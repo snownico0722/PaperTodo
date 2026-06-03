@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
@@ -59,11 +60,7 @@ public sealed partial class PaperWindow : Window
     private readonly List<Border> _todoRows = new();
     private TodoDragState? _todoDrag;
     private MarkdownTextBox? _noteBox;
-    private RichTextBox? _notePreview;
     private Action? _showNotePreview;
-    private string? _lastRenderedText;
-    private System.Windows.Documents.FlowDocument? _lastRenderedDocument;
-    private bool _lastRenderedIsDark;
     private readonly List<List<PaperItem>> _undoStack = new();
     private readonly List<List<PaperItem>> _redoStack = new();
     private const int MaxUndoDepth = 100;
@@ -75,10 +72,21 @@ public sealed partial class PaperWindow : Window
     private TextBlock _capsuleLabelText = null!;
     private bool _isMaybeDragging;
     private Point _mouseDownScreenPos;
+    private bool _suppressGeometrySave;
+    private bool _isDeepCapsulePlaced;
+    private bool _isDeepCapsuleHovering;
+    private int _deepCapsuleIndex = -1;
     private double _startTransitionWidth;
     private double _startTransitionHeight;
     private double _targetTransitionWidth;
     private double _targetTransitionHeight;
+    private const double DeepCapsuleVisibleWidth = PaperLayoutDefaults.CapsuleWidth / 2 + 10;
+    private const double DeepCapsuleHoverOutsideOffset = 8;
+    private const double DeepCapsuleTopMargin = 8;
+    private const double DeepCapsuleGap = 4;
+
+    public bool IsDeepCapsulePlaced => _isDeepCapsulePlaced;
+    public bool SuppressGeometrySave => _suppressGeometrySave || _isDeepCapsulePlaced;
 
     private sealed class TodoDragState
     {
@@ -382,9 +390,9 @@ public sealed partial class PaperWindow : Window
         ConfigureWindow();
         BuildShell();
 
-        Loaded += (_, _) => { if (!_isApplyingCollapsedState) _controller.UpdateGeometry(_paper, this); };
-        LocationChanged += (_, _) => { if (!_isApplyingCollapsedState) _controller.UpdateGeometry(_paper, this); };
-        SizeChanged += (_, _) => { if (!_isApplyingCollapsedState) _controller.UpdateGeometry(_paper, this); };
+        Loaded += (_, _) => SaveGeometryIfAllowed();
+        LocationChanged += (_, _) => SaveGeometryIfAllowed();
+        SizeChanged += (_, _) => SaveGeometryIfAllowed();
         PreviewMouseMove += OnWindowPreviewMouseMove;
         PreviewMouseLeftButtonUp += OnWindowPreviewMouseLeftButtonUp;
         LostMouseCapture += OnLostMouseCapture;
@@ -447,7 +455,7 @@ public sealed partial class PaperWindow : Window
             ResizeMode = ResizeMode.CanResizeWithGrip;
         }
 
-        Topmost = _paper.AlwaysOnTop;
+        RefreshEffectiveTopmost();
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -487,21 +495,6 @@ public sealed partial class PaperWindow : Window
                 _noteBox.RefreshVisualStyle();
             }
 
-            if (_notePreview != null && _notePreview.Visibility == Visibility.Visible && _noteBox != null)
-            {
-                try
-                {
-                    var doc = RenderNoteMarkdown(_noteBox.Text);
-                    _lastRenderedText = _noteBox.Text;
-                    _lastRenderedIsDark = Theme.IsDark;
-                    _lastRenderedDocument = doc;
-                    _notePreview.Document = doc;
-                }
-                catch (Exception ex)
-                {
-                    _notePreview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
-                }
-            }
         }
         else
         {
@@ -523,16 +516,6 @@ public sealed partial class PaperWindow : Window
 
         Keyboard.ClearFocus();
         _showNotePreview?.Invoke();
-    }
-
-    private System.Windows.Documents.FlowDocument RenderNoteMarkdown(string text)
-    {
-        if (_noteBox != null)
-        {
-            NoteTypography.SetMeasuredLineHeight(_noteBox.GetEffectiveLineHeight());
-        }
-
-        return MarkdownRenderer.Render(text);
     }
 
     private void BuildShell()
@@ -733,79 +716,52 @@ public sealed partial class PaperWindow : Window
             FontWeight = NoteTypography.FontWeight,
             FontStretch = NoteTypography.FontStretch,
             Language = NoteTypography.Language,
-            Margin = NoteTypography.EditorContentPadding,
+            Margin = NoteTypography.ContentPadding,
             FocusVisualStyle = null
         };
         NoteTypography.ApplyTextRendering(_noteBox);
         var box = _noteBox;
 
-        _notePreview = new RichTextBox
-        {
-            Visibility = Visibility.Collapsed,
-            Background = Brushes.Transparent,
-            BorderBrush = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            Margin = NoteTypography.PreviewContentPadding,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            IsReadOnly = true,
-            IsDocumentEnabled = true,
-            Focusable = true,
-            FontFamily = NoteTypography.FontFamily,
-            FontSize = NoteTypography.FontSize,
-            FontStyle = NoteTypography.FontStyle,
-            FontWeight = NoteTypography.FontWeight,
-            FontStretch = NoteTypography.FontStretch,
-            Language = NoteTypography.Language,
-            FocusVisualStyle = null
-        };
-        NoteTypography.ApplyTextRendering(_notePreview);
-        var preview = _notePreview;
-
         host.Children.Add(box);
-        host.Children.Add(preview);
+        var editorMenu = CreateContextMenu();
+        editorMenu.Items.Add(MenuHeader(Strings.Get("MenuFormat")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuBold"), (_, _) => box.WrapSelection("**", "**")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuItalic"), (_, _) => box.WrapSelection("*", "*")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuStrikethrough"), (_, _) => box.WrapSelection("~~", "~~")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuHeading"), (_, _) => box.InsertLinePrefix("# ")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuQuote"), (_, _) => box.InsertLinePrefix("> ")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
+        editorMenu.Items.Add(MenuSeparator());
+        editorMenu.Items.Add(MenuHeader(Strings.Get("MenuThisPaper")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuDelete"), (_, _) => ConfirmAndDeletePaper()));
 
+        var previewMenu = BuildPaperContextMenu();
         var isPreviewing = false;
 
         void ShowPreview()
         {
-            var anchorIndex = Math.Clamp(box.CaretIndex, 0, box.Text.Length);
-            var anchorRatio = GetEditorCaretViewportRatio();
+            if (isPreviewing)
+            {
+                return;
+            }
 
-            try
-            {
-                bool isDark = Theme.IsDark;
-                if (_lastRenderedText == box.Text && _lastRenderedDocument != null && _lastRenderedIsDark == isDark)
-                {
-                    preview.Document = _lastRenderedDocument;
-                }
-                else
-                {
-                    var doc = RenderNoteMarkdown(box.Text);
-                    _lastRenderedText = box.Text;
-                    _lastRenderedIsDark = isDark;
-                    _lastRenderedDocument = doc;
-                    preview.Document = doc;
-                }
-            }
-            catch (Exception ex)
-            {
-                preview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
-            }
-            box.Visibility = Visibility.Collapsed;
-            preview.Visibility = Visibility.Visible;
+            box.SelectionLength = 0;
+            box.SetPreviewMode(true);
+            box.ContextMenu = previewMenu;
             isPreviewing = true;
-            ScrollPreviewToSourceIndex(anchorIndex, anchorRatio);
         }
 
         _showNotePreview = ShowPreview;
 
         void ShowEditor(bool focus = true)
         {
-            preview.Visibility = Visibility.Collapsed;
-            box.Visibility = Visibility.Visible;
+            box.SetPreviewMode(false);
+            box.ContextMenu = editorMenu;
             isPreviewing = false;
+
             if (focus && !box.IsKeyboardFocusWithin)
             {
                 box.Focus();
@@ -814,8 +770,7 @@ public sealed partial class PaperWindow : Window
 
         void ShowEditorAtPreviewPoint(Point previewPoint)
         {
-            var hasPreviewCaret = TryGetCaretIndexAtPreviewPoint(previewPoint, out var caretIndex);
-            var anchorRatio = GetPreviewPointViewportRatio(previewPoint);
+            var hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out var caretIndex);
 
             ShowEditor(focus: false);
 
@@ -824,282 +779,32 @@ public sealed partial class PaperWindow : Window
                 box.Focus();
             }
 
-            if (!hasPreviewCaret)
+            if (hasPreviewCaret)
             {
-                caretIndex = box.CaretIndex;
+                box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
+                box.SelectionLength = 0;
             }
-
-            box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
-            box.SelectionLength = 0;
-            ScrollEditorToCaret(box.CaretIndex, anchorRatio);
         }
 
-        double GetPreviewPointViewportRatio(Point previewPoint)
-        {
-            var height = preview.ActualHeight > 1 ? preview.ActualHeight : 1;
-            return Math.Clamp(previewPoint.Y / height, 0, 1);
-        }
-
-        double GetEditorCaretViewportRatio()
+        static void OpenMarkdownLink(string url)
         {
             try
             {
-                box.UpdateLayout();
-                var rect = GetEditorCaretRect(Math.Clamp(box.CaretIndex, 0, box.Text.Length));
-                if (IsUsableRect(rect) && box.ActualHeight > 1)
+                Process.Start(new ProcessStartInfo(url)
                 {
-                    return Math.Clamp(rect.Top / box.ActualHeight, 0, 1);
-                }
+                    UseShellExecute = true
+                });
             }
             catch
             {
-                // Fall back to line-based positioning when WPF has not measured the caret yet.
+                // Link opening is optional; the note should never crash because a URL handler failed.
             }
-
-            try
-            {
-                var firstLine = box.GetFirstVisibleLineIndex();
-                var lastLine = box.GetLastVisibleLineIndex();
-                var caretLine = box.GetLineIndexFromCharacterIndex(Math.Clamp(box.CaretIndex, 0, box.Text.Length));
-                if (firstLine >= 0 && lastLine >= firstLine)
-                {
-                    var visibleLineCount = Math.Max(1, lastLine - firstLine);
-                    return Math.Clamp((caretLine - firstLine) / (double)visibleLineCount, 0, 1);
-                }
-            }
-            catch
-            {
-                // Keep the default top anchor if line information is unavailable.
-            }
-
-            return 0;
-        }
-
-        void ScrollEditorToCaret(int caretIndex, double viewportRatio)
-        {
-            void Apply()
-            {
-                try
-                {
-                    box.UpdateLayout();
-                    var clampedIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
-                    var rect = GetEditorCaretRect(clampedIndex);
-                    if (!IsUsableRect(rect))
-                    {
-                        var line = box.GetLineIndexFromCharacterIndex(clampedIndex);
-                        box.ScrollToLine(Math.Max(0, line));
-                        box.UpdateLayout();
-                        rect = GetEditorCaretRect(clampedIndex);
-                    }
-
-                    if (!IsUsableRect(rect))
-                    {
-                        return;
-                    }
-
-                    var viewportHeight = box.ViewportHeight > 1 ? box.ViewportHeight : box.ActualHeight;
-                    if (viewportHeight <= 1)
-                    {
-                        return;
-                    }
-
-                    var targetOffset = box.VerticalOffset + rect.Top - viewportHeight * Math.Clamp(viewportRatio, 0, 1);
-                    var maxOffset = Math.Max(0, box.ExtentHeight - viewportHeight);
-                    box.ScrollToVerticalOffset(Math.Clamp(targetOffset, 0, maxOffset));
-                }
-                catch
-                {
-                    // Scrolling is best-effort; caret placement above is the functional part.
-                }
-            }
-
-            Apply();
-            Dispatcher.BeginInvoke(new Action(Apply), System.Windows.Threading.DispatcherPriority.Loaded);
-        }
-
-        Rect GetEditorCaretRect(int caretIndex)
-        {
-            try
-            {
-                var clampedIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
-                var rect = box.GetRectFromCharacterIndex(clampedIndex, true);
-                if (IsUsableRect(rect))
-                {
-                    return rect;
-                }
-
-                if (clampedIndex > 0)
-                {
-                    rect = box.GetRectFromCharacterIndex(clampedIndex - 1, true);
-                    if (IsUsableRect(rect))
-                    {
-                        return rect;
-                    }
-                }
-            }
-            catch
-            {
-                // The caller has line-based fallbacks.
-            }
-
-            return Rect.Empty;
-        }
-
-        void ScrollPreviewToSourceIndex(int sourceIndex, double viewportRatio)
-        {
-            void Apply()
-            {
-                try
-                {
-                    preview.ApplyTemplate();
-                    preview.UpdateLayout();
-
-                    var viewer = FindVisualChild<ScrollViewer>(preview);
-                    if (!TryFindPreviewAnchor(preview.Document, sourceIndex, out var element, out var pointer))
-                    {
-                        return;
-                    }
-
-                    element.BringIntoView();
-                    preview.UpdateLayout();
-
-                    if (viewer == null)
-                    {
-                        return;
-                    }
-
-                    var rect = GetPointerCharacterRect(pointer);
-                    if (!IsUsableRect(rect))
-                    {
-                        return;
-                    }
-
-                    var viewportHeight = viewer.ViewportHeight > 1 ? viewer.ViewportHeight : preview.ActualHeight;
-                    if (viewportHeight <= 1)
-                    {
-                        return;
-                    }
-
-                    var targetOffset = viewer.VerticalOffset + rect.Top - viewportHeight * Math.Clamp(viewportRatio, 0, 1);
-                    var maxOffset = Math.Max(0, viewer.ExtentHeight - viewportHeight);
-                    viewer.ScrollToVerticalOffset(Math.Clamp(targetOffset, 0, maxOffset));
-                }
-                catch
-                {
-                    // The preview still opens even if the visual tree is not ready for scrolling.
-                }
-            }
-
-            Apply();
-            Dispatcher.BeginInvoke(new Action(Apply), System.Windows.Threading.DispatcherPriority.Loaded);
-        }
-
-        Rect GetPointerCharacterRect(System.Windows.Documents.TextPointer pointer)
-        {
-            try
-            {
-                var rect = pointer.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward);
-                if (IsUsableRect(rect))
-                {
-                    return rect;
-                }
-
-                rect = pointer.GetCharacterRect(System.Windows.Documents.LogicalDirection.Backward);
-                if (IsUsableRect(rect))
-                {
-                    return rect;
-                }
-            }
-            catch
-            {
-                // The preview can still switch states if layout has not produced character boxes yet.
-            }
-
-            return Rect.Empty;
-        }
-
-        bool TryGetCaretIndexAtPreviewPoint(Point previewPoint, out int caretIndex)
-        {
-            caretIndex = box.CaretIndex;
-
-            System.Windows.Documents.TextPointer? pointer;
-            try
-            {
-                pointer = preview.GetPositionFromPoint(previewPoint, true);
-            }
-            catch
-            {
-                pointer = null;
-            }
-
-            return pointer != null && TryGetCaretIndexFromPointer(pointer, out caretIndex);
-        }
-
-        bool TryGetCaretIndexFromPointer(System.Windows.Documents.TextPointer pointer, out int caretIndex)
-        {
-            if (TryGetCaretIndexFromElement(pointer.Parent, pointer, out caretIndex))
-            {
-                return true;
-            }
-
-            var forward = pointer.GetAdjacentElement(System.Windows.Documents.LogicalDirection.Forward);
-            if (TryGetCaretIndexFromElement(forward, pointer, out caretIndex))
-            {
-                return true;
-            }
-
-            var backward = pointer.GetAdjacentElement(System.Windows.Documents.LogicalDirection.Backward);
-            if (TryGetCaretIndexFromElement(backward, pointer, out caretIndex))
-            {
-                return true;
-            }
-
-            caretIndex = box.CaretIndex;
-            return false;
-        }
-
-        bool TryGetCaretIndexFromElement(DependencyObject? current, System.Windows.Documents.TextPointer pointer, out int caretIndex)
-        {
-            while (current != null)
-            {
-                if (current is System.Windows.Documents.Run run &&
-                    MarkdownRenderer.TryGetSourceSpan(run, out var sourceStart, out var sourceLength))
-                {
-                    var offset = run.ContentStart.GetOffsetToPosition(pointer);
-                    if (offset >= 0)
-                    {
-                        caretIndex = Math.Clamp(sourceStart + offset, sourceStart, sourceStart + sourceLength);
-                        return true;
-                    }
-                }
-
-                current = GetSafeParent(current);
-            }
-
-            caretIndex = box.CaretIndex;
-            return false;
         }
 
         box.TextChanged += (_, _) =>
         {
             _paper.Content = box.Text;
             _controller.MarkDirty();
-
-            if (isPreviewing)
-            {
-                try
-                {
-                    var doc = RenderNoteMarkdown(box.Text);
-                    _lastRenderedText = box.Text;
-                    _lastRenderedIsDark = Theme.IsDark;
-                    _lastRenderedDocument = doc;
-                    preview.Document = doc;
-                }
-                catch (Exception ex)
-                {
-                    preview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
-                }
-            }
         };
 
         box.PreviewKeyDown += (_, e) =>
@@ -1137,53 +842,59 @@ public sealed partial class PaperWindow : Window
             ShowPreview();
         };
 
-        preview.PreviewMouseLeftButtonDown += (_, e) =>
+        box.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            var originalSource = e.OriginalSource as DependencyObject;
-            var isHyperlink = false;
-            var current = originalSource;
-            while (current != null && current != preview)
+            var textViewPoint = e.GetPosition(box.TextArea.TextView);
+            if (!isPreviewing)
             {
-                if (current is System.Windows.Documents.Hyperlink)
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
+                    box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var editUrl))
                 {
-                    isHyperlink = true;
-                    break;
+                    OpenMarkdownLink(editUrl);
+                    e.Handled = true;
                 }
-                current = GetSafeParent(current);
+                return;
             }
 
-            if (!isHyperlink)
+            var point = e.GetPosition(box);
+            if (box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var url))
             {
-                ShowEditorAtPreviewPoint(e.GetPosition(preview));
+                OpenMarkdownLink(url);
                 e.Handled = true;
+                return;
+            }
+
+            ShowEditorAtPreviewPoint(point);
+            e.Handled = true;
+        };
+
+        box.MouseMove += (sender, e) =>
+        {
+            var isOverLink = box.TryGetMarkdownLinkFromTextViewPoint(e.GetPosition(box.TextArea.TextView), out _);
+            if (isPreviewing)
+            {
+                box.SetInteractionCursor(isOverLink ? Cursors.Hand : Cursors.Arrow);
+            }
+            else
+            {
+                box.SetInteractionCursor(isOverLink && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+                    ? Cursors.Hand
+                    : Cursors.IBeam);
             }
         };
 
-        var editorMenu = CreateContextMenu();
-        editorMenu.Items.Add(MenuHeader(Strings.Get("MenuFormat")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuBold"), (_, _) => box.WrapSelection("**", "**")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuItalic"), (_, _) => box.WrapSelection("*", "*")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuStrikethrough"), (_, _) => box.WrapSelection("~~", "~~")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuHeading"), (_, _) => box.InsertLinePrefix("# ")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuQuote"), (_, _) => box.InsertLinePrefix("> ")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
-        editorMenu.Items.Add(MenuSeparator());
-        editorMenu.Items.Add(MenuHeader(Strings.Get("MenuThisPaper")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuDelete"), (_, _) => ConfirmAndDeletePaper()));
-        box.ContextMenu = editorMenu;
+        box.MouseLeave += (_, _) =>
+        {
+            box.SetInteractionCursor(isPreviewing ? Cursors.Arrow : Cursors.IBeam);
+        };
 
         editorMenu.Closed += (_, _) =>
         {
-            if (!box.IsFocused && !box.IsKeyboardFocusWithin)
+            if (!isPreviewing && !box.IsFocused && !box.IsKeyboardFocusWithin)
             {
                 ShowPreview();
             }
         };
-
-        preview.ContextMenu = BuildPaperContextMenu();
 
         if (box.IsFocused || string.IsNullOrEmpty(box.Text))
         {
@@ -1644,9 +1355,14 @@ public sealed partial class PaperWindow : Window
     private void ToggleTopmost()
     {
         _paper.AlwaysOnTop = !_paper.AlwaysOnTop;
-        Topmost = _paper.AlwaysOnTop;
+        RefreshEffectiveTopmost();
         RefreshPaperIconButton();
         _controller.MarkDirty();
+    }
+
+    private void RefreshEffectiveTopmost()
+    {
+        Topmost = _paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed);
     }
 
     private void RefreshPaperIconButton()
@@ -2481,176 +2197,6 @@ public sealed partial class PaperWindow : Window
         return null;
     }
 
-    private static bool IsUsableRect(Rect rect)
-    {
-        return !rect.IsEmpty &&
-               !double.IsNaN(rect.Top) &&
-               !double.IsInfinity(rect.Top) &&
-               !double.IsNaN(rect.Height) &&
-               !double.IsInfinity(rect.Height);
-    }
-
-    private static bool TryFindPreviewAnchor(
-        System.Windows.Documents.FlowDocument document,
-        int sourceIndex,
-        out System.Windows.Documents.TextElement element,
-        out System.Windows.Documents.TextPointer pointer)
-    {
-        element = null!;
-        pointer = null!;
-
-        System.Windows.Documents.TextElement? bestElement = null;
-        var bestStart = 0;
-        var bestDistance = int.MaxValue;
-        var bestRank = int.MaxValue;
-        var bestLength = int.MaxValue;
-
-        foreach (var candidate in EnumerateTextElements(document))
-        {
-            if (!MarkdownRenderer.TryGetSourceSpan(candidate, out var start, out var length))
-            {
-                continue;
-            }
-
-            var end = start + length;
-            var distance = sourceIndex < start
-                ? start - sourceIndex
-                : sourceIndex > end
-                    ? sourceIndex - end
-                    : 0;
-            var rank = candidate is System.Windows.Documents.Run
-                ? 0
-                : candidate is System.Windows.Documents.Inline
-                    ? 1
-                    : 2;
-
-            if (distance > bestDistance)
-            {
-                continue;
-            }
-
-            if (distance == bestDistance && (rank > bestRank || (rank == bestRank && length >= bestLength)))
-            {
-                continue;
-            }
-
-            bestElement = candidate;
-            bestStart = start;
-            bestDistance = distance;
-            bestRank = rank;
-            bestLength = length;
-        }
-
-        if (bestElement == null)
-        {
-            return false;
-        }
-
-        element = bestElement;
-        if (bestElement is System.Windows.Documents.Run run)
-        {
-            var offset = Math.Clamp(sourceIndex - bestStart, 0, run.Text.Length);
-            pointer = run.ContentStart.GetPositionAtOffset(offset, System.Windows.Documents.LogicalDirection.Forward)
-                      ?? run.ContentStart;
-            return true;
-        }
-
-        pointer = bestElement.ContentStart;
-        return true;
-    }
-
-    private static IEnumerable<System.Windows.Documents.TextElement> EnumerateTextElements(System.Windows.Documents.FlowDocument document)
-    {
-        foreach (System.Windows.Documents.Block block in document.Blocks)
-        {
-            foreach (var element in EnumerateBlockElements(block))
-            {
-                yield return element;
-            }
-        }
-    }
-
-    private static IEnumerable<System.Windows.Documents.TextElement> EnumerateBlockElements(System.Windows.Documents.Block block)
-    {
-        yield return block;
-
-        switch (block)
-        {
-            case System.Windows.Documents.Paragraph paragraph:
-                foreach (System.Windows.Documents.Inline inline in paragraph.Inlines)
-                {
-                    foreach (var element in EnumerateInlineElements(inline))
-                    {
-                        yield return element;
-                    }
-                }
-                break;
-
-            case System.Windows.Documents.Section section:
-                foreach (System.Windows.Documents.Block child in section.Blocks)
-                {
-                    foreach (var element in EnumerateBlockElements(child))
-                    {
-                        yield return element;
-                    }
-                }
-                break;
-
-            case System.Windows.Documents.List list:
-                foreach (System.Windows.Documents.ListItem item in list.ListItems)
-                {
-                    yield return item;
-                    foreach (System.Windows.Documents.Block child in item.Blocks)
-                    {
-                        foreach (var element in EnumerateBlockElements(child))
-                        {
-                            yield return element;
-                        }
-                    }
-                }
-                break;
-        }
-    }
-
-    private static IEnumerable<System.Windows.Documents.TextElement> EnumerateInlineElements(System.Windows.Documents.Inline inline)
-    {
-        yield return inline;
-
-        if (inline is not System.Windows.Documents.Span span)
-        {
-            yield break;
-        }
-
-        foreach (System.Windows.Documents.Inline child in span.Inlines)
-        {
-            foreach (var element in EnumerateInlineElements(child))
-            {
-                yield return element;
-            }
-        }
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
-    {
-        if (parent is T match)
-        {
-            return match;
-        }
-
-        var count = VisualTreeHelper.GetChildrenCount(parent);
-        for (var i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            var found = FindVisualChild<T>(child);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-
-        return null;
-    }
-
     private static Button IconButton(string text, string tooltip)
     {
         return new Button
@@ -2882,6 +2428,182 @@ public sealed partial class PaperWindow : Window
         Height = _startTransitionHeight + (_targetTransitionHeight - _startTransitionHeight) * progress;
     }
 
+    private void SaveGeometryIfAllowed()
+    {
+        if (_isApplyingCollapsedState || SuppressGeometrySave)
+        {
+            return;
+        }
+
+        _controller.UpdateGeometry(_paper, this);
+    }
+
+    private void MoveWindowWithoutGeometrySave(Action move)
+    {
+        var wasSuppressing = _suppressGeometrySave;
+        _suppressGeometrySave = true;
+        try
+        {
+            move();
+        }
+        finally
+        {
+            _suppressGeometrySave = wasSuppressing;
+        }
+    }
+
+    private void ClearDeepCapsulePositionAnimation()
+    {
+        BeginAnimation(Window.LeftProperty, null);
+    }
+
+    private static Rect DeepCapsuleWorkArea()
+    {
+        return SystemParameters.WorkArea;
+    }
+
+    private double DeepCapsuleTopForIndex(int index)
+    {
+        var area = DeepCapsuleWorkArea();
+        var desiredTop = area.Top + DeepCapsuleTopMargin + Math.Max(0, index) * (PaperLayoutDefaults.CapsuleHeight + DeepCapsuleGap);
+        var maxTop = Math.Max(area.Top + DeepCapsuleTopMargin, area.Bottom - PaperLayoutDefaults.CapsuleHeight - DeepCapsuleTopMargin);
+        return Math.Min(desiredTop, maxTop);
+    }
+
+    private void MoveDeepCapsuleToCurrentTarget(bool animate = false)
+    {
+        if (!_isDeepCapsulePlaced)
+        {
+            return;
+        }
+
+        var area = DeepCapsuleWorkArea();
+        var targetLeft = Math.Round(_isDeepCapsuleHovering
+            ? area.Right - PaperLayoutDefaults.CapsuleWidth + DeepCapsuleHoverOutsideOffset
+            : area.Right - DeepCapsuleVisibleWidth);
+        var targetTop = Math.Round(DeepCapsuleTopForIndex(_deepCapsuleIndex));
+
+        MoveWindowWithoutGeometrySave(() =>
+        {
+            Top = targetTop;
+            Width = PaperLayoutDefaults.CapsuleWidth;
+            Height = PaperLayoutDefaults.CapsuleHeight;
+        });
+
+        if (!animate)
+        {
+            ClearDeepCapsulePositionAnimation();
+            MoveWindowWithoutGeometrySave(() => Left = targetLeft);
+            return;
+        }
+
+        var currentLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? targetLeft : Left;
+        if (Math.Abs(currentLeft - targetLeft) < 0.5)
+        {
+            ClearDeepCapsulePositionAnimation();
+            MoveWindowWithoutGeometrySave(() => Left = targetLeft);
+            return;
+        }
+
+        var expectedHovering = _isDeepCapsuleHovering;
+        var leftAnimation = new System.Windows.Media.Animation.DoubleAnimation
+        {
+            From = currentLeft,
+            To = targetLeft,
+            Duration = TimeSpan.FromMilliseconds(expectedHovering ? 160 : 130),
+            EasingFunction = new System.Windows.Media.Animation.CubicEase
+            {
+                EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+            }
+        };
+        leftAnimation.Completed += (_, _) =>
+        {
+            if (!_isDeepCapsulePlaced || _isDeepCapsuleHovering != expectedHovering)
+            {
+                return;
+            }
+
+            MoveWindowWithoutGeometrySave(() =>
+            {
+                ClearDeepCapsulePositionAnimation();
+                Left = targetLeft;
+            });
+        };
+
+        BeginAnimation(Window.LeftProperty, leftAnimation, System.Windows.Media.Animation.HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void SetDeepCapsuleHover(bool hovering)
+    {
+        if (!_isDeepCapsulePlaced || !_paper.IsCollapsed || !_controller.State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        _isDeepCapsuleHovering = hovering;
+        MoveDeepCapsuleToCurrentTarget(animate: true);
+    }
+
+    public void ApplyDeepCapsulePlacement(int index)
+    {
+        if (!_paper.IsCollapsed || !_controller.State.UseCapsuleMode || !_controller.State.UseDeepCapsuleMode)
+        {
+            ClearDeepCapsulePlacement();
+            return;
+        }
+
+        _isDeepCapsulePlaced = true;
+        _deepCapsuleIndex = Math.Max(0, index);
+        RefreshCapsuleLabel();
+        MoveDeepCapsuleToCurrentTarget();
+        RefreshEffectiveTopmost();
+    }
+
+    public void ClearDeepCapsulePlacement(bool restoreCollapsedPosition = true)
+    {
+        var wasPlaced = _isDeepCapsulePlaced;
+        ClearDeepCapsulePositionAnimation();
+        _isDeepCapsulePlaced = false;
+        _isDeepCapsuleHovering = false;
+        _deepCapsuleIndex = -1;
+
+        if (wasPlaced && restoreCollapsedPosition && _paper.IsCollapsed && IsVisible)
+        {
+            MoveWindowWithoutGeometrySave(() =>
+            {
+                Left = _paper.X;
+                Top = _paper.Y;
+                Width = PaperLayoutDefaults.CapsuleWidth;
+                Height = PaperLayoutDefaults.CapsuleHeight;
+            });
+        }
+    }
+
+    public void UpdateDeepCapsuleMode()
+    {
+        if (!_controller.State.UseCapsuleMode || !_controller.State.UseDeepCapsuleMode || !_paper.IsCollapsed)
+        {
+            ClearDeepCapsulePlacement();
+        }
+        else
+        {
+            MoveDeepCapsuleToCurrentTarget();
+        }
+
+        RefreshEffectiveTopmost();
+    }
+
+    private void AlignExpandedToRightEdge(double targetWidth, double targetHeight)
+    {
+        var area = DeepCapsuleWorkArea();
+        var width = Math.Max(targetWidth, PaperLayoutDefaults.MinWidth);
+        var height = Math.Max(targetHeight, PaperLayoutDefaults.MinHeight);
+        var targetTop = Math.Clamp(Top, area.Top + DeepCapsuleTopMargin, Math.Max(area.Top + DeepCapsuleTopMargin, area.Bottom - height - DeepCapsuleTopMargin));
+
+        Left = Math.Round(area.Right - width);
+        Top = Math.Round(targetTop);
+    }
+
     private void RegisterNameSafe(string name, object scopedElement)
     {
         try
@@ -2940,7 +2662,15 @@ public sealed partial class PaperWindow : Window
         RefreshCloseButton();
         if (!_controller.State.UseCapsuleMode && _paper.IsCollapsed)
         {
+            if (_isDeepCapsulePlaced)
+            {
+                ClearDeepCapsulePlacement();
+            }
             SetCollapsedState(false, animate: true);
+        }
+        else
+        {
+            RefreshEffectiveTopmost();
         }
 
         if (Content is Border root)
@@ -3017,6 +2747,9 @@ public sealed partial class PaperWindow : Window
 
         leftArea.Child = leftStack;
 
+        _capsuleShell.MouseEnter += (_, _) => SetDeepCapsuleHover(true);
+        _capsuleShell.MouseLeave += (_, _) => SetDeepCapsuleHover(false);
+
         leftArea.MouseEnter += (_, _) => leftArea.Background = HoverBrush;
         leftArea.MouseLeave += (_, _) => leftArea.Background = Brushes.Transparent;
 
@@ -3031,6 +2764,7 @@ public sealed partial class PaperWindow : Window
         leftArea.PreviewMouseMove += (s, e) =>
         {
             if (!_isMaybeDragging) return;
+            if (_isDeepCapsulePlaced) return;
 
             Point currentScreenPos = PointToScreen(e.GetPosition(this));
             double deltaX = Math.Abs(currentScreenPos.X - _mouseDownScreenPos.X);
@@ -3068,7 +2802,7 @@ public sealed partial class PaperWindow : Window
                 _isMaybeDragging = false;
                 leftArea.ReleaseMouseCapture();
 
-                SetCollapsedState(false);
+                SetCollapsedState(false, alignExpandedToRight: _isDeepCapsulePlaced);
                 e.Handled = true;
             }
         };
@@ -3130,7 +2864,7 @@ public sealed partial class PaperWindow : Window
         _capsuleShell.Children.Add(capsuleClose);
     }
 
-    public void SetCollapsedState(bool collapsed, bool animate = true)
+    public void SetCollapsedState(bool collapsed, bool animate = true, bool saveGeometry = true, bool alignExpandedToRight = false)
     {
         if (_paper.IsCollapsed == collapsed)
         {
@@ -3165,8 +2899,21 @@ public sealed partial class PaperWindow : Window
 
         double targetWidth = collapsed ? PaperLayoutDefaults.CapsuleWidth : _paper.Width;
         double targetHeight = collapsed ? PaperLayoutDefaults.CapsuleHeight : _paper.Height;
+        var arrangeDeepCapsulesAfterCollapse = collapsed && _controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode;
+
+        var wasDeepCapsulePlaced = _isDeepCapsulePlaced;
 
         _paper.IsCollapsed = collapsed;
+        if (!collapsed)
+        {
+            ClearDeepCapsulePlacement(restoreCollapsedPosition: false);
+            if (alignExpandedToRight || wasDeepCapsulePlaced)
+            {
+                MoveWindowWithoutGeometrySave(() => AlignExpandedToRightEdge(targetWidth, targetHeight));
+            }
+        }
+
+        RefreshEffectiveTopmost();
         _controller.MarkDirty();
 
         var root = Content as Border;
@@ -3318,7 +3065,14 @@ public sealed partial class PaperWindow : Window
                 }
 
                 _isApplyingCollapsedState = false;
-                _controller.UpdateGeometry(_paper, this);
+                if (saveGeometry)
+                {
+                    _controller.UpdateGeometry(_paper, this);
+                }
+                if (arrangeDeepCapsulesAfterCollapse)
+                {
+                    _controller.ArrangeDeepCapsules();
+                }
             };
 
             BeginAnimation(TransitionProgressProperty, progressAnim);
@@ -3361,7 +3115,14 @@ public sealed partial class PaperWindow : Window
             Height = targetHeight;
 
             _isApplyingCollapsedState = false;
-            _controller.UpdateGeometry(_paper, this);
+            if (saveGeometry)
+            {
+                _controller.UpdateGeometry(_paper, this);
+            }
+            if (arrangeDeepCapsulesAfterCollapse)
+            {
+                _controller.ArrangeDeepCapsules();
+            }
         }
 
         root.ContextMenu = BuildPaperContextMenu();

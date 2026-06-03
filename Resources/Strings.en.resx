@@ -192,6 +192,9 @@
   <data name="TrayCapsuleMode" xml:space="preserve">
     <value>Enable capsule collapse mode</value>
   </data>
+  <data name="TrayDeepCapsuleMode" xml:space="preserve">
+    <value>Auto edge-align capsules</value>
+  </data>
   <data name="TrayExit" xml:space="preserve">
     <value>Exit</value>
   </data>

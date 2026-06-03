@@ -192,6 +192,9 @@
   <data name="TrayCapsuleMode" xml:space="preserve">
     <value>カプセル折りたたみを有効化</value>
   </data>
+  <data name="TrayDeepCapsuleMode" xml:space="preserve">
+    <value>カプセルを自動で端に寄せる</value>
+  </data>
   <data name="TrayExit" xml:space="preserve">
     <value>終了</value>
   </data>

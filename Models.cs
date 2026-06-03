@@ -26,6 +26,7 @@ public sealed class AppState
     public List<PaperData> Papers { get; set; } = new();
     public string Theme { get; set; } = "system";
     public bool UseCapsuleMode { get; set; } = false;
+    public bool UseDeepCapsuleMode { get; set; } = false;
 }
 
 public sealed class PaperData

@@ -192,6 +192,9 @@
   <data name="TrayCapsuleMode" xml:space="preserve">
     <value>启用胶囊折叠模式</value>
   </data>
+  <data name="TrayDeepCapsuleMode" xml:space="preserve">
+    <value>胶囊自动贴边</value>
+  </data>
   <data name="TrayExit" xml:space="preserve">
     <value>退出</value>
   </data>

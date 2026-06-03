@@ -192,6 +192,9 @@
   <data name="TrayCapsuleMode" xml:space="preserve">
     <value>캡슐 접기 모드 사용</value>
   </data>
+  <data name="TrayDeepCapsuleMode" xml:space="preserve">
+    <value>캡슐 자동 가장자리 정렬</value>
+  </data>
   <data name="TrayExit" xml:space="preserve">
     <value>종료</value>
   </data>

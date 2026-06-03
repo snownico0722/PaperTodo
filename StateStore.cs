@@ -151,6 +151,11 @@ public sealed class StateStore
             state.Theme = "system";
         }
 
+        if (!state.UseCapsuleMode)
+        {
+            state.UseDeepCapsuleMode = false;
+        }
+
         foreach (var paper in state.Papers)
         {
             if (string.IsNullOrWhiteSpace(paper.Id))

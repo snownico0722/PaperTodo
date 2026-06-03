@@ -257,6 +257,10 @@ public sealed partial class AppController : IDisposable
         }
 
         window.Activate();
+        if (State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed)
+        {
+            ArrangeDeepCapsules();
+        }
         RefreshTrayMenu();
         MarkDirty();
     }
@@ -267,10 +271,11 @@ public sealed partial class AppController : IDisposable
 
         if (_windows.TryGetValue(paper.Id, out var window))
         {
+            var saveGeometry = !window.IsDeepCapsulePlaced;
             window.Hide();
             if (paper.IsCollapsed)
             {
-                window.SetCollapsedState(false, animate: false);
+                window.SetCollapsedState(false, animate: false, saveGeometry: saveGeometry);
             }
         }
         else
@@ -278,6 +283,7 @@ public sealed partial class AppController : IDisposable
             paper.IsCollapsed = false;
         }
 
+        ArrangeDeepCapsules();
         RefreshTrayMenu();
         MarkDirty();
     }
@@ -316,7 +322,7 @@ public sealed partial class AppController : IDisposable
         foreach (var window in _windows.Values)
         {
             window.Hide();
-            window.SetCollapsedState(false, animate: false);
+            window.SetCollapsedState(false, animate: false, saveGeometry: !window.IsDeepCapsulePlaced);
         }
 
         foreach (var paper in State.Papers)
@@ -351,12 +357,18 @@ public sealed partial class AppController : IDisposable
             }
         }
 
+        ArrangeDeepCapsules();
         RefreshTrayMenu();
         MarkDirty();
     }
 
     public void UpdateGeometry(PaperData paper, Window window)
     {
+        if (window is PaperWindow paperWindow && paperWindow.SuppressGeometrySave)
+        {
+            return;
+        }
+
         if (double.IsNaN(window.Left) || double.IsNaN(window.Top))
         {
             return;
@@ -371,6 +383,37 @@ public sealed partial class AppController : IDisposable
         }
 
         MarkDirty();
+    }
+
+    public void ArrangeDeepCapsules()
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            foreach (var window in _windows.Values)
+            {
+                window.ClearDeepCapsulePlacement();
+            }
+            return;
+        }
+
+        var capsuleIndex = 0;
+        foreach (var paper in State.Papers)
+        {
+            if (!_windows.TryGetValue(paper.Id, out var window))
+            {
+                continue;
+            }
+
+            if (paper.IsVisible && paper.IsCollapsed && window.IsVisible)
+            {
+                window.ApplyDeepCapsulePlacement(capsuleIndex);
+                capsuleIndex++;
+            }
+            else
+            {
+                window.ClearDeepCapsulePlacement();
+            }
+        }
     }
 
     public void MarkDirty()
@@ -890,6 +933,8 @@ public sealed partial class AppController : IDisposable
 
         var capsulePrefix = State.UseCapsuleMode ? "☑ " : "☐ ";
         _trayMenu.Items.Add(TrayItem(capsulePrefix + Strings.Get("TrayCapsuleMode"), ToggleCapsuleMode));
+        var deepCapsulePrefix = State.UseDeepCapsuleMode ? "☑ " : "☐ ";
+        _trayMenu.Items.Add(TrayItem(deepCapsulePrefix + Strings.Get("TrayDeepCapsuleMode"), ToggleDeepCapsuleMode));
         _trayMenu.Items.Add(TraySeparator());
 
         _trayMenu.Items.Add(TrayItem(Strings.Get("TrayShowAll"), ShowAllPapers));
@@ -1173,10 +1218,6 @@ public sealed partial class AppController : IDisposable
             confirmArea.Opacity = 1.0;
             if (confirmMode)
             {
-                if (_trayMenu != null)
-                {
-                    _trayMenu.IsOpen = false;
-                }
                 DeletePaper(paper);
             }
             e.Handled = true;
@@ -1376,12 +1417,37 @@ public sealed partial class AppController : IDisposable
 
         if (!State.UseCapsuleMode)
         {
+            State.UseDeepCapsuleMode = false;
             foreach (var paper in State.Papers)
             {
                 paper.IsCollapsed = false;
             }
         }
 
+        ArrangeDeepCapsules();
+        SaveNow();
+        RebuildTrayMenu();
+    }
+
+    private void ToggleDeepCapsuleMode()
+    {
+        State.UseDeepCapsuleMode = !State.UseDeepCapsuleMode;
+
+        if (State.UseDeepCapsuleMode && !State.UseCapsuleMode)
+        {
+            State.UseCapsuleMode = true;
+            foreach (var window in _windows.Values)
+            {
+                window.UpdateCapsuleMode();
+            }
+        }
+
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateDeepCapsuleMode();
+        }
+
+        ArrangeDeepCapsules();
         SaveNow();
         RebuildTrayMenu();
     }

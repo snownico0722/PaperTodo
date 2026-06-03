@@ -191,6 +191,12 @@ jobs:
           @"
           PaperTodo $tag
 
+          What's new:
+
+          - Markdown editing and browsing now share the AvalonEdit Markdown editor, keeping the lightweight Markdown view while reducing preview-state jumps and sync issues.
+          - Added capsule auto edge-align: collapsed capsules can arrange at the top-right edge, stay half-hidden, and slide out on hover.
+          - Tray paper deletion now keeps the tray menu open after confirmation.
+
           Windows x64 executables:
 
           - ${selfContained}: self-contained single file, includes .NET Desktop Runtime, ReadyToRun enabled, single-file compression enabled.
