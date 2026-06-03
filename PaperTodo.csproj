@@ -20,6 +20,7 @@
     <EmbeddedResource Include="assets\icons\PaperTodo.ico" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
   </ItemGroup>

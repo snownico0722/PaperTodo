@@ -60,6 +60,7 @@ public sealed partial class PaperWindow : Window
     private TodoDragState? _todoDrag;
     private MarkdownTextBox? _noteBox;
     private RichTextBox? _notePreview;
+    private Action? _showNotePreview;
     private string? _lastRenderedText;
     private System.Windows.Documents.FlowDocument? _lastRenderedDocument;
     private bool _lastRenderedIsDark;
@@ -406,7 +407,7 @@ public sealed partial class PaperWindow : Window
                     var clicked = e.OriginalSource as DependencyObject;
                     if (!IsDescendantOf(clicked, _noteBox))
                     {
-                        Keyboard.ClearFocus();
+                        ExitNoteEditor();
                     }
                 }
             };
@@ -483,15 +484,14 @@ public sealed partial class PaperWindow : Window
         {
             if (_noteBox != null)
             {
-                _noteBox.Foreground = TextBrush;
-                _noteBox.CaretBrush = TextBrush;
+                _noteBox.RefreshVisualStyle();
             }
 
             if (_notePreview != null && _notePreview.Visibility == Visibility.Visible && _noteBox != null)
             {
                 try
                 {
-                    var doc = MarkdownRenderer.Render(_noteBox.Text);
+                    var doc = RenderNoteMarkdown(_noteBox.Text);
                     _lastRenderedText = _noteBox.Text;
                     _lastRenderedIsDark = Theme.IsDark;
                     _lastRenderedDocument = doc;
@@ -499,7 +499,7 @@ public sealed partial class PaperWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    _notePreview.Document = MarkdownRenderer.Render(Strings.Format("MarkdownPreviewFailure", ex.Message));
+                    _notePreview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
                 }
             }
         }
@@ -507,6 +507,32 @@ public sealed partial class PaperWindow : Window
         {
             RebuildTodoRows(CurrentFocusedTodoItemId());
         }
+    }
+
+    private void ExitNoteEditor()
+    {
+        if (_paper.Type != PaperTypes.Note || _noteBox == null)
+        {
+            return;
+        }
+
+        if (_noteBox.ContextMenu?.IsOpen == true)
+        {
+            return;
+        }
+
+        Keyboard.ClearFocus();
+        _showNotePreview?.Invoke();
+    }
+
+    private System.Windows.Documents.FlowDocument RenderNoteMarkdown(string text)
+    {
+        if (_noteBox != null)
+        {
+            NoteTypography.SetMeasuredLineHeight(_noteBox.GetEffectiveLineHeight());
+        }
+
+        return MarkdownRenderer.Render(text);
     }
 
     private void BuildShell()
@@ -587,6 +613,7 @@ public sealed partial class PaperWindow : Window
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        top.PreviewMouseLeftButtonDown += (_, _) => ExitNoteEditor();
         top.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ChangedButton == MouseButton.Left && e.ClickCount == 1)
@@ -700,10 +727,16 @@ public sealed partial class PaperWindow : Window
             Background = Brushes.Transparent,
             Foreground = TextBrush,
             CaretBrush = TextBrush,
-            FontSize = 14,
-            Padding = new Thickness(14, 8, 14, 8),
+            FontFamily = NoteTypography.FontFamily,
+            FontSize = NoteTypography.FontSize,
+            FontStyle = NoteTypography.FontStyle,
+            FontWeight = NoteTypography.FontWeight,
+            FontStretch = NoteTypography.FontStretch,
+            Language = NoteTypography.Language,
+            Margin = NoteTypography.EditorContentPadding,
             FocusVisualStyle = null
         };
+        NoteTypography.ApplyTextRendering(_noteBox);
         var box = _noteBox;
 
         _notePreview = new RichTextBox
@@ -713,13 +746,21 @@ public sealed partial class PaperWindow : Window
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
+            Margin = NoteTypography.PreviewContentPadding,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             IsReadOnly = true,
             IsDocumentEnabled = true,
             Focusable = true,
+            FontFamily = NoteTypography.FontFamily,
+            FontSize = NoteTypography.FontSize,
+            FontStyle = NoteTypography.FontStyle,
+            FontWeight = NoteTypography.FontWeight,
+            FontStretch = NoteTypography.FontStretch,
+            Language = NoteTypography.Language,
             FocusVisualStyle = null
         };
+        NoteTypography.ApplyTextRendering(_notePreview);
         var preview = _notePreview;
 
         host.Children.Add(box);
@@ -741,7 +782,7 @@ public sealed partial class PaperWindow : Window
                 }
                 else
                 {
-                    var doc = MarkdownRenderer.Render(box.Text);
+                    var doc = RenderNoteMarkdown(box.Text);
                     _lastRenderedText = box.Text;
                     _lastRenderedIsDark = isDark;
                     _lastRenderedDocument = doc;
@@ -750,13 +791,15 @@ public sealed partial class PaperWindow : Window
             }
             catch (Exception ex)
             {
-                preview.Document = MarkdownRenderer.Render(Strings.Format("MarkdownPreviewFailure", ex.Message));
+                preview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
             }
             box.Visibility = Visibility.Collapsed;
             preview.Visibility = Visibility.Visible;
             isPreviewing = true;
             ScrollPreviewToSourceIndex(anchorIndex, anchorRatio);
         }
+
+        _showNotePreview = ShowPreview;
 
         void ShowEditor(bool focus = true)
         {
@@ -1046,7 +1089,7 @@ public sealed partial class PaperWindow : Window
             {
                 try
                 {
-                    var doc = MarkdownRenderer.Render(box.Text);
+                    var doc = RenderNoteMarkdown(box.Text);
                     _lastRenderedText = box.Text;
                     _lastRenderedIsDark = Theme.IsDark;
                     _lastRenderedDocument = doc;
@@ -1054,7 +1097,7 @@ public sealed partial class PaperWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    preview.Document = MarkdownRenderer.Render(Strings.Format("MarkdownPreviewFailure", ex.Message));
+                    preview.Document = RenderNoteMarkdown(Strings.Format("MarkdownPreviewFailure", ex.Message));
                 }
             }
         };
