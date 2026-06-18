@@ -1020,6 +1020,13 @@ public sealed partial class AppController : IDisposable
         return DeepCapsulePapersInOrder().Count;
     }
 
+    // Count of capsules in only the given paper's (monitor, edge) queue.
+    public int VisibleDeepCapsuleCountForQueue(PaperData target)
+    {
+        var key = QueueKey(target);
+        return DeepCapsulePapersInOrder().Count(p => QueueKey(p) == key);
+    }
+
     public double VisibleDeepCapsuleRestingWidth()
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
@@ -1039,6 +1046,36 @@ public sealed partial class AppController : IDisposable
         return width;
     }
 
+    // Widest resting capsule in ONLY the queue that the given paper belongs to. Used to reserve
+    // expanded-window edge inset per queue, so a long title on another screen/edge doesn't push
+    // this paper's expanded window away from its own wall.
+    public double VisibleDeepCapsuleRestingWidthForQueue(PaperData target)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return 0;
+        }
+
+        var targetKey = QueueKey(target);
+        double width = 0;
+        foreach (var paper in DeepCapsulePapersInOrder())
+        {
+            if (QueueKey(paper) != targetKey)
+            {
+                continue;
+            }
+            if (_windows.TryGetValue(paper.Id, out var window))
+            {
+                width = Math.Max(width, window.DeepCapsuleRestingVisibleWidth);
+            }
+        }
+
+        return width;
+    }
+
+    // Reorder a capsule WITHIN its own (monitor, edge) queue. targetIndex is an index into that
+    // queue's members (matching the per-queue slot the drop landed on), NOT the global capsule
+    // list — with multiple queues those differ, so a global reorder would mis-place the capsule.
     public void ReorderDeepCapsule(PaperData paper, int targetIndex)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
@@ -1046,35 +1083,37 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        var capsulePapers = DeepCapsulePapersInOrder();
-        var currentIndex = capsulePapers.FindIndex(p => p.Id == paper.Id);
-        if (currentIndex < 0 || capsulePapers.Count == 0)
+        var queueKey = QueueKey(paper);
+        var queueMembers = DeepCapsulePapersInOrder().Where(p => QueueKey(p) == queueKey).ToList();
+        var currentIndex = queueMembers.FindIndex(p => p.Id == paper.Id);
+        if (currentIndex < 0 || queueMembers.Count == 0)
         {
             return;
         }
 
-        targetIndex = Math.Clamp(targetIndex, 0, capsulePapers.Count - 1);
+        targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count - 1);
         if (targetIndex == currentIndex)
         {
             ArrangeDeepCapsules(animate: true);
             return;
         }
 
-        var draggedPaper = capsulePapers[currentIndex];
-        capsulePapers.RemoveAt(currentIndex);
-        targetIndex = Math.Clamp(targetIndex, 0, capsulePapers.Count);
-        capsulePapers.Insert(targetIndex, draggedPaper);
+        var draggedPaper = queueMembers[currentIndex];
+        queueMembers.RemoveAt(currentIndex);
+        targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
+        queueMembers.Insert(targetIndex, draggedPaper);
 
-        var reorderedCapsuleIds = new HashSet<string>(capsulePapers.Select(p => p.Id));
+        // Rebuild State.Papers: the slots occupied by THIS queue's members get refilled in the new
+        // order; every other paper (other queues, non-capsule papers) stays exactly in place.
+        var queueIds = new HashSet<string>(queueMembers.Select(p => p.Id), StringComparer.Ordinal);
         var reorderedPapers = new List<PaperData>(State.Papers.Count);
-        var capsuleCursor = 0;
-
+        var cursor = 0;
         foreach (var existing in State.Papers)
         {
-            if (reorderedCapsuleIds.Contains(existing.Id))
+            if (queueIds.Contains(existing.Id))
             {
-                reorderedPapers.Add(capsulePapers[capsuleCursor]);
-                capsuleCursor++;
+                reorderedPapers.Add(queueMembers[cursor]);
+                cursor++;
             }
             else
             {
@@ -1819,26 +1858,6 @@ public sealed partial class AppController : IDisposable
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, DeepCapsuleEdge edge)
     {
         return State.DeepCapsuleStartTopMargin;
-    }
-
-    // Commit a new dock anchor (monitor + edge) chosen by dragging the master pill, then relayout.
-    // startTopMargin is the vertical rest position resolved against the NEW monitor's work area.
-    public void SetDeepCapsuleAnchor(string monitorDeviceName, string side, double startTopMargin)
-    {
-        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
-        {
-            return;
-        }
-
-        State.DeepCapsuleMonitorDeviceName = (monitorDeviceName ?? "").Trim();
-        State.DeepCapsuleSide = DeepCapsuleSides.Normalize(side);
-        SyncDeepCapsuleAnchor();
-
-        var slotCount = VisibleDeepCapsuleCount() + (State.UseCapsuleCollapseAll && VisibleDeepCapsuleCount() > 0 ? 1 : 0);
-        State.DeepCapsuleStartTopMargin = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, slotCount);
-
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
     }
 
     // Live-adjust the stack's vertical rest position while the master pill is dragged within its

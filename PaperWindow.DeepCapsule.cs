@@ -986,7 +986,10 @@ public sealed partial class PaperWindow
     // column 0 / close in column 1; left edge swaps them and mirrors the rounded caps.
     private void ApplyDeepCapsuleSlotEdgeLayout()
     {
-        var edge = DeepCapsuleLayout.Edge;
+        // This window's OWN queue edge — NOT the global anchor. With per-edge queues a capsule on
+        // the left edge must flip its column order / close area / corner radii independently of
+        // whatever edge other queues use.
+        var edge = MyDeepCapsuleEdge;
         if (_appliedSlotEdge == edge ||
             _deepCapsuleSlotLeftArea == null ||
             _deepCapsuleSlotCloseArea == null ||
@@ -1698,7 +1701,7 @@ public sealed partial class PaperWindow
 
     private int DeepCapsuleDropIndexForCurrentPosition()
     {
-        var count = _controller.VisibleDeepCapsuleCount();
+        var count = _controller.VisibleDeepCapsuleCountForQueue(_paper);
         if (count <= 1)
         {
             return 0;
@@ -1728,7 +1731,7 @@ public sealed partial class PaperWindow
         var edgeInset = Math.Min(
             Math.Max(
                 Math.Max(DeepCapsuleExpandedEdgeInset, requiredEdgeInset),
-                _controller.VisibleDeepCapsuleRestingWidth() + DeepCapsuleGap),
+                _controller.VisibleDeepCapsuleRestingWidthForQueue(_paper) + DeepCapsuleGap),
             Math.Max(0, area.Width - width));
         var targetTop = Math.Clamp(Top, area.Top + DeepCapsuleTopMargin, Math.Max(area.Top + DeepCapsuleTopMargin, area.Bottom - height - DeepCapsuleTopMargin));
 
