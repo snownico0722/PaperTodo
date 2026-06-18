@@ -84,6 +84,87 @@ internal static class WindowWorkAreaHelper
         }
     }
 
+    // The DIP work-area of the monitor whose device name matches, or null if no such monitor
+    // is currently connected. Used to resolve the deep-capsule stack's persisted anchor.
+    public static Rect? WorkAreaForDevice(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName))
+        {
+            return null;
+        }
+
+        foreach (var monitor in EnumerateMonitors())
+        {
+            if (string.Equals(monitor.DeviceName, deviceName, StringComparison.Ordinal) &&
+                !monitor.WorkArea.IsEmpty)
+            {
+                return DeviceRectToDip(monitor.WorkArea);
+            }
+        }
+
+        return null;
+    }
+
+    // The device name + DIP work-area of the monitor under a screen point (in DIPs).
+    // Falls back to the nearest monitor. Used to snap the dragged master pill to a monitor.
+    public static (string DeviceName, Rect WorkArea)? MonitorAtScreenPoint(Point dipPoint)
+    {
+        try
+        {
+            var (scaleX, scaleY) = SystemDpiScale();
+            var nativePoint = new NativePoint
+            {
+                X = (int)Math.Round(dipPoint.X * scaleX),
+                Y = (int)Math.Round(dipPoint.Y * scaleY)
+            };
+            var monitor = MonitorFromPoint(nativePoint, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            var info = new MonitorInfoEx();
+            info.Size = Marshal.SizeOf<MonitorInfoEx>();
+            if (!GetMonitorInfoEx(monitor, ref info) || info.WorkArea.IsEmpty)
+            {
+                return null;
+            }
+
+            return (info.DeviceNameString, DeviceRectToDip(info.WorkArea));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IEnumerable<MonitorEntry> EnumerateMonitors()
+    {
+        var results = new List<MonitorEntry>();
+        try
+        {
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr _, ref NativeRect _, IntPtr _) =>
+            {
+                var info = new MonitorInfoEx();
+                info.Size = Marshal.SizeOf<MonitorInfoEx>();
+                if (GetMonitorInfoEx(hMonitor, ref info))
+                {
+                    results.Add(new MonitorEntry(info.DeviceNameString, info.WorkArea));
+                }
+
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch
+        {
+            // Enumeration failure leaves results empty; callers fall back to the primary work area.
+        }
+
+        return results;
+    }
+
+    private readonly record struct MonitorEntry(string DeviceName, NativeRect WorkArea);
+
     private static Rect DeviceRectToDip(Visual reference, NativeRect rect)
     {
         var source = PresentationSource.FromVisual(reference);
@@ -167,8 +248,26 @@ internal static class WindowWorkAreaHelper
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromRect(ref NativeRect lprc, uint dwFlags);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(NativePoint pt, uint dwFlags);
+
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
+    private static extern bool GetMonitorInfoEx(IntPtr hMonitor, ref MonitorInfoEx lpmi);
+
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref NativeRect lprc, IntPtr data);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr data);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
@@ -190,5 +289,20 @@ internal static class WindowWorkAreaHelper
         public NativeRect Monitor;
         public NativeRect WorkArea;
         public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MonitorInfoEx
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect WorkArea;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+        public char[] Device;
+
+        public readonly string DeviceNameString =>
+            Device == null ? "" : new string(Device).TrimEnd('\0');
     }
 }

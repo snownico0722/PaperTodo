@@ -12,7 +12,11 @@ public sealed class StateStore
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
+        AllowTrailingCommas = true,
+        // Tolerate unknown properties so configs written by older / experimental builds (e.g.
+        // retired deepCapsuleDock* fields) still load instead of crashing on startup. The Strict
+        // preset otherwise sets Disallow, which makes any removed/renamed field fatal.
+        UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
     };
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "data.json");
@@ -164,6 +168,8 @@ public sealed class StateStore
 
         state.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Normalize(state.ExternalMarkdownExtension);
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);
+        state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
+        state.DeepCapsuleMonitorDeviceName = (state.DeepCapsuleMonitorDeviceName ?? "").Trim();
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
         state.TopBarHeight = 0;
 

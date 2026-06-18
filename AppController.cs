@@ -829,7 +829,7 @@ public sealed partial class AppController : IDisposable
         if (_windows.TryGetValue(paper.Id, out var window))
         {
             var saveGeometry = !window.IsDeepCapsulePlaced;
-            window.ClearDeepCapsulePlacement(animate: State.EnableAnimations);
+            window.DetachFromDeepCapsuleStack(animate: State.EnableAnimations);
 
             // 隐藏动画：淡出
             if (State.EnableAnimations && window.IsVisible)
@@ -909,9 +909,12 @@ public sealed partial class AppController : IDisposable
 
         foreach (var window in _windows.Values)
         {
-            window.ClearDeepCapsuleSlotReservation();
+            // Fully detach from the stack, not just the expanded reservation: a docked collapsed
+            // capsule shows its own slot-host window that a reservation-only clear leaves on screen.
+            var saveGeometry = !window.IsDeepCapsulePlaced;
+            window.DetachFromDeepCapsuleStack();
             window.Hide();
-            window.SetCollapsedState(false, animate: false, saveGeometry: !window.IsDeepCapsulePlaced);
+            window.SetCollapsedState(false, animate: false, saveGeometry: saveGeometry);
         }
 
         foreach (var paper in State.Papers)
@@ -919,6 +922,7 @@ public sealed partial class AppController : IDisposable
             paper.IsCollapsed = false;
         }
 
+        ArrangeDeepCapsules();
         RefreshTrayMenu();
         MarkDirty();
     }
@@ -1108,12 +1112,12 @@ public sealed partial class AppController : IDisposable
 
     public void ArrangeDeepCapsules(bool animate = false)
     {
+        SyncDeepCapsuleAnchor();
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
         {
             foreach (var window in _windows.Values)
             {
-                window.ClearDeepCapsulePlacement();
-                window.ClearDeepCapsuleSlotReservation();
+                window.DetachFromDeepCapsuleStack();
             }
             DestroyMasterCapsule();
             return;
@@ -1159,8 +1163,7 @@ public sealed partial class AppController : IDisposable
                     continue;
                 }
 
-                window.ClearDeepCapsulePlacement();
-                window.ClearDeepCapsuleSlotReservation();
+                window.DetachFromDeepCapsuleStack();
             }
         }
 
@@ -1666,6 +1669,39 @@ public sealed partial class AppController : IDisposable
         return SystemParameters.WorkArea;
     }
 
+    // Push the persisted dock anchor (edge + monitor) into the shared layout statics so every
+    // capsule and the master pill resolve geometry against the same screen. Cheap and idempotent.
+    private void SyncDeepCapsuleAnchor()
+    {
+        var edge = State.DeepCapsuleSide == DeepCapsuleSides.Left
+            ? DeepCapsuleEdge.Left
+            : DeepCapsuleEdge.Right;
+        DeepCapsuleLayout.SetAnchor(edge, State.DeepCapsuleMonitorDeviceName);
+    }
+
+    // Commit a new dock anchor (monitor + edge) chosen by dragging the master pill, then relayout.
+    // startTopMargin is the vertical rest position resolved against the NEW monitor's work area.
+    public void SetDeepCapsuleAnchor(string monitorDeviceName, string side, double startTopMargin)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        State.DeepCapsuleMonitorDeviceName = (monitorDeviceName ?? "").Trim();
+        State.DeepCapsuleSide = DeepCapsuleSides.Normalize(side);
+        SyncDeepCapsuleAnchor();
+
+        var slotCount = VisibleDeepCapsuleCount() + (State.UseCapsuleCollapseAll && VisibleDeepCapsuleCount() > 0 ? 1 : 0);
+        State.DeepCapsuleStartTopMargin = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, slotCount);
+
+        ArrangeDeepCapsules(animate: true);
+        SaveNow();
+    }
+
+    // Live-adjust the stack's vertical rest position while the master pill is dragged within its
+    // magnetic X band. Relayouts every capsule immediately (cheap for a small stack); persists
+    // only when commit is set (drag release), so mid-drag frames don't thrash the save path.
     public void SetDeepCapsuleStartTopMargin(double startTopMargin, bool commit = false)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
@@ -1678,6 +1714,10 @@ public sealed partial class AppController : IDisposable
 
         if (Math.Abs(State.DeepCapsuleStartTopMargin - normalized) < 0.01)
         {
+            if (commit)
+            {
+                SaveNow();
+            }
             return;
         }
 

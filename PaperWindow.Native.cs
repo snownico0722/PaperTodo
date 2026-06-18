@@ -35,56 +35,6 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private static void ApplyNoActivateStyle(Window window)
-    {
-        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var exStyle = GetWindowLong(handle, GwlExStyle);
-        SetWindowLong(handle, GwlExStyle, exStyle | WsExNoActivate);
-    }
-
-    private static void ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
-    {
-        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        SetWindowPos(
-            handle,
-            topmost ? HwndTopmost : HwndNoTopmost,
-            0,
-            0,
-            0,
-            0,
-            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-
-        if (!topmost && insertAfter != IntPtr.Zero)
-        {
-            SetWindowPos(
-                handle,
-                insertAfter,
-                0,
-                0,
-                0,
-                0,
-                SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-        }
-    }
-
-    private const int GwlExStyle = -20;
-    private const int WsExNoActivate = 0x08000000;
-    private static readonly IntPtr HwndTopmost = new(-1);
-    private static readonly IntPtr HwndNoTopmost = new(-2);
-    private const uint SwpNoSize = 0x0001;
-    private const uint SwpNoMove = 0x0002;
-    private const uint SwpNoActivate = 0x0010;
-    private const uint SwpNoOwnerZOrder = 0x0200;
     private const uint EventSystemForeground = 0x0003;
     private const uint WineventOutOfContext = 0x0000;
     private const int WhMouseLl = 14;
@@ -121,23 +71,7 @@ public sealed partial class PaperWindow
         public readonly IntPtr ExtraInfo;
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetWindowPos(
-        IntPtr hWnd,
-        IntPtr hWndInsertAfter,
-        int X,
-        int Y,
-        int cx,
-        int cy,
-        uint uFlags);
-
-    [DllImport("user32.dll")]
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr SetWinEventHook(
         uint eventMin,
         uint eventMax,

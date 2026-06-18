@@ -168,17 +168,20 @@ public sealed partial class PaperWindow
     private void UpdateDeepCapsuleSlotClosePlacement(bool updateHostViewport = true)
     {
         var usesActivePresentation = _deepCapsuleVisualState is DeepCapsuleVisualState.Active or DeepCapsuleVisualState.Hovered;
+        var leftEdge = DeepCapsuleLayout.IsLeftEdge;
         if (_deepCapsuleSlotCloseArea != null)
         {
             _deepCapsuleSlotCloseArea.Width = CapsuleCloseWidth;
+            // Breathing gap sits on the interior side of the close button (right edge: right;
+            // left edge: left), and only when the close is actually revealed.
             _deepCapsuleSlotCloseArea.Margin = usesActivePresentation
-                ? new Thickness(0, 0, 2, 0)
+                ? (leftEdge ? new Thickness(2, 0, 0, 0) : new Thickness(0, 0, 2, 0))
                 : new Thickness(0);
         }
 
         if (_deepCapsuleSlotCloseGlyphOffset != null)
         {
-            _deepCapsuleSlotCloseGlyphOffset.X = CapsuleCloseGlyphDeepOffset;
+            _deepCapsuleSlotCloseGlyphOffset.X = leftEdge ? -CapsuleCloseGlyphDeepOffset : CapsuleCloseGlyphDeepOffset;
         }
 
         if (_deepCapsuleSlotShell != null && !IsDeepCapsuleSlotHorizontalAnimating)
@@ -381,7 +384,7 @@ public sealed partial class PaperWindow
         _capsuleShell.Children.Add(capsuleClose);
     }
 
-    public void SetCollapsedState(bool collapsed, bool animate = true, bool saveGeometry = true, bool alignExpandedToRight = false)
+    public void SetCollapsedState(bool collapsed, bool animate = true, bool saveGeometry = true, bool alignExpandedToDockedEdge = false)
     {
         animate = animate && _controller.State.EnableAnimations;
 
@@ -389,7 +392,7 @@ public sealed partial class PaperWindow
         {
             if (_paper.IsCollapsed)
             {
-                SetCollapsedState(false, animate, saveGeometry, alignExpandedToRight);
+                SetCollapsedState(false, animate, saveGeometry, alignExpandedToDockedEdge);
             }
             else
             {
@@ -463,12 +466,12 @@ public sealed partial class PaperWindow
             }
             SetDeepCapsuleSlotState(keepDeepCapsuleSlotReservation ? DeepCapsuleSlotState.ExpandedReserved : DeepCapsuleSlotState.None);
             SetDeepCapsuleVisualState(keepDeepCapsuleSlotReservation ? DeepCapsuleVisualState.Active : DeepCapsuleVisualState.Resting);
-            if (alignExpandedToRight || expandingFromDeepCapsuleEdge)
+            if (alignExpandedToDockedEdge || expandingFromDeepCapsuleEdge)
             {
-                var requiredRightInset = keepDeepCapsuleSlotReservation
+                var requiredEdgeInset = keepDeepCapsuleSlotReservation
                     ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
                     : 0;
-                MoveWindowWithoutGeometrySave(() => AlignExpandedToRightEdge(finalTargetWidth, finalTargetHeight, requiredRightInset));
+                MoveWindowWithoutGeometrySave(() => AlignExpandedToDockedEdge(finalTargetWidth, finalTargetHeight, requiredEdgeInset));
             }
             if (arrangeDeepCapsulesAfterExpand)
             {
@@ -588,7 +591,7 @@ public sealed partial class PaperWindow
                 {
                     From = 1.0,
                     To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(80),
+                    Duration = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
                     EasingFunction = easeOut
                 };
                 _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeOutCapsule);
@@ -597,8 +600,8 @@ public sealed partial class PaperWindow
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(140),
-                    BeginTime = TimeSpan.FromMilliseconds(80),
+                    Duration = TimeSpan.FromMilliseconds(ExpandShellFadeInMilliseconds),
+                    BeginTime = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
                     EasingFunction = easeOut
                 };
                 _shell.BeginAnimation(UIElement.OpacityProperty, fadeInShell);

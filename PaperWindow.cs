@@ -92,11 +92,14 @@ public sealed partial class PaperWindow : Window
     private Border? _deepCapsuleSlotChrome;
     private Border? _deepCapsuleSlotOutline;
     private Grid? _deepCapsuleSlotShell;
+    private Border? _deepCapsuleSlotLeftArea;
+    private Grid? _deepCapsuleSlotLeftStack;
     private TextBlock? _deepCapsuleSlotIconText;
     private Border? _deepCapsuleSlotCloseArea;
     private TextBlock? _deepCapsuleSlotCloseGlyph;
     private TranslateTransform? _deepCapsuleSlotCloseGlyphOffset;
     private TextBlock? _deepCapsuleSlotLabelText;
+    private DeepCapsuleEdge? _appliedSlotEdge;
     private ContextMenu? _deepCapsuleSlotContextMenu;
     private IntPtr _deepCapsuleForegroundHook;
     private IntPtr _deepCapsuleMouseHook;
@@ -123,9 +126,8 @@ public sealed partial class PaperWindow : Window
     // Visual slot shift: when the "collapse-all" master capsule occupies slot 0, real
     // capsules render at slot index+offset while _deepCapsuleIndex stays the paper-list index.
     private int _deepCapsuleVisualOffset;
-    // Monotonic token guarding deep-capsule move animations; a superseded animation's
-    // Completed handler bails when this no longer matches the value captured at its start.
-    private int _deepCapsuleMoveGeneration;
+    // Monotonic tokens guarding superseded animations; a stale Completed handler bails when its
+    // captured value no longer matches.
     private int _deepCapsuleSlotMoveGeneration;
     private int _collapseTransitionGeneration;
     private double _deepCapsuleSlotTargetLeft;
@@ -145,7 +147,7 @@ public sealed partial class PaperWindow : Window
     private int _clearDoneGeneration;
     private int _todoRowsGeneration;
     private const double DeepCapsuleHoverOutsideOffset = DeepCapsuleLayout.HoverOutsideOffset;
-    private const double DeepCapsuleExpandedRightInset = DeepCapsuleLayout.ExpandedRightInset;
+    private const double DeepCapsuleExpandedEdgeInset = DeepCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = DeepCapsuleLayout.TopMargin;
     private const double DeepCapsuleStartTopMargin = DeepCapsuleLayout.StartTopMargin;
     private const double DeepCapsuleGap = DeepCapsuleLayout.Gap;
@@ -155,6 +157,9 @@ public sealed partial class PaperWindow : Window
     private const int CollapseShellFadeMilliseconds = 70;
     private const int CollapseResizeMilliseconds = 150;
     private const int ExpandAnimationMilliseconds = 220;
+    // Expand cross-fade: the capsule pill fades out first, then the paper shell fades in after it.
+    private const int ExpandCapsuleFadeOutMilliseconds = 80;
+    private const int ExpandShellFadeInMilliseconds = 140;
     private const double ExpandedChromeCornerRadius = RadiusShell;
     private const double CapsuleChromeCornerRadius = DeepCapsuleLayout.CornerRadius; // 胶囊圆角，自成一套，不纳入圆角阶梯
     private const double CapsuleInnerCornerRadius = DeepCapsuleLayout.CornerRadius;   // 左区 / 关闭按钮的内圆角，与药丸外圆角同档
@@ -206,6 +211,25 @@ public sealed partial class PaperWindow : Window
         Start
     }
 
+    // ── Deep-capsule state machine (currently implicit; transitions are scattered across
+    // SetCollapsedState, Apply*/Clear*DeepCapsule*, ArrangeDeepCapsules). Documented here until
+    // it can be extracted into a dedicated presenter that owns these transitions centrally.
+    //
+    // Four orthogonal axes track one docked capsule:
+    //
+    //   SlotState   — does this paper occupy/reserve an edge slot, and is its slot-host window live?
+    //       None            : not in the stack; slot-host hidden.
+    //       CollapsedDocked : paper is collapsed and shown as an edge pill (slot-host visible).
+    //       ExpandedReserved: paper is expanded but still holds its slot (ShowDeepCapsuleWhileExpanded).
+    //       Retracting      : transient — slot-host is animating out before going None.
+    //     Legal: None⇄CollapsedDocked, None⇄ExpandedReserved, CollapsedDocked⇄ExpandedReserved,
+    //            (CollapsedDocked|ExpandedReserved)→Retracting→None.
+    //     Invariant: paper not visible ⇒ SlotState must reach None (slot-host hidden). The
+    //                single correct teardown is DetachFromDeepCapsuleStack().
+    //
+    //   VisualState — resting tag / hover-peek / fully-revealed (active). Independent of SlotState.
+    //   GestureState— pointer interaction: Idle / PendingClick / Reordering (vertical drag-reorder).
+    //   OpenOrigin  — whether the expanded window came from an edge slot (affects re-dock on collapse).
     private enum DeepCapsuleSlotState
     {
         None,
@@ -1401,7 +1425,7 @@ public sealed partial class PaperWindow : Window
         Topmost = effectiveTopmost;
         if (IsVisible && (shouldBeTopmost || _controller.SuppressTopmostForFullscreenForeground))
         {
-            ApplyTopmostZOrder(this, effectiveTopmost, _controller.FullscreenAvoidanceWindow);
+            WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, _controller.FullscreenAvoidanceWindow);
         }
 
         RefreshDeepCapsuleSlotTopmost();
@@ -1415,7 +1439,7 @@ public sealed partial class PaperWindow : Window
             _deepCapsuleSlotHost.Topmost = slotShouldBeTopmost;
             if (_deepCapsuleSlotHost.IsVisible)
             {
-                ApplyTopmostZOrder(_deepCapsuleSlotHost, slotShouldBeTopmost, _controller.FullscreenAvoidanceWindow);
+                WindowNative.ApplyTopmostZOrder(_deepCapsuleSlotHost, slotShouldBeTopmost, _controller.FullscreenAvoidanceWindow);
             }
         }
     }
@@ -1552,7 +1576,7 @@ public sealed partial class PaperWindow : Window
         }
         else
         {
-            EnsureExpandedSurfaceGeometry(alignToRightEdge: true);
+            EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
         }
 
         var delay = Math.Max(ExpandAnimationMilliseconds, CollapseResizeMilliseconds) + 30;
@@ -1885,32 +1909,6 @@ public sealed partial class PaperWindow : Window
         set => SetValue(TransitionProgressProperty, value);
     }
 
-    private static readonly DependencyProperty DeepCapsuleAnimatedLeftProperty =
-        DependencyProperty.Register(
-            nameof(DeepCapsuleAnimatedLeft),
-            typeof(double),
-            typeof(PaperWindow),
-            new PropertyMetadata(double.NaN, OnDeepCapsuleAnimatedLeftChanged));
-
-    private double DeepCapsuleAnimatedLeft
-    {
-        get => (double)GetValue(DeepCapsuleAnimatedLeftProperty);
-        set => SetValue(DeepCapsuleAnimatedLeftProperty, value);
-    }
-
-    private static readonly DependencyProperty DeepCapsuleAnimatedTopProperty =
-        DependencyProperty.Register(
-            nameof(DeepCapsuleAnimatedTop),
-            typeof(double),
-            typeof(PaperWindow),
-            new PropertyMetadata(double.NaN, OnDeepCapsuleAnimatedTopChanged));
-
-    private double DeepCapsuleAnimatedTop
-    {
-        get => (double)GetValue(DeepCapsuleAnimatedTopProperty);
-        set => SetValue(DeepCapsuleAnimatedTopProperty, value);
-    }
-
     private static readonly DependencyProperty DeepCapsuleSlotHorizontalProgressProperty =
         DependencyProperty.Register(
             nameof(DeepCapsuleSlotHorizontalProgress),
@@ -1930,26 +1928,6 @@ public sealed partial class PaperWindow : Window
         {
             window.UpdateTransitionVisuals((double)e.NewValue);
         }
-    }
-
-    private static void OnDeepCapsuleAnimatedLeftChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is not PaperWindow window || e.NewValue is not double left || double.IsNaN(left) || double.IsInfinity(left))
-        {
-            return;
-        }
-
-        window.MoveWindowWithoutGeometrySave(() => window.Left = window.RoundToDevicePixelX(left));
-    }
-
-    private static void OnDeepCapsuleAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is not PaperWindow window || e.NewValue is not double top || double.IsNaN(top) || double.IsInfinity(top))
-        {
-            return;
-        }
-
-        window.MoveWindowWithoutGeometrySave(() => window.Top = window.RoundToDevicePixelY(top));
     }
 
     private static void OnDeepCapsuleSlotHorizontalProgressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

@@ -80,6 +80,17 @@ public static class FullscreenTopmostModes
     }
 }
 
+public static class DeepCapsuleSides
+{
+    public const string Left = "left";
+    public const string Right = "right";
+
+    public static string Normalize(string? side)
+    {
+        return side is Left ? Left : Right;
+    }
+}
+
 public static class TodoVisualSizes
 {
     public const string Small = "small";
@@ -141,6 +152,14 @@ public sealed class AppState
     public bool EnableToolTips { get; set; } = true;
     public string FullscreenTopmostMode { get; set; } = FullscreenTopmostModes.Avoid;
     public double DeepCapsuleStartTopMargin { get; set; } = DeepCapsuleLayout.StartTopMargin;
+
+    // Which screen edge the deep-capsule stack docks to. "left" or "right" (default).
+    public string DeepCapsuleSide { get; set; } = DeepCapsuleSides.Right;
+
+    // Device name (e.g. "\\\\.\\DISPLAY1") of the monitor hosting the deep-capsule stack.
+    // Empty means "the primary monitor"; resolved with a nearest-monitor fallback on load,
+    // so unplugging the anchored monitor gracefully lands the stack on a surviving screen.
+    public string DeepCapsuleMonitorDeviceName { get; set; } = "";
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public double TopBarHeight { get; set; }

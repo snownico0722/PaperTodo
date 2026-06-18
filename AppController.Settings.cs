@@ -1212,8 +1212,7 @@ public sealed partial class AppController
     {
         RescuePaperIfOffScreen(paper, State.Papers.IndexOf(paper));
         window.CancelPendingVisibilityTransitions();
-        window.ClearDeepCapsulePlacement(animate: false);
-        window.ClearDeepCapsuleSlotReservation(animate: false);
+        window.DetachFromDeepCapsuleStack(animate: false);
 
         window.Left = paper.X;
         window.Top = paper.Y;

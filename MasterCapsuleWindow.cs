@@ -41,6 +41,7 @@ public sealed class MasterCapsuleWindow : Window
     private Border _hoverOverlay = null!;
     private TextBlock _glyph = null!;
     private TextBlock _label = null!;
+    private StackPanel _contentStack = null!;
     private TranslateTransform _pillOffset = null!;
 
     private bool _isHovering;
@@ -48,9 +49,20 @@ public sealed class MasterCapsuleWindow : Window
     private int _count;
     private bool _active;
     private bool _isPointerDown;
-    private bool _isDraggingStartTop;
-    private Point _dragStartScreenPos;
+    private bool _isDraggingMaster;
+    // Two-phase master drag. Within the magnetic X band the pill stays pinned to the docked edge
+    // and vertical drag slides the WHOLE stack (drives DeepCapsuleStartTopMargin). Pulling past
+    // DetachThreshold flips to "detached": the pill alone follows the cursor in 2D and the other
+    // capsules stay put. Re-entering below ReattachThreshold snaps back to magnetic. The two
+    // thresholds differ (hysteresis) so the pill doesn't flip-flop at a single boundary X.
+    private bool _isDetached;
     private double _dragStartTopMargin;
+    private const double DetachThreshold = 44;
+    private const double ReattachThreshold = 24;
+    private Point _dragStartScreenPos;
+    private double _dragStartLeft;
+    private double _dragStartTop;
+    private DeepCapsuleEdge? _appliedEdge;
 
     private static readonly DependencyProperty AnimatedLeftProperty =
         DependencyProperty.Register(
@@ -65,6 +77,19 @@ public sealed class MasterCapsuleWindow : Window
         set => SetValue(AnimatedLeftProperty, value);
     }
 
+    private static readonly DependencyProperty AnimatedTopProperty =
+        DependencyProperty.Register(
+            nameof(AnimatedTop),
+            typeof(double),
+            typeof(MasterCapsuleWindow),
+            new PropertyMetadata(double.NaN, OnAnimatedTopChanged));
+
+    private double AnimatedTop
+    {
+        get => (double)GetValue(AnimatedTopProperty);
+        set => SetValue(AnimatedTopProperty, value);
+    }
+
     public MasterCapsuleWindow(AppController controller)
     {
         _controller = controller;
@@ -75,19 +100,7 @@ public sealed class MasterCapsuleWindow : Window
         // deactivate whatever app was in front, forcing it to repaint — the click "flash".
         // WS_EX_NOACTIVATE makes the window unable to become the active/foreground window,
         // so the click toggles collapse-all without disturbing the current foreground app.
-        SourceInitialized += (_, _) => ApplyNoActivateStyle();
-    }
-
-    private void ApplyNoActivateStyle()
-    {
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var exStyle = GetWindowLong(handle, GwlExStyle);
-        SetWindowLong(handle, GwlExStyle, exStyle | WsExNoActivate);
+        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
     }
 
     private void ConfigureWindow()
@@ -150,6 +163,7 @@ public sealed class MasterCapsuleWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(MasterLeftPadding, 0, MasterRightPadding, 0)
         };
+        _contentStack = stack;
 
         _glyph = new TextBlock
         {
@@ -189,8 +203,11 @@ public sealed class MasterCapsuleWindow : Window
         _pill.PreviewMouseLeftButtonDown += (_, e) =>
         {
             _isPointerDown = true;
-            _isDraggingStartTop = false;
+            _isDraggingMaster = false;
+            _isDetached = false;
             _dragStartScreenPos = PointToScreen(e.GetPosition(this));
+            _dragStartLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? 0 : Left;
+            _dragStartTop = double.IsNaN(Top) || double.IsInfinity(Top) ? 0 : Top;
             _dragStartTopMargin = _controller.State.DeepCapsuleStartTopMargin;
             _pill.CaptureMouse();
             e.Handled = true;
@@ -203,25 +220,80 @@ public sealed class MasterCapsuleWindow : Window
             }
 
             var currentScreenPos = PointToScreen(e.GetPosition(this));
-            var deltaY = Math.Abs(currentScreenPos.Y - _dragStartScreenPos.Y);
-            if (!_isDraggingStartTop && deltaY < SystemParameters.MinimumVerticalDragDistance)
+            var deltaX = currentScreenPos.X - _dragStartScreenPos.X;
+            var deltaY = currentScreenPos.Y - _dragStartScreenPos.Y;
+            if (!_isDraggingMaster &&
+                Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
             {
                 return;
             }
 
-            _isDraggingStartTop = true;
-            var dpiScaleY = VisualTreeHelper.GetDpi(this).DpiScaleY;
-            var target = _dragStartTopMargin + (currentScreenPos.Y - _dragStartScreenPos.Y) / Math.Max(0.1, dpiScaleY);
-            _controller.SetDeepCapsuleStartTopMargin(target);
+            if (!_isDraggingMaster)
+            {
+                _isDraggingMaster = true;
+                BeginAnimation(AnimatedLeftProperty, null);
+                BeginAnimation(AnimatedTopProperty, null);
+            }
+
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var dpiScaleX = Math.Max(0.1, dpi.DpiScaleX);
+            var dpiScaleY = Math.Max(0.1, dpi.DpiScaleY);
+
+            // Horizontal pull away from the docked wall, in DIPs (always positive = "toward interior").
+            var area = DeepCapsuleLayout.WorkArea;
+            var pullFromWall = DeepCapsuleLayout.IsLeftEdge
+                ? (currentScreenPos.X / dpiScaleX) - area.Left
+                : area.Right - (currentScreenPos.X / dpiScaleX);
+            pullFromWall = Math.Max(0, pullFromWall);
+
+            // Hysteresis: detach past DetachThreshold, re-attach only below the smaller one.
+            if (_isDetached)
+            {
+                if (pullFromWall < ReattachThreshold)
+                {
+                    _isDetached = false;
+                }
+            }
+            else if (pullFromWall > DetachThreshold)
+            {
+                _isDetached = true;
+            }
+
+            if (_isDetached)
+            {
+                // Detached: this pill alone follows the cursor in 2D; the rest of the stack is left
+                // exactly where it is (no controller relayout).
+                MoveWithoutSave(() =>
+                {
+                    Left = RoundX(_dragStartLeft + deltaX / dpiScaleX);
+                    Top = RoundY(_dragStartTop + deltaY / dpiScaleY);
+                });
+            }
+            else
+            {
+                // Magnetic: pinned to the docked edge, vertical drag slides the WHOLE stack by
+                // driving the shared start-top margin. ArrangeDeepCapsules re-pins this pill's X.
+                var targetMargin = _dragStartTopMargin + deltaY / dpiScaleY;
+                _controller.SetDeepCapsuleStartTopMargin(targetMargin);
+            }
+
             e.Handled = true;
         };
         _pill.PreviewMouseLeftButtonUp += (_, e) =>
         {
-            var wasDragging = _isDraggingStartTop;
-            EndStartTopDrag();
-            if (wasDragging)
+            var wasDragging = _isDraggingMaster;
+            var wasDetached = _isDetached;
+            EndMasterDrag();
+            if (wasDragging && wasDetached)
             {
-                _controller.SaveNow();
+                // Released away from the wall: snap to the monitor/edge under the drop point.
+                CommitDropAnchor();
+            }
+            else if (wasDragging)
+            {
+                // Magnetic drag: the live margin is already applied; just persist it.
+                _controller.SetDeepCapsuleStartTopMargin(_controller.State.DeepCapsuleStartTopMargin, commit: true);
             }
             else
             {
@@ -232,12 +304,13 @@ public sealed class MasterCapsuleWindow : Window
         };
         _pill.LostMouseCapture += (_, _) =>
         {
-            if (_isDraggingStartTop)
+            // A capture lost mid-drag (e.g. Alt-Tab) snaps the stack back to its current anchor.
+            if (_isDraggingMaster)
             {
-                _controller.SaveNow();
+                _controller.ArrangeDeepCapsules(animate: true);
             }
 
-            EndStartTopDrag();
+            EndMasterDrag();
         };
         _pill.MouseLeftButtonUp += (_, e) =>
         {
@@ -266,7 +339,7 @@ public sealed class MasterCapsuleWindow : Window
         Topmost = topmost;
         if (IsVisible)
         {
-            ApplyTopmostZOrder(topmost, _controller.FullscreenAvoidanceWindow);
+            WindowNative.ApplyTopmostZOrder(this, topmost, _controller.FullscreenAvoidanceWindow);
         }
     }
 
@@ -301,14 +374,56 @@ public sealed class MasterCapsuleWindow : Window
         _isHovering = hovering;
     }
 
-    private void EndStartTopDrag()
+    private void EndMasterDrag()
     {
         _isPointerDown = false;
-        _isDraggingStartTop = false;
+        _isDraggingMaster = false;
+        _isDetached = false;
         if (_pill.IsMouseCaptured)
         {
             _pill.ReleaseMouseCapture();
         }
+    }
+
+    // Resolve the monitor under the cursor and the nearer edge by where the pill landed,
+    // then commit the new dock anchor. The vertical rest position maps the master's Top to a
+    // start-top-margin against the NEW monitor's work area.
+    private void CommitDropAnchor()
+    {
+        var dropCenter = MasterDropCenterDip();
+        var resolved = WindowWorkAreaHelper.MonitorAtScreenPoint(dropCenter);
+        Rect area;
+        string deviceName;
+        if (resolved.HasValue)
+        {
+            deviceName = resolved.Value.DeviceName;
+            area = resolved.Value.WorkArea;
+        }
+        else
+        {
+            deviceName = _controller.State.DeepCapsuleMonitorDeviceName;
+            area = DeepCapsuleLayout.WorkArea;
+        }
+
+        // Nearer edge: which half of the monitor the cursor landed in.
+        var side = dropCenter.X < area.Left + area.Width / 2
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+
+        var currentTop = double.IsNaN(Top) || double.IsInfinity(Top) ? area.Top : Top;
+        var startTopMargin = currentTop - area.Top;
+
+        _controller.SetDeepCapsuleAnchor(deviceName, side, startTopMargin);
+    }
+
+    // Center of the master pill in DIPs — a stable point for monitor/side resolution that
+    // doesn't depend on the cursor still being over the (narrow) pill at release.
+    private Point MasterDropCenterDip()
+    {
+        var left = double.IsNaN(Left) || double.IsInfinity(Left) ? 0 : Left;
+        var top = double.IsNaN(Top) || double.IsInfinity(Top) ? 0 : Top;
+        var width = double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0 ? MasterVisibleWidth() : Width;
+        return new Point(left + width / 2, top + PaperLayoutDefaults.CapsuleHeight / 2);
     }
 
     private double CapsuleWindowWidth()
@@ -348,12 +463,55 @@ public sealed class MasterCapsuleWindow : Window
 
     private void ApplyDockedWidth(double visibleWidth)
     {
+        ApplyMasterEdgeLayout();
         var fullWidth = CapsuleWindowWidth();
         visibleWidth = Math.Clamp(visibleWidth, 1, fullWidth);
         Width = visibleWidth;
         Height = PaperLayoutDefaults.CapsuleHeight;
         _pill.Width = Math.Max(0, fullWidth - WindowChromeInset);
         _pillOffset.X = 0;
+    }
+
+    // Mirror the pill chrome + content to the anchored edge. Right edge (default): chrome margin
+    // on the left, pill+content hug the left, chevron leads. Left edge: chrome margin on the
+    // right, pill+content hug the right (tail tucked past the left wall), chevron on the interior.
+    private void ApplyMasterEdgeLayout()
+    {
+        var edge = DeepCapsuleLayout.Edge;
+        if (_appliedEdge == edge)
+        {
+            return;
+        }
+
+        _appliedEdge = edge;
+        var leftEdge = edge == DeepCapsuleEdge.Left;
+
+        _pill.Margin = leftEdge
+            ? new Thickness(0, WindowChromeMargin, WindowChromeMargin, WindowChromeMargin)
+            : new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin);
+        _pill.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+
+        _contentStack.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _contentStack.Margin = leftEdge
+            ? new Thickness(MasterRightPadding, 0, MasterLeftPadding, 0)
+            : new Thickness(MasterLeftPadding, 0, MasterRightPadding, 0);
+
+        // Keep the chevron on the interior side of the pill: leftmost on the right dock,
+        // rightmost on the left dock.
+        _contentStack.Children.Clear();
+        _label.Margin = leftEdge
+            ? new Thickness(0, 0, MasterGlyphGap, 0)
+            : new Thickness(MasterGlyphGap, 0, 0, 0);
+        if (leftEdge)
+        {
+            _contentStack.Children.Add(_label);
+            _contentStack.Children.Add(_glyph);
+        }
+        else
+        {
+            _contentStack.Children.Add(_glyph);
+            _contentStack.Children.Add(_label);
+        }
     }
 
     private double MeasureText(string text, double fontSize, FontWeight weight)
@@ -385,23 +543,25 @@ public sealed class MasterCapsuleWindow : Window
     {
         var area = DeepCapsuleLayout.WorkArea;
         var visibleWidth = MasterVisibleWidth();
-        var targetLeft = RoundX(area.Right - visibleWidth);
+        var targetLeft = RoundX(DeepCapsuleLayout.DockedLeft(area, visibleWidth));
         var targetTop = RoundY(DeepCapsuleLayout.TopForIndex(0, _controller.State.DeepCapsuleStartTopMargin));
         var currentLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? targetLeft : RoundX(Left);
+        var currentTop = double.IsNaN(Top) || double.IsInfinity(Top) ? targetTop : RoundY(Top);
 
         MoveWithoutSave(() =>
         {
             ApplyDockedWidth(visibleWidth);
-            Top = targetTop;
             if (!animate)
             {
                 Left = targetLeft;
+                Top = targetTop;
             }
         });
 
         if (!animate)
         {
             BeginAnimation(AnimatedLeftProperty, null);
+            BeginAnimation(AnimatedTopProperty, null);
             return;
         }
 
@@ -409,22 +569,45 @@ public sealed class MasterCapsuleWindow : Window
         {
             BeginAnimation(AnimatedLeftProperty, null);
             MoveWithoutSave(() => Left = targetLeft);
-            return;
+        }
+        else
+        {
+            var leftAnim = new DoubleAnimation
+            {
+                From = currentLeft,
+                To = targetLeft,
+                Duration = TimeSpan.FromMilliseconds(_isHovering ? DeepCapsuleLayout.SlideOutMilliseconds : DeepCapsuleLayout.SlideInMilliseconds),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            leftAnim.Completed += (_, _) =>
+            {
+                BeginAnimation(AnimatedLeftProperty, null);
+                MoveWithoutSave(() => Left = targetLeft);
+            };
+            BeginAnimation(AnimatedLeftProperty, leftAnim, HandoffBehavior.SnapshotAndReplace);
         }
 
-        var anim = new DoubleAnimation
+        if (Math.Abs(currentTop - targetTop) < 0.5)
         {
-            From = currentLeft,
-            To = targetLeft,
-            Duration = TimeSpan.FromMilliseconds(_isHovering ? DeepCapsuleLayout.SlideOutMilliseconds : DeepCapsuleLayout.SlideInMilliseconds),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        anim.Completed += (_, _) =>
+            BeginAnimation(AnimatedTopProperty, null);
+            MoveWithoutSave(() => Top = targetTop);
+        }
+        else
         {
-            BeginAnimation(AnimatedLeftProperty, null);
-            MoveWithoutSave(() => Left = targetLeft);
-        };
-        BeginAnimation(AnimatedLeftProperty, anim, HandoffBehavior.SnapshotAndReplace);
+            var topAnim = new DoubleAnimation
+            {
+                From = currentTop,
+                To = targetTop,
+                Duration = TimeSpan.FromMilliseconds(DeepCapsuleLayout.SlotMoveMilliseconds),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            topAnim.Completed += (_, _) =>
+            {
+                BeginAnimation(AnimatedTopProperty, null);
+                MoveWithoutSave(() => Top = targetTop);
+            };
+            BeginAnimation(AnimatedTopProperty, topAnim, HandoffBehavior.SnapshotAndReplace);
+        }
     }
 
     // The resting Top of the master, used as the retract/release anchor for real capsules.
@@ -438,6 +621,16 @@ public sealed class MasterCapsuleWindow : Window
         }
 
         w.MoveWithoutSave(() => w.Left = w.RoundX(left));
+    }
+
+    private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not MasterCapsuleWindow w || e.NewValue is not double top || double.IsNaN(top) || double.IsInfinity(top))
+        {
+            return;
+        }
+
+        w.MoveWithoutSave(() => w.Top = w.RoundY(top));
     }
 
     private void MoveWithoutSave(Action move)
@@ -508,61 +701,7 @@ public sealed class MasterCapsuleWindow : Window
     public void CloseForReal()
     {
         BeginAnimation(AnimatedLeftProperty, null);
+        BeginAnimation(AnimatedTopProperty, null);
         Close();
     }
-
-    private const int GwlExStyle = -20;
-    private const int WsExNoActivate = 0x08000000;
-    private static readonly IntPtr HwndTopmost = new(-1);
-    private static readonly IntPtr HwndNoTopmost = new(-2);
-    private const uint SwpNoSize = 0x0001;
-    private const uint SwpNoMove = 0x0002;
-    private const uint SwpNoActivate = 0x0010;
-    private const uint SwpNoOwnerZOrder = 0x0200;
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    private void ApplyTopmostZOrder(bool topmost, IntPtr insertAfter)
-    {
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        SetWindowPos(
-            handle,
-            topmost ? HwndTopmost : HwndNoTopmost,
-            0,
-            0,
-            0,
-            0,
-            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-
-        if (!topmost && insertAfter != IntPtr.Zero)
-        {
-            SetWindowPos(
-                handle,
-                insertAfter,
-                0,
-                0,
-                0,
-                0,
-                SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-        }
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetWindowPos(
-        IntPtr hWnd,
-        IntPtr hWndInsertAfter,
-        int X,
-        int Y,
-        int cx,
-        int cy,
-        uint uFlags);
 }
