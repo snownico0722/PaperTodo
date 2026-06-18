@@ -120,6 +120,10 @@ public sealed partial class PaperWindow : Window
     private bool _isCollapseAllRetracted;
     private double _deepCapsuleDragMouseOffsetY;
     private double _deepCapsuleDragLeft;
+    // Cross-edge/monitor drag: cursor offset inside the pill and last screen point (DIP), used on
+    // release to resolve which (monitor, edge) queue the capsule was dropped onto.
+    private double _deepCapsuleDragMouseOffsetX;
+    private Point _deepCapsuleDragLastDip;
     private double _deepCapsuleSlotLeft;
     private double _deepCapsuleSlotTop;
     private int _deepCapsuleIndex = -1;

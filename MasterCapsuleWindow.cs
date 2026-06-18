@@ -55,18 +55,11 @@ public sealed class MasterCapsuleWindow : Window
     private bool _active;
     private bool _isPointerDown;
     private bool _isDraggingMaster;
-    // Two-phase master drag. Within the magnetic X band the pill stays pinned to the docked edge
-    // and vertical drag slides the WHOLE stack (drives DeepCapsuleStartTopMargin). Pulling past
-    // DetachThreshold flips to "detached": the pill alone follows the cursor in 2D and the other
-    // capsules stay put. Re-entering below ReattachThreshold snaps back to magnetic. The two
-    // thresholds differ (hysteresis) so the pill doesn't flip-flop at a single boundary X.
-    private bool _isDetached;
+    // The master pill is dragged vertically only: it slides its queue's stack by driving the
+    // shared start-top margin. It never detaches or changes edge/monitor — that is done by
+    // dragging an individual side capsule to another edge / screen.
     private double _dragStartTopMargin;
-    private const double DetachThreshold = 44;
-    private const double ReattachThreshold = 24;
     private Point _dragStartScreenPos;
-    private double _dragStartLeft;
-    private double _dragStartTop;
     private DeepCapsuleEdge? _appliedEdge;
 
     private static readonly DependencyProperty AnimatedLeftProperty =
@@ -211,10 +204,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             _isPointerDown = true;
             _isDraggingMaster = false;
-            _isDetached = false;
             _dragStartScreenPos = PointToScreen(e.GetPosition(this));
-            _dragStartLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? 0 : Left;
-            _dragStartTop = double.IsNaN(Top) || double.IsInfinity(Top) ? 0 : Top;
             _dragStartTopMargin = _controller.State.DeepCapsuleStartTopMargin;
             _pill.CaptureMouse();
             e.Handled = true;
@@ -244,62 +234,23 @@ public sealed class MasterCapsuleWindow : Window
             }
 
             var dpi = VisualTreeHelper.GetDpi(this);
-            var dpiScaleX = Math.Max(0.1, dpi.DpiScaleX);
             var dpiScaleY = Math.Max(0.1, dpi.DpiScaleY);
 
-            // Horizontal pull away from the docked wall, in DIPs (always positive = "toward interior").
-            var area = QueueWorkArea;
-            var pullFromWall = QueueIsLeftEdge
-                ? (currentScreenPos.X / dpiScaleX) - area.Left
-                : area.Right - (currentScreenPos.X / dpiScaleX);
-            pullFromWall = Math.Max(0, pullFromWall);
-
-            // Hysteresis: detach past DetachThreshold, re-attach only below the smaller one.
-            if (_isDetached)
-            {
-                if (pullFromWall < ReattachThreshold)
-                {
-                    _isDetached = false;
-                }
-            }
-            else if (pullFromWall > DetachThreshold)
-            {
-                _isDetached = true;
-            }
-
-            if (_isDetached)
-            {
-                // Detached: this pill alone follows the cursor in 2D; the rest of the stack is left
-                // exactly where it is (no controller relayout).
-                MoveWithoutSave(() =>
-                {
-                    Left = RoundX(_dragStartLeft + deltaX / dpiScaleX);
-                    Top = RoundY(_dragStartTop + deltaY / dpiScaleY);
-                });
-            }
-            else
-            {
-                // Magnetic: pinned to the docked edge, vertical drag slides the WHOLE stack by
-                // driving the shared start-top margin. ArrangeDeepCapsules re-pins this pill's X.
-                var targetMargin = _dragStartTopMargin + deltaY / dpiScaleY;
-                _controller.SetDeepCapsuleStartTopMargin(targetMargin);
-            }
+            // The master stays pinned to its queue's edge; vertical drag slides that queue's stack
+            // by driving the shared start-top margin. It never detaches or changes edge/monitor —
+            // moving capsules between queues is done by dragging an individual side capsule.
+            var targetMargin = _dragStartTopMargin + deltaY / dpiScaleY;
+            _controller.SetDeepCapsuleStartTopMargin(targetMargin);
 
             e.Handled = true;
         };
         _pill.PreviewMouseLeftButtonUp += (_, e) =>
         {
             var wasDragging = _isDraggingMaster;
-            var wasDetached = _isDetached;
             EndMasterDrag();
-            if (wasDragging && wasDetached)
+            if (wasDragging)
             {
-                // Released away from the wall: snap to the monitor/edge under the drop point.
-                CommitDropAnchor();
-            }
-            else if (wasDragging)
-            {
-                // Magnetic drag: the live margin is already applied; just persist it.
+                // Vertical slide only: the live margin is already applied; persist it.
                 _controller.SetDeepCapsuleStartTopMargin(_controller.State.DeepCapsuleStartTopMargin, commit: true);
             }
             else
@@ -385,52 +336,10 @@ public sealed class MasterCapsuleWindow : Window
     {
         _isPointerDown = false;
         _isDraggingMaster = false;
-        _isDetached = false;
         if (_pill.IsMouseCaptured)
         {
             _pill.ReleaseMouseCapture();
         }
-    }
-
-    // Resolve the monitor under the cursor and the nearer edge by where the pill landed,
-    // then commit the new dock anchor. The vertical rest position maps the master's Top to a
-    // start-top-margin against the NEW monitor's work area.
-    private void CommitDropAnchor()
-    {
-        var dropCenter = MasterDropCenterDip();
-        var resolved = WindowWorkAreaHelper.MonitorAtScreenPoint(dropCenter);
-        Rect area;
-        string deviceName;
-        if (resolved.HasValue)
-        {
-            deviceName = resolved.Value.DeviceName;
-            area = resolved.Value.WorkArea;
-        }
-        else
-        {
-            deviceName = _queueMonitorDeviceName;
-            area = QueueWorkArea;
-        }
-
-        // Nearer edge: which half of the monitor the cursor landed in.
-        var side = dropCenter.X < area.Left + area.Width / 2
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
-
-        var currentTop = double.IsNaN(Top) || double.IsInfinity(Top) ? area.Top : Top;
-        var startTopMargin = currentTop - area.Top;
-
-        _controller.SetDeepCapsuleAnchor(deviceName, side, startTopMargin);
-    }
-
-    // Center of the master pill in DIPs — a stable point for monitor/side resolution that
-    // doesn't depend on the cursor still being over the (narrow) pill at release.
-    private Point MasterDropCenterDip()
-    {
-        var left = double.IsNaN(Left) || double.IsInfinity(Left) ? 0 : Left;
-        var top = double.IsNaN(Top) || double.IsInfinity(Top) ? 0 : Top;
-        var width = double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0 ? MasterVisibleWidth() : Width;
-        return new Point(left + width / 2, top + PaperLayoutDefaults.CapsuleHeight / 2);
     }
 
     private double CapsuleWindowWidth()

@@ -188,7 +188,10 @@ public sealed partial class PaperWindow
             var deltaY = Math.Abs(currentScreenPos.Y - _deepCapsuleSlotMouseDownScreenPos.Y);
             if (CanReorderDeepCapsuleSlot())
             {
-                if (deltaY >= SystemParameters.MinimumVerticalDragDistance + DeepCapsuleReorderDragExtraThreshold)
+                // Start the drag on EITHER axis: vertical reorders within the queue, horizontal
+                // carries the capsule toward another edge / monitor (resolved on release).
+                if (deltaY >= SystemParameters.MinimumVerticalDragDistance + DeepCapsuleReorderDragExtraThreshold ||
+                    deltaX >= SystemParameters.MinimumHorizontalDragDistance + DeepCapsuleReorderDragExtraThreshold)
                 {
                     SetDeepCapsuleGestureState(DeepCapsuleGestureState.Idle);
                     StartDeepCapsuleReorderDrag(currentScreenPos);
@@ -1584,8 +1587,11 @@ public sealed partial class PaperWindow
         SetDeepCapsuleVisualState(DeepCapsuleVisualState.Hovered);
         // currentScreenPos is in physical device pixels (PointToScreen); Top is in DIPs.
         // Convert to DIPs so the capsule tracks the cursor 1:1 at any DPI.
-        var dpiScaleY = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var dpiScaleY = dpi.DpiScaleY;
+        var dpiScaleX = Math.Max(0.1, dpi.DpiScaleX);
         _deepCapsuleDragMouseOffsetY = currentScreenPos.Y / dpiScaleY - _deepCapsuleSlotHost.Top;
+        _deepCapsuleDragMouseOffsetX = currentScreenPos.X / dpiScaleX - _deepCapsuleSlotHost.Left;
 
         _deepCapsuleSlotHost.BeginAnimation(Window.LeftProperty, null);
         _deepCapsuleSlotHost.BeginAnimation(Window.TopProperty, null);
@@ -1598,7 +1604,7 @@ public sealed partial class PaperWindow
         ApplyDeepCapsuleSlotHostViewport(visibleWidth);
         _deepCapsuleSlotLeft = _deepCapsuleSlotHost.Left;
 
-        Mouse.OverrideCursor = Cursors.SizeNS;
+        Mouse.OverrideCursor = Cursors.SizeAll;
         UpdateDeepCapsuleReorderDrag(currentScreenPos);
     }
 
@@ -1609,17 +1615,20 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var area = DeepCapsuleWorkArea();
-        var minTop = area.Top + DeepCapsuleTopMargin;
-        var maxTop = Math.Max(minTop, area.Bottom - PaperLayoutDefaults.CapsuleHeight - DeepCapsuleTopMargin);
-        // currentScreenPos is in physical device pixels; convert to DIPs to match Top/offset.
-        var dpiScaleY = VisualTreeHelper.GetDpi(this).DpiScaleY;
-        var targetTop = Math.Clamp(currentScreenPos.Y / dpiScaleY - _deepCapsuleDragMouseOffsetY, minTop, maxTop);
+        // Free 2D follow: the dragged capsule tracks the cursor across the desktop so it can be
+        // carried to another edge or monitor. It is NOT free-placed — on release it snaps to the
+        // (monitor, edge) queue under the cursor. While dragging it floats under the pointer.
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var dpiScaleX = Math.Max(0.1, dpi.DpiScaleX);
+        var dpiScaleY = Math.Max(0.1, dpi.DpiScaleY);
+        var cursorDipX = currentScreenPos.X / dpiScaleX;
+        var cursorDipY = currentScreenPos.Y / dpiScaleY;
+        _deepCapsuleDragLastDip = new Point(cursorDipX, cursorDipY);
 
         if (_deepCapsuleSlotHost != null)
         {
-            _deepCapsuleSlotHost.Left = _deepCapsuleDragLeft;
-            _deepCapsuleSlotHost.Top = RoundToDevicePixelY(targetTop);
+            _deepCapsuleSlotHost.Left = RoundToDevicePixelX(cursorDipX - _deepCapsuleDragMouseOffsetX);
+            _deepCapsuleSlotHost.Top = RoundToDevicePixelY(cursorDipY - _deepCapsuleDragMouseOffsetY);
             _deepCapsuleSlotLeft = _deepCapsuleSlotHost.Left;
             _deepCapsuleSlotTop = _deepCapsuleSlotHost.Top;
         }
@@ -1641,7 +1650,39 @@ public sealed partial class PaperWindow
 
         if (commit)
         {
-            _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
+            // Resolve the (monitor, edge) queue under the drop point. If it differs from this
+            // paper's current queue, reassign it (cross-edge / cross-monitor move). Otherwise it's
+            // a plain vertical reorder within the same queue.
+            var resolved = WindowWorkAreaHelper.MonitorAtScreenPoint(_deepCapsuleDragLastDip);
+            string targetMonitor;
+            Rect targetArea;
+            if (resolved.HasValue)
+            {
+                targetMonitor = resolved.Value.DeviceName;
+                targetArea = resolved.Value.WorkArea;
+            }
+            else
+            {
+                targetMonitor = _paper.CapsuleMonitorDeviceName;
+                targetArea = DeepCapsuleWorkArea();
+            }
+
+            // Nearer edge of the target monitor by the drop X (left half => left, else right).
+            var targetSide = _deepCapsuleDragLastDip.X < targetArea.Left + targetArea.Width / 2
+                ? DeepCapsuleSides.Left
+                : DeepCapsuleSides.Right;
+
+            var queueChanged = targetSide != _paper.CapsuleSide ||
+                !string.Equals(targetMonitor, _paper.CapsuleMonitorDeviceName, StringComparison.Ordinal);
+
+            if (queueChanged)
+            {
+                _controller.MoveCapsuleToQueue(_paper, targetMonitor, targetSide, _deepCapsuleDragLastDip.Y);
+            }
+            else
+            {
+                _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
+            }
             return;
         }
 

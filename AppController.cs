@@ -1088,6 +1088,87 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
+    // Reassign a capsule to a different (monitor, edge) queue — the cross-edge / cross-monitor
+    // drag. The paper keeps its identity; only its queue tag + position among the target queue's
+    // members change. Order within State.Papers is rebuilt so the dragged paper lands at the slot
+    // matching the drop height in the target queue.
+    public void MoveCapsuleToQueue(PaperData paper, string monitorDeviceName, string side, double dropDipY)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var normalizedSide = DeepCapsuleSides.Normalize(side);
+        var normalizedMonitor = (monitorDeviceName ?? "").Trim();
+
+        paper.CapsuleSide = normalizedSide;
+        paper.CapsuleMonitorDeviceName = normalizedMonitor;
+
+        // Members already in the target queue (excluding the dragged paper), in State.Papers order.
+        var targetKey = QueueKey(normalizedMonitor, normalizedSide);
+        var targetMembers = new List<PaperData>();
+        foreach (var p in State.Papers)
+        {
+            if (p.Id == paper.Id || !p.IsVisible)
+            {
+                continue;
+            }
+            if (_windows.TryGetValue(p.Id, out var w) && ShouldPaperOccupyDeepCapsuleSlot(p, w) && QueueKey(p) == targetKey)
+            {
+                targetMembers.Add(p);
+            }
+        }
+
+        // Insertion index by drop height against the target queue's monitor work area.
+        var area = DeepCapsuleLayout.WorkAreaForQueue(normalizedMonitor);
+        var startTop = DeepCapsuleLayout.NormalizeStartTopMargin(
+            DeepCapsuleStartTopMarginForQueue(normalizedMonitor,
+                normalizedSide == DeepCapsuleSides.Left ? DeepCapsuleEdge.Left : DeepCapsuleEdge.Right),
+            area,
+            targetMembers.Count + 1);
+        var slotHeight = PaperLayoutDefaults.CapsuleHeight + DeepCapsuleLayout.Gap;
+        var firstTop = DeepCapsuleLayout.TopForIndex(0, startTop, area);
+        var rawIndex = (int)Math.Floor((dropDipY - firstTop) / slotHeight + 0.5);
+        var insertAt = Math.Clamp(rawIndex, 0, targetMembers.Count);
+
+        // Rebuild State.Papers: drop the dragged paper, then re-insert it right before the target
+        // queue member currently at insertAt (or at the end of that queue's run).
+        var anchorPaper = insertAt < targetMembers.Count ? targetMembers[insertAt] : null;
+        var rebuilt = new List<PaperData>(State.Papers.Count);
+        foreach (var p in State.Papers)
+        {
+            if (p.Id == paper.Id)
+            {
+                continue;
+            }
+            if (anchorPaper != null && p.Id == anchorPaper.Id)
+            {
+                rebuilt.Add(paper);
+            }
+            rebuilt.Add(p);
+        }
+        if (anchorPaper == null)
+        {
+            // Append after the last target-queue member, or at the end if the queue was empty.
+            if (targetMembers.Count > 0)
+            {
+                var lastId = targetMembers[^1].Id;
+                var idx = rebuilt.FindIndex(p => p.Id == lastId);
+                rebuilt.Insert(idx + 1, paper);
+            }
+            else
+            {
+                rebuilt.Add(paper);
+            }
+        }
+
+        State.Papers = rebuilt;
+        ArrangeDeepCapsules(animate: true);
+        RefreshTrayMenu();
+        SaveNow();
+    }
+
     public void UpdateGeometry(PaperData paper, Window window)
     {
         if (window is PaperWindow paperWindow && paperWindow.SuppressGeometrySave)
