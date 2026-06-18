@@ -153,6 +153,11 @@ public sealed class AppState
     public string FullscreenTopmostMode { get; set; } = FullscreenTopmostModes.Avoid;
     public double DeepCapsuleStartTopMargin { get; set; } = DeepCapsuleLayout.StartTopMargin;
 
+    // Per-queue vertical start margin, keyed by "monitorDevice|side". A missing key falls back to
+    // the legacy global DeepCapsuleStartTopMargin, so dragging one queue's master only slides that
+    // queue. Old configs (no per-queue entries) keep behaving exactly as the single global margin.
+    public Dictionary<string, double> DeepCapsuleQueueStartTopMargins { get; set; } = new();
+
     // Which screen edge the deep-capsule stack docks to. "left" or "right" (default).
     public string DeepCapsuleSide { get; set; } = DeepCapsuleSides.Right;
 

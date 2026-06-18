@@ -205,7 +205,7 @@ public sealed class MasterCapsuleWindow : Window
             _isPointerDown = true;
             _isDraggingMaster = false;
             _dragStartScreenPos = PointToScreen(e.GetPosition(this));
-            _dragStartTopMargin = _controller.State.DeepCapsuleStartTopMargin;
+            _dragStartTopMargin = _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
             _pill.CaptureMouse();
             e.Handled = true;
         };
@@ -240,7 +240,7 @@ public sealed class MasterCapsuleWindow : Window
             // by driving the shared start-top margin. It never detaches or changes edge/monitor —
             // moving capsules between queues is done by dragging an individual side capsule.
             var targetMargin = _dragStartTopMargin + deltaY / dpiScaleY;
-            _controller.SetDeepCapsuleStartTopMargin(targetMargin);
+            _controller.SetDeepCapsuleStartTopMargin(_queueMonitorDeviceName, _queueEdge, targetMargin);
 
             e.Handled = true;
         };
@@ -250,8 +250,11 @@ public sealed class MasterCapsuleWindow : Window
             EndMasterDrag();
             if (wasDragging)
             {
-                // Vertical slide only: the live margin is already applied; persist it.
-                _controller.SetDeepCapsuleStartTopMargin(_controller.State.DeepCapsuleStartTopMargin, commit: true);
+                // Vertical slide only: the live per-queue margin is already applied; persist it.
+                _controller.SetDeepCapsuleStartTopMargin(
+                    _queueMonitorDeviceName, _queueEdge,
+                    _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
+                    commit: true);
             }
             else
             {

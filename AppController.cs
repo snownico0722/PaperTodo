@@ -1848,32 +1848,47 @@ public sealed partial class AppController : IDisposable
         DeepCapsuleLayout.SetAnchor(edge, State.DeepCapsuleMonitorDeviceName);
     }
 
-    // Per-queue vertical rest position. For now all queues share the legacy global margin;
-    // Stage 4 will key this by (monitor, edge). Centralized here so callers don't read State.
+    // Per-queue vertical rest position, keyed by (monitor, edge). Falls back to the legacy global
+    // margin when a queue has no stored value, so old configs are unchanged and a queue's first
+    // slide forks it from the global default.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
-        return State.DeepCapsuleStartTopMargin;
+        var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? DeepCapsuleEdge.Left : DeepCapsuleEdge.Right;
+        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge);
     }
 
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, DeepCapsuleEdge edge)
     {
-        return State.DeepCapsuleStartTopMargin;
+        var key = QueueKey(monitorDeviceName, edge == DeepCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
+        return State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m)
+            ? m
+            : State.DeepCapsuleStartTopMargin;
     }
 
     // Live-adjust the stack's vertical rest position while the master pill is dragged within its
     // magnetic X band. Relayouts every capsule immediately (cheap for a small stack); persists
     // only when commit is set (drag release), so mid-drag frames don't thrash the save path.
-    public void SetDeepCapsuleStartTopMargin(double startTopMargin, bool commit = false)
+    // Live-adjust ONE queue's vertical rest position while its master pill is dragged. Writes the
+    // per-queue margin (keyed by monitor+edge) so other queues are untouched. Relayouts immediately;
+    // persists only on commit (drag release) so mid-drag frames don't thrash the save path.
+    public void SetDeepCapsuleStartTopMargin(string monitorDeviceName, DeepCapsuleEdge edge, double startTopMargin, bool commit = false)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
         {
             return;
         }
 
-        var slotCount = VisibleDeepCapsuleCount() + (State.UseCapsuleCollapseAll && VisibleDeepCapsuleCount() > 0 ? 1 : 0);
-        var normalized = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, slotCount);
+        var side = edge == DeepCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var key = QueueKey(monitorDeviceName, side);
+        var area = DeepCapsuleLayout.WorkAreaForQueue(monitorDeviceName);
 
-        if (Math.Abs(State.DeepCapsuleStartTopMargin - normalized) < 0.01)
+        // Slot count for THIS queue (+1 if its master occupies slot 0).
+        var queueCount = DeepCapsulePapersInOrder().Count(p => QueueKey(p) == key);
+        var slotCount = queueCount + (State.UseCapsuleCollapseAll && queueCount > 0 ? 1 : 0);
+        var normalized = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, area, slotCount);
+
+        var current = State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m) ? m : State.DeepCapsuleStartTopMargin;
+        if (Math.Abs(current - normalized) < 0.01)
         {
             if (commit)
             {
@@ -1882,7 +1897,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        State.DeepCapsuleStartTopMargin = normalized;
+        State.DeepCapsuleQueueStartTopMargins[key] = normalized;
         ArrangeDeepCapsules(animate: false);
 
         if (commit)

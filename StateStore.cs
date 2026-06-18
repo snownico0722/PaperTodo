@@ -207,6 +207,19 @@ public sealed class StateStore
             ? NormalizeDeepCapsuleStartTopMargin(state.DeepCapsuleStartTopMargin)
             : DeepCapsuleLayout.StartTopMargin;
 
+        // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
+        // done at layout time (monitor set can change between sessions, so we don't over-normalize
+        // here). A null dict (older config) becomes empty => every queue falls back to the global.
+        state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
+        foreach (var key in state.DeepCapsuleQueueStartTopMargins.Keys.ToList())
+        {
+            var v = state.DeepCapsuleQueueStartTopMargins[key];
+            if (double.IsNaN(v) || double.IsInfinity(v))
+            {
+                state.DeepCapsuleQueueStartTopMargins.Remove(key);
+            }
+        }
+
         var usedPaperIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var paper in state.Papers)
         {
