@@ -109,9 +109,16 @@ public static class DeepCapsuleLayout
 
     private static Rect ResolveWorkArea()
     {
-        if (!string.IsNullOrEmpty(MonitorDeviceName))
+        return WorkAreaForQueue(MonitorDeviceName);
+    }
+
+    // Work area of a specific monitor device (empty => primary), with nearest-monitor fallback.
+    // Per-queue geometry resolves through this so each (monitor, edge) queue is independent.
+    public static Rect WorkAreaForQueue(string? monitorDeviceName)
+    {
+        if (!string.IsNullOrEmpty(monitorDeviceName))
         {
-            var resolved = WindowWorkAreaHelper.WorkAreaForDevice(MonitorDeviceName);
+            var resolved = WindowWorkAreaHelper.WorkAreaForDevice(monitorDeviceName);
             if (resolved.HasValue)
             {
                 return resolved.Value;
@@ -119,6 +126,45 @@ public static class DeepCapsuleLayout
         }
 
         return SystemParameters.WorkArea;
+    }
+
+    public static bool IsLeftEdgeOf(DeepCapsuleEdge edge) => edge == DeepCapsuleEdge.Left;
+
+    // ── Pure per-queue geometry: same math as the static-anchor methods below, but every
+    // input (edge + work area) is explicit, so N independent queues can each compute their own
+    // docked positions without sharing one global anchor.
+
+    public static double DockedLeft(Rect area, double visibleWidth, DeepCapsuleEdge edge)
+    {
+        return edge == DeepCapsuleEdge.Left
+            ? area.Left
+            : area.Right - visibleWidth;
+    }
+
+    public static double TopForIndex(int index, double startTopMargin, Rect area, int slotCount = 1)
+    {
+        var desiredTop = area.Top + NormalizeStartTopMargin(startTopMargin, area, slotCount) + Math.Max(0, index) * SlotHeight;
+        var maxTop = Math.Max(area.Top + TopMargin, area.Bottom - PaperLayoutDefaults.CapsuleHeight - TopMargin);
+        return Math.Min(desiredTop, maxTop);
+    }
+
+    public static double MaxStartTopMarginForCount(int slotCount, Rect area)
+    {
+        var count = Math.Max(1, slotCount);
+        var stackHeight = PaperLayoutDefaults.CapsuleHeight + (count - 1) * SlotHeight;
+        var maxMargin = area.Height - stackHeight - TopMargin;
+        return Math.Max(TopMargin, maxMargin);
+    }
+
+    public static double NormalizeStartTopMargin(double value, Rect area, int slotCount = 1)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            value = StartTopMargin;
+        }
+
+        var max = MaxStartTopMarginForCount(slotCount, area);
+        return Math.Round(Math.Clamp(value, TopMargin, max), 1);
     }
 
     // The window Left that docks a pill of the given visible width to the anchored edge.
@@ -146,29 +192,16 @@ public static class DeepCapsuleLayout
 
     public static double TopForIndex(int index, double startTopMargin = StartTopMargin)
     {
-        var area = WorkArea;
-        var desiredTop = area.Top + NormalizeStartTopMargin(startTopMargin) + Math.Max(0, index) * SlotHeight;
-        var maxTop = Math.Max(area.Top + TopMargin, area.Bottom - PaperLayoutDefaults.CapsuleHeight - TopMargin);
-        return Math.Min(desiredTop, maxTop);
+        return TopForIndex(index, startTopMargin, WorkArea);
     }
 
     public static double MaxStartTopMarginForCount(int slotCount)
     {
-        var area = WorkArea;
-        var count = Math.Max(1, slotCount);
-        var stackHeight = PaperLayoutDefaults.CapsuleHeight + (count - 1) * SlotHeight;
-        var maxMargin = area.Height - stackHeight - TopMargin;
-        return Math.Max(TopMargin, maxMargin);
+        return MaxStartTopMarginForCount(slotCount, WorkArea);
     }
 
     public static double NormalizeStartTopMargin(double value, int slotCount = 1)
     {
-        if (double.IsNaN(value) || double.IsInfinity(value))
-        {
-            value = StartTopMargin;
-        }
-
-        var max = MaxStartTopMarginForCount(slotCount);
-        return Math.Round(Math.Clamp(value, TopMargin, max), 1);
+        return NormalizeStartTopMargin(value, WorkArea, slotCount);
     }
 }

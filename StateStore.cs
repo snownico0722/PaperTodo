@@ -219,6 +219,17 @@ public sealed class StateStore
             {
                 paper.Type = PaperTypes.Todo;
             }
+
+            // Per-paper queue identity. Migration: a capsule with no explicit side inherits the
+            // legacy single global anchor, so existing docked capsules keep their current edge /
+            // monitor. New papers default to the global side until dragged to a queue.
+            paper.CapsuleSide = string.IsNullOrWhiteSpace(paper.CapsuleSide)
+                ? state.DeepCapsuleSide
+                : DeepCapsuleSides.Normalize(paper.CapsuleSide);
+            paper.CapsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
+                ? (state.DeepCapsuleMonitorDeviceName ?? "")
+                : paper.CapsuleMonitorDeviceName.Trim();
+
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);

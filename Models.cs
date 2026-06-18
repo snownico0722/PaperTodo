@@ -184,6 +184,13 @@ public sealed class PaperData
     public bool IsCollapsed { get; set; } = false;
     public double TextZoom { get; set; } = 1.0;
 
+    // Which edge-queue this paper's capsule belongs to. A queue is identified by
+    // (CapsuleMonitorDeviceName, CapsuleSide): every docked capsule sharing the same pair
+    // forms one vertical stack with its own master pill. Empty CapsuleSide means "not yet
+    // assigned" — on load it inherits the legacy global anchor so existing capsules keep place.
+    public string CapsuleSide { get; set; } = "";
+    public string CapsuleMonitorDeviceName { get; set; } = "";
+
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
 }
