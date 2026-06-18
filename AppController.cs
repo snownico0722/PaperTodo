@@ -49,7 +49,8 @@ public sealed partial class AppController : IDisposable
     private bool? _lastFullscreenDebugSuppressState;
     private PaperWindow? _noteLinkTargetWindow;
     private string? _noteLinkTargetItemId;
-    private MasterCapsuleWindow? _masterCapsule;
+    // One master pill per docked-capsule queue, keyed by QueueKey(monitorDevice, edge).
+    private readonly Dictionary<string, MasterCapsuleWindow> _masterCapsules = new();
 
     private static Brush TrayPaperBrush => Theme.PaperBrush;
     private static Brush TrayBorderBrush => Theme.PaperBorderBrush;
@@ -756,7 +757,7 @@ public sealed partial class AppController : IDisposable
         {
             window.RefreshEffectiveTopmost();
         }
-        _masterCapsule?.RefreshEffectiveTopmost();
+        foreach (var m in _masterCapsules.Values) m.RefreshEffectiveTopmost();
 
         if (ShouldAvoidFullscreenTopmost)
         {
@@ -818,7 +819,7 @@ public sealed partial class AppController : IDisposable
         {
             window.RefreshDeepCapsuleSlotTopmost();
         }
-        _masterCapsule?.RefreshEffectiveTopmost();
+        foreach (var m in _masterCapsules.Values) m.RefreshEffectiveTopmost();
     }
 
     public void HidePaper(PaperData paper)
@@ -1110,6 +1111,13 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
+    // A queue is identified by (monitor device, edge). All docked capsules sharing the same
+    // pair form one vertical stack with its own master pill.
+    private static string QueueKey(string monitorDeviceName, string side)
+        => $"{monitorDeviceName ?? ""}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
+
+    private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
+
     public void ArrangeDeepCapsules(bool animate = false)
     {
         SyncDeepCapsuleAnchor();
@@ -1119,20 +1127,31 @@ public sealed partial class AppController : IDisposable
             {
                 window.DetachFromDeepCapsuleStack();
             }
-            DestroyMasterCapsule();
+            DestroyAllMasterCapsules();
             return;
         }
 
         var capsulePapers = DeepCapsulePapersInOrder();
-        var showMaster = State.UseCapsuleCollapseAll && capsulePapers.Count > 0;
 
-        // The master pill, when shown, permanently occupies slot 0; real capsules shift to 1..N.
-        var visualOffset = showMaster ? 1 : 0;
-        var slotCount = capsulePapers.Count + visualOffset;
-        State.DeepCapsuleStartTopMargin = DeepCapsuleLayout.NormalizeStartTopMargin(State.DeepCapsuleStartTopMargin, slotCount);
-        var retracted = showMaster && State.CapsuleCollapseAllActive;
+        // Group capsule papers into per-(monitor,edge) queues, preserving State.Papers order
+        // within each queue. Each queue lays out independently with its own slot indices + master.
+        var queues = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
+        var queueOrder = new List<string>();
+        foreach (var paper in capsulePapers)
+        {
+            var key = QueueKey(paper);
+            if (!queues.TryGetValue(key, out var list))
+            {
+                list = new List<PaperData>();
+                queues[key] = list;
+                queueOrder.Add(key);
+            }
+            list.Add(paper);
+        }
 
-        var capsuleIndex = 0;
+        var showMasterGlobally = State.UseCapsuleCollapseAll;
+        var perQueueIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+
         foreach (var paper in State.Papers)
         {
             if (!_windows.TryGetValue(paper.Id, out var window))
@@ -1142,19 +1161,28 @@ public sealed partial class AppController : IDisposable
 
             if (ShouldPaperOccupyDeepCapsuleSlot(paper, window))
             {
+                var key = QueueKey(paper);
+                var queueShowMaster = showMasterGlobally && queues.TryGetValue(key, out var q) && q.Count > 0;
+                var visualOffset = queueShowMaster ? 1 : 0;
+                var slotCount = (queues.TryGetValue(key, out var ql) ? ql.Count : 0) + visualOffset;
+                var area = DeepCapsuleLayout.WorkAreaForQueue(paper.CapsuleMonitorDeviceName);
+                var startTop = DeepCapsuleLayout.NormalizeStartTopMargin(DeepCapsuleStartTopMarginFor(paper), area, slotCount);
+                var retracted = queueShowMaster && State.CapsuleCollapseAllActive;
+
+                var idx = perQueueIndex.TryGetValue(key, out var v) ? v : 0;
                 if (retracted)
                 {
-                    window.RetractIntoMaster(DeepCapsuleLayout.TopForIndex(0, State.DeepCapsuleStartTopMargin), animate);
+                    window.RetractIntoMaster(DeepCapsuleLayout.TopForIndex(0, startTop, area), animate);
                 }
                 else if (paper.IsCollapsed)
                 {
-                    window.ApplyDeepCapsulePlacement(capsuleIndex, animate, visualOffset);
+                    window.ApplyDeepCapsulePlacement(idx, animate, visualOffset);
                 }
                 else
                 {
-                    window.ApplyExpandedDeepCapsuleSlotPlacement(capsuleIndex, animate, visualOffset);
+                    window.ApplyExpandedDeepCapsuleSlotPlacement(idx, animate, visualOffset);
                 }
-                capsuleIndex++;
+                perQueueIndex[key] = idx + 1;
             }
             else
             {
@@ -1167,53 +1195,74 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        if (showMaster)
+        SyncMasterCapsules(queues, queueOrder, animate);
+    }
+
+    // Reconcile one master pill per non-empty queue (when collapse-all is on). Creates/updates the
+    // masters for live queues and closes masters whose queue disappeared.
+    private void SyncMasterCapsules(Dictionary<string, List<PaperData>> queues, List<string> queueOrder, bool animate)
+    {
+        if (!State.UseCapsuleCollapseAll)
         {
-            var firstShow = _masterCapsule == null;
-            EnsureMasterCapsule();
-            if (firstShow)
+            DestroyAllMasterCapsules();
+            return;
+        }
+
+        var retracted = State.CapsuleCollapseAllActive;
+        var liveKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var key in queueOrder)
+        {
+            var papers = queues[key];
+            if (papers.Count == 0)
             {
-                // First appearance: position then fade in, so it never flashes at the
-                // top-left nor slides in from the wrong edge.
-                _masterCapsule!.ShowPlaced(capsulePapers.Count, retracted);
+                continue;
+            }
+
+            liveKeys.Add(key);
+            var sample = papers[0];
+            var edge = sample.CapsuleSide == DeepCapsuleSides.Left ? DeepCapsuleEdge.Left : DeepCapsuleEdge.Right;
+            var monitor = sample.CapsuleMonitorDeviceName;
+
+            if (!_masterCapsules.TryGetValue(key, out var master))
+            {
+                master = new MasterCapsuleWindow(this, edge, monitor);
+                _masterCapsules[key] = master;
+                master.ShowPlaced(papers.Count, retracted);
             }
             else
             {
-                _masterCapsule!.UpdateState(capsulePapers.Count, retracted, animate);
+                master.SetQueue(edge, monitor);
+                master.UpdateState(papers.Count, retracted, animate);
             }
         }
-        else
+
+        // Close masters for queues that no longer exist.
+        foreach (var staleKey in _masterCapsules.Keys.Where(k => !liveKeys.Contains(k)).ToList())
         {
-            DestroyMasterCapsule();
+            _masterCapsules[staleKey].CloseForReal();
+            _masterCapsules.Remove(staleKey);
         }
     }
 
-    private void EnsureMasterCapsule()
+    private void DestroyAllMasterCapsules()
     {
-        if (_masterCapsule != null)
+        if (_masterCapsules.Count == 0)
         {
             return;
         }
 
-        // Created hidden (Opacity 0, ShowActivated false); ShowPlaced() reveals it once positioned.
-        _masterCapsule = new MasterCapsuleWindow(this);
-    }
-
-    private void DestroyMasterCapsule()
-    {
-        if (_masterCapsule == null)
-        {
-            return;
-        }
-
-        // Collapsing the master must never strand retracted capsules off-screen at Opacity 0.
+        // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
         if (State.CapsuleCollapseAllActive)
         {
             State.CapsuleCollapseAllActive = false;
         }
 
-        _masterCapsule.CloseForReal();
-        _masterCapsule = null;
+        foreach (var master in _masterCapsules.Values)
+        {
+            master.CloseForReal();
+        }
+        _masterCapsules.Clear();
     }
 
     // Toggle whether the real capsules are retracted behind the master pill.
@@ -1686,6 +1735,11 @@ public sealed partial class AppController : IDisposable
         return State.DeepCapsuleStartTopMargin;
     }
 
+    public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, DeepCapsuleEdge edge)
+    {
+        return State.DeepCapsuleStartTopMargin;
+    }
+
     // Commit a new dock anchor (monitor + edge) chosen by dragging the master pill, then relayout.
     // startTopMargin is the vertical rest position resolved against the NEW monitor's work area.
     public void SetDeepCapsuleAnchor(string monitorDeviceName, string side, double startTopMargin)
@@ -1781,8 +1835,11 @@ public sealed partial class AppController : IDisposable
         {
             window.ClearDeepCapsuleSlotReservation();
         }
-        _masterCapsule?.CloseForReal();
-        _masterCapsule = null;
+        foreach (var m in _masterCapsules.Values)
+        {
+            m.CloseForReal();
+        }
+        _masterCapsules.Clear();
         _trayIcon?.Dispose();
         _trayIcon = null;
         _trayMenu = null;

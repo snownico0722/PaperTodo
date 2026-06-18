@@ -26,7 +26,7 @@ public sealed partial class AppController
         {
             window.UpdateTheme();
         }
-        _masterCapsule?.UpdateTheme();
+        foreach (var m in _masterCapsules.Values) m.UpdateTheme();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -59,7 +59,7 @@ public sealed partial class AppController
         {
             window.UpdateTheme();
         }
-        _masterCapsule?.UpdateTheme();
+        foreach (var m in _masterCapsules.Values) m.UpdateTheme();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -999,7 +999,7 @@ public sealed partial class AppController
                     {
                         window.UpdateTheme();
                     }
-                    _masterCapsule?.UpdateTheme();
+                    foreach (var m in _masterCapsules.Values) m.UpdateTheme();
                     RebuildTrayMenu();
                     RefreshSettingsWindowContent();
                 }));
@@ -1043,7 +1043,7 @@ public sealed partial class AppController
             window.UpdateToolTipSetting();
         }
 
-        _masterCapsule?.UpdateToolTipSetting();
+        foreach (var m in _masterCapsules.Values) m.UpdateToolTipSetting();
 
         if (_settingsWindow != null)
         {

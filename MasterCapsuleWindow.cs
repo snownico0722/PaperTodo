@@ -37,6 +37,11 @@ public sealed class MasterCapsuleWindow : Window
 
     private readonly AppController _controller;
 
+    // Which queue this master serves: (monitor device, edge). Each docked-capsule queue has its
+    // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
+    private DeepCapsuleEdge _queueEdge;
+    private string _queueMonitorDeviceName = "";
+
     private Border _pill = null!;
     private Border _hoverOverlay = null!;
     private TextBlock _glyph = null!;
@@ -90,9 +95,11 @@ public sealed class MasterCapsuleWindow : Window
         set => SetValue(AnimatedTopProperty, value);
     }
 
-    public MasterCapsuleWindow(AppController controller)
+    public MasterCapsuleWindow(AppController controller, DeepCapsuleEdge queueEdge, string queueMonitorDeviceName)
     {
         _controller = controller;
+        _queueEdge = queueEdge;
+        _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
         ConfigureWindow();
         BuildContent();
         UpdateToolTipSetting();
@@ -241,8 +248,8 @@ public sealed class MasterCapsuleWindow : Window
             var dpiScaleY = Math.Max(0.1, dpi.DpiScaleY);
 
             // Horizontal pull away from the docked wall, in DIPs (always positive = "toward interior").
-            var area = DeepCapsuleLayout.WorkArea;
-            var pullFromWall = DeepCapsuleLayout.IsLeftEdge
+            var area = QueueWorkArea;
+            var pullFromWall = QueueIsLeftEdge
                 ? (currentScreenPos.X / dpiScaleX) - area.Left
                 : area.Right - (currentScreenPos.X / dpiScaleX);
             pullFromWall = Math.Max(0, pullFromWall);
@@ -401,8 +408,8 @@ public sealed class MasterCapsuleWindow : Window
         }
         else
         {
-            deviceName = _controller.State.DeepCapsuleMonitorDeviceName;
-            area = DeepCapsuleLayout.WorkArea;
+            deviceName = _queueMonitorDeviceName;
+            area = QueueWorkArea;
         }
 
         // Nearer edge: which half of the monitor the cursor landed in.
@@ -477,7 +484,7 @@ public sealed class MasterCapsuleWindow : Window
     // right, pill+content hug the right (tail tucked past the left wall), chevron on the interior.
     private void ApplyMasterEdgeLayout()
     {
-        var edge = DeepCapsuleLayout.Edge;
+        var edge = _queueEdge;
         if (_appliedEdge == edge)
         {
             return;
@@ -539,12 +546,23 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
+    // Update which queue this master serves (e.g. its monitor was unplugged and it re-homes).
+    public void SetQueue(DeepCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    {
+        _queueEdge = queueEdge;
+        _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
+    }
+
+    private Rect QueueWorkArea => DeepCapsuleLayout.WorkAreaForQueue(_queueMonitorDeviceName);
+    private bool QueueIsLeftEdge => _queueEdge == DeepCapsuleEdge.Left;
+    private double QueueStartTopMargin => _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
+
     private void MoveToTarget(bool animate)
     {
-        var area = DeepCapsuleLayout.WorkArea;
+        var area = QueueWorkArea;
         var visibleWidth = MasterVisibleWidth();
-        var targetLeft = RoundX(DeepCapsuleLayout.DockedLeft(area, visibleWidth));
-        var targetTop = RoundY(DeepCapsuleLayout.TopForIndex(0, _controller.State.DeepCapsuleStartTopMargin));
+        var targetLeft = RoundX(DeepCapsuleLayout.DockedLeft(area, visibleWidth, _queueEdge));
+        var targetTop = RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, area));
         var currentLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? targetLeft : RoundX(Left);
         var currentTop = double.IsNaN(Top) || double.IsInfinity(Top) ? targetTop : RoundY(Top);
 
@@ -611,7 +629,7 @@ public sealed class MasterCapsuleWindow : Window
     }
 
     // The resting Top of the master, used as the retract/release anchor for real capsules.
-    public double AnchorTop => RoundY(DeepCapsuleLayout.TopForIndex(0, _controller.State.DeepCapsuleStartTopMargin));
+    public double AnchorTop => RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, QueueWorkArea));
 
     private static void OnAnimatedLeftChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
