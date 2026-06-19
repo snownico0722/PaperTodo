@@ -603,15 +603,15 @@
 
 ## 阶段 4：高风险专项攻击
 
-- [ ] 单屏 100% DPI 贴边胶囊
+- [x] 单屏 100% DPI 贴边胶囊
 - [ ] 单屏 125% / 150% DPI 贴边胶囊
 - [ ] 双屏同 DPI 左右侧队列
 - [ ] 双屏混合 DPI 跨屏拖拽
 - [ ] 左侧与右侧 hover 滑出 / 滑回视觉一致性
-- [ ] 收起全部每队列独立收起 / 展开
+- [-] 收起全部每队列独立收起 / 展开
 - [ ] 拖单个胶囊上下排序和跨边磁吸阈值
 - [ ] 拖拽中丢失捕获、Alt-Tab、释放到菜单外
-- [-] 隐藏全部 / 显示全部 / 关闭模式 / 重启恢复
+- [x] 隐藏全部 / 显示全部 / 关闭模式 / 重启恢复
 - [ ] 托盘菜单首次点击、行点击、删除确认、菜单重建
 - [-] 新建纸片位置和来源队列继承
 - [ ] 待办多行粘贴、拖拽排序、撤销重做
@@ -631,7 +631,10 @@
 - `exit` 空数据：隔离目录 `stage4-exit-20260619-104307` 中运行 `PaperTodo.exe exit`，结果 `dataExists=True papers=0 crashLog=False`。结论：首实例 `exit` 会保存空状态并退出，但不会创建默认待办纸。
 - `new-todo` / `new-note`：隔离目录 `stage4-cmd-20260619-104221` 中依次启动主实例并用二次实例发 `exit`，结果 `afterNewTodo count=1 types=todo visible=True`，`afterNewNote count=2 types=todo,note`。
 - `hide` / `show` / `toggle`：同一隔离目录中运行，结果 `afterHide visible=False,False collapsed=False,False`，`afterShow visible=True,True`，`afterToggle visible=False,False collapsed=False,False`，`crashLog=False`。
-- 结论：命令类新建、隐藏、显示、切换、退出保存路径在当前构建下通过；“关闭胶囊 / 贴边模式”仍需设置 UI 或更强运行时注入验证，所以主清单保持进行中。
+- 损坏主数据 + backup 恢复：隔离目录 `stage4-recovery-20260619-175139` 中写入损坏 `data.json` 和可用 `data.backup.json`，运行 `PaperTodo.exe exit`，结果 `exit=0 mainCount=1 mainId=todo-recovered backupCount=1 backupId=todo-recovered failedCopies=1 recoveryCopies=1 crashLog=False`。
+- 关闭模式 / 旧配置规范化：隔离目录 `stage4-normalize-20260619-175459` 中写入类型正确但值非法的配置，包含 `useCapsuleMode=false`、`useDeepCapsuleMode=true`、`useCapsuleCollapseAll=true`、非空 active queues / per-queue margins、折叠纸片、非法枚举和未知字段；运行 `PaperTodo.exe exit` 后结果 `exit=0 type=todo title='VeryLongTitleShouldB' width=280 height=340 collapsed=False zoom=1.5 textZoom=1.5 useCapsule=False useDeep=False collapseAll=False topTodo=False topNote=False theme=system markdown=enhanced todoSize=medium fullscreen=avoid ext=.md crashLog=False`。
+- 严格解析失败边界：隔离目录 `stage4-normalize-20260619-175331` 中故意把字符串字段 `markdownRenderMode` 写成数字，启动失败并记录 `JsonException: The JSON value could not be converted to System.String`；原 `data.json` 未被规范化覆盖。结论：类型不匹配仍按损坏数据处理，不做危险“修复后覆盖”。
+- 结论：命令类新建、隐藏、显示、切换、退出保存、backup 恢复、模式关闭后的状态清理和旧配置规范化路径在当前构建下通过。
 
 #### 笔记大文本攻击
 
@@ -640,6 +643,13 @@
 - 发现并修复：A007。长度截断改为排队到 dispatcher 下一轮执行，避开 AvalonEdit 初始文档更新期间打开的 undo group。
 - 复验结果：隔离目录 `stage4-fix-20260619-104133` 中同样输入 120000 字符，修复后 `MainExitCode=0`，`afterRun count=1 len=100000 visible=True`，`crashLog=False`。
 - 结论：大文本启动 / 截断攻击通过；Markdown 链接点击和外部打开还未在阶段 4 实测，因此该主项保持进行中。
+
+#### 单屏 100% DPI 贴边胶囊烟测
+
+- DPI 证据：`GetDpiForSystem()` -> `Dpi=96 Scale=100%`；屏幕仍为单主屏 `\\.\DISPLAY1`。
+- 攻击输入：隔离目录 `stage4-capsule-single-20260619-175607` 中写入 4 张已折叠可见 todo，左队列 2 张、右队列 2 张，`UseCapsuleCollapseAll=true`，仅 `|left` 队列 active，per-queue 起始高度包含 `|left` 和 `|right`。
+- 运行结果：启动 `PaperTodo.exe show`，等待后用二次实例 `exit`，结果 `exit=0 count=4 sides=left,left,right,right collapsed=True,True,True,True activeKeys=|left marginKeys=|right,|left crashLog=False`。
+- 结论：单屏 100% DPI 下左右贴边队列、折叠胶囊、主胶囊 active key 和 per-queue margin 能启动、布局并退出保存；hover 视觉、拖拽和真实点击收起/展开另有专项，不能由本烟测替代。
 
 ## 阶段 5：性能审查
 
