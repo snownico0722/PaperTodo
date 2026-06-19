@@ -173,12 +173,11 @@ PaperTodo/
 
 ## Download And Verification
 
-GitHub Actions builds two Windows x64 single-file executables and publishes them as Release assets:
+GitHub Actions builds a Windows x64 single-file executable and publishes it as a Release asset:
 
-- **`...-self-contained-compressed.exe`** - Recommended for most users. Includes the .NET Runtime. Single file with ReadyToRun and compression enabled.
-- **`...-no-runtime-uncompressed.exe`** - For users who already have the required runtime installed. Framework-dependent, single file, uncompressed.
+- **`...-no-runtime-uncompressed.exe`** - Framework-dependent no-runtime single file, uncompressed.
 
-Each build includes `SHA256SUMS.txt` and Sigstore signatures (`.sig` / `.crt`).
+The build includes `SHA256SUMS.txt` and Sigstore signatures (`.sig` / `.crt`).
 
 Release notes are automatically extracted from the matching version section in [`CHANGELOG.md`](CHANGELOG.md).
 

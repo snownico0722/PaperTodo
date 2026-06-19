@@ -105,6 +105,47 @@ internal static class WindowWorkAreaHelper
         return null;
     }
 
+    public static string NormalizeQueueMonitorDeviceName(string? deviceName)
+    {
+        var value = (deviceName ?? "").Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
+        var primary = PrimaryMonitorDeviceName();
+        return !string.IsNullOrEmpty(primary) && string.Equals(value, primary, StringComparison.Ordinal)
+            ? ""
+            : value;
+    }
+
+    public static string PrimaryMonitorDeviceName()
+    {
+        try
+        {
+            var primaryProbe = new NativeRect
+            {
+                Left = 0,
+                Top = 0,
+                Right = 1,
+                Bottom = 1
+            };
+            var monitor = MonitorFromRect(ref primaryProbe, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return "";
+            }
+
+            var info = new MonitorInfoEx();
+            info.Size = Marshal.SizeOf<MonitorInfoEx>();
+            return GetMonitorInfoEx(monitor, ref info) ? info.DeviceNameString : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
     // Convert a PointToScreen point (physical screen pixels) into the app's screen DIP space.
     // Most persisted/window geometry in this app uses the system-DPI coordinate space, so callers
     // should use this when comparing a raw Win32 screen point with DeviceRectToDip rectangles.

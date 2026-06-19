@@ -84,6 +84,8 @@ dotnet build PaperTodo.csproj -c Release
 
 “无依赖”发布指不带运行库的 Windows x64 单文件（no-runtime）。WPF 版本不要开启 `PublishTrimmed` 或 Native AOT。
 
+稳定正式版不要靠 tag push 自动发布；完成真实多屏 / 混合 DPI 等发布前手测后，用 GitHub Actions `workflow_dispatch` 并显式确认稳定版发布。`rc` / `alpha` / `beta` / `preview` 标签可以继续由 tag push 发布为预发布。
+
 ## 更新本文
 
 只有产品边界、持久化兼容、保存 / 单实例 / 托盘 / 胶囊 / 发布流程发生变化时才更新本文。普通 UI 微调、文案、颜色、间距、动画参数不需要同步。

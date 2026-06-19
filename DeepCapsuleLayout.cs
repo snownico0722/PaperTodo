@@ -104,7 +104,7 @@ public static class DeepCapsuleLayout
     public static void SetAnchor(DeepCapsuleEdge edge, string? monitorDeviceName)
     {
         Edge = edge;
-        MonitorDeviceName = (monitorDeviceName ?? "").Trim();
+        MonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
     }
 
     private static Rect ResolveWorkArea()
@@ -116,9 +116,10 @@ public static class DeepCapsuleLayout
     // Per-queue geometry resolves through this so each (monitor, edge) queue is independent.
     public static Rect WorkAreaForQueue(string? monitorDeviceName)
     {
-        if (!string.IsNullOrEmpty(monitorDeviceName))
+        var normalizedMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
+        if (!string.IsNullOrEmpty(normalizedMonitor))
         {
-            var resolved = WindowWorkAreaHelper.WorkAreaForDevice(monitorDeviceName);
+            var resolved = WindowWorkAreaHelper.WorkAreaForDevice(normalizedMonitor);
             if (resolved.HasValue)
             {
                 return resolved.Value;

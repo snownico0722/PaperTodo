@@ -243,7 +243,7 @@ public sealed class StateStore
         state.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Normalize(state.ExternalMarkdownExtension);
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);
         state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
-        state.DeepCapsuleMonitorDeviceName = (state.DeepCapsuleMonitorDeviceName ?? "").Trim();
+        state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
         state.TopBarHeight = 0;
 
@@ -277,6 +277,7 @@ public sealed class StateStore
             state.CapsuleCollapseAllActive = false;
         }
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
+        state.CapsuleCollapseAllActiveQueues = NormalizeCollapseAllActiveQueues(state.CapsuleCollapseAllActiveQueues);
         if (!state.UseCapsuleCollapseAll)
         {
             state.CapsuleCollapseAllActiveQueues.Clear();
@@ -305,6 +306,7 @@ public sealed class StateStore
         // done at layout time (monitor set can change between sessions, so we don't over-normalize
         // here). A null dict (older config) becomes empty => every queue falls back to the global.
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
+        state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
         if (!keepDeepCapsuleStartTopMargins)
         {
             state.DeepCapsuleQueueStartTopMargins.Clear();
@@ -340,9 +342,10 @@ public sealed class StateStore
             paper.CapsuleSide = string.IsNullOrWhiteSpace(paper.CapsuleSide)
                 ? state.DeepCapsuleSide
                 : DeepCapsuleSides.Normalize(paper.CapsuleSide);
-            paper.CapsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
+            var capsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
                 : paper.CapsuleMonitorDeviceName.Trim();
+            paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
             paper.X = NormalizeCoordinate(paper.X, 120);
@@ -442,6 +445,53 @@ public sealed class StateStore
             ? fallback
             : value;
     }
+
+    private static Dictionary<string, bool> NormalizeCollapseAllActiveQueues(Dictionary<string, bool> source)
+    {
+        var normalized = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var (key, value) in source)
+        {
+            var normalizedKey = NormalizeQueueKey(key);
+            if (!normalized.ContainsKey(normalizedKey) || string.Equals(key, normalizedKey, StringComparison.Ordinal))
+            {
+                normalized[normalizedKey] = value;
+            }
+        }
+
+        return normalized;
+    }
+
+    private static Dictionary<string, double> NormalizeQueueStartTopMargins(Dictionary<string, double> source)
+    {
+        var normalized = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var (key, value) in source)
+        {
+            var normalizedKey = NormalizeQueueKey(key);
+            if (!normalized.ContainsKey(normalizedKey) || string.Equals(key, normalizedKey, StringComparison.Ordinal))
+            {
+                normalized[normalizedKey] = value;
+            }
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeQueueKey(string? key)
+    {
+        var value = (key ?? "").Trim();
+        var separator = value.LastIndexOf('|');
+        if (separator < 0)
+        {
+            return QueueKey("", value);
+        }
+
+        var monitorDeviceName = value[..separator];
+        var side = value[(separator + 1)..];
+        return QueueKey(monitorDeviceName, side);
+    }
+
+    private static string QueueKey(string? monitorDeviceName, string? side)
+        => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
     private static double NormalizeDeepCapsuleStartTopMargin(double value, string monitorDeviceName)
     {

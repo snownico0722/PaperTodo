@@ -177,12 +177,11 @@ PaperTodo/
 
 ## 下载与校验
 
-GitHub Actions 构建两个 Windows x64 单文件 exe，直接作为 Release 资产发布：
+GitHub Actions 构建 Windows x64 单文件 exe，直接作为 Release 资产发布：
 
-- **`...-self-contained-compressed.exe`** — 普通用户。自包含 .NET Runtime，单文件，ReadyToRun + 压缩。
-- **`...-no-runtime-uncompressed.exe`** — 已装对应 Runtime。框架依赖，单文件无压缩。
+- **`...-no-runtime-uncompressed.exe`** — 框架依赖 no-runtime 单文件，无压缩。
 
-每个产物附带 `SHA256SUMS.txt` 与 Sigstore 签名（`.sig` / `.crt`）。
+产物附带 `SHA256SUMS.txt` 与 Sigstore 签名（`.sig` / `.crt`）。
 
 Release 发行说明从 [`CHANGELOG.md`](CHANGELOG.md) 自动提取对应 tag 的版本小节。
 

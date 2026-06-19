@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      stable_release_confirmed:
+        description: "Required for stable releases. Confirms final hand checks are complete."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -54,38 +59,20 @@ jobs:
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
-          "self_contained_exe=PaperTodo-v$version-win-x64-self-contained-compressed.exe" >> $env:GITHUB_OUTPUT
-          "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime-uncompressed.exe" >> $env:GITHUB_OUTPUT
+          "release_exe=PaperTodo-v$version-win-x64-no-runtime-uncompressed.exe" >> $env:GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
 
       - name: Publish release executables
         env:
-          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
-          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+          RELEASE_EXE: ${{ steps.meta.outputs.release_exe }}
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
-          $selfContainedOut = Join-Path $env:RUNNER_TEMP "publish-self-contained-compressed"
           $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "publish-no-runtime-uncompressed"
 
-          Remove-Item -LiteralPath $releaseDir, $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $releaseDir, $selfContainedOut, $frameworkDependentOut | Out-Null
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -o $selfContainedOut `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=true `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=true `
-            /p:PublishTrimmed=false `
-            /p:DebugType=none `
-            /p:DebugSymbols=false
-
-          Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:SELF_CONTAINED_EXE)
+          Remove-Item -LiteralPath $releaseDir, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $releaseDir, $frameworkDependentOut | Out-Null
 
           dotnet publish .\PaperTodo.csproj `
             -c Release `
@@ -99,14 +86,14 @@ jobs:
             /p:DebugType=none `
             /p:DebugSymbols=false
 
-          Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
+          Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:RELEASE_EXE)
 
       - name: Write SHA256 checksums
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $exeFiles = Get-ChildItem -LiteralPath $releaseDir -Filter "*.exe" -File | Sort-Object Name
-          if ($exeFiles.Count -ne 2) {
-            throw "Expected exactly 2 release executables, found $($exeFiles.Count)."
+          if ($exeFiles.Count -ne 1) {
+            throw "Expected exactly 1 release executable, found $($exeFiles.Count)."
           }
 
           $lines = foreach ($file in $exeFiles) {
@@ -122,14 +109,10 @@ jobs:
 
       - name: Sign release executables
         env:
-          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
-          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+          RELEASE_EXE: ${{ steps.meta.outputs.release_exe }}
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
-          $exeFiles = @(
-            (Join-Path $releaseDir $env:SELF_CONTAINED_EXE),
-            (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
-          )
+          $exeFiles = @((Join-Path $releaseDir $env:RELEASE_EXE))
 
           foreach ($exe in $exeFiles) {
             if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
@@ -151,12 +134,9 @@ jobs:
           name: PaperTodo-v${{ steps.meta.outputs.version }}-win-x64
           if-no-files-found: error
           path: |
-            release/${{ steps.meta.outputs.self_contained_exe }}
-            release/${{ steps.meta.outputs.self_contained_exe }}.sig
-            release/${{ steps.meta.outputs.self_contained_exe }}.crt
-            release/${{ steps.meta.outputs.framework_dependent_exe }}
-            release/${{ steps.meta.outputs.framework_dependent_exe }}.sig
-            release/${{ steps.meta.outputs.framework_dependent_exe }}.crt
+            release/${{ steps.meta.outputs.release_exe }}
+            release/${{ steps.meta.outputs.release_exe }}.sig
+            release/${{ steps.meta.outputs.release_exe }}.crt
             release/SHA256SUMS.txt
 
       - name: Resolve release tag
@@ -176,6 +156,15 @@ jobs:
             throw "Release tag must start with 'v'. Got '$tag'."
           }
 
+          $isStable = $tag -notmatch '(?i)(alpha|beta|preview|rc)'
+          $stableConfirmed = "${{ inputs.stable_release_confirmed }}" -eq "true"
+          if ($isStable -and "${{ github.event_name }}" -ne "workflow_dispatch") {
+            throw "Stable releases must be published from workflow_dispatch after final hand checks. Prerelease tags may still publish from tag pushes."
+          }
+          if ($isStable -and -not $stableConfirmed) {
+            throw "Stable release '$tag' requires stable_release_confirmed=true."
+          }
+
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Write release notes
@@ -184,8 +173,7 @@ jobs:
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $tag = "${{ steps.release.outputs.tag }}"
           $repo = "${{ github.repository }}"
-          $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
-          $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
+          $releaseExe = "${{ steps.meta.outputs.release_exe }}"
           $identityPattern = "^https://github[.]com/$repo/[.]github/workflows/release[.]yml@refs/(heads/main|tags/v.*)$"
           $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
           if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
@@ -228,16 +216,14 @@ jobs:
             "",
             "Windows x64 executables:",
             "",
-            "- ${selfContained}: self-contained single file, includes .NET Desktop Runtime, ReadyToRun enabled, single-file compression enabled.",
-            "- ${frameworkDependent}: no-runtime framework-dependent single file, ReadyToRun disabled, single-file compression disabled.",
+            "- ${releaseExe}: no-runtime framework-dependent single file, ReadyToRun disabled, single-file compression disabled.",
             "",
             "SHA256 hashes are included in SHA256SUMS.txt.",
             "",
             "Sigstore keyless signatures are included as .sig and .crt files. Verify them with:",
             "",
             '```powershell',
-            "cosign verify-blob --certificate .\$selfContained.crt --signature .\$selfContained.sig --certificate-identity-regexp `"$identityPattern`" --certificate-oidc-issuer `"https://token.actions.githubusercontent.com`" .\$selfContained",
-            "cosign verify-blob --certificate .\$frameworkDependent.crt --signature .\$frameworkDependent.sig --certificate-identity-regexp `"$identityPattern`" --certificate-oidc-issuer `"https://token.actions.githubusercontent.com`" .\$frameworkDependent",
+            "cosign verify-blob --certificate .\$releaseExe.crt --signature .\$releaseExe.sig --certificate-identity-regexp `"$identityPattern`" --certificate-oidc-issuer `"https://token.actions.githubusercontent.com`" .\$releaseExe",
             '```'
           )
 
@@ -250,20 +236,30 @@ jobs:
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $tag = "${{ steps.release.outputs.tag }}"
+          $releaseExe = "${{ steps.meta.outputs.release_exe }}"
           $assets = @(
-            (Join-Path $releaseDir "${{ steps.meta.outputs.self_contained_exe }}"),
-            (Join-Path $releaseDir "${{ steps.meta.outputs.self_contained_exe }}.sig"),
-            (Join-Path $releaseDir "${{ steps.meta.outputs.self_contained_exe }}.crt"),
-            (Join-Path $releaseDir "${{ steps.meta.outputs.framework_dependent_exe }}"),
-            (Join-Path $releaseDir "${{ steps.meta.outputs.framework_dependent_exe }}.sig"),
-            (Join-Path $releaseDir "${{ steps.meta.outputs.framework_dependent_exe }}.crt"),
+            (Join-Path $releaseDir $releaseExe),
+            (Join-Path $releaseDir "$releaseExe.sig"),
+            (Join-Path $releaseDir "$releaseExe.crt"),
             (Join-Path $releaseDir "SHA256SUMS.txt")
           )
           $notes = Join-Path $releaseDir "RELEASE_NOTES.md"
-          $isPrerelease = "${{ inputs.prerelease }}" -eq "true"
+          $isPrerelease = ("${{ inputs.prerelease }}" -eq "true") -or ($tag -match '(?i)(alpha|beta|preview|rc)')
+          $expectedAssetNames = @(
+            $releaseExe,
+            "$releaseExe.sig",
+            "$releaseExe.crt",
+            "SHA256SUMS.txt"
+          )
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
+            $existingAssetNames = @(gh release view $tag --json assets --jq '.assets[].name')
+            foreach ($assetName in $existingAssetNames) {
+              if ($expectedAssetNames -notcontains $assetName) {
+                gh release delete-asset $tag $assetName --yes
+              }
+            }
             gh release upload $tag @assets --clobber
             gh release edit $tag --title "PaperTodo $tag" --notes-file $notes
             if ($isPrerelease) {

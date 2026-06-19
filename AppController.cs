@@ -210,9 +210,10 @@ public sealed partial class AppController : IDisposable
         paper.CapsuleSide = string.IsNullOrWhiteSpace(sourcePaper?.CapsuleSide)
             ? DeepCapsuleSides.Normalize(State.DeepCapsuleSide)
             : DeepCapsuleSides.Normalize(sourcePaper.CapsuleSide);
-        paper.CapsuleMonitorDeviceName = string.IsNullOrWhiteSpace(sourcePaper?.CapsuleMonitorDeviceName)
+        var monitor = string.IsNullOrWhiteSpace(sourcePaper?.CapsuleMonitorDeviceName)
             ? (State.DeepCapsuleMonitorDeviceName ?? "")
             : sourcePaper.CapsuleMonitorDeviceName.Trim();
+        paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor);
     }
 
     private void ClampNewPaperAwayFromDeepCapsuleStrip(PaperData paper)
@@ -1196,7 +1197,7 @@ public sealed partial class AppController : IDisposable
         }
 
         var normalizedSide = DeepCapsuleSides.Normalize(side);
-        var normalizedMonitor = (monitorDeviceName ?? "").Trim();
+        var normalizedMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
 
         paper.CapsuleSide = normalizedSide;
         paper.CapsuleMonitorDeviceName = normalizedMonitor;
@@ -1298,7 +1299,7 @@ public sealed partial class AppController : IDisposable
     // A queue is identified by (monitor device, edge). All docked capsules sharing the same
     // pair form one vertical stack with its own master pill.
     private static string QueueKey(string monitorDeviceName, string side)
-        => $"{monitorDeviceName ?? ""}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
+        => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
     private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
 
