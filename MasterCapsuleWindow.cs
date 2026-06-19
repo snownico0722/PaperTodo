@@ -296,7 +296,8 @@ public sealed class MasterCapsuleWindow : Window
 
     public void RefreshEffectiveTopmost()
     {
-        var topmost = !_controller.SuppressTopmostForFullscreenForeground;
+        var topmost = !_controller.SuppressTopmostForFullscreenForeground &&
+            !_controller.SuppressDeepCapsuleTopmostForContextMenu;
         Topmost = topmost;
         if (IsVisible)
         {

@@ -102,6 +102,7 @@ public sealed partial class PaperWindow : Window
     private TextBlock? _deepCapsuleSlotLabelText;
     private DeepCapsuleEdge? _appliedSlotEdge;
     private ContextMenu? _deepCapsuleSlotContextMenu;
+    private bool _deepCapsuleSlotContextMenuOpen;
     private IntPtr _deepCapsuleForegroundHook;
     private IntPtr _deepCapsuleMouseHook;
     private WinEventDelegate? _deepCapsuleForegroundHookProc;
@@ -1455,7 +1456,8 @@ public sealed partial class PaperWindow : Window
     {
         if (_deepCapsuleSlotHost != null)
         {
-            var slotShouldBeTopmost = !_controller.SuppressTopmostForFullscreenForeground;
+            var slotShouldBeTopmost = !_controller.SuppressDeepCapsuleTopmostForContextMenu &&
+                !_controller.SuppressTopmostForFullscreenForeground;
             _deepCapsuleSlotHost.Topmost = slotShouldBeTopmost;
             if (_deepCapsuleSlotHost.IsVisible)
             {

@@ -49,6 +49,7 @@ public sealed partial class AppController : IDisposable
     private bool? _lastFullscreenDebugSuppressState;
     private PaperWindow? _noteLinkTargetWindow;
     private string? _noteLinkTargetItemId;
+    private int _deepCapsuleContextMenuOpenCount;
     // One master pill per docked-capsule queue, keyed by QueueKey(monitorDevice, edge).
     private readonly Dictionary<string, MasterCapsuleWindow> _masterCapsules = new();
 
@@ -62,6 +63,7 @@ public sealed partial class AppController : IDisposable
 
     public AppState State { get; private set; }
     public bool SuppressTopmostForFullscreenForeground => _suppressTopmostForFullscreenForeground;
+    public bool SuppressDeepCapsuleTopmostForContextMenu => _deepCapsuleContextMenuOpenCount > 0;
     public IntPtr FullscreenAvoidanceWindow => _fullscreenAvoidanceWindow;
     private bool ShouldAvoidFullscreenTopmost => FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode) == FullscreenTopmostModes.Avoid;
 
@@ -878,6 +880,22 @@ public sealed partial class AppController : IDisposable
             window.RefreshDeepCapsuleSlotTopmost();
         }
         foreach (var m in _masterCapsules.Values) m.RefreshEffectiveTopmost();
+    }
+
+    public void BeginDeepCapsuleContextMenu()
+    {
+        _deepCapsuleContextMenuOpenCount++;
+        RefreshFloatingSurfaceZOrder();
+    }
+
+    public void EndDeepCapsuleContextMenu()
+    {
+        if (_deepCapsuleContextMenuOpenCount > 0)
+        {
+            _deepCapsuleContextMenuOpenCount--;
+        }
+
+        RefreshFloatingSurfaceZOrder();
     }
 
     public void HidePaper(PaperData paper)

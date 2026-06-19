@@ -749,6 +749,7 @@ public sealed partial class PaperWindow
             }
 
             _deepCapsuleSlotContextMenu = menu;
+            SetDeepCapsuleSlotContextMenuOpen(true);
             StartDeepCapsuleContextMenuGuards();
         };
 
@@ -757,6 +758,7 @@ public sealed partial class PaperWindow
             if (ReferenceEquals(_deepCapsuleSlotContextMenu, menu))
             {
                 _deepCapsuleSlotContextMenu = null;
+                SetDeepCapsuleSlotContextMenuOpen(false);
                 StopDeepCapsuleContextMenuGuards();
             }
         };
@@ -773,7 +775,29 @@ public sealed partial class PaperWindow
         }
 
         _deepCapsuleSlotContextMenu = null;
+        SetDeepCapsuleSlotContextMenuOpen(false);
         StopDeepCapsuleContextMenuGuards();
+    }
+
+    private void SetDeepCapsuleSlotContextMenuOpen(bool open)
+    {
+        if (_deepCapsuleSlotContextMenuOpen == open)
+        {
+            RefreshDeepCapsuleSlotTopmost();
+            return;
+        }
+
+        _deepCapsuleSlotContextMenuOpen = open;
+        if (open)
+        {
+            _controller.BeginDeepCapsuleContextMenu();
+        }
+        else
+        {
+            _controller.EndDeepCapsuleContextMenu();
+        }
+
+        RefreshDeepCapsuleSlotTopmost();
     }
 
     private void StartDeepCapsuleContextMenuGuards()
@@ -1840,7 +1864,7 @@ public sealed partial class PaperWindow
 
         SetDeepCapsuleSlotHostHorizontalBounds(_deepCapsuleDragLeft, visibleWidth);
 
-        Mouse.OverrideCursor = Cursors.SizeNS;
+        Mouse.OverrideCursor = Cursors.SizeAll;
         UpdateDeepCapsuleReorderDrag(currentScreenPos);
     }
 
