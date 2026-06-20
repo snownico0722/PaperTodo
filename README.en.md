@@ -14,12 +14,6 @@ A minimal Windows desktop sticky-note app built with native WPF. No main window,
 
 ---
 
-## Star History
-
-[![PaperTodo Star History Chart](https://api.star-history.com/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.com/#snownico0722/PaperTodo&Date)
-
----
-
 ## Preview
 
 | Papers |
@@ -205,3 +199,9 @@ Local packaging only produces the no-runtime single file; cloud Releases publish
 ## Thanks
 
 Thanks to the [linux.do](https://linux.do/) community.
+
+---
+
+## Star History
+
+[![PaperTodo Star History Chart](https://api.star-history.com/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.com/#snownico0722/PaperTodo&Date)
