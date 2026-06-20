@@ -254,6 +254,8 @@ public sealed partial class PaperWindow
         var linkedNoteTitle = "";
         var hasLinkedNote = _controller.State.EnableTodoNoteLinks &&
             _controller.TryGetLinkedNoteTitle(item.LinkedNoteId, out linkedNoteTitle);
+        var runLinkedScriptOnClick = hasLinkedNote &&
+            _controller.ShouldRunLinkedScriptCapsule(item.LinkedNoteId);
 
         var row = new Border
         {
@@ -405,7 +407,10 @@ public sealed partial class PaperWindow
             itemMenu.Items.Add(MenuHeader(Strings.Get("MenuTodoItem")));
             if (hasLinkedNote)
             {
-                itemMenu.Items.Add(MenuItem(Strings.Format("MenuOpenLinkedNote", linkedNoteTitle), (_, _) => _controller.OpenLinkedNote(item.LinkedNoteId, this)));
+                var openMenuText = runLinkedScriptOnClick
+                    ? Strings.Format("MenuEditLinkedScriptCapsule", linkedNoteTitle)
+                    : Strings.Format("MenuOpenLinkedNote", linkedNoteTitle);
+                itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedNote(item.LinkedNoteId, this)));
                 itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkNote"), (_, _) => UnlinkNoteFromTodoItem(item)));
                 itemMenu.Items.Add(MenuSeparator());
             }
@@ -440,26 +445,40 @@ public sealed partial class PaperWindow
         if (hasLinkedNote)
         {
             var showLinkedNoteName = _controller.State.ShowLinkedNoteName;
-            var linkedNoteButtonText = showLinkedNoteName ? CompactLinkedNoteTitle(linkedNoteTitle, 3, 3) : "\uE71B";
+            string LinkedNoteButtonLabel(int fullTextElementLimit, int truncatedTextElementCount)
+            {
+                var title = CompactLinkedNoteTitle(linkedNoteTitle, fullTextElementLimit, truncatedTextElementCount);
+                return runLinkedScriptOnClick ? "⚡ " + title : title;
+            }
+
+            var linkedNoteButtonText = showLinkedNoteName
+                ? LinkedNoteButtonLabel(3, 3)
+                : runLinkedScriptOnClick ? "⚡" : "\uE71B";
             var linkGlyph = new TextBlock
             {
                 Text = linkedNoteButtonText,
                 Foreground = WeakTextBrush,
                 Opacity = 0.72,
-                FontFamily = showLinkedNoteName ? new FontFamily("Segoe UI") : new FontFamily("Segoe MDL2 Assets"),
-                FontSize = showLinkedNoteName ? metrics.LinkedNoteNameFontSize : metrics.LinkedNoteIconFontSize,
+                FontFamily = showLinkedNoteName
+                    ? new FontFamily("Segoe UI")
+                    : runLinkedScriptOnClick ? new FontFamily("Segoe UI Symbol") : new FontFamily("Segoe MDL2 Assets"),
+                FontSize = showLinkedNoteName
+                    ? metrics.LinkedNoteNameFontSize
+                    : runLinkedScriptOnClick ? metrics.LinkedNoteIconFontSize + 1 : metrics.LinkedNoteIconFontSize,
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.NoWrap,
                 LineHeight = showLinkedNoteName ? metrics.LinkedNoteNameFontSize + 1 : double.NaN,
-                MaxWidth = showLinkedNoteName ? metrics.CheckColumnWidth * 2 : double.PositiveInfinity
+                MaxWidth = showLinkedNoteName ? metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2) : double.PositiveInfinity
             };
 
             var linkButton = new Border
             {
-                Width = showLinkedNoteName ? Math.Max(50, metrics.CheckColumnWidth * 2.2) : Math.Max(23, metrics.CheckColumnWidth),
+                Width = showLinkedNoteName
+                    ? Math.Max(runLinkedScriptOnClick ? 58 : 50, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.55 : 2.2))
+                    : Math.Max(23, metrics.CheckColumnWidth),
                 MinWidth = Math.Max(23, metrics.CheckColumnWidth),
                 MinHeight = Math.Max(22, metrics.RowMinHeight - 2),
                 Margin = new Thickness(1, 0, 0, 0),
@@ -467,7 +486,9 @@ public sealed partial class PaperWindow
                 CornerRadius = new CornerRadius(RadiusControl),
                 Background = LinkedNoteBgBrush,
                 Cursor = Cursors.Hand,
-                ToolTip = Strings.Format("ToolTipOpenLinkedNote", linkedNoteTitle),
+                ToolTip = runLinkedScriptOnClick
+                    ? Strings.Format("ToolTipRunLinkedScriptCapsule", linkedNoteTitle)
+                    : Strings.Format("ToolTipOpenLinkedNote", linkedNoteTitle),
                 Child = linkGlyph
             };
 
@@ -480,11 +501,15 @@ public sealed partial class PaperWindow
 
                 var isTodoMultiline = text.LineCount > 1;
                 linkGlyph.Text = isTodoMultiline
-                    ? CompactLinkedNoteTitle(linkedNoteTitle, 6, 5)
-                    : CompactLinkedNoteTitle(linkedNoteTitle, 3, 3);
+                    ? LinkedNoteButtonLabel(6, 5)
+                    : LinkedNoteButtonLabel(3, 3);
                 linkGlyph.TextWrapping = isTodoMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap;
-                linkGlyph.MaxWidth = isTodoMultiline ? metrics.CheckColumnWidth * 1.8 : metrics.CheckColumnWidth * 2;
-                linkButton.Width = isTodoMultiline ? Math.Max(44, metrics.CheckColumnWidth * 2) : Math.Max(50, metrics.CheckColumnWidth * 2.2);
+                linkGlyph.MaxWidth = isTodoMultiline
+                    ? metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.15 : 1.8)
+                    : metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2);
+                linkButton.Width = isTodoMultiline
+                    ? Math.Max(runLinkedScriptOnClick ? 52 : 44, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2))
+                    : Math.Max(runLinkedScriptOnClick ? 58 : 50, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.55 : 2.2));
             }
 
             void QueueLinkedNoteNameLayoutUpdate()
@@ -526,7 +551,11 @@ public sealed partial class PaperWindow
             linkButton.MouseLeftButtonUp += (_, e) =>
             {
                 linkButton.Opacity = 1.0;
-                _controller.OpenLinkedNote(item.LinkedNoteId, this);
+                if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedNoteId) ||
+                    !_controller.RunLinkedScriptCapsule(item.LinkedNoteId))
+                {
+                    _controller.OpenLinkedNote(item.LinkedNoteId, this);
+                }
                 e.Handled = true;
             };
             AttachItemContextMenu(linkButton);

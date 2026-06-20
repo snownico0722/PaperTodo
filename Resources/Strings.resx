@@ -72,6 +72,9 @@
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
   </data>
+  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
+    <value>运行关联脚本：{0}</value>
+  </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>启用</value>
   </data>
@@ -149,6 +152,9 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
+  </data>
+  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
+    <value>编辑关联脚本：{0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>取消关联笔记</value>
@@ -384,6 +390,9 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>待办与笔记</value>
   </data>
+  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>关联脚本点击运行</value>
+  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>通用</value>
   </data>
@@ -410,6 +419,9 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>开启后，已经挂到待办项上的笔记不会再出现在胶囊列表里，避免边缘胶囊与待办入口重复。关闭后，这些笔记仍可像普通纸片一样折叠为胶囊。</value>
+  </data>
+  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>开启后，待办项后的关联入口如果指向脚本胶囊，左键会直接运行脚本；右键仍可打开脚本胶囊编辑。默认关闭，避免误触执行脚本。</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>在纸片顶栏显示「新建待办」按钮。</value>
@@ -454,13 +466,13 @@
     <value>开启后，待办完成、新增、删除等操作会有平滑动画效果。关闭可提升低配电脑的性能。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>开启后，使用 !!powerflash 的脚本胶囊会复用一个 PowerShell 进程并立即返回；脚本变量、目录和加载状态可能保留。关闭此项会结束常驻进程。</value>
+    <value>开启后，使用 !pf 或 !powerf 的脚本胶囊会复用一个 PowerShell 进程并立即返回；脚本变量、目录和加载状态可能保留。关闭此项会结束常驻进程。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>开启后，脚本胶囊会优先使用 PowerShell 7（pwsh.exe），找不到时回退到 Windows PowerShell。也可用 !!pwsh 或 !!powershell5 强制指定。</value>
+    <value>开启后，脚本胶囊会优先使用 PowerShell 7（pwsh.exe），找不到时回退到 Windows PowerShell。也可用 !pwsh 或 !ps5 强制指定。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>开启后脚本在后台隐藏运行；关闭后允许显示 PowerShell 窗口。普通 !!power 始终会等待并捕获错误输出，!!powerflash 只负责投递脚本。</value>
+    <value>开启后脚本在后台隐藏运行；关闭后允许显示 PowerShell 窗口。普通 !p / !power 始终会等待并捕获错误输出，!pf / !powerf 只负责投递脚本。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>启用待办关联笔记</value>

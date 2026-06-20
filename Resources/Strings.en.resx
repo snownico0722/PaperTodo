@@ -72,6 +72,9 @@
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
   </data>
+  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
+    <value>Run linked script: {0}</value>
+  </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>On</value>
   </data>
@@ -149,6 +152,9 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
+  </data>
+  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
+    <value>Edit linked script: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>Unlink note</value>
@@ -384,6 +390,9 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>To-dos &amp; notes</value>
   </data>
+  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>Run linked scripts on click</value>
+  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>General</value>
   </data>
@@ -410,6 +419,9 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>When enabled, notes already attached to a to-do item are removed from the capsule list, so the edge capsules do not duplicate that to-do entry point. When disabled, those notes can still collapse like any normal paper.</value>
+  </data>
+  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>When enabled, the linked-note button on a to-do item runs the linked script capsule on left-click. Right-click still opens it for editing. Off by default to prevent accidental script runs.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>Show the "New to-do" button in the paper's top bar.</value>
@@ -454,13 +466,13 @@
     <value>When enabled, actions like completing, adding, or deleting todos will have smooth animations. Disable this to improve performance on low-end devices.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>When enabled, script capsules using !!powerflash reuse one PowerShell process and return immediately. Variables, location, and loaded state may persist. Turning this off ends the persistent process.</value>
+    <value>When enabled, script capsules using !pf or !powerf reuse one PowerShell process and return immediately. Variables, location, and loaded state may persist. Turning this off ends the persistent process.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>When enabled, script capsules prefer PowerShell 7 (pwsh.exe) and fall back to Windows PowerShell when unavailable. Use !!pwsh or !!powershell5 to force one.</value>
+    <value>When enabled, script capsules prefer PowerShell 7 (pwsh.exe) and fall back to Windows PowerShell when unavailable. Use !pwsh or !ps5 to force one.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>When enabled, scripts run hidden in the background. When off, a PowerShell window may be shown. Normal !!power always waits and captures error output; !!powerflash only submits the script.</value>
+    <value>When enabled, scripts run hidden in the background. When off, a PowerShell window may be shown. Normal !p / !power always waits and captures error output; !pf / !powerf only submits the script.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>Enable todo-note links</value>

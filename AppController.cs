@@ -336,6 +336,10 @@ public sealed partial class AppController : IDisposable
         {
             window.RefreshPaperTitle();
         }
+        if (paper.Type == PaperTypes.Note)
+        {
+            RefreshTodoRowsForLinkedNote(paper.Id);
+        }
         RefreshTrayMenu();
         MarkDirty();
     }
@@ -389,6 +393,57 @@ public sealed partial class AppController : IDisposable
 
         title = PaperTitleText(note);
         return true;
+    }
+
+    public bool ShouldRunLinkedScriptCapsule(string? noteId)
+    {
+        return State.EnableTodoNoteLinks &&
+            State.RunLinkedScriptCapsulesOnClick &&
+            IsLinkedScriptCapsule(noteId);
+    }
+
+    private bool IsLinkedScriptCapsule(string? noteId)
+    {
+        var note = FindNote(noteId);
+        return note != null && PaperWindow.IsScriptCapsuleContent(note.Content);
+    }
+
+    public bool RunLinkedScriptCapsule(string? noteId)
+    {
+        var note = FindNote(noteId);
+        if (note == null || !PaperWindow.IsScriptCapsuleContent(note.Content))
+        {
+            return false;
+        }
+
+        if (!_windows.TryGetValue(note.Id, out var window))
+        {
+            window = new PaperWindow(note, this);
+            _windows[note.Id] = window;
+        }
+
+        return window.TryRunScriptCapsule();
+    }
+
+    public void RefreshTodoRowsForLinkedNote(string? noteId)
+    {
+        if (string.IsNullOrWhiteSpace(noteId))
+        {
+            return;
+        }
+
+        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+        {
+            if (!paper.Items.Any(item => string.Equals(item.LinkedNoteId, noteId, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            if (_windows.TryGetValue(paper.Id, out var window))
+            {
+                window.RefreshTodoRowsForExternalChange();
+            }
+        }
     }
 
     public bool IsNoteLinkedToAnyTodo(PaperData paper)

@@ -592,6 +592,9 @@ public sealed partial class AppController
         var hideLinkedNotesFromCapsulesToggle = SettingsToggle(Strings.Get("SettingsHideLinkedNotesFromCapsules"), State.HideLinkedNotesFromCapsules, ToggleHideLinkedNotesFromCapsules);
         hideLinkedNotesFromCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(hideLinkedNotesFromCapsulesToggle, "TipHideLinkedNotesFromCapsules"));
+        var runLinkedScriptCapsulesToggle = SettingsToggle(Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"), State.RunLinkedScriptCapsulesOnClick, ToggleRunLinkedScriptCapsulesOnClick);
+        runLinkedScriptCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
+        rightColumn.Children.Add(WrapWithHint(runLinkedScriptCapsulesToggle, "TipRunLinkedScriptCapsulesOnClick"));
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsExternalOpen")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsExternalMarkdownExtension")), "TipExternalExtension"));
@@ -1219,6 +1222,19 @@ public sealed partial class AppController
     {
         State.HideLinkedNotesFromCapsules = !State.HideLinkedNotesFromCapsules;
         RefreshCapsuleEligibilityForLinkedNotes();
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleRunLinkedScriptCapsulesOnClick()
+    {
+        State.RunLinkedScriptCapsulesOnClick = !State.RunLinkedScriptCapsulesOnClick;
+
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshTodoRowsForExternalChange();
+        }
+
         SaveNow();
         RefreshSettingsWindowContent();
     }

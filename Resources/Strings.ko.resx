@@ -72,6 +72,9 @@
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>연결된 메모 열기: {0}</value>
   </data>
+  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
+    <value>연결된 스크립트 실행: {0}</value>
+  </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>사용</value>
   </data>
@@ -149,6 +152,9 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>연결된 메모 열기: {0}</value>
+  </data>
+  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
+    <value>연결된 스크립트 편집: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>메모 연결 해제</value>
@@ -384,6 +390,9 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>할 일 및 메모</value>
   </data>
+  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>연결 스크립트 클릭 실행</value>
+  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>일반</value>
   </data>
@@ -410,6 +419,9 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>켜면 할 일 항목에 이미 연결된 메모는 캡슐 목록에 표시되지 않아, 가장자리 캡슐과 할 일 진입점이 중복되지 않습니다. 끄면 해당 메모도 일반 종이처럼 캡슐로 접을 수 있습니다.</value>
+  </data>
+  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>켜면 할 일 항목의 연결 버튼이 스크립트 캡슐을 가리킬 때 왼쪽 클릭으로 바로 실행합니다. 오른쪽 클릭으로는 계속 편집할 수 있습니다. 실수로 실행하지 않도록 기본값은 꺼짐입니다.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>페이퍼 상단 바에 '새 할 일' 버튼을 표시합니다.</value>
@@ -454,13 +466,13 @@
     <value>활성화하면 할 일 완료, 추가, 삭제 등의 작업에서 부드러운 애니메이션 효과가 표시됩니다. 저사양 PC에서는 성능 향상을 위해 비활성화할 수 있습니다.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>켜면 !!powerflash 스크립트 캡슐이 하나의 PowerShell 프로세스를 재사용하고 즉시 반환됩니다. 변수, 위치, 로드된 상태가 남을 수 있습니다. 끄면 상주 프로세스를 종료합니다.</value>
+    <value>켜면 !pf 또는 !powerf 스크립트 캡슐이 하나의 PowerShell 프로세스를 재사용하고 즉시 반환됩니다. 변수, 위치, 로드된 상태가 남을 수 있습니다. 끄면 상주 프로세스를 종료합니다.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>켜면 스크립트 캡슐이 PowerShell 7(pwsh.exe)을 우선 사용하고, 없으면 Windows PowerShell로 돌아갑니다. !!pwsh 또는 !!powershell5로 강제 지정할 수 있습니다.</value>
+    <value>켜면 스크립트 캡슐이 PowerShell 7(pwsh.exe)을 우선 사용하고, 없으면 Windows PowerShell로 돌아갑니다. !pwsh 또는 !ps5로 강제 지정할 수 있습니다.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>켜면 스크립트가 백그라운드에서 숨겨져 실행됩니다. 끄면 PowerShell 창이 표시될 수 있습니다. 일반 !!power는 항상 기다리고 오류 출력을 캡처하며, !!powerflash는 스크립트만 전달합니다.</value>
+    <value>켜면 스크립트가 백그라운드에서 숨겨져 실행됩니다. 끄면 PowerShell 창이 표시될 수 있습니다. 일반 !p / !power는 항상 기다리고 오류 출력을 캡처하며, !pf / !powerf는 스크립트만 전달합니다.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>할 일-메모 연결 사용</value>

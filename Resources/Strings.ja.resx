@@ -72,6 +72,9 @@
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
   </data>
+  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
+    <value>関連スクリプトを実行: {0}</value>
+  </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>有効</value>
   </data>
@@ -149,6 +152,9 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
+  </data>
+  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
+    <value>関連スクリプトを編集: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>メモの関連付けを解除</value>
@@ -384,6 +390,9 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>ToDo とノート</value>
   </data>
+  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>関連スクリプトをクリックで実行</value>
+  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>一般</value>
   </data>
@@ -410,6 +419,9 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>オンにすると、ToDo 項目に関連付け済みのノートはカプセル一覧に表示されず、エッジのカプセルと ToDo 入口の重複を避けます。オフにすると、それらのノートも通常の紙片と同じようにカプセルへ折りたためます。</value>
+  </data>
+  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
+    <value>オンにすると、ToDo 項目の関連入口がスクリプトカプセルを指す場合、左クリックで直接実行します。右クリックでは引き続き編集用に開けます。誤実行を避けるため既定ではオフです。</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>ペーパー上部のバーに「新規 ToDo」ボタンを表示します。</value>
@@ -454,13 +466,13 @@
     <value>有効にすると、ToDo の完了、追加、削除などの操作で滑らかなアニメーションが表示されます。低スペック PC ではパフォーマンス向上のため無効化できます。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>有効にすると、!!powerflash のスクリプトカプセルは 1 つの PowerShell プロセスを再利用し、すぐに戻ります。変数、場所、読み込み状態が残る場合があります。無効にすると常駐プロセスを終了します。</value>
+    <value>有効にすると、!pf または !powerf のスクリプトカプセルは 1 つの PowerShell プロセスを再利用し、すぐに戻ります。変数、場所、読み込み状態が残る場合があります。無効にすると常駐プロセスを終了します。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>有効にすると、スクリプトカプセルは PowerShell 7（pwsh.exe）を優先し、見つからない場合は Windows PowerShell に戻ります。!!pwsh または !!powershell5 で明示指定できます。</value>
+    <value>有効にすると、スクリプトカプセルは PowerShell 7（pwsh.exe）を優先し、見つからない場合は Windows PowerShell に戻ります。!pwsh または !ps5 で明示指定できます。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>有効にするとスクリプトはバックグラウンドで非表示実行されます。無効にすると PowerShell ウィンドウが表示される場合があります。通常の !!power は常に待機してエラー出力を取得し、!!powerflash はスクリプト投入のみ行います。</value>
+    <value>有効にするとスクリプトはバックグラウンドで非表示実行されます。無効にすると PowerShell ウィンドウが表示される場合があります。通常の !p / !power は常に待機してエラー出力を取得し、!pf / !powerf はスクリプト投入のみ行います。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>ToDo とメモの関連付けを有効化</value>

@@ -262,10 +262,12 @@ public sealed partial class PaperWindow
         {
             var wasScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
             _paper.Content = box.Text;
-            if (wasScriptCapsule != IsScriptCapsuleText(_paper.Content ?? ""))
+            var isScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
+            if (wasScriptCapsule != isScriptCapsule)
             {
                 RefreshCapsuleLabel();
                 RefreshPaperContextMenus();
+                _controller.RefreshTodoRowsForLinkedNote(_paper.Id);
             }
             _controller.MarkDirty();
         };
@@ -538,6 +540,11 @@ public sealed partial class PaperWindow
         return TryGetScriptCapsule(out _);
     }
 
+    internal static bool IsScriptCapsuleContent(string? text)
+    {
+        return IsScriptCapsuleText(text ?? "");
+    }
+
     private void ActivateFromCollapsedCapsule()
     {
         if (TryRunScriptCapsule())
@@ -569,7 +576,7 @@ public sealed partial class PaperWindow
         _controller.BringPaperToFront(_paper);
     }
 
-    private bool TryRunScriptCapsule()
+    internal bool TryRunScriptCapsule()
     {
         if (!TryGetScriptCapsule(out var spec))
         {
@@ -636,10 +643,10 @@ public sealed partial class PaperWindow
         var marker = firstLine.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
         spec = marker switch
         {
-            "!!powerflash" => new ScriptCapsuleMarkerSpec("auto", true),
-            "!!power" or "!!powershell" or "!!ps" or "!!ps1" => new ScriptCapsuleMarkerSpec("auto", false),
-            "!!pwsh" or "!!powershell7" or "!!ps7" => new ScriptCapsuleMarkerSpec("pwsh", false),
-            "!!powershell5" or "!!ps5" or "!!winps" => new ScriptCapsuleMarkerSpec("powershell", false),
+            "!pf" or "!powerf" => new ScriptCapsuleMarkerSpec("auto", true),
+            "!p" or "!power" => new ScriptCapsuleMarkerSpec("auto", false),
+            "!pwsh" or "!ps7" => new ScriptCapsuleMarkerSpec("pwsh", false),
+            "!ps5" or "!winps" => new ScriptCapsuleMarkerSpec("powershell", false),
             _ => default
         };
         return !string.IsNullOrEmpty(spec.Engine);

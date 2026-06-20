@@ -488,16 +488,71 @@ public sealed partial class AppController
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var prefix = IsPaperShown(paper) ? "☑ " : "☐ ";
-        var normalLabelText = prefix + PaperTypeIcon(paper) + " " + PaperLabel(paper);
+        var labelPanel = new Grid();
+        var checkColumn = new ColumnDefinition { Width = new GridLength(18) };
+        var iconColumn = new ColumnDefinition { Width = new GridLength(22) };
+        labelPanel.ColumnDefinitions.Add(checkColumn);
+        labelPanel.ColumnDefinitions.Add(iconColumn);
+        labelPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var checkMark = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 3,6.8 L 5.7,9.4 L 10.2,4"),
+            Stroke = TrayPaperBrush,
+            StrokeThickness = 1.7,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Visibility = IsPaperShown(paper) ? Visibility.Visible : Visibility.Collapsed,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var checkBoxHost = new Grid();
+        checkBoxHost.Children.Add(checkMark);
+
+        var checkBox = new Border
+        {
+            Width = 13,
+            Height = 13,
+            CornerRadius = new CornerRadius(3),
+            BorderThickness = IsPaperShown(paper) ? new Thickness(0) : new Thickness(1.3),
+            BorderBrush = TrayWeakTextBrush,
+            Background = IsPaperShown(paper) ? Theme.ActiveBrush : Brushes.Transparent,
+            Opacity = IsPaperShown(paper) ? 0.92 : 0.72,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = checkBoxHost
+        };
+
+        var iconText = new TextBlock
+        {
+            Text = PaperTypeIcon(paper),
+            Foreground = TrayTextBrush,
+            Opacity = 0.82,
+            FontFamily = new FontFamily("Segoe UI Symbol"),
+            FontSize = PaperTypeIconFontSize(paper),
+            FontWeight = FontWeights.SemiBold,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var normalLabelText = PaperLabel(paper);
         var label = new TextBlock
         {
             Text = normalLabelText,
             Foreground = TrayTextBrush,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 142,
+            MaxWidth = 118,
             VerticalAlignment = VerticalAlignment.Center
         };
+        Grid.SetColumn(checkBox, 0);
+        Grid.SetColumn(iconText, 1);
+        Grid.SetColumn(label, 2);
+        labelPanel.Children.Add(checkBox);
+        labelPanel.Children.Add(iconText);
+        labelPanel.Children.Add(label);
 
         var deleteText = new TextBlock
         {
@@ -630,6 +685,10 @@ public sealed partial class AppController
         void ExitConfirmMode()
         {
             confirmMode = false;
+            checkColumn.Width = new GridLength(18);
+            iconColumn.Width = new GridLength(22);
+            checkBox.Visibility = Visibility.Visible;
+            iconText.Visibility = Visibility.Visible;
             label.Text = normalLabelText;
             label.Foreground = TrayTextBrush;
             label.FontWeight = FontWeights.Normal;
@@ -643,6 +702,10 @@ public sealed partial class AppController
         void EnterConfirmMode()
         {
             confirmMode = true;
+            checkColumn.Width = new GridLength(0);
+            iconColumn.Width = new GridLength(0);
+            checkBox.Visibility = Visibility.Collapsed;
+            iconText.Visibility = Visibility.Collapsed;
             label.Text = Strings.Get("TrayInlineConfirmDelete");
             label.Foreground = System.Windows.Media.Brushes.Red;
             label.FontWeight = FontWeights.SemiBold;
@@ -710,10 +773,10 @@ public sealed partial class AppController
             e.Handled = true;
         };
 
-        Grid.SetColumn(label, 0);
+        Grid.SetColumn(labelPanel, 0);
         Grid.SetColumn(confirmArea, 1);
         Grid.SetColumn(deleteArea, 2);
-        grid.Children.Add(label);
+        grid.Children.Add(labelPanel);
         grid.Children.Add(confirmArea);
         grid.Children.Add(deleteArea);
 
@@ -775,7 +838,19 @@ public sealed partial class AppController
 
     private static string PaperTypeIcon(PaperData paper)
     {
+        if (paper.Type == PaperTypes.Note && PaperWindow.IsScriptCapsuleContent(paper.Content))
+        {
+            return "⚡";
+        }
+
         return paper.Type == PaperTypes.Note ? "✎" : "✓";
+    }
+
+    private static double PaperTypeIconFontSize(PaperData paper)
+    {
+        return paper.Type == PaperTypes.Note && PaperWindow.IsScriptCapsuleContent(paper.Content)
+            ? 15.0
+            : 14.0;
     }
 
     private static SolidColorBrush FrozenBrush(Color color)

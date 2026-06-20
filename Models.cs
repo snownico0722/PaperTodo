@@ -144,6 +144,7 @@ public sealed class AppState
     public bool EnableTodoNoteLinks { get; set; } = true;
     public bool ShowLinkedNoteName { get; set; }
     public bool HideLinkedNotesFromCapsules { get; set; }
+    public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; }
     public bool CapsuleCollapseAllActive { get; set; }

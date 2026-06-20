@@ -14,6 +14,12 @@
 
 ---
 
+## Star 增长曲线
+
+[![PaperTodo Star 增长曲线](https://api.star-history.com/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.com/#snownico0722/PaperTodo&Date)
+
+---
+
 
 ## 预览
 

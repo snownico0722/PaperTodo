@@ -1420,13 +1420,14 @@ public sealed partial class PaperWindow : Window
 
         if (CanDisplayAsCapsule())
         {
-            if (_paper.IsCollapsed)
+            var isScriptCapsule = IsScriptCapsule();
+            if (isScriptCapsule && (_paper.IsCollapsed || forDeepCapsuleSlot))
             {
-                if (IsScriptCapsule())
-                {
-                    menu.Items.Add(MenuItem(Strings.Get("ScriptCapsuleEditMenu"), (_, _) => OpenCapsuleForEditing()));
-                }
-                else if (!forDeepCapsuleSlot)
+                menu.Items.Add(MenuItem(Strings.Get("ScriptCapsuleEditMenu"), (_, _) => OpenCapsuleForEditing()));
+            }
+            else if (_paper.IsCollapsed)
+            {
+                if (!forDeepCapsuleSlot)
                 {
                     menu.Items.Add(MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => SetCollapsedState(false)));
                 }
@@ -1456,7 +1457,7 @@ public sealed partial class PaperWindow : Window
         var shouldBeTopmost = _paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed);
         var effectiveTopmost = shouldBeTopmost && !_controller.SuppressTopmostForFullscreenForeground;
         Topmost = effectiveTopmost;
-        if (IsVisible && (shouldBeTopmost || _controller.SuppressTopmostForFullscreenForeground))
+        if (IsVisible && shouldBeTopmost)
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, _controller.FullscreenAvoidanceWindow);
         }

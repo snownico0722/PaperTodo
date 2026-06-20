@@ -25,7 +25,8 @@ internal static class FullscreenForegroundWindowDetector
     public static bool TryGetFullscreenWindow(out IntPtr fullscreenWindow, bool allowGlobalScan)
     {
         var foreground = GetForegroundWindow();
-        if (foreground != IntPtr.Zero && !IsCurrentProcessWindow(foreground))
+        var hasExternalForeground = foreground != IntPtr.Zero && !IsCurrentProcessWindow(foreground);
+        if (hasExternalForeground)
         {
             _lastExternalForegroundWindow = foreground;
         }
@@ -35,7 +36,9 @@ internal static class FullscreenForegroundWindowDetector
             return true;
         }
 
-        return allowGlobalScan && TryGetAnyExternalFullscreenWindow(out fullscreenWindow);
+        return allowGlobalScan &&
+               hasExternalForeground &&
+               TryGetAnyForegroundRelatedFullscreenWindow(foreground, out fullscreenWindow);
     }
 
     public static string BuildDebugSnapshot()
@@ -100,16 +103,26 @@ internal static class FullscreenForegroundWindowDetector
         return false;
     }
 
-    private static bool TryGetAnyExternalFullscreenWindow(out IntPtr fullscreenWindow)
+    private static bool TryGetAnyForegroundRelatedFullscreenWindow(IntPtr foreground, out IntPtr fullscreenWindow)
     {
         var shellWindow = GetShellWindow();
         fullscreenWindow = IntPtr.Zero;
         var foundWindow = IntPtr.Zero;
         var found = false;
+        var foregroundProcessId = ProcessIdFor(foreground);
+        if (foregroundProcessId == 0)
+        {
+            return false;
+        }
 
         EnumWindows((hwnd, _) =>
         {
             if (!IsCandidateExternalWindow(hwnd, shellWindow))
+            {
+                return true;
+            }
+
+            if (hwnd != foreground && ProcessIdFor(hwnd) != foregroundProcessId)
             {
                 return true;
             }
@@ -234,8 +247,18 @@ internal static class FullscreenForegroundWindowDetector
 
     private static bool IsCurrentProcessWindow(IntPtr hwnd)
     {
+        return ProcessIdFor(hwnd) == Environment.ProcessId;
+    }
+
+    private static uint ProcessIdFor(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return 0;
+        }
+
         _ = GetWindowThreadProcessId(hwnd, out var processId);
-        return processId == Environment.ProcessId;
+        return processId;
     }
 
     private static bool CoversMonitor(Rectangle windowRect, Rectangle monitorRect)
