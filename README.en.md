@@ -6,7 +6,7 @@
 
 A minimal Windows desktop sticky-note app built with native WPF. No main window, no account, no manager.
 
-![version](https://img.shields.io/badge/version-v2.0-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
+![version](https://img.shields.io/badge/version-v2.1-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
 
 **Language: [中文](README.md) | English**
 
@@ -50,8 +50,9 @@ A minimal Windows desktop sticky-note app built with native WPF. No main window,
   - **Todo paper**: one item per line. Check, edit, delete, and clear completed items.
   - **Note paper**: plain text with lightweight Markdown-style highlighting and three Markdown rendering modes.
 - **Capsule mode** enabled by default - Collapse papers into pinned mini capsules.
-- **Auto-docked capsules** enabled by default - Collapsed capsules line up on screen edges, with multi-monitor and left/right-side queues.
+- **Auto-docked capsules** enabled by default - Collapsed capsules line up on screen edges, with multi-monitor support, left/right-side queues, and individual capsule dragging across screens.
 - **Minimal interaction layers** - Fast, direct, lightweight controls.
+- **Script capsules** - Start a note with `!p` / `!power` to quickly run scripts from the note and use the capsule system as visual script shortcuts.
 - **Link notes to todos** - Drag a note onto a todo item to link it, then open the linked note directly from that item.
 - **Theme switching** - Follow system, light, and dark modes.
 - **Four color schemes** - Warm Paper, Ink, Forest, and Rosy.
@@ -77,6 +78,7 @@ Good for today's tasks, temporary items, and small desktop checklists.
 - **Drag to reorder** - Hold the `≡` handle on the right and drag up or down.
 - **Drag to delete** - Drag an item to the bottom delete area.
 - **Paste multiple lines** - Lines are split into separate todo items, with common list prefixes cleaned up.
+- **Visual size** - Choose Small / Medium / Large / Extra Large todo item sizes in settings.
 - **Undo / redo** - `Ctrl+Z` / `Ctrl+Y`
 
 **Linked notes**: Drag a note from its title bar onto a todo item to create a link. The todo item then shows an entry point to open the linked note. When "show linked note names" is enabled, the note title is shown next to the item.
@@ -103,6 +105,10 @@ Note paper is not a full Markdown editor. It only helps a sheet of paper stay a 
 
 **Custom suffixes**: The `MD` button can use system-associated suffixes such as `.txt`, `.html`, or `.bat`; Windows handles the temporary file with the associated app.
 
+**Script capsules**: Put `!p` / `!power` on the first line of a note, and the remaining content runs as a PowerShell script. When collapsed, the note shows a lightning capsule; left-click runs it, and right-click opens the paper for editing. Use `!pf` / `!powerf` to send the script to a persistent PowerShell process.
+
+> Only run local scripts you trust. Do not run script content from unknown sources.
+
 ---
 
 ## Paper Window
@@ -115,15 +121,24 @@ Note paper is not a full Markdown editor. It only helps a sheet of paper stay a 
 - **Open with external editor**: click `MD` to open the current note externally. The associated suffix can be customized in settings.
 - **Set title**: paper titles can be customized.
 
+**Capsules And Edge Docking**
+
+- **Collapsed capsules**: Papers can collapse into pinned mini capsules to save desktop space.
+- **Auto docking**: Collapsed capsules can dock to screen edges and slide out on hover.
+- **Multi-screen queues**: Drag an individual edge capsule to the left side, right side, or another monitor; it joins the matching edge queue when released.
+- **Collapse all**: The master capsule can collapse or expand all edge capsules, and dragging it adjusts that queue's starting height.
+
 ---
 
 ## Settings
 
-- **Appearance** - Theme, color scheme, title length limit, normal tooltips, and animations.
+- **Appearance** - Theme, color scheme, todo visual size, title length limit, normal tooltips, and animations.
+- **Fullscreen topmost mode** - When an external fullscreen window is detected, choose whether papers and edge capsules temporarily step back or stay above fullscreen content.
 - **Todo and notes** - Linked notes for todos, linked note names, and whether linked notes appear as capsules.
 - **Title bar buttons** - Hide the new todo, new note, or external open button separately.
 - **External open** - Customize the temporary file suffix used when opening the current note with the system default editor.
-- **Capsules** - Capsule mode, auto docking, keeping the edge capsule when expanded, and the collapse-all master capsule.
+- **Script capsules** - Prefer PowerShell 7, hide script run windows, and enable a persistent PowerShell process.
+- **Capsules** - Capsule mode, auto docking, multi-screen left/right queues, keeping the edge capsule when expanded, and the collapse-all master capsule.
 
 ## Tray Entry
 
