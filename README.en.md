@@ -49,10 +49,10 @@ A minimal Windows desktop sticky-note app built with native WPF. No main window,
 - **One app, two paper types**:
   - **Todo paper**: one item per line. Check, edit, delete, and clear completed items.
   - **Note paper**: plain text with lightweight Markdown-style highlighting and three Markdown rendering modes.
-- **Capsule mode** enabled by default - Collapse papers into pinned mini capsules.
-- **Auto-docked capsules** enabled by default - Collapsed capsules line up on screen edges, with multi-monitor support, left/right-side queues, and individual capsule dragging across screens.
+- **Capsule mode** enabled by default - Click the top-right control to collapse a paper into a pinned mini capsule, saving desktop space and bringing it back when needed.
+- **Auto-docked capsules** enabled by default - Collapsed capsules dock to screen edges; multi-monitor layouts are supported, and individual capsules can be dragged to another side or monitor.
 - **Minimal interaction layers** - Fast, direct, lightweight controls.
-- **Script capsules** - Start a note with `!p` / `!power` to quickly run scripts from the note and use the capsule system as visual script shortcuts.
+- **Script capsules** - Start a note with `!p` / `!power` to quickly run scripts from the note and make full use of the capsule system.
 - **Link notes to todos** - Drag a note onto a todo item to link it, then open the linked note directly from that item.
 - **Theme switching** - Follow system, light, and dark modes.
 - **Four color schemes** - Warm Paper, Ink, Forest, and Rosy.
@@ -61,11 +61,30 @@ A minimal Windows desktop sticky-note app built with native WPF. No main window,
 - **Custom tray icon** - If `PaperTodo.ico` exists next to the executable, it is used instead of the embedded icon.
 - **Data safety** - Auto-saves to `data.json` next to the app and keeps `data.backup.json`; temporary writes reduce corruption risk on abnormal exit.
 - **Native paper experience** - Built with native WPF controls for a smooth and efficient desktop feel.
-- **Command-line friendly** - Show, hide, toggle, and create papers from startup arguments, without adding complex shortcut configuration inside the app.
+- **Command-line friendly** - Show, hide, toggle, and create papers from startup arguments, making it easy to call PaperTodo from hotkey tools or scripts.
 
 ---
 
 ## Paper Features And Manual
+
+## Paper Window
+
+**Basic actions**
+
+- **Move and resize**
+- **Pin on top**: the type icon in the top-left corner is also the pin toggle.
+- **Create**: create todo and note papers from the top-right buttons.
+- **Open with external editor**: click the `MD` button to open the current note in an external editor. The suffix can be customized in settings.
+- **Set title**: paper titles can be customized.
+
+**Capsules And Edge Docking**
+
+- **Collapsed capsules**: Papers can collapse into pinned mini capsules to save desktop space and reopen quickly.
+- **Auto docking**: Collapsed capsules can dock to screen edges and slide out on hover.
+- **Multi-screen queues**: Drag an individual edge capsule to the left side, right side, or another monitor; it joins the matching edge queue when released.
+- **Collapse all**: The master capsule can collapse or expand all edge capsules, and dragging it adjusts that queue's starting height.
+
+---
 
 ### Todo
 
@@ -108,25 +127,6 @@ Note paper is not a full Markdown editor. It only helps a sheet of paper stay a 
 **Script capsules**: Put `!p` / `!power` on the first line of a note, and the remaining content runs as a PowerShell script. When collapsed, the note shows a lightning capsule; left-click runs it, and right-click opens the paper for editing. Use `!pf` / `!powerf` to send the script to a persistent PowerShell process.
 
 > Only run local scripts you trust. Do not run script content from unknown sources.
-
----
-
-## Paper Window
-
-**Basic actions**
-
-- **Move and resize**
-- **Pin on top**: the type icon in the top-left corner is also the pin toggle.
-- **Create**: create todo and note papers from the top-right buttons.
-- **Open with external editor**: click `MD` to open the current note externally. The associated suffix can be customized in settings.
-- **Set title**: paper titles can be customized.
-
-**Capsules And Edge Docking**
-
-- **Collapsed capsules**: Papers can collapse into pinned mini capsules to save desktop space.
-- **Auto docking**: Collapsed capsules can dock to screen edges and slide out on hover.
-- **Multi-screen queues**: Drag an individual edge capsule to the left side, right side, or another monitor; it joins the matching edge queue when released.
-- **Collapse all**: The master capsule can collapse or expand all edge capsules, and dragging it adjusts that queue's starting height.
 
 ---
 
