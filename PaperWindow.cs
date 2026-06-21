@@ -54,6 +54,7 @@ public sealed partial class PaperWindow : Window
     private readonly Grid _containerGrid = new();
     private readonly Grid _shell = new();
     private readonly ScaleTransform _shellScale = new(1.0, 1.0);
+    private readonly ScaleTransform _paperContentScale = new(1.0, 1.0);
     private Canvas? _dragLayer;
     private StackPanel? _todoPanel;
     private Button? _paperIconButton;
@@ -222,6 +223,9 @@ public sealed partial class PaperWindow : Window
     // main window must not overwrite ordinary paper geometry.
     public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
+    private double PaperDisplayScale => _controller.PaperDisplayScale;
+    private double CapsuleDisplayScale => _controller.CapsuleDisplayScale;
+    private double CapsuleDisplayHeight => _controller.CapsuleDisplayHeight;
     public double DeepCapsuleRestingVisibleWidth => _deepCapsuleSlotState == DeepCapsuleSlotState.ExpandedReserved
         ? ExpandedDeepCapsuleVisibleWidth()
         : DeepCapsuleVisibleWidth();
@@ -682,17 +686,17 @@ public sealed partial class PaperWindow : Window
         if (_paper.IsCollapsed && _controller.State.UseCapsuleMode)
         {
             Width = CapsuleWindowWidth();
-            Height = PaperLayoutDefaults.CapsuleHeight;
+            Height = CapsuleDisplayHeight;
             MinWidth = CapsuleWindowWidth();
-            MinHeight = PaperLayoutDefaults.CapsuleHeight;
+            MinHeight = CapsuleDisplayHeight;
             ResizeMode = ResizeMode.NoResize;
         }
         else
         {
-            Width = _paper.Width;
-            Height = _paper.Height;
-            MinWidth = PaperLayoutDefaults.MinWidth;
-            MinHeight = PaperLayoutDefaults.MinHeight;
+            Width = ScalePaper(_paper.Width);
+            Height = ScalePaper(_paper.Height);
+            MinWidth = ScalePaper(PaperLayoutDefaults.MinWidth);
+            MinHeight = ScalePaper(PaperLayoutDefaults.MinHeight);
             ResizeMode = ResizeMode.CanResizeWithGrip;
         }
 
@@ -870,6 +874,7 @@ public sealed partial class PaperWindow : Window
 
         _containerGrid.Background = Brushes.Transparent;
         _containerGrid.ClipToBounds = false;
+        _containerGrid.LayoutTransform = _paperContentScale;
         _containerGrid.RenderTransform = _shellScale;
         _containerGrid.RenderTransformOrigin = new Point(0, 0);
         _paperChrome.Child = _containerGrid;
@@ -902,13 +907,48 @@ public sealed partial class PaperWindow : Window
         }
 
         _paperChrome.ContextMenu = BuildPaperContextMenu();
+        ApplyPaperContentScale();
         UpdateTextZoom();
+    }
+
+    private void ApplyPaperContentScale()
+    {
+        var scale = Math.Max(0.1, PaperDisplayScale);
+        _paperContentScale.ScaleX = scale;
+        _paperContentScale.ScaleY = scale;
+    }
+
+    public void UpdateScaleFromSettings()
+    {
+        ApplyPaperContentScale();
+        RefreshCapsuleLabel();
+        UpdateDeepCapsuleSlotHostTheme();
+        UpdateDeepCapsuleSlotClosePlacement();
+        MoveWindowWithoutGeometrySave(() =>
+        {
+            if (_paper.IsCollapsed && _controller.State.UseCapsuleMode)
+            {
+                Width = CapsuleWindowWidth();
+                Height = CapsuleDisplayHeight;
+                MinWidth = CapsuleWindowWidth();
+                MinHeight = CapsuleDisplayHeight;
+                ResizeMode = ResizeMode.NoResize;
+            }
+            else
+            {
+                Width = ScalePaper(_paper.Width);
+                Height = ScalePaper(_paper.Height);
+                MinWidth = ScalePaper(PaperLayoutDefaults.MinWidth);
+                MinHeight = ScalePaper(PaperLayoutDefaults.MinHeight);
+                ResizeMode = ResizeMode.CanResizeWithGrip;
+            }
+        });
     }
 
     private void AttachCapsuleShellToWindowHost()
     {
         _capsuleShell.BeginAnimation(UIElement.OpacityProperty, null);
-        _capsuleShell.Margin = new Thickness(WindowChromeMargin);
+        _capsuleShell.Margin = new Thickness(ScaleCapsule(WindowChromeMargin));
         _capsuleShell.HorizontalAlignment = HorizontalAlignment.Left;
         _capsuleShell.VerticalAlignment = VerticalAlignment.Top;
         Panel.SetZIndex(_capsuleShell, 10);
@@ -1420,14 +1460,13 @@ public sealed partial class PaperWindow : Window
 
         if (CanDisplayAsCapsule())
         {
-            var isScriptCapsule = IsScriptCapsule();
-            if (isScriptCapsule && (_paper.IsCollapsed || forDeepCapsuleSlot))
+            if (_paper.IsCollapsed)
             {
-                menu.Items.Add(MenuItem(Strings.Get("ScriptCapsuleEditMenu"), (_, _) => OpenCapsuleForEditing()));
-            }
-            else if (_paper.IsCollapsed)
-            {
-                if (!forDeepCapsuleSlot)
+                if (IsScriptCapsule())
+                {
+                    menu.Items.Add(MenuItem(Strings.Get("ScriptCapsuleEditMenu"), (_, _) => OpenCapsuleForEditing()));
+                }
+                else if (!forDeepCapsuleSlot)
                 {
                     menu.Items.Add(MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => SetCollapsedState(false)));
                 }
@@ -1457,7 +1496,7 @@ public sealed partial class PaperWindow : Window
         var shouldBeTopmost = _paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed);
         var effectiveTopmost = shouldBeTopmost && !_controller.SuppressTopmostForFullscreenForeground;
         Topmost = effectiveTopmost;
-        if (IsVisible && shouldBeTopmost)
+        if (IsVisible && (shouldBeTopmost || _controller.SuppressTopmostForFullscreenForeground))
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, _controller.FullscreenAvoidanceWindow);
         }
@@ -1594,7 +1633,7 @@ public sealed partial class PaperWindow : Window
             !_isApplyingCollapsedState &&
             !_isTransitionVisualsActive &&
             Width > DesiredCapsuleWindowWidth + 8 &&
-            Height > PaperLayoutDefaults.CapsuleHeight + 8;
+            Height > CapsuleDisplayHeight + 8;
     }
 
     private void QueueTitleEditAfterWindowIsExpanded()
@@ -2025,8 +2064,8 @@ public sealed partial class PaperWindow : Window
         var capsuleChromeMin = Math.Max(
             1.0,
             Math.Min(
-                PaperLayoutDefaults.CapsuleWidth - WindowChromeInset,
-                PaperLayoutDefaults.CapsuleHeight - WindowChromeInset));
+                ScaleCapsule(PaperLayoutDefaults.CapsuleWidth) - ScaleCapsule(WindowChromeInset),
+                CapsuleDisplayHeight - ScaleCapsule(WindowChromeInset)));
         var compactRange = Math.Max(1.0, expandedChromeMin - capsuleChromeMin);
         var compactness = Math.Clamp((expandedChromeMin - visualChromeMin) / compactRange, 0.0, 1.0);
         var compactVisualRadius = Math.Min(CapsuleChromeCornerRadius, visualChromeMin / 2.0);
@@ -2047,8 +2086,8 @@ public sealed partial class PaperWindow : Window
 
     private double CapsuleWindowWidth(bool usesDeepCapsulePresentation)
     {
-        var minWidth = usesDeepCapsulePresentation ? PaperLayoutDefaults.CapsuleWidth : CapsuleNormalMinWidth;
-        return Math.Max(minWidth, CapsuleShellWidth(usesDeepCapsulePresentation) + WindowChromeInset);
+        var minWidth = ScaleCapsule(usesDeepCapsulePresentation ? PaperLayoutDefaults.CapsuleWidth : CapsuleNormalMinWidth);
+        return Math.Max(minWidth, CapsuleShellWidth(usesDeepCapsulePresentation) + ScaleCapsule(WindowChromeInset));
     }
 
     private double CapsuleShellWidth()
@@ -2058,7 +2097,7 @@ public sealed partial class PaperWindow : Window
 
     private double CapsuleShellWidth(bool usesDeepCapsulePresentation)
     {
-        return Math.Ceiling(CapsuleLeftPadding + MeasureCapsuleIconWidth() + CapsuleIconGap + MeasureCapsuleTitleWidth() + CapsuleCloseWidthForPlacement(usesDeepCapsulePresentation) + CapsuleRightPadding);
+        return Math.Ceiling(ScaleCapsule(CapsuleLeftPadding) + MeasureCapsuleIconWidth() + ScaleCapsule(CapsuleIconGap) + MeasureCapsuleTitleWidth() + CapsuleCloseWidthForPlacement(usesDeepCapsulePresentation) + ScaleCapsule(CapsuleRightPadding));
     }
 
     private double CapsuleCloseWidthForCurrentPlacement()
@@ -2066,9 +2105,9 @@ public sealed partial class PaperWindow : Window
         return CapsuleCloseWidthForPlacement(UsesDeepCapsulePresentation);
     }
 
-    private static double CapsuleCloseWidthForPlacement(bool usesDeepCapsulePresentation)
+    private double CapsuleCloseWidthForPlacement(bool usesDeepCapsulePresentation)
     {
-        return usesDeepCapsulePresentation ? CapsuleCloseWidth : CapsuleNormalCloseWidth;
+        return ScaleCapsule(usesDeepCapsulePresentation ? CapsuleCloseWidth : CapsuleNormalCloseWidth);
     }
 
     private bool UsesDeepCapsulePresentation => false;
@@ -2084,12 +2123,12 @@ public sealed partial class PaperWindow : Window
 
     private double CapsuleShellLayoutWidth(bool usesDeepCapsulePresentation)
     {
-        return Math.Max(CapsuleShellWidth(usesDeepCapsulePresentation), CapsuleWindowWidth(usesDeepCapsulePresentation) - WindowChromeInset);
+        return Math.Max(CapsuleShellWidth(usesDeepCapsulePresentation), CapsuleWindowWidth(usesDeepCapsulePresentation) - ScaleCapsule(WindowChromeInset));
     }
 
     private double MeasureCapsuleTitleWidth()
     {
-        return MeasureCapsuleTextWidth(_controller.PaperCapsuleTitle(_paper), CapsuleLabelFontSize, FontWeights.Normal);
+        return MeasureCapsuleTextWidth(_controller.PaperCapsuleTitle(_paper), ScaleCapsule(CapsuleLabelFontSize), FontWeights.Normal);
     }
 
     // The capsule icon glyph (✓ / ✎) is not a fixed box — its rendered advance width depends
@@ -2126,6 +2165,21 @@ public sealed partial class PaperWindow : Window
         {
             return text.Length * fontSize;
         }
+    }
+
+    private double ScalePaper(double value)
+    {
+        return value * PaperDisplayScale;
+    }
+
+    private double UnscalePaper(double value)
+    {
+        return value / Math.Max(0.1, PaperDisplayScale);
+    }
+
+    private double ScaleCapsule(double value)
+    {
+        return value * CapsuleDisplayScale;
     }
 
     private double RoundToDevicePixelX(double value)
@@ -2199,3 +2253,19 @@ public sealed partial class PaperWindow : Window
         BeginAnimation(OpacityProperty, anim);
     }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增纸片整体显示缩放与胶囊显示缩放入口。
+- 调整折叠态、展开态窗口尺寸和胶囊测量逻辑。
+
+[修改目的]:
+- 让设置中的整体大小和胶囊大小即时影响窗口、普通胶囊和侧边栏胶囊显示。
+
+[影响范围]:
+- 纸片窗口初始化、尺寸刷新、胶囊宽高测量和几何保存。
+*/

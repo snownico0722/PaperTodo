@@ -234,6 +234,10 @@ public sealed class StateStore
         }
 
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
+        if (state.ColorScheme == ColorSchemes.Custom || state.CustomColorPalette != null)
+        {
+            state.CustomColorPalette = Theme.NormalizeCustomPalette(state.CustomColorPalette, ColorSchemes.Warm);
+        }
 
         if (!MarkdownRenderModes.IsValid(state.MarkdownRenderMode))
         {
@@ -254,11 +258,8 @@ public sealed class StateStore
             state.ShowTopBarNewPaperButtons = null;
         }
 
-        if (double.IsNaN(state.Zoom) || double.IsInfinity(state.Zoom) || state.Zoom <= 0)
-        {
-            state.Zoom = 1.0;
-        }
-        state.Zoom = Math.Clamp(state.Zoom, 0.5, 1.5);
+        state.Zoom = NormalizeScalePercent(state.Zoom);
+        state.CapsuleZoom = NormalizeScalePercent(state.CapsuleZoom);
 
         if (!state.UseCapsuleMode)
         {
@@ -346,6 +347,12 @@ public sealed class StateStore
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
                 : paper.CapsuleMonitorDeviceName.Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            paper.CapsulePlacement = CapsulePlacements.Normalize(paper.CapsulePlacement);
+            if (!IsValidNullableCoordinate(paper.CapsuleX) || !IsValidNullableCoordinate(paper.CapsuleY))
+            {
+                paper.CapsuleX = null;
+                paper.CapsuleY = null;
+            }
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
             paper.X = NormalizeCoordinate(paper.X, 120);
@@ -493,9 +500,53 @@ public sealed class StateStore
     private static string QueueKey(string? monitorDeviceName, string? side)
         => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
+    private static double NormalizeScalePercent(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+        {
+            value = 1.0;
+        }
+
+        return Math.Round(Math.Clamp(value, 0.5, 1.5) / 0.05, MidpointRounding.AwayFromZero) * 0.05;
+    }
+
+    private static bool IsValidNullableCoordinate(double? value)
+    {
+        return !value.HasValue || (!double.IsNaN(value.Value) && !double.IsInfinity(value.Value));
+    }
+
     private static double NormalizeDeepCapsuleStartTopMargin(double value, string monitorDeviceName)
     {
         var area = DeepCapsuleLayout.WorkAreaForQueue(monitorDeviceName);
         return DeepCapsuleLayout.NormalizeStartTopMargin(value, area, 1);
     }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增整体缩放、胶囊缩放的百分比规范化。
+- 新增胶囊布局状态与自由悬浮坐标的兼容校验。
+
+[修改目的]:
+- 保证旧配置加载后能安全使用新增的缩放和自由悬浮字段。
+
+[影响范围]:
+- data.json 加载、保存前序列化规范化和旧版本配置兼容。
+
+[修改编号]: 2
+[修改日期]: 2026-06-21
+[修改类型]: 新增功能
+[主要内容]:
+- 新增自定义色盘的加载和保存前规范化。
+- 对非法或缺失的 HEX 颜色按默认色盘逐项回退。
+
+[修改目的]:
+- 保证旧配置和手动修改过的 data.json 在启用自定义主题时仍能安全加载。
+
+[影响范围]:
+- data.json 主题字段兼容、自定义色盘保存格式和主题初始化。
+*/

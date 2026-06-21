@@ -122,6 +122,12 @@ public sealed partial class PaperWindow
         if (_capsuleShell != null)
         {
             _capsuleShell.Width = CapsuleShellLayoutWidth();
+            _capsuleShell.Height = Math.Max(1, ScaleCapsule(30));
+        }
+        if (_capsuleLabelText != null)
+        {
+            _capsuleLabelText.FontSize = ScaleCapsule(CapsuleLabelFontSize);
+            _capsuleLabelText.Margin = new Thickness(ScaleCapsule(CapsuleIconGap), 0, 0, 0);
         }
         UpdateCapsuleClosePlacement();
         RefreshDeepCapsuleSlotLabel();
@@ -150,15 +156,15 @@ public sealed partial class PaperWindow
         {
             _capsuleCloseArea.Width = CapsuleCloseWidthForCurrentPlacement();
             _capsuleCloseArea.Margin = usesDeepCapsulePresentation
-                ? new Thickness(0, 0, 2, 0)
+                ? new Thickness(0, 0, ScaleCapsule(2), 0)
                 : new Thickness(0);
         }
 
         if (_capsuleCloseGlyphOffset != null)
         {
             _capsuleCloseGlyphOffset.X = usesDeepCapsulePresentation
-                ? CapsuleCloseGlyphDeepOffset
-                : CapsuleCloseGlyphNormalOffset;
+                ? ScaleCapsule(CapsuleCloseGlyphDeepOffset)
+                : ScaleCapsule(CapsuleCloseGlyphNormalOffset);
         }
 
         if (_capsuleShell != null)
@@ -192,18 +198,18 @@ public sealed partial class PaperWindow
         var leftEdge = MyDeepCapsuleIsLeftEdge;
         if (_deepCapsuleSlotCloseArea != null)
         {
-            _deepCapsuleSlotCloseArea.Width = CapsuleCloseWidth;
+            _deepCapsuleSlotCloseArea.Width = ScaleCapsule(CapsuleCloseWidth);
             _deepCapsuleSlotCloseArea.IsHitTestVisible = true;
             // Breathing gap sits on the interior side of the close button (right edge: right;
             // left edge: left), and only when the close is actually revealed.
             _deepCapsuleSlotCloseArea.Margin = usesActivePresentation
-                ? (leftEdge ? new Thickness(2, 0, 0, 0) : new Thickness(0, 0, 2, 0))
+                ? (leftEdge ? new Thickness(ScaleCapsule(2), 0, 0, 0) : new Thickness(0, 0, ScaleCapsule(2), 0))
                 : new Thickness(0);
         }
 
         if (_deepCapsuleSlotCloseGlyphOffset != null)
         {
-            _deepCapsuleSlotCloseGlyphOffset.X = leftEdge ? -CapsuleCloseGlyphDeepOffset : CapsuleCloseGlyphDeepOffset;
+            _deepCapsuleSlotCloseGlyphOffset.X = leftEdge ? -ScaleCapsule(CapsuleCloseGlyphDeepOffset) : ScaleCapsule(CapsuleCloseGlyphDeepOffset);
         }
 
         if (_deepCapsuleSlotShell != null && !IsDeepCapsuleSlotHorizontalAnimating)
@@ -232,7 +238,7 @@ public sealed partial class PaperWindow
         _capsuleShell = new Grid
         {
             Width = CapsuleShellLayoutWidth(),
-            Height = 30,
+            Height = Math.Max(1, ScaleCapsule(30)),
             Background = Brushes.Transparent
         };
         _capsuleShell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -253,7 +259,7 @@ public sealed partial class PaperWindow
             // Hug the left edge (with a small inset) instead of centering, so the icon
             // doesn't float in the middle of the left area with dead space beside it.
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(CapsuleLeftPadding, 0, 0, 0)
+            Margin = new Thickness(ScaleCapsule(CapsuleLeftPadding), 0, 0, 0)
         };
 
         var iconText = new TextBlock
@@ -275,8 +281,8 @@ public sealed partial class PaperWindow
             // Explicit font so the rendered title matches the measured width (the window
             // default is Segoe UI, which has different digit/halfwidth metrics).
             FontFamily = NoteTypography.FontFamily,
-            FontSize = CapsuleLabelFontSize,
-            Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
+            FontSize = ScaleCapsule(CapsuleLabelFontSize),
+            Margin = new Thickness(ScaleCapsule(CapsuleIconGap), 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
         RefreshCapsuleLabel();
@@ -323,6 +329,7 @@ public sealed partial class PaperWindow
                 finally
                 {
                     leftArea.Cursor = Cursors.Hand;
+                    _controller.TryAutoDockFloatingCapsule(_paper, this);
                     ClearCapsuleInteractionKeyboardFocus();
                 }
 
@@ -365,7 +372,7 @@ public sealed partial class PaperWindow
         {
             Text = "×",
             Foreground = WeakTextBrush,
-            FontSize = 18,
+            FontSize = ScaleCapsule(18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             RenderTransform = closeGlyphOffset
@@ -375,7 +382,7 @@ public sealed partial class PaperWindow
 
         var capsuleClose = new Border
         {
-            Width = CapsuleCloseWidth,
+            Width = CapsuleCloseWidthForCurrentPlacement(),
             VerticalAlignment = VerticalAlignment.Stretch,
             Background = Brushes.Transparent,
             // Concentric with the capsule pill's right edge.
@@ -413,6 +420,21 @@ public sealed partial class PaperWindow
 
         Grid.SetColumn(capsuleClose, 1);
         _capsuleShell.Children.Add(capsuleClose);
+    }
+
+    private void PrepareCapsulePlacementForCollapse()
+    {
+        if (_controller.State.UseDeepCapsuleMode && _controller.State.AutoDockCapsules)
+        {
+            _paper.CapsulePlacement = CapsulePlacements.Docked;
+            _paper.CapsuleX = null;
+            _paper.CapsuleY = null;
+            return;
+        }
+
+        _paper.CapsulePlacement = CapsulePlacements.Floating;
+        _paper.CapsuleX = Math.Round(Left);
+        _paper.CapsuleY = Math.Round(Top);
     }
 
     public void SetCollapsedState(bool collapsed, bool animate = true, bool saveGeometry = true, bool alignExpandedToDockedEdge = false)
@@ -467,8 +489,8 @@ public sealed partial class PaperWindow
         var transitionGeneration = ++_collapseTransitionGeneration;
 
         var capsuleWidth = CapsuleWindowWidth();
-        double targetWidth = collapsed ? capsuleWidth : _paper.Width;
-        double targetHeight = collapsed ? PaperLayoutDefaults.CapsuleHeight : _paper.Height;
+        double targetWidth = collapsed ? capsuleWidth : ScalePaper(_paper.Width);
+        double targetHeight = collapsed ? CapsuleDisplayHeight : ScalePaper(_paper.Height);
         double finalTargetWidth = RoundToDevicePixelX(targetWidth);
         double finalTargetHeight = RoundToDevicePixelY(targetHeight);
         var usesDeepCapsuleMode = _paper.IsVisible && _controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode;
@@ -488,6 +510,10 @@ public sealed partial class PaperWindow
             && !_controller.State.ShowDeepCapsuleWhileExpanded;
 
         _paper.IsCollapsed = collapsed;
+        if (collapsed)
+        {
+            PrepareCapsulePlacementForCollapse();
+        }
         if (!collapsed)
         {
             if (_controller.State.ShowDeepCapsuleWhileExpanded &&
@@ -561,7 +587,7 @@ public sealed partial class PaperWindow
             _transitionBaseWidth = expandedWidth;
             _transitionBaseHeight = expandedHeight;
             _startTransitionWidth = collapsed ? expandedWidth : capsuleWidth;
-            _startTransitionHeight = collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight;
+            _startTransitionHeight = collapsed ? expandedHeight : CapsuleDisplayHeight;
             _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
             _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
             _isTransitionVisualsActive = true;
@@ -666,13 +692,13 @@ public sealed partial class PaperWindow
                 if (collapsed)
                 {
                     MinWidth = capsuleWidth;
-                    MinHeight = PaperLayoutDefaults.CapsuleHeight;
+                    MinHeight = CapsuleDisplayHeight;
                     ResizeMode = ResizeMode.NoResize;
                 }
                 else
                 {
-                    MinWidth = PaperLayoutDefaults.MinWidth;
-                    MinHeight = PaperLayoutDefaults.MinHeight;
+                    MinWidth = ScalePaper(PaperLayoutDefaults.MinWidth);
+                    MinHeight = ScalePaper(PaperLayoutDefaults.MinHeight);
                     ResizeMode = ResizeMode.CanResizeWithGrip;
                 }
 
@@ -723,7 +749,7 @@ public sealed partial class PaperWindow
                 _capsuleShell.Opacity = 1;
 
                 MinWidth = capsuleWidth;
-                MinHeight = PaperLayoutDefaults.CapsuleHeight;
+                MinHeight = CapsuleDisplayHeight;
                 ResizeMode = ResizeMode.NoResize;
             }
             else
@@ -733,8 +759,8 @@ public sealed partial class PaperWindow
                 _capsuleShell.Visibility = Visibility.Collapsed;
                 _capsuleShell.Opacity = 0;
 
-                MinWidth = PaperLayoutDefaults.MinWidth;
-                MinHeight = PaperLayoutDefaults.MinHeight;
+                MinWidth = ScalePaper(PaperLayoutDefaults.MinWidth);
+                MinHeight = ScalePaper(PaperLayoutDefaults.MinHeight);
                 ResizeMode = ResizeMode.CanResizeWithGrip;
             }
 
@@ -761,3 +787,19 @@ public sealed partial class PaperWindow
     }
 
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 普通胶囊折叠、展开、拖动和测量逻辑接入整体缩放与胶囊缩放。
+- 折叠时根据自动吸附开关保存 Docked 或 Floating 胶囊状态。
+
+[修改目的]:
+- 支持普通胶囊按设置缩放，并允许关闭自动吸附后自由悬浮。
+
+[影响范围]:
+- 普通胶囊点击展开、拖动释放、折叠动画和尺寸保存。
+*/

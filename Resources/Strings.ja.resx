@@ -16,7 +16,7 @@
     <value>起動に失敗しました: データファイルを読み込めません。ファイルが使用中、または破損している可能性があります。&#x0A;データが空の状態で上書きされないよう、アプリは安全に停止しました。&#x0A;&#x0A;エラー: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.4</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - エラー</value>
@@ -71,9 +71,6 @@
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
-  </data>
-  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
-    <value>関連スクリプトを実行: {0}</value>
   </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>有効</value>
@@ -152,9 +149,6 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
-  </data>
-  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
-    <value>関連スクリプトを編集: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>メモの関連付けを解除</value>
@@ -330,6 +324,15 @@
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>ToDo の表示サイズ</value>
   </data>
+  <data name="SettingsGlobalZoom" xml:space="preserve">
+    <value>全体サイズ</value>
+  </data>
+  <data name="SettingsCapsuleZoom" xml:space="preserve">
+    <value>カプセルサイズ</value>
+  </data>
+  <data name="SettingsAutoDockCapsules" xml:space="preserve">
+    <value>カプセル自動吸着</value>
+  </data>
   <data name="TodoVisualSizeSmall" xml:space="preserve">
     <value>小</value>
   </data>
@@ -390,9 +393,6 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>ToDo とノート</value>
   </data>
-  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>関連スクリプトをクリックで実行</value>
-  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>一般</value>
   </data>
@@ -411,6 +411,15 @@
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>ToDo 項目の表示サイズを調整します。小は 12、中は現在の 13、大は 14、特大は 15.5 です。</value>
   </data>
+  <data name="TipGlobalZoom" xml:space="preserve">
+    <value>ToDo やノートの内容自体は変えず、紙片全体の表示サイズを割合で調整します。</value>
+  </data>
+  <data name="TipCapsuleZoom" xml:space="preserve">
+    <value>全体サイズに加えて、通常カプセルと端のカプセルだけを個別に拡大・縮小します。</value>
+  </data>
+  <data name="TipAutoDockCapsules" xml:space="preserve">
+    <value>オンにすると、折りたたみ時や画面端へドラッグしたカプセルが自動で端の列に入ります。オフでは個別のカプセルを自由に浮かせられます。</value>
+  </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
     <value>オンにすると、ノートを ToDo 項目にドラッグして関連付けでき、その項目の関連ノートボタンからノートを開けます。</value>
   </data>
@@ -419,9 +428,6 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>オンにすると、ToDo 項目に関連付け済みのノートはカプセル一覧に表示されず、エッジのカプセルと ToDo 入口の重複を避けます。オフにすると、それらのノートも通常の紙片と同じようにカプセルへ折りたためます。</value>
-  </data>
-  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>オンにすると、ToDo 項目の関連入口がスクリプトカプセルを指す場合、左クリックで直接実行します。右クリックでは引き続き編集用に開けます。誤実行を避けるため既定ではオフです。</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>ペーパー上部のバーに「新規 ToDo」ボタンを表示します。</value>
@@ -466,13 +472,13 @@
     <value>有効にすると、ToDo の完了、追加、削除などの操作で滑らかなアニメーションが表示されます。低スペック PC ではパフォーマンス向上のため無効化できます。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>有効にすると、!pf または !powerf のスクリプトカプセルは 1 つの PowerShell プロセスを再利用し、すぐに戻ります。変数、場所、読み込み状態が残る場合があります。無効にすると常駐プロセスを終了します。</value>
+    <value>有効にすると、!!powerflash のスクリプトカプセルは 1 つの PowerShell プロセスを再利用し、すぐに戻ります。変数、場所、読み込み状態が残る場合があります。無効にすると常駐プロセスを終了します。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>有効にすると、スクリプトカプセルは PowerShell 7（pwsh.exe）を優先し、見つからない場合は Windows PowerShell に戻ります。!pwsh または !ps5 で明示指定できます。</value>
+    <value>有効にすると、スクリプトカプセルは PowerShell 7（pwsh.exe）を優先し、見つからない場合は Windows PowerShell に戻ります。!!pwsh または !!powershell5 で明示指定できます。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>有効にするとスクリプトはバックグラウンドで非表示実行されます。無効にすると PowerShell ウィンドウが表示される場合があります。通常の !p / !power は常に待機してエラー出力を取得し、!pf / !powerf はスクリプト投入のみ行います。</value>
+    <value>有効にするとスクリプトはバックグラウンドで非表示実行されます。無効にすると PowerShell ウィンドウが表示される場合があります。通常の !!power は常に待機してエラー出力を取得し、!!powerflash はスクリプト投入のみ行います。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>ToDo とメモの関連付けを有効化</value>
@@ -515,5 +521,68 @@
   </data>
   <data name="Unpin" xml:space="preserve">
     <value>固定を解除</value>
+  </data>
+  <data name="ColorSchemeOcean" xml:space="preserve">
+    <value>海塩</value>
+  </data>
+  <data name="ColorSchemeLavender" xml:space="preserve">
+    <value>ラベンダー</value>
+  </data>
+  <data name="ColorSchemeDune" xml:space="preserve">
+    <value>砂丘</value>
+  </data>
+  <data name="ColorSchemeCustom" xml:space="preserve">
+    <value>カスタム</value>
+  </data>
+  <data name="SettingsCustomPalette" xml:space="preserve">
+    <value>カスタムパレット</value>
+  </data>
+  <data name="SettingsCustomPaletteLight" xml:space="preserve">
+    <value>編集中: ライト配色</value>
+  </data>
+  <data name="SettingsCustomPaletteDark" xml:space="preserve">
+    <value>編集中: ダーク配色</value>
+  </data>
+  <data name="SettingsCustomPaletteReset" xml:space="preserve">
+    <value>カスタムをリセット</value>
+  </data>
+  <data name="SettingsAuthorSignature" xml:space="preserve">
+    <value>Designed by trigger</value>
+  </data>
+  <data name="TipCustomPalette" xml:space="preserve">
+    <value>色見本をクリックしてテーマ色を選択できます。#FFCC00 のような 6 桁 HEX 値を入力して細かく調整することもできます。</value>
+  </data>
+  <data name="CustomColorPaper" xml:space="preserve">
+    <value>紙面</value>
+  </data>
+  <data name="CustomColorPaperBorder" xml:space="preserve">
+    <value>枠線</value>
+  </data>
+  <data name="CustomColorText" xml:space="preserve">
+    <value>文字</value>
+  </data>
+  <data name="CustomColorWeakText" xml:space="preserve">
+    <value>弱い文字</value>
+  </data>
+  <data name="CustomColorActive" xml:space="preserve">
+    <value>アクセント</value>
+  </data>
+  <data name="CustomColorCode" xml:space="preserve">
+    <value>コード背景</value>
+  </data>
+  <data name="CustomColorQuoteBorder" xml:space="preserve">
+    <value>引用枠線</value>
+  </data>
+  <data name="CustomColorLink" xml:space="preserve">
+    <value>リンク</value>
+  </data>
+  <data name="CustomColorCheckBox" xml:space="preserve">
+    <value>チェック</value>
+  </data>
+  <data name="CustomColorTint" xml:space="preserve">
+    <value>下地色</value>
+  </data>
+  <data name="CustomColorDanger" xml:space="preserve">
+    <value>警告色</value>
   </data>
 </root>

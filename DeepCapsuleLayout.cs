@@ -144,27 +144,43 @@ public static class DeepCapsuleLayout
 
     public static double TopForIndex(int index, double startTopMargin, Rect area, int slotCount)
     {
-        var desiredTop = area.Top + NormalizeStartTopMargin(startTopMargin, area, slotCount) + Math.Max(0, index) * SlotHeight;
-        var maxTop = Math.Max(area.Top + TopMargin, area.Bottom - PaperLayoutDefaults.CapsuleHeight - TopMargin);
+        return TopForIndex(index, startTopMargin, area, slotCount, 1.0);
+    }
+
+    public static double TopForIndex(int index, double startTopMargin, Rect area, int slotCount, double capsuleScale)
+    {
+        var capsuleHeight = CapsuleHeight(capsuleScale);
+        var desiredTop = area.Top + NormalizeStartTopMargin(startTopMargin, area, slotCount, capsuleScale) + Math.Max(0, index) * SlotHeight(capsuleScale);
+        var maxTop = Math.Max(area.Top + TopMargin, area.Bottom - capsuleHeight - TopMargin);
         return Math.Min(desiredTop, maxTop);
     }
 
     public static double MaxStartTopMarginForCount(int slotCount, Rect area)
     {
+        return MaxStartTopMarginForCount(slotCount, area, 1.0);
+    }
+
+    public static double MaxStartTopMarginForCount(int slotCount, Rect area, double capsuleScale)
+    {
         var count = Math.Max(1, slotCount);
-        var stackHeight = PaperLayoutDefaults.CapsuleHeight + (count - 1) * SlotHeight;
+        var stackHeight = CapsuleHeight(capsuleScale) + (count - 1) * SlotHeight(capsuleScale);
         var maxMargin = area.Height - stackHeight - TopMargin;
         return Math.Max(TopMargin, maxMargin);
     }
 
     public static double NormalizeStartTopMargin(double value, Rect area, int slotCount)
     {
+        return NormalizeStartTopMargin(value, area, slotCount, 1.0);
+    }
+
+    public static double NormalizeStartTopMargin(double value, Rect area, int slotCount, double capsuleScale)
+    {
         if (double.IsNaN(value) || double.IsInfinity(value))
         {
             value = StartTopMargin;
         }
 
-        var max = MaxStartTopMarginForCount(slotCount, area);
+        var max = MaxStartTopMarginForCount(slotCount, area, capsuleScale);
         return Math.Round(Math.Clamp(value, TopMargin, max), 1);
     }
 
@@ -189,7 +205,24 @@ public static class DeepCapsuleLayout
 
     public static bool IsLeftEdge => Edge == DeepCapsuleEdge.Left;
 
-    public static double SlotHeight => PaperLayoutDefaults.CapsuleHeight + Gap;
+    public static double DefaultSlotHeight => PaperLayoutDefaults.CapsuleHeight + Gap;
+
+    public static double CapsuleHeight(double capsuleScale)
+    {
+        return PaperLayoutDefaults.CapsuleHeight * ValidCapsuleScale(capsuleScale);
+    }
+
+    public static double SlotHeight(double capsuleScale)
+    {
+        return CapsuleHeight(capsuleScale) + Gap;
+    }
+
+    private static double ValidCapsuleScale(double capsuleScale)
+    {
+        return double.IsNaN(capsuleScale) || double.IsInfinity(capsuleScale) || capsuleScale <= 0
+            ? 1.0
+            : capsuleScale;
+    }
 
     public static double TopForIndex(int index, double startTopMargin = StartTopMargin)
     {
@@ -206,3 +239,18 @@ public static class DeepCapsuleLayout
         return NormalizeStartTopMargin(value, WorkArea, slotCount);
     }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增侧边栏胶囊高度、槽位高度和起始边距的缩放感知重载。
+
+[修改目的]:
+- 确保胶囊大小变化后，侧边栏队列不会重叠或使用旧槽位间距。
+
+[影响范围]:
+- 侧边栏胶囊队列布局、主胶囊位置和跨队列拖动落点计算。
+*/

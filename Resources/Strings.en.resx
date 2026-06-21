@@ -16,7 +16,7 @@
     <value>Startup failed: unable to load the data file. It may be in use or corrupted.&#x0A;To prevent your data from being overwritten with an empty state, the app has stopped safely.&#x0A;&#x0A;Error: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.4</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - Error</value>
@@ -71,9 +71,6 @@
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
-  </data>
-  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
-    <value>Run linked script: {0}</value>
   </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>On</value>
@@ -152,9 +149,6 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
-  </data>
-  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
-    <value>Edit linked script: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>Unlink note</value>
@@ -330,6 +324,15 @@
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>Todo visual size</value>
   </data>
+  <data name="SettingsGlobalZoom" xml:space="preserve">
+    <value>Overall size</value>
+  </data>
+  <data name="SettingsCapsuleZoom" xml:space="preserve">
+    <value>Capsule size</value>
+  </data>
+  <data name="SettingsAutoDockCapsules" xml:space="preserve">
+    <value>Auto-dock capsules</value>
+  </data>
   <data name="TodoVisualSizeSmall" xml:space="preserve">
     <value>Small</value>
   </data>
@@ -390,9 +393,6 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>To-dos &amp; notes</value>
   </data>
-  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>Run linked scripts on click</value>
-  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>General</value>
   </data>
@@ -411,6 +411,15 @@
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>Adjust the visual size of todo items. Small is 12, medium keeps the current 13, large is 14, and XL is 15.5.</value>
   </data>
+  <data name="TipGlobalZoom" xml:space="preserve">
+    <value>Adjust the overall paper display size by percentage without changing the actual todo or note content.</value>
+  </data>
+  <data name="TipCapsuleZoom" xml:space="preserve">
+    <value>Independently enlarge or shrink normal capsules and edge capsules on top of the overall size.</value>
+  </data>
+  <data name="TipAutoDockCapsules" xml:space="preserve">
+    <value>When on, collapsed capsules or capsules dragged to a screen edge join the edge stack automatically. When off, individual capsules can float freely.</value>
+  </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
     <value>When on, drag a note onto a to-do item to link them, then use the linked-note button on that item to open the note.</value>
   </data>
@@ -419,9 +428,6 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>When enabled, notes already attached to a to-do item are removed from the capsule list, so the edge capsules do not duplicate that to-do entry point. When disabled, those notes can still collapse like any normal paper.</value>
-  </data>
-  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>When enabled, the linked-note button on a to-do item runs the linked script capsule on left-click. Right-click still opens it for editing. Off by default to prevent accidental script runs.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>Show the "New to-do" button in the paper's top bar.</value>
@@ -466,13 +472,13 @@
     <value>When enabled, actions like completing, adding, or deleting todos will have smooth animations. Disable this to improve performance on low-end devices.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>When enabled, script capsules using !pf or !powerf reuse one PowerShell process and return immediately. Variables, location, and loaded state may persist. Turning this off ends the persistent process.</value>
+    <value>When enabled, script capsules using !!powerflash reuse one PowerShell process and return immediately. Variables, location, and loaded state may persist. Turning this off ends the persistent process.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>When enabled, script capsules prefer PowerShell 7 (pwsh.exe) and fall back to Windows PowerShell when unavailable. Use !pwsh or !ps5 to force one.</value>
+    <value>When enabled, script capsules prefer PowerShell 7 (pwsh.exe) and fall back to Windows PowerShell when unavailable. Use !!pwsh or !!powershell5 to force one.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>When enabled, scripts run hidden in the background. When off, a PowerShell window may be shown. Normal !p / !power always waits and captures error output; !pf / !powerf only submits the script.</value>
+    <value>When enabled, scripts run hidden in the background. When off, a PowerShell window may be shown. Normal !!power always waits and captures error output; !!powerflash only submits the script.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>Enable todo-note links</value>
@@ -515,5 +521,68 @@
   </data>
   <data name="Unpin" xml:space="preserve">
     <value>Unpin</value>
+  </data>
+  <data name="ColorSchemeOcean" xml:space="preserve">
+    <value>Ocean</value>
+  </data>
+  <data name="ColorSchemeLavender" xml:space="preserve">
+    <value>Lavender</value>
+  </data>
+  <data name="ColorSchemeDune" xml:space="preserve">
+    <value>Dune</value>
+  </data>
+  <data name="ColorSchemeCustom" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="SettingsCustomPalette" xml:space="preserve">
+    <value>Custom palette</value>
+  </data>
+  <data name="SettingsCustomPaletteLight" xml:space="preserve">
+    <value>Editing: light palette</value>
+  </data>
+  <data name="SettingsCustomPaletteDark" xml:space="preserve">
+    <value>Editing: dark palette</value>
+  </data>
+  <data name="SettingsCustomPaletteReset" xml:space="preserve">
+    <value>Reset custom</value>
+  </data>
+  <data name="SettingsAuthorSignature" xml:space="preserve">
+    <value>Designed by trigger</value>
+  </data>
+  <data name="TipCustomPalette" xml:space="preserve">
+    <value>Click a swatch to choose a theme color, or enter a 6-digit HEX value for precise control, for example #FFCC00.</value>
+  </data>
+  <data name="CustomColorPaper" xml:space="preserve">
+    <value>Paper</value>
+  </data>
+  <data name="CustomColorPaperBorder" xml:space="preserve">
+    <value>Border</value>
+  </data>
+  <data name="CustomColorText" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="CustomColorWeakText" xml:space="preserve">
+    <value>Weak text</value>
+  </data>
+  <data name="CustomColorActive" xml:space="preserve">
+    <value>Accent</value>
+  </data>
+  <data name="CustomColorCode" xml:space="preserve">
+    <value>Code bg</value>
+  </data>
+  <data name="CustomColorQuoteBorder" xml:space="preserve">
+    <value>Quote border</value>
+  </data>
+  <data name="CustomColorLink" xml:space="preserve">
+    <value>Link</value>
+  </data>
+  <data name="CustomColorCheckBox" xml:space="preserve">
+    <value>Checkbox</value>
+  </data>
+  <data name="CustomColorTint" xml:space="preserve">
+    <value>Tint</value>
+  </data>
+  <data name="CustomColorDanger" xml:space="preserve">
+    <value>Danger</value>
   </data>
 </root>

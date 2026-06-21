@@ -16,7 +16,7 @@
     <value>启动失败：无法加载数据文件（可能文件被占用或损坏）。&#x0A;为了防止您的数据被覆盖清空，程序已安全中止运行。&#x0A;&#x0A;错误信息：{0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.4</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - 错误</value>
@@ -71,9 +71,6 @@
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
-  </data>
-  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
-    <value>运行关联脚本：{0}</value>
   </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>启用</value>
@@ -152,9 +149,6 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
-  </data>
-  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
-    <value>编辑关联脚本：{0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>取消关联笔记</value>
@@ -330,6 +324,15 @@
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>待办视觉大小</value>
   </data>
+  <data name="SettingsGlobalZoom" xml:space="preserve">
+    <value>整体大小</value>
+  </data>
+  <data name="SettingsCapsuleZoom" xml:space="preserve">
+    <value>胶囊大小</value>
+  </data>
+  <data name="SettingsAutoDockCapsules" xml:space="preserve">
+    <value>胶囊自动吸附</value>
+  </data>
   <data name="TodoVisualSizeSmall" xml:space="preserve">
     <value>小</value>
   </data>
@@ -390,9 +393,6 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>待办与笔记</value>
   </data>
-  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>关联脚本点击运行</value>
-  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>通用</value>
   </data>
@@ -411,6 +411,15 @@
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>调整待办项的视觉大小。小为 12，中为当前 13，大为 14，特大为 15.5。</value>
   </data>
+  <data name="TipGlobalZoom" xml:space="preserve">
+    <value>按百分比调整纸片整体显示大小，不改变待办和笔记内容本身。</value>
+  </data>
+  <data name="TipCapsuleZoom" xml:space="preserve">
+    <value>在整体大小基础上，单独放大或缩小普通胶囊和侧边栏胶囊。</value>
+  </data>
+  <data name="TipAutoDockCapsules" xml:space="preserve">
+    <value>开启后，折叠或拖动胶囊到屏幕边缘会自动加入侧边栏队列；关闭后可让单个胶囊自由悬浮。</value>
+  </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
     <value>开启后，可把笔记拖到待办项上建立关联，再通过待办项后的关联入口打开对应笔记。</value>
   </data>
@@ -419,9 +428,6 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>开启后，已经挂到待办项上的笔记不会再出现在胶囊列表里，避免边缘胶囊与待办入口重复。关闭后，这些笔记仍可像普通纸片一样折叠为胶囊。</value>
-  </data>
-  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>开启后，待办项后的关联入口如果指向脚本胶囊，左键会直接运行脚本；右键仍可打开脚本胶囊编辑。默认关闭，避免误触执行脚本。</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>在纸片顶栏显示「新建待办」按钮。</value>
@@ -466,13 +472,13 @@
     <value>开启后，待办完成、新增、删除等操作会有平滑动画效果。关闭可提升低配电脑的性能。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>开启后，使用 !pf 或 !powerf 的脚本胶囊会复用一个 PowerShell 进程并立即返回；脚本变量、目录和加载状态可能保留。关闭此项会结束常驻进程。</value>
+    <value>开启后，使用 !!powerflash 的脚本胶囊会复用一个 PowerShell 进程并立即返回；脚本变量、目录和加载状态可能保留。关闭此项会结束常驻进程。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>开启后，脚本胶囊会优先使用 PowerShell 7（pwsh.exe），找不到时回退到 Windows PowerShell。也可用 !pwsh 或 !ps5 强制指定。</value>
+    <value>开启后，脚本胶囊会优先使用 PowerShell 7（pwsh.exe），找不到时回退到 Windows PowerShell。也可用 !!pwsh 或 !!powershell5 强制指定。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>开启后脚本在后台隐藏运行；关闭后允许显示 PowerShell 窗口。普通 !p / !power 始终会等待并捕获错误输出，!pf / !powerf 只负责投递脚本。</value>
+    <value>开启后脚本在后台隐藏运行；关闭后允许显示 PowerShell 窗口。普通 !!power 始终会等待并捕获错误输出，!!powerflash 只负责投递脚本。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>启用待办关联笔记</value>
@@ -515,5 +521,68 @@
   </data>
   <data name="Unpin" xml:space="preserve">
     <value>取消置顶</value>
+  </data>
+  <data name="ColorSchemeOcean" xml:space="preserve">
+    <value>海盐</value>
+  </data>
+  <data name="ColorSchemeLavender" xml:space="preserve">
+    <value>雾紫</value>
+  </data>
+  <data name="ColorSchemeDune" xml:space="preserve">
+    <value>沙丘</value>
+  </data>
+  <data name="ColorSchemeCustom" xml:space="preserve">
+    <value>自定义</value>
+  </data>
+  <data name="SettingsCustomPalette" xml:space="preserve">
+    <value>自定义色盘</value>
+  </data>
+  <data name="SettingsCustomPaletteLight" xml:space="preserve">
+    <value>当前编辑：浅色色盘</value>
+  </data>
+  <data name="SettingsCustomPaletteDark" xml:space="preserve">
+    <value>当前编辑：深色色盘</value>
+  </data>
+  <data name="SettingsCustomPaletteReset" xml:space="preserve">
+    <value>重置自定义</value>
+  </data>
+  <data name="SettingsAuthorSignature" xml:space="preserve">
+    <value>Designed by trigger</value>
+  </data>
+  <data name="TipCustomPalette" xml:space="preserve">
+    <value>点击色块打开色盘选择主题颜色，也可输入 6 位 HEX 精确调整，例如 #FFCC00。</value>
+  </data>
+  <data name="CustomColorPaper" xml:space="preserve">
+    <value>纸面</value>
+  </data>
+  <data name="CustomColorPaperBorder" xml:space="preserve">
+    <value>边框</value>
+  </data>
+  <data name="CustomColorText" xml:space="preserve">
+    <value>文字</value>
+  </data>
+  <data name="CustomColorWeakText" xml:space="preserve">
+    <value>弱文字</value>
+  </data>
+  <data name="CustomColorActive" xml:space="preserve">
+    <value>强调</value>
+  </data>
+  <data name="CustomColorCode" xml:space="preserve">
+    <value>代码背景</value>
+  </data>
+  <data name="CustomColorQuoteBorder" xml:space="preserve">
+    <value>引用边框</value>
+  </data>
+  <data name="CustomColorLink" xml:space="preserve">
+    <value>链接</value>
+  </data>
+  <data name="CustomColorCheckBox" xml:space="preserve">
+    <value>复选框</value>
+  </data>
+  <data name="CustomColorTint" xml:space="preserve">
+    <value>底纹</value>
+  </data>
+  <data name="CustomColorDanger" xml:space="preserve">
+    <value>危险色</value>
   </data>
 </root>

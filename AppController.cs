@@ -65,6 +65,9 @@ public sealed partial class AppController : IDisposable
     public bool SuppressTopmostForFullscreenForeground => _suppressTopmostForFullscreenForeground;
     public bool SuppressDeepCapsuleTopmostForContextMenu => _deepCapsuleContextMenuOpenCount > 0;
     public IntPtr FullscreenAvoidanceWindow => _fullscreenAvoidanceWindow;
+    public double PaperDisplayScale => NormalizeDisplayScale(State.Zoom);
+    public double CapsuleDisplayScale => NormalizeDisplayScale(State.Zoom) * NormalizeDisplayScale(State.CapsuleZoom);
+    public double CapsuleDisplayHeight => DeepCapsuleLayout.CapsuleHeight(CapsuleDisplayScale);
     private bool ShouldAvoidFullscreenTopmost => FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode) == FullscreenTopmostModes.Avoid;
 
     public AppController()
@@ -238,14 +241,14 @@ public sealed partial class AppController : IDisposable
         }
 
         const double margin = 8;
-        var width = Math.Max(paper.Width, PaperLayoutDefaults.MinWidth);
-        var height = Math.Max(paper.Height, PaperLayoutDefaults.MinHeight);
+        var width = Math.Max(paper.Width * PaperDisplayScale, PaperLayoutDefaults.MinWidth * PaperDisplayScale);
+        var height = Math.Max(paper.Height * PaperDisplayScale, PaperLayoutDefaults.MinHeight * PaperDisplayScale);
         var edgeInset = Math.Min(
             Math.Max(
                 DeepCapsuleLayout.ExpandedEdgeInset,
                 Math.Max(
                     VisibleDeepCapsuleRestingWidthForQueue(paper) + DeepCapsuleLayout.Gap,
-                    PaperLayoutDefaults.CapsuleWidth + DeepCapsuleLayout.Gap)),
+                    PaperLayoutDefaults.CapsuleWidth * CapsuleDisplayScale + DeepCapsuleLayout.Gap)),
             Math.Max(0, area.Width - width));
 
         var minX = area.Left + margin;
@@ -336,12 +339,56 @@ public sealed partial class AppController : IDisposable
         {
             window.RefreshPaperTitle();
         }
-        if (paper.Type == PaperTypes.Note)
-        {
-            RefreshTodoRowsForLinkedNote(paper.Id);
-        }
         RefreshTrayMenu();
         MarkDirty();
+    }
+
+    public void SetGlobalZoom(double zoom)
+    {
+        var normalized = NormalizeDisplayScale(zoom);
+        if (Math.Abs(State.Zoom - normalized) < 0.001)
+        {
+            return;
+        }
+
+        State.Zoom = normalized;
+        RefreshScaleSettings();
+    }
+
+    public void SetCapsuleZoom(double zoom)
+    {
+        var normalized = NormalizeDisplayScale(zoom);
+        if (Math.Abs(State.CapsuleZoom - normalized) < 0.001)
+        {
+            return;
+        }
+
+        State.CapsuleZoom = normalized;
+        RefreshScaleSettings();
+    }
+
+    private static double NormalizeDisplayScale(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+        {
+            value = 1.0;
+        }
+
+        return Math.Round(Math.Clamp(value, 0.5, 1.5) / 0.05, MidpointRounding.AwayFromZero) * 0.05;
+    }
+
+    private void RefreshScaleSettings()
+    {
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateScaleFromSettings();
+        }
+
+        ArrangeDeepCapsules(animate: State.EnableAnimations);
+        foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+        SaveNow();
+        RebuildTrayMenu();
+        RefreshSettingsWindowContent();
     }
 
     public void SetPaperTextZoom(PaperData paper, double zoom)
@@ -393,57 +440,6 @@ public sealed partial class AppController : IDisposable
 
         title = PaperTitleText(note);
         return true;
-    }
-
-    public bool ShouldRunLinkedScriptCapsule(string? noteId)
-    {
-        return State.EnableTodoNoteLinks &&
-            State.RunLinkedScriptCapsulesOnClick &&
-            IsLinkedScriptCapsule(noteId);
-    }
-
-    private bool IsLinkedScriptCapsule(string? noteId)
-    {
-        var note = FindNote(noteId);
-        return note != null && PaperWindow.IsScriptCapsuleContent(note.Content);
-    }
-
-    public bool RunLinkedScriptCapsule(string? noteId)
-    {
-        var note = FindNote(noteId);
-        if (note == null || !PaperWindow.IsScriptCapsuleContent(note.Content))
-        {
-            return false;
-        }
-
-        if (!_windows.TryGetValue(note.Id, out var window))
-        {
-            window = new PaperWindow(note, this);
-            _windows[note.Id] = window;
-        }
-
-        return window.TryRunScriptCapsule();
-    }
-
-    public void RefreshTodoRowsForLinkedNote(string? noteId)
-    {
-        if (string.IsNullOrWhiteSpace(noteId))
-        {
-            return;
-        }
-
-        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
-        {
-            if (!paper.Items.Any(item => string.Equals(item.LinkedNoteId, noteId, StringComparison.Ordinal)))
-            {
-                continue;
-            }
-
-            if (_windows.TryGetValue(paper.Id, out var window))
-            {
-                window.RefreshTodoRowsForExternalChange();
-            }
-        }
     }
 
     public bool IsNoteLinkedToAnyTodo(PaperData paper)
@@ -708,29 +704,31 @@ public sealed partial class AppController : IDisposable
         paper.IsVisible = true;
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         RescuePaperIfOffScreen(paper, State.Papers.IndexOf(paper));
+        RescueFloatingCapsuleIfOffScreen(paper, State.Papers.IndexOf(paper));
 
         if (!_windows.TryGetValue(paper.Id, out var window))
         {
             window = new PaperWindow(paper, this);
             _windows[paper.Id] = window;
+            RescueFloatingCapsuleIfOffScreen(paper, State.Papers.IndexOf(paper));
         }
         window.CancelPendingVisibilityTransitions();
 
-        var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed;
+        var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && ShouldPaperUseDockedCapsule(paper);
 
         if (!showAsDeepCapsuleOnly && !window.IsVisible)
         {
-            window.Left = paper.X;
-            window.Top = paper.Y;
+            window.Left = paper.IsCollapsed && paper.CapsuleX.HasValue ? paper.CapsuleX.Value : paper.X;
+            window.Top = paper.IsCollapsed && paper.CapsuleY.HasValue ? paper.CapsuleY.Value : paper.Y;
             if (paper.IsCollapsed && State.UseCapsuleMode)
             {
                 window.Width = window.DesiredCapsuleWindowWidth;
-                window.Height = PaperLayoutDefaults.CapsuleHeight;
+                window.Height = CapsuleDisplayHeight;
             }
             else
             {
-                window.Width = paper.Width;
-                window.Height = paper.Height;
+                window.Width = paper.Width * PaperDisplayScale;
+                window.Height = paper.Height * PaperDisplayScale;
             }
             // To prevent a 1-frame DWM cache flash when a window's size changes while hidden,
             // we show it fully transparent first, then restore opacity after layout is complete.
@@ -1260,6 +1258,44 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
+    public void TryAutoDockFloatingCapsule(PaperData paper, Window window)
+    {
+        if (!State.AutoDockCapsules || !State.UseCapsuleMode || !State.UseDeepCapsuleMode || !paper.IsCollapsed)
+        {
+            return;
+        }
+
+        var probe = new Point(window.Left + Math.Max(1, window.Width) / 2, window.Top + Math.Max(1, window.Height) / 2);
+        var resolved = WindowWorkAreaHelper.MonitorAtScreenPoint(probe);
+        if (!resolved.HasValue)
+        {
+            return;
+        }
+
+        var area = resolved.Value.WorkArea;
+        const double dockDistance = 72;
+        string? side = null;
+        if (Math.Abs(probe.X - area.Left) <= dockDistance)
+        {
+            side = DeepCapsuleSides.Left;
+        }
+        else if (Math.Abs(area.Right - probe.X) <= dockDistance)
+        {
+            side = DeepCapsuleSides.Right;
+        }
+
+        if (side == null)
+        {
+            paper.CapsulePlacement = CapsulePlacements.Floating;
+            paper.CapsuleX = Math.Round(window.Left);
+            paper.CapsuleY = Math.Round(window.Top);
+            MarkDirty();
+            return;
+        }
+
+        MoveCapsuleToQueue(paper, resolved.Value.DeviceName, side, probe.Y);
+    }
+
     // Reassign a capsule to a different (monitor, edge) queue — the cross-edge / cross-monitor
     // drag. The paper keeps its identity; only its queue tag + position among the target queue's
     // members change. Order within State.Papers is rebuilt so the dragged paper lands at the slot
@@ -1276,6 +1312,9 @@ public sealed partial class AppController : IDisposable
 
         paper.CapsuleSide = normalizedSide;
         paper.CapsuleMonitorDeviceName = normalizedMonitor;
+        paper.CapsulePlacement = CapsulePlacements.Docked;
+        paper.CapsuleX = null;
+        paper.CapsuleY = null;
 
         // Members already in the target queue (excluding the dragged paper), in State.Papers order.
         var targetKey = QueueKey(normalizedMonitor, normalizedSide);
@@ -1300,9 +1339,10 @@ public sealed partial class AppController : IDisposable
             DeepCapsuleStartTopMarginForQueue(normalizedMonitor,
                 normalizedSide == DeepCapsuleSides.Left ? DeepCapsuleEdge.Left : DeepCapsuleEdge.Right),
             area,
-            targetRealCount + visualOffset);
-        var slotHeight = PaperLayoutDefaults.CapsuleHeight + DeepCapsuleLayout.Gap;
-        var firstTop = DeepCapsuleLayout.TopForIndex(visualOffset, startTop, area, targetRealCount + visualOffset);
+            targetRealCount + visualOffset,
+            CapsuleDisplayScale);
+        var slotHeight = DeepCapsuleLayout.SlotHeight(CapsuleDisplayScale);
+        var firstTop = DeepCapsuleLayout.TopForIndex(visualOffset, startTop, area, targetRealCount + visualOffset, CapsuleDisplayScale);
         var rawIndex = (int)Math.Floor((dropDipY - firstTop) / slotHeight + 0.5);
         var insertAt = Math.Clamp(rawIndex, 0, targetMembers.Count);
 
@@ -1360,13 +1400,24 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        if (paper.IsCollapsed)
+        {
+            if (CapsulePlacements.Normalize(paper.CapsulePlacement) == CapsulePlacements.Floating)
+            {
+                paper.CapsuleX = Math.Round(window.Left);
+                paper.CapsuleY = Math.Round(window.Top);
+                MarkDirty();
+            }
+            return;
+        }
+
         paper.X = Math.Round(window.Left);
         paper.Y = Math.Round(window.Top);
-        if (!paper.IsCollapsed)
-        {
-            paper.Width = Math.Round(Math.Max(window.ActualWidth > 0 ? window.ActualWidth : window.Width, PaperLayoutDefaults.MinWidth));
-            paper.Height = Math.Round(Math.Max(window.ActualHeight > 0 ? window.ActualHeight : window.Height, PaperLayoutDefaults.MinHeight));
-        }
+        var paperScale = Math.Max(0.1, PaperDisplayScale);
+        var displayWidth = window.ActualWidth > 0 ? window.ActualWidth : window.Width;
+        var displayHeight = window.ActualHeight > 0 ? window.ActualHeight : window.Height;
+        paper.Width = Math.Round(Math.Max(displayWidth / paperScale, PaperLayoutDefaults.MinWidth));
+        paper.Height = Math.Round(Math.Max(displayHeight / paperScale, PaperLayoutDefaults.MinHeight));
 
         MarkDirty();
     }
@@ -1470,13 +1521,13 @@ public sealed partial class AppController : IDisposable
                 var visualOffset = queueShowMaster ? 1 : 0;
                 var slotCount = (queues.TryGetValue(key, out var ql) ? ql.Count : 0) + visualOffset;
                 var area = DeepCapsuleLayout.WorkAreaForQueue(paper.CapsuleMonitorDeviceName);
-                var startTop = DeepCapsuleLayout.NormalizeStartTopMargin(DeepCapsuleStartTopMarginFor(paper), area, slotCount);
+                var startTop = DeepCapsuleLayout.NormalizeStartTopMargin(DeepCapsuleStartTopMarginFor(paper), area, slotCount, CapsuleDisplayScale);
                 var retracted = queueShowMaster && IsCapsuleCollapseAllActiveForQueue(key);
 
                 var idx = perQueueIndex.TryGetValue(key, out var v) ? v : 0;
                 if (retracted)
                 {
-                    window.RetractIntoMaster(DeepCapsuleLayout.TopForIndex(0, startTop, area, slotCount), animate);
+                    window.RetractIntoMaster(DeepCapsuleLayout.TopForIndex(0, startTop, area, slotCount, CapsuleDisplayScale), animate);
                 }
                 else if (paper.IsCollapsed)
                 {
@@ -1662,7 +1713,7 @@ public sealed partial class AppController : IDisposable
 
     private bool ShouldPaperOccupyDeepCapsuleSlot(PaperData paper, PaperWindow window)
     {
-        if (!paper.IsVisible || !CanPaperDisplayAsCapsule(paper))
+        if (!paper.IsVisible || !CanPaperDisplayAsCapsule(paper) || !ShouldPaperUseDockedCapsule(paper))
         {
             return false;
         }
@@ -1675,6 +1726,17 @@ public sealed partial class AppController : IDisposable
         return State.UseDeepCapsuleMode &&
             State.ShowDeepCapsuleWhileExpanded &&
             window.HasVisibleSurface;
+    }
+
+    private bool ShouldPaperUseDockedCapsule(PaperData paper)
+    {
+        var placement = CapsulePlacements.Normalize(paper.CapsulePlacement);
+        if (placement == CapsulePlacements.Floating)
+        {
+            return false;
+        }
+
+        return placement == CapsulePlacements.Docked || State.AutoDockCapsules;
     }
 
     public void MarkDirty()
@@ -1915,6 +1977,7 @@ public sealed partial class AppController : IDisposable
         for (var i = 0; i < State.Papers.Count; i++)
         {
             changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            changed |= RescueFloatingCapsuleIfOffScreen(State.Papers[i], i);
         }
 
         return changed;
@@ -1947,6 +2010,59 @@ public sealed partial class AppController : IDisposable
 
         PlacePaperInWorkArea(paper, area, offsetIndex);
         return true;
+    }
+
+    private bool RescueFloatingCapsuleIfOffScreen(PaperData paper, int offsetIndex)
+    {
+        if (!paper.IsCollapsed || CapsulePlacements.Normalize(paper.CapsulePlacement) != CapsulePlacements.Floating)
+        {
+            return false;
+        }
+
+        var originalX = paper.CapsuleX;
+        var originalY = paper.CapsuleY;
+        var fallbackX = IsFinite(paper.X) ? paper.X : SystemParameters.WorkArea.Left + 40 + Math.Min(Math.Max(offsetIndex, 0), 8) * 22;
+        var fallbackY = IsFinite(paper.Y) ? paper.Y : SystemParameters.WorkArea.Top + 40 + Math.Min(Math.Max(offsetIndex, 0), 8) * 22;
+        var left = IsFinite(originalX) ? originalX!.Value : fallbackX;
+        var top = IsFinite(originalY) ? originalY!.Value : fallbackY;
+        var width = _windows.TryGetValue(paper.Id, out var window)
+            ? Math.Max(1, window.DesiredCapsuleWindowWidth)
+            : Math.Max(1, PaperLayoutDefaults.CapsuleWidth * CapsuleDisplayScale);
+        var height = Math.Max(1, CapsuleDisplayHeight);
+        var clamped = ClampFloatingCapsulePoint(new Point(left, top), width, height);
+
+        paper.CapsuleX = clamped.X;
+        paper.CapsuleY = clamped.Y;
+        return !CoordinateEquals(originalX, paper.CapsuleX) || !CoordinateEquals(originalY, paper.CapsuleY);
+    }
+
+    public Point ClampFloatingCapsulePoint(Point targetTopLeft, double capsuleWidth, double capsuleHeight)
+    {
+        var probe = IsFinite(targetTopLeft.X) && IsFinite(targetTopLeft.Y)
+            ? targetTopLeft
+            : new Point(SystemParameters.WorkArea.Left, SystemParameters.WorkArea.Top);
+        var resolved = WindowWorkAreaHelper.MonitorAtScreenPoint(probe);
+        var area = resolved?.WorkArea ?? SystemParameters.WorkArea;
+        const double margin = 8;
+        var width = Math.Max(1, capsuleWidth);
+        var height = Math.Max(1, capsuleHeight);
+        var minX = area.Left + margin;
+        var maxX = Math.Max(minX, area.Right - width - margin);
+        var minY = area.Top + margin;
+        var maxY = Math.Max(minY, area.Bottom - height - margin);
+        return new Point(
+            Math.Round(Math.Clamp(probe.X, minX, maxX)),
+            Math.Round(Math.Clamp(probe.Y, minY, maxY)));
+    }
+
+    private static bool CoordinateEquals(double? oldValue, double? newValue)
+    {
+        return oldValue.HasValue && newValue.HasValue && Math.Abs(oldValue.Value - newValue.Value) <= 0.001;
+    }
+
+    private static bool IsFinite(double? value)
+    {
+        return value.HasValue && IsFinite(value.Value);
     }
 
     private static double ClampPaperDimension(double value, double fallback, double min, double max)
@@ -2097,7 +2213,7 @@ public sealed partial class AppController : IDisposable
         // Slot count for THIS queue (+1 if its master occupies slot 0).
         var queueCount = DeepCapsulePapersInOrder().Count(p => QueueKey(p) == key);
         var slotCount = queueCount + (State.UseCapsuleCollapseAll && queueCount > 0 ? 1 : 0);
-        var normalized = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, area, slotCount);
+        var normalized = DeepCapsuleLayout.NormalizeStartTopMargin(startTopMargin, area, slotCount, CapsuleDisplayScale);
 
         var current = State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m) ? m : State.DeepCapsuleStartTopMargin;
         if (Math.Abs(current - normalized) < 0.01)
@@ -2120,6 +2236,109 @@ public sealed partial class AppController : IDisposable
         {
             MarkDirty();
         }
+    }
+
+    public void FloatCapsuleQueue(string monitorDeviceName, DeepCapsuleEdge edge, Point targetTopLeft)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var side = edge == DeepCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var key = QueueKey(monitorDeviceName, side);
+        var members = DeepCapsulePapersInOrder()
+            .Where(p => p.IsCollapsed && QueueKey(p) == key)
+            .ToList();
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        FloatCapsuleQueueMembers(members, monitorDeviceName, targetTopLeft);
+        ArrangeDeepCapsules(animate: true);
+        RefreshTrayMenu();
+        SaveNow();
+    }
+
+    public void FloatAllDockedCapsuleQueues()
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var groups = State.Papers
+            .Where(p => p.IsVisible &&
+                p.IsCollapsed &&
+                CanPaperDisplayAsCapsule(p) &&
+                CapsulePlacements.Normalize(p.CapsulePlacement) != CapsulePlacements.Floating)
+            .GroupBy(QueueKey)
+            .Select(g => g.ToList())
+            .ToList();
+        if (groups.Count == 0)
+        {
+            ArrangeDeepCapsules(animate: true);
+            return;
+        }
+
+        foreach (var members in groups)
+        {
+            var sample = members[0];
+            var edge = sample.CapsuleSide == DeepCapsuleSides.Left ? DeepCapsuleEdge.Left : DeepCapsuleEdge.Right;
+            var area = DeepCapsuleLayout.WorkAreaForQueue(sample.CapsuleMonitorDeviceName);
+            const double margin = 8;
+            var maxCapsuleWidth = MaxCapsuleWidthFor(members);
+            var visualOffset = State.UseCapsuleCollapseAll && members.Count > 0 ? 1 : 0;
+            var slotCount = members.Count + visualOffset;
+            var startTop = DeepCapsuleLayout.NormalizeStartTopMargin(
+                DeepCapsuleStartTopMarginForQueue(sample.CapsuleMonitorDeviceName, edge),
+                area,
+                slotCount,
+                CapsuleDisplayScale);
+            var top = DeepCapsuleLayout.TopForIndex(visualOffset, startTop, area, slotCount, CapsuleDisplayScale);
+            var left = edge == DeepCapsuleEdge.Left
+                ? area.Left + margin
+                : area.Right - maxCapsuleWidth - margin;
+
+            FloatCapsuleQueueMembers(members, sample.CapsuleMonitorDeviceName, new Point(left, top));
+        }
+
+        ArrangeDeepCapsules(animate: true);
+        RefreshTrayMenu();
+        SaveNow();
+    }
+
+    private void FloatCapsuleQueueMembers(List<PaperData> members, string monitorDeviceName, Point targetTopLeft)
+    {
+        var slotHeight = DeepCapsuleLayout.SlotHeight(CapsuleDisplayScale);
+        var area = DeepCapsuleLayout.WorkAreaForQueue(monitorDeviceName);
+        const double margin = 8;
+        var maxCapsuleWidth = MaxCapsuleWidthFor(members);
+        var stackHeight = CapsuleDisplayHeight + Math.Max(0, members.Count - 1) * slotHeight;
+        var left = Math.Round(Math.Clamp(targetTopLeft.X, area.Left + margin, Math.Max(area.Left + margin, area.Right - maxCapsuleWidth - margin)));
+        var top = Math.Round(Math.Clamp(targetTopLeft.Y, area.Top + margin, Math.Max(area.Top + margin, area.Bottom - stackHeight - margin)));
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            var paper = members[i];
+            paper.CapsulePlacement = CapsulePlacements.Floating;
+            paper.CapsuleX = left;
+            paper.CapsuleY = Math.Round(top + i * slotHeight);
+
+            if (_windows.TryGetValue(paper.Id, out var window))
+            {
+                window.RestoreFloatingCapsuleSurface(paper.CapsuleX.Value, paper.CapsuleY.Value);
+            }
+        }
+    }
+
+    private double MaxCapsuleWidthFor(IEnumerable<PaperData> members)
+    {
+        return members
+            .Select(p => _windows.TryGetValue(p.Id, out var window) ? window.DesiredCapsuleWindowWidth : PaperLayoutDefaults.CapsuleWidth * CapsuleDisplayScale)
+            .DefaultIfEmpty(PaperLayoutDefaults.CapsuleWidth * CapsuleDisplayScale)
+            .Max();
     }
 
     public void Exit()
@@ -2181,3 +2400,34 @@ public sealed partial class AppController : IDisposable
         _trayMenu = null;
     }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增整体缩放和胶囊缩放的控制器接口。
+- 新增胶囊 Docked/Floating 判断、自动吸附和整组悬浮逻辑。
+- 调整展开态纸片几何保存为逻辑尺寸，折叠悬浮胶囊单独保存 CapsuleX/Y。
+
+[修改目的]:
+- 支持设置中调整整体大小和胶囊大小，并允许单个或整组胶囊自由悬浮。
+
+[影响范围]:
+- 纸片显示、托盘菜单刷新、侧边栏胶囊队列、主胶囊和数据保存。
+
+[修改编号]: 2
+[修改日期]: 2026-06-21
+[修改类型]: 修复bug
+[主要内容]:
+- 新增自由悬浮胶囊离屏救援与坐标夹取逻辑。
+- 关闭自动吸附并整组转悬浮时排除已有 Floating 胶囊，避免覆盖用户手动摆放位置。
+- 首次创建胶囊窗口后按真实胶囊宽度再次执行离屏救援。
+
+[修改目的]:
+- 防止自由悬浮胶囊在多屏变化、长标题或设置切换后丢失位置或离屏不可见。
+
+[影响范围]:
+- 自由悬浮胶囊显示、整组悬浮转换、应用启动恢复和设置切换保存。
+*/

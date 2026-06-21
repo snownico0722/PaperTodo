@@ -16,7 +16,7 @@
     <value>시작에 실패했습니다: 데이터 파일을 불러올 수 없습니다. 파일이 사용 중이거나 손상되었을 수 있습니다.&#x0A;데이터가 빈 상태로 덮어쓰기 되지 않도록 프로그램을 안전하게 중지했습니다.&#x0A;&#x0A;오류: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.4</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - 오류</value>
@@ -71,9 +71,6 @@
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>연결된 메모 열기: {0}</value>
-  </data>
-  <data name="ToolTipRunLinkedScriptCapsule" xml:space="preserve">
-    <value>연결된 스크립트 실행: {0}</value>
   </data>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>사용</value>
@@ -152,9 +149,6 @@
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>연결된 메모 열기: {0}</value>
-  </data>
-  <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
-    <value>연결된 스크립트 편집: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
     <value>메모 연결 해제</value>
@@ -330,6 +324,15 @@
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>할 일 표시 크기</value>
   </data>
+  <data name="SettingsGlobalZoom" xml:space="preserve">
+    <value>전체 크기</value>
+  </data>
+  <data name="SettingsCapsuleZoom" xml:space="preserve">
+    <value>캡슐 크기</value>
+  </data>
+  <data name="SettingsAutoDockCapsules" xml:space="preserve">
+    <value>캡슐 자동 도킹</value>
+  </data>
   <data name="TodoVisualSizeSmall" xml:space="preserve">
     <value>작게</value>
   </data>
@@ -390,9 +393,6 @@
   <data name="SettingsTodoNote" xml:space="preserve">
     <value>할 일 및 메모</value>
   </data>
-  <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>연결 스크립트 클릭 실행</value>
-  </data>
   <data name="SettingsGeneral" xml:space="preserve">
     <value>일반</value>
   </data>
@@ -411,6 +411,15 @@
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>할 일 항목의 표시 크기를 조정합니다. 작게는 12, 중간은 현재 13, 크게는 14, 특대는 15.5입니다.</value>
   </data>
+  <data name="TipGlobalZoom" xml:space="preserve">
+    <value>할 일과 메모 내용 자체는 바꾸지 않고 종이 전체 표시 크기를 백분율로 조정합니다.</value>
+  </data>
+  <data name="TipCapsuleZoom" xml:space="preserve">
+    <value>전체 크기에 더해 일반 캡슐과 가장자리 캡슐만 별도로 키우거나 줄입니다.</value>
+  </data>
+  <data name="TipAutoDockCapsules" xml:space="preserve">
+    <value>켜면 접거나 화면 가장자리로 드래그한 캡슐이 자동으로 가장자리 목록에 들어갑니다. 끄면 개별 캡슐을 자유롭게 띄울 수 있습니다.</value>
+  </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
     <value>켜면 메모를 할 일 항목으로 드래그해 연결할 수 있고, 해당 항목의 연결 메모 버튼으로 메모를 열 수 있습니다.</value>
   </data>
@@ -419,9 +428,6 @@
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>켜면 할 일 항목에 이미 연결된 메모는 캡슐 목록에 표시되지 않아, 가장자리 캡슐과 할 일 진입점이 중복되지 않습니다. 끄면 해당 메모도 일반 종이처럼 캡슐로 접을 수 있습니다.</value>
-  </data>
-  <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>켜면 할 일 항목의 연결 버튼이 스크립트 캡슐을 가리킬 때 왼쪽 클릭으로 바로 실행합니다. 오른쪽 클릭으로는 계속 편집할 수 있습니다. 실수로 실행하지 않도록 기본값은 꺼짐입니다.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>페이퍼 상단 바에 '새 할 일' 버튼을 표시합니다.</value>
@@ -466,13 +472,13 @@
     <value>활성화하면 할 일 완료, 추가, 삭제 등의 작업에서 부드러운 애니메이션 효과가 표시됩니다. 저사양 PC에서는 성능 향상을 위해 비활성화할 수 있습니다.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>켜면 !pf 또는 !powerf 스크립트 캡슐이 하나의 PowerShell 프로세스를 재사용하고 즉시 반환됩니다. 변수, 위치, 로드된 상태가 남을 수 있습니다. 끄면 상주 프로세스를 종료합니다.</value>
+    <value>켜면 !!powerflash 스크립트 캡슐이 하나의 PowerShell 프로세스를 재사용하고 즉시 반환됩니다. 변수, 위치, 로드된 상태가 남을 수 있습니다. 끄면 상주 프로세스를 종료합니다.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>켜면 스크립트 캡슐이 PowerShell 7(pwsh.exe)을 우선 사용하고, 없으면 Windows PowerShell로 돌아갑니다. !pwsh 또는 !ps5로 강제 지정할 수 있습니다.</value>
+    <value>켜면 스크립트 캡슐이 PowerShell 7(pwsh.exe)을 우선 사용하고, 없으면 Windows PowerShell로 돌아갑니다. !!pwsh 또는 !!powershell5로 강제 지정할 수 있습니다.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>켜면 스크립트가 백그라운드에서 숨겨져 실행됩니다. 끄면 PowerShell 창이 표시될 수 있습니다. 일반 !p / !power는 항상 기다리고 오류 출력을 캡처하며, !pf / !powerf는 스크립트만 전달합니다.</value>
+    <value>켜면 스크립트가 백그라운드에서 숨겨져 실행됩니다. 끄면 PowerShell 창이 표시될 수 있습니다. 일반 !!power는 항상 기다리고 오류 출력을 캡처하며, !!powerflash는 스크립트만 전달합니다.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>할 일-메모 연결 사용</value>
@@ -515,5 +521,68 @@
   </data>
   <data name="Unpin" xml:space="preserve">
     <value>고정 해제</value>
+  </data>
+  <data name="ColorSchemeOcean" xml:space="preserve">
+    <value>오션</value>
+  </data>
+  <data name="ColorSchemeLavender" xml:space="preserve">
+    <value>라벤더</value>
+  </data>
+  <data name="ColorSchemeDune" xml:space="preserve">
+    <value>모래 언덕</value>
+  </data>
+  <data name="ColorSchemeCustom" xml:space="preserve">
+    <value>사용자 지정</value>
+  </data>
+  <data name="SettingsCustomPalette" xml:space="preserve">
+    <value>사용자 지정 팔레트</value>
+  </data>
+  <data name="SettingsCustomPaletteLight" xml:space="preserve">
+    <value>편집 중: 밝은 팔레트</value>
+  </data>
+  <data name="SettingsCustomPaletteDark" xml:space="preserve">
+    <value>편집 중: 어두운 팔레트</value>
+  </data>
+  <data name="SettingsCustomPaletteReset" xml:space="preserve">
+    <value>사용자 지정 초기화</value>
+  </data>
+  <data name="SettingsAuthorSignature" xml:space="preserve">
+    <value>Designed by trigger</value>
+  </data>
+  <data name="TipCustomPalette" xml:space="preserve">
+    <value>색상 견본을 클릭해 테마 색상을 선택하거나 #FFCC00 같은 6자리 HEX 값으로 정밀하게 조정할 수 있습니다.</value>
+  </data>
+  <data name="CustomColorPaper" xml:space="preserve">
+    <value>종이</value>
+  </data>
+  <data name="CustomColorPaperBorder" xml:space="preserve">
+    <value>테두리</value>
+  </data>
+  <data name="CustomColorText" xml:space="preserve">
+    <value>글자</value>
+  </data>
+  <data name="CustomColorWeakText" xml:space="preserve">
+    <value>약한 글자</value>
+  </data>
+  <data name="CustomColorActive" xml:space="preserve">
+    <value>강조</value>
+  </data>
+  <data name="CustomColorCode" xml:space="preserve">
+    <value>코드 배경</value>
+  </data>
+  <data name="CustomColorQuoteBorder" xml:space="preserve">
+    <value>인용 테두리</value>
+  </data>
+  <data name="CustomColorLink" xml:space="preserve">
+    <value>링크</value>
+  </data>
+  <data name="CustomColorCheckBox" xml:space="preserve">
+    <value>체크박스</value>
+  </data>
+  <data name="CustomColorTint" xml:space="preserve">
+    <value>틴트</value>
+  </data>
+  <data name="CustomColorDanger" xml:space="preserve">
+    <value>위험색</value>
   </data>
 </root>
