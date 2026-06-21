@@ -36,6 +36,9 @@ public sealed class MasterCapsuleWindow : Window
     private const double MasterTextPixelReserve = 2;
 
     private readonly AppController _controller;
+    private double CapsuleScale => _controller.CapsuleDisplayScale;
+    private double CapsuleHeight => _controller.CapsuleDisplayHeight;
+    private double ScaleCapsule(double value) => value * CapsuleScale;
 
     // Which queue this master serves: (monitor device, edge). Each docked-capsule queue has its
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
@@ -55,6 +58,8 @@ public sealed class MasterCapsuleWindow : Window
     private bool _active;
     private bool _isPointerDown;
     private bool _isDraggingMaster;
+    private bool _endingMasterDragFromMouseUp;
+    private double _appliedCapsuleScale = -1;
     // The master pill is dragged vertically only: it slides its queue's stack by driving the
     // shared start-top margin. It never detaches or changes edge/monitor — that is done by
     // dragging an individual side capsule to another edge / screen.
@@ -114,8 +119,8 @@ public sealed class MasterCapsuleWindow : Window
         FontFamily = new FontFamily("Segoe UI");
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
-        Width = PaperLayoutDefaults.CapsuleWidth;
-        Height = PaperLayoutDefaults.CapsuleHeight;
+        Width = ScaleCapsule(PaperLayoutDefaults.CapsuleWidth);
+        Height = CapsuleHeight;
         // Don't steal foreground when first shown — activating would force every other
         // paper window to repaint, which reads as a whole-app flash.
         ShowActivated = false;
@@ -132,7 +137,7 @@ public sealed class MasterCapsuleWindow : Window
         _pillOffset = new TranslateTransform();
         _pill = new Border
         {
-            Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
+            Margin = new Thickness(ScaleCapsule(WindowChromeMargin), ScaleCapsule(WindowChromeMargin), 0, ScaleCapsule(WindowChromeMargin)),
             CornerRadius = new CornerRadius(DeepCapsuleLayout.CornerRadius),
             BorderThickness = new Thickness(1),
             Background = Theme.PaperBrush,
@@ -161,7 +166,7 @@ public sealed class MasterCapsuleWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             // Hug the left edge; the master pill is never truncated, so content sits flush left.
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(MasterLeftPadding, 0, MasterRightPadding, 0)
+            Margin = new Thickness(ScaleCapsule(MasterLeftPadding), 0, ScaleCapsule(MasterRightPadding), 0)
         };
         _contentStack = stack;
 
@@ -169,7 +174,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             Text = "▾",
             Foreground = Theme.TextBrush,
-            FontSize = 12,
+            FontSize = ScaleCapsule(MasterGlyphFontSize),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -179,8 +184,8 @@ public sealed class MasterCapsuleWindow : Window
         {
             Text = Strings.Get("CapsuleCollapseAllLabel"),
             Foreground = Theme.WeakTextBrush,
-            FontSize = 11,
-            Margin = new Thickness(MasterGlyphGap, 0, 0, 0),
+            FontSize = ScaleCapsule(MasterLabelFontSize),
+            Margin = new Thickness(ScaleCapsule(MasterGlyphGap), 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
         stack.Children.Add(_label);
@@ -234,7 +239,22 @@ public sealed class MasterCapsuleWindow : Window
             }
 
             var dpi = VisualTreeHelper.GetDpi(this);
+            var dpiScaleX = Math.Max(0.1, dpi.DpiScaleX);
             var dpiScaleY = Math.Max(0.1, dpi.DpiScaleY);
+
+            if (!_controller.State.AutoDockCapsules)
+            {
+                // 自动吸附关闭时，主胶囊拖动表示“整组悬浮”：释放时会把队列内每个胶囊
+                // 按当前相对槽位转为独立 floating 坐标。
+                MoveWithoutSave(() =>
+                {
+                    Left = RoundX(Left + deltaX / dpiScaleX);
+                    Top = RoundY(Top + deltaY / dpiScaleY);
+                });
+                _dragStartScreenPos = currentScreenPos;
+                e.Handled = true;
+                return;
+            }
 
             // The master stays pinned to its queue's edge; vertical drag slides that queue's stack
             // by driving the shared start-top margin. It never detaches or changes edge/monitor —
@@ -247,14 +267,29 @@ public sealed class MasterCapsuleWindow : Window
         _pill.PreviewMouseLeftButtonUp += (_, e) =>
         {
             var wasDragging = _isDraggingMaster;
-            EndMasterDrag(clearFocus: false);
+            _endingMasterDragFromMouseUp = true;
+            try
+            {
+                EndMasterDrag(clearFocus: false);
+            }
+            finally
+            {
+                _endingMasterDragFromMouseUp = false;
+            }
             if (wasDragging)
             {
-                // Vertical slide only: the live per-queue margin is already applied; persist it.
-                _controller.SetDeepCapsuleStartTopMargin(
-                    _queueMonitorDeviceName, _queueEdge,
-                    _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
-                    commit: true);
+                if (_controller.State.AutoDockCapsules)
+                {
+                    // Vertical slide only: the live per-queue margin is already applied; persist it.
+                    _controller.SetDeepCapsuleStartTopMargin(
+                        _queueMonitorDeviceName, _queueEdge,
+                        _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
+                        commit: true);
+                }
+                else
+                {
+                    _controller.FloatCapsuleQueue(_queueMonitorDeviceName, _queueEdge, new Point(Left, Top));
+                }
             }
             else
             {
@@ -267,7 +302,9 @@ public sealed class MasterCapsuleWindow : Window
         _pill.LostMouseCapture += (_, _) =>
         {
             // A capture lost mid-drag (e.g. Alt-Tab) snaps the stack back to its current anchor.
-            if (_isDraggingMaster)
+            // Normal MouseUp also releases capture, but that path must keep the user's release point
+            // so the whole queue can be converted to floating capsules at the exact dropped position.
+            if (_isDraggingMaster && !_endingMasterDragFromMouseUp)
             {
                 _controller.ArrangeDeepCapsules(animate: true);
             }
@@ -288,6 +325,8 @@ public sealed class MasterCapsuleWindow : Window
         _hoverOverlay.Background = _isHovering ? Theme.HoverBrush : Brushes.Transparent;
         _glyph.Foreground = Theme.TextBrush;
         _label.Foreground = Theme.WeakTextBrush;
+        _glyph.FontSize = ScaleCapsule(MasterGlyphFontSize);
+        _label.FontSize = ScaleCapsule(MasterLabelFontSize);
     }
 
     public void UpdateToolTipSetting()
@@ -364,23 +403,23 @@ public sealed class MasterCapsuleWindow : Window
     {
         // glyph + gap + label + left/right paddings + chrome margins. Both pieces are
         // measured the same way so the pill hugs the actual rendered content.
-        var glyphWidth = MeasureText(_glyph.Text, MasterGlyphFontSize, FontWeights.SemiBold);
-        var textWidth = MeasureText(_label.Text, MasterLabelFontSize, FontWeights.Normal);
-        var shellWidth = Math.Ceiling(MasterLeftPadding + glyphWidth + MasterGlyphGap + textWidth + MasterRightPadding);
-        return shellWidth + WindowChromeInset;
+        var glyphWidth = MeasureText(_glyph.Text, ScaleCapsule(MasterGlyphFontSize), FontWeights.SemiBold);
+        var textWidth = MeasureText(_label.Text, ScaleCapsule(MasterLabelFontSize), FontWeights.Normal);
+        var shellWidth = Math.Ceiling(ScaleCapsule(MasterLeftPadding) + glyphWidth + ScaleCapsule(MasterGlyphGap) + textWidth + ScaleCapsule(MasterRightPadding));
+        return shellWidth + ScaleCapsule(WindowChromeInset);
     }
 
     private double MasterVisibleWidth()
     {
         var peekLabel = FirstTextElement(Strings.Get("CapsuleCollapseAllLabel"));
-        var visibleWidth = WindowChromeMargin + MasterLeftPadding
+        var visibleWidth = ScaleCapsule(WindowChromeMargin) + ScaleCapsule(MasterLeftPadding)
             + Math.Max(
-                MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold),
-                MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold))
-            + MasterGlyphGap
-            + MeasureText(peekLabel, MasterLabelFontSize, FontWeights.Normal)
-            + MasterRightPadding
-            + MasterTextPixelReserve;
+                MeasureText("▾", ScaleCapsule(MasterGlyphFontSize), FontWeights.SemiBold),
+                MeasureText("▸", ScaleCapsule(MasterGlyphFontSize), FontWeights.SemiBold))
+            + ScaleCapsule(MasterGlyphGap)
+            + MeasureText(peekLabel, ScaleCapsule(MasterLabelFontSize), FontWeights.Normal)
+            + ScaleCapsule(MasterRightPadding)
+            + ScaleCapsule(MasterTextPixelReserve);
         return Math.Clamp(visibleWidth, 1, CapsuleWindowWidth());
     }
 
@@ -401,8 +440,8 @@ public sealed class MasterCapsuleWindow : Window
         var fullWidth = CapsuleWindowWidth();
         visibleWidth = Math.Clamp(visibleWidth, 1, fullWidth);
         Width = visibleWidth;
-        Height = PaperLayoutDefaults.CapsuleHeight;
-        _pill.Width = Math.Max(0, fullWidth - WindowChromeInset);
+        Height = CapsuleHeight;
+        _pill.Width = Math.Max(0, fullWidth - ScaleCapsule(WindowChromeInset));
         _pillOffset.X = 0;
     }
 
@@ -412,30 +451,32 @@ public sealed class MasterCapsuleWindow : Window
     private void ApplyMasterEdgeLayout()
     {
         var edge = _queueEdge;
-        if (_appliedEdge == edge)
+        var scale = CapsuleScale;
+        if (_appliedEdge == edge && Math.Abs(_appliedCapsuleScale - scale) < 0.001)
         {
             return;
         }
 
         _appliedEdge = edge;
+        _appliedCapsuleScale = scale;
         var leftEdge = edge == DeepCapsuleEdge.Left;
 
         _pill.Margin = leftEdge
-            ? new Thickness(0, WindowChromeMargin, WindowChromeMargin, WindowChromeMargin)
-            : new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin);
+            ? new Thickness(0, ScaleCapsule(WindowChromeMargin), ScaleCapsule(WindowChromeMargin), ScaleCapsule(WindowChromeMargin))
+            : new Thickness(ScaleCapsule(WindowChromeMargin), ScaleCapsule(WindowChromeMargin), 0, ScaleCapsule(WindowChromeMargin));
         _pill.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
 
         _contentStack.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         _contentStack.Margin = leftEdge
-            ? new Thickness(MasterRightPadding, 0, MasterLeftPadding, 0)
-            : new Thickness(MasterLeftPadding, 0, MasterRightPadding, 0);
+            ? new Thickness(ScaleCapsule(MasterRightPadding), 0, ScaleCapsule(MasterLeftPadding), 0)
+            : new Thickness(ScaleCapsule(MasterLeftPadding), 0, ScaleCapsule(MasterRightPadding), 0);
 
         // Keep the chevron on the interior side of the pill: leftmost on the right dock,
         // rightmost on the left dock.
         _contentStack.Children.Clear();
         _label.Margin = leftEdge
-            ? new Thickness(0, 0, MasterGlyphGap, 0)
-            : new Thickness(MasterGlyphGap, 0, 0, 0);
+            ? new Thickness(0, 0, ScaleCapsule(MasterGlyphGap), 0)
+            : new Thickness(ScaleCapsule(MasterGlyphGap), 0, 0, 0);
         if (leftEdge)
         {
             _contentStack.Children.Add(_label);
@@ -491,7 +532,7 @@ public sealed class MasterCapsuleWindow : Window
         var area = QueueWorkArea;
         var visibleWidth = MasterVisibleWidth();
         var targetLeft = RoundX(DeepCapsuleLayout.DockedLeft(area, visibleWidth, _queueEdge));
-        var targetTop = RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, area, QueueSlotCount));
+        var targetTop = RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, area, QueueSlotCount, CapsuleScale));
         var currentLeft = double.IsNaN(Left) || double.IsInfinity(Left) ? targetLeft : RoundX(Left);
         var currentTop = double.IsNaN(Top) || double.IsInfinity(Top) ? targetTop : RoundY(Top);
         var currentWidth = double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0 ? visibleWidth : RoundX(Width);
@@ -563,7 +604,7 @@ public sealed class MasterCapsuleWindow : Window
     }
 
     // The resting Top of the master, used as the retract/release anchor for real capsules.
-    public double AnchorTop => RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, QueueWorkArea, QueueSlotCount));
+    public double AnchorTop => RoundY(DeepCapsuleLayout.TopForIndex(0, QueueStartTopMargin, QueueWorkArea, QueueSlotCount, CapsuleScale));
 
     private static void OnAnimatedLeftChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -666,3 +707,31 @@ public sealed class MasterCapsuleWindow : Window
         Close();
     }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 主胶囊尺寸接入胶囊缩放。
+- 自动吸附关闭时，主胶囊拖动可将当前侧边栏队列整组转为自由悬浮。
+
+[修改目的]:
+- 支持胶囊整体大小调整，并满足整组胶囊拖动悬浮需求。
+
+[影响范围]:
+- 主胶囊显示尺寸、侧边栏队列整体拖动、收起全部胶囊交互。
+
+[修改编号]: 2
+[修改日期]: 2026-06-21
+[修改类型]: 修复bug
+[主要内容]:
+- 新增 MouseUp 结束拖动标记，避免正常释放鼠标捕获时触发 LostMouseCapture 回滚。
+
+[修改目的]:
+- 确保自动吸附关闭时，主胶囊整组拖动释放位置能准确转换为整组悬浮起点。
+
+[影响范围]:
+- 主胶囊拖动、整组胶囊悬浮转换和异常丢失鼠标捕获回滚逻辑。
+*/

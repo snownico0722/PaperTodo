@@ -17,23 +17,15 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private const string AuthorName = "Designed by trigger";
     private const string AuthorGithubUrl = "https://github.com/snownico0722";
+    private readonly List<CustomPaletteEditorBinding> _customPaletteEditorBindings = new();
+
+    private sealed record CustomPaletteEditorBinding(TextBox TextBox, Border Swatch, string Slot, Popup Picker);
 
     private void SetTheme(string theme)
     {
         State.Theme = theme;
-        Theme.Invalidate();
-        SaveNow();
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTheme();
-        }
-        foreach (var m in _masterCapsules.Values) m.UpdateTheme();
-
-        RebuildTrayMenu();
-        RefreshSettingsWindowContent();
+        ApplyThemeStateChange(refreshSettingsContent: true);
     }
 
     private UIElement CreateThemeSegmentSelector()
@@ -55,7 +47,103 @@ public sealed partial class AppController
             return;
         }
 
+        var previousScheme = ColorSchemes.Normalize(State.ColorScheme);
+        if (scheme == ColorSchemes.Custom && State.CustomColorPalette == null)
+        {
+            State.CustomColorPalette = Theme.CreateCustomPaletteFromScheme(previousScheme);
+        }
+
         State.ColorScheme = scheme;
+        if (State.ColorScheme == ColorSchemes.Custom)
+        {
+            State.CustomColorPalette = Theme.NormalizeCustomPalette(State.CustomColorPalette, ColorSchemes.Warm);
+        }
+        ApplyThemeStateChange(refreshSettingsContent: true);
+    }
+
+    private UIElement CreateColorSchemeSegmentSelector()
+    {
+        var panel = new WrapPanel
+        {
+            Margin = new Thickness(0, 4, 0, 8),
+            Orientation = Orientation.Horizontal
+        };
+        var activeKey = ColorSchemes.Normalize(State.ColorScheme);
+        foreach (var scheme in ColorSchemes.All)
+        {
+            panel.Children.Add(CreateColorSchemeChip(scheme, activeKey));
+        }
+
+        return panel;
+    }
+
+    private Border CreateColorSchemeChip(string scheme, string activeKey)
+    {
+        var isActive = scheme == activeKey;
+        var text = new TextBlock
+        {
+            Text = ColorSchemeLabel(scheme),
+            Foreground = isActive ? TrayPaperBrush : TrayTextBrush,
+            FontSize = 12,
+            FontWeight = isActive ? FontWeights.SemiBold : FontWeights.Normal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var chip = new Border
+        {
+            MinWidth = 58,
+            Height = 26,
+            Margin = new Thickness(0, 0, 6, 6),
+            Padding = new Thickness(8, 0, 8, 0),
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            BorderBrush = isActive ? Theme.ActiveBrush : TrayBorderBrush,
+            Background = isActive ? Theme.ActiveBrush : Brushes.Transparent,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Child = text,
+            Tag = scheme
+        };
+        chip.MouseEnter += (_, _) =>
+        {
+            if ((string)chip.Tag != ColorSchemes.Normalize(State.ColorScheme))
+            {
+                chip.Background = TrayHoverBrush;
+                chip.BorderBrush = TrayWeakTextBrush;
+            }
+        };
+        chip.MouseLeave += (_, _) =>
+        {
+            var current = (string)chip.Tag == ColorSchemes.Normalize(State.ColorScheme);
+            chip.Background = current ? Theme.ActiveBrush : Brushes.Transparent;
+            chip.BorderBrush = current ? Theme.ActiveBrush : TrayBorderBrush;
+        };
+        chip.MouseLeftButtonUp += (_, e) =>
+        {
+            CommitCustomPaletteEditors();
+            SetColorScheme((string)chip.Tag);
+            e.Handled = true;
+        };
+        return chip;
+    }
+
+    private static string ColorSchemeLabel(string scheme)
+    {
+        return scheme switch
+        {
+            ColorSchemes.Warm => Strings.Get("ColorSchemeWarm"),
+            ColorSchemes.Ink => Strings.Get("ColorSchemeInk"),
+            ColorSchemes.Forest => Strings.Get("ColorSchemeForest"),
+            ColorSchemes.Rose => Strings.Get("ColorSchemeRose"),
+            ColorSchemes.Ocean => Strings.Get("ColorSchemeOcean"),
+            ColorSchemes.Lavender => Strings.Get("ColorSchemeLavender"),
+            ColorSchemes.Dune => Strings.Get("ColorSchemeDune"),
+            ColorSchemes.Custom => Strings.Get("ColorSchemeCustom"),
+            _ => Strings.Get("ColorSchemeWarm")
+        };
+    }
+
+    private void ApplyThemeStateChange(bool refreshSettingsContent)
+    {
         Theme.Invalidate();
         SaveNow();
 
@@ -66,20 +154,34 @@ public sealed partial class AppController
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
 
         RebuildTrayMenu();
-        RefreshSettingsWindowContent();
+        if (refreshSettingsContent)
+        {
+            RefreshSettingsWindowContent();
+        }
     }
 
-    private UIElement CreateColorSchemeSegmentSelector()
+    private void CommitCustomPaletteEditors()
     {
-        var segments = new[]
+        if (_customPaletteEditorBindings.Count == 0)
         {
-            (ColorSchemes.Warm, Strings.Get("ColorSchemeWarm")),
-            (ColorSchemes.Ink, Strings.Get("ColorSchemeInk")),
-            (ColorSchemes.Forest, Strings.Get("ColorSchemeForest")),
-            (ColorSchemes.Rose, Strings.Get("ColorSchemeRose"))
-        };
+            return;
+        }
 
-        return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
+        foreach (var binding in _customPaletteEditorBindings.ToList())
+        {
+            CommitCustomPaletteColor(binding.TextBox, binding.Swatch, binding.Slot, refreshSettingsContent: false);
+        }
+    }
+
+    private void CloseCustomPalettePickers(Popup? except = null)
+    {
+        foreach (var binding in _customPaletteEditorBindings.ToList())
+        {
+            if (!ReferenceEquals(binding.Picker, except))
+            {
+                binding.Picker.IsOpen = false;
+            }
+        }
     }
 
     private void SetMarkdownRenderMode(string mode)
@@ -99,6 +201,319 @@ public sealed partial class AppController
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
+    }
+
+    private UIElement CreateCustomPaletteEditor()
+    {
+        State.CustomColorPalette = Theme.NormalizeCustomPalette(State.CustomColorPalette, ColorSchemes.Warm);
+        CloseCustomPalettePickers();
+        _customPaletteEditorBindings.Clear();
+        var root = new StackPanel
+        {
+            Margin = new Thickness(0, 2, 0, 8)
+        };
+        var modeLabel = new TextBlock
+        {
+            Text = Theme.IsDark ? Strings.Get("SettingsCustomPaletteDark") : Strings.Get("SettingsCustomPaletteLight"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        root.Children.Add(modeLabel);
+
+        var resetButton = CreateSettingsSmallButton(Strings.Get("SettingsCustomPaletteReset"));
+        resetButton.HorizontalAlignment = HorizontalAlignment.Left;
+        resetButton.Margin = new Thickness(0, 0, 0, 8);
+        resetButton.Click += (_, _) =>
+        {
+            CommitCustomPaletteEditors();
+            ResetCustomPalette();
+        };
+        root.Children.Add(resetButton);
+
+        foreach (var slot in Theme.CustomColorSlots)
+        {
+            root.Children.Add(CreateCustomPaletteColorRow(slot));
+        }
+
+        return root;
+    }
+
+    private UIElement CreateCustomPaletteColorRow(ThemeColorSlot slot)
+    {
+        var currentHex = Theme.GetCustomPaletteHex(State.CustomColorPalette, Theme.IsDark, slot.Key);
+        var grid = new Grid
+        {
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var label = new TextBlock
+        {
+            Text = Strings.Get(slot.ResourceKey),
+            Foreground = TrayTextBrush,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var swatch = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(1),
+            BorderBrush = TrayBorderBrush,
+            Background = Theme.BrushForHex(currentHex),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = BuildSettingsHintTooltip(Strings.Get("TipCustomPalette"))
+        };
+        ToolTipPreferences.SetAlwaysEnabled(swatch, true);
+        Grid.SetColumn(swatch, 1);
+        grid.Children.Add(swatch);
+
+        var textBox = new TextBox
+        {
+            Text = currentHex,
+            Foreground = TrayTextBrush,
+            CaretBrush = TrayTextBrush,
+            Background = Brushes.Transparent,
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 4, 8, 4),
+            FontSize = 12,
+            Height = 28,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Style = BuildSettingsTextBoxStyle(),
+            Tag = currentHex
+        };
+        textBox.GotKeyboardFocus += (_, _) => textBox.SelectAll();
+        textBox.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                CommitCustomPaletteColor(textBox, swatch, slot.Key);
+                Keyboard.ClearFocus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                textBox.Text = (string)textBox.Tag;
+                Keyboard.ClearFocus();
+                e.Handled = true;
+            }
+        };
+        textBox.LostKeyboardFocus += (_, _) => CommitCustomPaletteColor(textBox, swatch, slot.Key);
+
+        var picker = CreateCustomPalettePicker(textBox, swatch, slot.Key, currentHex);
+        swatch.MouseLeftButtonUp += (_, e) =>
+        {
+            CommitCustomPaletteEditors();
+            var wasOpen = picker.IsOpen;
+            CloseCustomPalettePickers();
+            if (!wasOpen)
+            {
+                picker.IsOpen = true;
+            }
+            e.Handled = true;
+        };
+        _customPaletteEditorBindings.Add(new CustomPaletteEditorBinding(textBox, swatch, slot.Key, picker));
+        Grid.SetColumn(textBox, 2);
+        grid.Children.Add(textBox);
+
+        return grid;
+    }
+
+    private Popup CreateCustomPalettePicker(TextBox textBox, Border swatch, string slot, string currentHex)
+    {
+        var colorGrid = new UniformGrid
+        {
+            Columns = 8,
+            Margin = new Thickness(0)
+        };
+
+        foreach (var hex in BuildCustomPalettePickerHexes(slot, currentHex))
+        {
+            colorGrid.Children.Add(CreateCustomPalettePickerCell(textBox, swatch, slot, hex));
+        }
+
+        var shell = new Border
+        {
+            Background = TrayPaperBrush,
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8),
+            Child = colorGrid,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 14,
+                ShadowDepth = 3,
+                Opacity = Theme.IsDark ? 0.45 : 0.18
+            }
+        };
+
+        return new Popup
+        {
+            PlacementTarget = swatch,
+            Placement = PlacementMode.Bottom,
+            AllowsTransparency = true,
+            PopupAnimation = PopupAnimation.Fade,
+            StaysOpen = true,
+            Focusable = false,
+            Child = shell
+        };
+    }
+
+    private Border CreateCustomPalettePickerCell(TextBox textBox, Border swatch, string slot, string hex)
+    {
+        var isActive = string.Equals((string)textBox.Tag, hex, StringComparison.OrdinalIgnoreCase);
+        var cell = new Border
+        {
+            Width = 24,
+            Height = 24,
+            Margin = new Thickness(2),
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(isActive ? 2 : 1),
+            BorderBrush = isActive ? Theme.ActiveBrush : TrayBorderBrush,
+            Background = Theme.BrushForHex(hex),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = hex,
+            Tag = hex
+        };
+        cell.MouseEnter += (_, _) => cell.BorderBrush = Theme.ActiveBrush;
+        cell.MouseLeave += (_, _) =>
+        {
+            cell.BorderBrush = string.Equals((string)textBox.Tag, (string)cell.Tag, StringComparison.OrdinalIgnoreCase)
+                ? Theme.ActiveBrush
+                : TrayBorderBrush;
+        };
+        cell.MouseLeftButtonUp += (_, e) =>
+        {
+            ApplyCustomPaletteHex(textBox, swatch, slot, (string)cell.Tag, refreshSettingsContent: true);
+            CloseCustomPalettePickers();
+            e.Handled = true;
+        };
+        return cell;
+    }
+
+    private IEnumerable<string> BuildCustomPalettePickerHexes(string slot, string currentHex)
+    {
+        var orderedHexes = new List<string>();
+
+        void AddHex(string? value)
+        {
+            if (Theme.TryNormalizeHex(value, out var normalized) &&
+                !orderedHexes.Any(existing => string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                orderedHexes.Add(normalized);
+            }
+        }
+
+        AddHex(currentHex);
+        foreach (var scheme in ColorSchemes.BuiltIn)
+        {
+            AddHex(Theme.GetCustomPaletteHex(Theme.CreateCustomPaletteFromScheme(scheme), Theme.IsDark, slot));
+        }
+
+        foreach (var hex in new[]
+        {
+            "#FFFFFF", "#F8F5EF", "#EFE8DC", "#DDD0BF", "#B8A895", "#8A7D70", "#4D4640", "#1F1F1F",
+            "#FFF7E6", "#FFE4B5", "#FFD166", "#F4A261", "#D97706", "#92400E", "#7F5539", "#3F2A1D",
+            "#FFE4E6", "#FDA4AF", "#FB7185", "#E11D48", "#BE123C", "#881337", "#F9A8D4", "#DB2777",
+            "#DCFCE7", "#86EFAC", "#22C55E", "#16A34A", "#15803D", "#14532D", "#CCFBF1", "#14B8A6",
+            "#E0F2FE", "#93C5FD", "#38BDF8", "#2563EB", "#1D4ED8", "#1E3A8A", "#A5F3FC", "#0891B2",
+            "#F3E8FF", "#D8B4FE", "#A78BFA", "#8B5CF6", "#7C3AED", "#4C1D95", "#E9D5FF", "#C084FC"
+        })
+        {
+            AddHex(hex);
+        }
+
+        return orderedHexes;
+    }
+
+    private Button CreateSettingsSmallButton(string text)
+    {
+        var button = new Button
+        {
+            Content = text,
+            MinWidth = 82,
+            Height = 26,
+            Padding = new Thickness(10, 0, 10, 0),
+            BorderThickness = new Thickness(1),
+            BorderBrush = TrayBorderBrush,
+            Background = Brushes.Transparent,
+            Foreground = TrayTextBrush,
+            FontSize = 12,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Focusable = false
+        };
+        button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
+        button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+        return button;
+    }
+
+    private void CommitCustomPaletteColor(TextBox textBox, Border swatch, string slot)
+    {
+        CommitCustomPaletteColor(textBox, swatch, slot, refreshSettingsContent: true);
+    }
+
+    private void CommitCustomPaletteColor(TextBox textBox, Border swatch, string slot, bool refreshSettingsContent)
+    {
+        if (!Theme.TryNormalizeHex(textBox.Text, out var normalized))
+        {
+            textBox.Text = (string)textBox.Tag;
+            textBox.BorderBrush = Theme.DangerBrush;
+            return;
+        }
+
+        ApplyCustomPaletteHex(textBox, swatch, slot, normalized, refreshSettingsContent);
+    }
+
+    private void ApplyCustomPaletteHex(TextBox textBox, Border swatch, string slot, string hex, bool refreshSettingsContent)
+    {
+        State.CustomColorPalette ??= Theme.CreateDefaultCustomPalette();
+        if (!Theme.TryNormalizeHex(hex, out var normalized))
+        {
+            textBox.Text = (string)textBox.Tag;
+            textBox.BorderBrush = Theme.DangerBrush;
+            return;
+        }
+
+        if ((string)textBox.Tag == normalized)
+        {
+            textBox.Text = normalized;
+            textBox.BorderBrush = TrayBorderBrush;
+            swatch.Background = Theme.BrushForHex(normalized);
+            return;
+        }
+
+        if (!Theme.SetCustomPaletteHex(State.CustomColorPalette, Theme.IsDark, slot, normalized))
+        {
+            textBox.Text = (string)textBox.Tag;
+            textBox.BorderBrush = Theme.DangerBrush;
+            return;
+        }
+
+        State.CustomColorPalette = Theme.NormalizeCustomPalette(State.CustomColorPalette, ColorSchemes.Warm);
+        textBox.Tag = normalized;
+        textBox.Text = normalized;
+        textBox.BorderBrush = TrayBorderBrush;
+        swatch.Background = Theme.BrushForHex(normalized);
+        ApplyThemeStateChange(refreshSettingsContent: refreshSettingsContent);
+    }
+
+    private void ResetCustomPalette()
+    {
+        State.CustomColorPalette = Theme.CreateDefaultCustomPalette();
+        State.ColorScheme = ColorSchemes.Custom;
+        ApplyThemeStateChange(refreshSettingsContent: true);
     }
 
     private UIElement CreateMarkdownRenderSegmentSelector()
@@ -136,6 +551,16 @@ public sealed partial class AppController
         };
 
         return CreateSegmentSelector(segments, FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode), SetFullscreenTopmostMode);
+    }
+
+    private void SetGlobalZoomFromSettings(double zoom)
+    {
+        SetGlobalZoom(zoom);
+    }
+
+    private void SetCapsuleZoomFromSettings(double zoom)
+    {
+        SetCapsuleZoom(zoom);
     }
 
     private void SetTodoVisualSize(string size)
@@ -324,6 +749,92 @@ public sealed partial class AppController
         return container;
     }
 
+    private UIElement CreatePercentStepper(double value, Action<double> onChange)
+    {
+        const double min = 0.5;
+        const double max = 1.5;
+        const double step = 0.05;
+        var normalized = Math.Round(Math.Clamp(value, min, max) / step, MidpointRounding.AwayFromZero) * step;
+
+        var container = new Border
+        {
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 4, 0, 10),
+            Height = 28,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var valueText = new TextBlock
+        {
+            Text = PercentText(normalized),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TrayTextBrush
+        };
+        Grid.SetColumn(valueText, 1);
+
+        Border StepButton(string glyph, int column, double delta)
+        {
+            var glyphText = new TextBlock
+            {
+                Text = glyph,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 15,
+                Foreground = TrayTextBrush
+            };
+            var button = new Border
+            {
+                Width = 34,
+                Background = Brushes.Transparent,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Child = glyphText
+            };
+            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
+            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+            button.MouseLeftButtonDown += (_, e) =>
+            {
+                var current = PercentValue(valueText.Text, normalized);
+                var next = Math.Round(Math.Clamp(current + delta, min, max) / step, MidpointRounding.AwayFromZero) * step;
+                onChange(next);
+                valueText.Text = PercentText(next);
+                e.Handled = true;
+            };
+            Grid.SetColumn(button, column);
+            return button;
+        }
+
+        grid.Children.Add(StepButton("−", 0, -step));
+        grid.Children.Add(valueText);
+        grid.Children.Add(StepButton("＋", 2, step));
+
+        container.Child = grid;
+        return container;
+    }
+
+    private static string PercentText(double value)
+    {
+        return $"{(int)Math.Round(value * 100)}%";
+    }
+
+    private static double PercentValue(string text, double fallback)
+    {
+        var cleaned = text.Trim().TrimEnd('%');
+        return double.TryParse(cleaned, NumberStyles.Number, CultureInfo.InvariantCulture, out var percent)
+            ? percent / 100.0
+            : fallback;
+    }
+
     private UIElement CreateMaxTitleLengthStepper()
     {
         var container = new Border
@@ -451,8 +962,17 @@ public sealed partial class AppController
 
         window.PreviewMouseDown += (_, e) =>
         {
+            var source = e.OriginalSource as DependencyObject;
+            if (_customPaletteEditorBindings.Any(binding =>
+                    IsWithinElement(source, binding.TextBox) || IsWithinElement(source, binding.Swatch)))
+            {
+                return;
+            }
+
+            CloseCustomPalettePickers();
+            CommitCustomPaletteEditors();
             if (_settingsExternalMarkdownTextBox is not { IsKeyboardFocusWithin: true } textBox ||
-                IsWithinElement(e.OriginalSource as DependencyObject, textBox))
+                IsWithinElement(source, textBox))
             {
                 return;
             }
@@ -460,10 +980,18 @@ public sealed partial class AppController
             CommitExternalMarkdownExtension(textBox);
             Keyboard.ClearFocus();
         };
-        window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
+        window.Deactivated += (_, _) =>
+        {
+            CloseCustomPalettePickers();
+            CommitSettingsExternalMarkdownEditor();
+            CommitCustomPaletteEditors();
+        };
         window.Closed += (_, _) =>
         {
+            CloseCustomPalettePickers();
             CommitSettingsExternalMarkdownEditor();
+            CommitCustomPaletteEditors();
+            _customPaletteEditorBindings.Clear();
             _settingsExternalMarkdownTextBox = null;
             _settingsCapsuleModeCheckBox = null;
             _settingsDeepCapsuleModeCheckBox = null;
@@ -486,6 +1014,8 @@ public sealed partial class AppController
             return;
         }
 
+        CloseCustomPalettePickers();
+        _customPaletteEditorBindings.Clear();
         _settingsWindow.Content = BuildSettingsWindowContent(_settingsWindow);
         ApplyToolTipSetting(_settingsWindow);
     }
@@ -567,12 +1097,21 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateThemeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+        if (ColorSchemes.Normalize(State.ColorScheme) == ColorSchemes.Custom)
+        {
+            leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsCustomPalette")), "TipCustomPalette"));
+            leftColumn.Children.Add(CreateCustomPaletteEditor());
+        }
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode")), "TipMarkdownRender"));
         leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode")), "TipFullscreenTopmostMode"));
         leftColumn.Children.Add(CreateFullscreenTopmostModeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTodoVisualSize")), "TipTodoVisualSize"));
         leftColumn.Children.Add(CreateTodoVisualSizeSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsGlobalZoom")), "TipGlobalZoom"));
+        leftColumn.Children.Add(CreatePercentStepper(State.Zoom, SetGlobalZoomFromSettings));
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsCapsuleZoom")), "TipCapsuleZoom"));
+        leftColumn.Children.Add(CreatePercentStepper(State.CapsuleZoom, SetCapsuleZoomFromSettings));
 
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewTodoButton"), State.ShowTopBarNewTodoButton, ToggleTopBarNewTodoButton), "TipNewTodoButton"));
@@ -592,9 +1131,6 @@ public sealed partial class AppController
         var hideLinkedNotesFromCapsulesToggle = SettingsToggle(Strings.Get("SettingsHideLinkedNotesFromCapsules"), State.HideLinkedNotesFromCapsules, ToggleHideLinkedNotesFromCapsules);
         hideLinkedNotesFromCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(hideLinkedNotesFromCapsulesToggle, "TipHideLinkedNotesFromCapsules"));
-        var runLinkedScriptCapsulesToggle = SettingsToggle(Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"), State.RunLinkedScriptCapsulesOnClick, ToggleRunLinkedScriptCapsulesOnClick);
-        runLinkedScriptCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
-        rightColumn.Children.Add(WrapWithHint(runLinkedScriptCapsulesToggle, "TipRunLinkedScriptCapsulesOnClick"));
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsExternalOpen")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsExternalMarkdownExtension")), "TipExternalExtension"));
@@ -612,6 +1148,7 @@ public sealed partial class AppController
         _settingsCapsuleCollapseAllCheckBox = SettingsToggle(Strings.Get("SettingsCapsuleCollapseAll"), State.UseCapsuleCollapseAll, ToggleCapsuleCollapseAll);
         rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
         rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
+        rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoDockCapsules"), State.AutoDockCapsules, ToggleAutoDockCapsules), "TipAutoDockCapsules"));
         rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleExpandedSlotCheckBox, "TipShowDeepCapsuleWhileExpanded"));
         rightColumn.Children.Add(WrapWithHint(_settingsCapsuleCollapseAllCheckBox, "TipCapsuleCollapseAll"));
         RefreshSettingsCapsuleToggleStates();
@@ -665,7 +1202,7 @@ public sealed partial class AppController
     {
         var signatureText = new TextBlock
         {
-            Text = AuthorName,
+            Text = Strings.Get("SettingsAuthorSignature"),
             Foreground = TrayWeakTextBrush,
             FontSize = 11,
             FontWeight = FontWeights.Medium,
@@ -1158,6 +1695,24 @@ public sealed partial class AppController
         ToolTipPreferences.Apply(window, State.EnableToolTips);
     }
 
+    private void ToggleAutoDockCapsules()
+    {
+        State.AutoDockCapsules = !State.AutoDockCapsules;
+        if (!State.AutoDockCapsules)
+        {
+            FloatAllDockedCapsuleQueues();
+            SaveNow();
+        }
+        else
+        {
+            ArrangeDeepCapsules(animate: State.EnableAnimations);
+            SaveNow();
+        }
+
+        RebuildTrayMenu();
+        RefreshSettingsWindowContent();
+    }
+
     private void ToggleCapsuleMode()
     {
         State.UseCapsuleMode = !State.UseCapsuleMode;
@@ -1222,19 +1777,6 @@ public sealed partial class AppController
     {
         State.HideLinkedNotesFromCapsules = !State.HideLinkedNotesFromCapsules;
         RefreshCapsuleEligibilityForLinkedNotes();
-        SaveNow();
-        RefreshSettingsWindowContent();
-    }
-
-    private void ToggleRunLinkedScriptCapsulesOnClick()
-    {
-        State.RunLinkedScriptCapsulesOnClick = !State.RunLinkedScriptCapsulesOnClick;
-
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshTodoRowsForExternalChange();
-        }
-
         SaveNow();
         RefreshSettingsWindowContent();
     }
@@ -1329,20 +1871,23 @@ public sealed partial class AppController
     private void RestoreExistingPaperWindowSurface(PaperData paper, PaperWindow window)
     {
         RescuePaperIfOffScreen(paper, State.Papers.IndexOf(paper));
+        RescueFloatingCapsuleIfOffScreen(paper, State.Papers.IndexOf(paper));
         window.CancelPendingVisibilityTransitions();
         window.DetachFromDeepCapsuleStack(animate: false);
 
-        window.Left = paper.X;
-        window.Top = paper.Y;
         if (paper.IsCollapsed && State.UseCapsuleMode)
         {
+            window.Left = paper.CapsuleX ?? paper.X;
+            window.Top = paper.CapsuleY ?? paper.Y;
             window.Width = window.DesiredCapsuleWindowWidth;
-            window.Height = PaperLayoutDefaults.CapsuleHeight;
+            window.Height = CapsuleDisplayHeight;
         }
         else
         {
-            window.Width = paper.Width;
-            window.Height = paper.Height;
+            window.Left = paper.X;
+            window.Top = paper.Y;
+            window.Width = paper.Width * PaperDisplayScale;
+            window.Height = paper.Height * PaperDisplayScale;
         }
 
         window.Opacity = 1.0;
@@ -1354,3 +1899,61 @@ public sealed partial class AppController
     }
 
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增整体大小、胶囊大小百分比步进设置。
+- 新增胶囊自动吸附开关。
+
+[修改目的]:
+- 允许用户在设置中调整纸片整体显示尺寸和胶囊显示尺寸。
+
+[影响范围]:
+- 设置窗口、纸片缩放、普通胶囊和侧边栏胶囊显示。
+
+[修改编号]: 2
+[修改日期]: 2026-06-21
+[修改类型]: 修复bug
+[主要内容]:
+- 关闭胶囊自动吸附后，无论是否存在可转换侧边栏队列都立即保存设置。
+- 恢复隐藏中的折叠胶囊窗口前同步执行自由悬浮坐标离屏救援。
+
+[修改目的]:
+- 防止自动吸附开关状态丢失，并避免设置变化后悬浮胶囊恢复到不可见位置。
+
+[影响范围]:
+- 设置窗口、自动吸附开关保存、隐藏纸片恢复和自由悬浮胶囊显示。
+
+[修改编号]: 3
+[修改日期]: 2026-06-21
+[修改类型]: 新增功能
+[主要内容]:
+- 配色方案选择改为可换行色彩 chip。
+- 新增自定义色盘编辑器，支持 HEX 输入、色块预览和重置自定义色盘。
+- 新增主题状态变更共用刷新逻辑。
+- 新增自定义色盘输入框统一提交，避免关闭设置、切换配色或窗口失活时丢失未按 Enter 的输入。
+
+[修改目的]:
+- 允许用户在设置中选择更多配色，并自定义纸面、边框、文字、强调色等主题颜色。
+
+[影响范围]:
+- 设置窗口显示区域、主题刷新、托盘菜单刷新和自定义色盘保存。
+
+[修改编号]: 4
+[修改日期]: 2026-06-21
+[修改类型]: 优化
+[主要内容]:
+- 自定义色盘色块改为可点击入口，点击后弹出 WPF 原生颜色盘。
+- 新增颜色盘色格点击应用逻辑，并与 HEX 输入共用自定义色盘保存和主题刷新路径。
+- 增加颜色盘关闭处理，避免设置窗口失焦、关闭或刷新后残留弹窗。
+
+[修改目的]:
+- 降低自定义主题配色门槛，让用户无需手动输入数值即可直接选择颜色。
+
+[影响范围]:
+- 设置窗口自定义色盘、主题预览刷新、自定义色盘保存和弹出层交互。
+*/

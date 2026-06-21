@@ -91,6 +91,18 @@ public static class DeepCapsuleSides
     }
 }
 
+public static class CapsulePlacements
+{
+    public const string Auto = "auto";
+    public const string Docked = "docked";
+    public const string Floating = "floating";
+
+    public static string Normalize(string? placement)
+    {
+        return placement is Docked or Floating ? placement : Auto;
+    }
+}
+
 public static class TodoVisualSizes
 {
     public const string Small = "small";
@@ -132,10 +144,16 @@ public sealed class AppState
     public List<PaperData> Papers { get; set; } = new();
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CustomColorPalette? CustomColorPalette { get; set; }
+
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
+    public double CapsuleZoom { get; set; } = 1.0;
+    public bool AutoDockCapsules { get; set; } = true;
     public bool UseCapsuleMode { get; set; } = true;
     public bool UseDeepCapsuleMode { get; set; } = true;
     public bool ShowTopBarNewTodoButton { get; set; } = true;
@@ -144,7 +162,6 @@ public sealed class AppState
     public bool EnableTodoNoteLinks { get; set; } = true;
     public bool ShowLinkedNoteName { get; set; }
     public bool HideLinkedNotesFromCapsules { get; set; }
-    public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; }
     public bool CapsuleCollapseAllActive { get; set; }
@@ -178,6 +195,27 @@ public sealed class AppState
     public bool? ShowTopBarNewPaperButtons { get; set; }
 }
 
+public sealed class CustomColorPalette
+{
+    public ThemePaletteColors? Light { get; set; }
+    public ThemePaletteColors? Dark { get; set; }
+}
+
+public sealed class ThemePaletteColors
+{
+    public string? Paper { get; set; }
+    public string? PaperBorder { get; set; }
+    public string? Text { get; set; }
+    public string? WeakText { get; set; }
+    public string? Active { get; set; }
+    public string? Code { get; set; }
+    public string? QuoteBorder { get; set; }
+    public string? Link { get; set; }
+    public string? CheckBox { get; set; }
+    public string? Tint { get; set; }
+    public string? Danger { get; set; }
+}
+
 public sealed class PaperData
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -200,6 +238,13 @@ public sealed class PaperData
     // assigned" — on load it inherits the legacy global anchor so existing capsules keep place.
     public string CapsuleSide { get; set; } = "";
     public string CapsuleMonitorDeviceName { get; set; } = "";
+    public string CapsulePlacement { get; set; } = CapsulePlacements.Auto;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? CapsuleX { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? CapsuleY { get; set; }
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
@@ -215,3 +260,31 @@ public sealed class PaperItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LinkedNoteId { get; set; }
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 新增胶囊布局状态常量与规范化逻辑。
+- 新增胶囊缩放、自动吸附开关和自由悬浮坐标字段。
+
+[修改目的]:
+- 支持整体缩放、胶囊单独缩放、胶囊自动吸附和自由悬浮。
+
+[影响范围]:
+- 配置数据结构、旧数据兼容、普通胶囊和侧边栏胶囊位置保存。
+
+[修改编号]: 2
+[修改日期]: 2026-06-21
+[修改类型]: 新增功能
+[主要内容]:
+- 新增自定义色盘持久化结构，保存浅色和深色两套 HEX 颜色。
+
+[修改目的]:
+- 支持用户在设置中自定义纸面、边框、文字、强调色等主题颜色。
+
+[影响范围]:
+- data.json 配置结构、主题配色加载和自定义色盘保存。
+*/

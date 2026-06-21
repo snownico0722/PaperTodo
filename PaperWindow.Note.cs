@@ -262,12 +262,10 @@ public sealed partial class PaperWindow
         {
             var wasScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
             _paper.Content = box.Text;
-            var isScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
-            if (wasScriptCapsule != isScriptCapsule)
+            if (wasScriptCapsule != IsScriptCapsuleText(_paper.Content ?? ""))
             {
                 RefreshCapsuleLabel();
                 RefreshPaperContextMenus();
-                _controller.RefreshTodoRowsForLinkedNote(_paper.Id);
             }
             _controller.MarkDirty();
         };
@@ -508,7 +506,7 @@ public sealed partial class PaperWindow
 
     private string WriteExternalMarkdownFile()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "PaperTodo");
+        var directory = Path.Combine(AppContext.BaseDirectory, "tmp", "PaperTodo");
         Directory.CreateDirectory(directory);
 
         var path = Path.Combine(directory, $"paper-{_paper.Id}{CurrentExternalMarkdownExtension()}");
@@ -532,17 +530,12 @@ public sealed partial class PaperWindow
 
     private double CapsuleIconFontSizeForCurrentPaper()
     {
-        return IsScriptCapsule() ? CapsuleIconFontSize + 2 : CapsuleIconFontSize;
+        return ScaleCapsule(IsScriptCapsule() ? CapsuleIconFontSize + 2 : CapsuleIconFontSize);
     }
 
     private bool IsScriptCapsule()
     {
         return TryGetScriptCapsule(out _);
-    }
-
-    internal static bool IsScriptCapsuleContent(string? text)
-    {
-        return IsScriptCapsuleText(text ?? "");
     }
 
     private void ActivateFromCollapsedCapsule()
@@ -576,7 +569,7 @@ public sealed partial class PaperWindow
         _controller.BringPaperToFront(_paper);
     }
 
-    internal bool TryRunScriptCapsule()
+    private bool TryRunScriptCapsule()
     {
         if (!TryGetScriptCapsule(out var spec))
         {
@@ -643,10 +636,10 @@ public sealed partial class PaperWindow
         var marker = firstLine.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
         spec = marker switch
         {
-            "!pf" or "!powerf" => new ScriptCapsuleMarkerSpec("auto", true),
-            "!p" or "!power" => new ScriptCapsuleMarkerSpec("auto", false),
-            "!pwsh" or "!ps7" => new ScriptCapsuleMarkerSpec("pwsh", false),
-            "!ps5" or "!winps" => new ScriptCapsuleMarkerSpec("powershell", false),
+            "!!powerflash" => new ScriptCapsuleMarkerSpec("auto", true),
+            "!!power" or "!!powershell" or "!!ps" or "!!ps1" => new ScriptCapsuleMarkerSpec("auto", false),
+            "!!pwsh" or "!!powershell7" or "!!ps7" => new ScriptCapsuleMarkerSpec("pwsh", false),
+            "!!powershell5" or "!!ps5" or "!!winps" => new ScriptCapsuleMarkerSpec("powershell", false),
             _ => default
         };
         return !string.IsNullOrEmpty(spec.Engine);
@@ -866,7 +859,7 @@ public sealed partial class PaperWindow
 
     private static string ScriptCapsuleTempDirectory()
     {
-        return Path.Combine(Path.GetTempPath(), "PaperTodo", "Scripts");
+        return Path.Combine(AppContext.BaseDirectory, "tmp", "PaperTodo", "Scripts");
     }
 
     private static void DeleteScriptCapsuleFile(string path)
@@ -1075,3 +1068,19 @@ public sealed partial class PaperWindow
     }
 
 }
+
+/*
+=== 修改记录 ===
+[修改编号]: 1
+[修改日期]: 2026-06-20
+[修改类型]: 新增功能
+[主要内容]:
+- 胶囊图标字号接入胶囊缩放。
+- 外部 Markdown 临时文件和脚本胶囊临时文件改为写入程序目录下 tmp 文件夹。
+
+[修改目的]:
+- 确保胶囊大小设置影响脚本/笔记胶囊图标，并避免临时文件写入系统临时目录。
+
+[影响范围]:
+- 笔记胶囊显示、脚本胶囊运行、外部 Markdown 编辑临时文件。
+*/
