@@ -245,6 +245,7 @@ public sealed class StateStore
         state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
         state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
+        state.UiFontPreset = UiFontPresets.Normalize(state.UiFontPreset);
         state.TopBarHeight = 0;
 
         if (state.ShowTopBarNewPaperButtons is bool showTopBarNewPaperButtons)

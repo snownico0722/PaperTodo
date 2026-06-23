@@ -249,6 +249,18 @@
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>색 구성</value>
   </data>
+  <data name="SettingsUiFont" xml:space="preserve">
+    <value>글꼴</value>
+  </data>
+  <data name="UiFontDefault" xml:space="preserve">
+    <value>언어 기본값</value>
+  </data>
+  <data name="UiFontYaHei" xml:space="preserve">
+    <value>YaHei</value>
+  </data>
+  <data name="UiFontDengXian" xml:space="preserve">
+    <value>DengXian</value>
+  </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>종이</value>
   </data>
@@ -405,6 +417,11 @@
   <data name="TipColorScheme" xml:space="preserve">
     <value>종이의 전체 색조를 바꿉니다. 배경, 강조색, 약한 글자색에 영향을 줍니다.</value>
   </data>
+  <data name="TipUiFont" xml:space="preserve">
+    <value>언어 기본값은 UI와 본문에 각각 알맞은 시스템 글꼴을 사용합니다.
+YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본문이 선택한 글꼴로 통일됩니다.
+앱 폴더에 papertodo.ttf 또는 papertodo.otf가 있으면 해당 사용자 지정 글꼴을 우선 사용합니다.</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>기본은 가벼운 강조만 적용하고, 확장은 제목, 목록, 강조까지 더 다듬어 표시합니다.</value>
   </data>
@@ -419,6 +436,9 @@
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>할 일 항목 뒤에 연결된 메모 제목을 표시합니다.</value>
+  </data>
+  <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>끄면 간결한 표시를 유지합니다. 켜면 연결된 메모 제목이 내용에 맞게 넓어지며, 한 줄에서는 전각 약 5자, 여러 줄에서는 전각 약 10자까지 표시합니다.</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>할 일 항목에 연결된 메모는 캡슐 목록에 표시하지 않아 중복 진입점을 피합니다.</value>
@@ -462,6 +482,12 @@
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>호버 도움말 표시</value>
   </data>
+  <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>창 전환에서 종이 숨기기</value>
+  </data>
+  <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>켜면 펼쳐진 종이가 Alt+Tab과 작업 보기에서 숨겨집니다. 트레이, 데스크톱의 종이, 캡슐에서는 계속 열 수 있습니다.</value>
+  </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>버튼이나 조작 가능한 영역에 포인터를 올렸을 때 짧은 설명을 표시합니다. 설정 설명 아이콘은 항상 사용할 수 있습니다.</value>
   </data>
@@ -503,6 +529,9 @@
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
     <value>연결된 메모 제목 표시</value>
+  </data>
+  <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>연결 제목 길게 표시</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>연결된 메모를 캡슐로 표시하지 않음</value>

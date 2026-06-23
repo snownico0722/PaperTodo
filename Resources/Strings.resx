@@ -258,6 +258,18 @@
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>配色方案</value>
   </data>
+  <data name="SettingsUiFont" xml:space="preserve">
+    <value>字体</value>
+  </data>
+  <data name="UiFontDefault" xml:space="preserve">
+    <value>语言默认</value>
+  </data>
+  <data name="UiFontYaHei" xml:space="preserve">
+    <value>雅黑</value>
+  </data>
+  <data name="UiFontDengXian" xml:space="preserve">
+    <value>等线</value>
+  </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>暖纸</value>
   </data>
@@ -417,6 +429,11 @@
   <data name="TipColorScheme" xml:space="preserve">
     <value>切换纸片的配色基调，包括背景、强调色和弱化文字。</value>
   </data>
+  <data name="TipUiFont" xml:space="preserve">
+    <value>语言默认会为界面和笔记正文分别选择合适的系统字体。
+手动选择雅黑或等线后，界面、托盘、胶囊、待办和笔记正文会统一使用所选字体。
+程序目录下存在 papertodo.ttf 或 papertodo.otf 时，会优先使用该自定义字体。</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础模式只做轻量高亮；增强模式进一步美化标题、列表和强调。</value>
   </data>
@@ -431,6 +448,9 @@
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>在待办项后显示已关联笔记的标题。</value>
+  </data>
+  <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>关闭时保持紧凑显示；开启后关联笔记标题会按内容扩展，单行最多约 5 个全角字符，多行最多约 10 个。</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>已关联到待办项的笔记不再出现在胶囊列表中，避免重复入口。</value>
@@ -474,6 +494,12 @@
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>显示悬停提示</value>
   </data>
+  <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>从窗口切换中隐藏纸片</value>
+  </data>
+  <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>开启后，展开的纸片会从 Alt+Tab 和任务视图中隐藏；仍可通过托盘、桌面纸片和胶囊访问。</value>
+  </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>指针停在按钮和可操作区域上时显示简短说明；设置页说明图标始终可用。</value>
   </data>
@@ -515,6 +541,9 @@
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
     <value>显示关联笔记标题</value>
+  </data>
+  <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>关联笔记显示长标题</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>关联笔记不显示为胶囊</value>

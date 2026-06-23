@@ -290,7 +290,11 @@ public sealed partial class PaperWindow : Window
     private bool ExpandedFromDeepCapsuleEdge => _deepCapsuleOpenOrigin == DeepCapsuleOpenOrigin.EdgeSlot;
 
     private void SetDeepCapsuleSlotState(DeepCapsuleSlotState state) => _deepCapsuleSlotState = state;
-    private void SetDeepCapsuleVisualState(DeepCapsuleVisualState state) => _deepCapsuleVisualState = state;
+    private void SetDeepCapsuleVisualState(DeepCapsuleVisualState state)
+    {
+        _deepCapsuleVisualState = state;
+        UpdateDeepCapsuleSlotOutlineState();
+    }
     private void SetDeepCapsuleGestureState(DeepCapsuleGestureState state) => _deepCapsuleGestureState = state;
     private void SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin origin) => _deepCapsuleOpenOrigin = origin;
 
@@ -456,6 +460,7 @@ public sealed partial class PaperWindow : Window
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("WeakTextBrushKey")));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
+        style.Setters.Add(new Setter(Control.FontFamilyProperty, AppTypography.SymbolFontFamily));
         style.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
         style.Setters.Add(new Setter(Control.FocusableProperty, false));
 
@@ -591,6 +596,7 @@ public sealed partial class PaperWindow : Window
         LostMouseCapture += OnLostMouseCapture;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewKeyUp += OnWindowPreviewKeyUp;
+        SourceInitialized += (_, _) => UpdateWindowSwitcherVisibility();
         Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
         Deactivated += (_, _) =>
         {
@@ -639,6 +645,11 @@ public sealed partial class PaperWindow : Window
     {
         ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
         ToolTipPreferences.Apply(_deepCapsuleSlotHost, _controller.State.EnableToolTips);
+    }
+
+    public void UpdateWindowSwitcherVisibility()
+    {
+        WindowNative.ApplyWindowSwitcherVisibility(this, !_controller.State.HidePapersFromWindowSwitcher);
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -707,7 +718,8 @@ public sealed partial class PaperWindow : Window
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
-        FontFamily = new FontFamily("Segoe UI");
+        FontFamily = AppTypography.UiFontFamily;
+        Language = AppTypography.Language;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
     }
@@ -810,6 +822,65 @@ public sealed partial class PaperWindow : Window
         {
             RebuildTodoRows(CurrentFocusedTodoItemId());
         }
+    }
+
+    public void UpdateTypography()
+    {
+        FontFamily = AppTypography.UiFontFamily;
+        Language = AppTypography.Language;
+
+        if (_titleText != null)
+        {
+            _titleText.FontFamily = AppTypography.UiFontFamily;
+        }
+
+        if (_titleEditBox != null)
+        {
+            _titleEditBox.FontFamily = AppTypography.UiFontFamily;
+        }
+
+        if (_openMarkdownButton != null)
+        {
+            _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
+        }
+
+        if (_noteBox != null)
+        {
+            _noteBox.RefreshTypography();
+        }
+
+        if (_paper.Type == PaperTypes.Todo)
+        {
+            RebuildTodoRows(CurrentFocusedTodoItemId());
+        }
+
+        if (_capsuleIconText != null)
+        {
+            _capsuleIconText.FontFamily = AppTypography.SymbolFontFamily;
+        }
+
+        if (_capsuleLabelText != null)
+        {
+            _capsuleLabelText.FontFamily = AppTypography.UiFontFamily;
+        }
+
+        if (_deepCapsuleSlotHost != null)
+        {
+            _deepCapsuleSlotHost.FontFamily = AppTypography.UiFontFamily;
+            _deepCapsuleSlotHost.Language = AppTypography.Language;
+        }
+
+        if (_deepCapsuleSlotIconText != null)
+        {
+            _deepCapsuleSlotIconText.FontFamily = AppTypography.SymbolFontFamily;
+        }
+
+        if (_deepCapsuleSlotLabelText != null)
+        {
+            _deepCapsuleSlotLabelText.FontFamily = AppTypography.UiFontFamily;
+        }
+
+        RefreshPaperTitle();
     }
 
     private static bool TryGetSolidColor(Brush? brush, out Color color)
@@ -1097,6 +1168,7 @@ public sealed partial class PaperWindow : Window
             buttons.Children.Add(_linkNoteButton);
 
             _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
+            _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
             _openMarkdownButton.FontSize = 10.5;
             _openMarkdownButton.Click += (_, _) => OpenMarkdownInDefaultEditor();
             buttons.Children.Add(_openMarkdownButton);
@@ -1239,6 +1311,7 @@ public sealed partial class PaperWindow : Window
         {
             Text = "✎",
             Foreground = TextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -1248,6 +1321,7 @@ public sealed partial class PaperWindow : Window
         {
             Text = _controller.PaperCapsuleTitle(_paper),
             Foreground = TextBrush,
+            FontFamily = AppTypography.UiFontFamily,
             FontSize = 12,
             Margin = new Thickness(6, 0, 0, 0),
             MaxWidth = 150,
@@ -1882,7 +1956,8 @@ public sealed partial class PaperWindow : Window
         var menu = new ContextMenu
         {
             Padding = new Thickness(4, 4, 4, 4),
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = AppTypography.UiFontFamily,
+            Language = AppTypography.Language,
             FontSize = 13,
             HasDropShadow = true,
             Template = SharedContextMenuTemplate
@@ -2096,21 +2171,21 @@ public sealed partial class PaperWindow : Window
 
     private double MeasureCapsuleTitleWidth()
     {
-        return MeasureCapsuleTextWidth(_controller.PaperCapsuleTitle(_paper), CapsuleLabelFontSize, FontWeights.Normal);
+        return MeasureCapsuleTextWidth(_controller.PaperCapsuleTitle(_paper), CapsuleLabelFontSize, FontWeights.Normal, AppTypography.UiFontFamily);
     }
 
     // The capsule icon glyph (✓ / ✎) is not a fixed box — its rendered advance width depends
     // on the font and weight. Measure it with the same SemiBold weight it renders at.
     private double MeasureCapsuleIconWidth()
     {
-        return MeasureCapsuleTextWidth(CapsuleIconText(), CapsuleIconFontSizeForCurrentPaper(), FontWeights.SemiBold);
+        return MeasureCapsuleTextWidth(CapsuleIconText(), CapsuleIconFontSizeForCurrentPaper(), FontWeights.SemiBold, AppTypography.SymbolFontFamily);
     }
 
     // Single source of truth for "how wide does this text actually render". Uses the same
-    // font family (NoteTypography) and weight the capsule icon/label are bound to, so
+    // font family and weight the capsule icon/label are bound to, so
     // measurement and rendering never disagree — digits and halfwidth chars get their true
     // advance width.
-    private double MeasureCapsuleTextWidth(string text, double fontSize, FontWeight weight)
+    private double MeasureCapsuleTextWidth(string text, double fontSize, FontWeight weight, FontFamily fontFamily)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -2123,7 +2198,7 @@ public sealed partial class PaperWindow : Window
                 text,
                 CultureInfo.CurrentUICulture,
                 FlowDirection.LeftToRight,
-                new Typeface(NoteTypography.FontFamily, FontStyles.Normal, weight, FontStretches.Normal),
+                new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
                 WeakTextBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);

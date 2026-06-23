@@ -249,6 +249,18 @@
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>配色</value>
   </data>
+  <data name="SettingsUiFont" xml:space="preserve">
+    <value>フォント</value>
+  </data>
+  <data name="UiFontDefault" xml:space="preserve">
+    <value>言語既定</value>
+  </data>
+  <data name="UiFontYaHei" xml:space="preserve">
+    <value>YaHei</value>
+  </data>
+  <data name="UiFontDengXian" xml:space="preserve">
+    <value>DengXian</value>
+  </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>紙</value>
   </data>
@@ -405,6 +417,11 @@
   <data name="TipColorScheme" xml:space="preserve">
     <value>紙片の配色基調を切り替えます。背景、アクセント、弱い文字色に影響します。</value>
   </data>
+  <data name="TipUiFont" xml:space="preserve">
+    <value>言語既定では、UI とノート本文にそれぞれ適したシステムフォントを使います。
+YaHei または DengXian を選ぶと、UI、トレイ、カプセル、ToDo、ノート本文の主文字をそのフォントに統一します。
+アプリフォルダーに papertodo.ttf または papertodo.otf がある場合は、そのカスタムフォントを優先します。</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基本は軽いハイライトのみ、拡張は見出し・リスト・強調も整えて表示します。</value>
   </data>
@@ -419,6 +436,9 @@
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>ToDo 項目の後ろに関連ノートのタイトルを表示します。</value>
+  </data>
+  <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>オフではコンパクト表示のままです。オンにすると関連ノートのタイトル幅を内容に合わせて広げ、1 行では全角約 5 文字、複数行では全角約 10 文字まで表示します。</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>ToDo 項目に関連付け済みのノートはカプセル一覧に表示せず、入口の重複を避けます。</value>
@@ -462,6 +482,12 @@
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>ホバー時のヒントを表示</value>
   </data>
+  <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>ウィンドウ切り替えから紙片を隠す</value>
+  </data>
+  <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>オンにすると、展開中の紙片を Alt+Tab とタスクビューから隠します。トレイ、デスクトップ上の紙片、カプセルからは引き続き開けます。</value>
+  </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>ボタンや操作できる領域にポインターを置いたときに短い説明を表示します。設定の説明アイコンは常に利用できます。</value>
   </data>
@@ -503,6 +529,9 @@
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
     <value>関連ノートのタイトルを表示</value>
+  </data>
+  <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>関連タイトルを長く表示</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>関連ノートをカプセルに表示しない</value>

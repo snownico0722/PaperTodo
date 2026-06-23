@@ -12,11 +12,17 @@ internal static class WindowNative
     private const int GwlExStyle = -20;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExTopmost = 0x00000008;
+    private const int WsExToolWindow = 0x00000080;
+    private const int WsExAppWindow = 0x00040000;
     private static readonly IntPtr HwndTopmost = new(-1);
     private static readonly IntPtr HwndNoTopmost = new(-2);
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
     private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
+    private const uint SwpShowWindow = 0x0040;
+    private const uint SwpHideWindow = 0x0080;
     private const uint SwpNoOwnerZOrder = 0x0200;
 
     // WS_EX_NOACTIVATE: the window can never become foreground, so clicking it never steals
@@ -31,6 +37,53 @@ internal static class WindowNative
 
         var exStyle = GetWindowLong(handle, GwlExStyle);
         SetWindowLong(handle, GwlExStyle, exStyle | WsExNoActivate);
+    }
+
+    public static void ApplyWindowSwitcherVisibility(Window window, bool visible)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var exStyle = GetWindowLong(handle, GwlExStyle);
+        var newStyle = visible
+            ? (exStyle & ~WsExToolWindow)
+            : ((exStyle | WsExToolWindow) & ~WsExAppWindow);
+
+        if (newStyle == exStyle)
+        {
+            return;
+        }
+
+        SetWindowLong(handle, GwlExStyle, newStyle);
+        SetWindowPos(
+            handle,
+            IntPtr.Zero,
+            0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged | SwpNoOwnerZOrder);
+
+        if (visible && window.IsVisible)
+        {
+            RefreshShellWindowListEntry(handle);
+        }
+    }
+
+    private static void RefreshShellWindowListEntry(IntPtr handle)
+    {
+        // The shell may keep Alt+Tab / Task View membership cached after WS_EX_TOOLWINDOW
+        // changes. A no-activate hide/show makes it rebuild the entry without stealing focus.
+        SetWindowPos(
+            handle,
+            IntPtr.Zero,
+            0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder | SwpHideWindow);
+        SetWindowPos(
+            handle,
+            IntPtr.Zero,
+            0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder | SwpShowWindow);
     }
 
     // Set topmost / no-topmost without moving, sizing, or activating the window. When dropping

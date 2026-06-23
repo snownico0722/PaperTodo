@@ -72,6 +72,7 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         State = _store.Load();
+        AppTypography.Configure(State.UiFontPreset);
         ToolTipPreferences.Register(() => State.EnableToolTips);
 
         _saveTimer = new DispatcherTimer

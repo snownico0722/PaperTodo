@@ -362,7 +362,8 @@ public sealed partial class AppController
             BorderThickness = new Thickness(1),
             Padding = new Thickness(4, 4, 4, 4),
             HasDropShadow = true,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = AppTypography.UiFontFamily,
+            Language = AppTypography.Language,
             FontSize = 13,
             Focusable = true,
             MinWidth = 190,
@@ -421,6 +422,8 @@ public sealed partial class AppController
         _trayMenu.Background = TrayPaperBrush;
         _trayMenu.BorderBrush = TrayBorderBrush;
         _trayMenu.Foreground = TrayTextBrush;
+        _trayMenu.FontFamily = AppTypography.UiFontFamily;
+        _trayMenu.Language = AppTypography.Language;
         _trayMenu.MaxHeight = TrayMenuMaxHeight();
 
         _trayMenu.Items.Clear();
@@ -571,6 +574,7 @@ public sealed partial class AppController
         {
             Text = "×",
             Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 14,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center

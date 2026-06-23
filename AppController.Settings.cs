@@ -82,6 +82,33 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
     }
 
+    private void SetUiFontPreset(string preset)
+    {
+        var normalized = UiFontPresets.Normalize(preset);
+        if (State.UiFontPreset == normalized)
+        {
+            return;
+        }
+
+        State.UiFontPreset = normalized;
+        AppTypography.Configure(State.UiFontPreset);
+        SaveNow();
+        RefreshTypography();
+        RefreshSettingsWindowContent();
+    }
+
+    private UIElement CreateUiFontPresetSegmentSelector()
+    {
+        var segments = new[]
+        {
+            (UiFontPresets.Default, Strings.Get("UiFontDefault")),
+            (UiFontPresets.YaHei, Strings.Get("UiFontYaHei")),
+            (UiFontPresets.DengXian, Strings.Get("UiFontDengXian"))
+        };
+
+        return CreateSegmentSelector(segments, UiFontPresets.Normalize(State.UiFontPreset), SetUiFontPreset);
+    }
+
     private void SetMarkdownRenderMode(string mode)
     {
         if (!MarkdownRenderModes.IsValid(mode))
@@ -360,6 +387,7 @@ public sealed partial class AppController
                 Text = glyph,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = AppTypography.SymbolFontFamily,
                 FontSize = 15,
                 Foreground = TrayTextBrush
             };
@@ -444,7 +472,8 @@ public sealed partial class AppController
             ShowInTaskbar = false,
             Topmost = false,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = AppTypography.UiFontFamily,
+            Language = AppTypography.Language,
             SnapsToDevicePixels = true,
             UseLayoutRounding = true
         };
@@ -488,7 +517,24 @@ public sealed partial class AppController
         }
 
         _settingsWindow.Content = BuildSettingsWindowContent(_settingsWindow);
+        _settingsWindow.FontFamily = AppTypography.UiFontFamily;
+        _settingsWindow.Language = AppTypography.Language;
         ApplyToolTipSetting(_settingsWindow);
+    }
+
+    private void RefreshTypography()
+    {
+        RebuildTrayMenu();
+
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateTypography();
+        }
+
+        foreach (var masterCapsule in _masterCapsules.Values)
+        {
+            masterCapsule.UpdateTypography();
+        }
     }
 
     private UIElement BuildSettingsWindowContent(Window window)
@@ -535,6 +581,7 @@ public sealed partial class AppController
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 16,
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
@@ -569,6 +616,8 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateThemeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
+        leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode")), "TipMarkdownRender"));
         leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode")), "TipFullscreenTopmostMode"));
@@ -583,6 +632,7 @@ public sealed partial class AppController
 
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher), "TipHidePapersFromWindowSwitcher"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
 
@@ -591,6 +641,9 @@ public sealed partial class AppController
         var showLinkedNoteNameToggle = SettingsToggle(Strings.Get("SettingsShowLinkedNoteName"), State.ShowLinkedNoteName, ToggleLinkedNoteNameDisplay);
         showLinkedNoteNameToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(showLinkedNoteNameToggle, "TipShowLinkedNoteName"));
+        var allowLongLinkedNoteTitlesToggle = SettingsToggle(Strings.Get("SettingsAllowLongLinkedNoteTitles"), State.AllowLongLinkedNoteTitles, ToggleLongLinkedNoteTitles);
+        allowLongLinkedNoteTitlesToggle.IsEnabled = State.EnableTodoNoteLinks && State.ShowLinkedNoteName;
+        rightColumn.Children.Add(WrapWithHint(allowLongLinkedNoteTitlesToggle, "TipAllowLongLinkedNoteTitles"));
         var hideLinkedNotesFromCapsulesToggle = SettingsToggle(Strings.Get("SettingsHideLinkedNotesFromCapsules"), State.HideLinkedNotesFromCapsules, ToggleHideLinkedNotesFromCapsules);
         hideLinkedNotesFromCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(hideLinkedNotesFromCapsulesToggle, "TipHideLinkedNotesFromCapsules"));
@@ -799,6 +852,7 @@ public sealed partial class AppController
         {
             Text = "ⓘ",
             Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
@@ -1151,6 +1205,22 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+    private void ToggleHidePapersFromWindowSwitcher()
+    {
+        State.HidePapersFromWindowSwitcher = !State.HidePapersFromWindowSwitcher;
+        SaveNow();
+        RefreshPaperWindowSwitcherVisibility();
+        RefreshSettingsWindowContent();
+    }
+
+    private void RefreshPaperWindowSwitcherVisibility()
+    {
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateWindowSwitcherVisibility();
+        }
+    }
+
     private void TogglePersistentPowerShellProcess()
     {
         State.UsePersistentPowerShellProcess = !State.UsePersistentPowerShellProcess;
@@ -1263,6 +1333,19 @@ public sealed partial class AppController
     private void ToggleLinkedNoteNameDisplay()
     {
         State.ShowLinkedNoteName = !State.ShowLinkedNoteName;
+
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshTodoRowsForExternalChange();
+        }
+
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleLongLinkedNoteTitles()
+    {
+        State.AllowLongLinkedNoteTitles = !State.AllowLongLinkedNoteTitles;
 
         foreach (var window in _windows.Values)
         {

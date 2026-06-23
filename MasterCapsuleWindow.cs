@@ -111,7 +111,8 @@ public sealed class MasterCapsuleWindow : Window
         AllowsTransparency = true;
         Background = Brushes.Transparent;
         ResizeMode = ResizeMode.NoResize;
-        FontFamily = new FontFamily("Segoe UI");
+        FontFamily = AppTypography.UiFontFamily;
+        Language = AppTypography.Language;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
         Width = PaperLayoutDefaults.CapsuleWidth;
@@ -169,6 +170,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             Text = "▾",
             Foreground = Theme.TextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -290,6 +292,14 @@ public sealed class MasterCapsuleWindow : Window
         _label.Foreground = Theme.WeakTextBrush;
     }
 
+    public void UpdateTypography()
+    {
+        FontFamily = AppTypography.UiFontFamily;
+        Language = AppTypography.Language;
+        _glyph.FontFamily = AppTypography.SymbolFontFamily;
+        _label.FontFamily = AppTypography.UiFontFamily;
+    }
+
     public void UpdateToolTipSetting()
     {
         ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
@@ -364,8 +374,8 @@ public sealed class MasterCapsuleWindow : Window
     {
         // glyph + gap + label + left/right paddings + chrome margins. Both pieces are
         // measured the same way so the pill hugs the actual rendered content.
-        var glyphWidth = MeasureText(_glyph.Text, MasterGlyphFontSize, FontWeights.SemiBold);
-        var textWidth = MeasureText(_label.Text, MasterLabelFontSize, FontWeights.Normal);
+        var glyphWidth = MeasureText(_glyph.Text, MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily);
+        var textWidth = MeasureText(_label.Text, MasterLabelFontSize, FontWeights.Normal, AppTypography.UiFontFamily);
         var shellWidth = Math.Ceiling(MasterLeftPadding + glyphWidth + MasterGlyphGap + textWidth + MasterRightPadding);
         return shellWidth + WindowChromeInset;
     }
@@ -375,10 +385,10 @@ public sealed class MasterCapsuleWindow : Window
         var peekLabel = FirstTextElement(Strings.Get("CapsuleCollapseAllLabel"));
         var visibleWidth = WindowChromeMargin + MasterLeftPadding
             + Math.Max(
-                MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold),
-                MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold))
+                MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily),
+                MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily))
             + MasterGlyphGap
-            + MeasureText(peekLabel, MasterLabelFontSize, FontWeights.Normal)
+            + MeasureText(peekLabel, MasterLabelFontSize, FontWeights.Normal, AppTypography.UiFontFamily)
             + MasterRightPadding
             + MasterTextPixelReserve;
         return Math.Clamp(visibleWidth, 1, CapsuleWindowWidth());
@@ -448,7 +458,7 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
-    private double MeasureText(string text, double fontSize, FontWeight weight)
+    private double MeasureText(string text, double fontSize, FontWeight weight, FontFamily fontFamily)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -461,7 +471,7 @@ public sealed class MasterCapsuleWindow : Window
                 text,
                 CultureInfo.CurrentUICulture,
                 FlowDirection.LeftToRight,
-                new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
+                new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
                 Theme.WeakTextBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);

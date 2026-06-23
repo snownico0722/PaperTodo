@@ -165,6 +165,22 @@ public sealed class MarkdownTextBox : TextEditor
             System.Windows.Threading.DispatcherPriority.Render);
     }
 
+    public void RefreshTypography()
+    {
+        FontFamily = NoteTypography.FontFamily;
+        FontStyle = NoteTypography.FontStyle;
+        FontWeight = NoteTypography.FontWeight;
+        FontStretch = NoteTypography.FontStretch;
+        Language = NoteTypography.Language;
+        TextArea.Language = NoteTypography.Language;
+        TextArea.TextView.Language = NoteTypography.Language;
+        NoteTypography.ApplyTextRendering(this);
+        NoteTypography.ApplyTextRendering(TextArea);
+        NoteTypography.ApplyTextRendering(TextArea.TextView);
+        FontSize = ScaledFontSize(NoteTypography.FontSize);
+        RefreshVisualStyle();
+    }
+
     private void RefreshTextView()
     {
         var textView = TextArea.TextView;
@@ -1891,7 +1907,7 @@ public sealed class MarkdownTextBox : TextEditor
 
     private sealed class MarkdownListBulletRenderer : IBackgroundRenderer
     {
-        private static readonly Typeface ListMarkerTypeface = new(
+        private static Typeface ListMarkerTypeface => new(
             NoteTypography.FontFamily,
             NoteTypography.FontStyle,
             NoteTypography.FontWeight,
@@ -2076,31 +2092,31 @@ public sealed class MarkdownTextBox : TextEditor
     {
         private readonly MarkdownTextBox _owner;
 
-        private static readonly Typeface NormalTypeface = new(
+        private static Typeface NormalTypeface => new(
             NoteTypography.FontFamily,
             NoteTypography.FontStyle,
             NoteTypography.FontWeight,
             NoteTypography.FontStretch);
 
-        private static readonly Typeface HeadingTypeface = new(
+        private static Typeface HeadingTypeface => new(
             NoteTypography.FontFamily,
             NoteTypography.FontStyle,
             NoteTypography.HeadingFontWeight,
             NoteTypography.FontStretch);
 
-        private static readonly Typeface StrongTypeface = new(
+        private static Typeface StrongTypeface => new(
             NoteTypography.FontFamily,
             NoteTypography.FontStyle,
             NoteTypography.HeadingFontWeight,
             NoteTypography.FontStretch);
 
-        private static readonly Typeface EmphasisTypeface = new(
+        private static Typeface EmphasisTypeface => new(
             NoteTypography.FontFamily,
             FontStyles.Italic,
             NoteTypography.FontWeight,
             NoteTypography.FontStretch);
 
-        private static readonly Typeface CodeTypeface = new(
+        private static Typeface CodeTypeface => new(
             NoteTypography.CodeFontFamily,
             NoteTypography.FontStyle,
             NoteTypography.FontWeight,

@@ -249,6 +249,18 @@
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>Color scheme</value>
   </data>
+  <data name="SettingsUiFont" xml:space="preserve">
+    <value>Font</value>
+  </data>
+  <data name="UiFontDefault" xml:space="preserve">
+    <value>Language default</value>
+  </data>
+  <data name="UiFontYaHei" xml:space="preserve">
+    <value>YaHei</value>
+  </data>
+  <data name="UiFontDengXian" xml:space="preserve">
+    <value>DengXian</value>
+  </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>Paper</value>
   </data>
@@ -405,6 +417,11 @@
   <data name="TipColorScheme" xml:space="preserve">
     <value>Switch the paper color tone, including backgrounds, accents, and muted text.</value>
   </data>
+  <data name="TipUiFont" xml:space="preserve">
+    <value>Language default chooses suitable system fonts for UI and note text separately.
+Choosing YaHei or DengXian unifies the UI, tray, capsules, todos, and note text under that font.
+If papertodo.ttf or papertodo.otf exists in the app folder, that custom font takes priority.</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>Basic mode applies light highlighting; Enhanced also styles headings, lists, and emphasis.</value>
   </data>
@@ -419,6 +436,9 @@
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>Show the linked note title after the todo item.</value>
+  </data>
+  <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>When off, linked note titles stay compact. When on, they expand to fit content: about 5 full-width characters on one-line todos and 10 on multiline todos.</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>Notes linked to todo items no longer appear in the capsule list, avoiding duplicate entry points.</value>
@@ -462,6 +482,12 @@
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>Show hover hints</value>
   </data>
+  <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>Hide papers from window switching</value>
+  </data>
+  <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
+    <value>When on, expanded papers are hidden from Alt+Tab and Task View. They remain accessible from the tray, desktop papers, and capsules.</value>
+  </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>Show brief hints when the pointer rests on buttons or interactive areas. Setting info icons stay available either way.</value>
   </data>
@@ -503,6 +529,9 @@
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
     <value>Show linked note title</value>
+  </data>
+  <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
+    <value>Long linked note titles</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
     <value>Linked notes not shown as capsules</value>

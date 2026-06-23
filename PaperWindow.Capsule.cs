@@ -261,7 +261,7 @@ public sealed partial class PaperWindow
             Text = CapsuleIconText(),
             Foreground = BrightWeakTextBrush,
             // Explicit font so the rendered glyph matches what MeasureCapsuleTextWidth measures.
-            FontFamily = NoteTypography.FontFamily,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = CapsuleIconFontSizeForCurrentPaper(),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -272,9 +272,8 @@ public sealed partial class PaperWindow
         _capsuleLabelText = new TextBlock
         {
             Foreground = WeakTextBrush,
-            // Explicit font so the rendered title matches the measured width (the window
-            // default is Segoe UI, which has different digit/halfwidth metrics).
-            FontFamily = NoteTypography.FontFamily,
+            // Explicit font so the rendered title matches the measured width.
+            FontFamily = AppTypography.UiFontFamily,
             FontSize = CapsuleLabelFontSize,
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
@@ -365,6 +364,7 @@ public sealed partial class PaperWindow
         {
             Text = "×",
             Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 18,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

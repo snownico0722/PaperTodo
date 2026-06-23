@@ -87,7 +87,8 @@ public sealed partial class PaperWindow
             AllowsTransparency = true,
             Background = Brushes.Transparent,
             ResizeMode = ResizeMode.NoResize,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = AppTypography.UiFontFamily,
+            Language = AppTypography.Language,
             SnapsToDevicePixels = true,
             UseLayoutRounding = true,
             Topmost = !_controller.SuppressTopmostForFullscreenForeground,
@@ -139,7 +140,7 @@ public sealed partial class PaperWindow
         {
             Text = CapsuleIconText(),
             Foreground = BrightWeakTextBrush,
-            FontFamily = NoteTypography.FontFamily,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = CapsuleIconFontSizeForCurrentPaper(),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -150,7 +151,7 @@ public sealed partial class PaperWindow
         _deepCapsuleSlotLabelText = new TextBlock
         {
             Foreground = WeakTextBrush,
-            FontFamily = NoteTypography.FontFamily,
+            FontFamily = AppTypography.UiFontFamily,
             FontSize = CapsuleLabelFontSize,
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -260,6 +261,7 @@ public sealed partial class PaperWindow
         {
             Text = "×",
             Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = 18,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -497,9 +499,7 @@ public sealed partial class PaperWindow
         if (_deepCapsuleSlotOutline != null)
         {
             _deepCapsuleSlotOutline.BorderBrush = Theme.CapsuleFocusBorderBrush;
-            _deepCapsuleSlotOutline.Visibility = IsDeepCapsuleSlotActive
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            UpdateDeepCapsuleSlotOutlineState();
         }
 
         if (_deepCapsuleSlotLabelText != null)
@@ -519,6 +519,18 @@ public sealed partial class PaperWindow
             _deepCapsuleSlotCloseGlyph.Foreground = WeakTextBrush;
         }
 
+    }
+
+    private void UpdateDeepCapsuleSlotOutlineState()
+    {
+        if (_deepCapsuleSlotOutline == null)
+        {
+            return;
+        }
+
+        _deepCapsuleSlotOutline.Visibility = IsDeepCapsuleSlotActive
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void MoveExpandedDeepCapsuleSlotHost(

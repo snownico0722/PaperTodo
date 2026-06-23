@@ -115,6 +115,18 @@ public static class TodoVisualSizes
     }
 }
 
+public static class UiFontPresets
+{
+    public const string Default = "default";
+    public const string YaHei = "yahei";
+    public const string DengXian = "dengxian";
+
+    public static string Normalize(string? preset)
+    {
+        return preset is YaHei or DengXian ? preset : Default;
+    }
+}
+
 public readonly record struct TodoVisualMetrics(
     double TextFontSize,
     double TextVerticalPadding,
@@ -134,6 +146,7 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public string UiFontPreset { get; set; } = UiFontPresets.Default;
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
     public bool UseCapsuleMode { get; set; } = true;
@@ -141,8 +154,10 @@ public sealed class AppState
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
+    public bool HidePapersFromWindowSwitcher { get; set; }
     public bool EnableTodoNoteLinks { get; set; } = true;
     public bool ShowLinkedNoteName { get; set; }
+    public bool AllowLongLinkedNoteTitles { get; set; }
     public bool HideLinkedNotesFromCapsules { get; set; }
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;

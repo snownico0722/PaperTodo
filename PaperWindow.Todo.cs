@@ -133,6 +133,7 @@ public sealed partial class PaperWindow
             Text = "＋",
             Foreground = WeakTextBrush,
             Opacity = 0.42,
+            FontFamily = AppTypography.SymbolFontFamily,
             FontSize = metrics.AppendGlyphFontSize,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -246,6 +247,58 @@ public sealed partial class PaperWindow
         var keep = Math.Max(1, truncatedTextElementCount);
         var end = textElements.Length > keep ? textElements[keep] : Math.Min(keep, text.Length);
         return text[..end] + "…";
+    }
+
+    private static string CompactLinkedNoteTitleByDisplayWidth(string title, int fullDisplayWidthLimit, int truncatedDisplayWidth)
+    {
+        var text = title.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            return "";
+        }
+
+        if (DeepCapsuleLayout.DisplayWidth(text) <= fullDisplayWidthLimit)
+        {
+            return text;
+        }
+
+        var keepWidth = Math.Max(1, truncatedDisplayWidth);
+        var indexes = StringInfo.ParseCombiningCharacters(text);
+        var width = 0;
+        var end = 0;
+        foreach (var index in indexes)
+        {
+            var nextIndex = NextTextElementIndex(indexes, index, text.Length);
+            var element = text[index..nextIndex];
+            var elementWidth = Math.Max(1, DeepCapsuleLayout.DisplayWidth(element));
+            if (width > 0 && width + elementWidth > keepWidth)
+            {
+                break;
+            }
+
+            width += elementWidth;
+            end = nextIndex;
+        }
+
+        if (end <= 0)
+        {
+            end = indexes.Length > 0 ? NextTextElementIndex(indexes, indexes[0], text.Length) : Math.Min(1, text.Length);
+        }
+
+        return text[..end] + "…";
+    }
+
+    private static int NextTextElementIndex(int[] indexes, int currentIndex, int fallbackLength)
+    {
+        for (var i = 0; i < indexes.Length; i++)
+        {
+            if (indexes[i] == currentIndex)
+            {
+                return i + 1 < indexes.Length ? indexes[i + 1] : fallbackLength;
+            }
+        }
+
+        return fallbackLength;
     }
 
     private UIElement BuildTodoRow(PaperItem item, bool isNewItem = false)
@@ -445,22 +498,75 @@ public sealed partial class PaperWindow
         if (hasLinkedNote)
         {
             var showLinkedNoteName = _controller.State.ShowLinkedNoteName;
-            string LinkedNoteButtonLabel(int fullTextElementLimit, int truncatedTextElementCount)
+            var allowLongLinkedNoteTitle = showLinkedNoteName && _controller.State.AllowLongLinkedNoteTitles;
+
+            string LinkedNoteButtonLabel(bool isTodoMultiline)
             {
-                var title = CompactLinkedNoteTitle(linkedNoteTitle, fullTextElementLimit, truncatedTextElementCount);
+                var title = allowLongLinkedNoteTitle
+                    ? CompactLinkedNoteTitleByDisplayWidth(
+                        linkedNoteTitle,
+                        isTodoMultiline ? 20 : 10,
+                        isTodoMultiline ? 20 : 10)
+                    : isTodoMultiline
+                        ? CompactLinkedNoteTitle(linkedNoteTitle, 6, 5)
+                        : CompactLinkedNoteTitle(linkedNoteTitle, 3, 3);
                 return runLinkedScriptOnClick ? "⚡ " + title : title;
             }
 
+            double LegacyLinkedNoteButtonWidth(bool isTodoMultiline)
+            {
+                return isTodoMultiline
+                    ? Math.Max(runLinkedScriptOnClick ? 52 : 44, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2))
+                    : Math.Max(runLinkedScriptOnClick ? 58 : 50, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.55 : 2.2));
+            }
+
+            double LegacyLinkedNoteTextMaxWidth(bool isTodoMultiline)
+            {
+                return metrics.CheckColumnWidth * (isTodoMultiline
+                    ? runLinkedScriptOnClick ? 2.15 : 1.8
+                    : runLinkedScriptOnClick ? 2.35 : 2);
+            }
+
+            double LinkedNoteButtonWidth(bool isTodoMultiline, string label)
+            {
+                if (!showLinkedNoteName)
+                {
+                    return Math.Max(23, metrics.CheckColumnWidth);
+                }
+
+                var legacyWidth = LegacyLinkedNoteButtonWidth(isTodoMultiline);
+                if (!allowLongLinkedNoteTitle)
+                {
+                    return legacyWidth;
+                }
+
+                var measuredWidth = MeasureCapsuleTextWidth(label, metrics.LinkedNoteNameFontSize, FontWeights.SemiBold, AppTypography.UiFontFamily) + 10;
+                return Math.Max(legacyWidth, Math.Ceiling(measuredWidth));
+            }
+
+            double LinkedNoteTextMaxWidth(bool isTodoMultiline, double buttonWidth)
+            {
+                if (allowLongLinkedNoteTitle)
+                {
+                    return Math.Max(1, buttonWidth - 6);
+                }
+
+                return LegacyLinkedNoteTextMaxWidth(isTodoMultiline);
+            }
+
             var linkedNoteButtonText = showLinkedNoteName
-                ? LinkedNoteButtonLabel(3, 3)
+                ? LinkedNoteButtonLabel(isTodoMultiline: false)
                 : runLinkedScriptOnClick ? "⚡" : "\uE71B";
+            var initialLinkedNoteButtonWidth = showLinkedNoteName
+                ? LinkedNoteButtonWidth(isTodoMultiline: false, linkedNoteButtonText)
+                : Math.Max(23, metrics.CheckColumnWidth);
             var linkGlyph = new TextBlock
             {
                 Text = linkedNoteButtonText,
                 Foreground = WeakTextBrush,
                 Opacity = 0.72,
                 FontFamily = showLinkedNoteName
-                    ? new FontFamily("Segoe UI")
+                    ? AppTypography.UiFontFamily
                     : runLinkedScriptOnClick ? new FontFamily("Segoe UI Symbol") : new FontFamily("Segoe MDL2 Assets"),
                 FontSize = showLinkedNoteName
                     ? metrics.LinkedNoteNameFontSize
@@ -471,13 +577,13 @@ public sealed partial class PaperWindow
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.NoWrap,
                 LineHeight = showLinkedNoteName ? metrics.LinkedNoteNameFontSize + 1 : double.NaN,
-                MaxWidth = showLinkedNoteName ? metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2) : double.PositiveInfinity
+                MaxWidth = showLinkedNoteName ? LinkedNoteTextMaxWidth(isTodoMultiline: false, initialLinkedNoteButtonWidth) : double.PositiveInfinity
             };
 
             var linkButton = new Border
             {
                 Width = showLinkedNoteName
-                    ? Math.Max(runLinkedScriptOnClick ? 58 : 50, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.55 : 2.2))
+                    ? initialLinkedNoteButtonWidth
                     : Math.Max(23, metrics.CheckColumnWidth),
                 MinWidth = Math.Max(23, metrics.CheckColumnWidth),
                 MinHeight = Math.Max(22, metrics.RowMinHeight - 2),
@@ -500,16 +606,11 @@ public sealed partial class PaperWindow
                 }
 
                 var isTodoMultiline = text.LineCount > 1;
-                linkGlyph.Text = isTodoMultiline
-                    ? LinkedNoteButtonLabel(6, 5)
-                    : LinkedNoteButtonLabel(3, 3);
+                linkGlyph.Text = LinkedNoteButtonLabel(isTodoMultiline);
                 linkGlyph.TextWrapping = isTodoMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap;
-                linkGlyph.MaxWidth = isTodoMultiline
-                    ? metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.15 : 1.8)
-                    : metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2);
-                linkButton.Width = isTodoMultiline
-                    ? Math.Max(runLinkedScriptOnClick ? 52 : 44, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.35 : 2))
-                    : Math.Max(runLinkedScriptOnClick ? 58 : 50, metrics.CheckColumnWidth * (runLinkedScriptOnClick ? 2.55 : 2.2));
+                var buttonWidth = LinkedNoteButtonWidth(isTodoMultiline, linkGlyph.Text);
+                linkGlyph.MaxWidth = LinkedNoteTextMaxWidth(isTodoMultiline, buttonWidth);
+                linkButton.Width = buttonWidth;
             }
 
             void QueueLinkedNoteNameLayoutUpdate()
@@ -570,6 +671,7 @@ public sealed partial class PaperWindow
             Foreground = WeakTextBrush,
             Opacity = 0.48,
             FontSize = Math.Max(11, metrics.TextFontSize - 1),
+            FontFamily = AppTypography.SymbolFontFamily,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -1353,6 +1455,7 @@ public sealed partial class PaperWindow
             Foreground = WeakTextBrush,
             Opacity = 0.58,
             FontSize = Math.Max(12, metrics.GhostTextFontSize - 1),
+            FontFamily = AppTypography.SymbolFontFamily,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
