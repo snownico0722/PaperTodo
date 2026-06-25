@@ -15,14 +15,14 @@ public static class NoteTypography
     public static FontWeight FontWeight => FontWeights.Normal;
     public static FontWeight HeadingFontWeight => FontWeights.SemiBold;
     public static FontStretch FontStretch => FontStretches.Normal;
-    public static TextFormattingMode TextFormattingMode => AppTypography.TextFormattingMode;
-    public static TextRenderingMode TextRenderingMode => AppTypography.TextRenderingMode;
-    public static TextHintingMode TextHintingMode => AppTypography.TextHintingMode;
     public static XmlLanguage Language => AppTypography.Language;
     public static Thickness ContentPadding => new(13, 8, 6, 8);
 
     public static void ApplyTextRendering(DependencyObject target)
     {
-        AppTypography.ApplyTextRendering(target);
+        target.ClearValue(TextOptions.TextFormattingModeProperty);
+        target.ClearValue(TextOptions.TextRenderingModeProperty);
+        target.ClearValue(TextOptions.TextHintingModeProperty);
+        target.ClearValue(RenderOptions.ClearTypeHintProperty);
     }
 }

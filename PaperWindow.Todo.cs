@@ -12,6 +12,9 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    private const int TodoTextMaxLength = 5000;
+    private const int MaxPastedTodoLines = 200;
+
     private UIElement BuildTodoBody()
     {
         if (_paper.Items.Count == 0)
@@ -380,7 +383,7 @@ public sealed partial class PaperWindow
             VerticalContentAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = false,
-            MaxLength = 5000
+            MaxLength = TodoTextMaxLength
         };
 
         _todoEditors[item.Id] = text;
@@ -426,6 +429,12 @@ public sealed partial class PaperWindow
             text.IsDone = true;
             text.Foreground = BrightWeakTextBrush;
             _controller.MarkDirty();
+
+            if (_controller.State.AutoClearCompletedTodos)
+            {
+                RemoveItem(item, pushUndo: false);
+                return;
+            }
 
             // 完成动画：只淡化，不缩小
             if (_controller.State.EnableAnimations)
@@ -805,12 +814,12 @@ public sealed partial class PaperWindow
             .Split('\n')
             .Select(CleanPastedTodoLine)
             .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => line.Length > 5000 ? line[..5000] : line)
+            .Select(LimitTodoText)
             .ToList();
 
-        if (lines.Count > 200)
+        if (lines.Count > MaxPastedTodoLines)
         {
-            lines = lines.Take(200).ToList();
+            lines = lines.Take(MaxPastedTodoLines).ToList();
         }
 
         if (lines.Count <= 1)
@@ -820,15 +829,26 @@ public sealed partial class PaperWindow
 
         e.CancelCommand();
 
+        var originalText = box.Text ?? "";
+        var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
+        var selectionLength = Math.Clamp(box.SelectionLength, 0, originalText.Length - selectionStart);
+        var selectionEnd = selectionStart + selectionLength;
+        var prefix = originalText[..selectionStart];
+        var suffix = originalText[selectionEnd..];
+        var pastedItemTexts = lines.ToList();
+        pastedItemTexts[0] = LimitTodoText(prefix + pastedItemTexts[0]);
+        pastedItemTexts[^1] = LimitTodoText(pastedItemTexts[^1] + suffix);
+
         PushUndoSnapshot();
-        ReplaceSelection(box, lines[0]);
+        box.Text = pastedItemTexts[0];
+        box.CaretIndex = Math.Min(box.Text.Length, prefix.Length + lines[0].Length);
         item.Text = box.Text;
 
         var ordered = OrderedItems().ToList();
         var itemIndex = ordered.FindIndex(i => string.Equals(i.Id, item.Id, StringComparison.Ordinal));
         var insertIndex = itemIndex >= 0 ? itemIndex + 1 : ordered.Count;
         var newItems = new List<PaperItem>();
-        foreach (var line in lines.Skip(1))
+        foreach (var line in pastedItemTexts.Skip(1))
         {
             newItems.Add(new PaperItem
             {
@@ -897,6 +917,11 @@ public sealed partial class PaperWindow
         return cleaned.Trim();
     }
 
+    private static string LimitTodoText(string text)
+    {
+        return text.Length > TodoTextMaxLength ? text[..TodoTextMaxLength] : text;
+    }
+
 
     public void UpdateTodoLinkFeature()
     {
@@ -937,9 +962,13 @@ public sealed partial class PaperWindow
         return newItem;
     }
 
-    private void RemoveItem(PaperItem item, bool rebuild = true, string? focusItemId = null)
+    private void RemoveItem(PaperItem item, bool rebuild = true, string? focusItemId = null, bool pushUndo = true)
     {
-        PushUndoSnapshot();
+        if (pushUndo)
+        {
+            PushUndoSnapshot();
+        }
+
         var fallbackFocus = focusItemId ?? PreviousItem(item)?.Id ?? NextItem(item)?.Id;
         var itemId = item.Id;
 
@@ -1772,13 +1801,6 @@ public sealed partial class PaperWindow
             _activeDropRow = null;
         }
     }
-
-    private static void ReplaceSelection(TextBox box, string replacement)
-    {
-        box.SelectedText = replacement;
-        box.SelectionStart = box.SelectionStart + replacement.Length;
-    }
-
 
     private static List<PaperItem> CloneItems(List<PaperItem> items)
     {

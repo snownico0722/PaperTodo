@@ -488,6 +488,12 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>Show hover hints</value>
   </data>
+  <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
+    <value>Hide paper taskbar icons</value>
+  </data>
+  <data name="TipHidePapersFromTaskbar" xml:space="preserve">
+    <value>When on, expanded papers do not appear on the Windows taskbar. They remain accessible from the tray, desktop papers, and capsules. On by default.</value>
+  </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>Hide papers from window switching</value>
   </data>
@@ -512,8 +518,14 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   <data name="TipHideScriptRunWindow" xml:space="preserve">
     <value>Hide the script window. Normal !p / !power waits for completion and captures errors; !pf / !powerf only submits to the persistent process.</value>
   </data>
+  <data name="TipAutoClearCompletedTodos" xml:space="preserve">
+    <value>Remove a todo from the current paper as soon as you check it as done. Undo can bring it back.</value>
+  </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>Enable todo-note links</value>
+  </data>
+  <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
+    <value>Auto-clear completed todos</value>
   </data>
   <data name="SettingsPersistentPowerShellProcess" xml:space="preserve">
     <value>Persistent PowerShell process</value>

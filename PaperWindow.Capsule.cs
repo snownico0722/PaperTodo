@@ -544,6 +544,7 @@ public sealed partial class PaperWindow
         }
 
         RefreshEffectiveTopmost();
+        UpdateTaskbarVisibility();
         _controller.MarkDirty();
 
         if (collapsed)

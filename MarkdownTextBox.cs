@@ -47,9 +47,7 @@ public sealed class MarkdownTextBox : TextEditor
         WordWrap = true;
         ShowLineNumbers = false;
         TextArea.LeftMargins.Clear();
-        NoteTypography.ApplyTextRendering(this);
-        NoteTypography.ApplyTextRendering(TextArea);
-        NoteTypography.ApplyTextRendering(TextArea.TextView);
+        ApplyTypographyRendering();
 
         Options.ConvertTabsToSpaces = false;
         Options.IndentationSize = 4;
@@ -174,11 +172,16 @@ public sealed class MarkdownTextBox : TextEditor
         Language = NoteTypography.Language;
         TextArea.Language = NoteTypography.Language;
         TextArea.TextView.Language = NoteTypography.Language;
+        ApplyTypographyRendering();
+        FontSize = ScaledFontSize(NoteTypography.FontSize);
+        RefreshVisualStyle();
+    }
+
+    private void ApplyTypographyRendering()
+    {
         NoteTypography.ApplyTextRendering(this);
         NoteTypography.ApplyTextRendering(TextArea);
         NoteTypography.ApplyTextRendering(TextArea.TextView);
-        FontSize = ScaledFontSize(NoteTypography.FontSize);
-        RefreshVisualStyle();
     }
 
     private void RefreshTextView()

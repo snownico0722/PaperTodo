@@ -633,11 +633,13 @@ public sealed partial class AppController
 
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar), "TipHidePapersFromTaskbar"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher), "TipHidePapersFromWindowSwitcher"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoNote")));
+        rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoClearCompletedTodos"), State.AutoClearCompletedTodos, ToggleAutoClearCompletedTodos), "TipAutoClearCompletedTodos"));
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableTodoNoteLinks"), State.EnableTodoNoteLinks, ToggleTodoNoteLinks), "TipEnableTodoNoteLinks"));
         var showLinkedNoteNameToggle = SettingsToggle(Strings.Get("SettingsShowLinkedNoteName"), State.ShowLinkedNoteName, ToggleLinkedNoteNameDisplay);
         showLinkedNoteNameToggle.IsEnabled = State.EnableTodoNoteLinks;
@@ -1217,12 +1219,35 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+    private void ToggleAutoClearCompletedTodos()
+    {
+        State.AutoClearCompletedTodos = !State.AutoClearCompletedTodos;
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleHidePapersFromTaskbar()
+    {
+        State.HidePapersFromTaskbar = !State.HidePapersFromTaskbar;
+        SaveNow();
+        RefreshPaperTaskbarVisibility();
+        RefreshSettingsWindowContent();
+    }
+
     private void ToggleHidePapersFromWindowSwitcher()
     {
         State.HidePapersFromWindowSwitcher = !State.HidePapersFromWindowSwitcher;
         SaveNow();
         RefreshPaperWindowSwitcherVisibility();
         RefreshSettingsWindowContent();
+    }
+
+    private void RefreshPaperTaskbarVisibility()
+    {
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateTaskbarVisibility();
+        }
     }
 
     private void RefreshPaperWindowSwitcherVisibility()

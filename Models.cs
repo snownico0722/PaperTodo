@@ -146,6 +146,7 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public bool AutoClearCompletedTodos { get; set; }
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
@@ -154,6 +155,7 @@ public sealed class AppState
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
+    public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; }
     public bool EnableTodoNoteLinks { get; set; } = true;
     public bool ShowLinkedNoteName { get; set; }

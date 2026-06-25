@@ -597,7 +597,11 @@ public sealed partial class PaperWindow : Window
         LostMouseCapture += OnLostMouseCapture;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewKeyUp += OnWindowPreviewKeyUp;
-        SourceInitialized += (_, _) => UpdateWindowSwitcherVisibility();
+        SourceInitialized += (_, _) =>
+        {
+            UpdateTaskbarVisibility();
+            UpdateWindowSwitcherVisibility();
+        };
         Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
         Deactivated += (_, _) =>
         {
@@ -653,6 +657,16 @@ public sealed partial class PaperWindow : Window
         WindowNative.ApplyWindowSwitcherVisibility(this, !_controller.State.HidePapersFromWindowSwitcher);
     }
 
+    public void UpdateTaskbarVisibility()
+    {
+        ShowInTaskbar = ShouldShowInTaskbar();
+    }
+
+    private bool ShouldShowInTaskbar()
+    {
+        return !_controller.State.HidePapersFromTaskbar && !_paper.IsCollapsed;
+    }
+
     public void CancelPendingVisibilityTransitions()
     {
         BeginAnimation(Window.OpacityProperty, null);
@@ -692,7 +706,7 @@ public sealed partial class PaperWindow : Window
     {
         InitializeThemeResources();
         Title = _controller.PaperTitleText(_paper);
-        ShowInTaskbar = false;
+        ShowInTaskbar = ShouldShowInTaskbar();
         WindowStartupLocation = WindowStartupLocation.Manual;
 
         Left = _paper.X;
@@ -1130,6 +1144,14 @@ public sealed partial class PaperWindow : Window
         titleHost.MouseLeave += (_, _) => titleHost.Background = Brushes.Transparent;
         titleHost.MouseLeftButtonDown += (_, e) =>
         {
+            if (_isEditingTitle &&
+                _titleEditBox != null &&
+                IsDescendantOf(e.OriginalSource as DependencyObject, _titleEditBox))
+            {
+                e.Handled = true;
+                return;
+            }
+
             BeginTitleEdit();
             e.Handled = true;
         };
@@ -1618,7 +1640,6 @@ public sealed partial class PaperWindow : Window
         if (_isEditingTitle)
         {
             _titleEditBox.Focus();
-            _titleEditBox.SelectAll();
             return;
         }
 

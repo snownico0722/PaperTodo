@@ -163,7 +163,6 @@ public sealed partial class PaperWindow
             Margin = NoteTypography.ContentPadding,
             FocusVisualStyle = null
         };
-        NoteTypography.ApplyTextRendering(_noteBox);
         var box = _noteBox;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
         box.SetTextZoom(CurrentTextZoom());

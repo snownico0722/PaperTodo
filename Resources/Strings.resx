@@ -461,6 +461,9 @@
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>关联入口指向脚本胶囊时，左键直接运行脚本，右键打开编辑。默认关闭以避免误触。</value>
   </data>
+  <data name="TipAutoClearCompletedTodos" xml:space="preserve">
+    <value>勾选待办为完成后立即从当前纸片移除；可通过撤销恢复。</value>
+  </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>在纸片顶栏显示新建待办按钮。</value>
   </data>
@@ -500,6 +503,12 @@
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>显示悬停提示</value>
   </data>
+  <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
+    <value>隐藏纸片任务栏图标</value>
+  </data>
+  <data name="TipHidePapersFromTaskbar" xml:space="preserve">
+    <value>开启后，展开的纸片不会显示在 Windows 任务栏上；仍可通过托盘、桌面纸片和胶囊访问。默认开启。</value>
+  </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>从窗口切换中隐藏纸片</value>
   </data>
@@ -526,6 +535,9 @@
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>启用待办关联笔记</value>
+  </data>
+  <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
+    <value>完成后自动清除待办</value>
   </data>
   <data name="SettingsPersistentPowerShellProcess" xml:space="preserve">
     <value>常驻 PowerShell 进程</value>
