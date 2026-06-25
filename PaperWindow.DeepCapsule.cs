@@ -433,18 +433,38 @@ public sealed partial class PaperWindow
         MinHeight = PaperLayoutDefaults.MinHeight;
         ResizeMode = ResizeMode.CanResizeWithGrip;
 
-        var targetWidth = RoundToDevicePixelX(Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth));
-        var targetHeight = RoundToDevicePixelY(Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight));
+        var rawTargetWidth = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
+        var rawTargetHeight = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
+        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        if (alignToDockedEdge &&
+            ExpandedFromDeepCapsuleEdge &&
+            _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, rawTargetWidth, rawTargetHeight, out var rememberedGeometry))
+        {
+            rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
+            rawTargetWidth = rememberedGeometry.Width;
+            rawTargetHeight = rememberedGeometry.Height;
+        }
+
+        var targetWidth = RoundToDevicePixelX(rawTargetWidth);
+        var targetHeight = RoundToDevicePixelY(rawTargetHeight);
         MoveWindowWithoutGeometrySave(() =>
         {
             Width = targetWidth;
             Height = targetHeight;
             if (alignToDockedEdge)
             {
-                var requiredEdgeInset = _controller.State.ShowDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper)
-                    ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
-                    : 0;
-                AlignExpandedToDockedEdge(targetWidth, targetHeight, requiredEdgeInset);
+                if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
+                {
+                    Left = RoundToDevicePixelX(rememberedRect.Left);
+                    Top = RoundToDevicePixelY(rememberedRect.Top);
+                }
+                else
+                {
+                    var requiredEdgeInset = _controller.State.ShowDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper)
+                        ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
+                        : 0;
+                    AlignExpandedToDockedEdge(targetWidth, targetHeight, requiredEdgeInset);
+                }
             }
         });
 
@@ -1541,6 +1561,10 @@ public sealed partial class PaperWindow
         AnimateSlotHostOpacity(1.0, animate);
         RefreshEffectiveTopmost();
         UpdateToolTipSetting();
+        if (!_isApplyingCollapsedState)
+        {
+            _controller.UpdateGeometry(_paper, this);
+        }
     }
 
     public void ClearExpandedDeepCapsuleSlotPlacement(bool animate = false)
@@ -1784,6 +1808,11 @@ public sealed partial class PaperWindow
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = 1.0;
+        }
+
+        if (!_paper.IsVisible || !_controller.State.UseCapsuleMode || !_controller.State.UseDeepCapsuleMode)
+        {
+            SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.Normal);
         }
     }
 

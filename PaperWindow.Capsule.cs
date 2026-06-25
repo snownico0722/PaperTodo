@@ -469,8 +469,6 @@ public sealed partial class PaperWindow
         var capsuleWidth = CapsuleWindowWidth();
         double targetWidth = collapsed ? capsuleWidth : _paper.Width;
         double targetHeight = collapsed ? PaperLayoutDefaults.CapsuleHeight : _paper.Height;
-        double finalTargetWidth = RoundToDevicePixelX(targetWidth);
-        double finalTargetHeight = RoundToDevicePixelY(targetHeight);
         var usesDeepCapsuleMode = _paper.IsVisible && _controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode;
         var arrangeDeepCapsulesAfterCollapse = collapsed && usesDeepCapsuleMode;
 
@@ -486,6 +484,16 @@ public sealed partial class PaperWindow
             && usesDeepCapsuleMode
             && ExpandedFromDeepCapsuleEdge
             && !_controller.State.ShowDeepCapsuleWhileExpanded;
+        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        if (expandingFromDeepCapsuleEdge &&
+            _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, targetWidth, targetHeight, out var rememberedGeometry))
+        {
+            rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
+            targetWidth = rememberedGeometry.Width;
+            targetHeight = rememberedGeometry.Height;
+        }
+        double finalTargetWidth = RoundToDevicePixelX(targetWidth);
+        double finalTargetHeight = RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
         if (!collapsed)
@@ -503,7 +511,18 @@ public sealed partial class PaperWindow
                 var requiredEdgeInset = keepDeepCapsuleSlotReservation
                     ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
                     : 0;
-                MoveWindowWithoutGeometrySave(() => AlignExpandedToDockedEdge(finalTargetWidth, finalTargetHeight, requiredEdgeInset));
+                MoveWindowWithoutGeometrySave(() =>
+                {
+                    if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
+                    {
+                        Left = RoundToDevicePixelX(rememberedRect.Left);
+                        Top = RoundToDevicePixelY(rememberedRect.Top);
+                    }
+                    else
+                    {
+                        AlignExpandedToDockedEdge(finalTargetWidth, finalTargetHeight, requiredEdgeInset);
+                    }
+                });
             }
             if (arrangeDeepCapsulesAfterExpand)
             {

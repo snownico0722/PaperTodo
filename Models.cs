@@ -178,6 +178,7 @@ public sealed class AppState
     // the legacy global DeepCapsuleStartTopMargin, so dragging one queue's master only slides that
     // queue. Old configs (no per-queue entries) keep behaving exactly as the single global margin.
     public Dictionary<string, double> DeepCapsuleQueueStartTopMargins { get; set; } = new();
+    public bool RememberDeepCapsuleExpandedPosition { get; set; } = true;
 
     // Which screen edge the deep-capsule stack docks to. "left" or "right" (default).
     public string DeepCapsuleSide { get; set; } = DeepCapsuleSides.Right;
@@ -216,6 +217,21 @@ public sealed class PaperData
     // assigned" — on load it inherits the legacy global anchor so existing capsules keep place.
     public string CapsuleSide { get; set; } = "";
     public string CapsuleMonitorDeviceName { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedX { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedY { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedWidth { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedHeight { get; set; }
+
+    public string DeepCapsuleExpandedSide { get; set; } = "";
+    public string DeepCapsuleExpandedMonitorDeviceName { get; set; } = "";
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";

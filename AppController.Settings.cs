@@ -497,6 +497,7 @@ public sealed partial class AppController
             _settingsCapsuleModeCheckBox = null;
             _settingsDeepCapsuleModeCheckBox = null;
             _settingsDeepCapsuleExpandedSlotCheckBox = null;
+            _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
             _settingsCapsuleCollapseAllCheckBox = null;
             _settingsWindow = null;
@@ -578,7 +579,7 @@ public sealed partial class AppController
             Width = 28,
             Height = 24,
             Padding = new Thickness(0),
-            BorderThickness = new Thickness(0),
+            BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
@@ -664,11 +665,13 @@ public sealed partial class AppController
         _settingsCapsuleModeCheckBox = SettingsToggle(Strings.Get("TrayCapsuleMode"), State.UseCapsuleMode, ToggleCapsuleMode);
         _settingsDeepCapsuleModeCheckBox = SettingsToggle(Strings.Get("TrayDeepCapsuleMode"), State.UseDeepCapsuleMode, ToggleDeepCapsuleMode);
         _settingsDeepCapsuleExpandedSlotCheckBox = SettingsToggle(Strings.Get("SettingsShowDeepCapsuleWhileExpanded"), State.ShowDeepCapsuleWhileExpanded, ToggleDeepCapsuleExpandedSlot);
+        _settingsRememberDeepCapsuleExpandedPositionCheckBox = SettingsToggle(Strings.Get("SettingsRememberDeepCapsuleExpandedPosition"), State.RememberDeepCapsuleExpandedPosition, ToggleRememberDeepCapsuleExpandedPosition);
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"), State.CollapseExpandedDeepCapsuleOnClick, ToggleCollapseExpandedDeepCapsuleOnClick);
         _settingsCapsuleCollapseAllCheckBox = SettingsToggle(Strings.Get("SettingsCapsuleCollapseAll"), State.UseCapsuleCollapseAll, ToggleCapsuleCollapseAll);
         rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
         rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
         rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleExpandedSlotCheckBox, "TipShowDeepCapsuleWhileExpanded"));
+        rightColumn.Children.Add(WrapWithHint(_settingsRememberDeepCapsuleExpandedPositionCheckBox, "TipRememberDeepCapsuleExpandedPosition"));
         rightColumn.Children.Add(WrapWithHint(_settingsCollapseExpandedDeepCapsuleOnClickCheckBox, "TipCollapseExpandedDeepCapsuleOnClick"));
         rightColumn.Children.Add(WrapWithHint(_settingsCapsuleCollapseAllCheckBox, "TipCapsuleCollapseAll"));
         RefreshSettingsCapsuleToggleStates();
@@ -916,6 +919,11 @@ public sealed partial class AppController
             _settingsDeepCapsuleExpandedSlotCheckBox.IsChecked = State.ShowDeepCapsuleWhileExpanded;
             _settingsDeepCapsuleExpandedSlotCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
         }
+        if (_settingsRememberDeepCapsuleExpandedPositionCheckBox != null)
+        {
+            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsChecked = State.RememberDeepCapsuleExpandedPosition;
+            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+        }
         if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
         {
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
@@ -1062,7 +1070,7 @@ public sealed partial class AppController
 
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
         content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
+        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
         content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
         root.AppendChild(content);
@@ -1096,7 +1104,7 @@ public sealed partial class AppController
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
         style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
         style.Setters.Add(new Setter(UIElement.SnapsToDevicePixelsProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.UseLayoutRoundingProperty, true));
@@ -1122,11 +1130,15 @@ public sealed partial class AppController
         };
 
         var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TrayHoverBrush));
+        hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, TrayHoverBrush, "Bd"));
+        hoverTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, TrayBorderBrush, "Bd"));
+        hoverTrigger.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1), "Bd"));
         hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, TrayTextBrush));
 
         var pressedTrigger = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
-        pressedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, Theme.ActiveBrush));
+        pressedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, Theme.ActiveBrush, "Bd"));
+        pressedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, Brushes.Transparent, "Bd"));
+        pressedTrigger.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1), "Bd"));
         pressedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, TrayPaperBrush));
 
         template.Triggers.Add(hoverTrigger);
@@ -1452,6 +1464,13 @@ public sealed partial class AppController
     private void ToggleCollapseExpandedDeepCapsuleOnClick()
     {
         State.CollapseExpandedDeepCapsuleOnClick = !State.CollapseExpandedDeepCapsuleOnClick;
+        SaveNow();
+        RefreshSettingsCapsuleToggleStates();
+    }
+
+    private void ToggleRememberDeepCapsuleExpandedPosition()
+    {
+        State.RememberDeepCapsuleExpandedPosition = !State.RememberDeepCapsuleExpandedPosition;
         SaveNow();
         RefreshSettingsCapsuleToggleStates();
     }

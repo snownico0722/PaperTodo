@@ -557,8 +557,13 @@ public sealed partial class PaperWindow
             var linkedNoteButtonText = showLinkedNoteName
                 ? LinkedNoteButtonLabel(isTodoMultiline: false)
                 : runLinkedScriptOnClick ? "⚡" : "\uE71B";
-            var initialLinkedNoteButtonWidth = showLinkedNoteName
-                ? LinkedNoteButtonWidth(isTodoMultiline: false, linkedNoteButtonText)
+            var multilineLinkedNoteButtonText = showLinkedNoteName
+                ? LinkedNoteButtonLabel(isTodoMultiline: true)
+                : linkedNoteButtonText;
+            var linkedNoteButtonWidth = showLinkedNoteName
+                ? Math.Max(
+                    LinkedNoteButtonWidth(isTodoMultiline: false, linkedNoteButtonText),
+                    LinkedNoteButtonWidth(isTodoMultiline: true, multilineLinkedNoteButtonText))
                 : Math.Max(23, metrics.CheckColumnWidth);
             var linkGlyph = new TextBlock
             {
@@ -577,13 +582,13 @@ public sealed partial class PaperWindow
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.NoWrap,
                 LineHeight = showLinkedNoteName ? metrics.LinkedNoteNameFontSize + 1 : double.NaN,
-                MaxWidth = showLinkedNoteName ? LinkedNoteTextMaxWidth(isTodoMultiline: false, initialLinkedNoteButtonWidth) : double.PositiveInfinity
+                MaxWidth = showLinkedNoteName ? LinkedNoteTextMaxWidth(isTodoMultiline: false, linkedNoteButtonWidth) : double.PositiveInfinity
             };
 
             var linkButton = new Border
             {
                 Width = showLinkedNoteName
-                    ? initialLinkedNoteButtonWidth
+                    ? linkedNoteButtonWidth
                     : Math.Max(23, metrics.CheckColumnWidth),
                 MinWidth = Math.Max(23, metrics.CheckColumnWidth),
                 MinHeight = Math.Max(22, metrics.RowMinHeight - 2),
@@ -598,19 +603,27 @@ public sealed partial class PaperWindow
                 Child = linkGlyph
             };
 
+            bool? lastLinkedNoteNameMultiline = null;
+            var linkedNoteNameLayoutQueued = false;
+
             void UpdateLinkedNoteNameLayout()
             {
+                linkedNoteNameLayoutQueued = false;
                 if (!showLinkedNoteName)
                 {
                     return;
                 }
 
                 var isTodoMultiline = text.LineCount > 1;
-                linkGlyph.Text = LinkedNoteButtonLabel(isTodoMultiline);
+                if (lastLinkedNoteNameMultiline == isTodoMultiline)
+                {
+                    return;
+                }
+
+                lastLinkedNoteNameMultiline = isTodoMultiline;
+                linkGlyph.Text = isTodoMultiline ? multilineLinkedNoteButtonText : linkedNoteButtonText;
                 linkGlyph.TextWrapping = isTodoMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap;
-                var buttonWidth = LinkedNoteButtonWidth(isTodoMultiline, linkGlyph.Text);
-                linkGlyph.MaxWidth = LinkedNoteTextMaxWidth(isTodoMultiline, buttonWidth);
-                linkButton.Width = buttonWidth;
+                linkGlyph.MaxWidth = LinkedNoteTextMaxWidth(isTodoMultiline, linkedNoteButtonWidth);
             }
 
             void QueueLinkedNoteNameLayoutUpdate()
@@ -620,6 +633,12 @@ public sealed partial class PaperWindow
                     return;
                 }
 
+                if (linkedNoteNameLayoutQueued)
+                {
+                    return;
+                }
+
+                linkedNoteNameLayoutQueued = true;
                 Dispatcher.BeginInvoke((Action)UpdateLinkedNoteNameLayout, System.Windows.Threading.DispatcherPriority.Render);
             }
 
@@ -805,16 +824,28 @@ public sealed partial class PaperWindow
         ReplaceSelection(box, lines[0]);
         item.Text = box.Text;
 
-        var last = item;
+        var ordered = OrderedItems().ToList();
+        var itemIndex = ordered.FindIndex(i => string.Equals(i.Id, item.Id, StringComparison.Ordinal));
+        var insertIndex = itemIndex >= 0 ? itemIndex + 1 : ordered.Count;
         var newItems = new List<PaperItem>();
         foreach (var line in lines.Skip(1))
         {
-            last = AddItemAfter(last, line, pushUndo: false);
-            newItems.Add(last);
+            newItems.Add(new PaperItem
+            {
+                Text = line,
+                Done = false
+            });
         }
 
-        _pendingFocusItemId = last.Id;
-        RebuildTodoRows(last.Id);
+        ordered.InsertRange(insertIndex, newItems);
+        _paper.Items = ordered;
+        NormalizeTodoItems();
+        NormalizeOrders();
+        _controller.MarkDirty();
+
+        var focusItem = newItems.LastOrDefault() ?? item;
+        _pendingFocusItemId = focusItem.Id;
+        RebuildTodoRows(focusItem.Id);
 
         // 粘贴多行时的错峰动画
         if (_controller.State.EnableAnimations && newItems.Count > 1)
@@ -1168,7 +1199,7 @@ public sealed partial class PaperWindow
         item.LinkedNoteId = noteId;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
-        _controller.RefreshCapsuleEligibilityForLinkedNotes();
+        _controller.RefreshCapsuleEligibilityForLinkedNote(noteId);
         return true;
     }
 
@@ -1179,12 +1210,13 @@ public sealed partial class PaperWindow
             return;
         }
 
+        var linkedNoteId = item.LinkedNoteId;
         var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
         PushUndoSnapshot();
         item.LinkedNoteId = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
-        _controller.RefreshCapsuleEligibilityForLinkedNotes();
+        _controller.RefreshCapsuleEligibilityForLinkedNote(linkedNoteId);
     }
 
     private void ClearNoteLinkDropTargetVisual()

@@ -34,6 +34,7 @@ public sealed partial class AppController : IDisposable
     private CheckBox? _settingsCapsuleModeCheckBox;
     private CheckBox? _settingsDeepCapsuleModeCheckBox;
     private CheckBox? _settingsDeepCapsuleExpandedSlotCheckBox;
+    private CheckBox? _settingsRememberDeepCapsuleExpandedPositionCheckBox;
     private CheckBox? _settingsCollapseExpandedDeepCapsuleOnClickCheckBox;
     private CheckBox? _settingsCapsuleCollapseAllCheckBox;
     private bool _isExiting;
@@ -1205,6 +1206,31 @@ public sealed partial class AppController : IDisposable
         RefreshTrayMenu();
     }
 
+    public void RefreshCapsuleEligibilityForLinkedNote(string? noteId)
+    {
+        if (string.IsNullOrWhiteSpace(noteId) ||
+            !State.EnableTodoNoteLinks ||
+            !State.HideLinkedNotesFromCapsules ||
+            !State.UseCapsuleMode)
+        {
+            return;
+        }
+
+        var note = FindNote(noteId);
+        if (note == null)
+        {
+            return;
+        }
+
+        if (_windows.TryGetValue(note.Id, out var noteWindow))
+        {
+            noteWindow.RefreshCapsuleEligibility();
+        }
+
+        ArrangeDeepCapsules(animate: State.EnableAnimations);
+        RefreshTrayMenu();
+    }
+
     public bool IsPaperEmpty(PaperData paper)
     {
         if (paper.Type == PaperTypes.Note)
@@ -1429,6 +1455,13 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        if (State.RememberDeepCapsuleExpandedPosition &&
+            window is PaperWindow { ShouldSaveDeepCapsuleExpandedGeometry: true })
+        {
+            UpdateDeepCapsuleExpandedGeometry(paper, window);
+            return;
+        }
+
         paper.X = Math.Round(window.Left);
         paper.Y = Math.Round(window.Top);
         if (!paper.IsCollapsed)
@@ -1437,6 +1470,79 @@ public sealed partial class AppController : IDisposable
             paper.Height = Math.Round(Math.Max(window.ActualHeight > 0 ? window.ActualHeight : window.Height, PaperLayoutDefaults.MinHeight));
         }
 
+        MarkDirty();
+    }
+
+    public bool TryGetRememberedDeepCapsuleExpandedGeometry(
+        PaperData paper,
+        double fallbackWidth,
+        double fallbackHeight,
+        out Rect geometry)
+    {
+        geometry = default;
+        if (!State.RememberDeepCapsuleExpandedPosition ||
+            !paper.DeepCapsuleExpandedX.HasValue ||
+            !paper.DeepCapsuleExpandedY.HasValue ||
+            !paper.DeepCapsuleExpandedWidth.HasValue ||
+            !paper.DeepCapsuleExpandedHeight.HasValue)
+        {
+            return false;
+        }
+
+        var currentSide = DeepCapsuleSides.Normalize(paper.CapsuleSide);
+        var currentMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName);
+        var rememberedSide = DeepCapsuleSides.Normalize(paper.DeepCapsuleExpandedSide);
+        var rememberedMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.DeepCapsuleExpandedMonitorDeviceName);
+        if (rememberedSide != currentSide ||
+            !string.Equals(rememberedMonitor, currentMonitor, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!IsFinite(paper.DeepCapsuleExpandedX.Value) ||
+            !IsFinite(paper.DeepCapsuleExpandedY.Value))
+        {
+            return false;
+        }
+
+        var area = DeepCapsuleLayout.WorkAreaForQueue(currentMonitor);
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            return false;
+        }
+
+        const double margin = 8;
+        var width = ClampPaperDimension(
+            paper.DeepCapsuleExpandedWidth.Value,
+            fallbackWidth,
+            PaperLayoutDefaults.MinWidth,
+            Math.Max(PaperLayoutDefaults.MinWidth, area.Width - (margin * 2)));
+        var height = ClampPaperDimension(
+            paper.DeepCapsuleExpandedHeight.Value,
+            fallbackHeight,
+            PaperLayoutDefaults.MinHeight,
+            Math.Max(PaperLayoutDefaults.MinHeight, area.Height - (margin * 2)));
+        var minX = area.Left + margin;
+        var maxX = Math.Max(minX, area.Right - width - margin);
+        var minY = area.Top + margin;
+        var maxY = Math.Max(minY, area.Bottom - height - margin);
+
+        geometry = new Rect(
+            Math.Round(Math.Clamp(paper.DeepCapsuleExpandedX.Value, minX, maxX)),
+            Math.Round(Math.Clamp(paper.DeepCapsuleExpandedY.Value, minY, maxY)),
+            Math.Round(width),
+            Math.Round(height));
+        return true;
+    }
+
+    private void UpdateDeepCapsuleExpandedGeometry(PaperData paper, Window window)
+    {
+        paper.DeepCapsuleExpandedX = Math.Round(window.Left);
+        paper.DeepCapsuleExpandedY = Math.Round(window.Top);
+        paper.DeepCapsuleExpandedWidth = Math.Round(Math.Max(window.ActualWidth > 0 ? window.ActualWidth : window.Width, PaperLayoutDefaults.MinWidth));
+        paper.DeepCapsuleExpandedHeight = Math.Round(Math.Max(window.ActualHeight > 0 ? window.ActualHeight : window.Height, PaperLayoutDefaults.MinHeight));
+        paper.DeepCapsuleExpandedSide = DeepCapsuleSides.Normalize(paper.CapsuleSide);
+        paper.DeepCapsuleExpandedMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName);
         MarkDirty();
     }
 

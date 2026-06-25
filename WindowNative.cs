@@ -10,6 +10,7 @@ namespace PaperTodo;
 internal static class WindowNative
 {
     private const int GwlExStyle = -20;
+    private const int GwlpHwndParent = -8;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExTopmost = 0x00000008;
     private const int WsExToolWindow = 0x00000080;
@@ -24,6 +25,32 @@ internal static class WindowNative
     private const uint SwpShowWindow = 0x0040;
     private const uint SwpHideWindow = 0x0080;
     private const uint SwpNoOwnerZOrder = 0x0200;
+
+    // A tiny off-screen TOOLWINDOW that serves as the native owner for papers hidden from
+    // Alt+Tab. Owned top-level windows do not appear in the window switcher, so setting
+    // this as owner hides the paper without applying WS_EX_TOOLWINDOW to the paper itself
+    // (which would cause Windows to skip it when choosing the next window to activate).
+    private static IntPtr _hiddenOwner;
+
+    private static IntPtr GetOrCreateHiddenOwner()
+    {
+        if (_hiddenOwner != IntPtr.Zero && IsWindow(_hiddenOwner))
+        {
+            return _hiddenOwner;
+        }
+
+        _hiddenOwner = CreateWindowEx(
+            WsExToolWindow,
+            "Static",
+            "",
+            0, // WS_OVERLAPPED (no visible chrome)
+            -100, -100, 0, 0,
+            IntPtr.Zero,
+            IntPtr.Zero,
+            IntPtr.Zero,
+            IntPtr.Zero);
+        return _hiddenOwner;
+    }
 
     // WS_EX_NOACTIVATE: the window can never become foreground, so clicking it never steals
     // focus from (and forces a repaint of) whatever app was in front — the click "flash".
@@ -47,17 +74,33 @@ internal static class WindowNative
             return;
         }
 
-        var exStyle = GetWindowLong(handle, GwlExStyle);
-        var newStyle = visible
-            ? (exStyle & ~WsExToolWindow)
-            : ((exStyle | WsExToolWindow) & ~WsExAppWindow);
-
-        if (newStyle == exStyle)
+        if (visible)
         {
-            return;
+            // Remove the hidden owner — the window re-appears in Alt+Tab.
+            SetWindowLongPtr(handle, GwlpHwndParent, IntPtr.Zero);
+        }
+        else
+        {
+            // Set the hidden TOOLWINDOW as owner — owned windows are excluded from
+            // Alt+Tab without needing WS_EX_TOOLWINDOW on the paper itself, so Windows
+            // won't skip the paper when choosing the next window to activate.
+            SetWindowLongPtr(handle, GwlpHwndParent, GetOrCreateHiddenOwner());
         }
 
-        SetWindowLong(handle, GwlExStyle, newStyle);
+        // Ensure WS_EX_TOOLWINDOW is cleared from the paper in both cases. This undoes the
+        // style that older versions may have left behind.
+        var exStyle = GetWindowLong(handle, GwlExStyle);
+        var cleaned = (exStyle & ~WsExToolWindow) & ~WsExAppWindow;
+        if (visible)
+        {
+            // No special ex-style needed when visible in switcher.
+            cleaned = exStyle & ~WsExToolWindow;
+        }
+        if (cleaned != exStyle)
+        {
+            SetWindowLong(handle, GwlExStyle, cleaned);
+        }
+
         SetWindowPos(
             handle,
             IntPtr.Zero,
@@ -142,6 +185,9 @@ internal static class WindowNative
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(
         IntPtr hWnd,
@@ -157,4 +203,22 @@ internal static class WindowNative
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateWindowEx(
+        int dwExStyle,
+        string lpClassName,
+        string lpWindowName,
+        int dwStyle,
+        int x,
+        int y,
+        int nWidth,
+        int nHeight,
+        IntPtr hWndParent,
+        IntPtr hMenu,
+        IntPtr hInstance,
+        IntPtr lpParam);
 }

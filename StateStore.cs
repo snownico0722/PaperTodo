@@ -347,6 +347,7 @@ public sealed class StateStore
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
                 : paper.CapsuleMonitorDeviceName.Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            NormalizeDeepCapsuleExpandedGeometry(paper);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
             paper.X = NormalizeCoordinate(paper.X, 120);
@@ -446,6 +447,55 @@ public sealed class StateStore
             ? fallback
             : value;
     }
+
+    private static void NormalizeDeepCapsuleExpandedGeometry(PaperData paper)
+    {
+        if (!paper.DeepCapsuleExpandedX.HasValue ||
+            !paper.DeepCapsuleExpandedY.HasValue ||
+            !paper.DeepCapsuleExpandedWidth.HasValue ||
+            !paper.DeepCapsuleExpandedHeight.HasValue ||
+            !IsFinite(paper.DeepCapsuleExpandedX.Value) ||
+            !IsFinite(paper.DeepCapsuleExpandedY.Value))
+        {
+            ClearDeepCapsuleExpandedGeometry(paper);
+            return;
+        }
+
+        var fallbackWidth = paper.Type == PaperTypes.Note
+            ? PaperLayoutDefaults.NoteDefaultWidth
+            : PaperLayoutDefaults.TodoDefaultWidth;
+        var fallbackHeight = paper.Type == PaperTypes.Note
+            ? PaperLayoutDefaults.NoteDefaultHeight
+            : PaperLayoutDefaults.TodoDefaultHeight;
+        paper.DeepCapsuleExpandedWidth = NormalizePaperDimension(
+            paper.DeepCapsuleExpandedWidth.Value,
+            fallbackWidth,
+            PaperLayoutDefaults.MinWidth);
+        paper.DeepCapsuleExpandedHeight = NormalizePaperDimension(
+            paper.DeepCapsuleExpandedHeight.Value,
+            fallbackHeight,
+            PaperLayoutDefaults.MinHeight);
+        paper.DeepCapsuleExpandedSide = string.IsNullOrWhiteSpace(paper.DeepCapsuleExpandedSide)
+            ? paper.CapsuleSide
+            : DeepCapsuleSides.Normalize(paper.DeepCapsuleExpandedSide);
+        var monitor = string.IsNullOrWhiteSpace(paper.DeepCapsuleExpandedMonitorDeviceName)
+            ? paper.CapsuleMonitorDeviceName
+            : paper.DeepCapsuleExpandedMonitorDeviceName.Trim();
+        paper.DeepCapsuleExpandedMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor);
+    }
+
+    private static void ClearDeepCapsuleExpandedGeometry(PaperData paper)
+    {
+        paper.DeepCapsuleExpandedX = null;
+        paper.DeepCapsuleExpandedY = null;
+        paper.DeepCapsuleExpandedWidth = null;
+        paper.DeepCapsuleExpandedHeight = null;
+        paper.DeepCapsuleExpandedSide = "";
+        paper.DeepCapsuleExpandedMonitorDeviceName = "";
+    }
+
+    private static bool IsFinite(double value)
+        => !double.IsNaN(value) && !double.IsInfinity(value);
 
     private static Dictionary<string, bool> NormalizeCollapseAllActiveQueues(Dictionary<string, bool> source)
     {

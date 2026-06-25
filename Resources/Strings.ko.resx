@@ -315,6 +315,9 @@
   <data name="SettingsShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>펼친 동안 가장자리 캡슐 유지</value>
   </data>
+  <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>가장자리 펼침 위치 기억</value>
+  </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>가장자리 캡슐을 다시 클릭해 종이 접기</value>
   </data>
@@ -466,6 +469,9 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>가장자리 캡슐에서 종이를 연 뒤에도 가장자리에 해당 입구를 남깁니다. 끄면 열려 있는 동안 그 입구를 잠시 숨깁니다.</value>
+  </data>
+  <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>가장자리 캡슐에서 종이를 열 때 마지막으로 펼친 창 위치와 크기를 복원합니다. 사용할 수 없으면 일반 가장자리 맞춤 위치로 엽니다.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>가장자리 캡슐에서 열린 종이에 대해 같은 캡슐을 다시 클릭하면 종이를 접습니다.</value>

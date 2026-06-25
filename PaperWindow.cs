@@ -222,6 +222,7 @@ public sealed partial class PaperWindow : Window
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
     // main window must not overwrite ordinary paper geometry.
     public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
+    public bool ShouldSaveDeepCapsuleExpandedGeometry => ExpandedFromDeepCapsuleEdge && !_paper.IsCollapsed && _paper.IsVisible;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
     public double DeepCapsuleRestingVisibleWidth => _deepCapsuleSlotState == DeepCapsuleSlotState.ExpandedReserved
         ? ExpandedDeepCapsuleVisibleWidth()

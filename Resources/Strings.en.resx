@@ -315,6 +315,9 @@
   <data name="SettingsShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>Keep edge capsule when expanded</value>
   </data>
+  <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>Remember edge-open position</value>
+  </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>Click edge capsule again to retract paper</value>
   </data>
@@ -466,6 +469,9 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>After opening a paper from an edge capsule, keep its edge entry visible. When off, that entry is hidden while the paper is open.</value>
+  </data>
+  <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>When opening a paper from an edge capsule, restore the last expanded window position and size. If unavailable, use the normal edge-aligned placement.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>When a paper is open from an edge capsule, click the same capsule again to retract the paper.</value>

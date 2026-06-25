@@ -327,6 +327,9 @@
   <data name="SettingsShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>展开时保留边缘胶囊</value>
   </data>
+  <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>记住边缘胶囊展开位置</value>
+  </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>再次点击边缘胶囊收回纸片</value>
   </data>
@@ -478,6 +481,9 @@
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
     <value>从边缘胶囊打开纸片后，边缘仍保留对应入口；关闭后，打开期间暂时隐藏该入口。</value>
+  </data>
+  <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
+    <value>从边缘胶囊打开纸片时，恢复上次展开后的窗口位置和大小；无记忆或位置不可用时仍按边缘展开。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>纸片已从边缘胶囊展开时，再次点击同一胶囊会把纸片收回。</value>
