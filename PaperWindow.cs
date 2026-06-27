@@ -592,7 +592,7 @@ public sealed partial class PaperWindow : Window
         {
             SaveGeometryIfAllowed();
             Dispatcher.BeginInvoke(
-                (Action)(() => ApplySystemVisibility(reapplyTaskbarShellState: true)),
+                (Action)ApplyDeferredStartupSystemVisibility,
                 System.Windows.Threading.DispatcherPriority.Background);
         };
         LocationChanged += (_, _) => SaveGeometryIfAllowed();
@@ -605,7 +605,7 @@ public sealed partial class PaperWindow : Window
         PreviewKeyUp += OnWindowPreviewKeyUp;
         SourceInitialized += (_, _) =>
         {
-            ApplySystemVisibility(reapplyTaskbarShellState: true, preferWindowSwitcherState: true);
+            ApplySystemVisibility(reapplyTaskbarShellState: true);
         };
         Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
         Deactivated += (_, _) =>
@@ -673,7 +673,7 @@ public sealed partial class PaperWindow : Window
         ShowInTaskbar = shouldShow;
     }
 
-    public void ApplySystemVisibility(bool reapplyTaskbarShellState = false, bool preferWindowSwitcherState = false)
+    public void ApplySystemVisibility(bool reapplyTaskbarShellState = false)
     {
         if (_controller.State.HidePapersFromWindowSwitcher)
         {
@@ -682,15 +682,14 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        if (preferWindowSwitcherState)
-        {
-            UpdateTaskbarVisibility(reapplyTaskbarShellState);
-            UpdateWindowSwitcherVisibility();
-            return;
-        }
-
         UpdateWindowSwitcherVisibility();
         UpdateTaskbarVisibility(reapplyTaskbarShellState);
+    }
+
+    private void ApplyDeferredStartupSystemVisibility()
+    {
+        var shouldShowInTaskbar = ShouldShowInTaskbar();
+        ApplySystemVisibility(reapplyTaskbarShellState: ShowInTaskbar != shouldShowInTaskbar || !shouldShowInTaskbar);
     }
 
     private bool ShouldShowInTaskbar()

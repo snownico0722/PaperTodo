@@ -1281,13 +1281,11 @@ public sealed partial class AppController
         }
     }
 
-    private void RefreshPaperSystemVisibility(
-        bool reapplyTaskbarShellState = false,
-        bool preferWindowSwitcherState = false)
+    private void RefreshPaperSystemVisibility(bool reapplyTaskbarShellState = false)
     {
         foreach (var window in _windows.Values)
         {
-            window.ApplySystemVisibility(reapplyTaskbarShellState, preferWindowSwitcherState);
+            window.ApplySystemVisibility(reapplyTaskbarShellState);
         }
     }
 
