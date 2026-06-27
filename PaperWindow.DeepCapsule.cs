@@ -1352,10 +1352,14 @@ public sealed partial class PaperWindow
 
     private double DeepCapsuleSlotShellLayoutWidth()
     {
-        var fullWidth = CapsuleWindowWidth(usesDeepCapsulePresentation: true);
-        return Math.Max(0, Math.Max(
-            CapsuleShellWidth(usesDeepCapsulePresentation: true),
-            fullWidth - WindowChromeMargin));
+        return Math.Max(1, CapsuleShellWidth(usesDeepCapsulePresentation: true));
+    }
+
+    private double DeepCapsuleContentWindowWidth()
+    {
+        return Math.Min(
+            CapsuleWindowWidth(usesDeepCapsulePresentation: true),
+            Math.Max(1, CapsuleShellWidth(usesDeepCapsulePresentation: true) + WindowChromeInset));
     }
 
     private double DeepCapsuleSlotViewportWidth(double viewportWidth)
@@ -1414,7 +1418,7 @@ public sealed partial class PaperWindow
     private double ExpandedDeepCapsuleVisibleWidth()
     {
         return DeepCapsuleLayout.FocusVisibleWidth(
-            CapsuleWindowWidth(usesDeepCapsulePresentation: true),
+            DeepCapsuleContentWindowWidth(),
             DeepCapsuleVisibleWidth());
     }
 

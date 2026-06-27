@@ -141,6 +141,13 @@ public sealed partial class PaperWindow
         {
             _deepCapsuleSlotShell.Width = DeepCapsuleSlotShellLayoutWidth();
         }
+        if (HasDeepCapsuleSlotPlacement &&
+            _deepCapsuleSlotHost?.IsVisible == true &&
+            !_deepCapsuleCrossQueueDragVisualActive &&
+            !IsDeepCapsuleSlotHorizontalAnimating)
+        {
+            MoveDeepCapsuleToCurrentTarget(animate: false);
+        }
     }
 
     private void UpdateCapsuleClosePlacement()
@@ -188,17 +195,12 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var usesActivePresentation = _deepCapsuleVisualState is DeepCapsuleVisualState.Active or DeepCapsuleVisualState.Hovered;
         var leftEdge = MyDeepCapsuleIsLeftEdge;
         if (_deepCapsuleSlotCloseArea != null)
         {
             _deepCapsuleSlotCloseArea.Width = CapsuleCloseWidth;
             _deepCapsuleSlotCloseArea.IsHitTestVisible = true;
-            // Breathing gap sits on the interior side of the close button (right edge: right;
-            // left edge: left), and only when the close is actually revealed.
-            _deepCapsuleSlotCloseArea.Margin = usesActivePresentation
-                ? (leftEdge ? new Thickness(2, 0, 0, 0) : new Thickness(0, 0, 2, 0))
-                : new Thickness(0);
+            _deepCapsuleSlotCloseArea.Margin = new Thickness(0);
         }
 
         if (_deepCapsuleSlotCloseGlyphOffset != null)
@@ -544,7 +546,7 @@ public sealed partial class PaperWindow
         }
 
         RefreshEffectiveTopmost();
-        UpdateTaskbarVisibility();
+        ApplySystemVisibility();
         _controller.MarkDirty();
 
         if (collapsed)

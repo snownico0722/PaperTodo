@@ -1256,7 +1256,7 @@ public sealed partial class AppController
 
         State.HidePapersFromTaskbar = !State.HidePapersFromTaskbar;
         SaveNow();
-        RefreshPaperTaskbarVisibility();
+        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
         RefreshSettingsSystemVisibilityToggleStates();
     }
 
@@ -1269,8 +1269,7 @@ public sealed partial class AppController
         }
 
         SaveNow();
-        RefreshPaperWindowSwitcherVisibility();
-        RefreshPaperTaskbarVisibility();
+        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
         RefreshSettingsSystemVisibilityToggleStates();
     }
 
@@ -1282,19 +1281,13 @@ public sealed partial class AppController
         }
     }
 
-    private void RefreshPaperTaskbarVisibility()
+    private void RefreshPaperSystemVisibility(
+        bool reapplyTaskbarShellState = false,
+        bool preferWindowSwitcherState = false)
     {
         foreach (var window in _windows.Values)
         {
-            window.UpdateTaskbarVisibility();
-        }
-    }
-
-    private void RefreshPaperWindowSwitcherVisibility()
-    {
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateWindowSwitcherVisibility();
+            window.ApplySystemVisibility(reapplyTaskbarShellState, preferWindowSwitcherState);
         }
     }
 

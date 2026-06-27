@@ -183,12 +183,12 @@ public sealed partial class PaperWindow : Window
     private const double CapsuleNormalMinWidth = 76;
     private const double CapsuleLeftPadding = 6;
     private const double CapsuleIconGap = 4;
-    private const double CapsuleCloseWidth = 30;
+    private const double CapsuleCloseWidth = 28;
     private const double CapsuleNormalCloseWidth = 21;
     private const double CapsuleRightPadding = 6;
     private const double CapsuleIconFontSize = 13;
     private const double CapsuleLabelFontSize = 11;
-    private const double CapsuleCloseGlyphDeepOffset = -8;
+    private const double CapsuleCloseGlyphDeepOffset = -6;
     private const double CapsuleCloseGlyphNormalOffset = -1;
     private const double DeepCapsuleSlotOutlineThickness = 2;
     private const double DeepCapsuleSlotOutlineOverlap = 1;
@@ -588,7 +588,13 @@ public sealed partial class PaperWindow : Window
         BuildShell();
         UpdateToolTipSetting();
 
-        Loaded += (_, _) => SaveGeometryIfAllowed();
+        Loaded += (_, _) =>
+        {
+            SaveGeometryIfAllowed();
+            Dispatcher.BeginInvoke(
+                (Action)(() => ApplySystemVisibility(reapplyTaskbarShellState: true)),
+                System.Windows.Threading.DispatcherPriority.Background);
+        };
         LocationChanged += (_, _) => SaveGeometryIfAllowed();
         SizeChanged += (_, _) => SaveGeometryIfAllowed();
         PreviewMouseMove += OnWindowPreviewMouseMove;
@@ -599,8 +605,7 @@ public sealed partial class PaperWindow : Window
         PreviewKeyUp += OnWindowPreviewKeyUp;
         SourceInitialized += (_, _) =>
         {
-            UpdateTaskbarVisibility();
-            UpdateWindowSwitcherVisibility();
+            ApplySystemVisibility(reapplyTaskbarShellState: true, preferWindowSwitcherState: true);
         };
         Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
         Deactivated += (_, _) =>
@@ -657,9 +662,35 @@ public sealed partial class PaperWindow : Window
         WindowNative.ApplyWindowSwitcherVisibility(this, !_controller.State.HidePapersFromWindowSwitcher);
     }
 
-    public void UpdateTaskbarVisibility()
+    public void UpdateTaskbarVisibility(bool reapplyShellState = false)
     {
-        ShowInTaskbar = ShouldShowInTaskbar();
+        var shouldShow = ShouldShowInTaskbar();
+        if (reapplyShellState && !shouldShow && !ShowInTaskbar)
+        {
+            ShowInTaskbar = true;
+        }
+
+        ShowInTaskbar = shouldShow;
+    }
+
+    public void ApplySystemVisibility(bool reapplyTaskbarShellState = false, bool preferWindowSwitcherState = false)
+    {
+        if (_controller.State.HidePapersFromWindowSwitcher)
+        {
+            UpdateTaskbarVisibility(reapplyTaskbarShellState);
+            UpdateWindowSwitcherVisibility();
+            return;
+        }
+
+        if (preferWindowSwitcherState)
+        {
+            UpdateTaskbarVisibility(reapplyTaskbarShellState);
+            UpdateWindowSwitcherVisibility();
+            return;
+        }
+
+        UpdateWindowSwitcherVisibility();
+        UpdateTaskbarVisibility(reapplyTaskbarShellState);
     }
 
     private bool ShouldShowInTaskbar()
