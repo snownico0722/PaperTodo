@@ -1069,9 +1069,20 @@ public sealed partial class PaperWindow : Window
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        top.PreviewMouseLeftButtonDown += (_, _) => ExitNoteEditor();
+        top.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (!IsTitleEditBoxEventSource(e.OriginalSource as DependencyObject))
+            {
+                ExitNoteEditor();
+            }
+        };
         top.MouseLeftButtonDown += (_, e) =>
         {
+            if (IsTitleEditBoxEventSource(e.OriginalSource as DependencyObject))
+            {
+                return;
+            }
+
             if (e.ChangedButton == MouseButton.Left && e.ClickCount == 1)
             {
                 try { DragMove(); } catch { }
@@ -1147,7 +1158,6 @@ public sealed partial class PaperWindow : Window
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null
         };
-        _titleEditBox.PreviewMouseLeftButtonDown += (_, e) => e.Handled = false;
         _titleEditBox.PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -1176,11 +1186,8 @@ public sealed partial class PaperWindow : Window
         titleHost.MouseLeave += (_, _) => titleHost.Background = Brushes.Transparent;
         titleHost.MouseLeftButtonDown += (_, e) =>
         {
-            if (_isEditingTitle &&
-                _titleEditBox != null &&
-                IsDescendantOf(e.OriginalSource as DependencyObject, _titleEditBox))
+            if (_isEditingTitle && IsTitleEditBoxEventSource(e.OriginalSource as DependencyObject))
             {
-                e.Handled = true;
                 return;
             }
 
@@ -1688,6 +1695,11 @@ public sealed partial class PaperWindow : Window
         _titleEditBox.Visibility = Visibility.Visible;
         _titleEditBox.Focus();
         _titleEditBox.SelectAll();
+    }
+
+    private bool IsTitleEditBoxEventSource(DependencyObject? source)
+    {
+        return _titleEditBox != null && IsDescendantOf(source, _titleEditBox);
     }
 
     private void CommitTitleEdit()
