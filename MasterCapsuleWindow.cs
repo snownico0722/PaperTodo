@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -20,6 +21,9 @@ namespace PaperTodo;
 // retract/release of the real capsule windows.
 public sealed class MasterCapsuleWindow : Window
 {
+    private const int WmSettingChange = 0x001A;
+    private const int WmDisplayChange = 0x007E;
+    private const int WmDpiChanged = 0x02E0;
     private const double ShellHeight = 30;
 
     // Compact internal metrics controlling how tightly the glyph + label sit inside the pill.
@@ -100,7 +104,14 @@ public sealed class MasterCapsuleWindow : Window
         // deactivate whatever app was in front, forcing it to repaint — the click "flash".
         // WS_EX_NOACTIVATE makes the window unable to become the active/foreground window,
         // so the click toggles collapse-all without disturbing the current foreground app.
-        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
+        SourceInitialized += (_, _) =>
+        {
+            WindowNative.ApplyNoActivateStyle(this);
+            if (PresentationSource.FromVisual(this) is HwndSource source)
+            {
+                source.AddHook(OnWindowMessage);
+            }
+        };
     }
 
     private void ConfigureWindow()
@@ -674,5 +685,15 @@ public sealed class MasterCapsuleWindow : Window
         BeginAnimation(AnimatedLeftProperty, null);
         BeginAnimation(AnimatedTopProperty, null);
         Close();
+    }
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg is WmDpiChanged or WmDisplayChange or WmSettingChange)
+        {
+            _controller.ScheduleDisplayMetricsRefresh();
+        }
+
+        return IntPtr.Zero;
     }
 }

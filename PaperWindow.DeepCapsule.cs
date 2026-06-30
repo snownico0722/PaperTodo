@@ -6,6 +6,7 @@ using System.Windows;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -96,7 +97,14 @@ public sealed partial class PaperWindow
             Height = PaperLayoutDefaults.CapsuleHeight,
             Content = _deepCapsuleSlotHostRoot
         };
-        host.SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(host);
+        host.SourceInitialized += (_, _) =>
+        {
+            WindowNative.ApplyNoActivateStyle(host);
+            if (PresentationSource.FromVisual(host) is HwndSource source)
+            {
+                source.AddHook(OnWindowMessage);
+            }
+        };
         host.Deactivated += (_, _) => CloseDeepCapsuleSlotContextMenu();
         _deepCapsuleSlotHost = host;
         UpdateDeepCapsuleSlotHostTheme();
@@ -475,6 +483,35 @@ public sealed partial class PaperWindow
         }
 
         RefreshEffectiveTopmost();
+    }
+
+    public bool TryRestoreRememberedDeepCapsuleExpandedGeometry()
+    {
+        if (_paper.IsCollapsed ||
+            !_controller.State.UseCapsuleMode ||
+            !_controller.State.UseDeepCapsuleMode ||
+            !_controller.State.ShowDeepCapsuleWhileExpanded ||
+            !CanDisplayAsCapsule())
+        {
+            return false;
+        }
+
+        var fallbackWidth = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
+        var fallbackHeight = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
+        if (!_controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, fallbackWidth, fallbackHeight, out var rememberedGeometry))
+        {
+            return false;
+        }
+
+        SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.EdgeSlot);
+        MoveWindowWithoutGeometrySave(() =>
+        {
+            Left = RoundToDevicePixelX(rememberedGeometry.Left);
+            Top = RoundToDevicePixelY(rememberedGeometry.Top);
+            Width = RoundToDevicePixelX(rememberedGeometry.Width);
+            Height = RoundToDevicePixelY(rememberedGeometry.Height);
+        });
+        return true;
     }
 
     public void ExpandForProgrammaticOpen()
@@ -1536,6 +1573,7 @@ public sealed partial class PaperWindow
             return;
         }
 
+        var shouldSaveExpandedGeometry = ShouldSaveDeepCapsuleExpandedGeometry;
         SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.EdgeSlot);
         SetDeepCapsuleSlotState(DeepCapsuleSlotState.ExpandedReserved);
         SetDeepCapsuleVisualState(DeepCapsuleVisualState.Active);
@@ -1565,7 +1603,7 @@ public sealed partial class PaperWindow
         AnimateSlotHostOpacity(1.0, animate);
         RefreshEffectiveTopmost();
         UpdateToolTipSetting();
-        if (!_isApplyingCollapsedState)
+        if (!_isApplyingCollapsedState && shouldSaveExpandedGeometry)
         {
             _controller.UpdateGeometry(_paper, this);
         }

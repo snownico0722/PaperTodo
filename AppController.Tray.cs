@@ -417,6 +417,7 @@ public sealed partial class AppController
             return;
         }
 
+        InvalidateSystemThemeCacheIfNeeded();
         UpdateTrayMenuResources(_trayMenu);
 
         _trayMenu.Background = TrayPaperBrush;

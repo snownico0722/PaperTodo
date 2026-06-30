@@ -26,6 +26,7 @@ public sealed partial class AppController : IDisposable
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _topmostRefreshTimer;
+    private readonly DispatcherTimer _displayMetricsRefreshTimer;
 
     private TaskbarIcon? _trayIcon;
     private ContextMenu? _trayMenu;
@@ -95,7 +96,18 @@ public sealed partial class AppController : IDisposable
         };
         _topmostRefreshTimer.Tick += (_, _) => RefreshTopmostForForegroundWindow();
 
+        _displayMetricsRefreshTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+        _displayMetricsRefreshTimer.Tick += (_, _) =>
+        {
+            _displayMetricsRefreshTimer.Stop();
+            RefreshAfterDisplayMetricsChanged();
+        };
+
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
     }
@@ -761,6 +773,7 @@ public sealed partial class AppController : IDisposable
                 window.Width = paper.Width;
                 window.Height = paper.Height;
             }
+            window.TryRestoreRememberedDeepCapsuleExpandedGeometry();
             // To prevent a 1-frame DWM cache flash when a window's size changes while hidden,
             // we show it fully transparent first, then restore opacity after layout is complete.
             double originalOpacity = window.Opacity;
@@ -932,6 +945,60 @@ public sealed partial class AppController : IDisposable
                 }
             }),
             DispatcherPriority.ApplicationIdle);
+    }
+
+    internal void ScheduleDisplayMetricsRefresh()
+    {
+        if (_isExiting)
+        {
+            return;
+        }
+
+        var dispatcher = _displayMetricsRefreshTimer.Dispatcher;
+        if (dispatcher.CheckAccess())
+        {
+            RestartDisplayMetricsRefreshTimer();
+            return;
+        }
+
+        dispatcher.BeginInvoke(
+            (Action)RestartDisplayMetricsRefreshTimer,
+            DispatcherPriority.Background);
+    }
+
+    private void RestartDisplayMetricsRefreshTimer()
+    {
+        if (_isExiting)
+        {
+            return;
+        }
+
+        _displayMetricsRefreshTimer.Stop();
+        _displayMetricsRefreshTimer.Start();
+    }
+
+    private void RefreshAfterDisplayMetricsChanged()
+    {
+        if (_isExiting)
+        {
+            return;
+        }
+
+        RefreshTopmostForForegroundWindow();
+        ArrangeDeepCapsules(animate: false);
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshEffectiveTopmost();
+        }
+        foreach (var m in _masterCapsules.Values)
+        {
+            m.RefreshEffectiveTopmost();
+        }
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        ScheduleDisplayMetricsRefresh();
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -2356,10 +2423,12 @@ public sealed partial class AppController : IDisposable
     public void Dispose()
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _saveTimer.Stop();
         _topmostRefreshTimer.Stop();
+        _displayMetricsRefreshTimer.Stop();
         DisposeTrayIcon();
         _settingsWindow?.Close();
         _settingsWindow = null;

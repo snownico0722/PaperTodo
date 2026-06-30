@@ -6,6 +6,7 @@ using System.Windows;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -77,6 +78,7 @@ public sealed partial class PaperWindow : Window
     private TodoDragState? _todoDrag;
     private NoteLinkDragState? _noteLinkDrag;
     private MarkdownTextBox? _noteBox;
+    private readonly List<WeakReference<ContextMenu>> _themedContextMenus = new();
     private Action? _showNotePreview;
     private readonly List<List<PaperItem>> _undoStack = new();
     private readonly List<List<PaperItem>> _redoStack = new();
@@ -606,6 +608,10 @@ public sealed partial class PaperWindow : Window
         SourceInitialized += (_, _) =>
         {
             ApplySystemVisibility(reapplyTaskbarShellState: true);
+            if (PresentationSource.FromVisual(this) is HwndSource source)
+            {
+                source.AddHook(OnWindowMessage);
+            }
         };
         Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
         Deactivated += (_, _) =>
@@ -697,6 +703,16 @@ public sealed partial class PaperWindow : Window
         return !_controller.State.HidePapersFromWindowSwitcher &&
             !_controller.State.HidePapersFromTaskbar &&
             !_paper.IsCollapsed;
+    }
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg is WmDpiChanged or WmDisplayChange or WmSettingChange)
+        {
+            _controller.ScheduleDisplayMetricsRefresh();
+        }
+
+        return IntPtr.Zero;
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -804,6 +820,7 @@ public sealed partial class PaperWindow : Window
         var themeAnimationGeneration = _themeAnimationGeneration;
 
         InitializeThemeResources();
+        RefreshThemedContextMenus();
 
         var canAnimateTheme = _controller.State.EnableAnimations &&
             _paperChrome != null &&
@@ -1654,14 +1671,7 @@ public sealed partial class PaperWindow : Window
         }
 
         RefreshCapsuleLabel();
-        if (_capsuleLeftArea != null)
-        {
-            _capsuleLeftArea.ContextMenu = BuildPaperContextMenu();
-        }
-        if (_paperChrome != null)
-        {
-            _paperChrome.ContextMenu = BuildPaperContextMenu();
-        }
+        RefreshPaperContextMenus();
     }
 
     private void RequestTitleEdit()
@@ -2017,7 +2027,7 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private static ContextMenu CreateContextMenu()
+    private ContextMenu CreateContextMenu()
     {
         var menu = new ContextMenu
         {
@@ -2028,6 +2038,52 @@ public sealed partial class PaperWindow : Window
             HasDropShadow = true,
             Template = SharedContextMenuTemplate
         };
+        UpdateContextMenuTheme(menu);
+        menu.Opened += (_, _) =>
+        {
+            if (_controller.State.Theme == "system")
+            {
+                Theme.Invalidate();
+            }
+
+            UpdateContextMenuTheme(menu);
+        };
+
+        menu.Resources.Add(typeof(MenuItem), SharedCompactMenuItemStyle);
+        RegisterThemedContextMenu(menu);
+        return menu;
+    }
+
+    private void RegisterThemedContextMenu(ContextMenu menu)
+    {
+        for (var i = _themedContextMenus.Count - 1; i >= 0; i--)
+        {
+            if (!_themedContextMenus[i].TryGetTarget(out _))
+            {
+                _themedContextMenus.RemoveAt(i);
+            }
+        }
+
+        _themedContextMenus.Add(new WeakReference<ContextMenu>(menu));
+    }
+
+    private void RefreshThemedContextMenus()
+    {
+        for (var i = _themedContextMenus.Count - 1; i >= 0; i--)
+        {
+            if (_themedContextMenus[i].TryGetTarget(out var menu))
+            {
+                UpdateContextMenuTheme(menu);
+            }
+            else
+            {
+                _themedContextMenus.RemoveAt(i);
+            }
+        }
+    }
+
+    private static void UpdateContextMenuTheme(ContextMenu menu)
+    {
         menu.Resources["PaperBrushKey"] = PaperBrush;
         menu.Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         menu.Resources["TextBrushKey"] = TextBrush;
@@ -2037,9 +2093,6 @@ public sealed partial class PaperWindow : Window
         menu.Background = PaperBrush;
         menu.BorderBrush = PaperBorderBrush;
         menu.Foreground = TextBrush;
-
-        menu.Resources.Add(typeof(MenuItem), SharedCompactMenuItemStyle);
-        return menu;
     }
 
     private static Separator MenuSeparator()

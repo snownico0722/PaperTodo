@@ -42,6 +42,9 @@ public sealed partial class PaperWindow
     private const int WmRButtonDown = 0x0204;
     private const int WmMButtonDown = 0x0207;
     private const int WmXButtonDown = 0x020B;
+    private const int WmSettingChange = 0x001A;
+    private const int WmDisplayChange = 0x007E;
+    private const int WmDpiChanged = 0x02E0;
 
     private delegate void WinEventDelegate(
         IntPtr hWinEventHook,

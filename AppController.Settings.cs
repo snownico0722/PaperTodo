@@ -23,17 +23,8 @@ public sealed partial class AppController
     private void SetTheme(string theme)
     {
         State.Theme = theme;
-        Theme.Invalidate();
         SaveNow();
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTheme();
-        }
-        foreach (var m in _masterCapsules.Values) m.UpdateTheme();
-
-        RebuildTrayMenu();
-        RefreshSettingsWindowContent();
+        RefreshThemeSurfaces();
     }
 
     private UIElement CreateThemeSegmentSelector()
@@ -56,9 +47,13 @@ public sealed partial class AppController
         }
 
         State.ColorScheme = scheme;
-        Theme.Invalidate();
         SaveNow();
+        RefreshThemeSurfaces();
+    }
 
+    private void RefreshThemeSurfaces()
+    {
+        Theme.Invalidate();
         foreach (var window in _windows.Values)
         {
             window.UpdateTheme();
@@ -67,6 +62,14 @@ public sealed partial class AppController
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
+    }
+
+    private void InvalidateSystemThemeCacheIfNeeded()
+    {
+        if (State.Theme == "system")
+        {
+            Theme.Invalidate();
+        }
     }
 
     private UIElement CreateColorSchemeSegmentSelector()
@@ -519,6 +522,7 @@ public sealed partial class AppController
             return;
         }
 
+        InvalidateSystemThemeCacheIfNeeded();
         _settingsWindow.Content = BuildSettingsWindowContent(_settingsWindow);
         _settingsWindow.FontFamily = AppTypography.UiFontFamily;
         _settingsWindow.Language = AppTypography.Language;
@@ -1198,20 +1202,21 @@ public sealed partial class AppController
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        if (e.Category == UserPreferenceCategory.General)
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Window or UserPreferenceCategory.Desktop)
+        {
+            ScheduleDisplayMetricsRefresh();
+        }
+
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color)
         {
             if (State.Theme == "system")
             {
                 Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    Theme.Invalidate();
-                    foreach (var window in _windows.Values)
+                    if (State.Theme == "system")
                     {
-                        window.UpdateTheme();
+                        RefreshThemeSurfaces();
                     }
-                    foreach (var m in _masterCapsules.Values) m.UpdateTheme();
-                    RebuildTrayMenu();
-                    RefreshSettingsWindowContent();
                 }));
             }
         }
