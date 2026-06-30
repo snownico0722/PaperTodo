@@ -197,10 +197,8 @@ jobs:
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $tag = "${{ steps.release.outputs.tag }}"
-          $repo = "${{ github.repository }}"
           $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
           $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
-          $identityPattern = "^https://github[.]com/$repo/[.]github/workflows/release[.]yml@refs/(heads/main|tags/v.*)$"
           $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
           if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
             throw "CHANGELOG.md not found."
@@ -234,25 +232,12 @@ jobs:
           }
 
           $notesLines = @(
-            "PaperTodo $tag",
-            "",
-            "更新内容:",
-            "",
             $changelogNotes,
             "",
-            "Windows x64 executables:",
+            "下载:",
             "",
-            "- ${selfContained}: self-contained single file, includes .NET Desktop Runtime, ReadyToRun enabled, single-file compression enabled.",
-            "- ${frameworkDependent}: no-runtime framework-dependent single file, ReadyToRun disabled, single-file compression disabled.",
-            "",
-            "SHA256 hashes are included in SHA256SUMS.txt.",
-            "",
-            "Sigstore keyless signatures are included as .sig and .crt files. Verify them with:",
-            "",
-            '```powershell',
-            "cosign verify-blob --certificate .\$selfContained.crt --signature .\$selfContained.sig --certificate-identity-regexp `"$identityPattern`" --certificate-oidc-issuer `"https://token.actions.githubusercontent.com`" .\$selfContained",
-            "cosign verify-blob --certificate .\$frameworkDependent.crt --signature .\$frameworkDependent.sig --certificate-identity-regexp `"$identityPattern`" --certificate-oidc-issuer `"https://token.actions.githubusercontent.com`" .\$frameworkDependent",
-            '```'
+            "- 完整版（含 .NET 运行库）：${selfContained}",
+            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}"
           )
 
           Set-Content -LiteralPath (Join-Path $releaseDir "RELEASE_NOTES.md") -Value ($notesLines -join "`n") -Encoding utf8
