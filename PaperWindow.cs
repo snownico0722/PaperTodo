@@ -733,7 +733,239 @@ public sealed partial class PaperWindow : Window
             _controller.ScheduleDisplayMetricsRefresh();
         }
 
+        if (msg == WmWindowPosChanged)
+        {
+            RefreshSnappedPresentation();
+        }
+
+        if (msg == WmGetMinMaxInfo)
+        {
+            // Clamp maximize bounds to the work area so the window doesn't cover the taskbar.
+            // Without this, WPF's default maximized rect is the full screen (including taskbar),
+            // which breaks both visual presentation and snap detection.
+            try
+            {
+                var mmi = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+                var monitor = MonitorFromWindow(hwnd, 2);
+                if (monitor != IntPtr.Zero)
+                {
+                    var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+                    if (GetMonitorInfo(monitor, ref info))
+                    {
+                        var wa = info.WorkArea;
+                        var mon = info.Monitor;
+
+                        // If work area equals monitor (auto-hide taskbar), use full screen to avoid gap
+                        bool isAutoHide = (wa.Left == mon.Left && wa.Top == mon.Top &&
+                                           wa.Right == mon.Right && wa.Bottom == mon.Bottom);
+
+                        var rect = isAutoHide ? mon : wa;
+                        mmi.MaxSize = new MutablePoint { X = rect.Right - rect.Left, Y = rect.Bottom - rect.Top };
+                        mmi.MaxPosition = new MutablePoint { X = rect.Left, Y = rect.Top };
+                        Marshal.StructureToPtr(mmi, lParam, true);
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore malformed lParam or marshal failures; WPF's default behavior is acceptable.
+            }
+        }
+
         return IntPtr.Zero;
+    }
+
+    // Snap-completed presentation patch:
+    // When the OS docks the window to a monitor tile (drag-to-edge or Win+arrow), make the
+    // paper fill the tile edge-to-edge: suppress the drop shadow AND collapse the 8px
+    // transparent chrome margin + corner radius. Leaving the margin in place reads as a
+    // dark seam around the snapped paper (the shadow lives inside that margin, and the
+    // rounded corners leak the wallpaper behind). Maximize is different: the system
+    // over-expands a maximized window by its resize border, which already pushes the
+    // margin off-screen — keep it as the offset.
+    private bool _isSnappedPresentation;
+
+    private void RefreshSnappedPresentation(bool forceApply = false)
+    {
+        if (_paperChrome == null)
+        {
+            return;
+        }
+
+        var snapped = !_paper.IsCollapsed &&
+            !_isTransitionVisualsActive &&
+            !_isApplyingCollapsedState &&
+            LooksSnappedNow();
+
+        if (snapped == _isSnappedPresentation)
+        {
+            // Callers at transition boundaries force a re-apply because the transition
+            // itself rewrites Margin/CornerRadius/Effect while the guards were up.
+            if (forceApply)
+            {
+                ApplyPaperChromePresentation();
+            }
+
+            return;
+        }
+
+        _isSnappedPresentation = snapped;
+        ApplyPaperChromePresentation();
+    }
+
+    // Central authority for the paper chrome's snap/form presentation: Effect, Margin and
+    // CornerRadius. Any code that changes these based on paper form (expanded vs capsule)
+    // or snap state should go through here so the inputs can't disagree with each other.
+    // Historical bug: two call sites (SetCollapsedState) mutated an existing DropShadowEffect
+    // in-place via `if (Effect is DropShadowEffect s)`. Once snap can set Effect=null,
+    // that check silently no-ops and the capsule ends up with expanded-shape shadow (or none).
+    private void ApplyPaperChromePresentation()
+    {
+        if (_paperChrome == null)
+        {
+            return;
+        }
+
+        var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
+
+        // Snapped presentation: make the paper fill the tile edge-to-edge (no shadow, no
+        // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
+        if (snappedExpanded)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.Margin = new Thickness(0);
+            _paperChrome.CornerRadius = new CornerRadius(0);
+            return;
+        }
+
+        // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
+        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        _paperChrome.Margin = new Thickness(WindowChromeMargin);
+        _paperChrome.CornerRadius = PaperChromeCornerRadiusForState(isCapsule);
+        _paperChrome.Effect = isCapsule
+            ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.08)
+            : CreatePaperChromeShadow();
+    }
+
+    private bool LooksSnappedNow()
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            return false;
+        }
+
+        var workArea = WindowWorkAreaHelper.WorkAreaFor(this);
+        if (workArea.IsEmpty)
+        {
+            return false;
+        }
+
+        // WM_WINDOWPOSCHANGED arrives before WPF syncs Left/Top/Width/Height (that happens in
+        // the WM_MOVE/WM_SIZE that DefWindowProc raises afterwards, and never while maximized),
+        // so the DPs still hold the pre-snap rect here. Half/quarter snaps are a single
+        // SetWindowPos with no follow-up message, so judging by the DPs stays one move behind
+        // forever — read the live hwnd rect instead.
+        if (!TryGetWindowRectDip(out var windowRect))
+        {
+            return false;
+        }
+
+        var chromeRect = new Rect(
+            windowRect.Left + WindowChromeMargin,
+            windowRect.Top + WindowChromeMargin,
+            Math.Max(0, windowRect.Width - WindowChromeInset),
+            Math.Max(0, windowRect.Height - WindowChromeInset));
+
+        return MatchesSnapTile(windowRect, workArea) || MatchesSnapTile(chromeRect, workArea);
+    }
+
+    // The current hwnd rect (GetWindowRect, physical pixels) converted into this window's DIP
+    // space via the same per-monitor transform WorkAreaFor uses, so both rects stay comparable
+    // on mixed-DPI monitor setups.
+    private bool TryGetWindowRectDip(out Rect rect)
+    {
+        rect = Rect.Empty;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero || !GetWindowRect(handle, out var native))
+        {
+            return false;
+        }
+
+        if (PresentationSource.FromVisual(this)?.CompositionTarget is not { } target)
+        {
+            return false;
+        }
+
+        var transform = target.TransformFromDevice;
+        rect = new Rect(
+            transform.Transform(new Point(native.Left, native.Top)),
+            transform.Transform(new Point(native.Right, native.Bottom)));
+        return true;
+    }
+
+    private static bool MatchesSnapTile(Rect rect, Rect workArea)
+    {
+        if (rect.IsEmpty || workArea.IsEmpty)
+        {
+            return false;
+        }
+
+        // The OS may report the snapped outer transparent window or the inner visible paper
+        // bounds depending on the route (mouse snap / keyboard snap / maximize). Accept both
+        // by allowing the 8px transparent margin plus DPI and resize-grip rounding noise.
+        const double tolerance = WindowChromeInset + 4.0;
+        var left = rect.Left;
+        var top = rect.Top;
+        var right = rect.Right;
+        var bottom = rect.Bottom;
+        var wa = workArea;
+
+        bool nearLeft = Math.Abs(left - wa.Left) <= tolerance;
+        bool nearTop = Math.Abs(top - wa.Top) <= tolerance;
+        bool nearRight = Math.Abs(right - wa.Right) <= tolerance;
+        bool nearBottom = Math.Abs(bottom - wa.Bottom) <= tolerance;
+
+        bool halfWidth = Math.Abs(rect.Width - wa.Width / 2) <= tolerance;
+        bool halfHeight = Math.Abs(rect.Height - wa.Height / 2) <= tolerance;
+        bool fullWidth = Math.Abs(rect.Width - wa.Width) <= tolerance;
+        bool fullHeight = Math.Abs(rect.Height - wa.Height) <= tolerance;
+
+        // Top-edge snap / maximize: full monitor work area.
+        if (fullWidth && fullHeight && nearLeft && nearTop && nearRight && nearBottom)
+        {
+            return true;
+        }
+
+        // Half-screen snap: full height on one edge.
+        if (fullHeight && nearTop && nearBottom && halfWidth && (nearLeft || nearRight))
+        {
+            return true;
+        }
+
+        // Vertical half snap (Win+Up/Down half): full width, half height.
+        if (fullWidth && nearLeft && nearRight && halfHeight && (nearTop || nearBottom))
+        {
+            return true;
+        }
+
+        // Quarter snap: half width + half height, touching a corner.
+        if (halfWidth && halfHeight && (nearLeft || nearRight) && (nearTop || nearBottom))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static DropShadowEffect CreatePaperChromeShadow(double blurRadius = 14, double opacity = 0.18)
+    {
+        return new DropShadowEffect
+        {
+            BlurRadius = blurRadius,
+            ShadowDepth = 2,
+            Opacity = opacity
+        };
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -1019,15 +1251,42 @@ public sealed partial class PaperWindow : Window
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 14,
-                ShadowDepth = 2,
-                Opacity = 0.18
-            }
+            Effect = CreatePaperChromeShadow()
         };
         _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
+
+        // Chrome-level drag gesture: when users click the chrome background itself (top margin
+        // area in snapped state, or transparent margin in floating state), initiate title bar
+        // drag. This covers the gap where top.Margin creates a dead zone at the window's edge.
+        _paperChrome.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (e.OriginalSource == _paperChrome || e.OriginalSource == _windowHost || e.OriginalSource == _shell)
+            {
+                BeginTitleBarDragGesture(_paperChrome, e);
+            }
+        };
+        _paperChrome.PreviewMouseMove += (_, e) =>
+        {
+            if (e.OriginalSource == _paperChrome || e.OriginalSource == _windowHost || e.OriginalSource == _shell)
+            {
+                UpdateTitleBarDragGesture(_paperChrome, e);
+            }
+        };
+        _paperChrome.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (e.OriginalSource == _paperChrome || e.OriginalSource == _windowHost || e.OriginalSource == _shell)
+            {
+                EndTitleBarDragGesture(_paperChrome);
+            }
+        };
+        _paperChrome.LostMouseCapture += (_, _) =>
+        {
+            if (Mouse.LeftButton != MouseButtonState.Pressed)
+            {
+                _pendingTitleBarDrag = false;
+            }
+        };
 
         _windowHost.Children.Add(_paperChrome);
 
@@ -1066,6 +1325,7 @@ public sealed partial class PaperWindow : Window
 
         _paperChrome.ContextMenu = BuildPaperContextMenu();
         UpdateTextZoom();
+        ApplyPaperChromePresentation();
     }
 
     private void AttachCapsuleShellToWindowHost()
@@ -2324,7 +2584,9 @@ public sealed partial class PaperWindow : Window
         _paperChrome.VerticalAlignment = VerticalAlignment.Stretch;
         _shellScale.ScaleX = 1.0;
         _shellScale.ScaleY = 1.0;
-        _paperChrome.CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode);
+        // Restore the full chrome presentation (corner radius, margin, shadow) for the
+        // current form + snap state instead of just the corner radius.
+        ApplyPaperChromePresentation();
     }
 
     private void UpdateTransitionCornerRadius(

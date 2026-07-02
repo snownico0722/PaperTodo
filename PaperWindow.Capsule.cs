@@ -553,12 +553,6 @@ public sealed partial class PaperWindow
         {
             RefreshCapsuleLabel();
             _capsuleShell.Visibility = Visibility.Visible;
-
-            if (_paperChrome.Effect is System.Windows.Media.Effects.DropShadowEffect shadow)
-            {
-                shadow.BlurRadius = 8;
-                shadow.Opacity = 0.08;
-            }
         }
         else
         {
@@ -568,13 +562,12 @@ public sealed partial class PaperWindow
             {
                 RebuildTodoRows();
             }
-
-            if (_paperChrome.Effect is System.Windows.Media.Effects.DropShadowEffect shadow)
-            {
-                shadow.BlurRadius = 14;
-                shadow.Opacity = 0.18;
-            }
         }
+
+        // Shadow/margin/corner selection is form-aware and snap-aware; centralize it so a
+        // null Effect (snap suppression) can't make the local `is DropShadowEffect` update
+        // silently no-op and leave the wrong shadow parameters on the capsule/expanded form.
+        ApplyPaperChromePresentation();
 
         if (animate)
         {
@@ -714,6 +707,9 @@ public sealed partial class PaperWindow
                 _shell.Height = double.NaN;
 
                 _isApplyingCollapsedState = false;
+                // Re-judge snap state and force re-apply: transition-time position messages
+                // were guarded off, and ResetTransitionVisuals rewrote the corner radius.
+                RefreshSnappedPresentation(forceApply: true);
                 if (saveGeometry)
                 {
                     _controller.UpdateGeometry(_paper, this);
@@ -767,6 +763,9 @@ public sealed partial class PaperWindow
             Height = finalTargetHeight;
 
             _isApplyingCollapsedState = false;
+            // Same as the animated path: re-judge and force re-apply after the transition
+            // rewrote the chrome visuals.
+            RefreshSnappedPresentation(forceApply: true);
             if (saveGeometry)
             {
                 _controller.UpdateGeometry(_paper, this);
