@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
@@ -663,6 +664,10 @@ public sealed partial class PaperWindow : Window
         }
 
         CloseExpandedDeepCapsuleSlotHostForReal();
+
+        // Force save before closing to prevent data loss if user edited within the last 450ms
+        _controller.SaveNow();
+
         _closeForReal = true;
         Close();
     }
@@ -833,18 +838,40 @@ public sealed partial class PaperWindow : Window
         if (snappedExpanded)
         {
             _paperChrome.Effect = null;
-            _paperChrome.Margin = new Thickness(0);
-            _paperChrome.CornerRadius = new CornerRadius(0);
+            AnimateMarginAndCorner(new Thickness(0), new CornerRadius(0));
             return;
         }
 
         // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
         var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
-        _paperChrome.Margin = new Thickness(WindowChromeMargin);
-        _paperChrome.CornerRadius = PaperChromeCornerRadiusForState(isCapsule);
+        var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
+        AnimateMarginAndCorner(new Thickness(WindowChromeMargin), targetCorner);
         _paperChrome.Effect = isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.08)
             : CreatePaperChromeShadow();
+    }
+
+    private void AnimateMarginAndCorner(Thickness targetMargin, CornerRadius targetCorner)
+    {
+        const int duration = 100;
+        var easing = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+
+        // Animate margin for smooth visual transition
+        if (_paperChrome.Margin != targetMargin)
+        {
+            var marginAnim = new ThicknessAnimation(targetMargin, TimeSpan.FromMilliseconds(duration))
+            {
+                EasingFunction = easing
+            };
+            _paperChrome.BeginAnimation(Border.MarginProperty, marginAnim);
+        }
+        else
+        {
+            _paperChrome.Margin = targetMargin;
+        }
+
+        // CornerRadius doesn't have built-in animation support in WPF, set directly
+        _paperChrome.CornerRadius = targetCorner;
     }
 
     private bool LooksSnappedNow()
