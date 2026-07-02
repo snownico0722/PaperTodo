@@ -1629,9 +1629,24 @@ public sealed partial class AppController : IDisposable
     }
 
     // A queue is identified by (monitor device, edge). All docked capsules sharing the same
-    // pair form one vertical stack with its own master pill.
+    // pair form one vertical stack with its own master pill. At runtime, a disconnected monitor
+    // falls back to the primary queue so unplugging a screen cannot leave duplicate masters on
+    // the same physical edge; the paper's persisted monitor tag is left intact for reconnects.
+    private static string LiveQueueMonitorDeviceName(string monitorDeviceName)
+    {
+        var normalized = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            return "";
+        }
+
+        return WindowWorkAreaHelper.WorkAreaForDevice(normalized).HasValue
+            ? normalized
+            : "";
+    }
+
     private static string QueueKey(string monitorDeviceName, string side)
-        => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
+        => $"{LiveQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
     private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
 

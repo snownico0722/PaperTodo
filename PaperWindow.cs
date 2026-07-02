@@ -133,6 +133,7 @@ public sealed partial class PaperWindow : Window
     // Cross-edge/monitor drag: cursor offset inside the pill, last DIP point for layout/drop
     // ordering, and last raw PointToScreen point for Win32 monitor resolution.
     private double _deepCapsuleDragMouseOffsetX;
+    private string _deepCapsuleDragStartMonitorDeviceName = "";
     private Point _deepCapsuleDragLastDip;
     private Point _deepCapsuleDragLastScreenPos;
     private double _deepCapsuleSlotLeft;
@@ -609,6 +610,7 @@ public sealed partial class PaperWindow : Window
         };
         LocationChanged += (_, _) => SaveGeometryIfAllowed();
         SizeChanged += (_, _) => SaveGeometryIfAllowed();
+        StateChanged += (_, _) => RefreshSnappedPresentation(forceApply: true);
         PreviewMouseMove += OnWindowPreviewMouseMove;
         PreviewMouseWheel += OnWindowPreviewMouseWheel;
         PreviewMouseLeftButtonUp += OnWindowPreviewMouseLeftButtonUp;
@@ -860,6 +862,11 @@ public sealed partial class PaperWindow : Window
         if (WindowState == WindowState.Minimized)
         {
             return false;
+        }
+
+        if (WindowState == WindowState.Maximized)
+        {
+            return true;
         }
 
         var workArea = WindowWorkAreaHelper.WorkAreaFor(this);

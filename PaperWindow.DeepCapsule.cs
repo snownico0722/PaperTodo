@@ -1531,10 +1531,6 @@ public sealed partial class PaperWindow
         {
             SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
         }
-        if (keepActiveUntilRetracted)
-        {
-            SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
-        }
         _isCollapseAllRetracted = false;
         _deepCapsuleIndex = Math.Max(0, index);
         _deepCapsuleVisualOffset = Math.Max(0, visualOffset);
@@ -1619,15 +1615,13 @@ public sealed partial class PaperWindow
         {
             SetDeepCapsuleSlotState(_paper.IsCollapsed ? DeepCapsuleSlotState.CollapsedDocked : DeepCapsuleSlotState.None);
         }
+        // When retracting from Active to Resting, keep the active visuals until the move finishes;
+        // dropping them before moving reads as a hard cut.
         if (!_isApplyingCollapsedState && !keepActiveUntilRetracted)
         {
             SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
         }
         if (wasActive && !_isApplyingCollapsedState && !keepActiveUntilRetracted)
-        {
-            SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
-        }
-        if (keepActiveUntilRetracted)
         {
             SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
         }
@@ -1644,6 +1638,10 @@ public sealed partial class PaperWindow
                 animate,
                 keepActiveUntilRetracted ? DeepCapsuleLayout.SlotRetractMoveMilliseconds : DeepCapsuleLayout.SlotMoveMilliseconds,
                 forceRestingOffset: keepActiveUntilRetracted);
+            if (keepActiveUntilRetracted)
+            {
+                ClearDeepCapsuleSlotActiveAfterMove(DeepCapsuleLayout.SlotRetractMoveMilliseconds);
+            }
         }
     }
 
@@ -1949,6 +1947,8 @@ public sealed partial class PaperWindow
         _deepCapsuleDragStartDip = DeepCapsuleScreenPointToDip(_deepCapsuleSlotMouseDownScreenPos);
         _deepCapsuleDragLastDip = currentDip;
         _deepCapsuleDragLastScreenPos = currentScreenPos;
+        _deepCapsuleDragStartMonitorDeviceName = WindowWorkAreaHelper
+            .MonitorAtDeviceScreenPoint(_deepCapsuleSlotMouseDownScreenPos)?.DeviceName ?? "";
         _deepCapsuleCrossQueueDragUnlocked = false;
         _deepCapsuleDragMouseOffsetY = currentDip.Y - _deepCapsuleSlotHost.Top;
         _deepCapsuleDragMouseOffsetX = currentDip.X - _deepCapsuleSlotHost.Left;
@@ -1981,12 +1981,17 @@ public sealed partial class PaperWindow
 
         if (_deepCapsuleSlotHost != null)
         {
-            if (!_deepCapsuleCrossQueueDragUnlocked && ShouldUnlockDeepCapsuleCrossQueueDrag(cursorDip))
+            if (!_deepCapsuleCrossQueueDragUnlocked &&
+                ShouldUnlockDeepCapsuleCrossQueueDrag(cursorDip, currentScreenPos))
             {
                 _deepCapsuleCrossQueueDragUnlocked = true;
-                SetDeepCapsuleCrossQueueDragVisual(true, animate: true);
+                _deepCapsuleCrossQueueDragWidth = DeepCapsuleCrossQueueDragWidth();
                 _deepCapsuleDragMouseOffsetX = _deepCapsuleCrossQueueDragWidth / 2.0;
                 _deepCapsuleDragMouseOffsetY = PaperLayoutDefaults.CapsuleHeight / 2.0;
+                ApplyDeepCapsuleCrossQueueDragHostBounds(
+                    RoundToDevicePixelX(cursorDip.X - _deepCapsuleDragMouseOffsetX),
+                    RoundToDevicePixelY(cursorDip.Y - _deepCapsuleDragMouseOffsetY));
+                SetDeepCapsuleCrossQueueDragVisual(true, animate: true);
                 Mouse.OverrideCursor = Cursors.SizeAll;
             }
 
@@ -2090,12 +2095,31 @@ public sealed partial class PaperWindow
         }
     }
 
-    private bool ShouldUnlockDeepCapsuleCrossQueueDrag(Point cursorDip)
+    private bool ShouldUnlockDeepCapsuleCrossQueueDrag(Point cursorDip, Point currentScreenPos)
     {
-        var outwardDelta = MyDeepCapsuleIsLeftEdge
-            ? cursorDip.X - _deepCapsuleDragStartDip.X
-            : _deepCapsuleDragStartDip.X - cursorDip.X;
-        return outwardDelta >= DeepCapsuleCrossQueueDragUnlockDistance;
+        var horizontalDelta = Math.Abs(cursorDip.X - _deepCapsuleDragStartDip.X);
+        if (horizontalDelta >= DeepCapsuleCrossQueueDragUnlockDistance)
+        {
+            return true;
+        }
+
+        return HasDeepCapsuleDragEnteredAnotherMonitor(currentScreenPos);
+    }
+
+    private bool HasDeepCapsuleDragEnteredAnotherMonitor(Point currentScreenPos)
+    {
+        if (string.IsNullOrEmpty(_deepCapsuleDragStartMonitorDeviceName))
+        {
+            return false;
+        }
+
+        var currentMonitor = WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(currentScreenPos);
+        return currentMonitor.HasValue &&
+            !string.IsNullOrEmpty(currentMonitor.Value.DeviceName) &&
+            !string.Equals(
+                currentMonitor.Value.DeviceName,
+                _deepCapsuleDragStartMonitorDeviceName,
+                StringComparison.Ordinal);
     }
 
     private void EndDeepCapsuleReorderDrag(bool commit)
@@ -2107,6 +2131,7 @@ public sealed partial class PaperWindow
 
         var crossQueueDragUnlocked = _deepCapsuleCrossQueueDragUnlocked;
         _deepCapsuleCrossQueueDragUnlocked = false;
+        _deepCapsuleDragStartMonitorDeviceName = "";
         SetDeepCapsuleCrossQueueDragVisual(false, animate: crossQueueDragUnlocked);
 
         SetDeepCapsuleGestureState(DeepCapsuleGestureState.Idle);
