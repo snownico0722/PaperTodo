@@ -1034,7 +1034,10 @@ public sealed partial class PaperWindow : Window
             return false;
         }
 
-        var workArea = WindowWorkAreaHelper.WorkAreaFor(remembered);
+        // The remembered snap tile was captured in this window's DIP space. Keep the
+        // restore-time validation in the same coordinate space; re-resolving from the rect
+        // uses system-DPI coordinates and can reject valid tiles on mixed-DPI monitors.
+        var workArea = WindowWorkAreaHelper.WorkAreaFor(this);
         return TryGetSnapTileBounds(remembered, workArea, out bounds);
     }
 

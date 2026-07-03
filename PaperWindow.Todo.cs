@@ -974,6 +974,10 @@ public sealed partial class PaperWindow
 
         var fallbackFocus = focusItemId ?? PreviousItem(item)?.Id ?? NextItem(item)?.Id;
         var itemId = item.Id;
+        var removedLinkedNoteIds = _paper.Items
+            .Where(i => i.Id == itemId)
+            .Select(i => i.LinkedNoteId)
+            .ToList();
 
         // 删除动画
         if (_controller.State.EnableAnimations)
@@ -993,6 +997,7 @@ public sealed partial class PaperWindow
                 NormalizeTodoItems();
                 NormalizeOrders();
                 _controller.MarkDirty();
+                RefreshCapsuleEligibilityForLinkedNotes(removedLinkedNoteIds);
 
                 var animationGeneration = _todoRowsGeneration;
                 row.IsHitTestVisible = false;
@@ -1030,6 +1035,7 @@ public sealed partial class PaperWindow
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();
+        RefreshCapsuleEligibilityForLinkedNotes(removedLinkedNoteIds);
 
         if (rebuild)
         {
@@ -1052,6 +1058,9 @@ public sealed partial class PaperWindow
         }
 
         var completedItemIds = new HashSet<string>(completedItems.Select(i => i.Id), StringComparer.Ordinal);
+        var removedLinkedNoteIds = completedItems
+            .Select(i => i.LinkedNoteId)
+            .ToList();
         var clearDoneGeneration = ++_clearDoneGeneration;
 
         PushUndoSnapshot();
@@ -1073,6 +1082,7 @@ public sealed partial class PaperWindow
             ?? remainingItems.FirstOrDefault()?.Id;
 
         _controller.MarkDirty();
+        RefreshCapsuleEligibilityForLinkedNotes(removedLinkedNoteIds);
 
         // 批量消失动画
         if (_controller.State.EnableAnimations && completedItems.Count > 0)
@@ -1148,6 +1158,20 @@ public sealed partial class PaperWindow
         }
 
         RebuildTodoRows(focus);
+    }
+
+    private void RefreshCapsuleEligibilityForLinkedNotes(IEnumerable<string?> noteIds)
+    {
+        var refreshed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var noteId in noteIds)
+        {
+            if (string.IsNullOrWhiteSpace(noteId) || !refreshed.Add(noteId))
+            {
+                continue;
+            }
+
+            _controller.RefreshCapsuleEligibilityForLinkedNote(noteId);
+        }
     }
 
     public bool TryHitTodoRow(Point screenPoint, out string? itemId)
