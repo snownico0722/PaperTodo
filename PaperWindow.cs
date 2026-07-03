@@ -31,6 +31,7 @@ using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 using TextBox = System.Windows.Controls.TextBox;
 using VerticalAlignment = System.Windows.VerticalAlignment;
 using WpfMenuItem = System.Windows.Controls.MenuItem;
+using WpfPath = System.Windows.Shapes.Path;
 
 namespace PaperTodo;
 
@@ -227,6 +228,7 @@ public sealed partial class PaperWindow : Window
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     public bool IsDeepCapsuleSlotVisible => _deepCapsuleSlotHost?.IsVisible == true;
     public bool HasVisibleSurface => IsVisible || IsDeepCapsuleSlotVisible;
+    public bool HasExpandedPaperSurface => IsVisible && !_paper.IsCollapsed;
     public bool IsCollapseAllRetracted => _isCollapseAllRetracted;
     public bool IsClosed { get; private set; }
     public bool HasExpandedDeepCapsuleSlotReservation => _deepCapsuleSlotState is DeepCapsuleSlotState.ExpandedReserved or DeepCapsuleSlotState.Retracting;
@@ -383,8 +385,10 @@ public sealed partial class PaperWindow : Window
     private static Brush AppendHoverBgBrush => Theme.Tint(26);
     private static Brush NoteLinkTargetBgBrush => Theme.Tint((byte)(Theme.IsDark ? 36 : 28));
     private static Brush NoteLinkTargetBorderBrush => Theme.Tint(150);
-    private static Brush LinkedNoteBgBrush => Theme.Tint((byte)(Theme.IsDark ? 28 : 18));
-    private static Brush LinkedNoteHoverBgBrush => Theme.Tint((byte)(Theme.IsDark ? 48 : 34));
+    private static Brush LinkedNoteNormalBgBrush => Theme.Tint((byte)(Theme.IsDark ? 28 : 18));
+    private static Brush LinkedNoteLightBgBrush => Theme.Tint((byte)(Theme.IsDark ? 48 : 34));
+    private static Brush LinkedNoteMediumBgBrush => Theme.Tint((byte)(Theme.IsDark ? 78 : 58));
+    private static Brush LinkedNoteActiveTextBrush => Theme.TextBrush;
 
     private static Brush CheckBoxBorderBrush => Theme.CheckBoxBorderBrush;
 
@@ -396,6 +400,8 @@ public sealed partial class PaperWindow : Window
 
     private static Brush TitleBarBrush => Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
+    private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
+    private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
     private const int TodoMoveAnimationMilliseconds = 150;
 
     private static readonly ControlTemplate SharedContextMenuTemplate = BuildContextMenuTemplate();
@@ -1488,9 +1494,8 @@ public sealed partial class PaperWindow : Window
         titleArea.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleArea.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        _paperIconButton = IconButton(_paper.Type == PaperTypes.Note ? "✎" : "✓", _paper.AlwaysOnTop ? Strings.Get("Unpin") : Strings.Get("Pin"));
+        _paperIconButton = IconButton("", _paper.AlwaysOnTop ? Strings.Get("Unpin") : Strings.Get("Pin"));
         _paperIconButton.Width = 23;
-        _paperIconButton.FontSize = _paper.Type == PaperTypes.Note ? NotePaperIconFontSize : TodoPaperIconFontSize;
         _paperIconButton.HorizontalAlignment = HorizontalAlignment.Left;
         _paperIconButton.VerticalAlignment = VerticalAlignment.Center;
         _paperIconButton.Click += (_, _) => ToggleTopmost();
@@ -2044,11 +2049,9 @@ public sealed partial class PaperWindow : Window
         }
 
         _paperIconButton.ToolTip = _paper.AlwaysOnTop ? Strings.Get("Unpin") : Strings.Get("Pin");
-        _paperIconButton.Opacity = _paper.AlwaysOnTop ? 1.0 : 0.58;
-        _paperIconButton.Foreground = _paper.AlwaysOnTop ? TextBrush : WeakTextBrush;
-        _paperIconButton.FontWeight = _paper.Type == PaperTypes.Todo
-            ? FontWeights.Bold
-            : (_paper.AlwaysOnTop ? FontWeights.SemiBold : FontWeights.Normal);
+        _paperIconButton.Content = CreateTopmostPinIcon(_paperIconButton, _paper.AlwaysOnTop);
+        _paperIconButton.Opacity = 1.0;
+        _paperIconButton.Foreground = _paper.AlwaysOnTop ? Theme.ActiveBrush : WeakTextBrush;
     }
 
     public void RefreshPaperTitle()
@@ -2423,6 +2426,78 @@ public sealed partial class PaperWindow : Window
             Height = 24,
             Margin = new Thickness(1, 0, 1, 0),
             Style = SharedIconButtonStyle
+        };
+    }
+
+    private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
+    {
+        var canvas = new Canvas
+        {
+            Width = 24,
+            Height = 24,
+            SnapsToDevicePixels = true
+        };
+
+        if (pinned)
+        {
+            var head = new WpfPath
+            {
+                Data = Geometry.Parse(PinOutlineHeadPathData),
+                StrokeThickness = 2.15,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                SnapsToDevicePixels = true
+            };
+            head.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
+            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
+            canvas.Children.Add(head);
+
+            var needle = new WpfPath
+            {
+                Data = Geometry.Parse(PinNeedlePathData),
+                SnapsToDevicePixels = true
+            };
+            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
+            canvas.Children.Add(needle);
+        }
+        else
+        {
+            var head = new WpfPath
+            {
+                Data = Geometry.Parse(PinOutlineHeadPathData),
+                StrokeThickness = 2.15,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                SnapsToDevicePixels = true
+            };
+            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
+            canvas.Children.Add(head);
+
+            var needle = new WpfPath
+            {
+                Data = Geometry.Parse(PinNeedlePathData),
+                SnapsToDevicePixels = true
+            };
+            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
+            canvas.Children.Add(needle);
+        }
+
+        return new Viewbox
+        {
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+            Child = canvas
+        };
+    }
+
+    private static System.Windows.Data.Binding CreateForegroundBinding(Button owner)
+    {
+        return new System.Windows.Data.Binding(nameof(Control.Foreground))
+        {
+            Source = owner
         };
     }
 

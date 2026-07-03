@@ -428,6 +428,15 @@ public sealed partial class AppController : IDisposable
         return true;
     }
 
+    public bool IsLinkedNoteShown(string? noteId)
+    {
+        var note = FindNote(noteId);
+        return note != null &&
+            _windows.TryGetValue(note.Id, out var window) &&
+            note.IsVisible &&
+            window.HasExpandedPaperSurface;
+    }
+
     public bool ShouldRunLinkedScriptCapsule(string? noteId)
     {
         return State.EnableTodoNoteLinks &&
@@ -523,6 +532,21 @@ public sealed partial class AppController : IDisposable
 
         if (_windows.TryGetValue(note.Id, out var window))
         {
+            if (IsLinkedNoteShown(note.Id))
+            {
+                if (State.CollapseExpandedDeepCapsuleOnClick && window.TryHandleLinkedNoteRepeatedOpenAsDeepCapsuleToggle())
+                {
+                    RefreshTodoRowsForLinkedNote(note.Id);
+                    RefreshTrayMenu();
+                    MarkDirty();
+                    return;
+                }
+
+                BringPaperToFront(note);
+                RefreshTodoRowsForLinkedNote(note.Id);
+                return;
+            }
+
             note.IsVisible = true;
             RescuePaperIfOffScreen(note, State.Papers.IndexOf(note));
             window.CancelPendingVisibilityTransitions();
@@ -538,6 +562,7 @@ public sealed partial class AppController : IDisposable
 
             PlaceLinkedNoteBesideAnchor(note, window, anchorWindow);
             ForceWindowToFront(window);
+            RefreshTodoRowsForLinkedNote(note.Id);
             RefreshTrayMenu();
             MarkDirty();
             return;
@@ -550,6 +575,7 @@ public sealed partial class AppController : IDisposable
         {
             ForceWindowToFront(window);
         }
+        RefreshTodoRowsForLinkedNote(note.Id);
     }
 
     public void BeginNoteLinkDrag(PaperData sourceNote)
@@ -836,6 +862,10 @@ public sealed partial class AppController : IDisposable
             ArrangeDeepCapsules(animate: State.EnableAnimations);
         }
         RefreshTrayMenu();
+        if (paper.Type == PaperTypes.Note)
+        {
+            RefreshTodoRowsForLinkedNote(paper.Id);
+        }
         MarkDirty();
     }
 
@@ -1184,6 +1214,10 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules();
         RefreshTrayMenu();
+        if (paper.Type == PaperTypes.Note)
+        {
+            RefreshTodoRowsForLinkedNote(paper.Id);
+        }
         MarkDirty();
     }
 

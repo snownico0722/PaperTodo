@@ -354,6 +354,27 @@ public sealed partial class PaperWindow
         }
     }
 
+    public bool TryHandleLinkedNoteRepeatedOpenAsDeepCapsuleToggle()
+    {
+        if (_paper.IsCollapsed ||
+            !_paper.IsVisible ||
+            !_controller.State.UseCapsuleMode ||
+            !_controller.State.UseDeepCapsuleMode ||
+            !_controller.State.ShowDeepCapsuleWhileExpanded ||
+            !CanDisplayAsCapsule())
+        {
+            return false;
+        }
+
+        if (!HoldsDeepCapsuleSlotWhileExpanded && !HasExpandedDeepCapsuleSlotReservation)
+        {
+            SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.EdgeSlot);
+        }
+
+        SetCollapsedState(true, alignExpandedToDockedEdge: true);
+        return true;
+    }
+
     private void ShowMainWindowForDeepCapsuleActivation()
     {
         if (IsVisible)

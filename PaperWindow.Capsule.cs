@@ -779,6 +779,10 @@ public sealed partial class PaperWindow
         }
 
         _paperChrome.ContextMenu = BuildPaperContextMenu();
+        if (_paper.Type == PaperTypes.Note)
+        {
+            _controller.RefreshTodoRowsForLinkedNote(_paper.Id);
+        }
     }
 
 }

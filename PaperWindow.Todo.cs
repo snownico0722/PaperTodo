@@ -510,6 +510,7 @@ public sealed partial class PaperWindow
         {
             var showLinkedNoteName = _controller.State.ShowLinkedNoteName;
             var allowLongLinkedNoteTitle = showLinkedNoteName && _controller.State.AllowLongLinkedNoteTitles;
+            var linkedNoteActive = _controller.IsLinkedNoteShown(item.LinkedNoteId);
 
             string LinkedNoteButtonLabel(bool isTodoMultiline)
             {
@@ -579,8 +580,8 @@ public sealed partial class PaperWindow
             var linkGlyph = new TextBlock
             {
                 Text = linkedNoteButtonText,
-                Foreground = WeakTextBrush,
-                Opacity = 0.72,
+                Foreground = linkedNoteActive ? LinkedNoteActiveTextBrush : WeakTextBrush,
+                Opacity = linkedNoteActive ? 1.0 : 0.72,
                 FontFamily = showLinkedNoteName
                     ? AppTypography.UiFontFamily
                     : runLinkedScriptOnClick ? new FontFamily("Segoe UI Symbol") : new FontFamily("Segoe MDL2 Assets"),
@@ -606,7 +607,7 @@ public sealed partial class PaperWindow
                 Margin = new Thickness(1, 0, 0, 0),
                 Padding = showLinkedNoteName ? new Thickness(3, 1, 3, 1) : new Thickness(0),
                 CornerRadius = new CornerRadius(RadiusControl),
-                Background = LinkedNoteBgBrush,
+                Background = linkedNoteActive ? LinkedNoteLightBgBrush : LinkedNoteNormalBgBrush,
                 Cursor = Cursors.Hand,
                 ToolTip = runLinkedScriptOnClick
                     ? Strings.Format("ToolTipRunLinkedScriptCapsule", linkedNoteTitle)
@@ -663,15 +664,15 @@ public sealed partial class PaperWindow
 
             linkButton.MouseEnter += (_, _) =>
             {
-                linkButton.Background = LinkedNoteHoverBgBrush;
-                linkGlyph.Foreground = TextBrush;
+                linkButton.Background = linkedNoteActive ? LinkedNoteMediumBgBrush : LinkedNoteLightBgBrush;
+                linkGlyph.Foreground = linkedNoteActive ? LinkedNoteActiveTextBrush : TextBrush;
                 linkGlyph.Opacity = 1.0;
             };
             linkButton.MouseLeave += (_, _) =>
             {
-                linkButton.Background = LinkedNoteBgBrush;
-                linkGlyph.Foreground = WeakTextBrush;
-                linkGlyph.Opacity = 0.7;
+                linkButton.Background = linkedNoteActive ? LinkedNoteLightBgBrush : LinkedNoteNormalBgBrush;
+                linkGlyph.Foreground = linkedNoteActive ? LinkedNoteActiveTextBrush : WeakTextBrush;
+                linkGlyph.Opacity = linkedNoteActive ? 1.0 : 0.7;
                 linkButton.Opacity = 1.0;
             };
             linkButton.MouseLeftButtonDown += (_, e) =>
