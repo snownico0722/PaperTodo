@@ -1249,7 +1249,7 @@ public sealed partial class AppController : IDisposable
 
         if (_windows.TryGetValue(paper.Id, out var window))
         {
-            window.CloseForReal();
+            window.CloseForReal(saveBeforeClose: false);
             _windows.Remove(paper.Id);
         }
 
@@ -1275,7 +1275,7 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules();
         RefreshTrayMenu();
-        MarkDirty();
+        SaveNow();
     }
 
     private void ClearTodoLinksToNote(string noteId)
@@ -1752,11 +1752,55 @@ public sealed partial class AppController : IDisposable
         }
 
         var live = liveQueueKeys.ToHashSet(StringComparer.Ordinal);
+        var changed = false;
         foreach (var staleKey in State.CapsuleCollapseAllActiveQueues.Keys.Where(key => !live.Contains(key)).ToList())
         {
+            if (TryGetDisconnectedQueueFallbackKey(staleKey, out var fallbackKey) &&
+                live.Contains(fallbackKey) &&
+                State.CapsuleCollapseAllActiveQueues.TryGetValue(staleKey, out var active) &&
+                active)
+            {
+                State.CapsuleCollapseAllActiveQueues[fallbackKey] = true;
+                changed = true;
+                continue;
+            }
+
             State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
+            changed = true;
         }
-        SyncLegacyCollapseAllActiveSummary();
+        if (changed)
+        {
+            SyncLegacyCollapseAllActiveSummary();
+        }
+    }
+
+    private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
+    {
+        fallbackKey = "";
+        var separator = queueKey.LastIndexOf('|');
+        if (separator <= 0 || separator >= queueKey.Length - 1)
+        {
+            return false;
+        }
+
+        var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(queueKey[..separator]);
+        if (string.IsNullOrEmpty(monitor) || WindowWorkAreaHelper.WorkAreaForDevice(monitor).HasValue)
+        {
+            return false;
+        }
+
+        var side = queueKey[(separator + 1)..] == DeepCapsuleSides.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        if (!DeepCapsulePapersInOrder().Any(p =>
+                string.Equals(WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(p.CapsuleMonitorDeviceName), monitor, StringComparison.Ordinal) &&
+                DeepCapsuleSides.Normalize(p.CapsuleSide) == side))
+        {
+            return false;
+        }
+
+        fallbackKey = QueueKey("", side);
+        return true;
     }
 
     private void SyncLegacyCollapseAllActiveSummary()
@@ -2483,7 +2527,7 @@ public sealed partial class AppController : IDisposable
 
         foreach (var window in _windows.Values.ToList())
         {
-            window.CloseForReal();
+            window.CloseForReal(saveBeforeClose: false);
         }
 
         foreach (var master in _masterCapsules.Values.ToList())

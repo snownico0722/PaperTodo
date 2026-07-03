@@ -659,7 +659,7 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    public void CloseForReal()
+    public void CloseForReal(bool saveBeforeClose = true)
     {
         if (IsClosed)
         {
@@ -668,8 +668,11 @@ public sealed partial class PaperWindow : Window
 
         CloseExpandedDeepCapsuleSlotHostForReal();
 
-        // Force save before closing to prevent data loss if user edited within the last 450ms
-        _controller.SaveNow();
+        if (saveBeforeClose)
+        {
+            // Force save before closing to prevent data loss if user edited within the last 450ms.
+            _controller.SaveNow();
+        }
 
         _closeForReal = true;
         Close();
