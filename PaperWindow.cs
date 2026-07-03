@@ -230,6 +230,7 @@ public sealed partial class PaperWindow : Window
     public bool IsClosed { get; private set; }
     public bool HasExpandedDeepCapsuleSlotReservation => _deepCapsuleSlotState is DeepCapsuleSlotState.ExpandedReserved or DeepCapsuleSlotState.Retracting;
     public bool OccupiesDeepCapsuleSlot => _paper.IsVisible && (_paper.IsCollapsed || _deepCapsuleSlotState == DeepCapsuleSlotState.ExpandedReserved);
+    public bool IsDeepCapsuleReorderDragInProgress => IsDeepCapsuleReordering;
     public bool SuppressGeometrySave => _suppressGeometrySave;
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
@@ -736,7 +737,14 @@ public sealed partial class PaperWindow : Window
     {
         if (msg is WmDpiChanged or WmDisplayChange or WmSettingChange)
         {
-            _controller.ScheduleDisplayMetricsRefresh();
+            if (IsDeepCapsuleReordering)
+            {
+                _controller.DeferDisplayMetricsRefreshUntilDeepCapsuleDragEnds();
+            }
+            else
+            {
+                _controller.ScheduleDisplayMetricsRefresh();
+            }
         }
 
         if (msg == WmWindowPosChanged)

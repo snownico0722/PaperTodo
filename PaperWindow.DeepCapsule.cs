@@ -1984,15 +1984,8 @@ public sealed partial class PaperWindow
             if (!_deepCapsuleCrossQueueDragUnlocked &&
                 ShouldUnlockDeepCapsuleCrossQueueDrag(cursorDip, currentScreenPos))
             {
-                _deepCapsuleCrossQueueDragUnlocked = true;
-                _deepCapsuleCrossQueueDragWidth = DeepCapsuleCrossQueueDragWidth();
-                _deepCapsuleDragMouseOffsetX = _deepCapsuleCrossQueueDragWidth / 2.0;
-                _deepCapsuleDragMouseOffsetY = PaperLayoutDefaults.CapsuleHeight / 2.0;
-                ApplyDeepCapsuleCrossQueueDragHostBounds(
-                    RoundToDevicePixelX(cursorDip.X - _deepCapsuleDragMouseOffsetX),
-                    RoundToDevicePixelY(cursorDip.Y - _deepCapsuleDragMouseOffsetY));
-                SetDeepCapsuleCrossQueueDragVisual(true, animate: true);
-                Mouse.OverrideCursor = Cursors.SizeAll;
+                BeginDeepCapsuleNativeCrossQueueDrag(currentScreenPos);
+                return;
             }
 
             var targetTop = RoundToDevicePixelY(cursorDip.Y - _deepCapsuleDragMouseOffsetY);
@@ -2009,6 +2002,70 @@ public sealed partial class PaperWindow
                 _deepCapsuleSlotLeft = _deepCapsuleSlotHost.Left;
                 _deepCapsuleSlotTop = _deepCapsuleSlotHost.Top;
             }
+        }
+    }
+
+    private void BeginDeepCapsuleNativeCrossQueueDrag(Point currentScreenPos)
+    {
+        if (_deepCapsuleSlotHost == null)
+        {
+            return;
+        }
+
+        _deepCapsuleCrossQueueDragUnlocked = true;
+        _deepCapsuleCrossQueueDragWidth = DeepCapsuleCrossQueueDragWidth();
+        _deepCapsuleDragMouseOffsetX = _deepCapsuleCrossQueueDragWidth / 2.0;
+        _deepCapsuleDragMouseOffsetY = PaperLayoutDefaults.CapsuleHeight / 2.0;
+
+        var cursorDip = DeepCapsuleScreenPointToDip(currentScreenPos);
+        _deepCapsuleDragLastDip = cursorDip;
+        _deepCapsuleDragLastScreenPos = currentScreenPos;
+        ApplyDeepCapsuleCrossQueueDragHostBounds(
+            RoundToDevicePixelX(cursorDip.X - _deepCapsuleDragMouseOffsetX),
+            RoundToDevicePixelY(cursorDip.Y - _deepCapsuleDragMouseOffsetY));
+        SetDeepCapsuleCrossQueueDragVisual(true, animate: true);
+        Mouse.OverrideCursor = Cursors.SizeAll;
+
+        if (!WindowNative.TryBeginWindowCaptionDrag(_deepCapsuleSlotHost))
+        {
+            return;
+        }
+
+        RefreshDeepCapsuleNativeDragDropPosition();
+        EndDeepCapsuleReorderDrag(commit: true);
+        ClearCapsuleInteractionKeyboardFocus();
+    }
+
+    private void RefreshDeepCapsuleNativeDragDropPosition()
+    {
+        Point screenPos;
+        if (!WindowNative.TryGetCursorScreenPosition(out screenPos))
+        {
+            screenPos = _deepCapsuleDragLastScreenPos;
+            if (_deepCapsuleSlotHost != null &&
+                PresentationSource.FromVisual(_deepCapsuleSlotHost) != null)
+            {
+                var width = _deepCapsuleSlotHost.ActualWidth > 1 ? _deepCapsuleSlotHost.ActualWidth : _deepCapsuleSlotHost.Width;
+                var height = _deepCapsuleSlotHost.ActualHeight > 1 ? _deepCapsuleSlotHost.ActualHeight : _deepCapsuleSlotHost.Height;
+                if (double.IsNaN(width) || double.IsInfinity(width) || width <= 1)
+                {
+                    width = _deepCapsuleCrossQueueDragWidth;
+                }
+                if (double.IsNaN(height) || double.IsInfinity(height) || height <= 1)
+                {
+                    height = PaperLayoutDefaults.CapsuleHeight;
+                }
+
+                screenPos = _deepCapsuleSlotHost.PointToScreen(new Point(width / 2.0, height / 2.0));
+            }
+        }
+
+        _deepCapsuleDragLastScreenPos = screenPos;
+        _deepCapsuleDragLastDip = DeepCapsuleScreenPointToDip(screenPos);
+        if (_deepCapsuleSlotHost != null)
+        {
+            _deepCapsuleSlotLeft = _deepCapsuleSlotHost.Left;
+            _deepCapsuleSlotTop = _deepCapsuleSlotHost.Top;
         }
     }
 
@@ -2129,64 +2186,71 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var crossQueueDragUnlocked = _deepCapsuleCrossQueueDragUnlocked;
-        _deepCapsuleCrossQueueDragUnlocked = false;
-        _deepCapsuleDragStartMonitorDeviceName = "";
-        SetDeepCapsuleCrossQueueDragVisual(false, animate: crossQueueDragUnlocked);
-
-        SetDeepCapsuleGestureState(DeepCapsuleGestureState.Idle);
-        Mouse.OverrideCursor = null;
-        SetDeepCapsuleVisualState(
-            _deepCapsuleSlotShell?.IsMouseOver == true
-                ? DeepCapsuleVisualState.Hovered
-                : DeepCapsuleVisualState.Resting);
-
-        if (commit)
+        try
         {
-            if (!crossQueueDragUnlocked)
+            var crossQueueDragUnlocked = _deepCapsuleCrossQueueDragUnlocked;
+            _deepCapsuleCrossQueueDragUnlocked = false;
+            _deepCapsuleDragStartMonitorDeviceName = "";
+            SetDeepCapsuleCrossQueueDragVisual(false, animate: crossQueueDragUnlocked);
+
+            SetDeepCapsuleGestureState(DeepCapsuleGestureState.Idle);
+            Mouse.OverrideCursor = null;
+            SetDeepCapsuleVisualState(
+                _deepCapsuleSlotShell?.IsMouseOver == true
+                    ? DeepCapsuleVisualState.Hovered
+                    : DeepCapsuleVisualState.Resting);
+
+            if (commit)
             {
-                _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
+                if (!crossQueueDragUnlocked)
+                {
+                    _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
+                    return;
+                }
+
+                // Resolve the (monitor, edge) queue under the drop point. If it differs from this
+                // paper's current queue, reassign it (cross-edge / cross-monitor move). Otherwise it's
+                // a plain vertical reorder within the same queue.
+                var resolved = WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(_deepCapsuleDragLastScreenPos);
+                var dropDip = WindowWorkAreaHelper.DeviceScreenPointToDip(_deepCapsuleDragLastScreenPos);
+                string targetMonitor;
+                Rect targetArea;
+                if (resolved.HasValue)
+                {
+                    targetMonitor = resolved.Value.DeviceName;
+                    targetArea = resolved.Value.WorkArea;
+                }
+                else
+                {
+                    targetMonitor = _paper.CapsuleMonitorDeviceName;
+                    targetArea = DeepCapsuleWorkArea();
+                }
+
+                // Nearer edge of the target monitor by the drop X (left half => left, else right).
+                var targetSide = dropDip.X < targetArea.Left + targetArea.Width / 2
+                    ? DeepCapsuleSides.Left
+                    : DeepCapsuleSides.Right;
+
+                var queueChanged = targetSide != _paper.CapsuleSide ||
+                    !string.Equals(targetMonitor, _paper.CapsuleMonitorDeviceName, StringComparison.Ordinal);
+
+                if (queueChanged)
+                {
+                    _controller.MoveCapsuleToQueue(_paper, targetMonitor, targetSide, dropDip.Y);
+                }
+                else
+                {
+                    _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
+                }
                 return;
             }
 
-            // Resolve the (monitor, edge) queue under the drop point. If it differs from this
-            // paper's current queue, reassign it (cross-edge / cross-monitor move). Otherwise it's
-            // a plain vertical reorder within the same queue.
-            var resolved = WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(_deepCapsuleDragLastScreenPos);
-            var dropDip = WindowWorkAreaHelper.DeviceScreenPointToDip(_deepCapsuleDragLastScreenPos);
-            string targetMonitor;
-            Rect targetArea;
-            if (resolved.HasValue)
-            {
-                targetMonitor = resolved.Value.DeviceName;
-                targetArea = resolved.Value.WorkArea;
-            }
-            else
-            {
-                targetMonitor = _paper.CapsuleMonitorDeviceName;
-                targetArea = DeepCapsuleWorkArea();
-            }
-
-            // Nearer edge of the target monitor by the drop X (left half => left, else right).
-            var targetSide = dropDip.X < targetArea.Left + targetArea.Width / 2
-                ? DeepCapsuleSides.Left
-                : DeepCapsuleSides.Right;
-
-            var queueChanged = targetSide != _paper.CapsuleSide ||
-                !string.Equals(targetMonitor, _paper.CapsuleMonitorDeviceName, StringComparison.Ordinal);
-
-            if (queueChanged)
-            {
-                _controller.MoveCapsuleToQueue(_paper, targetMonitor, targetSide, dropDip.Y);
-            }
-            else
-            {
-                _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
-            }
-            return;
+            MoveDeepCapsuleToCurrentTarget();
         }
-
-        MoveDeepCapsuleToCurrentTarget();
+        finally
+        {
+            _controller.CompleteDeepCapsuleReorderDrag();
+        }
     }
 
     private bool CanReorderDeepCapsuleSlot()

@@ -181,16 +181,34 @@ internal static class WindowNative
         _ = SetFocus(IntPtr.Zero);
     }
 
+    public static bool TryGetCursorScreenPosition(out Point point)
+    {
+        if (GetCursorPos(out var nativePoint))
+        {
+            point = new Point(nativePoint.X, nativePoint.Y);
+            return true;
+        }
+
+        point = default;
+        return false;
+    }
+
     public static void BeginWindowCaptionDrag(Window window)
+    {
+        _ = TryBeginWindowCaptionDrag(window);
+    }
+
+    public static bool TryBeginWindowCaptionDrag(Window window)
     {
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero)
         {
-            return;
+            return false;
         }
 
         _ = ReleaseCapture();
         _ = SendMessage(handle, WmNcLButtonDown, new IntPtr(HtCaption), IntPtr.Zero);
+        return true;
     }
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
@@ -219,6 +237,9 @@ internal static class WindowNative
     private static extern IntPtr SetFocus(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint lpPoint);
+
+    [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
 
     [DllImport("user32.dll", EntryPoint = "SendMessageW")]
@@ -241,4 +262,11 @@ internal static class WindowNative
         IntPtr hMenu,
         IntPtr hInstance,
         IntPtr lpParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorPoint
+    {
+        public int X;
+        public int Y;
+    }
 }

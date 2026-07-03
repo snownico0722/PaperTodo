@@ -52,6 +52,7 @@ public sealed partial class AppController : IDisposable
     private DateTimeOffset _lastFullscreenGlobalScanAt = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFullscreenDebugLogAt = DateTimeOffset.MinValue;
     private bool? _lastFullscreenDebugSuppressState;
+    private bool _displayMetricsRefreshDeferredForDeepCapsuleDrag;
     private PaperWindow? _noteLinkTargetWindow;
     private string? _noteLinkTargetItemId;
     private int _deepCapsuleContextMenuOpenCount;
@@ -997,7 +998,14 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTopmostForForegroundWindow();
-        ArrangeDeepCapsules(animate: false);
+        if (HasDeepCapsuleReorderDragInProgress())
+        {
+            DeferDisplayMetricsRefreshUntilDeepCapsuleDragEnds();
+        }
+        else
+        {
+            ArrangeDeepCapsules(animate: false);
+        }
         foreach (var window in _windows.Values)
         {
             window.RefreshEffectiveTopmost();
@@ -1006,6 +1014,28 @@ public sealed partial class AppController : IDisposable
         {
             m.RefreshEffectiveTopmost();
         }
+    }
+
+    private bool HasDeepCapsuleReorderDragInProgress()
+        => _windows.Values.Any(window => window.IsDeepCapsuleReorderDragInProgress);
+
+    internal void DeferDisplayMetricsRefreshUntilDeepCapsuleDragEnds()
+    {
+        if (!_isExiting)
+        {
+            _displayMetricsRefreshDeferredForDeepCapsuleDrag = true;
+        }
+    }
+
+    internal void CompleteDeepCapsuleReorderDrag()
+    {
+        if (_isExiting || !_displayMetricsRefreshDeferredForDeepCapsuleDrag)
+        {
+            return;
+        }
+
+        _displayMetricsRefreshDeferredForDeepCapsuleDrag = false;
+        ScheduleDisplayMetricsRefresh();
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -1693,6 +1723,11 @@ public sealed partial class AppController : IDisposable
 
     public void ArrangeDeepCapsules(bool animate = false)
     {
+        if (HasDeepCapsuleReorderDragInProgress())
+        {
+            return;
+        }
+
         animate = animate && State.EnableAnimations;
         SyncDeepCapsuleAnchor();
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
