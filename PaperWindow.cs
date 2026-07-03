@@ -133,6 +133,7 @@ public sealed partial class PaperWindow : Window
     // Cross-edge/monitor drag: cursor offset inside the pill, last DIP point for layout/drop
     // ordering, and last raw PointToScreen point for Win32 monitor resolution.
     private double _deepCapsuleDragMouseOffsetX;
+    private int _deepCapsuleReorderPreviewIndex = -1;
     private string _deepCapsuleDragStartMonitorDeviceName = "";
     private Point _deepCapsuleDragLastDip;
     private Point _deepCapsuleDragLastScreenPos;

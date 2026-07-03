@@ -1467,6 +1467,56 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
+    public void PreviewDeepCapsuleReorder(PaperData paper, int targetIndex)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var queueKey = QueueKey(paper);
+        var queueMembers = DeepCapsulePapersInOrder().Where(p => QueueKey(p) == queueKey).ToList();
+        var currentIndex = queueMembers.FindIndex(p => p.Id == paper.Id);
+        if (currentIndex < 0 || queueMembers.Count <= 1)
+        {
+            return;
+        }
+
+        targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count - 1);
+        var draggedPaper = queueMembers[currentIndex];
+        queueMembers.RemoveAt(currentIndex);
+        targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
+        queueMembers.Insert(targetIndex, draggedPaper);
+
+        var queueShowMaster = State.UseCapsuleCollapseAll && queueMembers.Count > 0;
+        if (queueShowMaster && IsCapsuleCollapseAllActiveForQueue(queueKey))
+        {
+            return;
+        }
+
+        var visualOffset = queueShowMaster ? 1 : 0;
+        var slotCount = queueMembers.Count + visualOffset;
+        for (var idx = 0; idx < queueMembers.Count; idx++)
+        {
+            var member = queueMembers[idx];
+            if (member.Id == paper.Id ||
+                !_windows.TryGetValue(member.Id, out var window) ||
+                !ShouldPaperOccupyDeepCapsuleSlot(member, window))
+            {
+                continue;
+            }
+
+            if (member.IsCollapsed)
+            {
+                window.ApplyDeepCapsulePlacement(idx, animate: true, visualOffset, slotCount);
+            }
+            else
+            {
+                window.ApplyExpandedDeepCapsuleSlotPlacement(idx, animate: true, visualOffset, slotCount);
+            }
+        }
+    }
+
     // Reassign a capsule to a different (monitor, edge) queue — the cross-edge / cross-monitor
     // drag. The paper keeps its identity; only its queue tag + position among the target queue's
     // members change. Order within State.Papers is rebuilt so the dragged paper lands at the slot

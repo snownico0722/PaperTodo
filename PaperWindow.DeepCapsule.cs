@@ -1949,6 +1949,7 @@ public sealed partial class PaperWindow
         _deepCapsuleDragLastScreenPos = currentScreenPos;
         _deepCapsuleDragStartMonitorDeviceName = WindowWorkAreaHelper
             .MonitorAtDeviceScreenPoint(_deepCapsuleSlotMouseDownScreenPos)?.DeviceName ?? "";
+        _deepCapsuleReorderPreviewIndex = -1;
         _deepCapsuleCrossQueueDragUnlocked = false;
         _deepCapsuleDragMouseOffsetY = currentDip.Y - _deepCapsuleSlotHost.Top;
         _deepCapsuleDragMouseOffsetX = currentDip.X - _deepCapsuleSlotHost.Left;
@@ -2001,8 +2002,21 @@ public sealed partial class PaperWindow
                 _deepCapsuleSlotHost.Top = targetTop;
                 _deepCapsuleSlotLeft = _deepCapsuleSlotHost.Left;
                 _deepCapsuleSlotTop = _deepCapsuleSlotHost.Top;
+                PreviewDeepCapsuleReorderForCurrentPosition();
             }
         }
+    }
+
+    private void PreviewDeepCapsuleReorderForCurrentPosition()
+    {
+        var dropIndex = DeepCapsuleDropIndexForCurrentPosition();
+        if (dropIndex == _deepCapsuleReorderPreviewIndex)
+        {
+            return;
+        }
+
+        _deepCapsuleReorderPreviewIndex = dropIndex;
+        _controller.PreviewDeepCapsuleReorder(_paper, dropIndex);
     }
 
     private void BeginDeepCapsuleNativeCrossQueueDrag(Point currentScreenPos)
@@ -2191,6 +2205,7 @@ public sealed partial class PaperWindow
             var crossQueueDragUnlocked = _deepCapsuleCrossQueueDragUnlocked;
             _deepCapsuleCrossQueueDragUnlocked = false;
             _deepCapsuleDragStartMonitorDeviceName = "";
+            _deepCapsuleReorderPreviewIndex = -1;
             SetDeepCapsuleCrossQueueDragVisual(false, animate: crossQueueDragUnlocked);
 
             SetDeepCapsuleGestureState(DeepCapsuleGestureState.Idle);
@@ -2245,7 +2260,7 @@ public sealed partial class PaperWindow
                 return;
             }
 
-            MoveDeepCapsuleToCurrentTarget();
+            _controller.ArrangeDeepCapsules(animate: true);
         }
         finally
         {
