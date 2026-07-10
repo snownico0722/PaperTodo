@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@openai.com>
-Date: Fri, 10 Jul 2026 17:10:00 +0800
+Date: Fri, 10 Jul 2026 19:50:00 +0800
 Subject: [PATCH] fix: remove note image render markers
 
 ---
@@ -27,7 +27,7 @@ index 9cc8e5c..f2aa615 100644
          => string.Equals(line.Trim(), RenderMarkerText, StringComparison.Ordinal);
  
 diff --git a/MarkdownTextBox.cs b/MarkdownTextBox.cs
-index 0e5a6e4..fc3e3c8 100644
+index 0e5a6e4..ea6f5c7 100644
 --- a/MarkdownTextBox.cs
 +++ b/MarkdownTextBox.cs
 @@ -7,6 +7,7 @@ using System.Windows.Controls.Primitives;
@@ -38,7 +38,7 @@ index 0e5a6e4..fc3e3c8 100644
  using ICSharpCode.AvalonEdit;
  using ICSharpCode.AvalonEdit.Document;
  using ICSharpCode.AvalonEdit.Rendering;
-@@ -28,7 +29,9 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -28,7 +29,11 @@ public sealed class MarkdownTextBox : TextEditor
      private bool _acceptsTab = true;
      private bool _isPreviewMode;
      private bool _isPostPasteRefreshQueued;
@@ -46,10 +46,12 @@ index 0e5a6e4..fc3e3c8 100644
 +    private bool _isImageRenderRedrawQueued;
 +    private bool _isEnsuringImageAnchorLine;
 +    private bool _hadInternalImageReferences;
++    private TextAnchor? _selectedImageReferenceAnchor;
++    private string? _selectedImageId;
      private double _textZoom = 1.0;
      private string _noteId = "";
      private NoteImageStore? _imageStore;
-@@ -119,7 +122,13 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -119,7 +124,13 @@ public sealed class MarkdownTextBox : TextEditor
      {
          _noteId = noteId ?? "";
          _imageStore = imageStore;
@@ -64,7 +66,7 @@ index 0e5a6e4..fc3e3c8 100644
          RefreshTextView();
      }
  
-@@ -160,7 +169,6 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -160,7 +171,6 @@ public sealed class MarkdownTextBox : TextEditor
          _markdownRenderMode = MarkdownRenderModes.IsValid(mode)
              ? mode
              : MarkdownRenderModes.Enhanced;
@@ -72,32 +74,222 @@ index 0e5a6e4..fc3e3c8 100644
          RefreshVisualStyle();
      }
  
-@@ -436,9 +444,10 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -174,7 +184,9 @@ public sealed class MarkdownTextBox : TextEditor
+     public void RefreshVisualStyle()
+     {
+         Foreground = Theme.TextBrush;
+-        CaretBrush = _isPreviewMode ? Brushes.Transparent : Theme.TextBrush;
++        CaretBrush = _isPreviewMode || HasSelectedImageReference
++            ? Brushes.Transparent
++            : Theme.TextBrush;
+         TextArea.TextView.LinkTextForegroundBrush = Theme.LinkBrush;
+         TextArea.TextView.BackgroundRenderers.Remove(_listBulletRenderer);
+         TextArea.TextView.BackgroundRenderers.Remove(_horizontalRuleRenderer);
+@@ -428,7 +440,73 @@ public sealed class MarkdownTextBox : TextEditor
+     public bool TryGetImageCaretFromSource(DependencyObject? source, out int caretIndex)
+     {
+         caretIndex = 0;
+-        if (Document == null || source == null)
++        if (Document == null ||
++            !TryGetImageBlockTagFromSource(source, out var tag) ||
++            tag.CaretAnchor.IsDeleted)
++        {
++            return false;
++        }
++
++        caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
++        return true;
++    }
++
++    public bool TryGetImageCaretFromPoint(Point point, out int caretIndex)
++    {
++        caretIndex = 0;
++        if (Document == null ||
++            !TryGetImageBlockTagFromPoint(point, out var tag) ||
++            tag.CaretAnchor.IsDeleted)
++        {
++            return false;
++        }
++
++        caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
++        return true;
++    }
++
++    public bool TryGetImageReferenceFromSource(
++        DependencyObject? source,
++        out int referenceOffset,
++        out string imageId)
++    {
++        referenceOffset = 0;
++        imageId = "";
++        if (Document == null ||
++            !TryGetImageBlockTagFromSource(source, out var tag) ||
++            tag.ReferenceAnchor.IsDeleted)
++        {
++            return false;
++        }
++
++        referenceOffset = Math.Clamp(tag.ReferenceAnchor.Offset, 0, Document.TextLength);
++        imageId = tag.ImageId;
++        return true;
++    }
++
++    public bool TryGetImageReferenceFromPoint(
++        Point point,
++        out int referenceOffset,
++        out string imageId)
++    {
++        referenceOffset = 0;
++        imageId = "";
++        if (Document == null ||
++            !TryGetImageBlockTagFromPoint(point, out var tag) ||
++            tag.ReferenceAnchor.IsDeleted)
++        {
++            return false;
++        }
++
++        referenceOffset = Math.Clamp(tag.ReferenceAnchor.Offset, 0, Document.TextLength);
++        imageId = tag.ImageId;
++        return true;
++    }
++
++    private bool TryGetImageBlockTagFromSource(DependencyObject? source, out ImageBlockTag tag)
++    {
++        tag = null!;
++        if (source == null)
+         {
+             return false;
+         }
+@@ -436,9 +514,9 @@ public sealed class MarkdownTextBox : TextEditor
          var current = source;
          while (current != null && !ReferenceEquals(current, this))
          {
 -            if (current is FrameworkElement { Tag: ImageBlockTag tag })
-+            if (current is FrameworkElement { Tag: ImageBlockTag tag } &&
-+                !tag.CaretAnchor.IsDeleted)
++            if (current is FrameworkElement { Tag: ImageBlockTag found })
              {
 -                caretIndex = Math.Clamp(tag.CaretOffset, 0, Document.TextLength);
-+                caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
++                tag = found;
                  return true;
              }
  
-@@ -472,9 +481,10 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -448,19 +526,14 @@ public sealed class MarkdownTextBox : TextEditor
+         return false;
+     }
+ 
+-    public bool TryGetImageCaretFromPoint(Point point, out int caretIndex)
++    private bool TryGetImageBlockTagFromPoint(Point point, out ImageBlockTag tag)
      {
-         caretIndex = 0;
-         if (node is FrameworkElement { Tag: ImageBlockTag tag } element &&
-+            !tag.CaretAnchor.IsDeleted &&
+-        caretIndex = 0;
+-        if (Document == null)
+-        {
+-            return false;
+-        }
+-
++        tag = null!;
+         try
+         {
+             EnsureVisualLines();
+             TextArea.TextView.UpdateLayout();
+-            return TryFindImageBlockAt(TextArea.TextView, point, out caretIndex);
++            return TryFindImageBlockAt(TextArea.TextView, point, out tag);
+         }
+         catch
+         {
+@@ -468,13 +541,13 @@ public sealed class MarkdownTextBox : TextEditor
+         }
+     }
+ 
+-    private bool TryFindImageBlockAt(DependencyObject node, Point editorPoint, out int caretIndex)
++    private bool TryFindImageBlockAt(DependencyObject node, Point editorPoint, out ImageBlockTag tag)
+     {
+-        caretIndex = 0;
+-        if (node is FrameworkElement { Tag: ImageBlockTag tag } element &&
++        tag = null!;
++        if (node is FrameworkElement { Tag: ImageBlockTag found } element &&
              IsPointInsideElement(element, editorPoint))
          {
 -            caretIndex = Math.Clamp(tag.CaretOffset, 0, Document?.TextLength ?? Text.Length);
-+            caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document?.TextLength ?? Text.Length);
++            tag = found;
              return true;
          }
  
-@@ -545,9 +555,7 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -490,7 +563,7 @@ public sealed class MarkdownTextBox : TextEditor
+ 
+         for (var i = 0; i < count; i++)
+         {
+-            if (TryFindImageBlockAt(VisualTreeHelper.GetChild(node, i), editorPoint, out caretIndex))
++            if (TryFindImageBlockAt(VisualTreeHelper.GetChild(node, i), editorPoint, out tag))
+             {
+                 return true;
+             }
+@@ -499,6 +572,66 @@ public sealed class MarkdownTextBox : TextEditor
+         return false;
+     }
+ 
++    public bool SelectImageReference(int referenceOffset, string imageId)
++    {
++        if (Document == null || string.IsNullOrWhiteSpace(imageId))
++        {
++            return false;
++        }
++
++        DocumentLine line;
++        try
++        {
++            line = Document.GetLineByOffset(Math.Clamp(referenceOffset, 0, Document.TextLength));
++        }
++        catch
++        {
++            return false;
++        }
++
++        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
++            !string.Equals(parsedId, imageId, StringComparison.Ordinal))
++        {
++            return false;
++        }
++
++        ClearImageSelection(redraw: false);
++        var anchor = Document.CreateAnchor(line.Offset);
++        anchor.MovementType = AnchorMovementType.BeforeInsertion;
++        anchor.SurviveDeletion = false;
++        _selectedImageReferenceAnchor = anchor;
++        _selectedImageId = imageId;
++        Focus();
++        Select(line.Offset, 0);
++        CaretBrush = Brushes.Transparent;
++        TextArea.Caret.DesiredXPos = double.NaN;
++        QueueImageRenderRedraw();
++        return true;
++    }
++
++    public void ClearImageSelection()
++        => ClearImageSelection(redraw: true);
++
++    private void ClearImageSelection(bool redraw)
++    {
++        if (_selectedImageReferenceAnchor == null && string.IsNullOrEmpty(_selectedImageId))
++        {
++            return;
++        }
++
++        _selectedImageReferenceAnchor = null;
++        _selectedImageId = null;
++        CaretBrush = _isPreviewMode ? Brushes.Transparent : Theme.TextBrush;
++        if (redraw)
++        {
++            QueueImageRenderRedraw();
++        }
++    }
++
++    private bool HasSelectedImageReference =>
++        _selectedImageReferenceAnchor is { IsDeleted: false } &&
++        !string.IsNullOrWhiteSpace(_selectedImageId);
++
+     private bool IsPointInsideElement(FrameworkElement element, Point editorPoint)
+     {
+         if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
+@@ -545,9 +678,7 @@ public sealed class MarkdownTextBox : TextEditor
              return false;
          }
  
@@ -108,7 +300,7 @@ index 0e5a6e4..fc3e3c8 100644
          return true;
      }
  
-@@ -558,12 +566,71 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -558,12 +689,87 @@ public sealed class MarkdownTextBox : TextEditor
              return false;
          }
  
@@ -126,10 +318,26 @@ index 0e5a6e4..fc3e3c8 100644
 +            return;
 +        }
 +
-+        Focus();
 +        var safeOffset = EnsureImageCaretLine(Math.Clamp(caretIndex, 0, Document.TextLength));
++        ApplyImageCaretOffset(safeOffset);
++    }
++
++    private void ApplyImageCaretOffset(int safeOffset)
++    {
++        if (Document == null)
++        {
++            return;
++        }
++
++        Focus();
++        safeOffset = Math.Clamp(safeOffset, 0, Document.TextLength);
 +        CaretOffset = safeOffset;
 +        Select(safeOffset, 0);
++        var caretLine = Document.GetLineByOffset(safeOffset);
++        if (safeOffset == caretLine.Offset)
++        {
++            TextArea.Caret.VisualColumn = 0;
++        }
 +        TextArea.Caret.DesiredXPos = double.NaN;
 +    }
 +
@@ -183,7 +391,7 @@ index 0e5a6e4..fc3e3c8 100644
      public bool TryGetMarkdownLinkFromPoint(Point point, out string url)
      {
          url = "";
-@@ -634,12 +701,24 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -634,12 +840,29 @@ public sealed class MarkdownTextBox : TextEditor
          base.ScrollToLine(Math.Max(1, lineIndex + 1));
      }
  
@@ -197,6 +405,11 @@ index 0e5a6e4..fc3e3c8 100644
 +    {
 +        base.OnTextChanged(e);
 +        _fencedCodeStateCache.Clear();
++
++        if (_selectedImageReferenceAnchor?.IsDeleted == true)
++        {
++            ClearImageSelection();
++        }
 +
 +        if (!_isEnsuringImageAnchorLine)
 +        {
@@ -214,7 +427,7 @@ index 0e5a6e4..fc3e3c8 100644
          {
              return;
          }
-@@ -752,9 +831,7 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -752,9 +975,7 @@ public sealed class MarkdownTextBox : TextEditor
      private void InsertImageReference(NoteImageAsset asset)
      {
          var insertion = BuildBlockInsertion(
@@ -225,7 +438,7 @@ index 0e5a6e4..fc3e3c8 100644
          var start = SelectionStart;
          SelectedText = insertion;
          var caret = start + insertion.Length;
-@@ -803,7 +880,8 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -803,7 +1024,8 @@ public sealed class MarkdownTextBox : TextEditor
      private void TrimTextToMaxLength()
      {
          _isTrimQueued = false;
@@ -235,7 +448,7 @@ index 0e5a6e4..fc3e3c8 100644
          {
              return;
          }
-@@ -811,8 +889,15 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -811,8 +1033,15 @@ public sealed class MarkdownTextBox : TextEditor
          try
          {
              _isTrimmingText = true;
@@ -253,7 +466,7 @@ index 0e5a6e4..fc3e3c8 100644
              CaretIndex = caret;
              Select(caret, 0);
          }
-@@ -821,13 +906,61 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -821,13 +1050,81 @@ public sealed class MarkdownTextBox : TextEditor
              _isTrimmingText = false;
          }
      }
@@ -308,6 +521,26 @@ index 0e5a6e4..fc3e3c8 100644
 -            return;
 +    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
 +    {
++        if (HasSelectedImageReference &&
++            e.Key is System.Windows.Input.Key.Back or System.Windows.Input.Key.Delete &&
++            Keyboard.Modifiers == ModifierKeys.None)
++        {
++            if (TryDeleteSelectedImageReference())
++            {
++                e.Handled = true;
++                return;
++            }
++        }
++
++        if (HasSelectedImageReference &&
++            e.Key == System.Windows.Input.Key.Escape &&
++            Keyboard.Modifiers == ModifierKeys.None)
++        {
++            ClearImageSelection();
++            e.Handled = true;
++            return;
++        }
++
 +        if (e.Key == System.Windows.Input.Key.Back && TryDeleteImageBeforeCaret())
 +        {
 +            e.Handled = true;
@@ -321,10 +554,54 @@ index 0e5a6e4..fc3e3c8 100644
          }
  
          if (!_acceptsTab && e.Key == System.Windows.Input.Key.Tab)
-@@ -847,6 +980,47 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -847,6 +1144,91 @@ public sealed class MarkdownTextBox : TextEditor
          base.OnPreviewKeyDown(e);
      }
  
++    protected override void OnPreviewTextInput(TextCompositionEventArgs e)
++    {
++        if (HasSelectedImageReference && !string.IsNullOrEmpty(e.Text))
++        {
++            TryDeleteSelectedImageReference();
++        }
++
++        base.OnPreviewTextInput(e);
++    }
++
++    private bool TryDeleteSelectedImageReference()
++    {
++        if (Document == null ||
++            _selectedImageReferenceAnchor is not { IsDeleted: false } anchor ||
++            string.IsNullOrWhiteSpace(_selectedImageId))
++        {
++            ClearImageSelection();
++            return false;
++        }
++
++        DocumentLine line;
++        try
++        {
++            line = Document.GetLineByOffset(Math.Clamp(anchor.Offset, 0, Document.TextLength));
++        }
++        catch
++        {
++            ClearImageSelection();
++            return false;
++        }
++
++        var imageId = _selectedImageId;
++        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
++            !string.Equals(parsedId, imageId, StringComparison.Ordinal))
++        {
++            ClearImageSelection();
++            return false;
++        }
++
++        ClearImageSelection(redraw: false);
++        DeleteImageReferenceLine(line, imageId);
++        return true;
++    }
++
 +    private bool TryDeleteImageBeforeCaret()
 +    {
 +        if (_isPreviewMode ||
@@ -369,7 +646,7 @@ index 0e5a6e4..fc3e3c8 100644
      private bool TryHandleMarkdownListEnter()
      {
          if (_isPreviewMode ||
-@@ -1091,20 +1265,25 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1091,20 +1473,25 @@ public sealed class MarkdownTextBox : TextEditor
              return;
          }
  
@@ -401,7 +678,7 @@ index 0e5a6e4..fc3e3c8 100644
          {
              return;
          }
-@@ -1117,6 +1296,98 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1117,6 +1504,98 @@ public sealed class MarkdownTextBox : TextEditor
          QueuePostPasteRefresh();
      }
  
@@ -500,7 +777,7 @@ index 0e5a6e4..fc3e3c8 100644
      private void OnCopying(object sender, DataObjectCopyingEventArgs e)
      {
          try
-@@ -1159,7 +1430,7 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1159,7 +1638,7 @@ public sealed class MarkdownTextBox : TextEditor
      {
          pasteText = text;
          var allowed = MaxLength > 0
@@ -509,7 +786,7 @@ index 0e5a6e4..fc3e3c8 100644
              : int.MaxValue;
          if (allowed <= 0)
          {
-@@ -1255,6 +1526,23 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1255,6 +1734,23 @@ public sealed class MarkdownTextBox : TextEditor
              System.Windows.Threading.DispatcherPriority.ContextIdle);
      }
  
@@ -533,7 +810,7 @@ index 0e5a6e4..fc3e3c8 100644
      private static bool TryGetLinePoint(TextView textView, DocumentLine line, int indexInLine, VisualYPosition yPosition, out Point point)
      {
          point = default;
-@@ -1431,147 +1719,20 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1431,159 +1927,38 @@ public sealed class MarkdownTextBox : TextEditor
          return true;
      }
  
@@ -674,33 +951,62 @@ index 0e5a6e4..fc3e3c8 100644
 -        int lineOffset,
 -        int lineLength,
 -        int caretOffset)
-+        DocumentLine referenceLine,
-+        DocumentLine anchorLine)
++        DocumentLine referenceLine)
      {
          var targetWidth = ImageTargetWidth();
          var displayWidth = ResolveImageDisplayWidth(reference.DisplayOptions, asset, targetWidth);
          var bitmap = asset == null ? null : _imageStore?.GetBitmapSource(asset.Id, Math.Min(targetWidth, displayWidth));
 +        var document = Document!;
-+        var caretOffset = anchorLine.Offset;
++        var referenceAnchor = document.CreateAnchor(referenceLine.Offset);
++        referenceAnchor.MovementType = AnchorMovementType.BeforeInsertion;
++        referenceAnchor.SurviveDeletion = false;
++        var caretOffset = referenceLine.NextLine?.Offset ?? referenceLine.EndOffset;
 +        var caretAnchor = document.CreateAnchor(caretOffset);
 +        caretAnchor.MovementType = AnchorMovementType.BeforeInsertion;
 +        caretAnchor.SurviveDeletion = true;
++        var isSelected = IsImageReferenceSelected(referenceLine);
  
          var host = new Border
          {
-@@ -1581,9 +1742,9 @@ public sealed class MarkdownTextBox : TextEditor
+-            Padding = new Thickness(0, ImageBlockVerticalPadding, 0, ImageBlockVerticalPadding),
++            Padding = new Thickness(0, ImageBlockVerticalPadding - 1, 0, ImageBlockVerticalPadding - 1),
+             Background = Brushes.Transparent,
++            BorderBrush = isSelected ? Theme.CapsuleFocusBorderBrush : Brushes.Transparent,
++            BorderThickness = new Thickness(1),
++            CornerRadius = new CornerRadius(4),
+             HorizontalAlignment = HorizontalAlignment.Left,
              MinWidth = 24,
              Width = targetWidth,
              ToolTip = asset?.OriginalName,
 -            Tag = new ImageBlockTag(caretOffset)
-+            Tag = new ImageBlockTag(caretAnchor)
++            Tag = new ImageBlockTag(referenceAnchor, caretAnchor, reference.ImageId)
          };
 -        host.ContextMenu = CreateImageContextMenu(reference.ImageId, lineOffset, lineLength, canCopy: bitmap != null);
 +        host.ContextMenu = CreateImageContextMenu(reference.ImageId, referenceLine, canCopy: bitmap != null);
  
          if (bitmap == null)
          {
-@@ -1651,7 +1812,7 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1620,6 +1995,19 @@ public sealed class MarkdownTextBox : TextEditor
+         return host;
+     }
+ 
++    private bool IsImageReferenceSelected(DocumentLine referenceLine)
++    {
++        if (_selectedImageReferenceAnchor is not { IsDeleted: false } anchor ||
++            string.IsNullOrWhiteSpace(_selectedImageId))
++        {
++            return false;
++        }
++
++        return anchor.Offset == referenceLine.Offset &&
++            MarkdownImageReferences.TryParseLine(Document!.GetText(referenceLine), out var imageId) &&
++            string.Equals(imageId, _selectedImageId, StringComparison.Ordinal);
++    }
++
+     private static double ResolveImageDisplayWidth(
+         MarkdownImageDisplayOptions options,
+         NoteImageAsset? asset,
+@@ -1651,7 +2039,7 @@ public sealed class MarkdownTextBox : TextEditor
          return Math.Round(Math.Clamp(width, 24, targetWidth), 1);
      }
  
@@ -709,7 +1015,7 @@ index 0e5a6e4..fc3e3c8 100644
      {
          var menu = new ContextMenu
          {
-@@ -1671,7 +1832,7 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1671,7 +2059,7 @@ public sealed class MarkdownTextBox : TextEditor
          {
              Header = Strings.Get("MenuDeleteImage")
          };
@@ -718,7 +1024,7 @@ index 0e5a6e4..fc3e3c8 100644
          menu.Items.Add(delete);
  
          return menu;
-@@ -1693,54 +1854,35 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -1693,54 +2081,35 @@ public sealed class MarkdownTextBox : TextEditor
          }
      }
  
@@ -792,7 +1098,7 @@ index 0e5a6e4..fc3e3c8 100644
      }
  
      private double ImageTargetWidth()
-@@ -2095,20 +2237,12 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -2095,20 +2464,11 @@ public sealed class MarkdownTextBox : TextEditor
                  return -1;
              }
  
@@ -810,26 +1116,23 @@ index 0e5a6e4..fc3e3c8 100644
 -            }
 -
 -            return -1;
-+            var anchorLine = CurrentContext.VisualLine.FirstDocumentLine;
-+            return anchorLine.Offset >= startOffset &&
-+                anchorLine.PreviousLine != null &&
-+                _owner.TryGetImageReferenceForLine(anchorLine.PreviousLine, out _, out _)
-+                ? anchorLine.Offset
++            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
++            return referenceLine.EndOffset >= startOffset &&
++                _owner.TryGetImageReferenceForLine(referenceLine, out _, out _)
++                ? referenceLine.EndOffset
 +                : -1;
          }
  
          public override VisualLineElement ConstructElement(int offset)
-@@ -2124,20 +2258,45 @@ public sealed class MarkdownTextBox : TextEditor
+@@ -2124,20 +2484,46 @@ public sealed class MarkdownTextBox : TextEditor
                  return null!;
              }
  
 -            var line = document.GetLineByOffset(offset);
 -            if (!_owner.TryGetImageElementForLine(line, out var imageOffset, out var reference, out var asset) ||
 -                imageOffset != offset)
-+            var anchorLine = CurrentContext.VisualLine.FirstDocumentLine;
-+            var referenceLine = anchorLine.PreviousLine;
-+            if (anchorLine.Offset != offset ||
-+                referenceLine == null ||
++            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
++            if (referenceLine.EndOffset != offset ||
 +                !_owner.TryGetImageReferenceForLine(referenceLine, out var reference, out var asset))
              {
                  return null!;
@@ -838,17 +1141,18 @@ index 0e5a6e4..fc3e3c8 100644
 -            var referenceLine = line.PreviousLine ?? line;
 -            var element = _owner.CreateImageBlock(reference, asset, referenceLine.Offset, referenceLine.Length, imageOffset);
 -            return new InlineObjectElement(MarkdownImageReferences.RenderMarkerText.Length, element);
-+            var element = _owner.CreateImageBlock(reference, asset, referenceLine, anchorLine);
++            var element = _owner.CreateImageBlock(reference, asset, referenceLine);
 +            return new BlockImageElement(element);
-+        }
-+    }
-+
+         }
+     }
+ 
+-    private sealed record ImageBlockTag(int CaretOffset);
 +    private sealed class BlockImageElement : InlineObjectElement
 +    {
 +        public BlockImageElement(UIElement element)
 +            : base(0, element)
 +        {
-         }
++        }
 +
 +        public override TextRun CreateTextRun(int startVisualColumn, ITextRunConstructionContext context)
 +        {
@@ -864,19 +1168,21 @@ index 0e5a6e4..fc3e3c8 100644
 +        {
 +        }
 +
-+        public override LineBreakCondition BreakAfter => LineBreakCondition.BreakAlways;
-     }
- 
--    private sealed record ImageBlockTag(int CaretOffset);
-+    private sealed record ImageBlockTag(TextAnchor CaretAnchor);
++        public override LineBreakCondition BreakBefore => LineBreakCondition.BreakAlways;
++    }
++
++    private sealed record ImageBlockTag(
++        TextAnchor ReferenceAnchor,
++        TextAnchor CaretAnchor,
++        string ImageId);
  
      private static int CountRepeated(string text, int start, char c)
      {
 diff --git a/PaperWindow.Note.cs b/PaperWindow.Note.cs
-index 84138e0..4bf2523 100644
+index 84138e0..94fb1cf 100644
 --- a/PaperWindow.Note.cs
 +++ b/PaperWindow.Note.cs
-@@ -171,6 +171,10 @@ public sealed partial class PaperWindow
+@@ -171,6 +171,12 @@ public sealed partial class PaperWindow
          box.ImageImportFailed += ShowNoteImageImportFailure;
  
          host.Children.Add(box);
@@ -884,10 +1190,12 @@ index 84138e0..4bf2523 100644
 +        var isEnteringEditorFromPreview = false;
 +        var isInteractingWithImage = false;
 +        var isOpeningImagePicker = false;
++        int? pendingImageReferenceOffset = null;
++        string? pendingImageId = null;
          var editorMenu = CreateContextMenu();
          editorMenu.Items.Add(MenuHeader(Strings.Get("MenuFormat")));
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuBold"), (_, _) => box.WrapSelection("**", "**")));
-@@ -181,7 +185,19 @@ public sealed partial class PaperWindow
+@@ -181,7 +187,19 @@ public sealed partial class PaperWindow
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
@@ -908,7 +1216,7 @@ index 84138e0..4bf2523 100644
          editorMenu.Items.Add(MenuSeparator());
          editorMenu.Items.Add(MenuHeader(Strings.Get("MenuText")));
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuCopy"), (_, _) => box.Copy()));
-@@ -189,10 +205,6 @@ public sealed partial class PaperWindow
+@@ -189,13 +207,10 @@ public sealed partial class PaperWindow
          editorMenu.Items.Add(MenuItem(Strings.Get("MenuSelectAll"), (_, _) => box.SelectAll()));
  
          var previewMenu = BuildPaperContextMenu();
@@ -919,65 +1227,196 @@ index 84138e0..4bf2523 100644
          void ShowPreview()
          {
              TraceNoteRender($"ShowPreview before isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
-@@ -222,11 +234,12 @@ public sealed partial class PaperWindow
-         void ShowEditorAtPreviewPoint(Point previewPoint, DependencyObject? originalSource = null)
++            box.ClearImageSelection();
+             box.SelectionLength = 0;
+             box.SetPreviewMode(true);
+             box.ContextMenu = previewMenu;
+@@ -219,17 +234,43 @@ public sealed partial class PaperWindow
+             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
+         }
+ 
+-        void ShowEditorAtPreviewPoint(Point previewPoint, DependencyObject? originalSource = null)
++        void ShowEditorAtPreviewPoint(
++            Point previewPoint,
++            DependencyObject? originalSource = null,
++            bool selectImage = true)
          {
              TraceNoteRender($"ShowEditorAtPreviewPoint x={previewPoint.X:F1} y={previewPoint.Y:F1}");
 -            var hasPreviewCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
 -            if (!hasPreviewCaret)
-+            var hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
-+            if (!hasImageCaret)
++            var hasImageSelection = false;
++            var imageReferenceOffset = 0;
++            var imageId = "";
++            var hasImageCaret = false;
++            var caretIndex = 0;
++            if (selectImage)
++            {
++                hasImageSelection = box.TryGetImageReferenceFromSource(
++                    originalSource,
++                    out imageReferenceOffset,
++                    out imageId);
++                if (!hasImageSelection)
++                {
++                    hasImageSelection = box.TryGetImageReferenceFromPoint(
++                        previewPoint,
++                        out imageReferenceOffset,
++                        out imageId);
++                }
++            }
++            else
              {
 -                hasPreviewCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
-+                hasImageCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
++                hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out caretIndex);
++                if (!hasImageCaret)
++                {
++                    hasImageCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
++                }
              }
-+            var hasPreviewCaret = hasImageCaret;
-             if (!hasPreviewCaret)
+-            if (!hasPreviewCaret)
++            var hasPreviewPosition = hasImageSelection || hasImageCaret;
++            if (!hasPreviewPosition)
              {
-                 hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
-@@ -242,8 +255,15 @@ public sealed partial class PaperWindow
+-                hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
++                hasPreviewPosition = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
+             }
  
-             if (hasPreviewCaret)
-             {
--                box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
--                box.SelectionLength = 0;
-+                if (hasImageCaret)
-+                {
-+                    box.PlaceCaretAfterImage(caretIndex);
-+                }
-+                else
-+                {
-+                    box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
-+                    box.SelectionLength = 0;
-+                }
+             isEnteringEditorFromPreview = true;
+@@ -240,12 +281,25 @@ public sealed partial class PaperWindow
+                 box.Focus();
              }
-             TraceNoteRender($"ShowEditorAtPreviewPoint after hasCaret={hasPreviewCaret} caret={box.CaretIndex}");
+ 
+-            if (hasPreviewCaret)
++            if (hasImageSelection)
+             {
++                MarkImageInteraction();
++                pendingImageReferenceOffset = imageReferenceOffset;
++                pendingImageId = imageId;
++                box.SelectImageReference(imageReferenceOffset, imageId);
++            }
++            else if (hasImageCaret)
++            {
++                box.ClearImageSelection();
++                box.PlaceCaretAfterImage(caretIndex);
++            }
++            else if (hasPreviewPosition)
++            {
++                box.ClearImageSelection();
+                 box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
+                 box.SelectionLength = 0;
+             }
+-            TraceNoteRender($"ShowEditorAtPreviewPoint after hasCaret={hasPreviewCaret} caret={box.CaretIndex}");
++            TraceNoteRender($"ShowEditorAtPreviewPoint after hasPosition={hasPreviewPosition} caret={box.CaretIndex}");
              Dispatcher.BeginInvoke(
-@@ -277,12 +297,11 @@ public sealed partial class PaperWindow
+                 (Action)(() =>
+                 {
+@@ -258,12 +312,72 @@ public sealed partial class PaperWindow
+         void MarkImageInteraction()
+         {
+             isInteractingWithImage = true;
++        }
++
++        void FinishImageInteraction(int referenceOffset, string imageId)
++        {
++            if (isPreviewing)
++            {
++                ShowEditor(focus: false);
++            }
++
++            if (!box.IsKeyboardFocusWithin)
++            {
++                box.Focus();
++            }
++            box.SelectImageReference(referenceOffset, imageId);
++
+             Dispatcher.BeginInvoke(
+-                (Action)(() => isInteractingWithImage = false),
++                (Action)(() =>
++                {
++                    if (isPreviewing)
++                    {
++                        ShowEditor(focus: false);
++                    }
++                    if (!box.IsKeyboardFocusWithin)
++                    {
++                        box.Focus();
++                    }
++
++                    box.SelectImageReference(referenceOffset, imageId);
++                    pendingImageReferenceOffset = null;
++                    pendingImageId = null;
++                    isInteractingWithImage = false;
++                }),
+                 System.Windows.Threading.DispatcherPriority.ContextIdle);
+         }
+ 
+-        bool TryPlaceCaretOnImage(Point point, DependencyObject? originalSource)
++        bool TrySelectImage(Point point, DependencyObject? originalSource)
++        {
++            var hasImageReference = box.TryGetImageReferenceFromSource(
++                originalSource,
++                out var referenceOffset,
++                out var imageId);
++            if (!hasImageReference)
++            {
++                hasImageReference = box.TryGetImageReferenceFromPoint(
++                    point,
++                    out referenceOffset,
++                    out imageId);
++            }
++
++            if (!hasImageReference)
++            {
++                return false;
++            }
++
++            MarkImageInteraction();
++            pendingImageReferenceOffset = referenceOffset;
++            pendingImageId = imageId;
++            if (!box.IsKeyboardFocusWithin)
++            {
++                box.Focus();
++            }
++            box.SelectImageReference(referenceOffset, imageId);
++            return true;
++        }
++
++        bool TryPlaceCaretOnImageForDrop(Point point, DependencyObject? originalSource)
+         {
+             var hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
+             if (!hasImageCaret)
+@@ -276,13 +390,12 @@ public sealed partial class PaperWindow
+                 return false;
              }
  
-             MarkImageInteraction();
+-            MarkImageInteraction();
 -            box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
 -            box.SelectionLength = 0;
              if (!box.IsKeyboardFocusWithin)
              {
                  box.Focus();
              }
++            box.ClearImageSelection();
 +            box.PlaceCaretAfterImage(caretIndex);
  
              return true;
          }
-@@ -310,7 +329,8 @@ public sealed partial class PaperWindow
+@@ -308,9 +421,13 @@ public sealed partial class PaperWindow
+             var point = e.GetPosition(box);
+             if (isPreviewing)
              {
-                 ShowEditorAtPreviewPoint(point, e.OriginalSource as DependencyObject);
+-                ShowEditorAtPreviewPoint(point, e.OriginalSource as DependencyObject);
++                ShowEditorAtPreviewPoint(
++                    point,
++                    e.OriginalSource as DependencyObject,
++                    selectImage: false);
              }
 -            else if (box.TryGetCharacterIndexFromPoint(point, out var dropCaret))
-+            else if (!TryPlaceCaretOnImage(point, e.OriginalSource as DependencyObject) &&
++            else if (!TryPlaceCaretOnImageForDrop(point, e.OriginalSource as DependencyObject) &&
 +                     box.TryGetCharacterIndexFromPoint(point, out var dropCaret))
              {
                  box.CaretIndex = dropCaret;
                  box.Select(dropCaret, 0);
-@@ -390,6 +410,11 @@ public sealed partial class PaperWindow
+@@ -390,6 +507,11 @@ public sealed partial class PaperWindow
                  TraceNoteRender($"LostKeyboardFocus ignored: entering editor isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
                  return;
              }
@@ -989,7 +1428,51 @@ index 84138e0..4bf2523 100644
              if (isInteractingWithImage)
              {
                  TraceNoteRender($"LostKeyboardFocus ignored: image interaction isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
-@@ -462,7 +487,10 @@ public sealed partial class PaperWindow
+@@ -410,15 +532,19 @@ public sealed partial class PaperWindow
+             var textViewPoint = e.GetPosition(box.TextArea.TextView);
+             var point = e.GetPosition(box);
+             var originalSource = e.OriginalSource as DependencyObject;
++            pendingImageReferenceOffset = null;
++            pendingImageId = null;
++            isInteractingWithImage = false;
+             TraceNoteRender($"PreviewMouseLeftButtonDown isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} handled={e.Handled}");
+             if (!isPreviewing)
+             {
+-                if (TryPlaceCaretOnImage(point, originalSource))
++                if (TrySelectImage(point, originalSource))
+                 {
+                     e.Handled = true;
+                     return;
+                 }
+ 
++                box.ClearImageSelection();
+                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
+                     box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var editUrl))
+                 {
+@@ -439,6 +565,22 @@ public sealed partial class PaperWindow
+             e.Handled = true;
+         };
+         box.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, noteMouseDown, true);
++        box.AddHandler(
++            UIElement.MouseLeftButtonUpEvent,
++            new MouseButtonEventHandler((_, e) =>
++            {
++                if (!pendingImageReferenceOffset.HasValue ||
++                    string.IsNullOrWhiteSpace(pendingImageId))
++                {
++                    return;
++                }
++
++                FinishImageInteraction(
++                    pendingImageReferenceOffset.Value,
++                    pendingImageId);
++                e.Handled = true;
++            }),
++            true);
+ 
+         box.MouseMove += (sender, e) =>
+         {
+@@ -462,7 +604,10 @@ public sealed partial class PaperWindow
  
          editorMenu.Closed += (_, _) =>
          {

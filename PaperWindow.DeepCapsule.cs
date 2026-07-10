@@ -2199,6 +2199,7 @@ public sealed partial class PaperWindow
         _deepCapsuleDragLeft = RoundToDevicePixelX(MyDockedLeft(area, visibleWidth));
 
         SetDeepCapsuleSlotHostHorizontalBounds(_deepCapsuleDragLeft, visibleWidth);
+        WindowNative.BringToFrontNoActivate(_deepCapsuleSlotHost);
 
         Mouse.OverrideCursor = Cursors.SizeAll;
         UpdateDeepCapsuleReorderDrag(currentScreenPos);
@@ -2273,6 +2274,7 @@ public sealed partial class PaperWindow
             RoundToDevicePixelX(cursorDip.X - _deepCapsuleDragMouseOffsetX),
             RoundToDevicePixelY(cursorDip.Y - _deepCapsuleDragMouseOffsetY));
         SetDeepCapsuleCrossQueueDragVisual(true, animate: true);
+        WindowNative.BringToFrontNoActivate(_deepCapsuleSlotHost);
         Mouse.OverrideCursor = Cursors.SizeAll;
 
         if (!WindowNative.TryBeginWindowCaptionDrag(_deepCapsuleSlotHost))
@@ -2514,6 +2516,7 @@ public sealed partial class PaperWindow
         finally
         {
             _controller.CompleteDeepCapsuleReorderDrag();
+            _controller.RefreshFloatingSurfaceZOrder();
         }
     }
 

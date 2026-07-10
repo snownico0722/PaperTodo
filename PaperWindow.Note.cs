@@ -175,6 +175,8 @@ public sealed partial class PaperWindow
         var isEnteringEditorFromPreview = false;
         var isInteractingWithImage = false;
         var isOpeningImagePicker = false;
+        int? pendingImageReferenceOffset = null;
+        string? pendingImageId = null;
         var editorMenu = CreateContextMenu();
         editorMenu.Items.Add(MenuHeader(Strings.Get("MenuFormat")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuBold"), (_, _) => box.WrapSelection("**", "**")));
@@ -208,6 +210,7 @@ public sealed partial class PaperWindow
         void ShowPreview()
         {
             TraceNoteRender($"ShowPreview before isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
+            box.ClearImageSelection();
             box.SelectionLength = 0;
             box.SetPreviewMode(true);
             box.ContextMenu = previewMenu;
@@ -231,18 +234,43 @@ public sealed partial class PaperWindow
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
 
-        void ShowEditorAtPreviewPoint(Point previewPoint, DependencyObject? originalSource = null)
+        void ShowEditorAtPreviewPoint(
+            Point previewPoint,
+            DependencyObject? originalSource = null,
+            bool selectImage = true)
         {
             TraceNoteRender($"ShowEditorAtPreviewPoint x={previewPoint.X:F1} y={previewPoint.Y:F1}");
-            var hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
-            if (!hasImageCaret)
+            var hasImageSelection = false;
+            var imageReferenceOffset = 0;
+            var imageId = "";
+            var hasImageCaret = false;
+            var caretIndex = 0;
+            if (selectImage)
             {
-                hasImageCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
+                hasImageSelection = box.TryGetImageReferenceFromSource(
+                    originalSource,
+                    out imageReferenceOffset,
+                    out imageId);
+                if (!hasImageSelection)
+                {
+                    hasImageSelection = box.TryGetImageReferenceFromPoint(
+                        previewPoint,
+                        out imageReferenceOffset,
+                        out imageId);
+                }
             }
-            var hasPreviewCaret = hasImageCaret;
-            if (!hasPreviewCaret)
+            else
             {
-                hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
+                hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out caretIndex);
+                if (!hasImageCaret)
+                {
+                    hasImageCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
+                }
+            }
+            var hasPreviewPosition = hasImageSelection || hasImageCaret;
+            if (!hasPreviewPosition)
+            {
+                hasPreviewPosition = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
             }
 
             isEnteringEditorFromPreview = true;
@@ -253,19 +281,25 @@ public sealed partial class PaperWindow
                 box.Focus();
             }
 
-            if (hasPreviewCaret)
+            if (hasImageSelection)
             {
-                if (hasImageCaret)
-                {
-                    box.PlaceCaretAfterImage(caretIndex);
-                }
-                else
-                {
-                    box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
-                    box.SelectionLength = 0;
-                }
+                MarkImageInteraction();
+                pendingImageReferenceOffset = imageReferenceOffset;
+                pendingImageId = imageId;
+                box.SelectImageReference(imageReferenceOffset, imageId);
             }
-            TraceNoteRender($"ShowEditorAtPreviewPoint after hasCaret={hasPreviewCaret} caret={box.CaretIndex}");
+            else if (hasImageCaret)
+            {
+                box.ClearImageSelection();
+                box.PlaceCaretAfterImage(caretIndex);
+            }
+            else if (hasPreviewPosition)
+            {
+                box.ClearImageSelection();
+                box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
+                box.SelectionLength = 0;
+            }
+            TraceNoteRender($"ShowEditorAtPreviewPoint after hasPosition={hasPreviewPosition} caret={box.CaretIndex}");
             Dispatcher.BeginInvoke(
                 (Action)(() =>
                 {
@@ -278,12 +312,72 @@ public sealed partial class PaperWindow
         void MarkImageInteraction()
         {
             isInteractingWithImage = true;
+        }
+
+        void FinishImageInteraction(int referenceOffset, string imageId)
+        {
+            if (isPreviewing)
+            {
+                ShowEditor(focus: false);
+            }
+
+            if (!box.IsKeyboardFocusWithin)
+            {
+                box.Focus();
+            }
+            box.SelectImageReference(referenceOffset, imageId);
+
             Dispatcher.BeginInvoke(
-                (Action)(() => isInteractingWithImage = false),
+                (Action)(() =>
+                {
+                    if (isPreviewing)
+                    {
+                        ShowEditor(focus: false);
+                    }
+                    if (!box.IsKeyboardFocusWithin)
+                    {
+                        box.Focus();
+                    }
+
+                    box.SelectImageReference(referenceOffset, imageId);
+                    pendingImageReferenceOffset = null;
+                    pendingImageId = null;
+                    isInteractingWithImage = false;
+                }),
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
 
-        bool TryPlaceCaretOnImage(Point point, DependencyObject? originalSource)
+        bool TrySelectImage(Point point, DependencyObject? originalSource)
+        {
+            var hasImageReference = box.TryGetImageReferenceFromSource(
+                originalSource,
+                out var referenceOffset,
+                out var imageId);
+            if (!hasImageReference)
+            {
+                hasImageReference = box.TryGetImageReferenceFromPoint(
+                    point,
+                    out referenceOffset,
+                    out imageId);
+            }
+
+            if (!hasImageReference)
+            {
+                return false;
+            }
+
+            MarkImageInteraction();
+            pendingImageReferenceOffset = referenceOffset;
+            pendingImageId = imageId;
+            if (!box.IsKeyboardFocusWithin)
+            {
+                box.Focus();
+            }
+            box.SelectImageReference(referenceOffset, imageId);
+            return true;
+        }
+
+        bool TryPlaceCaretOnImageForDrop(Point point, DependencyObject? originalSource)
         {
             var hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
             if (!hasImageCaret)
@@ -296,11 +390,11 @@ public sealed partial class PaperWindow
                 return false;
             }
 
-            MarkImageInteraction();
             if (!box.IsKeyboardFocusWithin)
             {
                 box.Focus();
             }
+            box.ClearImageSelection();
             box.PlaceCaretAfterImage(caretIndex);
 
             return true;
@@ -327,9 +421,12 @@ public sealed partial class PaperWindow
             var point = e.GetPosition(box);
             if (isPreviewing)
             {
-                ShowEditorAtPreviewPoint(point, e.OriginalSource as DependencyObject);
+                ShowEditorAtPreviewPoint(
+                    point,
+                    e.OriginalSource as DependencyObject,
+                    selectImage: false);
             }
-            else if (!TryPlaceCaretOnImage(point, e.OriginalSource as DependencyObject) &&
+            else if (!TryPlaceCaretOnImageForDrop(point, e.OriginalSource as DependencyObject) &&
                      box.TryGetCharacterIndexFromPoint(point, out var dropCaret))
             {
                 box.CaretIndex = dropCaret;
@@ -435,15 +532,19 @@ public sealed partial class PaperWindow
             var textViewPoint = e.GetPosition(box.TextArea.TextView);
             var point = e.GetPosition(box);
             var originalSource = e.OriginalSource as DependencyObject;
+            pendingImageReferenceOffset = null;
+            pendingImageId = null;
+            isInteractingWithImage = false;
             TraceNoteRender($"PreviewMouseLeftButtonDown isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} handled={e.Handled}");
             if (!isPreviewing)
             {
-                if (TryPlaceCaretOnImage(point, originalSource))
+                if (TrySelectImage(point, originalSource))
                 {
                     e.Handled = true;
                     return;
                 }
 
+                box.ClearImageSelection();
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
                     box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var editUrl))
                 {
@@ -464,6 +565,22 @@ public sealed partial class PaperWindow
             e.Handled = true;
         };
         box.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, noteMouseDown, true);
+        box.AddHandler(
+            UIElement.MouseLeftButtonUpEvent,
+            new MouseButtonEventHandler((_, e) =>
+            {
+                if (!pendingImageReferenceOffset.HasValue ||
+                    string.IsNullOrWhiteSpace(pendingImageId))
+                {
+                    return;
+                }
+
+                FinishImageInteraction(
+                    pendingImageReferenceOffset.Value,
+                    pendingImageId);
+                e.Handled = true;
+            }),
+            true);
 
         box.MouseMove += (sender, e) =>
         {

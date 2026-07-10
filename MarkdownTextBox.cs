@@ -32,6 +32,8 @@ public sealed class MarkdownTextBox : TextEditor
     private bool _isImageRenderRedrawQueued;
     private bool _isEnsuringImageAnchorLine;
     private bool _hadInternalImageReferences;
+    private TextAnchor? _selectedImageReferenceAnchor;
+    private string? _selectedImageId;
     private double _textZoom = 1.0;
     private string _noteId = "";
     private NoteImageStore? _imageStore;
@@ -182,7 +184,9 @@ public sealed class MarkdownTextBox : TextEditor
     public void RefreshVisualStyle()
     {
         Foreground = Theme.TextBrush;
-        CaretBrush = _isPreviewMode ? Brushes.Transparent : Theme.TextBrush;
+        CaretBrush = _isPreviewMode || HasSelectedImageReference
+            ? Brushes.Transparent
+            : Theme.TextBrush;
         TextArea.TextView.LinkTextForegroundBrush = Theme.LinkBrush;
         TextArea.TextView.BackgroundRenderers.Remove(_listBulletRenderer);
         TextArea.TextView.BackgroundRenderers.Remove(_horizontalRuleRenderer);
@@ -436,7 +440,73 @@ public sealed class MarkdownTextBox : TextEditor
     public bool TryGetImageCaretFromSource(DependencyObject? source, out int caretIndex)
     {
         caretIndex = 0;
-        if (Document == null || source == null)
+        if (Document == null ||
+            !TryGetImageBlockTagFromSource(source, out var tag) ||
+            tag.CaretAnchor.IsDeleted)
+        {
+            return false;
+        }
+
+        caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
+        return true;
+    }
+
+    public bool TryGetImageCaretFromPoint(Point point, out int caretIndex)
+    {
+        caretIndex = 0;
+        if (Document == null ||
+            !TryGetImageBlockTagFromPoint(point, out var tag) ||
+            tag.CaretAnchor.IsDeleted)
+        {
+            return false;
+        }
+
+        caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
+        return true;
+    }
+
+    public bool TryGetImageReferenceFromSource(
+        DependencyObject? source,
+        out int referenceOffset,
+        out string imageId)
+    {
+        referenceOffset = 0;
+        imageId = "";
+        if (Document == null ||
+            !TryGetImageBlockTagFromSource(source, out var tag) ||
+            tag.ReferenceAnchor.IsDeleted)
+        {
+            return false;
+        }
+
+        referenceOffset = Math.Clamp(tag.ReferenceAnchor.Offset, 0, Document.TextLength);
+        imageId = tag.ImageId;
+        return true;
+    }
+
+    public bool TryGetImageReferenceFromPoint(
+        Point point,
+        out int referenceOffset,
+        out string imageId)
+    {
+        referenceOffset = 0;
+        imageId = "";
+        if (Document == null ||
+            !TryGetImageBlockTagFromPoint(point, out var tag) ||
+            tag.ReferenceAnchor.IsDeleted)
+        {
+            return false;
+        }
+
+        referenceOffset = Math.Clamp(tag.ReferenceAnchor.Offset, 0, Document.TextLength);
+        imageId = tag.ImageId;
+        return true;
+    }
+
+    private bool TryGetImageBlockTagFromSource(DependencyObject? source, out ImageBlockTag tag)
+    {
+        tag = null!;
+        if (source == null)
         {
             return false;
         }
@@ -444,10 +514,9 @@ public sealed class MarkdownTextBox : TextEditor
         var current = source;
         while (current != null && !ReferenceEquals(current, this))
         {
-            if (current is FrameworkElement { Tag: ImageBlockTag tag } &&
-                !tag.CaretAnchor.IsDeleted)
+            if (current is FrameworkElement { Tag: ImageBlockTag found })
             {
-                caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document.TextLength);
+                tag = found;
                 return true;
             }
 
@@ -457,19 +526,14 @@ public sealed class MarkdownTextBox : TextEditor
         return false;
     }
 
-    public bool TryGetImageCaretFromPoint(Point point, out int caretIndex)
+    private bool TryGetImageBlockTagFromPoint(Point point, out ImageBlockTag tag)
     {
-        caretIndex = 0;
-        if (Document == null)
-        {
-            return false;
-        }
-
+        tag = null!;
         try
         {
             EnsureVisualLines();
             TextArea.TextView.UpdateLayout();
-            return TryFindImageBlockAt(TextArea.TextView, point, out caretIndex);
+            return TryFindImageBlockAt(TextArea.TextView, point, out tag);
         }
         catch
         {
@@ -477,14 +541,13 @@ public sealed class MarkdownTextBox : TextEditor
         }
     }
 
-    private bool TryFindImageBlockAt(DependencyObject node, Point editorPoint, out int caretIndex)
+    private bool TryFindImageBlockAt(DependencyObject node, Point editorPoint, out ImageBlockTag tag)
     {
-        caretIndex = 0;
-        if (node is FrameworkElement { Tag: ImageBlockTag tag } element &&
-            !tag.CaretAnchor.IsDeleted &&
+        tag = null!;
+        if (node is FrameworkElement { Tag: ImageBlockTag found } element &&
             IsPointInsideElement(element, editorPoint))
         {
-            caretIndex = Math.Clamp(tag.CaretAnchor.Offset, 0, Document?.TextLength ?? Text.Length);
+            tag = found;
             return true;
         }
 
@@ -500,7 +563,7 @@ public sealed class MarkdownTextBox : TextEditor
 
         for (var i = 0; i < count; i++)
         {
-            if (TryFindImageBlockAt(VisualTreeHelper.GetChild(node, i), editorPoint, out caretIndex))
+            if (TryFindImageBlockAt(VisualTreeHelper.GetChild(node, i), editorPoint, out tag))
             {
                 return true;
             }
@@ -508,6 +571,66 @@ public sealed class MarkdownTextBox : TextEditor
 
         return false;
     }
+
+    public bool SelectImageReference(int referenceOffset, string imageId)
+    {
+        if (Document == null || string.IsNullOrWhiteSpace(imageId))
+        {
+            return false;
+        }
+
+        DocumentLine line;
+        try
+        {
+            line = Document.GetLineByOffset(Math.Clamp(referenceOffset, 0, Document.TextLength));
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
+            !string.Equals(parsedId, imageId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        ClearImageSelection(redraw: false);
+        var anchor = Document.CreateAnchor(line.Offset);
+        anchor.MovementType = AnchorMovementType.BeforeInsertion;
+        anchor.SurviveDeletion = false;
+        _selectedImageReferenceAnchor = anchor;
+        _selectedImageId = imageId;
+        Focus();
+        Select(line.Offset, 0);
+        CaretBrush = Brushes.Transparent;
+        TextArea.Caret.DesiredXPos = double.NaN;
+        QueueImageRenderRedraw();
+        return true;
+    }
+
+    public void ClearImageSelection()
+        => ClearImageSelection(redraw: true);
+
+    private void ClearImageSelection(bool redraw)
+    {
+        if (_selectedImageReferenceAnchor == null && string.IsNullOrEmpty(_selectedImageId))
+        {
+            return;
+        }
+
+        _selectedImageReferenceAnchor = null;
+        _selectedImageId = null;
+        CaretBrush = _isPreviewMode ? Brushes.Transparent : Theme.TextBrush;
+        if (redraw)
+        {
+            QueueImageRenderRedraw();
+        }
+    }
+
+    private bool HasSelectedImageReference =>
+        _selectedImageReferenceAnchor is { IsDeleted: false } &&
+        !string.IsNullOrWhiteSpace(_selectedImageId);
 
     private bool IsPointInsideElement(FrameworkElement element, Point editorPoint)
     {
@@ -577,10 +700,26 @@ public sealed class MarkdownTextBox : TextEditor
             return;
         }
 
-        Focus();
         var safeOffset = EnsureImageCaretLine(Math.Clamp(caretIndex, 0, Document.TextLength));
+        ApplyImageCaretOffset(safeOffset);
+    }
+
+    private void ApplyImageCaretOffset(int safeOffset)
+    {
+        if (Document == null)
+        {
+            return;
+        }
+
+        Focus();
+        safeOffset = Math.Clamp(safeOffset, 0, Document.TextLength);
         CaretOffset = safeOffset;
         Select(safeOffset, 0);
+        var caretLine = Document.GetLineByOffset(safeOffset);
+        if (safeOffset == caretLine.Offset)
+        {
+            TextArea.Caret.VisualColumn = 0;
+        }
         TextArea.Caret.DesiredXPos = double.NaN;
     }
 
@@ -705,6 +844,11 @@ public sealed class MarkdownTextBox : TextEditor
     {
         base.OnTextChanged(e);
         _fencedCodeStateCache.Clear();
+
+        if (_selectedImageReferenceAnchor?.IsDeleted == true)
+        {
+            ClearImageSelection();
+        }
 
         if (!_isEnsuringImageAnchorLine)
         {
@@ -951,6 +1095,26 @@ public sealed class MarkdownTextBox : TextEditor
 
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
+        if (HasSelectedImageReference &&
+            e.Key is System.Windows.Input.Key.Back or System.Windows.Input.Key.Delete &&
+            Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (TryDeleteSelectedImageReference())
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (HasSelectedImageReference &&
+            e.Key == System.Windows.Input.Key.Escape &&
+            Keyboard.Modifiers == ModifierKeys.None)
+        {
+            ClearImageSelection();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == System.Windows.Input.Key.Back && TryDeleteImageBeforeCaret())
         {
             e.Handled = true;
@@ -978,6 +1142,50 @@ public sealed class MarkdownTextBox : TextEditor
         }
 
         base.OnPreviewKeyDown(e);
+    }
+
+    protected override void OnPreviewTextInput(TextCompositionEventArgs e)
+    {
+        if (HasSelectedImageReference && !string.IsNullOrEmpty(e.Text))
+        {
+            TryDeleteSelectedImageReference();
+        }
+
+        base.OnPreviewTextInput(e);
+    }
+
+    private bool TryDeleteSelectedImageReference()
+    {
+        if (Document == null ||
+            _selectedImageReferenceAnchor is not { IsDeleted: false } anchor ||
+            string.IsNullOrWhiteSpace(_selectedImageId))
+        {
+            ClearImageSelection();
+            return false;
+        }
+
+        DocumentLine line;
+        try
+        {
+            line = Document.GetLineByOffset(Math.Clamp(anchor.Offset, 0, Document.TextLength));
+        }
+        catch
+        {
+            ClearImageSelection();
+            return false;
+        }
+
+        var imageId = _selectedImageId;
+        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
+            !string.Equals(parsedId, imageId, StringComparison.Ordinal))
+        {
+            ClearImageSelection();
+            return false;
+        }
+
+        ClearImageSelection(redraw: false);
+        DeleteImageReferenceLine(line, imageId);
+        return true;
     }
 
     private bool TryDeleteImageBeforeCaret()
@@ -1722,27 +1930,33 @@ public sealed class MarkdownTextBox : TextEditor
     private FrameworkElement CreateImageBlock(
         MarkdownImageReference reference,
         NoteImageAsset? asset,
-        DocumentLine referenceLine,
-        DocumentLine anchorLine)
+        DocumentLine referenceLine)
     {
         var targetWidth = ImageTargetWidth();
         var displayWidth = ResolveImageDisplayWidth(reference.DisplayOptions, asset, targetWidth);
         var bitmap = asset == null ? null : _imageStore?.GetBitmapSource(asset.Id, Math.Min(targetWidth, displayWidth));
         var document = Document!;
-        var caretOffset = anchorLine.Offset;
+        var referenceAnchor = document.CreateAnchor(referenceLine.Offset);
+        referenceAnchor.MovementType = AnchorMovementType.BeforeInsertion;
+        referenceAnchor.SurviveDeletion = false;
+        var caretOffset = referenceLine.NextLine?.Offset ?? referenceLine.EndOffset;
         var caretAnchor = document.CreateAnchor(caretOffset);
         caretAnchor.MovementType = AnchorMovementType.BeforeInsertion;
         caretAnchor.SurviveDeletion = true;
+        var isSelected = IsImageReferenceSelected(referenceLine);
 
         var host = new Border
         {
-            Padding = new Thickness(0, ImageBlockVerticalPadding, 0, ImageBlockVerticalPadding),
+            Padding = new Thickness(0, ImageBlockVerticalPadding - 1, 0, ImageBlockVerticalPadding - 1),
             Background = Brushes.Transparent,
+            BorderBrush = isSelected ? Theme.CapsuleFocusBorderBrush : Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
             HorizontalAlignment = HorizontalAlignment.Left,
             MinWidth = 24,
             Width = targetWidth,
             ToolTip = asset?.OriginalName,
-            Tag = new ImageBlockTag(caretAnchor)
+            Tag = new ImageBlockTag(referenceAnchor, caretAnchor, reference.ImageId)
         };
         host.ContextMenu = CreateImageContextMenu(reference.ImageId, referenceLine, canCopy: bitmap != null);
 
@@ -1779,6 +1993,19 @@ public sealed class MarkdownTextBox : TextEditor
         };
 
         return host;
+    }
+
+    private bool IsImageReferenceSelected(DocumentLine referenceLine)
+    {
+        if (_selectedImageReferenceAnchor is not { IsDeleted: false } anchor ||
+            string.IsNullOrWhiteSpace(_selectedImageId))
+        {
+            return false;
+        }
+
+        return anchor.Offset == referenceLine.Offset &&
+            MarkdownImageReferences.TryParseLine(Document!.GetText(referenceLine), out var imageId) &&
+            string.Equals(imageId, _selectedImageId, StringComparison.Ordinal);
     }
 
     private static double ResolveImageDisplayWidth(
@@ -2237,11 +2464,10 @@ public sealed class MarkdownTextBox : TextEditor
                 return -1;
             }
 
-            var anchorLine = CurrentContext.VisualLine.FirstDocumentLine;
-            return anchorLine.Offset >= startOffset &&
-                anchorLine.PreviousLine != null &&
-                _owner.TryGetImageReferenceForLine(anchorLine.PreviousLine, out _, out _)
-                ? anchorLine.Offset
+            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
+            return referenceLine.EndOffset >= startOffset &&
+                _owner.TryGetImageReferenceForLine(referenceLine, out _, out _)
+                ? referenceLine.EndOffset
                 : -1;
         }
 
@@ -2258,16 +2484,14 @@ public sealed class MarkdownTextBox : TextEditor
                 return null!;
             }
 
-            var anchorLine = CurrentContext.VisualLine.FirstDocumentLine;
-            var referenceLine = anchorLine.PreviousLine;
-            if (anchorLine.Offset != offset ||
-                referenceLine == null ||
+            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
+            if (referenceLine.EndOffset != offset ||
                 !_owner.TryGetImageReferenceForLine(referenceLine, out var reference, out var asset))
             {
                 return null!;
             }
 
-            var element = _owner.CreateImageBlock(reference, asset, referenceLine, anchorLine);
+            var element = _owner.CreateImageBlock(reference, asset, referenceLine);
             return new BlockImageElement(element);
         }
     }
@@ -2293,10 +2517,13 @@ public sealed class MarkdownTextBox : TextEditor
         {
         }
 
-        public override LineBreakCondition BreakAfter => LineBreakCondition.BreakAlways;
+        public override LineBreakCondition BreakBefore => LineBreakCondition.BreakAlways;
     }
 
-    private sealed record ImageBlockTag(TextAnchor CaretAnchor);
+    private sealed record ImageBlockTag(
+        TextAnchor ReferenceAnchor,
+        TextAnchor CaretAnchor,
+        string ImageId);
 
     private static int CountRepeated(string text, int start, char c)
     {

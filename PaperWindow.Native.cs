@@ -140,6 +140,9 @@ public sealed partial class PaperWindow
     [DllImport("user32.dll")]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct MonitorInfo
     {

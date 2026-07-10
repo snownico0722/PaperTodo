@@ -765,12 +765,20 @@ public sealed partial class PaperWindow : Window
 
         if (msg == WmGetMinMaxInfo)
         {
-            // Clamp maximize bounds to the work area so the window doesn't cover the taskbar.
-            // Without this, WPF's default maximized rect is the full screen (including taskbar),
-            // which breaks both visual presentation and snap detection.
             try
             {
                 var mmi = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+                var dpi = GetDpiForWindow(hwnd);
+                var dpiScale = dpi > 0 ? dpi / 96.0 : 1.0;
+                mmi.MinTrackSize = new MutablePoint
+                {
+                    X = Math.Max(mmi.MinTrackSize.X, (int)Math.Ceiling(MinWidth * dpiScale)),
+                    Y = Math.Max(mmi.MinTrackSize.Y, (int)Math.Ceiling(MinHeight * dpiScale))
+                };
+
+                // Clamp maximize bounds to the work area so the window doesn't cover the taskbar.
+                // This hook must also preserve WPF's minimum tracking size because handled=true
+                // prevents the framework from applying MinWidth/MinHeight afterward.
                 var monitor = MonitorFromWindow(hwnd, 2);
                 if (monitor != IntPtr.Zero)
                 {
@@ -787,10 +795,11 @@ public sealed partial class PaperWindow : Window
                         var rect = isAutoHide ? mon : wa;
                         mmi.MaxSize = new MutablePoint { X = rect.Right - rect.Left, Y = rect.Bottom - rect.Top };
                         mmi.MaxPosition = new MutablePoint { X = rect.Left - mon.Left, Y = rect.Top - mon.Top };
-                        Marshal.StructureToPtr(mmi, lParam, true);
-                        handled = true;
                     }
                 }
+
+                Marshal.StructureToPtr(mmi, lParam, true);
+                handled = true;
             }
             catch
             {

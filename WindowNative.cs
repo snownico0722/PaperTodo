@@ -17,6 +17,7 @@ internal static class WindowNative
     private const int WsExAppWindow = 0x00040000;
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;
+    private static readonly IntPtr HwndTop = IntPtr.Zero;
     private static readonly IntPtr HwndTopmost = new(-1);
     private static readonly IntPtr HwndNoTopmost = new(-2);
     private const uint SwpNoSize = 0x0001;
@@ -167,6 +168,21 @@ internal static class WindowNative
         }
 
         return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) != 0;
+    }
+
+    public static void BringToFrontNoActivate(Window window)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        SetWindowPos(
+            handle,
+            IsTopmost(window) ? HwndTopmost : HwndTop,
+            0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
     }
 
     public static void TrySetForegroundWindow(IntPtr handle)
