@@ -23,6 +23,7 @@ public sealed partial class AppController : IDisposable
     public static AppController Current { get; private set; } = null!;
 
     private readonly StateStore _store = new();
+    private readonly NoteImageStore _imageStore = new();
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _topmostRefreshTimer;
@@ -68,6 +69,7 @@ public sealed partial class AppController : IDisposable
     private static string FullscreenDebugLogPath => Path.Combine(AppContext.BaseDirectory, "fullscreen-debug.log");
 
     public AppState State { get; private set; }
+    public NoteImageStore ImageStore => _imageStore;
     public bool SuppressTopmostForFullscreenForeground => _suppressTopmostForFullscreenForeground;
     public bool SuppressDeepCapsuleTopmostForContextMenu => _deepCapsuleContextMenuOpenCount > 0;
     public IntPtr FullscreenAvoidanceWindow => _fullscreenAvoidanceWindow;
@@ -77,6 +79,9 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         State = _store.Load();
+        _imageStore.Load();
+        _imageStore.TrackReferences(State, reserveRemovedIdsUntilRestart: false);
+        var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(State.UiFontPreset);
         ToolTipPreferences.Register(() => State.EnableToolTips);
@@ -90,6 +95,11 @@ public sealed partial class AppController : IDisposable
             _saveTimer.Stop();
             SaveNow();
         };
+
+        if (strippedInternalImageMarkers)
+        {
+            MarkDirty();
+        }
 
         _topmostRefreshTimer = new DispatcherTimer
         {
@@ -111,6 +121,27 @@ public sealed partial class AppController : IDisposable
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
+    }
+
+    private bool StripInternalImageRenderMarkersFromState()
+    {
+        var changed = false;
+        foreach (var paper in State.Papers)
+        {
+            if (paper.Type != PaperTypes.Note || string.IsNullOrEmpty(paper.Content))
+            {
+                continue;
+            }
+
+            var cleaned = MarkdownImageReferences.StripRenderMarkers(paper.Content);
+            if (!string.Equals(cleaned, paper.Content, StringComparison.Ordinal))
+            {
+                paper.Content = cleaned;
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     public void Start(bool createDefaultPaper = true)
@@ -2622,6 +2653,7 @@ public sealed partial class AppController : IDisposable
         _settingsWindow?.Close();
         _settingsWindow = null;
         SaveNow(sync: true);
+        _imageStore.TrackReferences(State);
 
         foreach (var window in _windows.Values.ToList())
         {

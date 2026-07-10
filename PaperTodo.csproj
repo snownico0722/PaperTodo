@@ -16,6 +16,9 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
+    <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets\icons\PaperTodo.ico" />
   </ItemGroup>

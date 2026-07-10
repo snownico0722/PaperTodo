@@ -159,6 +159,46 @@
   <data name="MenuInsertLink" xml:space="preserve">
     <value>插入链接</value>
   </data>
+  <data name="MenuInsertImage" xml:space="preserve">
+    <value>插入图片</value>
+  </data>
+  <data name="MenuCopyImage" xml:space="preserve">
+    <value>复制图片</value>
+  </data>
+  <data name="MenuDeleteImage" xml:space="preserve">
+    <value>删除图片引用</value>
+  </data>
+  <data name="ImageMissing" xml:space="preserve">
+    <value>图片不可用</value>
+  </data>
+  <data name="ImageFileDialogFilter" xml:space="preserve">
+    <value>图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|所有文件|*.*</value>
+  </data>
+  <data name="ImageImportFailureTitle" xml:space="preserve">
+    <value>图片插入失败</value>
+  </data>
+  <data name="ImageImportFailureMessage" xml:space="preserve">
+    <value>无法插入图片：
+{0}</value>
+  </data>
+  <data name="ImageStoreUnavailable" xml:space="preserve">
+    <value>图片数据文件无法加载。为避免覆盖现有图片，当前已停止写入图片数据。</value>
+  </data>
+  <data name="ImageImportInvalidNote" xml:space="preserve">
+    <value>无法确定要绑定的笔记。</value>
+  </data>
+  <data name="ImageImportFileMissing" xml:space="preserve">
+    <value>图片文件不存在。</value>
+  </data>
+  <data name="ImageImportUnsupported" xml:space="preserve">
+    <value>未找到可插入的图片，或图片格式不受支持。</value>
+  </data>
+  <data name="ImageImportTooLarge" xml:space="preserve">
+    <value>单张图片最多可保存 {0} MB。</value>
+  </data>
+  <data name="ImageImportTotalTooLarge" xml:space="preserve">
+    <value>图片总容量已达到上限（{0} MB）。</value>
+  </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
   </data>

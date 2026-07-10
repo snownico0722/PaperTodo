@@ -150,6 +150,45 @@
   <data name="MenuInsertLink" xml:space="preserve">
     <value>Insert link</value>
   </data>
+  <data name="MenuInsertImage" xml:space="preserve">
+    <value>Insert image</value>
+  </data>
+  <data name="MenuCopyImage" xml:space="preserve">
+    <value>Copy image</value>
+  </data>
+  <data name="MenuDeleteImage" xml:space="preserve">
+    <value>Delete image reference</value>
+  </data>
+  <data name="ImageMissing" xml:space="preserve">
+    <value>Image unavailable</value>
+  </data>
+  <data name="ImageFileDialogFilter" xml:space="preserve">
+    <value>Image files|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|All files|*.*</value>
+  </data>
+  <data name="ImageImportFailureTitle" xml:space="preserve">
+    <value>Image insert failed</value>
+  </data>
+  <data name="ImageImportFailureMessage" xml:space="preserve">
+    <value>Could not insert the image:&#x0A;{0}</value>
+  </data>
+  <data name="ImageStoreUnavailable" xml:space="preserve">
+    <value>The image data file could not be loaded. To avoid overwriting existing images, image writes are disabled.</value>
+  </data>
+  <data name="ImageImportInvalidNote" xml:space="preserve">
+    <value>The note to bind this image to could not be determined.</value>
+  </data>
+  <data name="ImageImportFileMissing" xml:space="preserve">
+    <value>The image file does not exist.</value>
+  </data>
+  <data name="ImageImportUnsupported" xml:space="preserve">
+    <value>No insertable image was found, or the image format is unsupported.</value>
+  </data>
+  <data name="ImageImportTooLarge" xml:space="preserve">
+    <value>Each image can be at most {0} MB.</value>
+  </data>
+  <data name="ImageImportTotalTooLarge" xml:space="preserve">
+    <value>The image store has reached its total limit ({0} MB).</value>
+  </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
   </data>

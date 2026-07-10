@@ -150,6 +150,45 @@
   <data name="MenuInsertLink" xml:space="preserve">
     <value>リンクを挿入</value>
   </data>
+  <data name="MenuInsertImage" xml:space="preserve">
+    <value>画像を挿入</value>
+  </data>
+  <data name="MenuCopyImage" xml:space="preserve">
+    <value>画像をコピー</value>
+  </data>
+  <data name="MenuDeleteImage" xml:space="preserve">
+    <value>画像参照を削除</value>
+  </data>
+  <data name="ImageMissing" xml:space="preserve">
+    <value>画像を表示できません</value>
+  </data>
+  <data name="ImageFileDialogFilter" xml:space="preserve">
+    <value>画像ファイル|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|すべてのファイル|*.*</value>
+  </data>
+  <data name="ImageImportFailureTitle" xml:space="preserve">
+    <value>画像の挿入に失敗</value>
+  </data>
+  <data name="ImageImportFailureMessage" xml:space="preserve">
+    <value>画像を挿入できませんでした:&#x0A;{0}</value>
+  </data>
+  <data name="ImageStoreUnavailable" xml:space="preserve">
+    <value>画像データファイルを読み込めませんでした。既存画像の上書きを避けるため、画像データの書き込みを停止しています。</value>
+  </data>
+  <data name="ImageImportInvalidNote" xml:space="preserve">
+    <value>画像を関連付けるメモを特定できません。</value>
+  </data>
+  <data name="ImageImportFileMissing" xml:space="preserve">
+    <value>画像ファイルが存在しません。</value>
+  </data>
+  <data name="ImageImportUnsupported" xml:space="preserve">
+    <value>挿入できる画像が見つからないか、画像形式が対応していません。</value>
+  </data>
+  <data name="ImageImportTooLarge" xml:space="preserve">
+    <value>画像 1 枚の上限は {0} MB です。</value>
+  </data>
+  <data name="ImageImportTotalTooLarge" xml:space="preserve">
+    <value>画像保存容量の上限（{0} MB）に達しました。</value>
+  </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
   </data>

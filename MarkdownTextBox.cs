@@ -3,8 +3,10 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
@@ -17,6 +19,8 @@ public sealed class MarkdownTextBox : TextEditor
 {
     private const int MaxSafePasteLength = 30000;
     private const int MaxSafePasteLineLength = 6000;
+    private const double ImageBlockVerticalPadding = 7;
+    private const double ImageBlockHorizontalPadding = 2;
 
     private bool _isTrimmingText;
     private bool _isTrimQueued;
@@ -24,11 +28,17 @@ public sealed class MarkdownTextBox : TextEditor
     private bool _acceptsTab = true;
     private bool _isPreviewMode;
     private bool _isPostPasteRefreshQueued;
+    private bool _isNormalizingImageRenderMarkers;
     private double _textZoom = 1.0;
+    private string _noteId = "";
+    private NoteImageStore? _imageStore;
     private readonly MarkdownMarkerColorizer _markerColorizer;
     private readonly MarkdownListBulletRenderer _listBulletRenderer;
     private readonly MarkdownHorizontalRuleRenderer _horizontalRuleRenderer;
+    private readonly MarkdownImageElementGenerator _imageElementGenerator;
     private readonly FencedCodeStateCache _fencedCodeStateCache = new();
+
+    public event Action<Exception>? ImageImportFailed;
 
     public MarkdownTextBox()
     {
@@ -57,11 +67,15 @@ public sealed class MarkdownTextBox : TextEditor
         _markerColorizer = new MarkdownMarkerColorizer(this);
         _listBulletRenderer = new MarkdownListBulletRenderer(this);
         _horizontalRuleRenderer = new MarkdownHorizontalRuleRenderer(this);
+        _imageElementGenerator = new MarkdownImageElementGenerator(this);
+        TextArea.TextView.ElementGenerators.Add(_imageElementGenerator);
         TextArea.TextView.BackgroundRenderers.Add(new MarkdownBlockBackgroundRenderer(this));
         TextArea.TextView.BackgroundRenderers.Add(_listBulletRenderer);
         TextArea.TextView.BackgroundRenderers.Add(_horizontalRuleRenderer);
         TextArea.TextView.LineTransformers.Add(_markerColorizer);
         DataObject.AddPastingHandler(this, OnPaste);
+        DataObject.AddCopyingHandler(this, OnCopying);
+        SizeChanged += (_, _) => QueuePostPasteRefresh();
         RefreshVisualStyle();
     }
 
@@ -98,6 +112,16 @@ public sealed class MarkdownTextBox : TextEditor
     }
 
     public bool IsPreviewMode => _isPreviewMode;
+
+    public string PersistentText => MarkdownImageReferences.StripRenderMarkers(Text);
+
+    public void ConfigureNoteImages(string noteId, NoteImageStore imageStore)
+    {
+        _noteId = noteId ?? "";
+        _imageStore = imageStore;
+        EnsureImageRenderMarkers();
+        RefreshTextView();
+    }
 
     private double ScaledFontSize(double baseFontSize)
     {
@@ -136,6 +160,7 @@ public sealed class MarkdownTextBox : TextEditor
         _markdownRenderMode = MarkdownRenderModes.IsValid(mode)
             ? mode
             : MarkdownRenderModes.Enhanced;
+        EnsureImageRenderMarkers();
         RefreshVisualStyle();
     }
 
@@ -400,6 +425,145 @@ public sealed class MarkdownTextBox : TextEditor
         }
     }
 
+    public bool TryGetImageCaretFromSource(DependencyObject? source, out int caretIndex)
+    {
+        caretIndex = 0;
+        if (Document == null || source == null)
+        {
+            return false;
+        }
+
+        var current = source;
+        while (current != null && !ReferenceEquals(current, this))
+        {
+            if (current is FrameworkElement { Tag: ImageBlockTag tag })
+            {
+                caretIndex = Math.Clamp(tag.CaretOffset, 0, Document.TextLength);
+                return true;
+            }
+
+            current = VisualParentOf(current);
+        }
+
+        return false;
+    }
+
+    public bool TryGetImageCaretFromPoint(Point point, out int caretIndex)
+    {
+        caretIndex = 0;
+        if (Document == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            EnsureVisualLines();
+            TextArea.TextView.UpdateLayout();
+            return TryFindImageBlockAt(TextArea.TextView, point, out caretIndex);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool TryFindImageBlockAt(DependencyObject node, Point editorPoint, out int caretIndex)
+    {
+        caretIndex = 0;
+        if (node is FrameworkElement { Tag: ImageBlockTag tag } element &&
+            IsPointInsideElement(element, editorPoint))
+        {
+            caretIndex = Math.Clamp(tag.CaretOffset, 0, Document?.TextLength ?? Text.Length);
+            return true;
+        }
+
+        var count = 0;
+        try
+        {
+            count = VisualTreeHelper.GetChildrenCount(node);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            if (TryFindImageBlockAt(VisualTreeHelper.GetChild(node, i), editorPoint, out caretIndex))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsPointInsideElement(FrameworkElement element, Point editorPoint)
+    {
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var bounds = element
+                .TransformToAncestor(this)
+                .TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+            return bounds.Contains(editorPoint);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static DependencyObject? VisualParentOf(DependencyObject current)
+    {
+        try
+        {
+            var parent = VisualTreeHelper.GetParent(current);
+            if (parent != null)
+            {
+                return parent;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return current is FrameworkElement element
+            ? element.Parent as DependencyObject
+            : null;
+    }
+
+    public bool TryPlaceCaretOnImageFromSource(DependencyObject? source)
+    {
+        if (!TryGetImageCaretFromSource(source, out var caretIndex))
+        {
+            return false;
+        }
+
+        CaretOffset = caretIndex;
+        Select(caretIndex, 0);
+        Focus();
+        return true;
+    }
+
+    public bool TryPlaceCaretOnImageFromPoint(Point point)
+    {
+        if (!TryGetImageCaretFromPoint(point, out var caretIndex))
+        {
+            return false;
+        }
+
+        CaretOffset = caretIndex;
+        Select(caretIndex, 0);
+        Focus();
+        return true;
+    }
+
     public bool TryGetMarkdownLinkFromPoint(Point point, out string url)
     {
         url = "";
@@ -481,6 +645,148 @@ public sealed class MarkdownTextBox : TextEditor
         }
 
         QueueTrimToMaxLength();
+    }
+
+    public bool CanInsertImagesFromDataObject(IDataObject dataObject)
+    {
+        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId))
+        {
+            return false;
+        }
+
+        if (TryGetImageFileDrop(dataObject, out var paths) && paths.Count > 0)
+        {
+            return true;
+        }
+
+        return TryGetBitmapSource(dataObject, out _);
+    }
+
+    public bool TryInsertImagesFromDataObject(IDataObject dataObject)
+    {
+        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (TryGetImageFileDrop(dataObject, out var paths) && paths.Count > 0)
+            {
+                InsertImagesFromFiles(paths);
+                return true;
+            }
+
+            if (TryGetBitmapSource(dataObject, out var bitmap) && bitmap != null)
+            {
+                var asset = _imageStore.ImportBitmapSource(_noteId, bitmap);
+                InsertImageReference(asset);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            ImageImportFailed?.Invoke(ex);
+            return true;
+        }
+
+        return false;
+    }
+
+    public bool TryInsertImageFromClipboard()
+    {
+        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId) || IsReadOnly)
+        {
+            return false;
+        }
+
+        BitmapSource? bitmap = null;
+        try
+        {
+            if (!Clipboard.ContainsImage())
+            {
+                return false;
+            }
+
+            bitmap = Clipboard.GetImage();
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (bitmap == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var asset = _imageStore.ImportBitmapSource(_noteId, bitmap);
+            InsertImageReference(asset);
+        }
+        catch (Exception ex)
+        {
+            ImageImportFailed?.Invoke(ex);
+        }
+
+        return true;
+    }
+
+    public int InsertImagesFromFiles(IEnumerable<string> paths)
+    {
+        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId) || IsReadOnly)
+        {
+            return 0;
+        }
+
+        var imported = _imageStore.ImportImageFiles(_noteId, paths);
+        foreach (var asset in imported)
+        {
+            InsertImageReference(asset);
+        }
+
+        return imported.Count;
+    }
+
+    private void InsertImageReference(NoteImageAsset asset)
+    {
+        var insertion = BuildBlockInsertion(
+            MarkdownImageReferences.CreateReference(asset.Id, asset.Width, asset.Height) +
+            Environment.NewLine +
+            MarkdownImageReferences.RenderMarkerText);
+        var start = SelectionStart;
+        SelectedText = insertion;
+        var caret = start + insertion.Length;
+        CaretIndex = caret;
+        Select(caret, 0);
+        Focus();
+        QueuePostPasteRefresh();
+    }
+
+    private string BuildBlockInsertion(string blockText)
+    {
+        var start = SelectionStart;
+        var end = SelectionStart + SelectionLength;
+        var builder = new StringBuilder();
+
+        if (start > 0 && Text[start - 1] is not '\n' and not '\r')
+        {
+            builder.Append(Environment.NewLine);
+        }
+
+        builder.Append(blockText);
+
+        if (end < Text.Length && Text[end] is not '\n' and not '\r')
+        {
+            builder.Append(Environment.NewLine);
+        }
+        else
+        {
+            builder.Append(Environment.NewLine);
+        }
+
+        return builder.ToString();
     }
 
     private void QueueTrimToMaxLength()
@@ -773,6 +1079,13 @@ public sealed class MarkdownTextBox : TextEditor
 
     private void OnPaste(object sender, DataObjectPastingEventArgs e)
     {
+        if (!IsReadOnly &&
+            (TryInsertImagesFromDataObject(e.DataObject) || TryInsertImageFromClipboard()))
+        {
+            e.CancelCommand();
+            return;
+        }
+
         if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText))
         {
             return;
@@ -804,13 +1117,42 @@ public sealed class MarkdownTextBox : TextEditor
         QueuePostPasteRefresh();
     }
 
+    private void OnCopying(object sender, DataObjectCopyingEventArgs e)
+    {
+        try
+        {
+            if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText))
+            {
+                return;
+            }
+
+            var text = e.DataObject.GetData(DataFormats.UnicodeText) as string;
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            var cleaned = MarkdownImageReferences.StripRenderMarkers(text);
+            if (string.Equals(cleaned, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            e.DataObject.SetData(DataFormats.UnicodeText, cleaned);
+            e.DataObject.SetData(DataFormats.Text, cleaned);
+        }
+        catch
+        {
+            // Clipboard cleanup should not block copy/cut.
+        }
+    }
+
     private void EnsureVisualLines()
     {
         TextArea.TextView.EnsureVisualLines();
     }
 
     private static Brush PreviewSyntaxBrush => Theme.SyntaxFadeBrush;
-
     private MarkdownRenderOptions RenderOptions => MarkdownRenderOptions.From(_markdownRenderMode, _isPreviewMode);
 
     private bool TryBuildSafePasteText(string text, int selectedLength, out string pasteText)
@@ -1056,6 +1398,408 @@ public sealed class MarkdownTextBox : TextEditor
         public int Start { get; }
         public int End { get; }
         public string Url { get; }
+    }
+
+    private bool ShouldRenderImages => _imageStore != null && RenderOptions.RenderBlocks;
+
+    private bool TryGetImageReferenceForLine(DocumentLine line, out MarkdownImageReference reference, out NoteImageAsset? asset)
+    {
+        reference = default;
+        asset = null;
+        if (_imageStore == null || Document == null || !ShouldRenderImages)
+        {
+            return false;
+        }
+
+        var text = Document.GetText(line);
+        var style = AnalyzeLine(Document, line, text);
+        if (style.Kind is MarkdownLineKind.CodeFence or MarkdownLineKind.CodeBlock)
+        {
+            return false;
+        }
+
+        if (!MarkdownImageReferences.TryParseReferenceLine(text, out reference))
+        {
+            return false;
+        }
+
+        if (_imageStore.TryGetAsset(reference.ImageId, out var found))
+        {
+            asset = found;
+        }
+
+        return true;
+    }
+
+    private void EnsureImageRenderMarkers()
+    {
+        if (_isNormalizingImageRenderMarkers ||
+            _imageStore == null ||
+            Document == null ||
+            !RenderOptions.RenderBlocks)
+        {
+            return;
+        }
+
+        var edits = new List<(int Offset, int Length, string Text)>();
+        for (var line = Document.GetLineByNumber(1); line != null; line = line.NextLine)
+        {
+            var text = Document.GetText(line);
+            if (MarkdownImageReferences.IsRenderMarkerLine(text))
+            {
+                if (line.PreviousLine == null ||
+                    !TryGetImageReferenceForLine(line.PreviousLine, out _, out _))
+                {
+                    edits.Add((line.Offset, line.Length + line.DelimiterLength, ""));
+                }
+
+                continue;
+            }
+
+            var style = AnalyzeLine(Document, line, text);
+            if (style.Kind is MarkdownLineKind.CodeFence or MarkdownLineKind.CodeBlock)
+            {
+                continue;
+            }
+
+            if (!MarkdownImageReferences.TryParseReferenceLine(text, out _))
+            {
+                continue;
+            }
+
+            var hasInlineMarker = MarkdownImageReferences.EndsWithRenderMarker(text);
+            var markerOffset = line.EndOffset - (hasInlineMarker ? MarkdownImageReferences.RenderMarkerText.Length : 0);
+            var nextIsMarker = line.NextLine != null &&
+                MarkdownImageReferences.IsRenderMarkerLine(Document.GetText(line.NextLine));
+
+            if (nextIsMarker)
+            {
+                if (hasInlineMarker)
+                {
+                    edits.Add((markerOffset, MarkdownImageReferences.RenderMarkerText.Length, ""));
+                }
+
+                continue;
+            }
+
+            var markerLineText = NewLineTextFor(line) + MarkdownImageReferences.RenderMarkerText;
+            if (hasInlineMarker)
+            {
+                edits.Add((markerOffset, MarkdownImageReferences.RenderMarkerText.Length, markerLineText));
+            }
+            else
+            {
+                edits.Add((markerOffset, 0, markerLineText));
+            }
+        }
+
+        if (edits.Count == 0)
+        {
+            return;
+        }
+
+        var oldCaret = CaretOffset;
+        var caret = oldCaret;
+        _isNormalizingImageRenderMarkers = true;
+        Document.BeginUpdate();
+        try
+        {
+            foreach (var edit in edits
+                         .OrderByDescending(edit => edit.Offset)
+                         .ThenByDescending(edit => edit.Length))
+            {
+                if (edit.Length > 0)
+                {
+                    Document.Remove(edit.Offset, edit.Length);
+                }
+
+                if (edit.Text.Length > 0)
+                {
+                    Document.Insert(edit.Offset, edit.Text);
+                }
+
+                if (edit.Offset < caret || (edit.Length == 0 && edit.Offset == caret))
+                {
+                    caret += edit.Text.Length - Math.Min(edit.Length, Math.Max(0, caret - edit.Offset));
+                }
+            }
+
+            CaretOffset = Math.Clamp(caret, 0, Document.TextLength);
+            Select(CaretOffset, 0);
+        }
+        finally
+        {
+            Document.EndUpdate();
+            _isNormalizingImageRenderMarkers = false;
+        }
+    }
+
+    private bool TryGetImageElementForLine(
+        DocumentLine line,
+        out int markerOffset,
+        out MarkdownImageReference reference,
+        out NoteImageAsset? asset)
+    {
+        markerOffset = -1;
+        reference = default;
+        asset = null;
+        if (Document == null ||
+            !MarkdownImageReferences.IsRenderMarkerLine(Document.GetText(line)) ||
+            line.PreviousLine == null ||
+            !TryGetImageReferenceForLine(line.PreviousLine, out reference, out asset))
+        {
+            return false;
+        }
+
+        var text = Document.GetText(line);
+        var index = text.IndexOf(MarkdownImageReferences.RenderMarker);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        markerOffset = line.Offset + index;
+        return markerOffset >= line.Offset;
+    }
+
+    private FrameworkElement CreateImageBlock(
+        MarkdownImageReference reference,
+        NoteImageAsset? asset,
+        int lineOffset,
+        int lineLength,
+        int caretOffset)
+    {
+        var targetWidth = ImageTargetWidth();
+        var displayWidth = ResolveImageDisplayWidth(reference.DisplayOptions, asset, targetWidth);
+        var bitmap = asset == null ? null : _imageStore?.GetBitmapSource(asset.Id, Math.Min(targetWidth, displayWidth));
+
+        var host = new Border
+        {
+            Padding = new Thickness(0, ImageBlockVerticalPadding, 0, ImageBlockVerticalPadding),
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 24,
+            Width = targetWidth,
+            ToolTip = asset?.OriginalName,
+            Tag = new ImageBlockTag(caretOffset)
+        };
+        host.ContextMenu = CreateImageContextMenu(reference.ImageId, lineOffset, lineLength, canCopy: bitmap != null);
+
+        if (bitmap == null)
+        {
+            host.Child = new Border
+            {
+                Width = Math.Max(120, Math.Min(targetWidth, displayWidth)),
+                Height = 42,
+                CornerRadius = new CornerRadius(5),
+                Background = Theme.Tint((byte)(Theme.IsDark ? 30 : 18)),
+                BorderBrush = Theme.PaperBorderBrush,
+                BorderThickness = new Thickness(1),
+                Child = new TextBlock
+                {
+                    Text = Strings.Get("ImageMissing"),
+                    Foreground = Theme.WeakTextBrush,
+                    FontSize = ScaledFontSize(NoteTypography.FontSize),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                }
+            };
+            return host;
+        }
+
+        host.Child = new Image
+        {
+            Source = bitmap,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Width = displayWidth,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
+        };
+
+        return host;
+    }
+
+    private static double ResolveImageDisplayWidth(
+        MarkdownImageDisplayOptions options,
+        NoteImageAsset? asset,
+        double targetWidth)
+    {
+        targetWidth = Math.Max(80, targetWidth);
+        var naturalWidth = Math.Max(1, asset?.Width ?? 180);
+        var width = Math.Min(targetWidth, naturalWidth);
+
+        if (options.WidthAttribute is { } widthAttribute)
+        {
+            width = widthAttribute.IsPercent
+                ? targetWidth * Math.Clamp(widthAttribute.Value, 1, 1000) / 100.0
+                : widthAttribute.Value;
+        }
+        else if (options.LabelWidth.HasValue)
+        {
+            width = options.LabelWidth.Value;
+            if (options.LabelScalePercent.HasValue)
+            {
+                width *= Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
+            }
+        }
+        else if (options.LabelScalePercent.HasValue)
+        {
+            width = naturalWidth * Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
+        }
+
+        return Math.Round(Math.Clamp(width, 24, targetWidth), 1);
+    }
+
+    private ContextMenu CreateImageContextMenu(string imageId, int lineOffset, int lineLength, bool canCopy)
+    {
+        var menu = new ContextMenu
+        {
+            Placement = PlacementMode.MousePoint,
+            HasDropShadow = true
+        };
+
+        var copy = new MenuItem
+        {
+            Header = Strings.Get("MenuCopyImage"),
+            IsEnabled = canCopy
+        };
+        copy.Click += (_, _) => CopyImageToClipboard(imageId);
+        menu.Items.Add(copy);
+
+        var delete = new MenuItem
+        {
+            Header = Strings.Get("MenuDeleteImage")
+        };
+        delete.Click += (_, _) => DeleteImageReferenceLine(lineOffset, lineLength, imageId);
+        menu.Items.Add(delete);
+
+        return menu;
+    }
+
+    private void CopyImageToClipboard(string imageId)
+    {
+        try
+        {
+            var bitmap = _imageStore?.GetBitmapSource(imageId);
+            if (bitmap != null)
+            {
+                Clipboard.SetImage(bitmap);
+            }
+        }
+        catch
+        {
+            // Clipboard access is best-effort.
+        }
+    }
+
+    private void DeleteImageReferenceLine(int lineOffset, int lineLength, string imageId)
+    {
+        if (Document == null || lineOffset < 0 || lineOffset > Document.TextLength)
+        {
+            return;
+        }
+
+        try
+        {
+            var line = Document.GetLineByOffset(Math.Min(lineOffset, Document.TextLength));
+            var text = Document.GetText(line);
+            if (!MarkdownImageReferences.TryParseLine(text, out var parsedId) ||
+                !string.Equals(parsedId, imageId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var removeStart = line.Offset;
+            var removeLength = line.Length + line.DelimiterLength;
+            if (line.NextLine != null &&
+                MarkdownImageReferences.IsRenderMarkerLine(Document.GetText(line.NextLine)))
+            {
+                removeLength += line.NextLine.Length + line.NextLine.DelimiterLength;
+            }
+
+            if (removeLength <= 0)
+            {
+                removeLength = Math.Max(0, lineLength);
+            }
+
+            Document.BeginUpdate();
+            try
+            {
+                Document.Remove(removeStart, Math.Min(removeLength, Document.TextLength - removeStart));
+                CaretOffset = Math.Min(removeStart, Document.TextLength);
+                Select(CaretOffset, 0);
+            }
+            finally
+            {
+                Document.EndUpdate();
+            }
+
+            QueuePostPasteRefresh();
+        }
+        catch
+        {
+            // A stale generated image element should never break the editor.
+        }
+    }
+
+    private double ImageTargetWidth()
+    {
+        var viewport = TextArea.TextView.ActualWidth;
+        if (viewport <= 0)
+        {
+            viewport = ActualWidth;
+        }
+
+        var width = viewport - ImageBlockHorizontalPadding * 2 - 10;
+        if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0)
+        {
+            return 240;
+        }
+
+        return Math.Max(80, width);
+    }
+
+    private static bool TryGetBitmapSource(IDataObject dataObject, out BitmapSource? bitmap)
+    {
+        bitmap = null;
+        try
+        {
+            if (!dataObject.GetDataPresent(DataFormats.Bitmap))
+            {
+                return false;
+            }
+
+            bitmap = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
+            return bitmap != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetImageFileDrop(IDataObject dataObject, out List<string> paths)
+    {
+        paths = new List<string>();
+        try
+        {
+            if (!dataObject.GetDataPresent(DataFormats.FileDrop) ||
+                dataObject.GetData(DataFormats.FileDrop) is not string[] dropped)
+            {
+                return false;
+            }
+
+            paths = dropped
+                .Where(NoteImageStore.IsSupportedImageFile)
+                .ToList();
+            return paths.Count > 0;
+        }
+        catch
+        {
+            paths.Clear();
+            return false;
+        }
     }
 
     private static bool IsIgnored(IReadOnlyList<InlineSpan> ignoredSpans, int start, int length)
@@ -1328,6 +2072,72 @@ public sealed class MarkdownTextBox : TextEditor
             return inside;
         }
     }
+
+    private sealed class MarkdownImageElementGenerator : VisualLineElementGenerator
+    {
+        private readonly MarkdownTextBox _owner;
+
+        public MarkdownImageElementGenerator(MarkdownTextBox owner)
+        {
+            _owner = owner;
+        }
+
+        public override int GetFirstInterestedOffset(int startOffset)
+        {
+            if (!_owner.ShouldRenderImages)
+            {
+                return -1;
+            }
+
+            var document = CurrentContext.Document;
+            if (document == null || document.TextLength <= 0)
+            {
+                return -1;
+            }
+
+            var offset = Math.Clamp(startOffset, 0, document.TextLength);
+            var line = document.GetLineByOffset(offset);
+            while (line != null)
+            {
+                if (_owner.TryGetImageElementForLine(line, out var imageOffset, out _, out _) &&
+                    imageOffset >= startOffset)
+                {
+                    return imageOffset;
+                }
+
+                line = line.NextLine;
+            }
+
+            return -1;
+        }
+
+        public override VisualLineElement ConstructElement(int offset)
+        {
+            if (!_owner.ShouldRenderImages)
+            {
+                return null!;
+            }
+
+            var document = CurrentContext.Document;
+            if (document == null || offset < 0 || offset > document.TextLength)
+            {
+                return null!;
+            }
+
+            var line = document.GetLineByOffset(offset);
+            if (!_owner.TryGetImageElementForLine(line, out var imageOffset, out var reference, out var asset) ||
+                imageOffset != offset)
+            {
+                return null!;
+            }
+
+            var referenceLine = line.PreviousLine ?? line;
+            var element = _owner.CreateImageBlock(reference, asset, referenceLine.Offset, referenceLine.Length, imageOffset);
+            return new InlineObjectElement(MarkdownImageReferences.RenderMarkerText.Length, element);
+        }
+    }
+
+    private sealed record ImageBlockTag(int CaretOffset);
 
     private static int CountRepeated(string text, int start, char c)
     {

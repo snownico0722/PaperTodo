@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Win32;
 
 namespace PaperTodo;
 
@@ -52,7 +53,7 @@ public sealed partial class PaperWindow
         }
 
         var oldBox = _noteBox;
-        var text = oldBox?.Text ?? _paper.Content ?? "";
+        var text = oldBox?.PersistentText ?? _paper.Content ?? "";
         var caret = oldBox?.CaretIndex ?? 0;
         var verticalOffset = oldBox?.VerticalOffset ?? 0;
         var horizontalOffset = oldBox?.HorizontalOffset ?? 0;
@@ -166,6 +167,8 @@ public sealed partial class PaperWindow
         var box = _noteBox;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
         box.SetTextZoom(CurrentTextZoom());
+        box.ConfigureNoteImages(_paper.Id, _controller.ImageStore);
+        box.ImageImportFailed += ShowNoteImageImportFailure;
 
         host.Children.Add(box);
         var editorMenu = CreateContextMenu();
@@ -178,6 +181,7 @@ public sealed partial class PaperWindow
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertImage"), (_, _) => InsertImageFromFilePicker(box)));
         editorMenu.Items.Add(MenuSeparator());
         editorMenu.Items.Add(MenuHeader(Strings.Get("MenuText")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuCopy"), (_, _) => box.Copy()));
@@ -187,6 +191,7 @@ public sealed partial class PaperWindow
         var previewMenu = BuildPaperContextMenu();
         var isPreviewing = false;
         var isEnteringEditorFromPreview = false;
+        var isInteractingWithImage = false;
 
         void ShowPreview()
         {
@@ -214,10 +219,18 @@ public sealed partial class PaperWindow
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
 
-        void ShowEditorAtPreviewPoint(Point previewPoint)
+        void ShowEditorAtPreviewPoint(Point previewPoint, DependencyObject? originalSource = null)
         {
             TraceNoteRender($"ShowEditorAtPreviewPoint x={previewPoint.X:F1} y={previewPoint.Y:F1}");
-            var hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out var caretIndex);
+            var hasPreviewCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
+            if (!hasPreviewCaret)
+            {
+                hasPreviewCaret = box.TryGetImageCaretFromPoint(previewPoint, out caretIndex);
+            }
+            if (!hasPreviewCaret)
+            {
+                hasPreviewCaret = box.TryGetCharacterIndexFromPoint(previewPoint, out caretIndex);
+            }
 
             isEnteringEditorFromPreview = true;
             ShowEditor(focus: false);
@@ -242,6 +255,71 @@ public sealed partial class PaperWindow
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
 
+        void MarkImageInteraction()
+        {
+            isInteractingWithImage = true;
+            Dispatcher.BeginInvoke(
+                (Action)(() => isInteractingWithImage = false),
+                System.Windows.Threading.DispatcherPriority.ContextIdle);
+        }
+
+        bool TryPlaceCaretOnImage(Point point, DependencyObject? originalSource)
+        {
+            var hasImageCaret = box.TryGetImageCaretFromSource(originalSource, out var caretIndex);
+            if (!hasImageCaret)
+            {
+                hasImageCaret = box.TryGetImageCaretFromPoint(point, out caretIndex);
+            }
+
+            if (!hasImageCaret)
+            {
+                return false;
+            }
+
+            MarkImageInteraction();
+            box.CaretIndex = Math.Clamp(caretIndex, 0, box.Text.Length);
+            box.SelectionLength = 0;
+            if (!box.IsKeyboardFocusWithin)
+            {
+                box.Focus();
+            }
+
+            return true;
+        }
+
+        box.AllowDrop = true;
+        box.PreviewDragOver += (_, e) =>
+        {
+            if (!box.CanInsertImagesFromDataObject(e.Data))
+            {
+                return;
+            }
+
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        };
+        box.PreviewDrop += (_, e) =>
+        {
+            if (!box.CanInsertImagesFromDataObject(e.Data))
+            {
+                return;
+            }
+
+            var point = e.GetPosition(box);
+            if (isPreviewing)
+            {
+                ShowEditorAtPreviewPoint(point, e.OriginalSource as DependencyObject);
+            }
+            else if (box.TryGetCharacterIndexFromPoint(point, out var dropCaret))
+            {
+                box.CaretIndex = dropCaret;
+                box.Select(dropCaret, 0);
+            }
+
+            box.TryInsertImagesFromDataObject(e.Data);
+            e.Handled = true;
+        };
+
         static void OpenMarkdownLink(string url)
         {
             try
@@ -260,7 +338,7 @@ public sealed partial class PaperWindow
         box.TextChanged += (_, _) =>
         {
             var wasScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
-            _paper.Content = box.Text;
+            _paper.Content = box.PersistentText;
             var isScriptCapsule = IsScriptCapsuleText(_paper.Content ?? "");
             if (wasScriptCapsule != isScriptCapsule)
             {
@@ -312,6 +390,11 @@ public sealed partial class PaperWindow
                 TraceNoteRender($"LostKeyboardFocus ignored: entering editor isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
                 return;
             }
+            if (isInteractingWithImage)
+            {
+                TraceNoteRender($"LostKeyboardFocus ignored: image interaction isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
+                return;
+            }
             TraceNoteRender($"LostKeyboardFocus isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
             ShowPreview();
         };
@@ -325,9 +408,17 @@ public sealed partial class PaperWindow
             }
 
             var textViewPoint = e.GetPosition(box.TextArea.TextView);
+            var point = e.GetPosition(box);
+            var originalSource = e.OriginalSource as DependencyObject;
             TraceNoteRender($"PreviewMouseLeftButtonDown isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} handled={e.Handled}");
             if (!isPreviewing)
             {
+                if (TryPlaceCaretOnImage(point, originalSource))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control &&
                     box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var editUrl))
                 {
@@ -337,7 +428,6 @@ public sealed partial class PaperWindow
                 return;
             }
 
-            var point = e.GetPosition(box);
             if (box.TryGetMarkdownLinkFromTextViewPoint(textViewPoint, out var url))
             {
                 OpenMarkdownLink(url);
@@ -345,7 +435,7 @@ public sealed partial class PaperWindow
                 return;
             }
 
-            ShowEditorAtPreviewPoint(point);
+            ShowEditorAtPreviewPoint(point, originalSource);
             e.Handled = true;
         };
         box.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, noteMouseDown, true);
@@ -388,6 +478,39 @@ public sealed partial class PaperWindow
         }
 
         return host;
+    }
+
+    private void InsertImageFromFilePicker(MarkdownTextBox box)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = Strings.Get("ImageFileDialogFilter"),
+            Multiselect = true,
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            box.InsertImagesFromFiles(dialog.FileNames);
+        }
+        catch (Exception ex)
+        {
+            ShowNoteImageImportFailure(ex);
+        }
+    }
+
+    private void ShowNoteImageImportFailure(Exception ex)
+    {
+        MessageBox.Show(
+            Strings.Format("ImageImportFailureMessage", ex.Message),
+            Strings.Get("ImageImportFailureTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
 
@@ -511,7 +634,11 @@ public sealed partial class PaperWindow
         Directory.CreateDirectory(directory);
 
         var path = Path.Combine(directory, $"paper-{_paper.Id}{CurrentExternalMarkdownExtension()}");
-        var text = _noteBox?.Text ?? _paper.Content ?? "";
+        var text = _noteBox?.PersistentText ?? _paper.Content ?? "";
+        text = _controller.ImageStore.ConvertMarkdownForExternalEditor(
+            _paper.Id,
+            text,
+            Path.Combine(directory, $"paper-{_paper.Id}-images"));
         File.WriteAllText(path, text, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         return path;
     }
@@ -594,7 +721,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        var text = _noteBox?.Text ?? _paper.Content ?? "";
+        var text = _noteBox?.PersistentText ?? _paper.Content ?? "";
         if (string.IsNullOrEmpty(text))
         {
             return false;

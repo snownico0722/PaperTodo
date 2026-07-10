@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using Application = System.Windows.Application;
@@ -13,6 +14,8 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        ApplyBuildCultureOverride();
+
         // Register global unhandled exception handlers
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
@@ -70,6 +73,17 @@ public partial class App : Application
                 _controller?.ExecuteStartupCommand(command);
             });
         });
+    }
+
+    private static void ApplyBuildCultureOverride()
+    {
+#if PAPERTODO_DEFAULT_ENGLISH
+        var culture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+        CultureInfo.CurrentCulture = culture;
+        CultureInfo.CurrentUICulture = culture;
+#endif
     }
 
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs ev)
