@@ -85,7 +85,9 @@ internal sealed class LmdbImageDatabase : IDisposable
 
             var store = DeserializeStore(storeBytes);
             var assets = new List<NoteImageAsset>();
-            long totalBytes = 0;
+            // Keep damaged records untouched in LMDB. The caller quarantines their ids in memory
+            // so healthy images remain available and the original bytes stay recoverable.
+            var corruptedImageIds = new HashSet<string>(StringComparer.Ordinal);
             var maximumImageNumber = 0;
 
             LmdbNative.Check(
@@ -101,24 +103,22 @@ internal sealed class LmdbImageDatabase : IDisposable
                 if (!keyBytes.AsSpan().SequenceEqual(StoreKey))
                 {
                     var imageId = Encoding.ASCII.GetString(keyBytes);
-                    var asset = JsonSerializer.Deserialize<NoteImageAsset>(CopyValue(value), JsonOptions)
-                        ?? throw new InvalidDataException($"Image metadata '{imageId}' is empty.");
-                    if (!string.Equals(asset.Id, imageId, StringComparison.Ordinal))
-                    {
-                        throw new InvalidDataException($"Image metadata key '{imageId}' does not match its id.");
-                    }
-
-                    if (!TryGetLength(transaction, _blobDatabase, keyBytes, out var blobLength) ||
-                        blobLength != asset.ByteLength)
-                    {
-                        throw new InvalidDataException($"Image '{imageId}' has missing or mismatched binary data.");
-                    }
-
-                    assets.Add(asset);
-                    totalBytes += asset.ByteLength;
-                    if (int.TryParse(imageId, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
+                    if (MarkdownImageReferences.IsValidImageId(imageId) &&
+                        int.TryParse(imageId, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
                     {
                         maximumImageNumber = Math.Max(maximumImageNumber, number);
+                    }
+
+                    if (!TryDeserializeAsset(CopyValue(value), out var asset) ||
+                        !string.Equals(asset.Id, imageId, StringComparison.Ordinal) ||
+                        !TryGetLength(transaction, _blobDatabase, keyBytes, out var blobLength) ||
+                        blobLength != asset.ByteLength)
+                    {
+                        corruptedImageIds.Add(imageId);
+                    }
+                    else
+                    {
+                        assets.Add(asset);
                     }
                 }
 
@@ -131,7 +131,7 @@ internal sealed class LmdbImageDatabase : IDisposable
             }
 
             var nextImageNumber = Math.Max(store.NextImageNumber, maximumImageNumber + 1);
-            return new LmdbImageIndex(assets, nextImageNumber, totalBytes);
+            return new LmdbImageIndex(assets, corruptedImageIds, nextImageNumber);
         }
         finally
         {
@@ -277,6 +277,32 @@ internal sealed class LmdbImageDatabase : IDisposable
             throw new InvalidDataException("The image database format is not supported.");
         }
         return store;
+    }
+
+    private static bool TryDeserializeAsset(byte[] bytes, out NoteImageAsset asset)
+    {
+        try
+        {
+            var deserialized = JsonSerializer.Deserialize<NoteImageAsset>(bytes, JsonOptions);
+            if (deserialized == null)
+            {
+                asset = null!;
+                return false;
+            }
+
+            asset = deserialized;
+            return true;
+        }
+        catch (JsonException)
+        {
+            asset = null!;
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            asset = null!;
+            return false;
+        }
     }
 
     private void PutStore(IntPtr transaction, ImageStoreMetadata store)
@@ -439,7 +465,7 @@ internal sealed class LmdbImageDatabase : IDisposable
 
 internal sealed record LmdbImageIndex(
     IReadOnlyList<NoteImageAsset> Assets,
-    int NextImageNumber,
-    long TotalBytes);
+    IReadOnlyCollection<string> CorruptedImageIds,
+    int NextImageNumber);
 
 internal readonly record struct LmdbImageWrite(NoteImageAsset Asset, byte[] Bytes);

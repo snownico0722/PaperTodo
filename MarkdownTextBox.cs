@@ -1971,6 +1971,7 @@ public sealed class MarkdownTextBox : TextEditor
         var targetWidth = ImageTargetWidth();
         var displayWidth = ResolveImageDisplayWidth(reference.DisplayOptions, asset, targetWidth);
         var bitmap = asset == null ? null : _imageStore?.GetBitmapSource(asset.Id, Math.Min(targetWidth, displayWidth));
+        var isCorrupted = _imageStore?.IsImageCorrupted(reference.ImageId) == true;
         var document = Document!;
         var referenceAnchor = document.CreateAnchor(referenceLine.Offset);
         referenceAnchor.MovementType = AnchorMovementType.BeforeInsertion;
@@ -2018,13 +2019,15 @@ public sealed class MarkdownTextBox : TextEditor
                 Width = Math.Max(120, Math.Min(targetWidth, displayWidth)),
                 Height = 42,
                 CornerRadius = new CornerRadius(5),
-                Background = Theme.Tint((byte)(Theme.IsDark ? 30 : 18)),
-                BorderBrush = Theme.PaperBorderBrush,
+                Background = isCorrupted
+                    ? Theme.Danger((byte)(Theme.IsDark ? 30 : 18))
+                    : Theme.Tint((byte)(Theme.IsDark ? 30 : 18)),
+                BorderBrush = isCorrupted ? Theme.Danger(70) : Theme.PaperBorderBrush,
                 BorderThickness = new Thickness(1),
                 Child = new TextBlock
                 {
-                    Text = Strings.Get("ImageMissing"),
-                    Foreground = Theme.WeakTextBrush,
+                    Text = Strings.Get(isCorrupted ? "ImageCorrupted" : "ImageMissing"),
+                    Foreground = isCorrupted ? Theme.DangerBrush : Theme.WeakTextBrush,
                     FontSize = ScaledFontSize(NoteTypography.FontSize),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center

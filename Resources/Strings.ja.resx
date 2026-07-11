@@ -162,6 +162,9 @@
   <data name="ImageMissing" xml:space="preserve">
     <value>画像を表示できません</value>
   </data>
+  <data name="ImageCorrupted" xml:space="preserve">
+    <value>画像が破損しています</value>
+  </data>
   <data name="ImageFileDialogFilter" xml:space="preserve">
     <value>画像ファイル|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|すべてのファイル|*.*</value>
   </data>

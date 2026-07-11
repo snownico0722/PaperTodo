@@ -162,6 +162,9 @@
   <data name="ImageMissing" xml:space="preserve">
     <value>이미지를 사용할 수 없습니다</value>
   </data>
+  <data name="ImageCorrupted" xml:space="preserve">
+    <value>이미지가 손상되었습니다</value>
+  </data>
   <data name="ImageFileDialogFilter" xml:space="preserve">
     <value>이미지 파일|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|모든 파일|*.*</value>
   </data>

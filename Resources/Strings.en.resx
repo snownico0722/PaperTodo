@@ -162,6 +162,9 @@
   <data name="ImageMissing" xml:space="preserve">
     <value>Image unavailable</value>
   </data>
+  <data name="ImageCorrupted" xml:space="preserve">
+    <value>Image corrupted</value>
+  </data>
   <data name="ImageFileDialogFilter" xml:space="preserve">
     <value>Image files|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|All files|*.*</value>
   </data>

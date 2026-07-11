@@ -20,6 +20,7 @@ public sealed class NoteImageStore : IDisposable
     private readonly Dictionary<string, BitmapSource> _bitmapCache = new(StringComparer.Ordinal);
     private readonly HashSet<string> _retiredImageIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _verifiedImageIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _corruptedImageIds = new(StringComparer.Ordinal);
     private LmdbImageDatabase? _database;
     private long _totalImageBytes;
     private int _nextImageNumber = 1;
@@ -41,6 +42,7 @@ public sealed class NoteImageStore : IDisposable
             _bitmapCache.Clear();
             _retiredImageIds.Clear();
             _verifiedImageIds.Clear();
+            _corruptedImageIds.Clear();
             _totalImageBytes = 0;
             _nextImageNumber = 1;
             _writeDisabled = false;
@@ -54,7 +56,7 @@ public sealed class NoteImageStore : IDisposable
             {
                 _database = LmdbImageDatabase.Open(FilePath);
                 var index = _database.ReadIndex();
-                if (!TryValidateIndex(index, out var images))
+                if (!TryValidateIndex(index, out var images, out var corruptedImageIds, out var totalBytes))
                 {
                     _database.Dispose();
                     _database = null;
@@ -62,8 +64,9 @@ public sealed class NoteImageStore : IDisposable
                     return;
                 }
 
-                _totalImageBytes = index.TotalBytes;
+                _totalImageBytes = totalBytes;
                 _nextImageNumber = index.NextImageNumber;
+                _corruptedImageIds.UnionWith(corruptedImageIds);
                 ReplaceImages(images);
             }
             catch
@@ -83,12 +86,21 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
+    public bool IsImageCorrupted(string imageId)
+    {
+        lock (_gate)
+        {
+            return _corruptedImageIds.Contains(imageId);
+        }
+    }
+
     public BitmapSource? GetBitmapSource(string imageId, double targetDisplayWidth = 0)
     {
         NoteImageAsset asset;
         lock (_gate)
         {
-            if (!_images.TryGetValue(imageId, out asset!))
+            if (_corruptedImageIds.Contains(imageId) ||
+                !_images.TryGetValue(imageId, out asset!))
             {
                 return null;
             }
@@ -138,6 +150,10 @@ public sealed class NoteImageStore : IDisposable
         }
         catch
         {
+            lock (_gate)
+            {
+                MarkImageCorruptedLocked(imageId);
+            }
             return null;
         }
     }
@@ -632,7 +648,9 @@ public sealed class NoteImageStore : IDisposable
         {
             var number = nextImageNumber++;
             var id = FormatImageId(number);
-            if (!_images.ContainsKey(id) && !_retiredImageIds.Contains(id))
+            if (!_images.ContainsKey(id) &&
+                !_retiredImageIds.Contains(id) &&
+                !_corruptedImageIds.Contains(id))
             {
                 return id;
             }
@@ -787,37 +805,42 @@ public sealed class NoteImageStore : IDisposable
 
     private static bool TryValidateIndex(
         LmdbImageIndex index,
-        out List<NoteImageAsset> images)
+        out List<NoteImageAsset> images,
+        out HashSet<string> corruptedImageIds,
+        out long totalBytes)
     {
         images = new List<NoteImageAsset>();
-        if (index.NextImageNumber is < 1 or > 100_000_000 ||
-            index.TotalBytes is < 0 or > MaxTotalImageBytes)
+        corruptedImageIds = new HashSet<string>(index.CorruptedImageIds, StringComparer.Ordinal);
+        totalBytes = 0;
+        if (index.NextImageNumber is < 1 or > 100_000_000)
         {
             return false;
         }
 
         var usedIds = new HashSet<string>(StringComparer.Ordinal);
-        long totalBytes = 0;
         foreach (var asset in index.Assets)
         {
             if (!TryValidateAssetMetadata(asset) ||
                 !usedIds.Add(asset.Id))
             {
-                images.Clear();
-                return false;
+                if (!string.IsNullOrWhiteSpace(asset?.Id))
+                {
+                    corruptedImageIds.Add(asset.Id);
+                }
+                continue;
+            }
+
+            if (asset.ByteLength > MaxTotalImageBytes - totalBytes)
+            {
+                corruptedImageIds.Add(asset.Id);
+                continue;
             }
 
             totalBytes += asset.ByteLength;
-            if (totalBytes > MaxTotalImageBytes)
-            {
-                images.Clear();
-                return false;
-            }
-
             images.Add(asset);
         }
 
-        return totalBytes == index.TotalBytes;
+        return true;
     }
 
     private void ReplaceImages(IEnumerable<NoteImageAsset> images)
@@ -838,6 +861,7 @@ public sealed class NoteImageStore : IDisposable
 
         _totalImageBytes = Math.Max(0, _totalImageBytes - asset.ByteLength);
         _verifiedImageIds.Remove(imageId);
+        _corruptedImageIds.Remove(imageId);
         RemoveCachedBitmapsFor(imageId);
         if (reserveIdUntilRestart)
         {
@@ -875,10 +899,20 @@ public sealed class NoteImageStore : IDisposable
     private bool TryReadImageBytesLocked(NoteImageAsset asset, out byte[] bytes)
     {
         bytes = Array.Empty<byte>();
-        if (_database == null ||
-            !_database.TryReadBlob(asset.Id, out var storedBytes) ||
+        if (_corruptedImageIds.Contains(asset.Id))
+        {
+            return false;
+        }
+
+        if (_database == null)
+        {
+            return false;
+        }
+
+        if (!_database.TryReadBlob(asset.Id, out var storedBytes) ||
             storedBytes.Length != asset.ByteLength)
         {
+            MarkImageCorruptedLocked(asset.Id);
             return false;
         }
 
@@ -887,6 +921,7 @@ public sealed class NoteImageStore : IDisposable
             var actualHash = Convert.ToHexString(SHA256.HashData(storedBytes));
             if (!string.Equals(actualHash, asset.Sha256, StringComparison.OrdinalIgnoreCase))
             {
+                MarkImageCorruptedLocked(asset.Id);
                 return false;
             }
             _verifiedImageIds.Add(asset.Id);
@@ -894,6 +929,13 @@ public sealed class NoteImageStore : IDisposable
 
         bytes = storedBytes;
         return true;
+    }
+
+    private void MarkImageCorruptedLocked(string imageId)
+    {
+        _corruptedImageIds.Add(imageId);
+        _verifiedImageIds.Remove(imageId);
+        RemoveCachedBitmapsFor(imageId);
     }
 
     private LmdbImageDatabase RequireDatabaseLocked()
@@ -938,6 +980,7 @@ public sealed class NoteImageStore : IDisposable
             _images.Clear();
             _bitmapCache.Clear();
             _verifiedImageIds.Clear();
+            _corruptedImageIds.Clear();
         }
     }
 

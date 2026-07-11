@@ -171,6 +171,9 @@
   <data name="ImageMissing" xml:space="preserve">
     <value>图片不可用</value>
   </data>
+  <data name="ImageCorrupted" xml:space="preserve">
+    <value>图片已损坏</value>
+  </data>
   <data name="ImageFileDialogFilter" xml:space="preserve">
     <value>图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|所有文件|*.*</value>
   </data>
