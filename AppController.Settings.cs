@@ -571,6 +571,7 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             Cursor = System.Windows.Input.Cursors.SizeAll
         };
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.MouseLeftButtonDown += (_, e) =>
@@ -592,6 +593,13 @@ public sealed partial class AppController
         Grid.SetColumn(title, 0);
         titleRow.Children.Add(title);
 
+        var pageSelector = (FrameworkElement)CreateSettingsPageSelector();
+        pageSelector.HorizontalAlignment = HorizontalAlignment.Left;
+        pageSelector.VerticalAlignment = VerticalAlignment.Center;
+        pageSelector.Margin = new Thickness(12, 0, 0, 0);
+        Grid.SetColumn(pageSelector, 1);
+        titleRow.Children.Add(pageSelector);
+
         var closeButton = new Button
         {
             Content = "×",
@@ -608,15 +616,11 @@ public sealed partial class AppController
             Style = BuildSettingsCloseButtonStyle()
         };
         closeButton.Click += (_, _) => window.Close();
-        Grid.SetColumn(closeButton, 1);
+        Grid.SetColumn(closeButton, 2);
         titleRow.Children.Add(closeButton);
 
         DockPanel.SetDock(titleRow, Dock.Top);
         root.Children.Add(titleRow);
-
-        var pageSelector = CreateSettingsPageSelector();
-        DockPanel.SetDock(pageSelector, Dock.Top);
-        root.Children.Add(pageSelector);
 
         if (_settingsPage == SettingsPage.Shortcuts)
         {
@@ -766,11 +770,11 @@ public sealed partial class AppController
         // Premium main segmented capsule container
         var container = new Border
         {
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = new CornerRadius(5),
             Background = TrayHoverBrush, // Sunken tab track background
-            Margin = new Thickness(0, 0, 0, 10),
-            Height = 30,
-            Width = 220,
+            Margin = new Thickness(0),
+            Height = 24,
+            Width = 140,
             HorizontalAlignment = HorizontalAlignment.Left
         };
 
@@ -787,8 +791,8 @@ public sealed partial class AppController
             // Segment item card
             var segmentBorder = new Border
             {
-                CornerRadius = new CornerRadius(4),
-                Margin = new Thickness(2), // Smaller margin for a compact capsule look
+                CornerRadius = new CornerRadius(3.5),
+                Margin = new Thickness(1.5), // Micro margin for inline capsule
                 Background = isActive ? Theme.ActiveBrush : Brushes.Transparent,
                 Cursor = System.Windows.Input.Cursors.Hand
             };
@@ -798,7 +802,7 @@ public sealed partial class AppController
                 Text = label,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12,
+                FontSize = 11,
                 FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
                 Foreground = isActive ? TrayPaperBrush : TrayWeakTextBrush,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -919,7 +923,7 @@ public sealed partial class AppController
     {
         const double verticalPadding = 26;
         const double titleRowHeight = 34;
-        const double pageSelectorHeight = 30;
+        const double pageSelectorHeight = 0;
         const double footerHeight = 24;
         return Math.Max(
             180,
