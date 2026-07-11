@@ -150,6 +150,7 @@ public static class MarkdownImageReferences
             yield break;
         }
 
+        var insideFencedCodeBlock = false;
         var lineStart = 0;
         while (lineStart <= markdown.Length)
         {
@@ -160,7 +161,11 @@ public static class MarkdownImageReferences
             }
 
             var line = markdown[lineStart..lineEnd];
-            if (TryParseReferenceLine(line, out var reference))
+            if (IsFenceLine(line))
+            {
+                insideFencedCodeBlock = !insideFencedCodeBlock;
+            }
+            else if (!insideFencedCodeBlock && TryParseReferenceLine(line, out var reference))
             {
                 yield return reference with
                 {
@@ -180,6 +185,34 @@ public static class MarkdownImageReferences
                 lineStart++;
             }
         }
+    }
+
+    public static bool IsFenceLine(string text)
+    {
+        var start = 0;
+        while (start < text.Length && start < 3 && text[start] == ' ')
+        {
+            start++;
+        }
+
+        if (start >= text.Length)
+        {
+            return false;
+        }
+
+        var marker = text[start];
+        if (marker is not ('`' or '~'))
+        {
+            return false;
+        }
+
+        var count = 0;
+        while (start + count < text.Length && text[start + count] == marker)
+        {
+            count++;
+        }
+
+        return count >= 3;
     }
 
     public static string ReplaceForExternalMarkdown(

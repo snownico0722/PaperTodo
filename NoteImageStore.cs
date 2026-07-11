@@ -423,14 +423,14 @@ public sealed class NoteImageStore
             return;
         }
 
-        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        var referenced = new HashSet<(string NoteId, string ImageId)>();
         var liveNotes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var note in state.Papers.Where(p => p.Type == PaperTypes.Note))
         {
             liveNotes.Add(note.Id);
             foreach (var imageId in MarkdownImageReferences.CollectImageIds(note.Content))
             {
-                referenced.Add(imageId);
+                referenced.Add((note.Id, imageId));
             }
         }
 
@@ -446,7 +446,7 @@ public sealed class NoteImageStore
                     continue;
                 }
 
-                if (referenced.Contains(asset.Id))
+                if (referenced.Contains((asset.NoteId, asset.Id)))
                 {
                     if (asset.OrphanedAt != null)
                     {

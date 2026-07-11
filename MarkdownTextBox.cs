@@ -2512,13 +2512,7 @@ public sealed class MarkdownTextBox : TextEditor
     private static bool IsFenceLine(string text, out int start)
     {
         start = CountIndent(text);
-        if (start >= text.Length)
-        {
-            return false;
-        }
-
-        return (text[start] == '`' && CountRepeated(text, start, '`') >= 3) ||
-               (text[start] == '~' && CountRepeated(text, start, '~') >= 3);
+        return MarkdownImageReferences.IsFenceLine(text);
     }
 
     private static bool IsHorizontalRuleLine(string text, int start)
