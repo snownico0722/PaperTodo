@@ -419,7 +419,12 @@ public sealed partial class PaperWindow
         _capsuleShell.Children.Add(capsuleClose);
     }
 
-    public void SetCollapsedState(bool collapsed, bool animate = true, bool saveGeometry = true, bool alignExpandedToDockedEdge = false)
+    public void SetCollapsedState(
+        bool collapsed,
+        bool animate = true,
+        bool saveGeometry = true,
+        bool alignExpandedToDockedEdge = false,
+        bool activateOnExpand = false)
     {
         animate = animate && _controller.State.EnableAnimations;
 
@@ -844,6 +849,37 @@ public sealed partial class PaperWindow
         {
             _controller.RefreshTodoRowsForLinkedNote(_paper.Id);
         }
+
+        if (!collapsed && activateOnExpand)
+        {
+            QueueActivateAfterExpandInteraction(transitionGeneration);
+        }
+    }
+
+    private void QueueActivateAfterExpandInteraction(int transitionGeneration)
+    {
+        // Capsule mouse-up handlers clear native keyboard focus after SetCollapsedState returns,
+        // and repeat that cleanup at Background priority. Run below Background so the explicit
+        // user activation is the final focus operation even when animations are disabled.
+        Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                if (transitionGeneration != _collapseTransitionGeneration ||
+                    _paper.IsCollapsed ||
+                    !IsVisible ||
+                    _controller.SuppressTopmostForFullscreenForeground)
+                {
+                    return;
+                }
+
+                if (!IsActive && !Activate())
+                {
+                    return;
+                }
+
+                Focus();
+            }),
+            System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     // Runs when an expand transition finishes. If the paper was collapsed while maximized,

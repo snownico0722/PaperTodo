@@ -2215,7 +2215,9 @@ public sealed partial class PaperWindow : Window
             {
                 if (!forDeepCapsuleSlot)
                 {
-                    menu.Items.Add(MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => SetCollapsedState(false)));
+                    menu.Items.Add(MenuItem(
+                        Strings.Get("MenuRestoreWindow"),
+                        (_, _) => SetCollapsedState(false, activateOnExpand: true)));
                 }
             }
             else

@@ -879,7 +879,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        SetCollapsedState(false);
+        SetCollapsedState(false, activateOnExpand: true);
     }
 
     private void OpenCapsuleForEditing()
@@ -889,11 +889,11 @@ public sealed partial class PaperWindow
             if (HasDeepCapsuleSlotPlacement)
             {
                 ShowMainWindowForDeepCapsuleActivation();
-                SetCollapsedState(false, alignExpandedToDockedEdge: true);
+                SetCollapsedState(false, alignExpandedToDockedEdge: true, activateOnExpand: true);
             }
             else
             {
-                SetCollapsedState(false);
+                SetCollapsedState(false, activateOnExpand: true);
             }
 
             return;
