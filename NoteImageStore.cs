@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -860,8 +861,15 @@ public sealed class NoteImageStore : IDisposable
             return false;
         }
 
-        Span<byte> hash = stackalloc byte[32];
-        return Convert.TryFromHexString(asset.Sha256, hash, out var written) && written == hash.Length;
+        try
+        {
+            var hexBytes = Convert.FromHexString(asset.Sha256);
+            return hexBytes.Length == 32;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private bool TryReadImageBytesLocked(NoteImageAsset asset, out byte[] bytes)
