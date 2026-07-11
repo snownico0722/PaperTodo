@@ -83,7 +83,7 @@ jobs:
             --self-contained true `
             -o $selfContainedOut `
             /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=true `
+            /p:PublishReadyToRun=false `
             /p:IncludeNativeLibrariesForSelfExtract=true `
             /p:EnableCompressionInSingleFile=true `
             /p:PublishTrimmed=false `
@@ -98,7 +98,7 @@ jobs:
             --self-contained false `
             -o $frameworkDependentOut `
             /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=true `
+            /p:PublishReadyToRun=false `
             /p:IncludeNativeLibrariesForSelfExtract=true `
             /p:EnableCompressionInSingleFile=false `
             /p:PublishTrimmed=false `
