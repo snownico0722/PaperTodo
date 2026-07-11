@@ -168,6 +168,7 @@ public sealed partial class PaperWindow : Window
     private bool _pendingTitleEdit;
     private Rect? _snappedPresentationBoundsForRestore;
     private Rect? _collapsedFromSnappedBounds;
+    private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
     private int _clearDoneGeneration;
     private int _todoRowsGeneration;
@@ -820,6 +821,7 @@ public sealed partial class PaperWindow : Window
     // margin off-screen — keep it as the offset.
     private bool _isSnappedPresentation;
 
+
     private void RefreshSnappedPresentation(bool forceApply = false)
     {
         if (_paperChrome == null)
@@ -1109,47 +1111,69 @@ public sealed partial class PaperWindow : Window
         }
 
         const double tolerance = WindowChromeInset + 4.0;
+        // A window must occupy at least this fraction of a work-area dimension before a mere
+        // edge graze counts as a snapped tile — keeps small free-floating windows out.
+        const double minSpanRatio = 0.20;
         var wa = workArea;
         bool nearLeft = Math.Abs(rect.Left - wa.Left) <= tolerance;
         bool nearTop = Math.Abs(rect.Top - wa.Top) <= tolerance;
         bool nearRight = Math.Abs(rect.Right - wa.Right) <= tolerance;
         bool nearBottom = Math.Abs(rect.Bottom - wa.Bottom) <= tolerance;
 
-        bool halfWidth = Math.Abs(rect.Width - wa.Width / 2) <= tolerance;
-        bool halfHeight = Math.Abs(rect.Height - wa.Height / 2) <= tolerance;
-        bool fullWidth = Math.Abs(rect.Width - wa.Width) <= tolerance;
-        bool fullHeight = Math.Abs(rect.Height - wa.Height) <= tolerance;
+        bool fullWidth = nearLeft && nearRight && Math.Abs(rect.Width - wa.Width) <= tolerance;
+        bool fullHeight = nearTop && nearBottom && Math.Abs(rect.Height - wa.Height) <= tolerance;
 
-        if (fullWidth && fullHeight && nearLeft && nearTop && nearRight && nearBottom)
+        // Maximized / full-area tile.
+        if (fullWidth && fullHeight)
         {
             bounds = wa;
             return true;
         }
 
-        if (fullHeight && nearTop && nearBottom && halfWidth && (nearLeft || nearRight))
+        // Column tile: spans the full height and is docked to exactly one vertical edge, at
+        // ANY width — half, thirds, 60/40, three-column, or a divider dragged to any ratio.
+        // Capture the actual occupied width instead of forcing it to a theoretical half.
+        if (fullHeight && (nearLeft ^ nearRight) && rect.Width >= wa.Width * minSpanRatio)
         {
-            var left = nearLeft ? wa.Left : wa.Left + wa.Width / 2;
-            var right = nearLeft ? wa.Left + wa.Width / 2 : wa.Right;
-            bounds = new Rect(new Point(left, wa.Top), new Point(right, wa.Bottom));
-            return true;
+            var left = nearLeft ? wa.Left : Math.Clamp(rect.Left, wa.Left, wa.Right);
+            var right = nearRight ? wa.Right : Math.Clamp(rect.Right, wa.Left, wa.Right);
+            if (right - left >= tolerance)
+            {
+                bounds = new Rect(new Point(left, wa.Top), new Point(right, wa.Bottom));
+                return true;
+            }
         }
 
-        if (fullWidth && nearLeft && nearRight && halfHeight && (nearTop || nearBottom))
+        // Row tile: spans the full width and is docked to exactly one horizontal edge, at any
+        // height. Capture the actual occupied height.
+        if (fullWidth && (nearTop ^ nearBottom) && rect.Height >= wa.Height * minSpanRatio)
         {
-            var top = nearTop ? wa.Top : wa.Top + wa.Height / 2;
-            var bottom = nearTop ? wa.Top + wa.Height / 2 : wa.Bottom;
-            bounds = new Rect(new Point(wa.Left, top), new Point(wa.Right, bottom));
-            return true;
+            var top = nearTop ? wa.Top : Math.Clamp(rect.Top, wa.Top, wa.Bottom);
+            var bottom = nearBottom ? wa.Bottom : Math.Clamp(rect.Bottom, wa.Top, wa.Bottom);
+            if (bottom - top >= tolerance)
+            {
+                bounds = new Rect(new Point(wa.Left, top), new Point(wa.Right, bottom));
+                return true;
+            }
         }
 
-        if (halfWidth && halfHeight && (nearLeft || nearRight) && (nearTop || nearBottom))
+        // Corner quarter tile: kept to the native ~half x half footprint on purpose. A fully
+        // generalized corner (any size touching one horizontal + one vertical edge) would
+        // misclassify ordinary windows resting near a corner as snapped, so only the actual
+        // occupied rect is captured while the half gate stays.
+        bool halfWidth = Math.Abs(rect.Width - wa.Width / 2) <= tolerance;
+        bool halfHeight = Math.Abs(rect.Height - wa.Height / 2) <= tolerance;
+        if (halfWidth && halfHeight && (nearLeft ^ nearRight) && (nearTop ^ nearBottom))
         {
-            var left = nearLeft ? wa.Left : wa.Left + wa.Width / 2;
-            var right = nearLeft ? wa.Left + wa.Width / 2 : wa.Right;
-            var top = nearTop ? wa.Top : wa.Top + wa.Height / 2;
-            var bottom = nearTop ? wa.Top + wa.Height / 2 : wa.Bottom;
-            bounds = new Rect(new Point(left, top), new Point(right, bottom));
-            return true;
+            var left = nearLeft ? wa.Left : Math.Clamp(rect.Left, wa.Left, wa.Right);
+            var right = nearRight ? wa.Right : Math.Clamp(rect.Right, wa.Left, wa.Right);
+            var top = nearTop ? wa.Top : Math.Clamp(rect.Top, wa.Top, wa.Bottom);
+            var bottom = nearBottom ? wa.Bottom : Math.Clamp(rect.Bottom, wa.Top, wa.Bottom);
+            if (right - left >= tolerance && bottom - top >= tolerance)
+            {
+                bounds = new Rect(new Point(left, top), new Point(right, bottom));
+                return true;
+            }
         }
 
         return false;

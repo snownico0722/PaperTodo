@@ -316,6 +316,7 @@ public sealed partial class PaperWindow
                 try
                 {
                     _collapsedFromSnappedBounds = null;
+                    _collapsedFromMaximized = false;
                     DragMove();
                 }
                 catch (InvalidOperationException)
@@ -484,10 +485,31 @@ public sealed partial class PaperWindow
         Rect? restoreSnappedBounds = null;
         if (collapsed)
         {
-            var shouldRestoreSnapAfterExpand = _isSnappedPresentation || WindowState == WindowState.Maximized;
-            _collapsedFromSnappedBounds = shouldRestoreSnapAfterExpand && TryGetCurrentSnapTileBounds(out var snappedBounds)
-                ? snappedBounds
-                : null;
+            var wasMaximized = WindowState == WindowState.Maximized;
+            var wasSnapped = _isSnappedPresentation;
+            _collapsedFromMaximized = wasMaximized;
+            // Collapsing ends the snap relationship: a collapsed paper is a free capsule, so it
+            // should expand back to its own recorded paper size — NOT re-snap. So we do not
+            // remember the snap tile for restore here (only maximized windows are restored, via
+            // _collapsedFromMaximized). Clearing the snapped flag also lets geometry save resume.
+            _collapsedFromSnappedBounds = null;
+            _isSnappedPresentation = false;
+            // Both maximized AND Windows-snapped windows keep a native "restore rect". After we
+            // shrink the WPF window to a capsule, that native memory still says "paper-sized", so
+            // the next DragMove would make Windows un-snap/un-maximize the tiny capsule back to
+            // full size mid-drag. Clear the native state now (SW_RESTORE). Suppress geometry save
+            // so the transient restored rect isn't written over the paper's saved size.
+            if (wasMaximized || wasSnapped)
+            {
+                MoveWindowWithoutGeometrySave(() =>
+                {
+                    WindowNative.RestoreNativeWindow(this);
+                    if (wasMaximized)
+                    {
+                        WindowState = WindowState.Normal;
+                    }
+                });
+            }
         }
         else if (_collapsedFromSnappedBounds is Rect snappedBounds)
         {
@@ -754,7 +776,7 @@ public sealed partial class PaperWindow
                 }
                 if (!collapsed)
                 {
-                    _collapsedFromSnappedBounds = null;
+                    FinishExpandSnapStateRestore();
                 }
             };
 
@@ -814,7 +836,7 @@ public sealed partial class PaperWindow
             }
             if (!collapsed)
             {
-                _collapsedFromSnappedBounds = null;
+                FinishExpandSnapStateRestore();
             }
         }
 
@@ -825,9 +847,23 @@ public sealed partial class PaperWindow
         }
     }
 
-    private void RestoreCollapseStartPositionIfNeeded(bool shouldRestore, double startLeft, double startTop)
+    // Runs when an expand transition finishes. If the paper was collapsed while maximized,
+    // re-enter the real maximized window state (rather than leaving a manually-sized rect);
+    // otherwise the snapped-rect position applied earlier already stands. Clears the
+    // one-shot capture flags either way.
+    private void FinishExpandSnapStateRestore()
     {
-        if (!shouldRestore ||
+        if (_collapsedFromMaximized)
+        {
+            MoveWindowWithoutGeometrySave(() => WindowState = WindowState.Maximized);
+        }
+
+        _collapsedFromMaximized = false;
+        _collapsedFromSnappedBounds = null;
+    }
+
+    private void RestoreCollapseStartPositionIfNeeded(bool shouldRestore, double startLeft, double startTop)
+    {        if (!shouldRestore ||
             !IsFiniteWindowCoordinate(Left) ||
             !IsFiniteWindowCoordinate(Top))
         {

@@ -273,6 +273,23 @@ internal static class WindowNative
         return true;
     }
 
+    // Restore a natively maximized or snapped window at the Win32 level (SW_RESTORE) so the hwnd
+    // leaves that state even when WPF's WindowState no longer agrees. Used while collapsing so a
+    // capsule dragged afterward isn't "restored to full size" by the shell mid-drag.
+    public static void RestoreNativeWindow(Window window)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle != IntPtr.Zero)
+        {
+            _ = ShowWindow(handle, SwRestore);
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SwRestore = 9;
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 

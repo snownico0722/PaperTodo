@@ -1746,6 +1746,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // While collapsed the window reports capsule geometry. Simple capsule mode
+        // intentionally persists the capsule's own position through paper.X/Y (that is
+        // where ShowPaper restores it from), so position is still saved — but the capsule's
+        // width/height must never overwrite the expanded paper's size.
         paper.X = Math.Round(window.Left);
         paper.Y = Math.Round(window.Top);
         if (!paper.IsCollapsed)
@@ -1753,7 +1757,6 @@ public sealed partial class AppController : IDisposable
             paper.Width = Math.Round(Math.Max(window.ActualWidth > 0 ? window.ActualWidth : window.Width, PaperLayoutDefaults.MinWidth));
             paper.Height = Math.Round(Math.Max(window.ActualHeight > 0 ? window.ActualHeight : window.Height, PaperLayoutDefaults.MinHeight));
         }
-
         MarkDirty();
     }
 
