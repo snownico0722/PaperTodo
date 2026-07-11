@@ -1442,24 +1442,38 @@ public sealed partial class AppController : IDisposable
     }
 
     public void RefreshCapsuleEligibilityForLinkedNote(string? noteId)
+        => RefreshCapsuleEligibilityForLinkedNotes([noteId]);
+
+    public void RefreshCapsuleEligibilityForLinkedNotes(IEnumerable<string?> noteIds)
     {
-        if (string.IsNullOrWhiteSpace(noteId) ||
-            !State.EnableTodoNoteLinks ||
+        if (!State.EnableTodoNoteLinks ||
             !State.HideLinkedNotesFromCapsules ||
             !State.UseCapsuleMode)
         {
             return;
         }
 
-        var note = FindNote(noteId);
-        if (note == null)
+        var refreshedAny = false;
+        foreach (var noteId in noteIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal))
         {
-            return;
+            var note = FindNote(noteId);
+            if (note == null)
+            {
+                continue;
+            }
+
+            refreshedAny = true;
+            if (_windows.TryGetValue(note.Id, out var noteWindow))
+            {
+                noteWindow.RefreshCapsuleEligibility();
+            }
         }
 
-        if (_windows.TryGetValue(note.Id, out var noteWindow))
+        if (!refreshedAny)
         {
-            noteWindow.RefreshCapsuleEligibility();
+            return;
         }
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);

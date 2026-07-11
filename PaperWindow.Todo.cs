@@ -782,6 +782,7 @@ public sealed partial class PaperWindow
             var next = NextItem(item);
             var focusTarget = previous?.Id ?? next?.Id;
             _suppressTodoBackspaceUntilKeyUp = true;
+            var previousItems = CloneItems(_paper.Items);
 
             // 退格删除不播放动画，直接删除
             PushUndoSnapshot();
@@ -800,6 +801,7 @@ public sealed partial class PaperWindow
 
             var focusPlacement = previous != null ? TodoFocusPlacement.End : TodoFocusPlacement.Start;
             RebuildTodoRows(focusTarget, focusPlacement);
+            RefreshCapsuleEligibilityForLinkedNoteChanges(previousItems);
             e.Handled = true;
         }
     }
@@ -843,6 +845,8 @@ public sealed partial class PaperWindow
         pastedItemTexts[^1] = LimitTodoText(pastedItemTexts[^1] + suffix);
 
         PushUndoSnapshot();
+        _activeOriginalItemId = null;
+        _activeOriginalText = null;
         box.Text = pastedItemTexts[0];
         box.CaretIndex = Math.Min(box.Text.Length, prefix.Length + lines[0].Length);
         item.Text = box.Text;
@@ -1162,16 +1166,22 @@ public sealed partial class PaperWindow
 
     private void RefreshCapsuleEligibilityForLinkedNotes(IEnumerable<string?> noteIds)
     {
-        var refreshed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var noteId in noteIds)
-        {
-            if (string.IsNullOrWhiteSpace(noteId) || !refreshed.Add(noteId))
-            {
-                continue;
-            }
+        _controller.RefreshCapsuleEligibilityForLinkedNotes(noteIds);
+    }
 
-            _controller.RefreshCapsuleEligibilityForLinkedNote(noteId);
-        }
+    private void RefreshCapsuleEligibilityForLinkedNoteChanges(IEnumerable<PaperItem> previousItems)
+    {
+        var changedNoteIds = previousItems
+            .Select(item => item.LinkedNoteId)
+            .Where(noteId => !string.IsNullOrWhiteSpace(noteId))
+            .Select(noteId => noteId!)
+            .ToHashSet(StringComparer.Ordinal);
+        changedNoteIds.SymmetricExceptWith(_paper.Items
+            .Select(item => item.LinkedNoteId)
+            .Where(noteId => !string.IsNullOrWhiteSpace(noteId))
+            .Select(noteId => noteId!));
+
+        RefreshCapsuleEligibilityForLinkedNotes(changedNoteIds);
     }
 
     public bool TryHitTodoRow(Point screenPoint, out string? itemId)
@@ -1251,11 +1261,12 @@ public sealed partial class PaperWindow
         }
 
         var focusedId = CurrentFocusedTodoItemId();
+        var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
         item.LinkedNoteId = noteId;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
-        _controller.RefreshCapsuleEligibilityForLinkedNote(noteId);
+        RefreshCapsuleEligibilityForLinkedNoteChanges(previousItems);
         return true;
     }
 
@@ -1266,13 +1277,13 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var linkedNoteId = item.LinkedNoteId;
         var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
+        var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
         item.LinkedNoteId = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
-        _controller.RefreshCapsuleEligibilityForLinkedNote(linkedNoteId);
+        RefreshCapsuleEligibilityForLinkedNoteChanges(previousItems);
     }
 
     private void ClearNoteLinkDropTargetVisual()
@@ -1901,6 +1912,7 @@ public sealed partial class PaperWindow
         _controller.MarkDirty();
 
         RebuildTodoRows(focusedId);
+        RefreshCapsuleEligibilityForLinkedNoteChanges(currentItems);
     }
 
     private void Redo()
@@ -1924,6 +1936,7 @@ public sealed partial class PaperWindow
         _controller.MarkDirty();
 
         RebuildTodoRows(focusedId);
+        RefreshCapsuleEligibilityForLinkedNoteChanges(currentItems);
     }
 
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
