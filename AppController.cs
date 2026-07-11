@@ -865,12 +865,15 @@ public sealed partial class AppController : IDisposable
 
         var window = GetOrCreatePaperWindow(paper);
         window.CancelPendingVisibilityTransitions();
+        var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed;
+        if (!showAsDeepCapsuleOnly)
+        {
+            RestoreWindowIfMinimized(window);
+        }
         if (!paper.IsCollapsed && window.TryGetRememberedSnapTileBoundsForRestore(out var rememberedSnapTileBounds))
         {
             snapTileBounds = rememberedSnapTileBounds;
         }
-
-        var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed;
 
         if (!showAsDeepCapsuleOnly && !window.IsVisible)
         {
@@ -956,6 +959,7 @@ public sealed partial class AppController : IDisposable
 
     private static void ForceWindowToFront(Window window)
     {
+        RestoreWindowIfMinimized(window);
         if (Current.ShouldAvoidFullscreenTopmost && FullscreenForegroundWindowDetector.IsForegroundFullscreen())
         {
             return;
@@ -995,11 +999,20 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        RestoreWindowIfMinimized(window);
         if (!paper.IsCollapsed)
         {
             window.EnsureExpandedSurfaceGeometry();
         }
         ForceWindowToFrontWithEmphasis(window, State);
+    }
+
+    private static void RestoreWindowIfMinimized(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+        {
+            SystemCommands.RestoreWindow(window);
+        }
     }
 
     private void RefreshTopmostForForegroundWindow()

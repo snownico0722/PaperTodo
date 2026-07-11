@@ -229,8 +229,13 @@ public sealed partial class PaperWindow : Window
 
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     public bool IsDeepCapsuleSlotVisible => _deepCapsuleSlotHost?.IsVisible == true;
-    public bool HasVisibleSurface => IsVisible || IsDeepCapsuleSlotVisible;
-    public bool HasExpandedPaperSurface => IsVisible && !_paper.IsCollapsed;
+    public bool HasVisibleSurface =>
+        (IsVisible && WindowState != WindowState.Minimized) ||
+        IsDeepCapsuleSlotVisible;
+    public bool HasExpandedPaperSurface =>
+        IsVisible &&
+        WindowState != WindowState.Minimized &&
+        !_paper.IsCollapsed;
     public bool IsCollapseAllRetracted => _isCollapseAllRetracted;
     public bool IsClosed { get; private set; }
     public bool HasExpandedDeepCapsuleSlotReservation => _deepCapsuleSlotState is DeepCapsuleSlotState.ExpandedReserved or DeepCapsuleSlotState.Retracting;
