@@ -186,6 +186,12 @@
   <data name="ImageImportTooLarge" xml:space="preserve">
     <value>画像 1 枚の上限は {0} MB です。</value>
   </data>
+  <data name="ImageImportSourceTooLarge" xml:space="preserve">
+    <value>元の画像ファイルが大きすぎます。読み込み前の上限は {0} MB です。</value>
+  </data>
+  <data name="ExternalMarkdownImageExportFailed" xml:space="preserve">
+    <value>ノート内の画像をエクスポートできなかったため、外部エディターを開く操作を中止しました。</value>
+  </data>
   <data name="ImageImportTotalTooLarge" xml:space="preserve">
     <value>画像保存容量の上限（{0} MB）に達しました。</value>
   </data>

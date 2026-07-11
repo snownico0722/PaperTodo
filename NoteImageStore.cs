@@ -15,6 +15,7 @@ public sealed class NoteImageStore
     private const int StoreVersion = 1;
     private const int MaxStoredDimension = 4096;
     private const int MaxImageBytes = 8 * 1024 * 1024;
+    private const int MaxInputImageBytes = 32 * 1024 * 1024;
     private const int MaxTotalImageBytes = 120 * 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
@@ -32,6 +33,7 @@ public sealed class NoteImageStore
     private readonly HashSet<string> _retiredImageIds = new(StringComparer.Ordinal);
     private bool _writeDisabled;
     private bool _skipNextBackupRotation;
+    private int _deferredImageSaveDepth;
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.json");
     public string BackupPath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.backup.json");
@@ -166,6 +168,12 @@ public sealed class NoteImageStore
             throw new FileNotFoundException(Strings.Get("ImageImportFileMissing"), path);
         }
 
+        var sourceLength = new FileInfo(path).Length;
+        if (sourceLength > MaxInputImageBytes)
+        {
+            throw new InvalidDataException(Strings.Format("ImageImportSourceTooLarge", MaxInputImageBytes / 1024 / 1024));
+        }
+
         var originalName = Path.GetFileName(path);
         var bytes = File.ReadAllBytes(path);
         if (!TryReadBitmapInfo(bytes, out var frame, out var width, out var height))
@@ -192,18 +200,43 @@ public sealed class NoteImageStore
 
     public IReadOnlyList<NoteImageAsset> ImportImageFiles(string noteId, IEnumerable<string> paths)
     {
-        var imported = new List<NoteImageAsset>();
-        foreach (var path in paths)
+        lock (_gate)
         {
-            if (!IsSupportedImageFile(path))
+            var imported = new List<NoteImageAsset>();
+            _deferredImageSaveDepth++;
+            try
             {
-                continue;
+                foreach (var path in paths)
+                {
+                    if (!IsSupportedImageFile(path))
+                    {
+                        continue;
+                    }
+
+                    imported.Add(ImportImageFile(noteId, path));
+                }
+
+                if (imported.Count > 0)
+                {
+                    SaveLocked();
+                }
+
+                return imported;
             }
+            catch
+            {
+                foreach (var asset in imported)
+                {
+                    RemoveImageLocked(asset.Id, reserveIdUntilRestart: false);
+                }
 
-            imported.Add(ImportImageFile(noteId, path));
+                throw;
+            }
+            finally
+            {
+                _deferredImageSaveDepth--;
+            }
         }
-
-        return imported;
     }
 
     public bool TryWriteImageFile(string imageId, string path)
@@ -240,10 +273,20 @@ public sealed class NoteImageStore
         string imageDirectory,
         string allowedRootDirectory)
     {
-        if (string.IsNullOrEmpty(markdown) ||
-            !TryPrepareImageDirectory(imageDirectory, allowedRootDirectory, out var safeImageDirectory))
+        if (string.IsNullOrEmpty(markdown))
         {
             return markdown;
+        }
+
+        var references = MarkdownImageReferences.Enumerate(markdown).ToList();
+        if (references.Count == 0)
+        {
+            return MarkdownImageReferences.StripRenderMarkers(markdown);
+        }
+
+        if (!TryPrepareImageDirectory(imageDirectory, allowedRootDirectory, out var safeImageDirectory))
+        {
+            throw new IOException(Strings.Get("ExternalMarkdownImageExportFailed"));
         }
 
         var exported = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -262,7 +305,7 @@ public sealed class NoteImageStore
                     if (!_images.TryGetValue(imageId, out asset!) ||
                         !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal))
                     {
-                        return null;
+                        throw new InvalidDataException(Strings.Get("ExternalMarkdownImageExportFailed"));
                     }
                 }
 
@@ -271,7 +314,7 @@ public sealed class NoteImageStore
                 var fullPath = Path.Combine(safeImageDirectory, fileName);
                 if (!TryWriteImageFile(asset.Id, fullPath))
                 {
-                    return null;
+                    throw new IOException(Strings.Get("ExternalMarkdownImageExportFailed"));
                 }
 
                 var relative = "./" + Path.GetFileName(safeImageDirectory) + "/" + fileName;
@@ -526,7 +569,10 @@ public sealed class NoteImageStore
             };
 
             _images[asset.Id] = asset;
-            SaveLocked();
+            if (_deferredImageSaveDepth == 0)
+            {
+                SaveLocked();
+            }
             return asset;
         }
     }

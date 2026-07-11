@@ -196,6 +196,12 @@
   <data name="ImageImportTooLarge" xml:space="preserve">
     <value>单张图片最多可保存 {0} MB。</value>
   </data>
+  <data name="ImageImportSourceTooLarge" xml:space="preserve">
+    <value>源图片文件过大，读取前的大小上限为 {0} MB。</value>
+  </data>
+  <data name="ExternalMarkdownImageExportFailed" xml:space="preserve">
+    <value>无法导出笔记中的图片，已取消打开外部编辑器。</value>
+  </data>
   <data name="ImageImportTotalTooLarge" xml:space="preserve">
     <value>图片总容量已达到上限（{0} MB）。</value>
   </data>

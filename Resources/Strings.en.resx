@@ -186,6 +186,12 @@
   <data name="ImageImportTooLarge" xml:space="preserve">
     <value>Each image can be at most {0} MB.</value>
   </data>
+  <data name="ImageImportSourceTooLarge" xml:space="preserve">
+    <value>The source image file is too large. The pre-read limit is {0} MB.</value>
+  </data>
+  <data name="ExternalMarkdownImageExportFailed" xml:space="preserve">
+    <value>The note images could not be exported, so opening the external editor was canceled.</value>
+  </data>
   <data name="ImageImportTotalTooLarge" xml:space="preserve">
     <value>The image store has reached its total limit ({0} MB).</value>
   </data>
