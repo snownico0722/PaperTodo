@@ -1127,6 +1127,19 @@ public sealed partial class PaperWindow : Window
 
         bool fullWidth = nearLeft && nearRight && Math.Abs(rect.Width - wa.Width) <= tolerance;
         bool fullHeight = nearTop && nearBottom && Math.Abs(rect.Height - wa.Height) <= tolerance;
+        bool horizontallyContained = rect.Left >= wa.Left - tolerance && rect.Right <= wa.Right + tolerance;
+        bool centerThirdColumn =
+            !nearLeft &&
+            !nearRight &&
+            horizontallyContained &&
+            Math.Abs(rect.Left - (wa.Left + wa.Width / 3)) <= tolerance &&
+            Math.Abs(rect.Right - (wa.Left + wa.Width * 2 / 3)) <= tolerance;
+        bool centerHalfColumn =
+            !nearLeft &&
+            !nearRight &&
+            horizontallyContained &&
+            Math.Abs(rect.Left - (wa.Left + wa.Width / 4)) <= tolerance &&
+            Math.Abs(rect.Right - (wa.Left + wa.Width * 3 / 4)) <= tolerance;
 
         // Maximized / full-area tile.
         if (fullWidth && fullHeight)
@@ -1135,10 +1148,12 @@ public sealed partial class PaperWindow : Window
             return true;
         }
 
-        // Column tile: spans the full height and is docked to exactly one vertical edge, at
-        // ANY width — half, thirds, 60/40, three-column, or a divider dragged to any ratio.
-        // Capture the actual occupied width instead of forcing it to a theoretical half.
-        if (fullHeight && (nearLeft ^ nearRight) && rect.Width >= wa.Width * minSpanRatio)
+        // Edge columns may use any width after the divider is dragged. Interior columns are
+        // limited to Windows 11's standard equal-thirds and 25/50/25 center tiles so an
+        // arbitrary full-height floating window is not mistaken for a Snap Layout member.
+        if (fullHeight &&
+            ((nearLeft ^ nearRight) || centerThirdColumn || centerHalfColumn) &&
+            rect.Width >= wa.Width * minSpanRatio)
         {
             var left = nearLeft ? wa.Left : Math.Clamp(rect.Left, wa.Left, wa.Right);
             var right = nearRight ? wa.Right : Math.Clamp(rect.Right, wa.Left, wa.Right);
@@ -1162,13 +1177,13 @@ public sealed partial class PaperWindow : Window
             }
         }
 
-        // Corner quarter tile: kept to the native ~half x half footprint on purpose. A fully
-        // generalized corner (any size touching one horizontal + one vertical edge) would
-        // misclassify ordinary windows resting near a corner as snapped, so only the actual
-        // occupied rect is captured while the half gate stays.
+        // Standard stacked corner tiles are half-height and either half-width or one-third
+        // width (the latter appears beside a 2/3 main column). Keep the ratio gates instead of
+        // accepting any corner-adjacent floating window.
         bool halfWidth = Math.Abs(rect.Width - wa.Width / 2) <= tolerance;
+        bool thirdWidth = Math.Abs(rect.Width - wa.Width / 3) <= tolerance;
         bool halfHeight = Math.Abs(rect.Height - wa.Height / 2) <= tolerance;
-        if (halfWidth && halfHeight && (nearLeft ^ nearRight) && (nearTop ^ nearBottom))
+        if ((halfWidth || thirdWidth) && halfHeight && (nearLeft ^ nearRight) && (nearTop ^ nearBottom))
         {
             var left = nearLeft ? wa.Left : Math.Clamp(rect.Left, wa.Left, wa.Right);
             var right = nearRight ? wa.Right : Math.Clamp(rect.Right, wa.Left, wa.Right);
