@@ -1418,15 +1418,23 @@ public sealed partial class AppController
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();
+        }
+
+        // Keep IsCollapsed intact until each live window has consumed the mode change.
+        // UpdateCapsuleMode uses that state to perform the capsule-to-paper visual transition.
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateCapsuleMode();
+        }
+
+        if (!State.UseCapsuleMode)
+        {
+            // Window-backed papers are already expanded. This also covers papers that do
+            // not currently have a live window.
             foreach (var paper in State.Papers)
             {
                 paper.IsCollapsed = false;
             }
-        }
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateCapsuleMode();
         }
 
         ArrangeDeepCapsules();
