@@ -670,11 +670,17 @@ public sealed partial class PaperWindow
 
         if (!host.IsVisible)
         {
+            var generation = ++_deepCapsuleSlotMoveGeneration;
             host.BeginAnimation(Window.OpacityProperty, null);
             host.Top = targetTop;
             SetDeepCapsuleSlotHostHorizontalBounds(targetHostLeft, wallExactViewportWidth);
             host.Opacity = _isCollapseAllRetracted ? 0 : 1;
             host.Show();
+            ScheduleDeepCapsuleSlotHostPostShowLayout(
+                host,
+                generation,
+                targetHostLeft,
+                wallExactViewportWidth);
             RefreshEffectiveTopmost();
             return;
         }
@@ -761,6 +767,50 @@ public sealed partial class PaperWindow
             host.Top = targetTop;
             _deepCapsuleSlotTop = targetTop;
         }
+    }
+
+    private void ScheduleDeepCapsuleSlotHostPostShowLayout(
+        Window host,
+        int generation,
+        double targetHostLeft,
+        double viewportWidth)
+    {
+        var root = _deepCapsuleSlotHostRoot;
+        if (root == null)
+        {
+            return;
+        }
+
+        // The transparent slot host receives its target-monitor presentation source only during
+        // Show(). On a portrait secondary display, keeping only the pre-Show arrange can leave the
+        // oversized pill centered inside the clipped viewport until the next resize (for example,
+        // the first reorder drag). Settle the same geometry once the first layout/render pass has
+        // completed. The generation and identity checks prevent this deferred pass from restoring
+        // stale bounds after a hover move, hide, queue change, or real close.
+        host.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                if (generation != _deepCapsuleSlotMoveGeneration ||
+                    !ReferenceEquals(host, _deepCapsuleSlotHost) ||
+                    !ReferenceEquals(root, _deepCapsuleSlotHostRoot) ||
+                    !host.IsVisible ||
+                    !HasDeepCapsuleSlotPlacement ||
+                    IsDeepCapsuleReordering)
+                {
+                    return;
+                }
+
+                _appliedSlotEdge = null;
+                SetDeepCapsuleSlotHostHorizontalBounds(targetHostLeft, viewportWidth);
+
+                host.InvalidateMeasure();
+                host.InvalidateArrange();
+                root.InvalidateMeasure();
+                root.InvalidateArrange();
+                host.UpdateLayout();
+                root.InvalidateVisual();
+            }),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void AnimateDeepCapsuleSlotHostTop(Window host, double from, double to, int durationMs, int generation)
