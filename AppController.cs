@@ -79,6 +79,7 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         State = _store.Load();
+        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
         var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         NormalizePaperSystemVisibilitySettings();

@@ -10,7 +10,10 @@ namespace PaperTodo;
 
 public sealed class NoteImageStore : IDisposable
 {
+    // 4096 is the hard import/storage limit. Automatic compression targets 2048, but disabling
+    // compression may still store an untouched image between 2049 and 4096 pixels.
     private const int MaxStoredDimension = 4096;
+    private const int AutoCompressedDimension = 2048;
     private const int MaxImageBytes = 8 * 1024 * 1024;
     private const int MaxInputImageBytes = 32 * 1024 * 1024;
     private const int MaxTotalImageBytes = 120 * 1024 * 1024;
@@ -30,6 +33,8 @@ public sealed class NoteImageStore : IDisposable
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
 
     public bool IsWriteDisabled => _writeDisabled;
+
+    public bool AutoCompressLargeImages { get; set; } = true;
 
     public void Load()
     {
@@ -170,9 +175,14 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
         }
 
-        var normalized = NormalizeBitmapSource(source);
-        var (bytes, mime) = EncodeConstrainedImage(normalized, preferJpeg: false);
-        return AddEncodedImage(noteId, bytes, mime, "clipboard");
+        var image = PrepareBitmapSource(source);
+        return AddEncodedImage(
+            noteId,
+            image.Bytes,
+            image.Mime,
+            image.OriginalName,
+            image.Width,
+            image.Height);
     }
 
     public NoteImageAsset ImportImageFile(string noteId, string path)
@@ -191,6 +201,8 @@ public sealed class NoteImageStore : IDisposable
         {
             throw new FileNotFoundException(Strings.Get("ImageImportFileMissing"), path);
         }
+
+        ThrowIfUnsupportedImageFiles(new[] { path });
 
         var image = PrepareImageFile(path);
         return AddEncodedImage(
@@ -214,21 +226,19 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
         }
 
-        var images = new List<PreparedImage>();
-        foreach (var path in paths)
-        {
-            if (!IsSupportedImageFile(path))
-            {
-                continue;
-            }
+        var candidatePaths = paths.ToList();
+        ThrowIfUnsupportedImageFiles(candidatePaths);
 
+        var images = new List<PreparedImage>(candidatePaths.Count);
+        foreach (var path in candidatePaths)
+        {
             images.Add(PrepareImageFile(path));
         }
 
         return AddEncodedImages(noteId, images);
     }
 
-    private static PreparedImage PrepareImageFile(string path)
+    private PreparedImage PrepareImageFile(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
@@ -241,6 +251,11 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidDataException(Strings.Format("ImageImportSourceTooLarge", MaxInputImageBytes / 1024 / 1024));
         }
 
+        if (!AutoCompressLargeImages && sourceLength > MaxImageBytes)
+        {
+            throw new InvalidDataException(Strings.Format("ImageImportTooLargeCompressionDisabled", MaxImageBytes / 1024 / 1024));
+        }
+
         var originalName = Path.GetFileName(path);
         var bytes = File.ReadAllBytes(path);
         if (!TryReadBitmapInfo(bytes, out var frame, out var width, out var height))
@@ -248,25 +263,70 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
         }
 
-        var mime = MimeFromExtension(path);
-        var canKeepOriginal =
-            IsDirectlyStoredMime(mime) &&
-            bytes.Length <= MaxImageBytes &&
-            Math.Max(width, height) <= MaxStoredDimension;
+        ValidateImageDimensions(width, height);
 
-        if (canKeepOriginal)
+        var mime = MimeFromExtension(path);
+        if (!AutoCompressLargeImages || !RequiresAutomaticCompression(bytes.Length, width, height))
         {
             return new PreparedImage(bytes, mime, originalName, width, height);
         }
 
-        var normalized = NormalizeBitmapSource(frame);
-        var preferJpeg = string.Equals(mime, "image/jpeg", StringComparison.OrdinalIgnoreCase);
-        var encoded = EncodeConstrainedImage(normalized, preferJpeg);
+        var encoded = CompressImage(frame, bytes, mime);
         if (!TryReadBitmapInfo(encoded.Bytes, out _, out width, out height))
         {
-            throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionFailed"));
         }
+        ValidateCompressedDimensions(width, height);
         return new PreparedImage(encoded.Bytes, encoded.Mime, originalName, width, height);
+    }
+
+    private PreparedImage PrepareBitmapSource(BitmapSource source)
+    {
+        ValidateImageDimensions(source.PixelWidth, source.PixelHeight);
+
+        byte[] originalBytes;
+        try
+        {
+            originalBytes = EncodePng(source);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionFailed"), ex);
+        }
+
+        if (!AutoCompressLargeImages)
+        {
+            if (originalBytes.Length > MaxImageBytes)
+            {
+                throw new InvalidDataException(Strings.Format("ImageImportTooLargeCompressionDisabled", MaxImageBytes / 1024 / 1024));
+            }
+
+            return new PreparedImage(
+                originalBytes,
+                "image/png",
+                "clipboard",
+                source.PixelWidth,
+                source.PixelHeight);
+        }
+
+        if (!RequiresAutomaticCompression(originalBytes.Length, source.PixelWidth, source.PixelHeight))
+        {
+            return new PreparedImage(
+                originalBytes,
+                "image/png",
+                "clipboard",
+                source.PixelWidth,
+                source.PixelHeight);
+        }
+
+        var encoded = CompressImage(source, originalBytes, "image/png");
+        if (!TryReadBitmapInfo(encoded.Bytes, out _, out var width, out var height))
+        {
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionFailed"));
+        }
+        ValidateCompressedDimensions(width, height);
+
+        return new PreparedImage(encoded.Bytes, encoded.Mime, "clipboard", width, height);
     }
 
     public bool TryWriteImageFile(string imageId, string path)
@@ -551,6 +611,52 @@ public sealed class NoteImageStore : IDisposable
             ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".tif" or ".tiff";
     }
 
+    private static void ThrowIfUnsupportedImageFiles(IReadOnlyList<string> paths)
+    {
+        var unsupported = paths
+            .Where(path => !IsSupportedImageFile(path))
+            .ToList();
+        if (unsupported.Count == 0)
+        {
+            return;
+        }
+
+        var displayedNames = unsupported
+            .Take(3)
+            .Select(DisplayImageFileName);
+        var summary = string.Join(", ", displayedNames);
+        if (unsupported.Count > 3)
+        {
+            summary += Strings.Format("ImageImportAdditionalFiles", unsupported.Count - 3);
+        }
+
+        throw new InvalidDataException(Strings.Format("ImageImportUnsupportedFiles", summary));
+    }
+
+    private static string DisplayImageFileName(string path)
+    {
+        string fileName;
+        try
+        {
+            fileName = Path.GetFileName(path);
+        }
+        catch
+        {
+            return Strings.Get("ImageImportUnknownFile");
+        }
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return Strings.Get("ImageImportUnknownFile");
+        }
+
+        const int maxTextElements = 48;
+        var textElementStarts = StringInfo.ParseCombiningCharacters(fileName);
+        return textElementStarts.Length <= maxTextElements
+            ? fileName
+            : fileName[..textElementStarts[maxTextElements]] + "…";
+    }
+
     private NoteImageAsset AddEncodedImage(
         string noteId,
         byte[] bytes,
@@ -590,11 +696,14 @@ public sealed class NoteImageStore : IDisposable
                 throw new InvalidDataException(Strings.Format("ImageImportTooLarge", MaxImageBytes / 1024 / 1024));
             }
 
-            if (image.Width <= 0 ||
-                image.Height <= 0 ||
-                Math.Max(image.Width, image.Height) > MaxStoredDimension)
+            if (image.Width <= 0 || image.Height <= 0)
             {
                 throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
+            }
+
+            if (image.Width > MaxStoredDimension || image.Height > MaxStoredDimension)
+            {
+                throw new InvalidDataException(Strings.Format("ImageImportDimensionsTooLarge", MaxStoredDimension));
             }
         }
 
@@ -664,13 +773,101 @@ public sealed class NoteImageStore : IDisposable
             ? number.ToString("000", CultureInfo.InvariantCulture)
             : number.ToString(CultureInfo.InvariantCulture);
 
-    private static BitmapSource NormalizeBitmapSource(BitmapSource source)
+    private static void ValidateImageDimensions(int width, int height)
     {
-        var bitmap = source;
-        if (Math.Max(bitmap.PixelWidth, bitmap.PixelHeight) > MaxStoredDimension)
+        if (width <= 0 || height <= 0)
         {
-            var scale = MaxStoredDimension / (double)Math.Max(bitmap.PixelWidth, bitmap.PixelHeight);
-            bitmap = new TransformedBitmap(bitmap, new ScaleTransform(scale, scale));
+            throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
+        }
+
+        if (width > MaxStoredDimension || height > MaxStoredDimension)
+        {
+            throw new InvalidDataException(Strings.Format("ImageImportDimensionsTooLarge", MaxStoredDimension));
+        }
+    }
+
+    private static bool RequiresAutomaticCompression(int byteLength, int width, int height)
+        => byteLength > MaxImageBytes ||
+            width > AutoCompressedDimension ||
+            height > AutoCompressedDimension;
+
+    private static void ValidateCompressedDimensions(int width, int height)
+    {
+        if (width <= 0 ||
+            height <= 0 ||
+            width > AutoCompressedDimension ||
+            height > AutoCompressedDimension)
+        {
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionFailed"));
+        }
+    }
+
+    private static (byte[] Bytes, string Mime) CompressImage(
+        BitmapSource source,
+        byte[] originalBytes,
+        string originalMime)
+    {
+        // Re-encoding these formats would silently discard animation or additional frames.
+        if (originalMime is "image/gif" or "image/tiff")
+        {
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionUnsafe"));
+        }
+
+        try
+        {
+            var resized = ResizeBitmapSource(source, AutoCompressedDimension);
+            (byte[] Bytes, string Mime) encoded;
+            if (string.Equals(originalMime, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            {
+                encoded = (EncodeJpeg(resized, 82), "image/jpeg");
+            }
+            else
+            {
+                var png = EncodePng(resized);
+                encoded = (png, "image/png");
+
+                if (png.Length > MaxImageBytes && !HasAlphaChannel(resized))
+                {
+                    var jpeg = EncodeJpeg(resized, 82);
+                    if (jpeg.Length < png.Length)
+                    {
+                        encoded = (jpeg, "image/jpeg");
+                    }
+                }
+            }
+
+            // Automatic compression has no original-file fallback: a failed, oversized, or
+            // non-beneficial result aborts the entire import before the LMDB transaction starts.
+            if (encoded.Bytes.Length >= originalBytes.Length)
+            {
+                throw new InvalidDataException(Strings.Get("ImageImportCompressionNotSmaller"));
+            }
+
+            if (encoded.Bytes.Length > MaxImageBytes)
+            {
+                throw new InvalidDataException(Strings.Format("ImageImportCompressedTooLarge", MaxImageBytes / 1024 / 1024));
+            }
+
+            return encoded;
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidDataException(Strings.Get("ImageImportCompressionFailed"), ex);
+        }
+    }
+
+    private static BitmapSource ResizeBitmapSource(BitmapSource source, int maxDimension)
+    {
+        BitmapSource bitmap = source;
+        var longestEdge = Math.Max(source.PixelWidth, source.PixelHeight);
+        if (longestEdge > maxDimension)
+        {
+            var scale = maxDimension / (double)longestEdge;
+            bitmap = new TransformedBitmap(source, new ScaleTransform(scale, scale));
         }
 
         if (bitmap.CanFreeze)
@@ -681,30 +878,20 @@ public sealed class NoteImageStore : IDisposable
         return bitmap;
     }
 
-    private static (byte[] Bytes, string Mime) EncodeConstrainedImage(BitmapSource source, bool preferJpeg)
+    private static bool HasAlphaChannel(BitmapSource source)
     {
-        if (preferJpeg)
+        var format = source.Format;
+        if (format == PixelFormats.Bgra32 ||
+            format == PixelFormats.Pbgra32 ||
+            format == PixelFormats.Rgba64 ||
+            format == PixelFormats.Prgba64 ||
+            format == PixelFormats.Rgba128Float ||
+            format == PixelFormats.Prgba128Float)
         {
-            var jpeg = EncodeJpeg(source, 88);
-            if (jpeg.Length <= MaxImageBytes)
-            {
-                return (jpeg, "image/jpeg");
-            }
+            return true;
         }
 
-        var png = EncodePng(source);
-        if (png.Length <= MaxImageBytes)
-        {
-            return (png, "image/png");
-        }
-
-        var fallbackJpeg = EncodeJpeg(source, 82);
-        if (fallbackJpeg.Length <= MaxImageBytes)
-        {
-            return (fallbackJpeg, "image/jpeg");
-        }
-
-        throw new InvalidDataException(Strings.Format("ImageImportTooLarge", MaxImageBytes / 1024 / 1024));
+        return source.Palette?.Colors.Any(color => color.A < byte.MaxValue) == true;
     }
 
     private static byte[] EncodePng(BitmapSource source)
@@ -784,9 +971,6 @@ public sealed class NoteImageStore : IDisposable
             ".tif" or ".tiff" => "image/tiff",
             _ => "image/png"
         };
-
-    private static bool IsDirectlyStoredMime(string mime)
-        => mime is "image/png" or "image/jpeg" or "image/gif";
 
     private static string NormalizeMime(string mime)
         => mime is "image/jpeg" or "image/png" or "image/gif" or "image/bmp" or "image/tiff"

@@ -677,6 +677,7 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoNote")));
+        rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoCompressLargeImages"), State.AutoCompressLargeImages, ToggleAutoCompressLargeImages), "TipAutoCompressLargeImages"));
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoClearCompletedTodos"), State.AutoClearCompletedTodos, ToggleAutoClearCompletedTodos), "TipAutoClearCompletedTodos"));
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableTodoNoteLinks"), State.EnableTodoNoteLinks, ToggleTodoNoteLinks), "TipEnableTodoNoteLinks"));
         var showLinkedNoteNameToggle = SettingsToggle(Strings.Get("SettingsShowLinkedNoteName"), State.ShowLinkedNoteName, ToggleLinkedNoteNameDisplay);
@@ -1373,6 +1374,14 @@ public sealed partial class AppController
     private void ToggleAutoClearCompletedTodos()
     {
         State.AutoClearCompletedTodos = !State.AutoClearCompletedTodos;
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleAutoCompressLargeImages()
+    {
+        State.AutoCompressLargeImages = !State.AutoCompressLargeImages;
+        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         SaveNow();
         RefreshSettingsWindowContent();
     }

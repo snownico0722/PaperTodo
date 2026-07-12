@@ -19,7 +19,7 @@
 错误信息：{0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.1</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - 启动失败</value>
@@ -195,6 +195,33 @@
   </data>
   <data name="ImageImportUnsupported" xml:space="preserve">
     <value>未找到可插入的图片，或图片格式不受支持。</value>
+  </data>
+  <data name="ImageImportUnsupportedFiles" xml:space="preserve">
+    <value>不支持以下图片文件：{0}。</value>
+  </data>
+  <data name="ImageImportUnknownFile" xml:space="preserve">
+    <value>未命名文件</value>
+  </data>
+  <data name="ImageImportAdditionalFiles" xml:space="preserve">
+    <value>，另有 {0} 个文件</value>
+  </data>
+  <data name="ImageImportDimensionsTooLarge" xml:space="preserve">
+    <value>图片尺寸超过上限，宽和高均不能超过 {0} 像素。</value>
+  </data>
+  <data name="ImageImportTooLargeCompressionDisabled" xml:space="preserve">
+    <value>图片超过 {0} MB；当前已关闭自动压缩，请启用后重试。</value>
+  </data>
+  <data name="ImageImportCompressionUnsafe" xml:space="preserve">
+    <value>无法在保留图片内容的情况下安全压缩，已取消导入。</value>
+  </data>
+  <data name="ImageImportCompressionFailed" xml:space="preserve">
+    <value>图片压缩失败，已取消导入。</value>
+  </data>
+  <data name="ImageImportCompressionNotSmaller" xml:space="preserve">
+    <value>压缩后的文件没有变小，已取消导入。</value>
+  </data>
+  <data name="ImageImportCompressedTooLarge" xml:space="preserve">
+    <value>图片压缩后仍超过 {0} MB，已取消导入。</value>
   </data>
   <data name="ImageImportTooLarge" xml:space="preserve">
     <value>单张图片最多可保存 {0} MB。</value>
@@ -513,6 +540,9 @@
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
     <value>勾选待办为完成后立即从当前纸片移除；可通过撤销恢复。</value>
   </data>
+  <data name="TipAutoCompressLargeImages" xml:space="preserve">
+    <value>开启后，插入超过 8 MB 或宽、高任一边超过 2048 像素的图片时，会尝试等比缩小至最长边 2048 像素并重新编码。压缩不安全、失败、压缩后仍超过 8 MB 或文件没有变小时会取消导入。关闭后不会压缩，超过 8 MB 的图片会直接拒绝。无论是否开启，宽或高超过 4096 像素的图片都会拒绝导入。</value>
+  </data>
   <data name="TipNewTodoButton" xml:space="preserve">
     <value>在纸片顶栏显示新建待办按钮。</value>
   </data>
@@ -587,6 +617,9 @@
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
     <value>完成后自动清除待办</value>
+  </data>
+  <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
+    <value>自动压缩过大图片</value>
   </data>
   <data name="SettingsPersistentPowerShellProcess" xml:space="preserve">
     <value>常驻 PowerShell 进程</value>

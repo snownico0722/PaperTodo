@@ -16,7 +16,7 @@
     <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.&#x0A;To avoid overwriting existing data, the app has stopped.&#x0A;&#x0A;Error: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.0</value>
+    <value>2.1</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - Startup Failed</value>
@@ -185,6 +185,33 @@
   </data>
   <data name="ImageImportUnsupported" xml:space="preserve">
     <value>No insertable image was found, or the image format is unsupported.</value>
+  </data>
+  <data name="ImageImportUnsupportedFiles" xml:space="preserve">
+    <value>These image files are not supported: {0}.</value>
+  </data>
+  <data name="ImageImportUnknownFile" xml:space="preserve">
+    <value>unnamed file</value>
+  </data>
+  <data name="ImageImportAdditionalFiles" xml:space="preserve">
+    <value>, plus {0} more files</value>
+  </data>
+  <data name="ImageImportDimensionsTooLarge" xml:space="preserve">
+    <value>The image dimensions exceed the limit. Width and height must each be at most {0} pixels.</value>
+  </data>
+  <data name="ImageImportTooLargeCompressionDisabled" xml:space="preserve">
+    <value>The image exceeds {0} MB. Automatic compression is off; enable it and try again.</value>
+  </data>
+  <data name="ImageImportCompressionUnsafe" xml:space="preserve">
+    <value>The image cannot be compressed safely without losing its content, so the import was canceled.</value>
+  </data>
+  <data name="ImageImportCompressionFailed" xml:space="preserve">
+    <value>Image compression failed, so the import was canceled.</value>
+  </data>
+  <data name="ImageImportCompressionNotSmaller" xml:space="preserve">
+    <value>The compressed file was not smaller, so the import was canceled.</value>
+  </data>
+  <data name="ImageImportCompressedTooLarge" xml:space="preserve">
+    <value>The compressed image still exceeds {0} MB, so the import was canceled.</value>
   </data>
   <data name="ImageImportTooLarge" xml:space="preserve">
     <value>Each image can be at most {0} MB.</value>
@@ -569,11 +596,17 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
     <value>Remove a todo from the current paper as soon as you check it as done. Undo can bring it back.</value>
   </data>
+  <data name="TipAutoCompressLargeImages" xml:space="preserve">
+    <value>When enabled, images over 8 MB or wider/taller than 2048 pixels are resized proportionally to a 2048-pixel longest edge and re-encoded. Import is canceled if compression is unsafe, fails, remains over 8 MB, or does not make the file smaller. When disabled, images are not compressed and files over 8 MB are rejected immediately. In either mode, images wider or taller than 4096 pixels are rejected.</value>
+  </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>Enable todo-note links</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
     <value>Auto-clear completed todos</value>
+  </data>
+  <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
+    <value>Automatically compress large images</value>
   </data>
   <data name="SettingsPersistentPowerShellProcess" xml:space="preserve">
     <value>Persistent PowerShell process</value>

@@ -699,11 +699,10 @@ public sealed partial class PaperWindow
 
     private void ShowNoteImageImportFailure(Exception ex)
     {
-        MessageBox.Show(
-            Strings.Format("ImageImportFailureMessage", ex.Message),
+        PaperNoticeDialog.Show(
+            this,
             Strings.Get("ImageImportFailureTitle"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+            Strings.Format("ImageImportFailureMessage", ex.Message));
     }
 
 

@@ -2317,7 +2317,7 @@ public sealed class MarkdownTextBox : TextEditor
             }
 
             paths = dropped
-                .Where(NoteImageStore.IsSupportedImageFile)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
                 .ToList();
             return paths.Count > 0;
         }
