@@ -137,17 +137,7 @@ public sealed partial class PaperWindow
 
         _deepCapsuleSlotLabelText.Text = _controller.PaperCapsuleTitle(_paper);
         _deepCapsuleSlotLabelText.ToolTip = _controller.PaperTitleText(_paper);
-        if (_deepCapsuleSlotShell != null && !IsDeepCapsuleSlotHorizontalAnimating)
-        {
-            _deepCapsuleSlotShell.Width = DeepCapsuleSlotShellLayoutWidth();
-        }
-        if (HasDeepCapsuleSlotPlacement &&
-            _deepCapsuleSlotHost?.IsVisible == true &&
-            !_deepCapsuleCrossQueueDragVisualActive &&
-            !IsDeepCapsuleSlotHorizontalAnimating)
-        {
-            MoveDeepCapsuleToCurrentTarget(animate: false);
-        }
+        ScheduleDeepCapsuleSlotMeasureRefresh();
     }
 
     private void UpdateCapsuleClosePlacement()
@@ -176,46 +166,29 @@ public sealed partial class PaperWindow
         UpdateDeepCapsuleSlotClosePlacement();
     }
 
-    private void UpdateDeepCapsuleSlotClosePlacement(bool updateHostViewport = true)
+    private void UpdateDeepCapsuleSlotClosePlacement(bool updateHostWidth = true)
     {
-        if (_deepCapsuleCrossQueueDragVisualActive)
+        // A visible slot's close segment is owned by the same geometry transition as its host.
+        // Theme/label refreshes must not jump it to the next visual state before the host grows.
+        if (!IsDeepCapsuleSlotHorizontalAnimating &&
+            (_deepCapsuleSlotHost?.IsVisible != true || !HasDeepCapsuleSlotPlacement))
         {
-            if (_deepCapsuleSlotCloseArea != null)
-            {
-                _deepCapsuleSlotCloseArea.Width = 0;
-                _deepCapsuleSlotCloseArea.Margin = new Thickness(0);
-                _deepCapsuleSlotCloseArea.IsHitTestVisible = false;
-            }
-
-            if (_deepCapsuleSlotCloseGlyphOffset != null)
-            {
-                _deepCapsuleSlotCloseGlyphOffset.X = 0;
-            }
-
-            return;
+            ApplyDeepCapsuleSlotCloseWidth(DeepCapsuleTargetCloseWidth());
         }
 
-        var leftEdge = MyDeepCapsuleIsLeftEdge;
         if (_deepCapsuleSlotCloseArea != null)
         {
-            _deepCapsuleSlotCloseArea.Width = CapsuleCloseWidth;
-            _deepCapsuleSlotCloseArea.IsHitTestVisible = true;
             _deepCapsuleSlotCloseArea.Margin = new Thickness(0);
         }
 
         if (_deepCapsuleSlotCloseGlyphOffset != null)
         {
-            _deepCapsuleSlotCloseGlyphOffset.X = leftEdge ? -CapsuleCloseGlyphDeepOffset : CapsuleCloseGlyphDeepOffset;
+            _deepCapsuleSlotCloseGlyphOffset.X = 0;
         }
 
-        if (_deepCapsuleSlotShell != null && !IsDeepCapsuleSlotHorizontalAnimating)
+        if (updateHostWidth && _deepCapsuleSlotHost != null && HasDeepCapsuleSlotPlacement)
         {
-            _deepCapsuleSlotShell.Width = DeepCapsuleSlotShellLayoutWidth();
-        }
-
-        if (updateHostViewport && _deepCapsuleSlotHost != null && HasDeepCapsuleSlotPlacement)
-        {
-            ApplyDeepCapsuleSlotHostViewport(_deepCapsuleSlotHost.Width);
+            ApplyDeepCapsuleSlotHostWidth(_deepCapsuleSlotHost.Width);
         }
     }
 

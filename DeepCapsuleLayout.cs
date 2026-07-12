@@ -14,9 +14,6 @@ public enum DeepCapsuleEdge
 // their positions through here so they never disagree on where a slot sits.
 public static class DeepCapsuleLayout
 {
-    // Focus reveal is a right-anchored viewport expansion. It intentionally reveals only
-    // part of the hidden tail so the capsule does not travel too far into the desktop.
-    public const double HoverOutsideOffset = 26;
     // Expanded windows opened from edge-aligned capsules should not hug the docked screen edge.
     public const double ExpandedEdgeInset = 36;
     // Vertical breathing room at the top/bottom of the work area.
@@ -27,9 +24,8 @@ public static class DeepCapsuleLayout
     public const double Gap = 4;
     // Shared pill corner radius for the real capsules and the master capsule.
     public const double CornerRadius = 12;
-    // Transparent outer chrome around the capsule body. The docked viewport must hide at
-    // least this margin plus the corner radius so the screen edge cuts through the straight
-    // body, not through the rounded cap.
+    // Transparent outer chrome around the capsule body. Edge capsules omit this margin on the
+    // wall side and keep it on the interior side for the shadow.
     public const double WindowChromeMargin = 8;
     // Top-level transparent windows are expensive to move; slightly longer durations give
     // the compositor more frames and make each frame's position delta smaller.
@@ -44,13 +40,6 @@ public static class DeepCapsuleLayout
     // The two-phase tear-down (move up, then a brief final fade) when fully releasing a slot host.
     public const int SlotReleaseSettleMilliseconds = 125;
     public const int SlotReleaseFadeMilliseconds = 45;
-    public static double FocusVisibleWidth(double capsuleWindowWidth, double restingVisibleWidth)
-    {
-        var resting = Math.Clamp(restingVisibleWidth, 1, capsuleWindowWidth);
-        var visibleWidth = resting + ((capsuleWindowWidth - resting) * 0.5);
-        return Math.Clamp(visibleWidth, Math.Min(54, capsuleWindowWidth), capsuleWindowWidth);
-    }
-
     // Display-weighted character count: CJK / fullwidth glyphs count as 2, everything
     // else as 1. A 6-digit number title then weighs the same as a 3-CJK-character title,
     // so the capsule no longer looks long-but-empty for numeric titles.
@@ -135,11 +124,11 @@ public static class DeepCapsuleLayout
     // input (edge + work area) is explicit, so N independent queues can each compute their own
     // docked positions without sharing one global anchor.
 
-    public static double DockedLeft(Rect area, double visibleWidth, DeepCapsuleEdge edge)
+    public static double DockedLeft(Rect area, double width, DeepCapsuleEdge edge)
     {
         return edge == DeepCapsuleEdge.Left
             ? area.Left
-            : area.Right - visibleWidth;
+            : area.Right - width;
     }
 
     public static double TopForIndex(int index, double startTopMargin, Rect area, int slotCount)
@@ -168,23 +157,13 @@ public static class DeepCapsuleLayout
         return Math.Round(Math.Clamp(value, TopMargin, max), 1);
     }
 
-    // The window Left that docks a pill of the given visible width to the anchored edge.
-    // Right edge: pin the window's right side to area.Right (tail tucked past the right edge).
-    // Left edge:  pin the window's left side to area.Left  (tail tucked past the left edge).
-    public static double DockedLeft(Rect area, double visibleWidth)
+    // The window Left that docks a real-width edge tag to the anchored edge.
+    // Right edge pins the window's right side to area.Right; left edge pins Left to area.Left.
+    public static double DockedLeft(Rect area, double width)
     {
         return Edge == DeepCapsuleEdge.Left
             ? area.Left
-            : area.Right - visibleWidth;
-    }
-
-    // Anchored screen edge, used by the horizontal reveal animation: the coordinate that
-    // stays fixed while the viewport width grows/shrinks.
-    public static double DockedAnchorEdge(Rect area, double visibleWidth)
-    {
-        return Edge == DeepCapsuleEdge.Left
-            ? area.Left + visibleWidth
-            : area.Right - visibleWidth;
+            : area.Right - width;
     }
 
     public static bool IsLeftEdge => Edge == DeepCapsuleEdge.Left;

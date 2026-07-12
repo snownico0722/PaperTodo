@@ -150,9 +150,19 @@ public sealed partial class PaperWindow : Window
     // captured value no longer matches.
     private int _deepCapsuleSlotMoveGeneration;
     private int _collapseTransitionGeneration;
-    private double _deepCapsuleSlotTargetLeft;
-    private double _deepCapsuleSlotStartViewportWidth;
-    private double _deepCapsuleSlotTargetViewportWidth;
+    // The slot host and its content share this one real rectangle. The previous implementation
+    // kept a full-width pill inside a narrower "viewport" window and relied on clipping to decide
+    // which part was visible; any delayed WPF layout could then clip the interior cap or icon.
+    private Rect _deepCapsuleSlotRequestedBounds = Rect.Empty;
+    private double _deepCapsuleSlotRequestedTop;
+    private double _deepCapsuleSlotRequestedCloseWidth;
+    private bool _deepCapsuleSlotLayoutSettlePending;
+    private bool _deepCapsuleSlotLayoutSettleScheduled;
+    private bool _deepCapsuleSlotMeasureRefreshScheduled;
+    private double _deepCapsuleSlotStartWidth;
+    private double _deepCapsuleSlotTargetWidth;
+    private double _deepCapsuleSlotStartCloseWidth;
+    private double _deepCapsuleSlotTargetCloseWidth;
     private Point _deepCapsuleSlotMouseDownScreenPos;
     private double _startTransitionWidth;
     private double _startTransitionHeight;
@@ -172,12 +182,11 @@ public sealed partial class PaperWindow : Window
     private int _themeAnimationGeneration;
     private int _clearDoneGeneration;
     private int _todoRowsGeneration;
-    private const double DeepCapsuleHoverOutsideOffset = DeepCapsuleLayout.HoverOutsideOffset;
     private const double DeepCapsuleExpandedEdgeInset = DeepCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = DeepCapsuleLayout.TopMargin;
     private const double DeepCapsuleStartTopMargin = DeepCapsuleLayout.StartTopMargin;
     private const double DeepCapsuleGap = DeepCapsuleLayout.Gap;
-    private const double WindowChromeMargin = 8;
+    private const double WindowChromeMargin = DeepCapsuleLayout.WindowChromeMargin;
     private const double WindowChromeInset = WindowChromeMargin * 2;
     private const double TitleBarHeight = PaperLayoutDefaults.TopBarHeight;
     private const int CollapseShellFadeMilliseconds = 70;
@@ -213,12 +222,6 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleCrossQueueDragUnlockDistance = 56;
     private const double DeepCapsuleCrossQueueDragScaleFrom = 0.97;
     private const int DeepCapsuleCrossQueueDragMorphMilliseconds = 90;
-    // Half-hidden (peek) cut-off, measured from the END of the title. Negative pulls the cut
-    // INTO the title so the last glyph is roughly half-covered — the capsule reads as clearly
-    // tucked away at the edge, yet enough text shows to identify it. ~half a CJK glyph at 11px,
-    // less 1px so a sliver of breathing room shows to the right of the text.
-    private const double CapsulePeekRightGap = -5;
-
     // 圆角阶梯：所有元素只从这四档取值，避免散落的随手圆角。
     // 小元素（勾选框）/ 控件（按钮、徽标、行）/ 块（菜单、面板）/ 外壳（纸片、顶栏）。
     private const double RadiusSmall = 4;
@@ -274,7 +277,7 @@ public sealed partial class PaperWindow : Window
     //     Invariant: paper not visible ⇒ SlotState must reach None (slot-host hidden). The
     //                single correct teardown is DetachFromDeepCapsuleStack().
     //
-    //   VisualState — resting tag / hover-peek / fully-revealed (active). Independent of SlotState.
+    //   VisualState — resting tag / expanded hover / persistent active. Independent of SlotState.
     //   GestureState— pointer interaction: Idle / PendingClick / Reordering (edge-locked reorder or cross-queue drag).
     //   OpenOrigin  — whether the expanded window came from an edge slot (affects re-dock on collapse).
     private enum DeepCapsuleSlotState
@@ -2990,7 +2993,7 @@ public sealed partial class PaperWindow : Window
         return Math.Max(CapsuleShellWidth(usesDeepCapsulePresentation), CapsuleWindowWidth(usesDeepCapsulePresentation) - WindowChromeInset);
     }
 
-    private double MeasureCapsuleTitleWidth(bool limitForDeepCapsule = false)
+    private double MeasureCapsuleTitleWidth(bool limitForDeepCapsule = false, double? pixelsPerDip = null)
     {
         var title = _controller.PaperCapsuleTitle(_paper);
         if (limitForDeepCapsule)
@@ -2998,7 +3001,12 @@ public sealed partial class PaperWindow : Window
             title = LimitTextElements(title, _controller.State.DeepCapsuleTitleMeasureCharacterLimit);
         }
 
-        return MeasureCapsuleTextWidth(title, CapsuleLabelFontSize, FontWeights.Normal, AppTypography.UiFontFamily);
+        return MeasureCapsuleTextWidth(
+            title,
+            CapsuleLabelFontSize,
+            FontWeights.Normal,
+            AppTypography.UiFontFamily,
+            pixelsPerDip);
     }
 
     private static string LimitTextElements(string text, int limit)
@@ -3014,16 +3022,26 @@ public sealed partial class PaperWindow : Window
 
     // The capsule icon glyph (✓ / ✎) is not a fixed box — its rendered advance width depends
     // on the font and weight. Measure it with the same SemiBold weight it renders at.
-    private double MeasureCapsuleIconWidth()
+    private double MeasureCapsuleIconWidth(double? pixelsPerDip = null)
     {
-        return MeasureCapsuleTextWidth(CapsuleIconText(), CapsuleIconFontSizeForCurrentPaper(), FontWeights.SemiBold, AppTypography.SymbolFontFamily);
+        return MeasureCapsuleTextWidth(
+            CapsuleIconText(),
+            CapsuleIconFontSizeForCurrentPaper(),
+            FontWeights.SemiBold,
+            AppTypography.SymbolFontFamily,
+            pixelsPerDip);
     }
 
     // Single source of truth for "how wide does this text actually render". Uses the same
     // font family and weight the capsule icon/label are bound to, so
     // measurement and rendering never disagree — digits and halfwidth chars get their true
     // advance width.
-    private double MeasureCapsuleTextWidth(string text, double fontSize, FontWeight weight, FontFamily fontFamily)
+    private double MeasureCapsuleTextWidth(
+        string text,
+        double fontSize,
+        FontWeight weight,
+        FontFamily fontFamily,
+        double? pixelsPerDip = null)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -3039,7 +3057,7 @@ public sealed partial class PaperWindow : Window
                 new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
                 WeakTextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip ?? VisualTreeHelper.GetDpi(this).PixelsPerDip);
             return formatted.WidthIncludingTrailingWhitespace;
         }
         catch
