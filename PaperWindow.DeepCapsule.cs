@@ -670,7 +670,7 @@ public sealed partial class PaperWindow
 
         if (!host.IsVisible)
         {
-            var generation = ++_deepCapsuleSlotMoveGeneration;
+            var showGeneration = ++_deepCapsuleSlotMoveGeneration;
             host.BeginAnimation(Window.OpacityProperty, null);
             host.Top = targetTop;
             SetDeepCapsuleSlotHostHorizontalBounds(targetHostLeft, wallExactViewportWidth);
@@ -678,7 +678,7 @@ public sealed partial class PaperWindow
             host.Show();
             ScheduleDeepCapsuleSlotHostPostShowLayout(
                 host,
-                generation,
+                showGeneration,
                 targetHostLeft,
                 wallExactViewportWidth);
             RefreshEffectiveTopmost();
