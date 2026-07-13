@@ -90,23 +90,11 @@ public sealed partial class PaperWindow : Window
     private bool _suppressTodoBackspaceUntilKeyUp;
     private Button? _closeButton;
     private Grid _capsuleShell = null!;
-    private Window? _deepCapsuleSlotHost;
-    private Grid? _deepCapsuleSlotHostRoot;
+    private EdgeCapsuleHost? _edgeCapsuleHost;
     // Cross-edge dragging owns a separate top-level window. The docked slot host never changes
     // into a floating pill, so its edge columns/corners cannot leak across a drag transition.
-    private DeepCapsuleDragWindow? _deepCapsuleFloatingDragHost;
-    private Border? _deepCapsuleSlotChrome;
-    private Border? _deepCapsuleSlotOutline;
-    private Grid? _deepCapsuleSlotShell;
-    private Border? _deepCapsuleSlotLeftArea;
-    private Grid? _deepCapsuleSlotLeftStack;
-    private TextBlock? _deepCapsuleSlotIconText;
-    private Border? _deepCapsuleSlotCloseArea;
-    private TextBlock? _deepCapsuleSlotCloseGlyph;
-    private TranslateTransform? _deepCapsuleSlotCloseGlyphOffset;
-    private TextBlock? _deepCapsuleSlotLabelText;
+    private EdgeCapsuleDragWindow? _deepCapsuleFloatingDragHost;
     private ContextMenu? _deepCapsuleSlotContextMenu;
-    private bool _deepCapsuleSlotContextMenuOpen;
     private IntPtr _deepCapsuleForegroundHook;
     private IntPtr _deepCapsuleMouseHook;
     private WinEventDelegate? _deepCapsuleForegroundHookProc;
@@ -117,41 +105,7 @@ public sealed partial class PaperWindow : Window
     private TranslateTransform? _capsuleCloseGlyphOffset;
     private TextBlock _capsuleLabelText = null!;
     private bool _suppressGeometrySave;
-    private DeviceScreenRect _deepCapsuleSlotDeviceBounds;
-    private double _deepCapsuleSlotTop = double.NaN;
-    private int _deepCapsuleIndex = -1;
-    // Visual slot shift: when the "collapse-all" master capsule occupies slot 0, real
-    // capsules render at slot index+offset while _deepCapsuleIndex stays the paper-list index.
-    private int _deepCapsuleVisualOffset;
-    // Total visual slots in this capsule's queue, including the optional master slot. Top
-    // clamping must use the whole stack; clamping per capsule makes lower slots collapse together.
-    private int _deepCapsuleSlotCount = 1;
-    // Geometry and visibility are independent transition channels. A new vertical/width target
-    // must not accidentally validate or cancel a pending hide, and canceling a fade must not
-    // invalidate an otherwise current geometry settle.
-    private int _deepCapsuleGeometryGeneration;
-    private int _deepCapsuleVisibilityGeneration;
     private int _collapseTransitionGeneration;
-    // The slot host and its content share this one real rectangle. The previous implementation
-    // kept a full-width pill inside a narrower "viewport" window and relied on clipping to decide
-    // which part was visible; any delayed WPF layout could then clip the interior cap or icon.
-    private DeviceScreenRect _deepCapsuleSlotRequestedBounds;
-    private double _deepCapsuleSlotRequestedTop;
-    private double _deepCapsuleSlotRequestedCloseWidth;
-    private bool _deepCapsuleSlotLayoutSettlePending;
-    private bool _deepCapsuleSlotLayoutSettleScheduled;
-    private bool _deepCapsuleSlotMeasureRefreshPending;
-    private bool _deepCapsuleSlotMeasureRefreshScheduled;
-    // Showing the floating drag HWND can steal capture from the docked slot. While true,
-    // LostMouseCapture must not cancel the reorder; the caller re-captures after Show returns.
-    private bool _deepCapsuleIgnoreCaptureLoss;
-    private bool _deepCapsuleHoverReconcilePending;
-    private bool _deepCapsuleHoverReconcileScheduled;
-    private int _deepCapsuleSlotStartWidth;
-    private int _deepCapsuleSlotTargetWidth;
-    private int _deepCapsuleSlotWallDeviceX;
-    private int _deepCapsuleSlotRestingWidth;
-    private double _deepCapsuleSlotHorizontalDpiScaleX = 1.0;
     private double _startTransitionWidth;
     private double _startTransitionHeight;
     private double _targetTransitionWidth;
@@ -165,11 +119,11 @@ public sealed partial class PaperWindow : Window
     private int _themeAnimationGeneration;
     private int _clearDoneGeneration;
     private int _todoRowsGeneration;
-    private const double DeepCapsuleExpandedEdgeInset = DeepCapsuleLayout.ExpandedEdgeInset;
-    private const double DeepCapsuleTopMargin = DeepCapsuleLayout.TopMargin;
-    private const double DeepCapsuleStartTopMargin = DeepCapsuleLayout.StartTopMargin;
-    private const double DeepCapsuleGap = DeepCapsuleLayout.Gap;
-    private const double WindowChromeMargin = DeepCapsuleLayout.WindowChromeMargin;
+    private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
+    private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
+    private const double DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
+    private const double DeepCapsuleGap = EdgeCapsuleLayout.Gap;
+    private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double WindowChromeInset = WindowChromeMargin * 2;
     private const double TitleBarHeight = PaperLayoutDefaults.TopBarHeight;
     private const int CollapseShellFadeMilliseconds = 70;
@@ -179,8 +133,8 @@ public sealed partial class PaperWindow : Window
     private const int ExpandCapsuleFadeOutMilliseconds = 80;
     private const int ExpandShellFadeInMilliseconds = 140;
     private const double ExpandedChromeCornerRadius = RadiusShell;
-    private const double CapsuleChromeCornerRadius = DeepCapsuleLayout.CornerRadius; // 胶囊圆角，自成一套，不纳入圆角阶梯
-    private const double CapsuleInnerCornerRadius = DeepCapsuleLayout.CornerRadius;   // 左区 / 关闭按钮的内圆角，与药丸外圆角同档
+    private const double CapsuleChromeCornerRadius = EdgeCapsuleLayout.CornerRadius; // 胶囊圆角，自成一套，不纳入圆角阶梯
+    private const double CapsuleInnerCornerRadius = EdgeCapsuleLayout.CornerRadius;   // 左区 / 关闭按钮的内圆角，与药丸外圆角同档
 
     // 胶囊态内部度量。布局（leftStack/标签）与宽度计算（CapsuleShellWidth）共用同一组值，
     // 否则二者不一致会让壳体与内容错位。整体偏紧凑，减少图标/文字四周的死白。
@@ -213,7 +167,7 @@ public sealed partial class PaperWindow : Window
     private static readonly object NoteRenderTraceLock = new();
 
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
-    public bool IsDeepCapsuleSlotVisible => _deepCapsuleSlotHost?.IsVisible == true;
+    public bool IsDeepCapsuleSlotVisible => _edgeCapsuleHost?.IsVisible == true;
     public bool HasVisibleSurface =>
         (IsVisible && WindowState != WindowState.Minimized) ||
         IsDeepCapsuleSlotVisible;
@@ -222,10 +176,10 @@ public sealed partial class PaperWindow : Window
         WindowState != WindowState.Minimized &&
         !_paper.IsCollapsed;
     public bool IsCollapseAllRetracted => IsDeepCapsuleRetractedIntoMaster;
-    public bool HasExpandedDeepCapsuleSlotReservation => DeepCapsuleSlot is
-        DeepCapsuleSlotState.ExpandedReserved or
-        DeepCapsuleSlotState.RetractedExpanded or
-        DeepCapsuleSlotState.RetractingExpanded;
+    public bool HasExpandedDeepCapsuleSlotReservation => EdgeCapsuleSlot is
+        EdgeCapsuleSlotState.ExpandedReserved or
+        EdgeCapsuleSlotState.RetractedExpanded or
+        EdgeCapsuleSlotState.RetractingExpanded;
     public bool OccupiesDeepCapsuleSlot => _paper.IsVisible && HasDeepCapsuleSlotPlacement;
     public bool IsDeepCapsuleReorderDragInProgress => IsDeepCapsuleReordering;
     public bool SuppressGeometrySave => _suppressGeometrySave;
@@ -612,7 +566,7 @@ public sealed partial class PaperWindow : Window
     public void UpdateToolTipSetting()
     {
         ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
-        ToolTipPreferences.Apply(_deepCapsuleSlotHost, _controller.State.EnableToolTips);
+        _edgeCapsuleHost?.ApplyToolTipSetting(_controller.State.EnableToolTips);
     }
 
     public void UpdateWindowSwitcherVisibility()
@@ -1144,19 +1098,17 @@ public sealed partial class PaperWindow : Window
         BeginAnimation(Window.OpacityProperty, null);
         Opacity = 1.0;
 
-        _deepCapsuleGeometryGeneration++;
-        _deepCapsuleVisibilityGeneration++;
+        _edgeCapsule.CancelTransition();
 
         if (IsDeepCapsuleSlotRetracting)
         {
-            SetDeepCapsuleSlotState(DeepCapsuleSlotState.None);
+            SetEdgeCapsuleSlotState(EdgeCapsuleSlotState.None);
             if (!_paper.IsCollapsed &&
                 _controller.State.UseCapsuleMode &&
                 _controller.State.UseDeepCapsuleMode &&
-                _deepCapsuleSlotHost?.IsVisible == true)
+                _edgeCapsuleHost?.IsVisible == true)
             {
-                SetDeepCapsuleSlotState(DeepCapsuleSlotState.ExpandedReserved);
-                UpdateDeepCapsuleSlotClosePlacement();
+                SetEdgeCapsuleSlotState(EdgeCapsuleSlotState.ExpandedReserved);
             }
         }
 
@@ -1341,21 +1293,10 @@ public sealed partial class PaperWindow : Window
             _capsuleLabelText.FontFamily = AppTypography.UiFontFamily;
         }
 
-        if (_deepCapsuleSlotHost != null)
-        {
-            _deepCapsuleSlotHost.FontFamily = AppTypography.UiFontFamily;
-            _deepCapsuleSlotHost.Language = AppTypography.Language;
-        }
-
-        if (_deepCapsuleSlotIconText != null)
-        {
-            _deepCapsuleSlotIconText.FontFamily = AppTypography.SymbolFontFamily;
-        }
-
-        if (_deepCapsuleSlotLabelText != null)
-        {
-            _deepCapsuleSlotLabelText.FontFamily = AppTypography.UiFontFamily;
-        }
+        _edgeCapsuleHost?.UpdateTypography(
+            AppTypography.UiFontFamily,
+            AppTypography.SymbolFontFamily,
+            AppTypography.Language);
 
         RefreshPaperTitle();
     }
@@ -2245,14 +2186,9 @@ public sealed partial class PaperWindow : Window
     {
         var slotShouldBeTopmost = !_controller.SuppressDeepCapsuleTopmostForContextMenu &&
             !_controller.SuppressTopmostForFullscreenForeground;
-        if (_deepCapsuleSlotHost != null)
-        {
-            _deepCapsuleSlotHost.Topmost = slotShouldBeTopmost;
-            if (_deepCapsuleSlotHost.IsVisible)
-            {
-                WindowNative.ApplyTopmostZOrder(_deepCapsuleSlotHost, slotShouldBeTopmost, _controller.FullscreenAvoidanceWindow);
-            }
-        }
+        _edgeCapsuleHost?.SetTopmost(
+            slotShouldBeTopmost,
+            _controller.FullscreenAvoidanceWindow);
 
         if (_deepCapsuleFloatingDragHost != null)
         {
@@ -2858,35 +2794,12 @@ public sealed partial class PaperWindow : Window
         set => SetValue(TransitionProgressProperty, value);
     }
 
-    private static readonly DependencyProperty DeepCapsuleSlotHorizontalProgressProperty =
-        DependencyProperty.Register(
-            nameof(DeepCapsuleSlotHorizontalProgress),
-            typeof(double),
-            typeof(PaperWindow),
-            new PropertyMetadata(double.NaN, OnDeepCapsuleSlotHorizontalProgressChanged));
-
-    private double DeepCapsuleSlotHorizontalProgress
-    {
-        get => (double)GetValue(DeepCapsuleSlotHorizontalProgressProperty);
-        set => SetValue(DeepCapsuleSlotHorizontalProgressProperty, value);
-    }
-
     private static void OnTransitionProgressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is PaperWindow window)
         {
             window.UpdateTransitionVisuals((double)e.NewValue);
         }
-    }
-
-    private static void OnDeepCapsuleSlotHorizontalProgressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is not PaperWindow window || e.NewValue is not double progress || double.IsNaN(progress) || double.IsInfinity(progress))
-        {
-            return;
-        }
-
-        window.ApplyDeepCapsuleSlotHorizontalProgress(progress);
     }
 
     private void UpdateTransitionVisuals(double progress)

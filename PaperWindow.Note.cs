@@ -1551,10 +1551,7 @@ public sealed partial class PaperWindow
         {
             _capsuleLeftArea.ContextMenu = BuildPaperContextMenu();
         }
-        if (_deepCapsuleSlotLeftArea != null)
-        {
-            _deepCapsuleSlotLeftArea.ContextMenu = BuildDeepCapsuleSlotContextMenu();
-        }
+        _edgeCapsuleHost?.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
         if (_paperChrome != null)
         {
             _paperChrome.ContextMenu = BuildPaperContextMenu();

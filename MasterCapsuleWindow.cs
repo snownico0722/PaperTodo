@@ -37,7 +37,7 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDpiChanged = 0x02E0;
     // Compact internal metrics controlling how tightly the glyph + label sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
-    private const double WindowChromeMargin = DeepCapsuleLayout.WindowChromeMargin;
+    private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double MasterLeftPadding = 5;
     private const double MasterGlyphGap = 4;
     private const double MasterRightPadding = 10;
@@ -49,7 +49,7 @@ public sealed class MasterCapsuleWindow : Window
 
     // Which queue this master serves: (monitor device, edge). Each docked-capsule queue has its
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
-    private DeepCapsuleEdge _queueEdge;
+    private EdgeCapsuleEdge _queueEdge;
     private string _queueMonitorDeviceName = "";
 
     private Border _pill = null!;
@@ -84,7 +84,7 @@ public sealed class MasterCapsuleWindow : Window
         set => SetValue(AnimatedTopProperty, value);
     }
 
-    public MasterCapsuleWindow(AppController controller, DeepCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
     {
         _controller = controller;
         _queueEdge = queueEdge;
@@ -144,7 +144,7 @@ public sealed class MasterCapsuleWindow : Window
         _pill = new Border
         {
             Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
-            CornerRadius = new CornerRadius(DeepCapsuleLayout.CornerRadius),
+            CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
             BorderThickness = new Thickness(1),
             Background = Theme.PaperBrush,
             BorderBrush = Theme.PaperBorderBrush,
@@ -159,7 +159,7 @@ public sealed class MasterCapsuleWindow : Window
 
         _hoverOverlay = new Border
         {
-            CornerRadius = new CornerRadius(DeepCapsuleLayout.CornerRadius),
+            CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
             Background = Brushes.Transparent,
             SnapsToDevicePixels = true
         };
@@ -437,8 +437,8 @@ public sealed class MasterCapsuleWindow : Window
     // interior side owns its rounded cap and margin inside the actual top-level window bounds.
     private void ApplyMasterEdgeLayout()
     {
-        var leftEdge = _queueEdge == DeepCapsuleEdge.Left;
-        var radius = DeepCapsuleLayout.CornerRadius;
+        var leftEdge = _queueEdge == EdgeCapsuleEdge.Left;
+        var radius = EdgeCapsuleLayout.CornerRadius;
         var edgeCorner = leftEdge
             ? new CornerRadius(0, radius, radius, 0)
             : new CornerRadius(radius, 0, 0, radius);
@@ -505,7 +505,7 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
-    public void SetQueue(DeepCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public void SetQueue(EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
     {
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
@@ -530,7 +530,7 @@ public sealed class MasterCapsuleWindow : Window
         animate = animate && _controller.State.EnableAnimations;
         var localArea = geometry.LocalWorkAreaDip;
         var requestedWidth = MasterDockedWidth(geometry.DpiScaleY);
-        var targetTop = DeepCapsuleLayout.TopForIndex(
+        var targetTop = EdgeCapsuleLayout.TopForIndex(
             0,
             QueueStartTopMargin,
             localArea,
@@ -554,7 +554,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             From = currentTop,
             To = targetTop,
-            Duration = TimeSpan.FromMilliseconds(DeepCapsuleLayout.SlotMoveMilliseconds),
+            Duration = TimeSpan.FromMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         topAnim.Completed += (_, _) =>
@@ -590,28 +590,24 @@ public sealed class MasterCapsuleWindow : Window
         MonitorGeometry geometry)
     {
         ApplyMasterEdgeLayout();
-        var width = Math.Max(1, (int)Math.Round(widthDip * geometry.DpiScaleX, MidpointRounding.AwayFromZero));
-        var height = Math.Max(1, (int)Math.Round(
-            PaperLayoutDefaults.CapsuleHeight * geometry.DpiScaleY,
-            MidpointRounding.AwayFromZero));
-        var top = geometry.WorkArea.Top +
-            (int)Math.Round(topDip * geometry.DpiScaleY, MidpointRounding.AwayFromZero);
-        var left = _queueEdge == DeepCapsuleEdge.Left
-            ? geometry.WorkArea.Left
-            : geometry.WorkArea.Right - width;
-
-        var bounds = new DeviceScreenRect(left, top, left + width, top + height);
-        if (WindowNative.TrySetWindowDeviceBounds(this, bounds))
+        var layout = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
+            geometry,
+            _queueEdge,
+            topDip,
+            widthDip,
+            0,
+            PaperLayoutDefaults.CapsuleHeight));
+        if (WindowNative.TrySetWindowDeviceBounds(this, layout.Bounds))
         {
             _currentTopDip = topDip;
         }
     }
 
     // Local target-monitor DIP. Real capsule hosts use the same coordinate space.
-    public double AnchorTop => DeepCapsuleLayout.TopForIndex(
+    public double AnchorTop => EdgeCapsuleLayout.TopForIndex(
         0,
         QueueStartTopMargin,
-        DeepCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
+        EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
         QueueSlotCount);
 
     private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

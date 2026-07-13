@@ -136,18 +136,18 @@ public sealed partial class PaperWindow
         }
         UpdateCapsuleClosePlacement();
         RefreshDeepCapsuleSlotLabel();
-        UpdateDeepCapsuleSlotClosePlacement();
     }
 
     private void RefreshDeepCapsuleSlotLabel()
     {
-        if (_deepCapsuleSlotLabelText == null)
+        if (_edgeCapsuleHost == null)
         {
             return;
         }
 
-        _deepCapsuleSlotLabelText.Text = _controller.PaperCapsuleTitle(_paper);
-        _deepCapsuleSlotLabelText.ToolTip = _controller.PaperTitleText(_paper);
+        _edgeCapsuleHost.SetLabel(
+            _controller.PaperCapsuleTitle(_paper),
+            _controller.PaperTitleText(_paper));
         ScheduleDeepCapsuleSlotMeasureRefresh();
     }
 
@@ -167,34 +167,6 @@ public sealed partial class PaperWindow
         if (_capsuleShell != null)
         {
             _capsuleShell.Width = CapsuleShellLayoutWidth();
-        }
-
-        UpdateDeepCapsuleSlotClosePlacement();
-    }
-
-    private void UpdateDeepCapsuleSlotClosePlacement(bool updateHostWidth = true)
-    {
-        // A visible slot's close segment is owned by the same geometry transition as its host.
-        // Theme/label refreshes must not jump it to the next visual state before the host grows.
-        if (!IsDeepCapsuleSlotHorizontalAnimating &&
-            (_deepCapsuleSlotHost?.IsVisible != true || !HasDeepCapsuleSlotPlacement))
-        {
-            ApplyDeepCapsuleSlotCloseWidth(DeepCapsuleTargetCloseWidth());
-        }
-
-        if (_deepCapsuleSlotCloseArea != null)
-        {
-            _deepCapsuleSlotCloseArea.Margin = new Thickness(0);
-        }
-
-        if (_deepCapsuleSlotCloseGlyphOffset != null)
-        {
-            _deepCapsuleSlotCloseGlyphOffset.X = 0;
-        }
-
-        if (updateHostWidth && _deepCapsuleSlotHost != null && HasDeepCapsuleSlotPlacement)
-        {
-            ApplyDeepCapsuleSlotFixedLayout();
         }
     }
 
@@ -574,12 +546,12 @@ public sealed partial class PaperWindow
                 _controller.CanPaperDisplayAsCapsule(_paper) &&
                 (expandingFromDeepCapsuleEdge || _controller.State.UseDeepCapsuleMode))
             {
-                SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.EdgeSlot);
+                SetEdgeCapsuleOpenOrigin(EdgeCapsuleOpenOrigin.EdgeSlot);
             }
-            SetDeepCapsuleSlotForPaperForm(
+            SetEdgeCapsuleSlotForPaperForm(
                 collapsed: false,
                 reserveWhileExpanded: keepDeepCapsuleSlotReservation);
-            SetDeepCapsuleVisualState(keepDeepCapsuleSlotReservation ? DeepCapsuleVisualState.Active : DeepCapsuleVisualState.Resting);
+            SetEdgeCapsuleVisualState(keepDeepCapsuleSlotReservation ? EdgeCapsuleVisualState.Active : EdgeCapsuleVisualState.Resting);
             if (alignExpandedToDockedEdge || expandingFromDeepCapsuleEdge)
             {
                 var requiredEdgeInset = keepDeepCapsuleSlotReservation
@@ -607,12 +579,12 @@ public sealed partial class PaperWindow
         {
             if (wasDeepCapsulePlaced)
             {
-                SetDeepCapsuleSlotForPaperForm(collapsed: true, reserveWhileExpanded: false);
+                SetEdgeCapsuleSlotForPaperForm(collapsed: true, reserveWhileExpanded: false);
             }
             if (usesDeepCapsuleMode && !wasDeepCapsulePlaced && !returningToHiddenDeepCapsuleSlot)
             {
-                SetDeepCapsuleSlotState(DeepCapsuleSlotState.CollapsedDocked);
-                SetDeepCapsuleVisualState(DeepCapsuleVisualState.Resting);
+                SetEdgeCapsuleSlotState(EdgeCapsuleSlotState.CollapsedDocked);
+                SetEdgeCapsuleVisualState(EdgeCapsuleVisualState.Resting);
                 _controller.ArrangeDeepCapsules(animate: false);
             }
         }
@@ -789,7 +761,7 @@ public sealed partial class PaperWindow
                 if (arrangeDeepCapsulesAfterCollapse)
                 {
                     _controller.ArrangeDeepCapsules(animate: true);
-                    SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.Normal);
+                    SetEdgeCapsuleOpenOrigin(EdgeCapsuleOpenOrigin.Normal);
                     HideMainWindowForDeepCapsuleRest();
                 }
                 if (!collapsed)
@@ -849,7 +821,7 @@ public sealed partial class PaperWindow
             if (arrangeDeepCapsulesAfterCollapse)
             {
                 _controller.ArrangeDeepCapsules(animate: true);
-                SetDeepCapsuleOpenOrigin(DeepCapsuleOpenOrigin.Normal);
+                SetEdgeCapsuleOpenOrigin(EdgeCapsuleOpenOrigin.Normal);
                 HideMainWindowForDeepCapsuleRest();
             }
             if (!collapsed)

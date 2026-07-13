@@ -3,7 +3,7 @@ using System.Windows;
 
 namespace PaperTodo;
 
-public enum DeepCapsuleEdge
+public enum EdgeCapsuleEdge
 {
     Right,
     Left
@@ -12,7 +12,7 @@ public enum DeepCapsuleEdge
 // Shared geometry for the edge-aligned (deep) capsule stack. Both the real paper
 // capsules (PaperWindow) and the standalone "collapse-all" master capsule resolve
 // their positions through here so they never disagree on where a slot sits.
-public static class DeepCapsuleLayout
+public static class EdgeCapsuleLayout
 {
     // Expanded windows opened from edge-aligned capsules should not hug the docked screen edge.
     public const double ExpandedEdgeInset = 36;
@@ -27,19 +27,9 @@ public static class DeepCapsuleLayout
     // Transparent outer chrome around the capsule body. Edge capsules omit this margin on the
     // wall side and keep it on the interior side for the shadow.
     public const double WindowChromeMargin = 8;
-    // Top-level transparent windows are expensive to move; slightly longer durations give
-    // the compositor more frames and make each frame's position delta smaller.
-    public const int SlideOutMilliseconds = 220;
-    public const int SlideInMilliseconds = 180;
     public const int SlotMoveMilliseconds = 200;
-    // Slot-host fade when opacity-toggling the resting docked pill (retract behind master, etc.).
-    public const int SlotOpacityFadeMilliseconds = 160;
-    // Quick "retract toward master then fade" used when clearing an active/expanded slot.
+    // Quick retract toward the master when a slot leaves the queue.
     public const int SlotRetractMoveMilliseconds = 120;
-    public const int SlotRetractFadeMilliseconds = 110;
-    // The two-phase tear-down (move up, then a brief final fade) when fully releasing a slot host.
-    public const int SlotReleaseSettleMilliseconds = 125;
-    public const int SlotReleaseFadeMilliseconds = 45;
     // Display-weighted character count: CJK / fullwidth glyphs count as 2, everything
     // else as 1. A 6-digit number title then weighs the same as a 3-CJK-character title,
     // so the capsule no longer looks long-but-empty for numeric titles.

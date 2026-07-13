@@ -8,7 +8,7 @@ using System.Windows.Media.Animation;
 
 namespace PaperTodo;
 
-internal sealed record DeepCapsuleDragWindowOptions
+internal sealed record EdgeCapsuleDragWindowOptions
 {
     public required double Width { get; init; }
     public required double Height { get; init; }
@@ -40,7 +40,7 @@ internal sealed record DeepCapsuleDragWindowOptions
 
 // A detached capsule is a complete, real-size pill in its own HWND. It never reuses the docked
 // one-sided tag or any of its edge-specific columns, margins, corners, or width animation state.
-internal sealed class DeepCapsuleDragWindow : Window
+internal sealed class EdgeCapsuleDragWindow : Window
 {
     private const int WmDpiChanged = 0x02E0;
     private readonly ScaleTransform _entranceScale = new(1, 1);
@@ -51,7 +51,7 @@ internal sealed class DeepCapsuleDragWindow : Window
     private bool _closingByOwner;
     private bool _isClosed;
 
-    public DeepCapsuleDragWindow(DeepCapsuleDragWindowOptions options)
+    public EdgeCapsuleDragWindow(EdgeCapsuleDragWindowOptions options)
     {
         ShowInTaskbar = false;
         ShowActivated = false;
@@ -183,7 +183,7 @@ internal sealed class DeepCapsuleDragWindow : Window
         }
     }
 
-    private Grid BuildContent(DeepCapsuleDragWindowOptions options)
+    private Grid BuildContent(EdgeCapsuleDragWindowOptions options)
     {
         var root = new Grid
         {

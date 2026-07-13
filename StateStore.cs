@@ -303,7 +303,7 @@ public sealed class StateStore
         var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
         state.DeepCapsuleStartTopMargin = keepDeepCapsuleStartTopMargins
             ? NormalizeDeepCapsuleStartTopMargin(state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName)
-            : DeepCapsuleLayout.StartTopMargin;
+            : EdgeCapsuleLayout.StartTopMargin;
 
         // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
         // done at layout time (monitor set can change between sessions, so we don't over-normalize
@@ -548,7 +548,7 @@ public sealed class StateStore
 
     private static double NormalizeDeepCapsuleStartTopMargin(double value, string monitorDeviceName)
     {
-        var area = DeepCapsuleLayout.LocalWorkAreaForQueue(monitorDeviceName);
-        return DeepCapsuleLayout.NormalizeStartTopMargin(value, area, 1);
+        var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(monitorDeviceName);
+        return EdgeCapsuleLayout.NormalizeStartTopMargin(value, area, 1);
     }
 }

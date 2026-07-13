@@ -260,7 +260,7 @@ public sealed partial class PaperWindow
             return "";
         }
 
-        if (DeepCapsuleLayout.DisplayWidth(text) <= fullDisplayWidthLimit)
+        if (EdgeCapsuleLayout.DisplayWidth(text) <= fullDisplayWidthLimit)
         {
             return text;
         }
@@ -273,7 +273,7 @@ public sealed partial class PaperWindow
         {
             var nextIndex = NextTextElementIndex(indexes, index, text.Length);
             var element = text[index..nextIndex];
-            var elementWidth = Math.Max(1, DeepCapsuleLayout.DisplayWidth(element));
+            var elementWidth = Math.Max(1, EdgeCapsuleLayout.DisplayWidth(element));
             if (width > 0 && width + elementWidth > keepWidth)
             {
                 break;
