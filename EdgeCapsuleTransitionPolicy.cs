@@ -17,6 +17,7 @@ internal static class EdgeCapsuleTransitionPolicy
         if (!target.Visible ||
             !applied.Visible ||
             applied.Bounds.IsEmpty ||
+            applied.HostBounds.IsEmpty ||
             motion.Kind == EdgeCapsuleMotionKind.Snap ||
             (motion.Kind == EdgeCapsuleMotionKind.Preserve && !transitionAlreadyActive) ||
             applied.Edge != target.Edge ||
@@ -73,6 +74,15 @@ internal static class EdgeCapsuleTransitionPolicy
             ? target.WallDeviceX + width
             : target.WallDeviceX;
         var bounds = new DeviceScreenRect(left, top, right, top + height);
+        // Capacity may grow immediately, but it never contracts around an in-flight wider visual.
+        var hostWidth = Math.Max(
+            bounds.Width,
+            Math.Max(start.HostBounds.Width, target.HostBounds.Width));
+        var hostBounds = EdgeCapsuleGeometry.HostBoundsForVisibleBounds(
+            bounds,
+            target.Edge,
+            target.WallDeviceX,
+            hostWidth);
         var interactiveBounds = target.IsHitTestVisible
             ? EdgeCapsuleGeometry.InteractiveBoundsForAppliedBounds(
                 bounds,
@@ -85,6 +95,7 @@ internal static class EdgeCapsuleTransitionPolicy
             true,
             target.Surface,
             bounds,
+            hostBounds,
             interactiveBounds,
             target.Edge,
             LerpDevice(start.BodyWindowWidthDevice, target.BodyWindowWidthDevice, progress),
@@ -105,6 +116,7 @@ internal static class EdgeCapsuleTransitionPolicy
         applied.Visible == target.Visible &&
         applied.Surface == target.Surface &&
         applied.Bounds == target.Bounds &&
+        applied.HostBounds == target.HostBounds &&
         applied.InteractiveBounds == target.InteractiveBounds &&
         applied.Edge == target.Edge &&
         applied.BodyWindowWidthDevice == target.BodyWindowWidthDevice &&

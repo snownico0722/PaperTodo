@@ -41,6 +41,16 @@ internal static class EdgeCapsuleTargetPlanner
             layout.RestingWidthDip,
             closeWidth,
             layout.HeightDip));
+        var hostBodyWidth = Math.Max(
+            layout.RestingWidthDip,
+            layout.HostWidthDip - layout.MaximumCloseWidthDip);
+        var hostGeometry = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
+            layout.Monitor,
+            layout.Edge,
+            top,
+            hostBodyWidth,
+            layout.MaximumCloseWidthDip,
+            layout.HeightDip));
         var surface = SurfaceFor(model, retracted, retracting, floating);
         var hitTest = !retracted && !floating;
         var interactiveBounds = hitTest ? geometry.InteractiveBounds : default;
@@ -48,6 +58,7 @@ internal static class EdgeCapsuleTargetPlanner
             true,
             surface,
             geometry.Bounds,
+            hostGeometry.Bounds,
             interactiveBounds,
             layout.Edge,
             geometry.RestingWidthDevice,

@@ -17,9 +17,13 @@ internal sealed class EdgeCapsulePresenter
     private EdgeCapsuleDirty _dirty;
     private bool _reconcileScheduled;
     private int _reconcileGeneration;
-    private DispatcherTimer? _frameTimer;
+    private EdgeCapsuleFrameScheduler? _frameScheduler;
+    private bool _frameSchedulerActive;
     private Dispatcher? _dispatcher;
     private Func<EdgeCapsuleDirty, EdgeCapsuleDirty>? _reconcile;
+    private EdgeCapsuleLayoutSnapshot? _layoutSnapshot;
+    private bool _hasFramePointerOverride;
+    private DeviceScreenPoint? _framePointerOverride;
     private EdgeCapsuleMotion _pendingMotion =
         EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State);
 
@@ -91,10 +95,13 @@ internal sealed class EdgeCapsulePresenter
     {
         var remaining = EdgeCapsuleDirty.None;
         var now = nowTimestamp ?? Stopwatch.GetTimestamp();
-        var pointer = capturePointer();
+        var pointer = _hasFramePointerOverride
+            ? _framePointerOverride
+            : capturePointer();
 
-        // A native resize can synthesize WPF enter/leave. Every transition frame resamples the
-        // same physical interactive rectangle, so pointer intent can retarget in either direction.
+        // The fixed host is larger than the current visible surface. Every transition frame
+        // resamples the real physical interactive rectangle, so transparent reserve pixels never
+        // become hover intent and a shrinking surface can retarget in either direction.
         if ((dirty & EdgeCapsuleDirty.Frame) != 0)
         {
             dirty |= EdgeCapsuleDirty.Pointer;
@@ -116,6 +123,7 @@ internal sealed class EdgeCapsulePresenter
             }
             else
             {
+                _layoutSnapshot = captureLayout();
                 RequestPresentation(EdgeCapsuleMotion.Preserve(
                     EdgeCapsuleTransitionReason.Measure));
                 dirty |= EdgeCapsuleDirty.Presentation;
@@ -127,7 +135,8 @@ internal sealed class EdgeCapsulePresenter
             return remaining;
         }
 
-        var layout = captureLayout();
+        var layout = _layoutSnapshot ?? captureLayout();
+        _layoutSnapshot = layout;
         var result = ReconcilePresentation(layout, apply, now);
         if (!result.Applied)
         {
@@ -247,13 +256,13 @@ internal sealed class EdgeCapsulePresenter
         _dirty = EdgeCapsuleDirty.None;
         _reconcileScheduled = false;
         _reconcileGeneration++;
-        StopFrameClock();
+        StopFrameScheduler();
     }
 
     public void CancelTransition()
     {
         Transition = null;
-        StopFrameClock();
+        StopFrameScheduler();
     }
 
     public void ResetPresentation()
@@ -261,6 +270,7 @@ internal sealed class EdgeCapsulePresenter
         CancelTransition();
         TargetPlan = EdgeCapsulePresentationPlan.Hidden;
         AppliedPresentation = EdgeCapsulePresentationFrame.Hidden;
+        _layoutSnapshot = null;
         _pendingMotion = EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State);
         ClearDeferredWork();
     }
@@ -285,6 +295,13 @@ internal sealed class EdgeCapsulePresenter
         Dispatcher dispatcher,
         Func<EdgeCapsuleDirty, EdgeCapsuleDirty> reconcile)
     {
+        if (_dispatcher != null && !ReferenceEquals(_dispatcher, dispatcher))
+        {
+            StopFrameScheduler();
+            _frameScheduler = null;
+            _layoutSnapshot = null;
+        }
+
         _dispatcher = dispatcher;
         _reconcile = reconcile;
     }
@@ -324,44 +341,73 @@ internal sealed class EdgeCapsulePresenter
         _dirty |= remaining & ~EdgeCapsuleDirty.Frame;
         if (needsFrame)
         {
-            StartFrameClock();
+            StartFrameScheduler();
         }
         else if (!Transition.HasValue)
         {
-            StopFrameClock();
+            StopFrameScheduler();
         }
     }
 
-    private void StartFrameClock()
+    private void StartFrameScheduler()
     {
         if (_dispatcher == null || _reconcile == null)
         {
             return;
         }
-        if (_frameTimer == null)
+        if (_frameSchedulerActive)
         {
-            _frameTimer = new DispatcherTimer(DispatcherPriority.Render, _dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(16)
-            };
-            _frameTimer.Tick += (_, _) =>
-            {
-                if (_dispatcher == null || _reconcile == null || !Transition.HasValue)
-                {
-                    StopFrameClock();
-                    return;
-                }
-                Invalidate(EdgeCapsuleDirty.Frame, _dispatcher, _reconcile);
-            };
+            return;
         }
-        if (!_frameTimer.IsEnabled)
-        {
-            _frameTimer.Start();
-        }
+
+        _frameScheduler ??= EdgeCapsuleFrameScheduler.For(_dispatcher);
+        _frameSchedulerActive = true;
+        _frameScheduler.Activate(this);
     }
 
-    private void StopFrameClock()
+    private void StopFrameScheduler()
     {
-        _frameTimer?.Stop();
+        if (!_frameSchedulerActive)
+        {
+            return;
+        }
+
+        _frameSchedulerActive = false;
+        _frameScheduler?.Deactivate(this);
+    }
+
+    internal bool UsesSharedFrameScheduler(EdgeCapsuleFrameScheduler scheduler) =>
+        _frameSchedulerActive && ReferenceEquals(_frameScheduler, scheduler);
+
+    internal bool AdvanceSharedFrame(
+        EdgeCapsuleFrameScheduler scheduler,
+        DeviceScreenPoint? pointer)
+    {
+        if (!UsesSharedFrameScheduler(scheduler) ||
+            _dispatcher == null ||
+            _reconcile == null ||
+            !Transition.HasValue)
+        {
+            StopFrameScheduler();
+            return false;
+        }
+
+        // Merge queued work into this render tick and invalidate its stale dispatcher callback.
+        // Flush, deferred invalidation and animation still execute the same RunReconcile path.
+        _dirty |= EdgeCapsuleDirty.Frame;
+        _reconcileGeneration++;
+        _reconcileScheduled = false;
+        _hasFramePointerOverride = true;
+        _framePointerOverride = pointer;
+        try
+        {
+            RunReconcile();
+        }
+        finally
+        {
+            _framePointerOverride = null;
+            _hasFramePointerOverride = false;
+        }
+        return UsesSharedFrameScheduler(scheduler) && Transition.HasValue;
     }
 }

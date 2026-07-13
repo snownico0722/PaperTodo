@@ -59,7 +59,8 @@ public sealed partial class PaperWindow
         RequestEdgeCapsulePresentation(
             animate,
             EdgeCapsuleTransitionReason.Retraction,
-            EdgeCapsuleLayout.SlotRetractMoveMilliseconds);
+            EdgeCapsuleLayout.SlotRetractMoveMilliseconds,
+            refreshLayout: true);
         if (_paper.IsCollapsed)
         {
             HideMainWindowForDeepCapsuleRest();
@@ -85,7 +86,8 @@ public sealed partial class PaperWindow
         RequestEdgeCapsulePresentation(
             animate,
             EdgeCapsuleTransitionReason.Placement,
-            EdgeCapsuleLayout.SlotMoveMilliseconds);
+            EdgeCapsuleLayout.SlotMoveMilliseconds,
+            refreshLayout: true);
         if (!IsPaperFormTransitioning)
         {
             HideMainWindowForDeepCapsuleRest();
@@ -110,7 +112,8 @@ public sealed partial class PaperWindow
         RequestEdgeCapsulePresentation(
             animate: true,
             EdgeCapsuleTransitionReason.Placement,
-            EdgeCapsuleLayout.SlotMoveMilliseconds);
+            EdgeCapsuleLayout.SlotMoveMilliseconds,
+            refreshLayout: true);
     }
 
     internal void ApplyExpandedDeepCapsuleSlotPlacement(EdgeCapsulePlacement placement, bool animate = false)
@@ -144,14 +147,17 @@ public sealed partial class PaperWindow
         var firstShow = _edgeCapsuleHost?.IsVisible != true;
         if (firstShow)
         {
-            FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.Placement);
+            FlushEdgeCapsulePresentation(
+                EdgeCapsuleTransitionReason.Placement,
+                EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
         }
         else
         {
             RequestEdgeCapsulePresentation(
                 animate,
                 EdgeCapsuleTransitionReason.Placement,
-                EdgeCapsuleLayout.SlotMoveMilliseconds);
+                EdgeCapsuleLayout.SlotMoveMilliseconds,
+                refreshLayout: true);
         }
         RefreshEffectiveTopmost();
         UpdateToolTipSetting();

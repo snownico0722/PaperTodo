@@ -48,6 +48,8 @@ internal sealed record EdgeCapsuleHostCallbacks(
 /// </summary>
 internal sealed class EdgeCapsuleHost : IDisposable
 {
+    private const int WmNcHitTest = 0x0084;
+    private static readonly IntPtr HtTransparent = new(-1);
     private readonly EdgeCapsuleHostOptions _options;
     private EdgeCapsuleHostCallbacks? _callbacks;
     private Brush _hoverBrush;
@@ -60,6 +62,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
     private bool _disposed;
     private Window Window { get; }
     private Grid Root { get; }
+    private Grid VisualSurface { get; }
     private Border Chrome { get; }
     private Border Outline { get; }
     private Grid Shell { get; }
@@ -74,6 +77,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
         EdgeCapsuleHostOptions options,
         Window window,
         Grid root,
+        Grid visualSurface,
         Border chrome,
         Border outline,
         Grid shell,
@@ -90,6 +94,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
         _weakTextBrush = options.TextBrush;
         Window = window;
         Root = root;
+        VisualSurface = visualSurface;
         Chrome = chrome;
         Outline = outline;
         Shell = shell;
@@ -116,6 +121,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             WindowNative.ApplyNoActivateStyle(window);
             if (PresentationSource.FromVisual(window) is HwndSource source)
             {
+                source.AddHook(OnNativeMessage);
                 source.AddHook(hook);
             }
         };
@@ -123,9 +129,9 @@ internal sealed class EdgeCapsuleHost : IDisposable
     }
 
     /// <summary>
-    /// The only docked-surface effect entry. Native bounds, WPF close layout, opacity and hit
-    /// testing are committed from the same immutable frame; callers cannot advance one channel
-    /// independently of another.
+    /// The only docked-surface effect entry. The native HWND owns stable expanded capacity while
+    /// the real, wall-aligned visual surface follows frame.Bounds. Horizontal animation therefore
+    /// changes only one WPF tree and never races a native resize.
     /// </summary>
     public bool Apply(EdgeCapsulePresentationFrame frame)
     {
@@ -138,10 +144,22 @@ internal sealed class EdgeCapsuleHost : IDisposable
 
         if (!frame.Visible)
         {
-            window.Hide();
-            window.Opacity = 1;
-            root.Opacity = 1;
-            root.IsHitTestVisible = false;
+            if (window.IsVisible)
+            {
+                window.Hide();
+            }
+            if (Math.Abs(window.Opacity - 1) > 0.001)
+            {
+                window.Opacity = 1;
+            }
+            if (Math.Abs(root.Opacity - 1) > 0.001)
+            {
+                root.Opacity = 1;
+            }
+            if (root.IsHitTestVisible)
+            {
+                root.IsHitTestVisible = false;
+            }
             _appliedFrame = EdgeCapsulePresentationFrame.Hidden;
             return true;
         }
@@ -149,29 +167,65 @@ internal sealed class EdgeCapsuleHost : IDisposable
         Debug.Assert(
             frame.Surface != EdgeCapsuleSurfaceKind.FloatingFree,
             "FloatingFree is rendered by EdgeCapsuleDragWindow, never the docked host.");
-        ApplyFixedLayout(frame.Edge);
-        var closeWidth = EdgeCapsuleGeometry.CloseWidthForAppliedDeviceWidth(
-            frame.Bounds.Width,
-            frame.BodyWindowWidthDevice,
-            frame.DpiScaleX,
-            frame.MaximumCloseWidthDip);
-        ApplySegmentWidths(
-            frame,
-            closeWidth,
-            frame.MaximumCloseWidthDip,
-            frame.IsHitTestVisible);
-        root.Opacity = Math.Clamp(frame.ContentOpacity, 0, 1);
-        root.IsHitTestVisible = frame.IsHitTestVisible;
-        Outline.Visibility = frame.OutlineVisible ? Visibility.Visible : Visibility.Collapsed;
-
+        Debug.Assert(
+            frame.HostBounds.Width >= frame.Bounds.Width &&
+            frame.HostBounds.Top == frame.Bounds.Top &&
+            frame.HostBounds.Bottom == frame.Bounds.Bottom &&
+            (frame.Edge == EdgeCapsuleEdge.Left
+                ? frame.HostBounds.Left == frame.Bounds.Left
+                : frame.HostBounds.Right == frame.Bounds.Right),
+            "The visible capsule must fit inside a host pinned to the same wall.");
+        var previousFrame = _appliedFrame;
         var firstShow = !window.IsVisible;
+        var edgeChanged = firstShow ||
+            !previousFrame.Visible ||
+            previousFrame.Edge != frame.Edge;
+        var visualSurfaceChanged = edgeChanged ||
+            previousFrame.Bounds.Width != frame.Bounds.Width ||
+            previousFrame.Bounds.Height != frame.Bounds.Height ||
+            Math.Abs(previousFrame.DpiScaleX - frame.DpiScaleX) > 0.001 ||
+            Math.Abs(previousFrame.DpiScaleY - frame.DpiScaleY) > 0.001;
+        var segmentLayoutChanged = visualSurfaceChanged ||
+            previousFrame.BodyWindowWidthDevice != frame.BodyWindowWidthDevice ||
+            Math.Abs(previousFrame.MaximumCloseWidthDip - frame.MaximumCloseWidthDip) > 0.001;
+        var nativeBoundsChanged = firstShow ||
+            !previousFrame.Visible ||
+            previousFrame.HostBounds != frame.HostBounds;
+
+        if (edgeChanged)
+        {
+            ApplyFixedLayout(frame.Edge);
+        }
+        if (visualSurfaceChanged)
+        {
+            ApplyVisualSurface(frame);
+        }
+        if (segmentLayoutChanged)
+        {
+            var closeWidth = EdgeCapsuleGeometry.CloseWidthForAppliedDeviceWidth(
+                frame.Bounds.Width,
+                frame.BodyWindowWidthDevice,
+                frame.DpiScaleX,
+                frame.MaximumCloseWidthDip);
+            ApplySegmentWidths(
+                frame,
+                closeWidth,
+                frame.MaximumCloseWidthDip,
+                frame.IsHitTestVisible);
+        }
+        else if (previousFrame.IsHitTestVisible != frame.IsHitTestVisible)
+        {
+            CloseArea.IsHitTestVisible = frame.IsHitTestVisible &&
+                _maximumCloseWidth > 0 &&
+                _appliedCloseWidth >= _maximumCloseWidth - 0.5;
+        }
+
         if (firstShow)
         {
             window.Opacity = 0;
         }
-        var previousFrame = _appliedFrame;
         _appliedFrame = frame;
-        if (!WindowNative.TrySetWindowDeviceBounds(window, frame.Bounds))
+        if (nativeBoundsChanged && !WindowNative.TrySetWindowDeviceBounds(window, frame.HostBounds))
         {
             _appliedFrame = previousFrame;
             return false;
@@ -179,13 +233,34 @@ internal sealed class EdgeCapsuleHost : IDisposable
         if (firstShow)
         {
             window.Show();
-            if (!WindowNative.TrySetWindowDeviceBounds(window, frame.Bounds))
+            if (!WindowNative.TrySetWindowDeviceBounds(window, frame.HostBounds))
             {
                 _appliedFrame = previousFrame;
                 return false;
             }
         }
-        window.Opacity = Math.Clamp(frame.Opacity, 0, 1);
+
+        var contentOpacity = Math.Clamp(frame.ContentOpacity, 0, 1);
+        if (Math.Abs(root.Opacity - contentOpacity) > 0.001)
+        {
+            root.Opacity = contentOpacity;
+        }
+        if (root.IsHitTestVisible != frame.IsHitTestVisible)
+        {
+            root.IsHitTestVisible = frame.IsHitTestVisible;
+        }
+        var outlineVisibility = frame.OutlineVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (Outline.Visibility != outlineVisibility)
+        {
+            Outline.Visibility = outlineVisibility;
+        }
+        var opacity = Math.Clamp(frame.Opacity, 0, 1);
+        if (Math.Abs(window.Opacity - opacity) > 0.001)
+        {
+            window.Opacity = opacity;
+        }
         return true;
     }
 
@@ -196,10 +271,36 @@ internal sealed class EdgeCapsuleHost : IDisposable
             return false;
         }
 
-        // The frame carries the physical body/close rectangle and excludes transparent shadow
-        // margins. A leave into that margin is a real leave, while a WPF leave caused only by a
-        // right-edge HWND resize is rejected against the already-committed physical frame.
+        // The frame carries the physical body/close rectangle and excludes both the transparent
+        // host reserve and the shadow margin. Pointer intent never uses the larger HWND rectangle.
         return EdgeCapsuleGeometry.Contains(_appliedFrame.InteractiveBounds, point);
+    }
+
+    private IntPtr OnNativeMessage(
+        IntPtr hwnd,
+        int msg,
+        IntPtr wParam,
+        IntPtr lParam,
+        ref bool handled)
+    {
+        if (msg != WmNcHitTest)
+        {
+            return IntPtr.Zero;
+        }
+
+        var packed = lParam.ToInt64();
+        var point = new DeviceScreenPoint(
+            unchecked((short)(packed & 0xffff)),
+            unchecked((short)((packed >> 16) & 0xffff)));
+        if (ContainsScreenPoint(point))
+        {
+            return IntPtr.Zero;
+        }
+
+        // The fixed host reserves the fully expanded rectangle. Pixels outside the current real
+        // capsule are only a transparent composition canvas and must behave as if no HWND exists.
+        handled = true;
+        return HtTransparent;
     }
 
     public static EdgeCapsuleHost Create(EdgeCapsuleHostOptions options)
@@ -210,6 +311,16 @@ internal sealed class EdgeCapsuleHost : IDisposable
             ClipToBounds = false,
             Opacity = 1
         };
+        var visualSurface = new Grid
+        {
+            Background = null,
+            ClipToBounds = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
+        };
+        root.Children.Add(visualSurface);
         var chrome = new Border
         {
             Margin = new Thickness(options.WindowChromeMargin),
@@ -220,7 +331,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             SnapsToDevicePixels = true
         };
         Panel.SetZIndex(chrome, 0);
-        root.Children.Add(chrome);
+        visualSurface.Children.Add(chrome);
 
         var shell = new Grid
         {
@@ -302,7 +413,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
         Grid.SetColumn(closeArea, 1);
         shell.Children.Add(closeArea);
         Panel.SetZIndex(shell, 10);
-        root.Children.Add(shell);
+        visualSurface.Children.Add(shell);
 
         var outlineMargin = options.WindowChromeMargin - options.OutlineThickness + options.OutlineOverlap;
         var outline = new Border
@@ -317,7 +428,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             SnapsToDevicePixels = true
         };
         Panel.SetZIndex(outline, 20);
-        root.Children.Add(outline);
+        visualSurface.Children.Add(outline);
 
         var window = new Window
         {
@@ -328,6 +439,8 @@ internal sealed class EdgeCapsuleHost : IDisposable
             AllowsTransparency = true,
             Background = Brushes.Transparent,
             ResizeMode = ResizeMode.NoResize,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
             FontFamily = options.UiFontFamily,
             Language = options.Language,
             SnapsToDevicePixels = true,
@@ -340,6 +453,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             options,
             window,
             root,
+            visualSurface,
             chrome,
             outline,
             shell,
@@ -499,9 +613,17 @@ internal sealed class EdgeCapsuleHost : IDisposable
 
     public DeviceScreenPoint ScreenOrigin()
     {
-        return _disposed
-            ? default
-            : DeviceScreenPoint.FromPoint(Window.PointToScreen(new Point(0, 0)));
+        if (_disposed)
+        {
+            return default;
+        }
+        if (_appliedFrame.Visible && !_appliedFrame.Bounds.IsEmpty)
+        {
+            return new DeviceScreenPoint(
+                _appliedFrame.Bounds.Left,
+                _appliedFrame.Bounds.Top);
+        }
+        return DeviceScreenPoint.FromPoint(Window.PointToScreen(new Point(0, 0)));
     }
 
     public bool ContainsWindowScreenPoint(Point screenPoint)
@@ -622,6 +744,16 @@ internal sealed class EdgeCapsuleHost : IDisposable
 
         ApplySegmentCorners(edge, options.InnerCornerRadius);
         _appliedEdge = edge;
+    }
+
+    private void ApplyVisualSurface(EdgeCapsulePresentationFrame frame)
+    {
+        var surface = VisualSurface;
+        surface.HorizontalAlignment = frame.Edge == EdgeCapsuleEdge.Left
+            ? HorizontalAlignment.Left
+            : HorizontalAlignment.Right;
+        surface.Width = frame.Bounds.Width / Math.Max(1, frame.DpiScaleX);
+        surface.Height = frame.Bounds.Height / Math.Max(1, frame.DpiScaleY);
     }
 
     private void ApplySegmentWidths(

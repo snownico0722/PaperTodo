@@ -60,7 +60,8 @@ public sealed partial class PaperWindow
             WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
             _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
                 EdgeCapsuleTransitionReason.DisplayMetrics));
-            InvalidateEdgeCapsule(EdgeCapsuleDirty.Presentation);
+            InvalidateEdgeCapsule(
+                EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
             if (IsDeepCapsuleReordering)
             {
                 _controller.DeferDisplayMetricsRefreshUntilDeepCapsuleDragEnds();
@@ -108,13 +109,19 @@ public sealed partial class PaperWindow
     private void RequestEdgeCapsulePresentation(
         bool animate,
         EdgeCapsuleTransitionReason reason,
-        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds)
+        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds,
+        bool refreshLayout = false)
     {
         animate = animate && _controller.State.EnableAnimations;
         _edgeCapsule.RequestPresentation(animate
             ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
             : EdgeCapsuleMotion.Snap(reason));
-        InvalidateEdgeCapsule(EdgeCapsuleDirty.Presentation);
+        var dirty = EdgeCapsuleDirty.Presentation;
+        if (refreshLayout)
+        {
+            dirty |= EdgeCapsuleDirty.Measure;
+        }
+        InvalidateEdgeCapsule(dirty);
     }
 
     private void FlushEdgeCapsulePresentation(
@@ -129,13 +136,19 @@ public sealed partial class PaperWindow
     private EdgeCapsuleLayoutSnapshot CaptureEdgeCapsuleLayoutSnapshot()
     {
         var monitor = DeepCapsuleMonitorGeometry();
+        var restingWidth = DeepCapsuleVisibleWidth(monitor.DpiScaleY);
         return EdgeCapsuleLayoutService.Calculate(new EdgeCapsuleLayoutFacts(
             monitor,
             MyDeepCapsuleEdge,
             _edgeCapsule.Placement,
             _controller.DeepCapsuleStartTopMarginFor(_paper),
-            DeepCapsuleVisibleWidth(monitor.DpiScaleY),
+            restingWidth,
             CapsuleCloseWidth,
+            Math.Max(
+                restingWidth + CapsuleCloseWidth,
+                Math.Min(
+                    EdgeCapsuleLayout.HostCapacityWidth,
+                    monitor.LocalWorkAreaDip.Width)),
             PaperLayoutDefaults.CapsuleHeight));
     }
 

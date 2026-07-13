@@ -7,6 +7,7 @@ internal readonly record struct EdgeCapsuleLayoutFacts(
     double QueueStartTopMarginDip,
     double RestingWidthDip,
     double MaximumCloseWidthDip,
+    double HostWidthDip,
     double HeightDip);
 
 /// <summary>
@@ -40,6 +41,7 @@ internal static class EdgeCapsuleLayoutService
             masterTop,
             facts.RestingWidthDip,
             facts.MaximumCloseWidthDip,
+            facts.HostWidthDip,
             facts.HeightDip);
     }
 

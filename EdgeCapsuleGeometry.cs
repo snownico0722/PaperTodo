@@ -115,6 +115,32 @@ internal static class EdgeCapsuleGeometry
         point.Y >= bounds.Top &&
         point.Y < bounds.Bottom;
 
+    /// <summary>
+    /// Keeps the transparent composition host pinned to the same wall and vertical frame as the
+    /// visible capsule. Capacity comes from the fully expanded target and does not follow hover
+    /// width, so a horizontal transition never moves or resizes the HWND.
+    /// </summary>
+    public static DeviceScreenRect HostBoundsForVisibleBounds(
+        DeviceScreenRect visibleBounds,
+        EdgeCapsuleEdge edge,
+        int wallDeviceX,
+        int hostWidthDevice)
+    {
+        if (visibleBounds.IsEmpty || hostWidthDevice <= 0)
+        {
+            return default;
+        }
+
+        var left = edge == EdgeCapsuleEdge.Left
+            ? wallDeviceX
+            : wallDeviceX - hostWidthDevice;
+        return new DeviceScreenRect(
+            left,
+            visibleBounds.Top,
+            left + hostWidthDevice,
+            visibleBounds.Bottom);
+    }
+
     public static EdgeCapsuleVerticalEdges CalculateVerticalEdges(
         MonitorGeometry monitor,
         double topDip,
