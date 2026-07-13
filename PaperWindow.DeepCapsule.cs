@@ -347,7 +347,7 @@ public sealed partial class PaperWindow
             Margin = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Stretch,
             Background = Brushes.Transparent,
-            CornerRadius = new CornerRadius(0, CapsuleInnerCornerRadius, CapsuleInnerCornerRadius, 0),
+            CornerRadius = new CornerRadius(0),
             Cursor = Cursors.Hand,
             ToolTip = Strings.Get("ToolTipHideThisPaper"),
             IsHitTestVisible = false,
@@ -694,7 +694,10 @@ public sealed partial class PaperWindow
     {
         animate = animate && _controller.State.EnableAnimations;
         var host = EnsureDeepCapsuleSlotHost();
-        var requestedBounds = UpdateDeepCapsuleSlotRequestedGeometry(targetTop, targetCloseWidth);
+        var requestedBounds = UpdateDeepCapsuleSlotRequestedGeometry(
+            targetTop,
+            targetCloseWidth,
+            out var requestedGeometry);
         targetCloseWidth = _deepCapsuleSlotRequestedCloseWidth;
 
         if (!keepHiding && IsDeepCapsuleSlotRetracting)
@@ -744,6 +747,7 @@ public sealed partial class PaperWindow
             ApplyDeepCapsuleSlotCloseWidth(targetCloseWidth);
             ApplyDeepCapsuleSlotHostBounds(requestedBounds);
             _deepCapsuleSlotTop = targetTop;
+            SchedulePendingDeepCapsuleHoverReconcile();
             QueuePendingDeepCapsuleSlotMeasureRefresh();
             return;
         }
@@ -755,7 +759,6 @@ public sealed partial class PaperWindow
         var currentTop = double.IsNaN(_deepCapsuleSlotTop)
             ? targetTop
             : _deepCapsuleSlotTop;
-        var currentCloseWidth = _deepCapsuleSlotCloseArea?.Width ?? 0;
         var easeOut = new System.Windows.Media.Animation.CubicEase
         {
             EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
@@ -763,14 +766,18 @@ public sealed partial class PaperWindow
 
         var needsHorizontalAnimation =
             currentBounds.Left != requestedBounds.Left ||
-            currentBounds.Right != requestedBounds.Right ||
-            Math.Abs(currentCloseWidth - targetCloseWidth) >= 0.5;
+            currentBounds.Right != requestedBounds.Right;
         if (needsHorizontalAnimation)
         {
             _deepCapsuleSlotStartWidth = currentBounds.Width;
             _deepCapsuleSlotTargetWidth = requestedBounds.Width;
-            _deepCapsuleSlotStartCloseWidth = currentCloseWidth;
-            _deepCapsuleSlotTargetCloseWidth = targetCloseWidth;
+            _deepCapsuleSlotWallDeviceX = MyDeepCapsuleIsLeftEdge
+                ? requestedBounds.Left
+                : requestedBounds.Right;
+            _deepCapsuleSlotRestingWidth = Math.Max(1, (int)Math.Round(
+                DeepCapsuleVisibleWidth(requestedGeometry.DpiScaleY) * requestedGeometry.DpiScaleX,
+                MidpointRounding.AwayFromZero));
+            _deepCapsuleSlotHorizontalDpiScaleX = Math.Max(1, requestedGeometry.DpiScaleX);
             ApplyDeepCapsuleSlotHorizontalProgress(0.0);
             var horizontalAnim = new System.Windows.Media.Animation.DoubleAnimation
             {
@@ -789,6 +796,7 @@ public sealed partial class PaperWindow
                 ClearDeepCapsuleSlotHorizontalAnimation();
                 ApplyDeepCapsuleSlotCloseWidth(targetCloseWidth);
                 ApplyDeepCapsuleRequestedHorizontalBounds();
+                SchedulePendingDeepCapsuleHoverReconcile();
                 QueuePendingDeepCapsuleSlotMeasureRefresh();
             };
             BeginAnimation(
@@ -801,6 +809,7 @@ public sealed partial class PaperWindow
             ClearDeepCapsuleSlotHorizontalAnimation();
             ApplyDeepCapsuleSlotCloseWidth(targetCloseWidth);
             ApplyDeepCapsuleRequestedHorizontalBounds();
+            SchedulePendingDeepCapsuleHoverReconcile();
             QueuePendingDeepCapsuleSlotMeasureRefresh();
         }
 
@@ -877,6 +886,7 @@ public sealed partial class PaperWindow
                 ApplyDeepCapsuleSlotCloseWidth(requestedCloseWidth);
                 ApplyDeepCapsuleSlotHostBounds(bounds);
                 _deepCapsuleSlotTop = requestedTop;
+                SchedulePendingDeepCapsuleHoverReconcile();
                 QueuePendingDeepCapsuleSlotMeasureRefresh();
 
                 RefreshDeepCapsuleSlotHostLayout(host, root);
@@ -995,6 +1005,8 @@ public sealed partial class PaperWindow
         _deepCapsuleSlotRequestedCloseWidth = 0;
         _deepCapsuleSlotMeasureRefreshPending = false;
         _deepCapsuleSlotMeasureRefreshScheduled = false;
+        _deepCapsuleHoverReconcilePending = false;
+        _deepCapsuleHoverReconcileScheduled = false;
         _deepCapsuleSlotHost.Content = null;
         _deepCapsuleSlotHost.Close();
         _deepCapsuleSlotHost = null;
@@ -1271,8 +1283,19 @@ public sealed partial class PaperWindow
         double targetTop,
         double targetCloseWidth)
     {
+        return UpdateDeepCapsuleSlotRequestedGeometry(
+            targetTop,
+            targetCloseWidth,
+            out _);
+    }
+
+    private DeviceScreenRect UpdateDeepCapsuleSlotRequestedGeometry(
+        double targetTop,
+        double targetCloseWidth,
+        out MonitorGeometry geometry)
+    {
         targetCloseWidth = Math.Clamp(targetCloseWidth, 0, CapsuleCloseWidth);
-        var geometry = DeepCapsuleMonitorGeometry();
+        geometry = DeepCapsuleMonitorGeometry();
         var targetWidthDip = DeepCapsuleVisibleWidth(geometry.DpiScaleY) + targetCloseWidth;
         var width = Math.Max(1, (int)Math.Round(
             targetWidthDip * geometry.DpiScaleX,
@@ -1659,8 +1682,8 @@ public sealed partial class PaperWindow
             : new CornerRadius(radius, 0, 0, radius);
     }
 
-    // Mirror the real-width edge tag. The icon remains nearest the wall, while the close segment
-    // grows on the interior side where it is reachable and never reverses after a floating drag.
+    // Mirror the real-width edge tag. The close segment owns the wall side; icon/title content
+    // moves inward as that segment grows and never reverses after a floating drag.
     private void ApplyDeepCapsuleSlotEdgeLayout()
     {
         // This window's OWN queue edge — NOT the global anchor. With per-edge queues a capsule on
@@ -1682,15 +1705,15 @@ public sealed partial class PaperWindow
         if (_deepCapsuleSlotShell.ColumnDefinitions.Count >= 2)
         {
             _deepCapsuleSlotShell.ColumnDefinitions[0].Width = leftEdge
-                ? new GridLength(1, GridUnitType.Star)
-                : GridLength.Auto;
-            _deepCapsuleSlotShell.ColumnDefinitions[1].Width = leftEdge
                 ? GridLength.Auto
                 : new GridLength(1, GridUnitType.Star);
+            _deepCapsuleSlotShell.ColumnDefinitions[1].Width = leftEdge
+                ? new GridLength(1, GridUnitType.Star)
+                : GridLength.Auto;
         }
 
-        Grid.SetColumn(_deepCapsuleSlotLeftArea, leftEdge ? 0 : 1);
-        Grid.SetColumn(_deepCapsuleSlotCloseArea, leftEdge ? 1 : 0);
+        Grid.SetColumn(_deepCapsuleSlotLeftArea, leftEdge ? 1 : 0);
+        Grid.SetColumn(_deepCapsuleSlotCloseArea, leftEdge ? 0 : 1);
 
         _deepCapsuleSlotLeftStack.Margin = leftEdge
             ? new Thickness(CapsuleLeftPadding, 0, 0, 0)
@@ -1764,27 +1787,20 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var closeVisible = _deepCapsuleSlotCloseArea.Width > 0.5;
         if (MyDeepCapsuleIsLeftEdge)
         {
             _deepCapsuleSlotLeftArea.CornerRadius =
-                closeVisible
-                    ? new CornerRadius(0)
-                    : new CornerRadius(0, CapsuleInnerCornerRadius, CapsuleInnerCornerRadius, 0);
-            _deepCapsuleSlotCloseArea.CornerRadius = closeVisible
-                ? new CornerRadius(0, CapsuleInnerCornerRadius, CapsuleInnerCornerRadius, 0)
-                : new CornerRadius(0);
+                new CornerRadius(0, CapsuleInnerCornerRadius, CapsuleInnerCornerRadius, 0);
         }
         else
         {
             _deepCapsuleSlotLeftArea.CornerRadius =
-                closeVisible
-                    ? new CornerRadius(0)
-                    : new CornerRadius(CapsuleInnerCornerRadius, 0, 0, CapsuleInnerCornerRadius);
-            _deepCapsuleSlotCloseArea.CornerRadius = closeVisible
-                ? new CornerRadius(CapsuleInnerCornerRadius, 0, 0, CapsuleInnerCornerRadius)
-                : new CornerRadius(0);
+                new CornerRadius(CapsuleInnerCornerRadius, 0, 0, CapsuleInnerCornerRadius);
         }
+
+        // The wall side belongs to the close segment and is always square. The outer chrome owns
+        // the same square wall edge, so no hidden/off-screen radius is needed at any width.
+        _deepCapsuleSlotCloseArea.CornerRadius = new CornerRadius(0);
     }
 
     private void ApplyDeepCapsuleSlotHorizontalProgress(double progress)
@@ -1799,19 +1815,26 @@ public sealed partial class PaperWindow
             Lerp(_deepCapsuleSlotStartWidth, _deepCapsuleSlotTargetWidth, progress),
             MidpointRounding.AwayFromZero));
         var left = MyDeepCapsuleIsLeftEdge
-            ? _deepCapsuleSlotRequestedBounds.Left
-            : _deepCapsuleSlotRequestedBounds.Right - width;
-        var right = left + width;
+            ? _deepCapsuleSlotWallDeviceX
+            : _deepCapsuleSlotWallDeviceX - width;
+        var right = MyDeepCapsuleIsLeftEdge
+            ? _deepCapsuleSlotWallDeviceX + width
+            : _deepCapsuleSlotWallDeviceX;
         var vertical = _deepCapsuleSlotDeviceBounds.IsEmpty
             ? _deepCapsuleSlotRequestedBounds
             : _deepCapsuleSlotDeviceBounds;
-        ApplyDeepCapsuleSlotCloseWidth(Lerp(
-            _deepCapsuleSlotStartCloseWidth,
-            _deepCapsuleSlotTargetCloseWidth,
-            progress));
-        ApplyDeepCapsuleSlotHostBounds(
-            new DeviceScreenRect(left, vertical.Top, right, vertical.Bottom),
-            updateFixedLayout: false);
+
+        // The applied, integer HWND width is the only horizontal animation channel. Derive the
+        // close segment from that exact width so WPF layout cannot get ahead of (or lag behind)
+        // the native right-edge rectangle because of a second floating-point interpolation.
+        var closeWidth = (width - _deepCapsuleSlotRestingWidth) /
+            _deepCapsuleSlotHorizontalDpiScaleX;
+        ApplyDeepCapsuleSlotCloseWidth(closeWidth);
+        var bounds = new DeviceScreenRect(left, vertical.Top, right, vertical.Bottom);
+        if (bounds != _deepCapsuleSlotDeviceBounds)
+        {
+            ApplyDeepCapsuleSlotHostBounds(bounds, updateFixedLayout: false);
+        }
     }
 
     private static double Lerp(double from, double to, double progress)
@@ -1931,8 +1954,67 @@ public sealed partial class PaperWindow
             return;
         }
 
-        SetDeepCapsuleVisualState(hovering ? DeepCapsuleVisualState.Hovered : DeepCapsuleVisualState.Resting);
+        if (IsDeepCapsuleSlotHorizontalAnimating)
+        {
+            // Moving the right-edge HWND changes its left boundary every frame. Windows may emit
+            // transient enter/leave pairs during that native resize; reconcile once the bounds are
+            // stable instead of reversing the animation on every pair.
+            _deepCapsuleHoverReconcilePending = true;
+            return;
+        }
+
+        var targetState = hovering
+            ? DeepCapsuleVisualState.Hovered
+            : DeepCapsuleVisualState.Resting;
+        if (DeepCapsuleVisual == targetState)
+        {
+            return;
+        }
+
+        SetDeepCapsuleVisualState(targetState);
         MoveDeepCapsuleToCurrentTarget(animate: _controller.State.EnableAnimations);
+    }
+
+    private void SchedulePendingDeepCapsuleHoverReconcile()
+    {
+        var host = _deepCapsuleSlotHost;
+        if (!_deepCapsuleHoverReconcilePending ||
+            _deepCapsuleHoverReconcileScheduled ||
+            host == null)
+        {
+            return;
+        }
+
+        _deepCapsuleHoverReconcileScheduled = true;
+        host.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                if (!ReferenceEquals(host, _deepCapsuleSlotHost))
+                {
+                    return;
+                }
+
+                _deepCapsuleHoverReconcileScheduled = false;
+                if (!_deepCapsuleHoverReconcilePending ||
+                    IsDeepCapsuleSlotHorizontalAnimating)
+                {
+                    return;
+                }
+
+                _deepCapsuleHoverReconcilePending = false;
+                if (!host.IsVisible ||
+                    !HasDeepCapsuleSlotPlacement ||
+                    !_paper.IsCollapsed ||
+                    IsDeepCapsuleReordering)
+                {
+                    return;
+                }
+
+                SetDeepCapsuleHover(
+                    _deepCapsuleSlotContextMenuOpen ||
+                    _deepCapsuleSlotShell?.IsMouseOver == true);
+            }),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void CompleteDeepCapsuleFloatingDragDrop()
@@ -2078,6 +2160,7 @@ public sealed partial class PaperWindow
     {
         _deepCapsuleVisibilityGeneration++;
         _deepCapsuleSlotMeasureRefreshPending = false;
+        _deepCapsuleHoverReconcilePending = false;
         if (_deepCapsuleSlotHost == null)
         {
             if (HasDeepCapsuleSlotPlacement)
@@ -2150,6 +2233,7 @@ public sealed partial class PaperWindow
     private void RetractAndHideDeepCapsuleSlotHost(bool animate)
     {
         _deepCapsuleSlotMeasureRefreshPending = false;
+        _deepCapsuleHoverReconcilePending = false;
         if (_deepCapsuleSlotHost == null)
         {
             return;
@@ -2364,6 +2448,7 @@ public sealed partial class PaperWindow
         }
 
         var session = RequireDeepCapsuleDragSession();
+        _deepCapsuleHoverReconcilePending = false;
         SetDeepCapsuleGestureState(DeepCapsuleGestureState.DockedReordering);
         SetDeepCapsuleVisualState(DeepCapsuleVisualState.Hovered);
         session.LastScreenPosition = currentScreenPos;

@@ -145,10 +145,13 @@ public sealed partial class PaperWindow : Window
     // Showing the floating drag HWND can steal capture from the docked slot. While true,
     // LostMouseCapture must not cancel the reorder; the caller re-captures after Show returns.
     private bool _deepCapsuleIgnoreCaptureLoss;
+    private bool _deepCapsuleHoverReconcilePending;
+    private bool _deepCapsuleHoverReconcileScheduled;
     private int _deepCapsuleSlotStartWidth;
     private int _deepCapsuleSlotTargetWidth;
-    private double _deepCapsuleSlotStartCloseWidth;
-    private double _deepCapsuleSlotTargetCloseWidth;
+    private int _deepCapsuleSlotWallDeviceX;
+    private int _deepCapsuleSlotRestingWidth;
+    private double _deepCapsuleSlotHorizontalDpiScaleX = 1.0;
     private double _startTransitionWidth;
     private double _startTransitionHeight;
     private double _targetTransitionWidth;
@@ -285,6 +288,8 @@ public sealed partial class PaperWindow : Window
         public Point StartScreenPoint { get; }
         public bool IsDragging { get; set; }
         public Window? Ghost { get; set; }
+        // Show() of the top-level ghost can steal capture and re-enter LostMouseCapture → End.
+        public bool SuppressCaptureLossEnd { get; set; }
     }
 
     private enum DropPlacement
@@ -1757,7 +1762,27 @@ public sealed partial class PaperWindow : Window
             _linkNoteButton.PreviewMouseLeftButtonDown += (_, e) => BeginNoteLinkMouseGesture(_linkNoteButton, e);
             _linkNoteButton.PreviewMouseMove += (_, e) => UpdateNoteLinkMouseGesture(e);
             _linkNoteButton.PreviewMouseLeftButtonUp += (_, e) => EndNoteLinkMouseGestureFromMouseUp(e);
-            _linkNoteButton.LostMouseCapture += (_, _) => EndNoteLinkMouseGesture(commit: false);
+            _linkNoteButton.LostMouseCapture += (_, _) =>
+            {
+                var state = _noteLinkDrag;
+                if (state?.SuppressCaptureLossEnd == true)
+                {
+                    return;
+                }
+
+                // Ghost Show() may steal capture while the button is still down; re-capture so
+                // the drag does not tear down mid-gesture (same class of bug as capsule floating drag).
+                if (state != null &&
+                    Mouse.LeftButton == MouseButtonState.Pressed &&
+                    state.Handle.IsVisible &&
+                    state.Handle.IsEnabled)
+                {
+                    state.Handle.CaptureMouse();
+                    return;
+                }
+
+                EndNoteLinkMouseGesture(commit: false);
+            };
             buttons.Children.Add(_linkNoteButton);
 
             _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
@@ -1853,13 +1878,52 @@ public sealed partial class PaperWindow : Window
             Mouse.OverrideCursor = Cursors.Cross;
             ExitNoteEditor();
             _controller.BeginNoteLinkDrag(_paper);
-            state.Ghost = CreateNoteLinkDragGhost();
-            state.Ghost.Show();
-            state.Ghost.UpdateLayout();
+
+            // Showing a top-level ghost can steal capture and re-enter LostMouseCapture → End,
+            // which nulls Ghost on the same state object. Suppress teardown while establishing it.
+            state.SuppressCaptureLossEnd = true;
+            try
+            {
+                var ghost = CreateNoteLinkDragGhost();
+                state.Ghost = ghost;
+                ghost.Show();
+                ghost.UpdateLayout();
+                if (Mouse.LeftButton == MouseButtonState.Pressed &&
+                    !state.Handle.IsMouseCaptured)
+                {
+                    state.Handle.CaptureMouse();
+                }
+            }
+            catch
+            {
+                CloseNoteLinkDragGhost(state);
+                EndNoteLinkMouseGesture(commit: false);
+                e.Handled = true;
+                return;
+            }
+            finally
+            {
+                state.SuppressCaptureLossEnd = false;
+                if (_noteLinkDrag == state &&
+                    Mouse.LeftButton == MouseButtonState.Pressed &&
+                    !state.Handle.IsMouseCaptured)
+                {
+                    state.Handle.CaptureMouse();
+                }
+            }
+
+            if (_noteLinkDrag != state || state.Ghost == null)
+            {
+                e.Handled = true;
+                return;
+            }
         }
 
         MoveNoteLinkDragGhost(state, currentScreenPoint);
-        _controller.UpdateNoteLinkDrag(_paper, currentScreenPoint);
+        if (_noteLinkDrag == state)
+        {
+            _controller.UpdateNoteLinkDrag(_paper, currentScreenPoint);
+        }
         e.Handled = true;
     }
 
@@ -1879,6 +1943,11 @@ public sealed partial class PaperWindow : Window
     {
         var state = _noteLinkDrag;
         if (state == null)
+        {
+            return;
+        }
+
+        if (state.SuppressCaptureLossEnd)
         {
             return;
         }
@@ -1961,28 +2030,35 @@ public sealed partial class PaperWindow : Window
 
     private static void MoveNoteLinkDragGhost(NoteLinkDragState state, Point screenPoint)
     {
-        if (state.Ghost == null)
+        // Capture a local reference: EndNoteLinkMouseGesture may null state.Ghost mid-call if a
+        // nested capture-loss teardown runs while we are positioning the window.
+        var ghost = state.Ghost;
+        if (ghost == null)
         {
             return;
         }
 
         var mousePoint = screenPoint;
-        var source = PresentationSource.FromVisual(state.Handle);
-        if (source?.CompositionTarget != null)
+        var handle = state.Handle;
+        if (handle.IsLoaded)
         {
-            mousePoint = source.CompositionTarget.TransformFromDevice.Transform(screenPoint);
-        }
-        else
-        {
-            var dpi = VisualTreeHelper.GetDpi(state.Handle);
-            if (dpi.DpiScaleX > 0 && dpi.DpiScaleY > 0)
+            var source = PresentationSource.FromVisual(handle);
+            if (source?.CompositionTarget != null)
             {
-                mousePoint = new Point(screenPoint.X / dpi.DpiScaleX, screenPoint.Y / dpi.DpiScaleY);
+                mousePoint = source.CompositionTarget.TransformFromDevice.Transform(screenPoint);
+            }
+            else
+            {
+                var dpi = VisualTreeHelper.GetDpi(handle);
+                if (dpi.DpiScaleX > 0 && dpi.DpiScaleY > 0)
+                {
+                    mousePoint = new Point(screenPoint.X / dpi.DpiScaleX, screenPoint.Y / dpi.DpiScaleY);
+                }
             }
         }
 
-        var width = state.Ghost.ActualWidth > 1 ? state.Ghost.ActualWidth : state.Ghost.Width;
-        var height = state.Ghost.ActualHeight > 1 ? state.Ghost.ActualHeight : state.Ghost.Height;
+        var width = ghost.ActualWidth > 1 ? ghost.ActualWidth : ghost.Width;
+        var height = ghost.ActualHeight > 1 ? ghost.ActualHeight : ghost.Height;
         if (double.IsNaN(width) || double.IsInfinity(width) || width <= 1)
         {
             width = 120;
@@ -1992,8 +2068,15 @@ public sealed partial class PaperWindow : Window
             height = 28;
         }
 
-        state.Ghost.Left = mousePoint.X - (width / 2);
-        state.Ghost.Top = mousePoint.Y - (height / 2);
+        try
+        {
+            ghost.Left = mousePoint.X - (width / 2);
+            ghost.Top = mousePoint.Y - (height / 2);
+        }
+        catch
+        {
+            // Ghost may have been closed by a nested gesture teardown.
+        }
     }
 
     private static void CloseNoteLinkDragGhost(NoteLinkDragState state)
