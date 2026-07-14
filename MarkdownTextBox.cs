@@ -884,6 +884,37 @@ public sealed class MarkdownTextBox : TextEditor
         return HasBitmapDataFormat(dataObject);
     }
 
+    public bool ValidateTextDrop(IDataObject dataObject)
+    {
+        if (IsReadOnly)
+        {
+            return true;
+        }
+
+        string? text;
+        try
+        {
+            text = dataObject.GetDataPresent(DataFormats.UnicodeText)
+                ? dataObject.GetData(DataFormats.UnicodeText) as string
+                : dataObject.GetDataPresent(DataFormats.Text)
+                    ? dataObject.GetData(DataFormats.Text) as string
+                    : null;
+        }
+        catch
+        {
+            PasteRejected?.Invoke();
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(text) || TryBuildSafePasteText(text, selectedLength: 0, out _))
+        {
+            return true;
+        }
+
+        PasteRejected?.Invoke();
+        return false;
+    }
+
     public bool TryInsertImagesFromDataObject(IDataObject dataObject)
     {
         if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId) || IsReadOnly)

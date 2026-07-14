@@ -590,6 +590,11 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!box.ValidateTextDrop(e.Data))
+                {
+                    e.Effects = DragDropEffects.None;
+                    e.Handled = true;
+                }
                 return;
             }
 
