@@ -678,7 +678,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        note.IsCollapsed = false;
+        SetPaperCollapsedRuntime(note, collapsed: false, animate: false, saveGeometry: false);
         PlaceLinkedNoteBesideAnchor(note, null, anchorWindow);
         ShowPaper(note);
         if (_windows.TryGetValue(note.Id, out window))
@@ -887,6 +887,23 @@ public sealed partial class AppController : IDisposable
         return window;
     }
 
+    private void SetPaperCollapsedRuntime(
+        PaperData paper,
+        bool collapsed,
+        bool animate,
+        bool saveGeometry)
+    {
+        // Hidden windows are still live presentation owners. Let them consume the complete form
+        // transition before falling back to the persisted source for papers with no live window.
+        if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
+        {
+            window.SetCollapsedState(collapsed, animate, saveGeometry);
+            return;
+        }
+
+        paper.IsCollapsed = collapsed;
+    }
+
     public void ShowPaper(PaperData paper, bool activate = true)
     {
         if (IsExiting)
@@ -900,7 +917,7 @@ public sealed partial class AppController : IDisposable
         }
         if (paper.IsCollapsed && !CanPaperDisplayAsCapsule(paper))
         {
-            paper.IsCollapsed = false;
+            SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
         }
         paper.IsVisible = true;
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
@@ -1402,7 +1419,7 @@ public sealed partial class AppController : IDisposable
         }
         else
         {
-            paper.IsCollapsed = false;
+            SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
         }
 
         ArrangeDeepCapsules();
@@ -1470,7 +1487,7 @@ public sealed partial class AppController : IDisposable
 
         foreach (var paper in State.Papers)
         {
-            paper.IsCollapsed = false;
+            SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
         }
 
         ArrangeDeepCapsules();

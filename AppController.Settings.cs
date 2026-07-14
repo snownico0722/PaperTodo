@@ -1527,7 +1527,7 @@ public sealed partial class AppController
             // not currently have a live window.
             foreach (var paper in State.Papers)
             {
-                paper.IsCollapsed = false;
+                SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
             }
         }
 
