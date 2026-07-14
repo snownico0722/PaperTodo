@@ -202,6 +202,17 @@ internal static class WindowNative
         _ = SetFocus(IntPtr.Zero);
     }
 
+    public static IntPtr ForegroundWindow => GetForegroundWindow();
+    public static IntPtr ActiveWindow => GetActiveWindow();
+    public static IntPtr KeyboardFocusWindow => GetFocus();
+
+    public static void ClearCurrentThreadInputActivation(IntPtr externalForegroundWindow)
+    {
+        _ = SetFocus(IntPtr.Zero);
+        // Passing a window owned by another input thread clears this thread's active HWND.
+        _ = SetActiveWindow(externalForegroundWindow);
+    }
+
     public static bool TryGetCursorScreenPosition(out DeviceScreenPoint point)
     {
         if (GetCursorPos(out var nativePoint))
@@ -346,6 +357,18 @@ internal static class WindowNative
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetActiveWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetActiveWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);

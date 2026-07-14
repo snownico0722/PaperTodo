@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using Point = System.Windows.Point;
 using ContextMenu = System.Windows.Controls.ContextMenu;
@@ -38,9 +39,41 @@ public sealed partial class PaperWindow
                 StopDeepCapsuleContextMenuGuards();
                 InvalidateEdgeCapsulePointer();
             }
+
+            // Let WPF finish leaving menu mode before checking the UI thread's native focus state.
+            _ = menu.Dispatcher.BeginInvoke(
+                ClearStaleDeepCapsuleMenuActivation,
+                System.Windows.Threading.DispatcherPriority.ContextIdle);
         };
 
         return menu;
+    }
+
+    private void ClearStaleDeepCapsuleMenuActivation()
+    {
+        if (_deepCapsuleSlotContextMenu?.IsOpen == true || InputManager.Current.IsInMenuMode)
+        {
+            return;
+        }
+
+        var foreground = WindowNative.ForegroundWindow;
+        if (foreground == IntPtr.Zero || IsWindowFromCurrentProcess(foreground))
+        {
+            return;
+        }
+
+        var active = WindowNative.ActiveWindow;
+        var focus = WindowNative.KeyboardFocusWindow;
+        if ((active == IntPtr.Zero || !IsWindowFromCurrentProcess(active)) &&
+            (focus == IntPtr.Zero || !IsWindowFromCurrentProcess(focus)))
+        {
+            return;
+        }
+
+        // A promoted WPF Popup can leave its owner active after closing. Hardcodet's next tray
+        // menu then opens and immediately closes, so clear only this stale cross-app handoff.
+        Keyboard.ClearFocus();
+        WindowNative.ClearCurrentThreadInputActivation(foreground);
     }
 
     private static void PromoteDeepCapsuleContextMenu(ContextMenu menu)

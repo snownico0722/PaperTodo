@@ -559,15 +559,15 @@ public sealed partial class PaperWindow
         _paper.IsCollapsed = collapsed;
         if (!collapsed)
         {
+            ChangeEdgeCapsulePaperForm(
+                EdgeCapsulePaperForm.Expanded,
+                keepDeepCapsuleSlotReservation);
             if (_controller.State.ShowDeepCapsuleWhileExpanded &&
                 _controller.CanPaperDisplayAsCapsule(_paper) &&
                 (expandingFromDeepCapsuleEdge || _controller.State.UseDeepCapsuleMode))
             {
                 MarkEdgeCapsuleOpenedFromEdge();
             }
-            ChangeEdgeCapsulePaperForm(
-                EdgeCapsulePaperForm.Expanded,
-                keepDeepCapsuleSlotReservation);
             if (programmaticOrigin is { } targetPlacement)
             {
                 MoveWindowWithoutGeometrySave(() => MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement));
