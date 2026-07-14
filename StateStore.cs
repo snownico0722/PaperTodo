@@ -224,10 +224,15 @@ public sealed class StateStore
     private static void Normalize(AppState state)
     {
         state.Papers ??= new List<PaperData>();
-        state.Papers = state.Papers
-            .Where(paper => paper != null)
-            .Cast<PaperData>()
-            .ToList();
+        RemoveNullEntriesInPlace(state.Papers);
+
+        NormalizeGlobalState(state);
+        NormalizePapers(state);
+        NormalizeLinks(state);
+    }
+
+    private static void NormalizeGlobalState(AppState state)
+    {
         if (state.Theme is not ("system" or "light" or "dark"))
         {
             state.Theme = "system";
@@ -325,7 +330,10 @@ public sealed class StateStore
                 }
             }
         }
+    }
 
+    private static void NormalizePapers(AppState state)
+    {
         var usedPaperIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var paper in state.Papers)
         {
@@ -370,10 +378,7 @@ public sealed class StateStore
                 PaperLayoutDefaults.MinHeight);
 
             paper.Items ??= new List<PaperItem>();
-            paper.Items = paper.Items
-                .Where(item => item != null)
-                .Cast<PaperItem>()
-                .ToList();
+            RemoveNullEntriesInPlace(paper.Items);
             paper.Content ??= "";
             if (!state.UseCapsuleMode)
             {
@@ -393,7 +398,10 @@ public sealed class StateStore
                 item.Text ??= "";
             }
         }
+    }
 
+    private static void NormalizeLinks(AppState state)
+    {
         var noteIds = state.Papers
             .Where(p => p.Type == PaperTypes.Note)
             .Select(p => p.Id)
@@ -421,6 +429,32 @@ public sealed class StateStore
             {
                 note.IsCollapsed = false;
             }
+        }
+    }
+
+    private static void RemoveNullEntriesInPlace<T>(List<T> items)
+        where T : class
+    {
+        var writeIndex = 0;
+        for (var readIndex = 0; readIndex < items.Count; readIndex++)
+        {
+            var item = items[readIndex];
+            if (item == null)
+            {
+                continue;
+            }
+
+            if (writeIndex != readIndex)
+            {
+                items[writeIndex] = item;
+            }
+
+            writeIndex++;
+        }
+
+        if (writeIndex < items.Count)
+        {
+            items.RemoveRange(writeIndex, items.Count - writeIndex);
         }
     }
 
