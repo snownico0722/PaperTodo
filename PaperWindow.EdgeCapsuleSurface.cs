@@ -4,6 +4,8 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    internal readonly record struct ProgrammaticPaperExpansionOrigin(double Left, double Top);
+
     private void ActivateFromDeepCapsuleSlot()
     {
         CloseDeepCapsuleSlotContextMenu();
@@ -50,12 +52,16 @@ public sealed partial class PaperWindow
         return true;
     }
 
-    private void ShowMainWindowForDeepCapsuleActivation()
+    private void ShowMainWindowForDeepCapsuleActivation(ProgrammaticPaperExpansionOrigin? programmaticOrigin = null)
     {
         if (IsVisible)
         {
             BeginAnimation(Window.OpacityProperty, null);
             Opacity = 1.0;
+            if (programmaticOrigin is { } visiblePlacement)
+            {
+                MoveWindowWithoutGeometrySave(() => MoveMainWindowToProgrammaticExpansionOrigin(visiblePlacement));
+            }
             return;
         }
 
@@ -65,7 +71,11 @@ public sealed partial class PaperWindow
         {
             Width = DesiredCapsuleWindowWidth;
             Height = PaperLayoutDefaults.CapsuleHeight;
-            if (_edgeCapsuleHost != null)
+            if (programmaticOrigin is { } targetPlacement)
+            {
+                MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement);
+            }
+            else if (_edgeCapsuleHost != null)
             {
                 // PointToScreen is physical pixels; convert through the app's global screen-DIP
                 // coordinate space. Rounding with this hidden paper HWND's old monitor DPI is the
@@ -82,6 +92,12 @@ public sealed partial class PaperWindow
             }
             Show();
         });
+    }
+
+    private void MoveMainWindowToProgrammaticExpansionOrigin(ProgrammaticPaperExpansionOrigin placement)
+    {
+        Left = placement.Left;
+        Top = placement.Top;
     }
 
     private void HideMainWindowForDeepCapsuleRest()
@@ -215,11 +231,18 @@ public sealed partial class PaperWindow
         return true;
     }
 
-    public void ExpandForProgrammaticOpen()
+    internal void ExpandForProgrammaticOpen(ProgrammaticPaperExpansionOrigin? programmaticOrigin = null)
     {
         if (!_paper.IsCollapsed)
         {
-            EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
+            if (programmaticOrigin is { } targetPlacement)
+            {
+                MoveWindowWithoutGeometrySave(() => MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement));
+            }
+            else
+            {
+                EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
+            }
             return;
         }
 
@@ -227,8 +250,14 @@ public sealed partial class PaperWindow
             _controller.State.UseDeepCapsuleMode &&
             HasDeepCapsuleSlotPlacement)
         {
-            ShowMainWindowForDeepCapsuleActivation();
-            SetCollapsedState(false);
+            ShowMainWindowForDeepCapsuleActivation(programmaticOrigin);
+            SetCollapsedStateCore(
+                collapsed: false,
+                animate: true,
+                saveGeometry: true,
+                alignExpandedToDockedEdge: false,
+                activateOnExpand: false,
+                programmaticOrigin: programmaticOrigin);
             return;
         }
 
@@ -236,14 +265,27 @@ public sealed partial class PaperWindow
         {
             BeginAnimation(Window.OpacityProperty, null);
             Opacity = 1.0;
-            Left = _paper.X;
-            Top = _paper.Y;
+            if (programmaticOrigin is { } targetPlacement)
+            {
+                MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement);
+            }
+            else
+            {
+                Left = _paper.X;
+                Top = _paper.Y;
+            }
             Width = DesiredCapsuleWindowWidth;
             Height = PaperLayoutDefaults.CapsuleHeight;
             Show();
         }
 
-        SetCollapsedState(false);
+        SetCollapsedStateCore(
+            collapsed: false,
+            animate: true,
+            saveGeometry: true,
+            alignExpandedToDockedEdge: false,
+            activateOnExpand: false,
+            programmaticOrigin: programmaticOrigin);
     }
 
     private void AlignExpandedToDockedEdge(double targetWidth, double targetHeight, double requiredEdgeInset = 0)

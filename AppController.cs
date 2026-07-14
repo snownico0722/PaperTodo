@@ -667,17 +667,18 @@ public sealed partial class AppController : IDisposable
             note.IsVisible = true;
             RescuePaperIfOffScreen(note, State.Papers.IndexOf(note));
             window.CancelPendingVisibilityTransitions();
+            // Resolve the final origin before Show()/shell visibility can expose the old capsule HWND.
+            var programmaticOrigin = PlaceLinkedNoteBesideAnchor(note, window, anchorWindow);
 
             if (note.IsCollapsed)
             {
-                window.ExpandForProgrammaticOpen();
+                window.ExpandForProgrammaticOpen(programmaticOrigin);
             }
             else if (!window.HasVisibleSurface)
             {
                 RestoreExistingPaperWindowSurface(note, window);
             }
 
-            PlaceLinkedNoteBesideAnchor(note, window, anchorWindow);
             ForceWindowToFront(window);
             RefreshTodoRowsForLinkedNote(note.Id);
             RefreshTrayMenu();
@@ -755,11 +756,14 @@ public sealed partial class AppController : IDisposable
         ClearNoteLinkDropTarget();
     }
 
-    private static void PlaceLinkedNoteBesideAnchor(PaperData note, Window? noteWindow, Window? anchorWindow)
+    private static PaperWindow.ProgrammaticPaperExpansionOrigin? PlaceLinkedNoteBesideAnchor(
+        PaperData note,
+        Window? noteWindow,
+        Window? anchorWindow)
     {
         if (anchorWindow == null || double.IsNaN(anchorWindow.Left) || double.IsNaN(anchorWindow.Top))
         {
-            return;
+            return null;
         }
 
         const double gap = 10;
@@ -805,6 +809,8 @@ public sealed partial class AppController : IDisposable
             noteWindow.Left = note.X;
             noteWindow.Top = note.Y;
         }
+
+        return new PaperWindow.ProgrammaticPaperExpansionOrigin(note.X, note.Y);
     }
 
     private void ClearNoteLinkDropTarget()

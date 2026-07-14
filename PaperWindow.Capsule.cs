@@ -421,6 +421,21 @@ public sealed partial class PaperWindow
         bool saveGeometry = true,
         bool alignExpandedToDockedEdge = false,
         bool activateOnExpand = false)
+        => SetCollapsedStateCore(
+            collapsed,
+            animate,
+            saveGeometry,
+            alignExpandedToDockedEdge,
+            activateOnExpand,
+            programmaticOrigin: null);
+
+    private void SetCollapsedStateCore(
+        bool collapsed,
+        bool animate,
+        bool saveGeometry,
+        bool alignExpandedToDockedEdge,
+        bool activateOnExpand,
+        ProgrammaticPaperExpansionOrigin? programmaticOrigin)
     {
         animate = animate && _controller.State.EnableAnimations;
 
@@ -529,7 +544,9 @@ public sealed partial class PaperWindow
             && ExpandedFromDeepCapsuleEdge
             && !_controller.State.ShowDeepCapsuleWhileExpanded;
         Rect? rememberedDeepCapsuleExpandedGeometry = null;
-        if (expandingFromDeepCapsuleEdge &&
+        // An explicit open origin outranks edge history; edge-driven expansion still restores it.
+        if (programmaticOrigin == null &&
+            expandingFromDeepCapsuleEdge &&
             _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, targetWidth, targetHeight, out var rememberedGeometry))
         {
             rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
@@ -551,7 +568,11 @@ public sealed partial class PaperWindow
             ChangeEdgeCapsulePaperForm(
                 EdgeCapsulePaperForm.Expanded,
                 keepDeepCapsuleSlotReservation);
-            if (alignExpandedToDockedEdge || expandingFromDeepCapsuleEdge)
+            if (programmaticOrigin is { } targetPlacement)
+            {
+                MoveWindowWithoutGeometrySave(() => MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement));
+            }
+            else if (alignExpandedToDockedEdge || expandingFromDeepCapsuleEdge)
             {
                 var requiredEdgeInset = keepDeepCapsuleSlotReservation
                     ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
