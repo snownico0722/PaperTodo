@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$buildDirectory = Join-Path $root "obj/win-x64-vs2022"
+$buildDirectory = Join-Path $root "obj/win-x64-cloud"
 
 $output = Join-Path $root "bin/win-x64/papertodo_lmdb.dll"
 if (-not $ForceRebuild -and (Test-Path -LiteralPath $output -PathType Leaf)) {
@@ -27,7 +27,9 @@ try {
         throw "CMake is required to build PaperTodo's native LMDB library."
     }
 
-    cmake -S $root -B $buildDirectory -G "Visual Studio 17 2022" -A x64
+    # Use the newest Visual Studio generator installed on the runner. windows-latest currently
+    # advances independently (for example VS 2026), so pinning a generator makes releases brittle.
+    cmake -S $root -B $buildDirectory -A x64
     if ($LASTEXITCODE -ne 0) {
         throw "Configuring PaperTodo's native LMDB library failed."
     }
