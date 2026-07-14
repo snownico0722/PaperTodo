@@ -66,6 +66,7 @@ public sealed class MasterCapsuleWindow : Window
     private MonitorGeometry? _animatedMonitorGeometry;
     private double _animatedWidthDip;
     private int _moveGeneration;
+    private bool _isClosingForReal;
     // The master pill is dragged vertically only: it slides its queue's stack by driving the
     // shared start-top margin. It never detaches or changes edge/monitor — that is done by
     // dragging an individual side capsule to another edge / screen.
@@ -107,7 +108,13 @@ public sealed class MasterCapsuleWindow : Window
             // The HWND can acquire a different per-monitor DPI than the pre-show WPF visual.
             // Re-measure and re-anchor once that real source exists.
             Dispatcher.BeginInvoke(
-                (Action)(() => MoveToTarget(animate: false)),
+                (Action)(() =>
+                {
+                    if (!_isClosingForReal)
+                    {
+                        MoveToTarget(animate: false);
+                    }
+                }),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         };
     }
@@ -518,6 +525,11 @@ public sealed class MasterCapsuleWindow : Window
 
     private void MoveToTarget(bool animate)
     {
+        if (_isClosingForReal)
+        {
+            return;
+        }
+
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                 _queueMonitorDeviceName,
                 this,
@@ -589,6 +601,11 @@ public sealed class MasterCapsuleWindow : Window
         double widthDip,
         MonitorGeometry geometry)
     {
+        if (_isClosingForReal)
+        {
+            return;
+        }
+
         ApplyMasterEdgeLayout();
         var layout = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             geometry,
@@ -613,6 +630,7 @@ public sealed class MasterCapsuleWindow : Window
     private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MasterCapsuleWindow w &&
+            !w._isClosingForReal &&
             e.NewValue is double top &&
             !double.IsNaN(top) &&
             !double.IsInfinity(top))
@@ -664,6 +682,12 @@ public sealed class MasterCapsuleWindow : Window
 
     public void CloseForReal()
     {
+        if (_isClosingForReal)
+        {
+            return;
+        }
+
+        _isClosingForReal = true;
         FinishMasterGesture(commit: false, clearFocus: false);
         ++_moveGeneration;
         _animatedMonitorGeometry = null;
