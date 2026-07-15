@@ -18,18 +18,19 @@ public sealed partial class AppController
 
     private enum ShortcutUiStatus
     {
+        Disabled,
         Unassigned,
         Registered,
         Duplicate,
         SystemOccupied,
         RegistrationFailed,
-        PendingSave,
-        PendingBehavior
+        PendingSave
     }
 
     private SettingsPage _settingsPage;
     private GlobalHotkeyManager? _globalHotkeys;
     private Dictionary<string, string>? _shortcutDraft;
+    private Dictionary<string, bool>? _shortcutEnabledDraft;
     private string? _shortcutRecordingCommandId;
     private readonly HashSet<string> _shortcutDuplicateIds = new(StringComparer.Ordinal);
     private string? _shortcutApplyFailureId;
@@ -39,17 +40,20 @@ public sealed partial class AppController
     {
         DisposeGlobalHotkeys();
         State.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
+        State.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(
+            State.GlobalHotkeyEnabled,
+            State.GlobalHotkeys);
 
         var manager = new GlobalHotkeyManager();
         manager.Invoked += OnGlobalHotkeyInvoked;
         _globalHotkeys = manager;
 
-        var executableBindings = State.GlobalHotkeys
-            .Where(pair => GlobalShortcutCatalog.Find(pair.Key)?.IsExecutable == true)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
+            .Where(id => State.GlobalHotkeyEnabled.GetValueOrDefault(id))
+            .ToArray();
         if (!manager.TryApply(
-                executableBindings,
-                GlobalShortcutCatalog.ExecutableIds,
+                State.GlobalHotkeys,
+                enabledCommandIds,
                 out _shortcutApplyFailureId,
                 out _shortcutApplyFailure))
         {
@@ -85,9 +89,18 @@ public sealed partial class AppController
             return;
         }
 
-        _ = Application.Current.Dispatcher.InvokeAsync(
-            () => ExecuteStartupCommand(new StartupCommand(definition.StartupCommandKind)),
-            DispatcherPriority.Input);
+        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            if (definition.IsEdgeCapsule)
+            {
+                ActivateEdgeCapsuleShortcut(
+                    definition.PreferredCapsuleSide,
+                    definition.EdgeOrdinal);
+                return;
+            }
+
+            ExecuteStartupCommand(new StartupCommand(definition.StartupCommandKind));
+        }, DispatcherPriority.Input);
     }
 
     private bool TryRecordRegisteredGlobalHotkey(string commandId)
@@ -120,12 +133,16 @@ public sealed partial class AppController
         _shortcutDraft ??= new Dictionary<string, string>(
             GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys),
             StringComparer.Ordinal);
+        _shortcutEnabledDraft ??= new Dictionary<string, bool>(
+            GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled, _shortcutDraft),
+            StringComparer.Ordinal);
         RefreshShortcutDuplicateIds();
     }
 
     private void DiscardShortcutDraft()
     {
         _shortcutDraft = null;
+        _shortcutEnabledDraft = null;
         _shortcutRecordingCommandId = null;
         _shortcutDuplicateIds.Clear();
         _shortcutApplyFailureId = null;
@@ -204,6 +221,7 @@ public sealed partial class AppController
             foreach (var definition in GlobalShortcutCatalog.Definitions)
             {
                 _shortcutDraft![definition.Id] = definition.DefaultGesture;
+                _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
             }
             _shortcutApplyFailureId = null;
             RefreshSettingsWindowContent();
@@ -224,9 +242,18 @@ public sealed partial class AppController
 
         var rows = new StackPanel();
         rows.Children.Add(BuildShortcutHeaderRow());
-        foreach (var definition in GlobalShortcutCatalog.Definitions)
+        foreach (var group in new[]
+                 {
+                     GlobalShortcutGroup.General,
+                     GlobalShortcutGroup.EdgeLeft,
+                     GlobalShortcutGroup.EdgeRight
+                 })
         {
-            rows.Children.Add(BuildShortcutRow(definition));
+            rows.Children.Add(BuildShortcutGroupLabel(group));
+            foreach (var definition in GlobalShortcutCatalog.Definitions.Where(item => item.Group == group))
+            {
+                rows.Children.Add(BuildShortcutRow(definition));
+            }
         }
 
         root.Children.Add(new ScrollViewer
@@ -261,10 +288,29 @@ public sealed partial class AppController
     {
         var grid = ShortcutRowGrid();
         grid.Margin = new Thickness(0, 0, 0, 4);
-        AddShortcutHeader(grid, Strings.Get("ShortcutCommandHeader"), 0);
-        AddShortcutHeader(grid, Strings.Get("ShortcutKeyHeader"), 1);
-        AddShortcutHeader(grid, Strings.Get("ShortcutStatusHeader"), 2);
+        AddShortcutHeader(grid, Strings.Get("ShortcutEnabledHeader"), 0);
+        AddShortcutHeader(grid, Strings.Get("ShortcutCommandHeader"), 1);
+        AddShortcutHeader(grid, Strings.Get("ShortcutKeyHeader"), 2);
+        AddShortcutHeader(grid, Strings.Get("ShortcutStatusHeader"), 3);
         return grid;
+    }
+
+    private static UIElement BuildShortcutGroupLabel(GlobalShortcutGroup group)
+    {
+        var key = group switch
+        {
+            GlobalShortcutGroup.EdgeLeft => "ShortcutGroupLeftPreferred",
+            GlobalShortcutGroup.EdgeRight => "ShortcutGroupRightPreferred",
+            _ => "ShortcutGroupGeneral"
+        };
+        return new TextBlock
+        {
+            Text = Strings.Get(key),
+            Foreground = TrayWeakTextBrush,
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 9, 0, 2)
+        };
     }
 
     private UIElement BuildShortcutRow(GlobalShortcutDefinition definition)
@@ -272,15 +318,38 @@ public sealed partial class AppController
         var grid = ShortcutRowGrid();
         grid.MinHeight = 34;
 
+        var enabledToggle = new CheckBox
+        {
+            IsChecked = _shortcutEnabledDraft![definition.Id],
+            Foreground = TrayTextBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            ToolTip = Strings.Get("ShortcutEnableTip"),
+            Style = BuildSettingsCheckBoxStyle()
+        };
+        enabledToggle.Click += (_, _) =>
+        {
+            _shortcutEnabledDraft![definition.Id] = enabledToggle.IsChecked == true;
+            _shortcutApplyFailureId = null;
+            _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
+            RefreshSettingsWindowContent();
+        };
+        Grid.SetColumn(enabledToggle, 0);
+        grid.Children.Add(enabledToggle);
+
         var label = new TextBlock
         {
-            Text = Strings.Get(definition.LabelKey),
+            Text = definition.IsEdgeCapsule
+                ? Strings.Format(definition.LabelKey, definition.EdgeOrdinal)
+                : Strings.Get(definition.LabelKey),
             Foreground = TrayTextBrush,
             FontSize = 12.5,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        Grid.SetColumn(label, 0);
+        Grid.SetColumn(label, 1);
         grid.Children.Add(label);
 
         var isRecording = _shortcutRecordingCommandId == definition.Id;
@@ -301,7 +370,7 @@ public sealed partial class AppController
             RefreshSettingsWindowContent();
             FocusShortcutRecorder();
         };
-        Grid.SetColumn(keyButton, 1);
+        Grid.SetColumn(keyButton, 2);
         grid.Children.Add(keyButton);
 
         var status = ShortcutStatusFor(definition);
@@ -314,7 +383,7 @@ public sealed partial class AppController
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(8, 0, 4, 0)
         };
-        Grid.SetColumn(statusText, 2);
+        Grid.SetColumn(statusText, 3);
         grid.Children.Add(statusText);
 
         var clear = SettingsIconButton("×", Strings.Get("ShortcutClear"));
@@ -325,18 +394,19 @@ public sealed partial class AppController
             _shortcutApplyFailureId = null;
             RefreshSettingsWindowContent();
         };
-        Grid.SetColumn(clear, 3);
+        Grid.SetColumn(clear, 4);
         grid.Children.Add(clear);
 
         var restore = SettingsIconButton("↺", Strings.Get("ShortcutRestoreDefault"));
         restore.Click += (_, _) =>
         {
             _shortcutDraft![definition.Id] = definition.DefaultGesture;
+            _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
             _shortcutRecordingCommandId = null;
             _shortcutApplyFailureId = null;
             RefreshSettingsWindowContent();
         };
-        Grid.SetColumn(restore, 4);
+        Grid.SetColumn(restore, 5);
         grid.Children.Add(restore);
 
         return grid;
@@ -345,9 +415,10 @@ public sealed partial class AppController
     private static Grid ShortcutRowGrid()
     {
         var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(154) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(142) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         return grid;
@@ -422,7 +493,9 @@ public sealed partial class AppController
         }
 
         foreach (var group in _shortcutDraft
-                     .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+                     .Where(pair =>
+                         _shortcutEnabledDraft?.GetValueOrDefault(pair.Key) == true &&
+                         !string.IsNullOrWhiteSpace(pair.Value))
                      .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase)
                      .Where(group => group.Count() > 1))
         {
@@ -437,6 +510,11 @@ public sealed partial class AppController
     {
         RefreshShortcutDuplicateIds();
         var binding = _shortcutDraft![definition.Id];
+        var enabled = _shortcutEnabledDraft![definition.Id];
+        if (!enabled)
+        {
+            return ShortcutUiStatus.Disabled;
+        }
         if (string.IsNullOrWhiteSpace(binding))
         {
             return ShortcutUiStatus.Unassigned;
@@ -451,12 +529,9 @@ public sealed partial class AppController
                 ? ShortcutUiStatus.SystemOccupied
                 : ShortcutUiStatus.RegistrationFailed;
         }
-        if (!definition.IsExecutable)
-        {
-            return ShortcutUiStatus.PendingBehavior;
-        }
         if (!State.GlobalHotkeys.TryGetValue(definition.Id, out var saved) ||
-            !string.Equals(saved, binding, StringComparison.Ordinal))
+            !string.Equals(saved, binding, StringComparison.Ordinal) ||
+            State.GlobalHotkeyEnabled.GetValueOrDefault(definition.Id) != enabled)
         {
             return ShortcutUiStatus.PendingSave;
         }
@@ -469,12 +544,12 @@ public sealed partial class AppController
     {
         return status switch
         {
+            ShortcutUiStatus.Disabled => "ShortcutStatusDisabled",
             ShortcutUiStatus.Registered => "ShortcutStatusRegistered",
             ShortcutUiStatus.Duplicate => "ShortcutStatusDuplicate",
             ShortcutUiStatus.SystemOccupied => "ShortcutStatusSystemOccupied",
             ShortcutUiStatus.RegistrationFailed => "ShortcutStatusRegistrationFailed",
             ShortcutUiStatus.PendingSave => "ShortcutStatusPendingSave",
-            ShortcutUiStatus.PendingBehavior => "ShortcutStatusPendingBehavior",
             _ => "ShortcutStatusUnassigned"
         };
     }
@@ -501,13 +576,17 @@ public sealed partial class AppController
         }
 
         var desired = GlobalShortcutCatalog.NormalizeBindings(_shortcutDraft);
+        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(_shortcutEnabledDraft, desired);
+        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
+            .Where(id => desiredEnabled.GetValueOrDefault(id))
+            .ToArray();
         _globalHotkeys ??= new GlobalHotkeyManager();
         _globalHotkeys.Invoked -= OnGlobalHotkeyInvoked;
         _globalHotkeys.Invoked += OnGlobalHotkeyInvoked;
 
         if (!_globalHotkeys.TryApply(
                 desired,
-                GlobalShortcutCatalog.ExecutableIds,
+                enabledCommandIds,
                 out _shortcutApplyFailureId,
                 out _shortcutApplyFailure))
         {
@@ -516,11 +595,123 @@ public sealed partial class AppController
         }
 
         State.GlobalHotkeys = desired;
+        State.GlobalHotkeyEnabled = desiredEnabled;
         _shortcutDraft = new Dictionary<string, string>(desired, StringComparer.Ordinal);
+        _shortcutEnabledDraft = new Dictionary<string, bool>(desiredEnabled, StringComparer.Ordinal);
         _shortcutApplyFailureId = null;
         _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
         SaveNow();
         RefreshSettingsWindowContent();
+    }
+
+    private void ActivateEdgeCapsuleShortcut(string preferredSide, int ordinal)
+    {
+        if (ordinal is < 1 or > 9 ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var papers = DeepCapsulePapersInOrder();
+        if (papers.Count == 0)
+        {
+            return;
+        }
+
+        var normalizedPreferredSide = DeepCapsuleSides.Normalize(preferredSide);
+        var oppositeSide = normalizedPreferredSide == DeepCapsuleSides.Left
+            ? DeepCapsuleSides.Right
+            : DeepCapsuleSides.Left;
+        var queuePlan = EdgeCapsuleQueueCoordinator.Build(
+            papers.Select(paper => new EdgeCapsuleQueueMember(paper, QueueKey(paper))),
+            State.UseCapsuleCollapseAll);
+        var queuesByKey = queuePlan.Queues.ToDictionary(queue => queue.Key, StringComparer.Ordinal);
+
+        foreach (var monitorName in EdgeShortcutMonitorSearchOrder())
+        {
+            foreach (var side in new[] { normalizedPreferredSide, oppositeSide })
+            {
+                var queueKey = QueueKey(monitorName, side);
+                if (!queuesByKey.TryGetValue(queueKey, out var queue) || queue.Papers.Count < ordinal)
+                {
+                    continue;
+                }
+
+                var target = queue.Papers[ordinal - 1];
+                if (_windows.TryGetValue(target.Id, out var window))
+                {
+                    window.ActivateFromEdgeShortcut();
+                }
+                return;
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> EdgeShortcutMonitorSearchOrder()
+    {
+        var currentMonitor = "";
+        if (WindowNative.TryGetCursorScreenPosition(out var cursor) &&
+            WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(cursor) is { } cursorMonitor)
+        {
+            currentMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(cursorMonitor.DeviceName);
+        }
+
+        var connectedMonitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+        var candidateNames = connectedMonitors
+            .Select(monitor => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor.DeviceName))
+            .Append(currentMonitor)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(currentMonitor, out var currentGeometry))
+        {
+            return candidateNames;
+        }
+
+        var currentCenterX = (currentGeometry.WorkArea.Left + currentGeometry.WorkArea.Right) / 2.0;
+        var currentCenterY = (currentGeometry.WorkArea.Top + currentGeometry.WorkArea.Bottom) / 2.0;
+        var candidates = connectedMonitors
+            .Select(geometry => (
+                Name: WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName),
+                Geometry: geometry))
+            .Where(candidate => !string.Equals(candidate.Name, currentMonitor, StringComparison.Ordinal))
+            .ToList();
+
+        static double CenterX(MonitorGeometry geometry) =>
+            (geometry.WorkArea.Left + geometry.WorkArea.Right) / 2.0;
+        static double CenterY(MonitorGeometry geometry) =>
+            (geometry.WorkArea.Top + geometry.WorkArea.Bottom) / 2.0;
+
+        var left = candidates
+            .Where(candidate => CenterX(candidate.Geometry) < currentCenterX - 0.5)
+            .OrderBy(candidate => currentCenterX - CenterX(candidate.Geometry))
+            .ThenBy(candidate => Math.Abs(currentCenterY - CenterY(candidate.Geometry)))
+            .ToList();
+        var right = candidates
+            .Where(candidate => CenterX(candidate.Geometry) > currentCenterX + 0.5)
+            .OrderBy(candidate => CenterX(candidate.Geometry) - currentCenterX)
+            .ThenBy(candidate => Math.Abs(currentCenterY - CenterY(candidate.Geometry)))
+            .ToList();
+        var vertical = candidates
+            .Where(candidate => Math.Abs(CenterX(candidate.Geometry) - currentCenterX) <= 0.5)
+            .OrderBy(candidate => Math.Abs(currentCenterY - CenterY(candidate.Geometry)))
+            .ToList();
+
+        var ordered = new List<string>(candidateNames.Count) { currentMonitor };
+        var horizontalDepth = Math.Max(left.Count, right.Count);
+        for (var index = 0; index < horizontalDepth; index++)
+        {
+            if (index < left.Count)
+            {
+                ordered.Add(left[index].Name);
+            }
+            if (index < right.Count)
+            {
+                ordered.Add(right[index].Name);
+            }
+        }
+        ordered.AddRange(vertical.Select(candidate => candidate.Name));
+        return ordered;
     }
 
     private UIElement CreateDeepCapsuleTitleMeasureLimitStepper()

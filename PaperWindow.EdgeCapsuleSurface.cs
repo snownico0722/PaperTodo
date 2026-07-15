@@ -6,6 +6,11 @@ public sealed partial class PaperWindow
 {
     internal readonly record struct ProgrammaticPaperExpansionOrigin(double Left, double Top);
 
+    internal void ActivateFromEdgeShortcut()
+    {
+        ActivateFromDeepCapsuleSlot();
+    }
+
     private void ActivateFromDeepCapsuleSlot()
     {
         CloseDeepCapsuleSlotContextMenu();

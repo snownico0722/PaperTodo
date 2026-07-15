@@ -684,6 +684,30 @@
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>全部</value>
   </data>
+  <data name="ShortcutEnabledHeader" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="ShortcutEnableTip" xml:space="preserve">
+    <value>开启后注册并响应此全局快捷键。</value>
+  </data>
+  <data name="ShortcutStatusDisabled" xml:space="preserve">
+    <value>未启用</value>
+  </data>
+  <data name="ShortcutGroupGeneral" xml:space="preserve">
+    <value>常用操作</value>
+  </data>
+  <data name="ShortcutGroupLeftPreferred" xml:space="preserve">
+    <value>左侧优先序列</value>
+  </data>
+  <data name="ShortcutGroupRightPreferred" xml:space="preserve">
+    <value>右侧优先序列</value>
+  </data>
+  <data name="ShortcutEdgeLeftSequenceFormat" xml:space="preserve">
+    <value>左侧优先序列 {0}</value>
+  </data>
+  <data name="ShortcutEdgeRightSequenceFormat" xml:space="preserve">
+    <value>右侧优先序列 {0}</value>
+  </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>命令</value>
   </data>

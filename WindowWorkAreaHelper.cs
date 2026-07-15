@@ -214,6 +214,18 @@ internal static class WindowWorkAreaHelper
     public static bool TryGetMonitorGeometryForDevice(string? deviceName, out MonitorGeometry geometry)
         => TryGetMonitorGeometryForDevice(deviceName, dpiWindow: null, out geometry);
 
+    public static IReadOnlyList<MonitorGeometry> ConnectedMonitorGeometries()
+    {
+        if (!TryEnumerateMonitors(out var monitors) || monitors.Count == 0)
+        {
+            return Array.Empty<MonitorGeometry>();
+        }
+
+        return monitors
+            .Select(monitor => CreateMonitorGeometry(monitor, dpiWindow: null))
+            .ToArray();
+    }
+
     public static bool TryGetMonitorGeometryForDevice(
         string? deviceName,
         Window? dpiWindow,

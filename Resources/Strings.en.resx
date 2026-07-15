@@ -671,6 +671,30 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>All</value>
   </data>
+  <data name="ShortcutEnabledHeader" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="ShortcutEnableTip" xml:space="preserve">
+    <value>Register and respond to this global shortcut.</value>
+  </data>
+  <data name="ShortcutStatusDisabled" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="ShortcutGroupGeneral" xml:space="preserve">
+    <value>General actions</value>
+  </data>
+  <data name="ShortcutGroupLeftPreferred" xml:space="preserve">
+    <value>Left-preferred sequence</value>
+  </data>
+  <data name="ShortcutGroupRightPreferred" xml:space="preserve">
+    <value>Right-preferred sequence</value>
+  </data>
+  <data name="ShortcutEdgeLeftSequenceFormat" xml:space="preserve">
+    <value>Left-preferred sequence {0}</value>
+  </data>
+  <data name="ShortcutEdgeRightSequenceFormat" xml:space="preserve">
+    <value>Right-preferred sequence {0}</value>
+  </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>Command</value>
   </data>

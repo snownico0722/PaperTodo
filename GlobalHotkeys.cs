@@ -5,13 +5,29 @@ using System.Windows.Interop;
 
 namespace PaperTodo;
 
+internal enum GlobalShortcutGroup
+{
+    General,
+    EdgeLeft,
+    EdgeRight
+}
+
 internal sealed record GlobalShortcutDefinition(
     string Id,
     string LabelKey,
     string DefaultGesture,
-    StartupCommandKind StartupCommandKind = StartupCommandKind.None)
+    GlobalShortcutGroup Group,
+    StartupCommandKind StartupCommandKind = StartupCommandKind.None,
+    string PreferredCapsuleSide = "",
+    int EdgeOrdinal = 0,
+    bool DefaultEnabled = false)
 {
-    public bool IsExecutable => StartupCommandKind != StartupCommandKind.None;
+    public bool IsEdgeCapsule =>
+        EdgeOrdinal is >= 1 and <= 9 &&
+        PreferredCapsuleSide is DeepCapsuleSides.Left or DeepCapsuleSides.Right;
+
+    public bool IsExecutable =>
+        StartupCommandKind != StartupCommandKind.None || IsEdgeCapsule;
 }
 
 internal static class GlobalShortcutCatalog
@@ -23,24 +39,7 @@ internal static class GlobalShortcutCatalog
     public const string NewNote = "startup.newNote";
     public const string Exit = "startup.exit";
 
-    public static IReadOnlyList<GlobalShortcutDefinition> Definitions { get; } =
-    [
-        new(Show, "ShortcutShowAll", "", StartupCommandKind.Show),
-        new(Hide, "ShortcutHideAll", "", StartupCommandKind.Hide),
-        new(Toggle, "ShortcutToggleVisibility", "", StartupCommandKind.Toggle),
-        new(NewTodo, "ShortcutNewTodo", "", StartupCommandKind.NewTodo),
-        new(NewNote, "ShortcutNewNote", "", StartupCommandKind.NewNote),
-        new(Exit, "ShortcutExit", "", StartupCommandKind.Exit),
-        new("edge.1", "ShortcutEdgeSequence1", "Ctrl+Alt+1"),
-        new("edge.2", "ShortcutEdgeSequence2", "Ctrl+Alt+2"),
-        new("edge.3", "ShortcutEdgeSequence3", "Ctrl+Alt+3"),
-        new("edge.4", "ShortcutEdgeSequence4", "Ctrl+Alt+4"),
-        new("edge.5", "ShortcutEdgeSequence5", "Ctrl+Alt+5"),
-        new("edge.6", "ShortcutEdgeSequence6", "Ctrl+Alt+6"),
-        new("edge.7", "ShortcutEdgeSequence7", "Ctrl+Alt+7"),
-        new("edge.8", "ShortcutEdgeSequence8", "Ctrl+Alt+8"),
-        new("edge.9", "ShortcutEdgeSequence9", "Ctrl+Alt+9")
-    ];
+    public static IReadOnlyList<GlobalShortcutDefinition> Definitions { get; } = BuildDefinitions();
 
     private static readonly Dictionary<string, GlobalShortcutDefinition> ById =
         Definitions.ToDictionary(definition => definition.Id, StringComparer.Ordinal);
@@ -69,10 +68,74 @@ internal static class GlobalShortcutCatalog
         return normalized;
     }
 
+    public static Dictionary<string, bool> NormalizeEnabled(
+        Dictionary<string, bool>? source,
+        IReadOnlyDictionary<string, string> bindings)
+    {
+        source ??= new Dictionary<string, bool>();
+        var normalized = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var definition in Definitions)
+        {
+            if (source.TryGetValue(definition.Id, out var enabled))
+            {
+                normalized[definition.Id] = enabled;
+                continue;
+            }
+
+            // Before per-shortcut switches existed, a non-empty ordinary command was active.
+            // Preserve that behavior on upgrade. Edge rows were visible placeholders only, so
+            // their stored default gestures must never turn into active hotkeys implicitly.
+            normalized[definition.Id] = definition.Group == GlobalShortcutGroup.General &&
+                bindings.TryGetValue(definition.Id, out var binding) &&
+                !string.IsNullOrWhiteSpace(binding);
+        }
+
+        return normalized;
+    }
+
     public static IReadOnlyCollection<string> ExecutableIds { get; } =
         Definitions.Where(definition => definition.IsExecutable)
             .Select(definition => definition.Id)
             .ToArray();
+
+    private static IReadOnlyList<GlobalShortcutDefinition> BuildDefinitions()
+    {
+        var definitions = new List<GlobalShortcutDefinition>
+        {
+            new(Show, "ShortcutShowAll", "", GlobalShortcutGroup.General, StartupCommandKind.Show),
+            new(Hide, "ShortcutHideAll", "", GlobalShortcutGroup.General, StartupCommandKind.Hide),
+            new(Toggle, "ShortcutToggleVisibility", "", GlobalShortcutGroup.General, StartupCommandKind.Toggle),
+            new(NewTodo, "ShortcutNewTodo", "", GlobalShortcutGroup.General, StartupCommandKind.NewTodo),
+            new(NewNote, "ShortcutNewNote", "", GlobalShortcutGroup.General, StartupCommandKind.NewNote),
+            new(Exit, "ShortcutExit", "", GlobalShortcutGroup.General, StartupCommandKind.Exit)
+        };
+
+        for (var ordinal = 1; ordinal <= 9; ordinal++)
+        {
+            definitions.Add(new GlobalShortcutDefinition(
+                $"edge.left.{ordinal}",
+                "ShortcutEdgeLeftSequenceFormat",
+                $"Ctrl+Shift+{ordinal}",
+                GlobalShortcutGroup.EdgeLeft,
+                PreferredCapsuleSide: DeepCapsuleSides.Left,
+                EdgeOrdinal: ordinal));
+        }
+
+        for (var ordinal = 1; ordinal <= 9; ordinal++)
+        {
+            // Keep the original edge.N ids so existing customized placeholder gestures carry
+            // forward as the right-preferred sequence without rewriting user data needlessly.
+            definitions.Add(new GlobalShortcutDefinition(
+                $"edge.{ordinal}",
+                "ShortcutEdgeRightSequenceFormat",
+                $"Ctrl+Alt+{ordinal}",
+                GlobalShortcutGroup.EdgeRight,
+                PreferredCapsuleSide: DeepCapsuleSides.Right,
+                EdgeOrdinal: ordinal));
+        }
+
+        return definitions;
+    }
 }
 
 internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)

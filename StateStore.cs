@@ -350,6 +350,7 @@ public sealed class StateStore
 
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.GlobalHotkeys ??= new Dictionary<string, string>();
+        state.GlobalHotkeyEnabled ??= new Dictionary<string, bool>();
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
 
@@ -481,6 +482,9 @@ public sealed class StateStore
         state.MaxTitleLength = PaperTitles.NormalizeMaxTitleLength(state.MaxTitleLength);
         state.DeepCapsuleTitleMeasureCharacterLimit = Math.Clamp(state.DeepCapsuleTitleMeasureCharacterLimit, 0, PaperTitles.MaxConfigurableTitleLength);
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
+        state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(
+            state.GlobalHotkeyEnabled,
+            state.GlobalHotkeys);
 
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
