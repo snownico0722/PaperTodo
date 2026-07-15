@@ -12,17 +12,19 @@ public static class AppTypography
     private const string DefaultContentFontFamilyName = "Microsoft YaHei UI, Segoe UI, Microsoft YaHei, Segoe UI Symbol, Segoe UI Emoji";
     private const string DefaultCodeFontFamilyName = "Cascadia Mono, Consolas, Microsoft YaHei UI, Segoe UI Symbol, Segoe UI Emoji";
 
+    private sealed record CustomFontFace(FontFamily Family, FontWeight Weight);
+
     private static string _preset = UiFontPresets.Default;
-    private static FontFamily? _customFontFamily;
-    private static FontFamily? _customBoldFontFamily;
+    private static CustomFontFace? _customFontFace;
+    private static CustomFontFace? _customBoldFontFace;
     private static bool _customFontEnhancedBold;
     private static double _scale = 1.0;
 
     public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag);
 
-    public static FontFamily UiFontFamily => _customFontFamily ?? ResolveUiFontFamily();
+    public static FontFamily UiFontFamily => _customFontFace?.Family ?? ResolveUiFontFamily();
 
-    public static FontFamily ContentFontFamily => _customFontFamily ?? ResolveContentFontFamily();
+    public static FontFamily ContentFontFamily => _customFontFace?.Family ?? ResolveContentFontFamily();
 
     public static FontFamily CodeFontFamily => new(DefaultCodeFontFamilyName);
 
@@ -32,15 +34,18 @@ public static class AppTypography
     public static TextRenderingMode TextRenderingMode => TextRenderingMode.Grayscale;
     public static TextHintingMode TextHintingMode => TextHintingMode.Auto;
 
-    public static bool HasCustomFont => _customFontFamily != null;
+    public static bool HasCustomFont => _customFontFace != null;
 
-    public static bool HasCustomBoldFont => _customBoldFontFamily != null;
+    public static bool HasCustomBoldFont => _customBoldFontFace != null;
 
     /// <summary>
-    /// Enhanced bold is armed in settings, a bold face file is present, and the caller wants bold.
+    /// Enhanced bold is armed in settings, both custom faces are present, and the caller wants bold.
     /// </summary>
     public static bool UsesCustomBoldFace(bool bold) =>
-        bold && _customFontEnhancedBold && _customBoldFontFamily != null;
+        bold &&
+        _customFontEnhancedBold &&
+        _customFontFace != null &&
+        _customBoldFontFace != null;
 
     public static double ScaleFactor => _scale;
 
@@ -61,8 +66,8 @@ public static class AppTypography
         _preset = UiFontPresets.Normalize(preset);
         _scale = OverallFontScales.Normalize(scale);
         _customFontEnhancedBold = customFontEnhancedBold;
-        _customFontFamily = TryLoadCustomFontFamilyFromCandidates(CustomRegularFontCandidates());
-        _customBoldFontFamily = TryLoadCustomFontFamilyFromCandidates(CustomBoldFontCandidates());
+        _customFontFace = TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates());
+        _customBoldFontFace = TryLoadCustomFontFaceFromCandidates(CustomBoldFontCandidates());
     }
 
     /// <summary>
@@ -72,20 +77,21 @@ public static class AppTypography
     {
         if (UsesCustomBoldFace(bold))
         {
-            return _customBoldFontFamily!;
+            return _customBoldFontFace!.Family;
         }
 
         return content ? ContentFontFamily : UiFontFamily;
     }
 
     /// <summary>
-    /// Weight for bold runs. Custom bold face is already heavy, so use Normal on that family.
+    /// Weight for bold runs. Preserve the face's designed weight so WPF selects the real bold
+    /// face when regular and bold files share the same internal family name.
     /// </summary>
     public static FontWeight FontWeightFor(bool bold)
     {
         if (UsesCustomBoldFace(bold))
         {
-            return FontWeights.Normal;
+            return _customBoldFontFace!.Weight;
         }
 
         return bold ? FontWeights.SemiBold : FontWeights.Normal;
@@ -95,7 +101,7 @@ public static class AppTypography
     {
         if (UsesCustomBoldFace(bold))
         {
-            return FontWeights.Normal;
+            return _customBoldFontFace!.Weight;
         }
 
         return bold ? FontWeights.Bold : FontWeights.SemiBold;
@@ -147,7 +153,7 @@ public static class AppTypography
         };
     }
 
-    private static FontFamily? TryLoadCustomFontFamilyFromCandidates(IEnumerable<string> candidates)
+    private static CustomFontFace? TryLoadCustomFontFaceFromCandidates(IEnumerable<string> candidates)
     {
         foreach (var path in candidates)
         {
@@ -173,7 +179,9 @@ public static class AppTypography
                 }
 
                 var baseUri = new Uri(AppendDirectorySeparator(directory), UriKind.Absolute);
-                return new FontFamily(baseUri, $"./#{familyName}");
+                return new CustomFontFace(
+                    new FontFamily(baseUri, $"./#{familyName}"),
+                    glyphTypeface.Weight);
             }
             catch
             {

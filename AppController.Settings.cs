@@ -1008,7 +1008,11 @@ public sealed partial class AppController
             State.CustomFontEnhancedBold,
             ToggleCustomFontEnhancedBold);
         // Only meaningful with papertodo + papertodo_bold (or PaperTodo_Bold) beside the exe.
-        customBoldToggle.IsEnabled = AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont;
+        // Keep an already-enabled setting clickable when a file disappears so the user can turn
+        // it off; AppTypography itself refuses to mix a system regular face with a custom bold one.
+        customBoldToggle.IsEnabled =
+            (AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
+            State.CustomFontEnhancedBold;
         leftColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsOverallFontScale")), "TipOverallFontScale"));
         leftColumn.Children.Add(CreateOverallFontScaleStepper());

@@ -2084,7 +2084,7 @@ public sealed partial class PaperWindow : Window
             }
         };
 
-        return new Window
+        var window = new Window
         {
             WindowStyle = WindowStyle.None,
             AllowsTransparency = true,
@@ -2096,6 +2096,8 @@ public sealed partial class PaperWindow : Window
             IsHitTestVisible = false,
             Content = root
         };
+        AppTypography.ApplyTextRendering(window);
+        return window;
     }
 
     private static void MoveNoteLinkDragGhost(NoteLinkDragState state, Point screenPoint)
@@ -2544,6 +2546,7 @@ public sealed partial class PaperWindow : Window
             ShowInTaskbar = false,
             Topmost = Topmost
         };
+        AppTypography.ApplyTextRendering(dialog);
 
         var root = new Border
         {

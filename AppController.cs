@@ -2576,6 +2576,7 @@ public sealed partial class AppController : IDisposable
                     Background = Brushes.Transparent,
                     Topmost = true
                 };
+                AppTypography.ApplyTextRendering(dlg);
                 var border = new Border
                 {
                     Background = Theme.PaperBrush,
@@ -2632,6 +2633,7 @@ public sealed partial class AppController : IDisposable
             ShowInTaskbar = false,
             Topmost = true
         };
+        AppTypography.ApplyTextRendering(dialog);
 
         var root = new Border
         {
