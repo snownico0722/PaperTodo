@@ -33,6 +33,7 @@ public sealed class MarkdownTextBox : TextEditor
     private bool _isImageRenderRedrawQueued;
     private bool _isMarkdownSuffixRedrawQueued;
     private bool _isEnsuringImageAnchorLine;
+    private string _imageReferenceTextMode = ImageReferenceTextModes.Always;
     private bool _hadInternalImageReferences;
     private int _pendingChangeStartLine = 1;
     private int _pendingChangeEndLine = 1;
@@ -192,6 +193,18 @@ public sealed class MarkdownTextBox : TextEditor
             ? mode
             : MarkdownRenderModes.Enhanced;
         RefreshVisualStyle();
+    }
+
+    public void SetImageReferenceTextMode(string mode)
+    {
+        var normalized = ImageReferenceTextModes.Normalize(mode);
+        if (_imageReferenceTextMode == normalized)
+        {
+            return;
+        }
+
+        _imageReferenceTextMode = normalized;
+        RefreshTextView();
     }
 
     public void SetInteractionCursor(Cursor cursor)
@@ -2363,6 +2376,13 @@ public sealed class MarkdownTextBox : TextEditor
     }
 
     private bool ShouldRenderImages => _imageStore != null && RenderOptions.RenderBlocks;
+    private bool ShouldHideImageReferenceText =>
+        ShouldRenderImages && (_imageReferenceTextMode switch
+        {
+            ImageReferenceTextModes.Hidden => true,
+            ImageReferenceTextModes.Editing => _isPreviewMode,
+            _ => false
+        });
 
     private bool TryGetImageReferenceForLine(DocumentLine line, out MarkdownImageReference reference, out NoteImageAsset? asset)
     {
@@ -4033,6 +4053,12 @@ public sealed class MarkdownTextBox : TextEditor
                 return;
             }
 
+            if (_owner.ShouldHideImageReferenceText && analysis.ParsedImageReference.HasValue)
+            {
+                HideImageReferenceText(line, text.Length);
+                return;
+            }
+
             var weak = Theme.WeakTextBrush;
             var link = Theme.LinkBrush;
             var code = Theme.ActiveBrush;
@@ -4523,6 +4549,13 @@ public sealed class MarkdownTextBox : TextEditor
                 element.TextRunProperties.SetFontHintingEmSize(fontSize);
                 element.TextRunProperties.SetForegroundBrush(brush);
             });
+        }
+
+        private void HideImageReferenceText(DocumentLine line, int length)
+        {
+            // Preserve the line's metrics so entering edit mode does not shift the image or
+            // invalidate the preview point that is being translated into an editor caret.
+            MarkSymbol(line, 0, length, Brushes.Transparent);
         }
 
         private void MarkHeading(DocumentLine line, int startInLine, int length, double fontSize, Brush? foreground)

@@ -257,6 +257,40 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, State.MarkdownRenderMode, SetMarkdownRenderMode);
     }
 
+    private void SetImageReferenceTextMode(string mode)
+    {
+        var normalized = ImageReferenceTextModes.Normalize(mode);
+        if (State.ImageReferenceTextMode == normalized)
+        {
+            return;
+        }
+
+        State.ImageReferenceTextMode = normalized;
+        SaveNow();
+
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateImageReferenceTextMode();
+        }
+
+        RefreshSettingsWindowContent();
+    }
+
+    private UIElement CreateImageReferenceTextModeSelector()
+    {
+        var segments = new[]
+        {
+            (ImageReferenceTextModes.Always, Strings.Get("ImageReferenceTextAlways")),
+            (ImageReferenceTextModes.Editing, Strings.Get("ImageReferenceTextEditing")),
+            (ImageReferenceTextModes.Hidden, Strings.Get("ImageReferenceTextHidden"))
+        };
+
+        return CreateSegmentSelector(
+            segments,
+            ImageReferenceTextModes.Normalize(State.ImageReferenceTextMode),
+            SetImageReferenceTextMode);
+    }
+
     private void SetFullscreenTopmostMode(string mode)
     {
         var normalized = FullscreenTopmostModes.Normalize(mode);
@@ -1049,6 +1083,10 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsOverallFontScale")), "TipOverallFontScale"));
         leftColumn.Children.Add(CreateOverallFontScaleStepper());
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
+            "TipImageReferenceText"));
+        leftColumn.Children.Add(CreateImageReferenceTextModeSelector());
 
         void AddTextStyleEditor(
             StackPanel column,

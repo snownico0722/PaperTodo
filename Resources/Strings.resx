@@ -703,6 +703,21 @@
   <data name="TipOverallFontScale" xml:space="preserve">
     <value>按 5% 调整应用内文字的整体缩放（80%–120%）；单个笔记的百分比缩放会在此基础上继续叠加。</value>
   </data>
+  <data name="SettingsImageReferenceText" xml:space="preserve">
+    <value>图片标记显示</value>
+  </data>
+  <data name="TipImageReferenceText" xml:space="preserve">
+    <value>控制图片对应的 Markdown 标记。“仅编辑时”会在浏览状态隐藏；“始终隐藏”只隐藏界面，原文仍会保留。修改图片尺寸等标记前请先切回显示。</value>
+  </data>
+  <data name="ImageReferenceTextAlways" xml:space="preserve">
+    <value>始终显示</value>
+  </data>
+  <data name="ImageReferenceTextEditing" xml:space="preserve">
+    <value>仅编辑时</value>
+  </data>
+  <data name="ImageReferenceTextHidden" xml:space="preserve">
+    <value>始终隐藏</value>
+  </data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>加粗</value>
   </data>

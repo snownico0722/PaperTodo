@@ -37,6 +37,18 @@ public static class MarkdownRenderModes
     }
 }
 
+public static class ImageReferenceTextModes
+{
+    public const string Always = "always";
+    public const string Editing = "editing";
+    public const string Hidden = "hidden";
+
+    public static string Normalize(string? mode)
+    {
+        return mode is Always or Editing or Hidden ? mode : Always;
+    }
+}
+
 public static class ExternalMarkdownFileExtensions
 {
     public const string Default = ".md";
@@ -222,6 +234,7 @@ public sealed class AppState
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
+    public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;

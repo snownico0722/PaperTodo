@@ -73,6 +73,14 @@ public sealed partial class PaperWindow
         }
     }
 
+    public void UpdateImageReferenceTextMode()
+    {
+        if (_paper.Type == PaperTypes.Note && _noteBox != null)
+        {
+            _noteBox.SetImageReferenceTextMode(_controller.State.ImageReferenceTextMode);
+        }
+    }
+
     private void TraceNoteRender(string message)
     {
 #if DEBUG
@@ -244,6 +252,7 @@ public sealed partial class PaperWindow
         var box = _noteBox;
         box.ImageContextMenuFactory = CreateContextMenu;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
+        box.SetImageReferenceTextMode(_controller.State.ImageReferenceTextMode);
         box.SetTextZoom(CurrentTextZoom());
         box.ConfigureNoteImages(_paper.Id, _controller.ImageStore);
         _noteContentDirty = box.Document.TextLength != (_paper.Content?.Length ?? 0);

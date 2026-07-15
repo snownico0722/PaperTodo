@@ -463,6 +463,7 @@ public sealed class StateStore
         state.CapsuleTextSize = VisualTextSizes.Normalize(state.CapsuleTextSize);
         state.UiFontPreset = UiFontPresets.Normalize(state.UiFontPreset);
         state.TextRenderingProfile = TextRenderingProfiles.Normalize(state.TextRenderingProfile);
+        state.ImageReferenceTextMode = ImageReferenceTextModes.Normalize(state.ImageReferenceTextMode);
         state.TopBarHeight = 0;
 
         if (state.ShowTopBarNewPaperButtons is bool showTopBarNewPaperButtons)

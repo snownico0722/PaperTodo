@@ -690,6 +690,21 @@ Experimental applies the same softer two-axis grayscale smoothing to every font 
   <data name="TipOverallFontScale" xml:space="preserve">
     <value>Scale text throughout the app in 5% steps from 80% to 120%. Per-note percentage zoom is applied on top.</value>
   </data>
+  <data name="SettingsImageReferenceText" xml:space="preserve">
+    <value>Image markup visibility</value>
+  </data>
+  <data name="TipImageReferenceText" xml:space="preserve">
+    <value>Control the Markdown markup for images. Editing only hides it while viewing; Always hide keeps the source intact. Show it again before editing image size or other markup.</value>
+  </data>
+  <data name="ImageReferenceTextAlways" xml:space="preserve">
+    <value>Always show</value>
+  </data>
+  <data name="ImageReferenceTextEditing" xml:space="preserve">
+    <value>Editing only</value>
+  </data>
+  <data name="ImageReferenceTextHidden" xml:space="preserve">
+    <value>Always hide</value>
+  </data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>Bold</value>
   </data>
