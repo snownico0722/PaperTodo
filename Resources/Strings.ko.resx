@@ -714,7 +714,7 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>사용</value>
   </data>
   <data name="ShortcutEnableTip" xml:space="preserve">
-    <value>이 전역 단축키를 등록하고 사용합니다.</value>
+    <value>전환 즉시 이 전역 단축키를 등록하거나 해제하며 저장할 필요가 없습니다.</value>
   </data>
   <data name="ShortcutStatusDisabled" xml:space="preserve">
     <value>사용 안 함</value>
@@ -723,10 +723,13 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>일반 동작</value>
   </data>
   <data name="ShortcutGroupLeftPreferred" xml:space="preserve">
-    <value>왼쪽 우선 순서</value>
+    <value>왼쪽 우선 순서(수정 키 공유, 숫자 고정)</value>
   </data>
   <data name="ShortcutGroupRightPreferred" xml:space="preserve">
-    <value>오른쪽 우선 순서</value>
+    <value>오른쪽 우선 순서(수정 키 공유, 숫자 고정)</value>
+  </data>
+  <data name="ShortcutEdgeKeyTip" xml:space="preserve">
+    <value>숫자는 변경할 수 없습니다. 수정 키 두 개와 표시된 숫자를 누르세요. 수정 키는 같은 쪽의 1~9에 함께 적용됩니다.</value>
   </data>
   <data name="ShortcutEdgeLeftSequenceFormat" xml:space="preserve">
     <value>왼쪽 우선 순서 {0}</value>

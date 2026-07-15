@@ -118,7 +118,11 @@ public sealed partial class PaperWindow
         var area = new Border
         {
             Margin = new Thickness(0, 6, 0, 2),
-            Padding = new Thickness(0, Math.Max(3, metrics.TextVerticalPadding + 1), 0, Math.Max(3, metrics.TextVerticalPadding + 1)),
+            Padding = new Thickness(
+                0,
+                Math.Max(AppTypography.Scale(3), metrics.TextVerticalPadding + AppTypography.Scale(1)),
+                0,
+                Math.Max(AppTypography.Scale(3), metrics.TextVerticalPadding + AppTypography.Scale(1))),
             CornerRadius = new CornerRadius(RadiusControl),
             BorderThickness = new Thickness(1),
             BorderBrush = AppendBorderBrush,
@@ -354,7 +358,12 @@ public sealed partial class PaperWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(metrics.CheckColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(18, metrics.CheckColumnWidth - 4)) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(Math.Max(
+                AppTypography.Scale(18),
+                metrics.CheckColumnWidth - AppTypography.Scale(4)))
+        });
 
         var check = new CheckBox
         {
@@ -364,7 +373,7 @@ public sealed partial class PaperWindow
             Cursor = Cursors.Hand,
             Focusable = false,
             FocusVisualStyle = null,
-            Style = SharedCheckBoxStyle
+            Style = CurrentTodoCheckBoxStyle()
         };
 
         Grid.SetColumn(check, 0);
@@ -380,7 +389,11 @@ public sealed partial class PaperWindow
             CaretBrush = TextBrush,
             FontSize = metrics.TextFontSize,
             FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
-            Padding = new Thickness(2, metrics.TextVerticalPadding, 2, metrics.TextVerticalPadding),
+            Padding = new Thickness(
+                AppTypography.Scale(2),
+                metrics.TextVerticalPadding,
+                AppTypography.Scale(2),
+                metrics.TextVerticalPadding),
             VerticalContentAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -710,7 +723,9 @@ public sealed partial class PaperWindow
 
         var handle = new Border
         {
-            Width = Math.Max(14, metrics.CheckColumnWidth - 8),
+            Width = Math.Max(
+                AppTypography.Scale(14),
+                metrics.CheckColumnWidth - AppTypography.Scale(8)),
             MinHeight = metrics.RowMinHeight,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Stretch,
@@ -1520,7 +1535,12 @@ public sealed partial class PaperWindow
         };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(metrics.CheckColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(18, metrics.CheckColumnWidth - 4)) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(Math.Max(
+                AppTypography.Scale(18),
+                metrics.CheckColumnWidth - AppTypography.Scale(4)))
+        });
 
         var check = new TextBlock
         {
@@ -1540,7 +1560,11 @@ public sealed partial class PaperWindow
             Foreground = done ? BrightWeakTextBrush : TextBrush,
             FontSize = metrics.GhostTextFontSize,
             FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
-            Padding = new Thickness(2, metrics.TextVerticalPadding, 2, metrics.TextVerticalPadding),
+            Padding = new Thickness(
+                AppTypography.Scale(2),
+                metrics.TextVerticalPadding,
+                AppTypography.Scale(2),
+                metrics.TextVerticalPadding),
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
         };

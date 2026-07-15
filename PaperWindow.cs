@@ -299,7 +299,8 @@ public sealed partial class PaperWindow : Window
 
     private static readonly ControlTemplate SharedContextMenuTemplate = BuildContextMenuTemplate();
     private static readonly Style SharedCompactMenuItemStyle = BuildCompactMenuItemStyle();
-    private static readonly Style SharedCheckBoxStyle = BuildCustomCheckBoxStyle();
+    private Style? _todoCheckBoxStyle;
+    private double _todoCheckBoxStyleScale = double.NaN;
 
     private static ControlTemplate BuildContextMenuTemplate()
     {
@@ -417,12 +418,25 @@ public sealed partial class PaperWindow : Window
         return style;
     }
 
+    private Style CurrentTodoCheckBoxStyle()
+    {
+        if (_todoCheckBoxStyle == null ||
+            Math.Abs(_todoCheckBoxStyleScale - AppTypography.ScaleFactor) > 0.001)
+        {
+            _todoCheckBoxStyle = BuildCustomCheckBoxStyle();
+            _todoCheckBoxStyleScale = AppTypography.ScaleFactor;
+        }
+
+        return _todoCheckBoxStyle;
+    }
+
     private static Style BuildCustomCheckBoxStyle()
     {
         var style = new Style(typeof(CheckBox));
+        var checkBoxSize = AppTypography.Scale(16);
 
-        style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 16.0));
-        style.Setters.Add(new Setter(FrameworkElement.HeightProperty, 16.0));
+        style.Setters.Add(new Setter(FrameworkElement.WidthProperty, checkBoxSize));
+        style.Setters.Add(new Setter(FrameworkElement.HeightProperty, checkBoxSize));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
         style.Setters.Add(new Setter(UIElement.FocusableProperty, false));
         style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
@@ -433,10 +447,10 @@ public sealed partial class PaperWindow : Window
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "CheckBorder";
-        border.SetValue(FrameworkElement.WidthProperty, 16.0);
-        border.SetValue(FrameworkElement.HeightProperty, 16.0);
-        border.SetValue(Border.BorderThicknessProperty, new Thickness(1.5));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(RadiusSmall));
+        border.SetValue(FrameworkElement.WidthProperty, checkBoxSize);
+        border.SetValue(FrameworkElement.HeightProperty, checkBoxSize);
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(AppTypography.Scale(1.5)));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(AppTypography.Scale(RadiusSmall)));
         border.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("CheckBoxBorderBrushKey"));
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
@@ -453,6 +467,9 @@ public sealed partial class PaperWindow : Window
         path.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         path.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         path.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        path.SetValue(
+            FrameworkElement.LayoutTransformProperty,
+            new ScaleTransform(AppTypography.ScaleFactor, AppTypography.ScaleFactor));
         path.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
         grid.AppendChild(path);
 

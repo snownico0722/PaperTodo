@@ -118,11 +118,15 @@ public static class TodoVisualSizes
         return metrics with
         {
             TextFontSize = AppTypography.Scale(metrics.TextFontSize),
+            TextVerticalPadding = AppTypography.Scale(metrics.TextVerticalPadding),
+            AppendMinHeight = AppTypography.Scale(metrics.AppendMinHeight),
             AppendGlyphFontSize = AppTypography.Scale(metrics.AppendGlyphFontSize),
             TrashGlyphFontSize = AppTypography.Scale(metrics.TrashGlyphFontSize),
             LinkedNoteNameFontSize = AppTypography.Scale(metrics.LinkedNoteNameFontSize),
             LinkedNoteIconFontSize = AppTypography.Scale(metrics.LinkedNoteIconFontSize),
-            GhostTextFontSize = AppTypography.Scale(metrics.GhostTextFontSize)
+            CheckColumnWidth = AppTypography.Scale(metrics.CheckColumnWidth),
+            GhostTextFontSize = AppTypography.Scale(metrics.GhostTextFontSize),
+            RowMinHeight = AppTypography.Scale(metrics.RowMinHeight)
         };
     }
 }

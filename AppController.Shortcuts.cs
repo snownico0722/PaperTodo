@@ -41,9 +41,7 @@ public sealed partial class AppController
     {
         DisposeGlobalHotkeys();
         State.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
-        State.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(
-            State.GlobalHotkeyEnabled,
-            State.GlobalHotkeys);
+        State.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
 
         var manager = new GlobalHotkeyManager();
         manager.Invoked += OnGlobalHotkeyInvoked;
@@ -89,6 +87,10 @@ public sealed partial class AppController
         {
             return;
         }
+        if (definition.IsEdgeCapsule && HasDeepCapsuleReorderDragInProgress())
+        {
+            return;
+        }
 
         _ = Application.Current.Dispatcher.InvokeAsync(() =>
         {
@@ -120,8 +122,12 @@ public sealed partial class AppController
             return true;
         }
 
-        EnsureShortcutDraft();
-        _shortcutDraft![recordingCommandId] = binding;
+        if (!ShortcutGesture.TryParse(binding, out var gesture) ||
+            !TrySetRecordedShortcutDraft(recordingCommandId, gesture))
+        {
+            return true;
+        }
+
         _shortcutRecordingCommandId = null;
         _shortcutApplyFailureId = null;
         _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
@@ -135,9 +141,47 @@ public sealed partial class AppController
             GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys),
             StringComparer.Ordinal);
         _shortcutEnabledDraft ??= new Dictionary<string, bool>(
-            GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled, _shortcutDraft),
+            GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled),
             StringComparer.Ordinal);
         RefreshShortcutDuplicateIds();
+    }
+
+    private bool TrySetRecordedShortcutDraft(string commandId, ShortcutGesture gesture)
+    {
+        var definition = GlobalShortcutCatalog.Find(commandId);
+        if (definition == null)
+        {
+            return false;
+        }
+
+        EnsureShortcutDraft();
+        if (definition.IsEdgeCapsule)
+        {
+            if (!ShortcutGesture.HasExactlyTwoModifiers(gesture.Modifiers) ||
+                !ShortcutGesture.IsEdgeOrdinalKey(gesture.Key, definition.EdgeOrdinal))
+            {
+                return false;
+            }
+
+            SetEdgeShortcutModifiersDraft(definition.Group, gesture.Modifiers);
+        }
+        else
+        {
+            _shortcutDraft![commandId] = gesture.ToStorageString();
+        }
+
+        _shortcutEnabledDraft![commandId] = true;
+        return true;
+    }
+
+    private void SetEdgeShortcutModifiersDraft(GlobalShortcutGroup group, ModifierKeys modifiers)
+    {
+        foreach (var definition in GlobalShortcutCatalog.Definitions.Where(item => item.Group == group))
+        {
+            _shortcutDraft![definition.Id] = ShortcutGesture.ForEdgeOrdinal(
+                modifiers,
+                definition.EdgeOrdinal).ToStorageString();
+        }
     }
 
     private void DiscardShortcutDraft()
@@ -171,6 +215,11 @@ public sealed partial class AppController
 
         if ((key == Key.Back || key == Key.Delete) && Keyboard.Modifiers == ModifierKeys.None)
         {
+            if (GlobalShortcutCatalog.Find(commandId)?.IsEdgeCapsule == true)
+            {
+                return;
+            }
+
             EnsureShortcutDraft();
             _shortcutDraft![commandId] = "";
             _shortcutRecordingCommandId = null;
@@ -191,10 +240,21 @@ public sealed partial class AppController
         }
 
         var gesture = new ShortcutGesture(key, modifiers);
-        EnsureShortcutDraft();
-        _shortcutDraft![commandId] = gesture.ToStorageString();
+        var definition = GlobalShortcutCatalog.Find(commandId);
+        if (definition?.IsEdgeCapsule == true &&
+            (!ShortcutGesture.HasExactlyTwoModifiers(modifiers) ||
+             !ShortcutGesture.IsEdgeOrdinalKey(key, definition.EdgeOrdinal)))
+        {
+            return;
+        }
+        if (!TrySetRecordedShortcutDraft(commandId, gesture))
+        {
+            return;
+        }
+
         _shortcutRecordingCommandId = null;
         _shortcutApplyFailureId = null;
+        _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
         RefreshSettingsWindowContent();
     }
 
@@ -332,10 +392,7 @@ public sealed partial class AppController
         };
         enabledToggle.Click += (_, _) =>
         {
-            _shortcutEnabledDraft![definition.Id] = enabledToggle.IsChecked == true;
-            _shortcutApplyFailureId = null;
-            _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
-            RefreshSettingsWindowContent();
+            SetShortcutEnabledImmediately(definition, enabledToggle.IsChecked == true);
         };
         Grid.SetColumn(enabledToggle, 0);
         grid.Children.Add(enabledToggle);
@@ -364,6 +421,10 @@ public sealed partial class AppController
         keyButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         keyButton.Focusable = true;
         keyButton.FontFamily = AppTypography.UiFontFamily;
+        if (definition.IsEdgeCapsule)
+        {
+            keyButton.ToolTip = Strings.Get("ShortcutEdgeKeyTip");
+        }
         keyButton.Click += (_, _) =>
         {
             _shortcutRecordingCommandId = definition.Id;
@@ -387,24 +448,38 @@ public sealed partial class AppController
         Grid.SetColumn(statusText, 3);
         grid.Children.Add(statusText);
 
-        var clear = SettingsIconButton("×", Strings.Get("ShortcutClear"));
-        clear.Click += (_, _) =>
+        if (!definition.IsEdgeCapsule)
         {
-            _shortcutDraft![definition.Id] = "";
-            _shortcutRecordingCommandId = null;
-            _shortcutApplyFailureId = null;
-            RefreshSettingsWindowContent();
-        };
-        Grid.SetColumn(clear, 4);
-        grid.Children.Add(clear);
+            var clear = SettingsIconButton("×", Strings.Get("ShortcutClear"));
+            clear.Click += (_, _) =>
+            {
+                _shortcutDraft![definition.Id] = "";
+                _shortcutRecordingCommandId = null;
+                _shortcutApplyFailureId = null;
+                _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
+                RefreshSettingsWindowContent();
+            };
+            Grid.SetColumn(clear, 4);
+            grid.Children.Add(clear);
+        }
 
         var restore = SettingsIconButton("↺", Strings.Get("ShortcutRestoreDefault"));
         restore.Click += (_, _) =>
         {
-            _shortcutDraft![definition.Id] = definition.DefaultGesture;
-            _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
+            if (definition.IsEdgeCapsule &&
+                ShortcutGesture.TryParse(definition.DefaultGesture, out var defaultGesture))
+            {
+                SetEdgeShortcutModifiersDraft(definition.Group, defaultGesture.Modifiers);
+            }
+            else
+            {
+                _shortcutDraft![definition.Id] = definition.DefaultGesture;
+            }
+            _shortcutEnabledDraft![definition.Id] =
+                definition.DefaultEnabled || !string.IsNullOrWhiteSpace(definition.DefaultGesture);
             _shortcutRecordingCommandId = null;
             _shortcutApplyFailureId = null;
+            _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
             RefreshSettingsWindowContent();
         };
         Grid.SetColumn(restore, 5);
@@ -512,6 +587,22 @@ public sealed partial class AppController
         RefreshShortcutDuplicateIds();
         var binding = _shortcutDraft![definition.Id];
         var enabled = _shortcutEnabledDraft![definition.Id];
+        if (_shortcutApplyFailureId == definition.Id)
+        {
+            return _shortcutApplyFailure == GlobalShortcutRegistrationFailure.SystemOccupied
+                ? ShortcutUiStatus.SystemOccupied
+                : ShortcutUiStatus.RegistrationFailed;
+        }
+        if (enabled && _shortcutDuplicateIds.Contains(definition.Id))
+        {
+            return ShortcutUiStatus.Duplicate;
+        }
+        if (!State.GlobalHotkeys.TryGetValue(definition.Id, out var saved) ||
+            !string.Equals(saved, binding, StringComparison.Ordinal) ||
+            State.GlobalHotkeyEnabled.GetValueOrDefault(definition.Id) != enabled)
+        {
+            return ShortcutUiStatus.PendingSave;
+        }
         if (!enabled)
         {
             return ShortcutUiStatus.Disabled;
@@ -519,22 +610,6 @@ public sealed partial class AppController
         if (string.IsNullOrWhiteSpace(binding))
         {
             return ShortcutUiStatus.Unassigned;
-        }
-        if (_shortcutDuplicateIds.Contains(definition.Id))
-        {
-            return ShortcutUiStatus.Duplicate;
-        }
-        if (_shortcutApplyFailureId == definition.Id)
-        {
-            return _shortcutApplyFailure == GlobalShortcutRegistrationFailure.SystemOccupied
-                ? ShortcutUiStatus.SystemOccupied
-                : ShortcutUiStatus.RegistrationFailed;
-        }
-        if (!State.GlobalHotkeys.TryGetValue(definition.Id, out var saved) ||
-            !string.Equals(saved, binding, StringComparison.Ordinal) ||
-            State.GlobalHotkeyEnabled.GetValueOrDefault(definition.Id) != enabled)
-        {
-            return ShortcutUiStatus.PendingSave;
         }
         return _globalHotkeys?.ActiveBindings.ContainsKey(definition.Id) == true
             ? ShortcutUiStatus.Registered
@@ -566,6 +641,62 @@ public sealed partial class AppController
         };
     }
 
+    private void SetShortcutEnabledImmediately(GlobalShortcutDefinition definition, bool enabled)
+    {
+        EnsureShortcutDraft();
+        var desiredBindings = new Dictionary<string, string>(State.GlobalHotkeys, StringComparer.Ordinal);
+        if (enabled)
+        {
+            if (definition.IsEdgeCapsule)
+            {
+                foreach (var groupDefinition in GlobalShortcutCatalog.Definitions.Where(
+                             item => item.Group == definition.Group))
+                {
+                    desiredBindings[groupDefinition.Id] = _shortcutDraft![groupDefinition.Id];
+                }
+            }
+            else
+            {
+                desiredBindings[definition.Id] = _shortcutDraft![definition.Id];
+            }
+            desiredBindings = GlobalShortcutCatalog.NormalizeBindings(desiredBindings);
+        }
+
+        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
+        desiredEnabled[definition.Id] = enabled;
+        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
+            .Where(id => desiredEnabled.GetValueOrDefault(id))
+            .ToArray();
+        var manager = EnsureGlobalHotkeyManager();
+        if (!manager.TryApply(
+                desiredBindings,
+                enabledCommandIds,
+                out _shortcutApplyFailureId,
+                out _shortcutApplyFailure))
+        {
+            _shortcutEnabledDraft![definition.Id] =
+                State.GlobalHotkeyEnabled.GetValueOrDefault(definition.Id);
+            RefreshSettingsWindowContent();
+            return;
+        }
+
+        State.GlobalHotkeys = desiredBindings;
+        State.GlobalHotkeyEnabled = desiredEnabled;
+        _shortcutEnabledDraft![definition.Id] = enabled;
+        _shortcutApplyFailureId = null;
+        _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private GlobalHotkeyManager EnsureGlobalHotkeyManager()
+    {
+        _globalHotkeys ??= new GlobalHotkeyManager();
+        _globalHotkeys.Invoked -= OnGlobalHotkeyInvoked;
+        _globalHotkeys.Invoked += OnGlobalHotkeyInvoked;
+        return _globalHotkeys;
+    }
+
     private void ApplyShortcutDraft()
     {
         EnsureShortcutDraft();
@@ -577,15 +708,13 @@ public sealed partial class AppController
         }
 
         var desired = GlobalShortcutCatalog.NormalizeBindings(_shortcutDraft);
-        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(_shortcutEnabledDraft, desired);
+        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(_shortcutEnabledDraft);
         var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
             .Where(id => desiredEnabled.GetValueOrDefault(id))
             .ToArray();
-        _globalHotkeys ??= new GlobalHotkeyManager();
-        _globalHotkeys.Invoked -= OnGlobalHotkeyInvoked;
-        _globalHotkeys.Invoked += OnGlobalHotkeyInvoked;
+        var manager = EnsureGlobalHotkeyManager();
 
-        if (!_globalHotkeys.TryApply(
+        if (!manager.TryApply(
                 desired,
                 enabledCommandIds,
                 out _shortcutApplyFailureId,
@@ -607,7 +736,8 @@ public sealed partial class AppController
 
     private void ActivateEdgeCapsuleShortcut(string preferredSide, int ordinal)
     {
-        if (ordinal is < 1 or > 9 ||
+        if (HasDeepCapsuleReorderDragInProgress() ||
+            ordinal is < 1 or > 9 ||
             !State.UseCapsuleMode ||
             !State.UseDeepCapsuleMode)
         {

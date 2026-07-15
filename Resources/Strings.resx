@@ -727,7 +727,7 @@
     <value>启用</value>
   </data>
   <data name="ShortcutEnableTip" xml:space="preserve">
-    <value>开启后注册并响应此全局快捷键。</value>
+    <value>切换后立即注册或注销此全局快捷键，无需保存。</value>
   </data>
   <data name="ShortcutStatusDisabled" xml:space="preserve">
     <value>未启用</value>
@@ -736,10 +736,13 @@
     <value>常用操作</value>
   </data>
   <data name="ShortcutGroupLeftPreferred" xml:space="preserve">
-    <value>左侧优先序列</value>
+    <value>左侧优先序列（修饰键共享，数字固定）</value>
   </data>
   <data name="ShortcutGroupRightPreferred" xml:space="preserve">
-    <value>右侧优先序列</value>
+    <value>右侧优先序列（修饰键共享，数字固定）</value>
+  </data>
+  <data name="ShortcutEdgeKeyTip" xml:space="preserve">
+    <value>数字固定不可更改；请按两枚修饰键和当前数字。修改会同步到本侧 1–9。</value>
   </data>
   <data name="ShortcutEdgeLeftSequenceFormat" xml:space="preserve">
     <value>左侧优先序列 {0}</value>

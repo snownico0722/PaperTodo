@@ -53,7 +53,7 @@ internal static class GlobalShortcutCatalog
     {
         source ??= new Dictionary<string, string>();
         var normalized = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var definition in Definitions)
+        foreach (var definition in Definitions.Where(item => item.Group == GlobalShortcutGroup.General))
         {
             if (!source.TryGetValue(definition.Id, out var configured))
             {
@@ -65,29 +65,42 @@ internal static class GlobalShortcutCatalog
                 : "";
         }
 
+        foreach (var group in new[] { GlobalShortcutGroup.EdgeLeft, GlobalShortcutGroup.EdgeRight })
+        {
+            var groupDefinitions = Definitions.Where(item => item.Group == group).ToArray();
+            ShortcutGesture.TryParse(groupDefinitions[0].DefaultGesture, out var defaultGesture);
+            var modifiers = defaultGesture.Modifiers;
+            foreach (var definition in groupDefinitions)
+            {
+                if (source.TryGetValue(definition.Id, out var configured) &&
+                    ShortcutGesture.TryParse(configured, out var configuredGesture) &&
+                    ShortcutGesture.HasExactlyTwoModifiers(configuredGesture.Modifiers))
+                {
+                    modifiers = configuredGesture.Modifiers;
+                    break;
+                }
+            }
+
+            foreach (var definition in groupDefinitions)
+            {
+                normalized[definition.Id] = ShortcutGesture.ForEdgeOrdinal(
+                    modifiers,
+                    definition.EdgeOrdinal).ToStorageString();
+            }
+        }
+
         return normalized;
     }
 
-    public static Dictionary<string, bool> NormalizeEnabled(
-        Dictionary<string, bool>? source,
-        IReadOnlyDictionary<string, string> bindings)
+    public static Dictionary<string, bool> NormalizeEnabled(Dictionary<string, bool>? source)
     {
         source ??= new Dictionary<string, bool>();
         var normalized = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var definition in Definitions)
         {
-            if (source.TryGetValue(definition.Id, out var enabled))
-            {
-                normalized[definition.Id] = enabled;
-                continue;
-            }
-
-            // Before per-shortcut switches existed, a non-empty ordinary command was active.
-            // Preserve that behavior on upgrade. Edge rows were visible placeholders only, so
-            // their stored default gestures must never turn into active hotkeys implicitly.
-            normalized[definition.Id] = definition.Group == GlobalShortcutGroup.General &&
-                bindings.TryGetValue(definition.Id, out var binding) &&
-                !string.IsNullOrWhiteSpace(binding);
+            normalized[definition.Id] = source.TryGetValue(definition.Id, out var enabled)
+                ? enabled
+                : definition.DefaultEnabled;
         }
 
         return normalized;
@@ -123,10 +136,8 @@ internal static class GlobalShortcutCatalog
 
         for (var ordinal = 1; ordinal <= 9; ordinal++)
         {
-            // Keep the original edge.N ids so existing customized placeholder gestures carry
-            // forward as the right-preferred sequence without rewriting user data needlessly.
             definitions.Add(new GlobalShortcutDefinition(
-                $"edge.{ordinal}",
+                $"edge.right.{ordinal}",
                 "ShortcutEdgeRightSequenceFormat",
                 $"Ctrl+Alt+{ordinal}",
                 GlobalShortcutGroup.EdgeRight,
@@ -140,6 +151,41 @@ internal static class GlobalShortcutCatalog
 
 internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
 {
+    public static ShortcutGesture ForEdgeOrdinal(ModifierKeys modifiers, int ordinal)
+    {
+        if (ordinal is < 1 or > 9)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ordinal));
+        }
+
+        return new ShortcutGesture(Key.D0 + ordinal, modifiers);
+    }
+
+    public static bool HasExactlyTwoModifiers(ModifierKeys modifiers)
+    {
+        const ModifierKeys supported = ModifierKeys.Control |
+            ModifierKeys.Alt |
+            ModifierKeys.Shift |
+            ModifierKeys.Windows;
+        if ((modifiers & ~supported) != ModifierKeys.None)
+        {
+            return false;
+        }
+
+        var count = 0;
+        if (modifiers.HasFlag(ModifierKeys.Control)) count++;
+        if (modifiers.HasFlag(ModifierKeys.Alt)) count++;
+        if (modifiers.HasFlag(ModifierKeys.Shift)) count++;
+        if (modifiers.HasFlag(ModifierKeys.Windows)) count++;
+        return count == 2;
+    }
+
+    public static bool IsEdgeOrdinalKey(Key key, int ordinal)
+    {
+        return ordinal is >= 1 and <= 9 &&
+            (key == Key.D0 + ordinal || key == Key.NumPad0 + ordinal);
+    }
+
     public static bool TryParse(string? text, out ShortcutGesture gesture)
     {
         gesture = default;

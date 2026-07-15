@@ -481,9 +481,7 @@ public sealed class StateStore
         state.MaxTitleLength = PaperTitles.NormalizeMaxTitleLength(state.MaxTitleLength);
         state.DeepCapsuleTitleMeasureCharacterLimit = Math.Clamp(state.DeepCapsuleTitleMeasureCharacterLimit, 0, PaperTitles.MaxConfigurableTitleLength);
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
-        state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(
-            state.GlobalHotkeyEnabled,
-            state.GlobalHotkeys);
+        state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(state.GlobalHotkeyEnabled);
 
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {

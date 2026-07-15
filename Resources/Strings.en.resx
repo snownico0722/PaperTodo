@@ -714,7 +714,7 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>On</value>
   </data>
   <data name="ShortcutEnableTip" xml:space="preserve">
-    <value>Register and respond to this global shortcut.</value>
+    <value>Register or unregister this global shortcut immediately; no save is required.</value>
   </data>
   <data name="ShortcutStatusDisabled" xml:space="preserve">
     <value>Disabled</value>
@@ -723,10 +723,13 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>General actions</value>
   </data>
   <data name="ShortcutGroupLeftPreferred" xml:space="preserve">
-    <value>Left-preferred sequence</value>
+    <value>Left-preferred sequence (shared modifiers, fixed digits)</value>
   </data>
   <data name="ShortcutGroupRightPreferred" xml:space="preserve">
-    <value>Right-preferred sequence</value>
+    <value>Right-preferred sequence (shared modifiers, fixed digits)</value>
+  </data>
+  <data name="ShortcutEdgeKeyTip" xml:space="preserve">
+    <value>The digit is fixed. Press exactly two modifiers plus the shown digit; the modifiers apply to all 1–9 shortcuts on this side.</value>
   </data>
   <data name="ShortcutEdgeLeftSequenceFormat" xml:space="preserve">
     <value>Left-preferred sequence {0}</value>
