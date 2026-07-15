@@ -400,7 +400,7 @@
     <value>펼친 동안 가장자리 캡슐 유지</value>
   </data>
   <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>가장자리 펼침 위치 기억</value>
+    <value>펼침 위치 기억</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>가장자리 캡슐을 다시 클릭해 종이 접기</value>
@@ -427,7 +427,7 @@
     <value>Markdown 표시</value>
   </data>
   <data name="SettingsFullscreenTopmostMode" xml:space="preserve">
-    <value>전체 화면 창 처리</value>
+    <value>전체 화면 양보</value>
   </data>
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>할 일 크기</value>
@@ -573,7 +573,7 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>호버 도움말 표시</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
-    <value>종이 작업 표시줄 아이콘 숨기기</value>
+    <value>작업 표시줄에서 아이콘 숨기기</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
     <value>켜면 펼쳐진 종이가 Windows 작업 표시줄에 표시되지 않습니다. 트레이, 데스크톱의 종이, 캡슐에서는 계속 열 수 있습니다. 기본값은 켜짐입니다. 창 전환에서 종이를 숨기면 자동으로 켜집니다.</value>
@@ -699,7 +699,7 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>일반, 가장자리, 드래그, 마스터 캡슐에 동일한 소·중·대 크기와 굵게를 적용합니다.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>가장자리 캡슐 제목 측정 글자 수</value>
+    <value>가장자리 제목 최대 길이</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>제목의 앞 N개 Unicode 텍스트 문자만 사용해 가장자리 캡슐 너비를 계산합니다. 제목 내용과 일반 캡슐은 바뀌지 않으며, “전체”는 기존 너비를 유지합니다.</value>

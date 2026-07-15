@@ -400,7 +400,7 @@
     <value>Keep edge capsule when expanded</value>
   </data>
   <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>Remember edge-open position</value>
+    <value>Remember open position</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>Click edge capsule again to retract paper</value>
@@ -427,7 +427,7 @@
     <value>Markdown display</value>
   </data>
   <data name="SettingsFullscreenTopmostMode" xml:space="preserve">
-    <value>Fullscreen handling</value>
+    <value>Yield to fullscreen</value>
   </data>
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>Todo size</value>
@@ -570,7 +570,7 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>Show hover hints</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
-    <value>Hide paper taskbar icons</value>
+    <value>Hide icons from taskbar</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
     <value>When on, expanded papers do not appear on the Windows taskbar. They remain accessible from the tray, desktop papers, and capsules. On by default. This is enabled automatically when papers are hidden from window switching.</value>
@@ -699,7 +699,7 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>Apply one size and bold setting consistently to normal, edge, drag, and master capsules.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>Edge capsule title measure limit</value>
+    <value>Edge title max length</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Measure edge capsule width from at most the first N Unicode text characters. The title remains intact and normal capsules are unaffected. All keeps the original width behavior.</value>

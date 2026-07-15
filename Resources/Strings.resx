@@ -413,7 +413,7 @@
     <value>展开时保留边缘胶囊</value>
   </data>
   <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>记住边缘胶囊展开位置</value>
+    <value>记住展开位置</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>再次点击边缘胶囊收回纸片</value>
@@ -440,7 +440,7 @@
     <value>Markdown 显示</value>
   </data>
   <data name="SettingsFullscreenTopmostMode" xml:space="preserve">
-    <value>全屏窗口处理</value>
+    <value>避让全屏窗口</value>
   </data>
   <data name="SettingsTodoVisualSize" xml:space="preserve">
     <value>待办大小</value>
@@ -592,7 +592,7 @@
     <value>显示悬停提示</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
-    <value>隐藏纸片任务栏图标</value>
+    <value>从任务栏隐藏图标</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
     <value>开启后，展开的纸片不会显示在 Windows 任务栏上；仍可通过托盘、桌面纸片和胶囊访问。默认开启。从窗口切换中隐藏纸片时会自动启用。</value>
@@ -712,7 +712,7 @@
     <value>统一调整普通胶囊、贴边胶囊、拖动胶囊和主胶囊文字的小、中、大字号与加粗。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>边缘胶囊标题测量字符数</value>
+    <value>边缘标题最大长度</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>仅用标题前 N 个 Unicode 文本字符计算边缘胶囊宽度；标题内容不会截断，普通胶囊不受影响。选择“全部”时保持原有宽度。</value>
