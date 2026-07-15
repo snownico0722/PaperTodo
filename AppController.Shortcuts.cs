@@ -80,9 +80,39 @@ public sealed partial class AppController
             return;
         }
 
+        if (TryRecordRegisteredGlobalHotkey(commandId))
+        {
+            return;
+        }
+
         _ = Application.Current.Dispatcher.InvokeAsync(
             () => ExecuteStartupCommand(new StartupCommand(definition.StartupCommandKind)),
             DispatcherPriority.Input);
+    }
+
+    private bool TryRecordRegisteredGlobalHotkey(string commandId)
+    {
+        if (_settingsPage != SettingsPage.Shortcuts ||
+            _shortcutRecordingCommandId is not { Length: > 0 } recordingCommandId)
+        {
+            return false;
+        }
+
+        if (_globalHotkeys is not { } hotkeys ||
+            !hotkeys.ActiveBindings.TryGetValue(commandId, out var binding) ||
+            string.IsNullOrEmpty(binding))
+        {
+            // A WM_HOTKEY received during recording must never fall through to its old action.
+            return true;
+        }
+
+        EnsureShortcutDraft();
+        _shortcutDraft![recordingCommandId] = binding;
+        _shortcutRecordingCommandId = null;
+        _shortcutApplyFailureId = null;
+        _shortcutApplyFailure = GlobalShortcutRegistrationFailure.None;
+        RefreshSettingsWindowContent();
+        return true;
     }
 
     private void EnsureShortcutDraft()
