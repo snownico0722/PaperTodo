@@ -733,19 +733,34 @@
     <value>常用</value>
   </data>
   <data name="ShortcutGroupEdgeSequences" xml:space="preserve">
-    <value>边缘胶囊</value>
+    <value>快速启动侧边胶囊</value>
+  </data>
+  <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
+    <value>用修饰键 + 数字 1–9 快速打开侧边队列中的第 N 个胶囊。主胶囊不计入序号；拖动边缘胶囊时会暂时忽略这些快捷键。</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
     <value>切换后立即注册或注销本侧 1–9 整组快捷键。</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>请按两枚修饰键加任意数字 1–9；数字固定，修饰键用于本侧整组 1–9。</value>
+    <value>请按 2～3 个修饰键（Ctrl / Alt / Shift / Win），可再按任意键确认。数字 1–9 固定不可改；左右队列不能使用相同修饰键。</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
-    <value>左侧 1–9</value>
+    <value>左侧队列</value>
   </data>
   <data name="ShortcutEdgeRightSequence" xml:space="preserve">
-    <value>右侧 1–9</value>
+    <value>右侧队列</value>
+  </data>
+  <data name="ShortcutEdgeLeftTip" xml:space="preserve">
+    <value>优先查找左侧贴边队列的第 1–9 个胶囊，再按对侧与邻屏顺序搜索。默认修饰键为 Ctrl+Shift。</value>
+  </data>
+  <data name="ShortcutEdgeRightTip" xml:space="preserve">
+    <value>优先查找右侧贴边队列的第 1–9 个胶囊，再按对侧与邻屏顺序搜索。默认修饰键为 Ctrl+Alt。</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
+    <value>1–9</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
+    <value>数字固定为 1–9，不可修改；只可更换前面的修饰键。</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>命令</value>
@@ -762,14 +777,11 @@
   <data name="ShortcutUnassigned" xml:space="preserve">
     <value>未设置</value>
   </data>
-  <data name="ShortcutClear" xml:space="preserve">
-    <value>清空</value>
-  </data>
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>恢复默认</value>
   </data>
   <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>全部恢复默认</value>
+    <value>恢复默认</value>
   </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>未设置</value>
@@ -785,9 +797,6 @@
   </data>
   <data name="ShortcutStatusRegistrationFailed" xml:space="preserve">
     <value>注册失败</value>
-  </data>
-  <data name="ShortcutStatusPendingSave" xml:space="preserve">
-    <value>待保存</value>
   </data>
   <data name="ShortcutShowAll" xml:space="preserve">
     <value>显示全部</value>

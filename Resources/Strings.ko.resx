@@ -720,19 +720,34 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>일반</value>
   </data>
   <data name="ShortcutGroupEdgeSequences" xml:space="preserve">
-    <value>가장자리 캡슐</value>
+    <value>가장자리 캡슐 빠른 실행</value>
+  </data>
+  <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
+    <value>수정 키 + 숫자 1~9로 가장자리 큐의 N번째 캡슐을 엽니다. 마스터 캡슐은 번호에 포함되지 않으며, 가장자리 캡슐을 끄는 동안에는 무시됩니다.</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
     <value>전환 즉시 같은 쪽의 1~9 전체를 등록하거나 해제합니다.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>수정 키 두 개와 1~9 중 아무 숫자나 누르세요. 숫자는 고정이며 수정 키는 같은 쪽 1~9 전체에 적용됩니다.</value>
+    <value>수정 키(Ctrl / Alt / Shift / Win) 2~3개를 누르고, 필요하면 아무 키로 확정하세요. 숫자 1~9는 고정이며 좌우 큐는 같은 수정 키를 쓸 수 없습니다.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
-    <value>왼쪽 1~9</value>
+    <value>왼쪽 큐</value>
   </data>
   <data name="ShortcutEdgeRightSequence" xml:space="preserve">
-    <value>오른쪽 1~9</value>
+    <value>오른쪽 큐</value>
+  </data>
+  <data name="ShortcutEdgeLeftTip" xml:space="preserve">
+    <value>왼쪽 가장자리 큐 1~9번을 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다. 기본 수정 키는 Ctrl+Shift입니다.</value>
+  </data>
+  <data name="ShortcutEdgeRightTip" xml:space="preserve">
+    <value>오른쪽 가장자리 큐 1~9번을 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다. 기본 수정 키는 Ctrl+Alt입니다.</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
+    <value>1~9</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
+    <value>숫자는 1~9로 고정되어 바꿀 수 없으며, 수정 키만 변경할 수 있습니다.</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>명령</value>
@@ -749,14 +764,11 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
   <data name="ShortcutUnassigned" xml:space="preserve">
     <value>설정 안 함</value>
   </data>
-  <data name="ShortcutClear" xml:space="preserve">
-    <value>지우기</value>
-  </data>
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>기본값 복원</value>
   </data>
   <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>모두 기본값 복원</value>
+    <value>기본값 복원</value>
   </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>설정 안 함</value>
@@ -772,9 +784,6 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
   </data>
   <data name="ShortcutStatusRegistrationFailed" xml:space="preserve">
     <value>등록 실패</value>
-  </data>
-  <data name="ShortcutStatusPendingSave" xml:space="preserve">
-    <value>저장 안 됨</value>
   </data>
   <data name="ShortcutShowAll" xml:space="preserve">
     <value>모두 표시</value>

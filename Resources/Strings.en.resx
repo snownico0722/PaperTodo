@@ -720,19 +720,34 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>General</value>
   </data>
   <data name="ShortcutGroupEdgeSequences" xml:space="preserve">
-    <value>Edge capsules</value>
+    <value>Quick-launch edge capsules</value>
+  </data>
+  <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
+    <value>Use modifiers + digits 1–9 to open the Nth capsule in an edge queue. The master capsule is not counted; edge shortcuts are ignored while dragging an edge capsule.</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
     <value>Register or unregister this side’s full 1–9 shortcuts immediately.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>Press exactly two modifiers plus any digit 1–9. Digits stay fixed; the modifiers apply to this side’s whole 1–9 set.</value>
+    <value>Press 2–3 modifiers (Ctrl / Alt / Shift / Win), optionally confirmed with any key. Digits 1–9 are fixed. Left and right queues cannot share the same modifiers.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
-    <value>Left 1–9</value>
+    <value>Left queue</value>
   </data>
   <data name="ShortcutEdgeRightSequence" xml:space="preserve">
-    <value>Right 1–9</value>
+    <value>Right queue</value>
+  </data>
+  <data name="ShortcutEdgeLeftTip" xml:space="preserve">
+    <value>Prefer the left edge queue’s 1st–9th capsules, then the opposite side and neighboring monitors. Default modifiers: Ctrl+Shift.</value>
+  </data>
+  <data name="ShortcutEdgeRightTip" xml:space="preserve">
+    <value>Prefer the right edge queue’s 1st–9th capsules, then the opposite side and neighboring monitors. Default modifiers: Ctrl+Alt.</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
+    <value>1–9</value>
+  </data>
+  <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
+    <value>Digits are fixed to 1–9 and cannot be changed; only the modifiers can be customized.</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>Command</value>
@@ -749,14 +764,11 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   <data name="ShortcutUnassigned" xml:space="preserve">
     <value>Unassigned</value>
   </data>
-  <data name="ShortcutClear" xml:space="preserve">
-    <value>Clear</value>
-  </data>
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>Restore default</value>
   </data>
   <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>Restore all defaults</value>
+    <value>Restore defaults</value>
   </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>Unassigned</value>
@@ -772,9 +784,6 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   </data>
   <data name="ShortcutStatusRegistrationFailed" xml:space="preserve">
     <value>Registration failed</value>
-  </data>
-  <data name="ShortcutStatusPendingSave" xml:space="preserve">
-    <value>Not saved</value>
   </data>
   <data name="ShortcutShowAll" xml:space="preserve">
     <value>Show all</value>

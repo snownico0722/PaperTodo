@@ -74,7 +74,7 @@ internal static class GlobalShortcutCatalog
             {
                 if (source.TryGetValue(definition.Id, out var configured) &&
                     ShortcutGesture.TryParse(configured, out var configuredGesture) &&
-                    ShortcutGesture.HasExactlyTwoModifiers(configuredGesture.Modifiers))
+                    ShortcutGesture.HasEdgePrefixModifiers(configuredGesture.Modifiers))
                 {
                     modifiers = configuredGesture.Modifiers;
                     break;
@@ -149,6 +149,36 @@ internal static class GlobalShortcutCatalog
         return DefinitionsInGroup(group)[0];
     }
 
+    public static GlobalShortcutGroup OppositeEdgeGroup(GlobalShortcutGroup group)
+    {
+        return group switch
+        {
+            GlobalShortcutGroup.EdgeLeft => GlobalShortcutGroup.EdgeRight,
+            GlobalShortcutGroup.EdgeRight => GlobalShortcutGroup.EdgeLeft,
+            _ => throw new ArgumentOutOfRangeException(nameof(group))
+        };
+    }
+
+    public static bool TryGetEdgePrefixModifiers(
+        IReadOnlyDictionary<string, string> bindings,
+        GlobalShortcutGroup group,
+        out ModifierKeys modifiers)
+    {
+        modifiers = ModifierKeys.None;
+        foreach (var definition in DefinitionsInGroup(group))
+        {
+            if (bindings.TryGetValue(definition.Id, out var configured) &&
+                ShortcutGesture.TryParse(configured, out var gesture) &&
+                ShortcutGesture.HasEdgePrefixModifiers(gesture.Modifiers))
+            {
+                modifiers = gesture.Modifiers;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static IReadOnlyCollection<string> ExecutableIds { get; } =
         Definitions.Where(definition => definition.IsExecutable)
             .Select(definition => definition.Id)
@@ -206,13 +236,27 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
 
     public static bool HasExactlyTwoModifiers(ModifierKeys modifiers)
     {
+        return CountSupportedModifiers(modifiers) == 2;
+    }
+
+    /// <summary>
+    /// Edge queue prefixes: 2–3 of Ctrl/Alt/Shift/Win (no bare single modifier).
+    /// </summary>
+    public static bool HasEdgePrefixModifiers(ModifierKeys modifiers)
+    {
+        var count = CountSupportedModifiers(modifiers);
+        return count is >= 2 and <= 3;
+    }
+
+    public static int CountSupportedModifiers(ModifierKeys modifiers)
+    {
         const ModifierKeys supported = ModifierKeys.Control |
             ModifierKeys.Alt |
             ModifierKeys.Shift |
             ModifierKeys.Windows;
         if ((modifiers & ~supported) != ModifierKeys.None)
         {
-            return false;
+            return 0;
         }
 
         var count = 0;
@@ -220,7 +264,7 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         if (modifiers.HasFlag(ModifierKeys.Alt)) count++;
         if (modifiers.HasFlag(ModifierKeys.Shift)) count++;
         if (modifiers.HasFlag(ModifierKeys.Windows)) count++;
-        return count == 2;
+        return count;
     }
 
     public static bool IsEdgeOrdinalKey(Key key, int ordinal)
@@ -234,16 +278,20 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         return key is (>= Key.D1 and <= Key.D9) or (>= Key.NumPad1 and <= Key.NumPad9);
     }
 
-    public string ToEdgeSequenceDisplayString()
+    public string ToEdgePrefixDisplayString()
     {
-        if (Key == Key.None || !HasExactlyTwoModifiers(Modifiers))
+        if (!HasEdgePrefixModifiers(Modifiers))
         {
             return "";
         }
 
-        var parts = ModifierParts();
-        parts.Add("1–9");
-        return string.Join('+', parts);
+        return string.Join('+', ModifierParts());
+    }
+
+    public string ToEdgeSequenceDisplayString()
+    {
+        var prefix = ToEdgePrefixDisplayString();
+        return string.IsNullOrEmpty(prefix) ? "" : $"{prefix}+1–9";
     }
 
     public static bool TryParse(string? text, out ShortcutGesture gesture)

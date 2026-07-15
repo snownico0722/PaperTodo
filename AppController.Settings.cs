@@ -610,7 +610,14 @@ public sealed partial class AppController
 
     private void ShowSettingsWindow(SettingsPage page)
     {
+        var previousPage = _settingsPage;
         _settingsPage = page;
+        if (previousPage == SettingsPage.Shortcuts && page != SettingsPage.Shortcuts)
+        {
+            // A rejected auto-save remains visible long enough to explain the rollback, then clears
+            // when the user leaves the shortcut page or starts the next shortcut interaction.
+            ClearShortcutApplyFailure();
+        }
         if (page == SettingsPage.Shortcuts)
         {
             EnsureShortcutDraft();
@@ -678,10 +685,12 @@ public sealed partial class AppController
         };
         _settingsWindow = window;
         RefreshSettingsWindowContent();
-        window.Show();
+        // Resolve the final fitted size before the first frame, then switch to manual positioning.
+        // Later typography changes keep this top-left anchor and grow only toward the bottom.
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
         CenterSettingsWindow(window);
+        window.Show();
         window.Activate();
-        window.Dispatcher.BeginInvoke(() => CenterSettingsWindow(window), DispatcherPriority.Loaded);
     }
 
     private void RefreshSettingsWindowContent()
@@ -691,21 +700,56 @@ public sealed partial class AppController
             return;
         }
 
+        var window = _settingsWindow;
+        var preserveAnchor = window.IsVisible &&
+            double.IsFinite(window.Left) &&
+            double.IsFinite(window.Top);
+        var anchoredLeft = window.Left;
+        var anchoredTop = window.Top;
+
         InvalidateSystemThemeCacheIfNeeded();
         var width = SettingsWindowWidth();
-        _settingsWindow.Title = Strings.Get("TraySettings");
-        _settingsWindow.Width = width;
-        _settingsWindow.SizeToContent = SizeToContent.Manual;
-        _settingsWindow.FontFamily = AppTypography.UiFontFamily;
-        _settingsWindow.FontSize = AppTypography.Scale(12);
-        _settingsWindow.Language = AppTypography.Language;
 
-        // Fit once from real layout of all pages at the current typography, so options are not
-        // clipped and the height does not jump with a guessed Scale(base) formula.
-        var fittedHeight = MeasureRequiredSettingsWindowHeight(width);
-        _settingsWindow.Height = fittedHeight;
-        _settingsWindow.Content = BuildSettingsWindowContent(_settingsWindow, fittedHeight);
-        ApplyToolTipSetting(_settingsWindow);
+        // Measure natural page chrome (no ScrollViewer). Only enable scrolling when the tallest
+        // page exceeds the work-area cap — otherwise Auto scrollbars appear even with free space.
+        var naturalHeight = MeasureRequiredSettingsWindowHeight(width);
+        var maxHeight = SettingsWindowMaxHeight();
+        var needsScroll = naturalHeight > maxHeight + 0.5;
+        var fittedHeight = Math.Min(naturalHeight, maxHeight);
+        // Pin border height only when scrolling (viewport must be capped). When content fits,
+        // leave the border unconstrained so a slightly short measure cannot clip the last rows;
+        // the window height still uses the fitted value (with slack) as the outer frame.
+        var content = BuildSettingsWindowContent(
+            window,
+            fittedHeight: needsScroll ? fittedHeight : null,
+            enableScroll: needsScroll);
+
+        if (preserveAnchor)
+        {
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            window.Left = anchoredLeft;
+            window.Top = anchoredTop;
+        }
+
+        // Replace the content before resizing the native window. With a manual top-left anchor,
+        // a larger fitted height extends downward instead of recentering around the old bounds.
+        window.Title = Strings.Get("TraySettings");
+        window.SizeToContent = SizeToContent.Manual;
+        window.FontFamily = AppTypography.UiFontFamily;
+        window.FontSize = AppTypography.Scale(12);
+        window.Language = AppTypography.Language;
+        window.Content = content;
+        window.Width = width;
+        window.Height = fittedHeight;
+
+        if (preserveAnchor)
+        {
+            // WPF/Win32 may round the new bounds to device pixels; explicitly restore the anchor.
+            window.Left = anchoredLeft;
+            window.Top = anchoredTop;
+        }
+
+        ApplyToolTipSetting(window);
     }
 
     private void RefreshTypography()
@@ -724,7 +768,10 @@ public sealed partial class AppController
         ArrangeDeepCapsules(animate: false);
     }
 
-    private UIElement BuildSettingsWindowContent(Window window, double? fittedHeight = null)
+    private UIElement BuildSettingsWindowContent(
+        Window window,
+        double? fittedHeight = null,
+        bool enableScroll = false)
     {
         var root = new DockPanel
         {
@@ -791,19 +838,13 @@ public sealed partial class AppController
 
         if (_settingsPage == SettingsPage.Shortcuts)
         {
-            var shortcutFooter = BuildSettingsFooter();
-            DockPanel.SetDock(shortcutFooter, Dock.Bottom);
-            root.Children.Add(shortcutFooter);
-            root.Children.Add(BuildShortcutSettingsPage());
+            root.Children.Add(WrapSettingsPageContent(BuildShortcutSettingsPage(), enableScroll));
             return WrapSettingsWindowContent(root, fittedHeight);
         }
 
         if (_settingsPage == SettingsPage.Visual)
         {
-            var visualFooter = BuildSettingsFooter();
-            DockPanel.SetDock(visualFooter, Dock.Bottom);
-            root.Children.Add(visualFooter);
-            root.Children.Add(BuildVisualSettingsPage());
+            root.Children.Add(WrapSettingsPageContent(BuildVisualSettingsPage(), enableScroll));
             return WrapSettingsWindowContent(root, fittedHeight);
         }
 
@@ -904,11 +945,7 @@ public sealed partial class AppController
         columns.Children.Add(separator);
         columns.Children.Add(rightColumn);
 
-        var footer = BuildSettingsFooter();
-        DockPanel.SetDock(footer, Dock.Bottom);
-        root.Children.Add(footer);
-
-        root.Children.Add(columns);
+        root.Children.Add(WrapSettingsPageContent(columns, enableScroll));
 
         return WrapSettingsWindowContent(root, fittedHeight);
     }
@@ -1119,8 +1156,40 @@ public sealed partial class AppController
         return container;
     }
 
-    private static Border WrapSettingsWindowContent(DockPanel root, double? fittedHeight = null)
+    private static UIElement WrapSettingsPageContent(UIElement content, bool enableScroll)
     {
+        // Overlay signature sits on the bottom-right; keep bottom inset so the last row is not
+        // hidden under it. Only use ScrollViewer when the window is capped by the work area.
+        var body = new Border
+        {
+            Padding = new Thickness(0, 0, 0, enableScroll ? 28 : 24),
+            Child = content
+        };
+
+        if (!enableScroll)
+        {
+            return body;
+        }
+
+        return new ScrollViewer
+        {
+            Content = body,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false,
+            PanningMode = PanningMode.VerticalOnly
+        };
+    }
+
+    private Border WrapSettingsWindowContent(DockPanel root, double? fittedHeight = null)
+    {
+        var overlay = new Grid();
+        overlay.Children.Add(root);
+
+        var signature = BuildSettingsSignature();
+        Panel.SetZIndex(signature, 10);
+        overlay.Children.Add(signature);
+
         var border = new Border
         {
             Background = TrayPaperBrush,
@@ -1129,11 +1198,15 @@ public sealed partial class AppController
             CornerRadius = new CornerRadius(12),
             Width = SettingsWindowWidth(),
             Padding = new Thickness(14, 12, 14, 14),
-            Child = root
+            // Fill the window client area so shorter pages keep a stable frame without clipping
+            // when the outer window is sized to the tallest measured page.
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = overlay
         };
         if (fittedHeight is > 0)
         {
-            // Keep chrome height stable across pages (max of measured pages); shorter pages leave empty space.
+            // Only when scrolling: pin the chrome so the ScrollViewer gets a finite viewport.
             border.Height = fittedHeight.Value;
         }
 
@@ -1165,7 +1238,8 @@ public sealed partial class AppController
                     EnsureShortcutDraft();
                 }
 
-                var probe = BuildSettingsWindowContent(_settingsWindow);
+                // Probe without ScrollViewer / fixed height so DesiredSize is true content chrome.
+                var probe = BuildSettingsWindowContent(_settingsWindow, fittedHeight: null, enableScroll: false);
                 probe.Measure(new Size(windowWidth, double.PositiveInfinity));
                 maxHeight = Math.Max(maxHeight, probe.DesiredSize.Height);
             }
@@ -1180,11 +1254,13 @@ public sealed partial class AppController
             maxHeight = 400;
         }
 
-        // Ceiling avoids sub-pixel clipping of the last row after layout rounding.
-        return Math.Min(Math.Ceiling(maxHeight + 2), SettingsWindowMaxHeight());
+        // Generous slack for DPI rounding, UseLayoutRounding, and font metric variance after the
+        // live tree is attached — too little here clips the last settings rows without a scrollbar.
+        // Do not clamp to work-area here — caller decides scroll vs grow.
+        return Math.Ceiling(maxHeight + 16);
     }
 
-    private UIElement BuildSettingsFooter()
+    private UIElement BuildSettingsSignature()
     {
         var signatureText = new TextBlock
         {
@@ -1197,11 +1273,13 @@ public sealed partial class AppController
 
         var signature = new Border
         {
-            Background = Brushes.Transparent,
+            Background = TrayPaperBrush,
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 2, 0),
-            Padding = new Thickness(6, 2, 0, 0),
+            VerticalAlignment = VerticalAlignment.Bottom,
+            // Slight inset from the right edge; keep close to the border (was reserving full scrollbar width).
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(6, 2, 0, 2),
             Child = signatureText,
             ToolTip = AuthorGithubUrl
         };
@@ -1673,7 +1751,11 @@ public sealed partial class AppController
 
         var area = SystemParameters.WorkArea;
         var width = window.ActualWidth > 1 ? window.ActualWidth : window.Width;
-        var height = window.ActualHeight > 1 ? window.ActualHeight : 280;
+        var height = window.ActualHeight > 1
+            ? window.ActualHeight
+            : double.IsFinite(window.Height) && window.Height > 1
+                ? window.Height
+                : 280;
         var minLeft = area.Left + 16;
         var minTop = area.Top + 16;
         var maxLeft = area.Right - width - 16;
