@@ -742,7 +742,7 @@
     <value>切换后立即注册或注销本侧 1–9 整组快捷键。</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>请按 2～3 个修饰键（Ctrl / Alt / Shift / Win），可再按任意键确认。数字 1–9 固定不可改；左右队列不能使用相同修饰键。</value>
+    <value>同时按下并松开 2～3 个修饰键（Ctrl / Alt / Shift / Win）即可完成录入。数字 1–9 固定不可改；左右队列不能使用相同修饰键。</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>左侧队列</value>

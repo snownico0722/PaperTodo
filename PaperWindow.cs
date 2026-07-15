@@ -62,6 +62,7 @@ public sealed partial class PaperWindow : Window
     private Button? _newNoteButton;
     private Button? _openMarkdownButton;
     private Button? _linkNoteButton;
+    private Grid? _topBar;
     private TextBlock? _titleText;
     private TextBox? _titleEditBox;
     private TextBlock? _textZoomIndicator;
@@ -129,7 +130,7 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleGap = EdgeCapsuleLayout.Gap;
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double WindowChromeInset = WindowChromeMargin * 2;
-    private const double TitleBarHeight = PaperLayoutDefaults.TopBarHeight;
+    private static double TitleBarHeight => AppTypography.FitChrome(PaperLayoutDefaults.TopBarHeight);
     private const int CollapseShellFadeMilliseconds = 70;
     private const int CollapseResizeMilliseconds = 150;
     private const int ExpandAnimationMilliseconds = 220;
@@ -1294,8 +1295,7 @@ public sealed partial class PaperWindow : Window
             _titleText.FontFamily = AppTypography.UiFontFamily;
             _titleText.FontSize = TitleFontSize;
             _titleText.FontWeight = TitleFontWeight;
-            _titleText.Height = TitleLineHeight + 1;
-            _titleText.LineHeight = TitleLineHeight;
+            _titleText.MinHeight = TitleLineHeight + 1;
         }
 
         if (_titleEditBox != null)
@@ -1303,8 +1303,20 @@ public sealed partial class PaperWindow : Window
             _titleEditBox.FontFamily = AppTypography.UiFontFamily;
             _titleEditBox.FontSize = TitleFontSize;
             _titleEditBox.FontWeight = TitleFontWeight;
-            _titleEditBox.Height = TitleLineHeight + 1;
+            _titleEditBox.MinHeight = TitleLineHeight + 1;
         }
+
+        if (_topBar != null)
+        {
+            _topBar.Height = TitleBarHeight;
+        }
+
+        UpdateIconButtonChrome(_paperIconButton, 23);
+        UpdateIconButtonChrome(_newTodoButton);
+        UpdateIconButtonChrome(_newNoteButton);
+        UpdateIconButtonChrome(_openMarkdownButton);
+        UpdateIconButtonChrome(_linkNoteButton, 24);
+        UpdateIconButtonChrome(_closeButton);
 
         if (_openMarkdownButton != null)
         {
@@ -1376,15 +1388,35 @@ public sealed partial class PaperWindow : Window
         RefreshThemedContextMenus();
 
         RefreshPaperTitle();
-        if (_paper.IsCollapsed && !IsPaperFormTransitioning)
+        ApplyCurrentCollapsedCapsuleWidth();
+    }
+
+    private void ApplyCurrentCollapsedCapsuleWidth()
+    {
+        if (!_paper.IsCollapsed || IsPaperFormTransitioning)
         {
-            MoveWindowWithoutGeometrySave(() =>
-            {
-                var width = CapsuleWindowWidth();
-                MinWidth = width;
-                Width = width;
-            });
+            return;
         }
+
+        var previousWidth = double.IsFinite(Width) && Width > 0 ? Width : ActualWidth;
+        var width = CapsuleWindowWidth();
+        var workArea = WindowWorkAreaHelper.WorkAreaFor(this);
+        var preserveRightEdge = !HasDeepCapsuleSlotPlacement &&
+            double.IsFinite(Left) &&
+            previousWidth > 0 &&
+            !workArea.IsEmpty &&
+            Math.Abs(workArea.Right - (Left + previousWidth)) <= WindowChromeMargin + 2;
+
+        MoveWindowWithoutGeometrySave(() =>
+        {
+            if (preserveRightEdge)
+            {
+                Left = RoundToDevicePixelX(Left + previousWidth - width);
+            }
+
+            MinWidth = width;
+            Width = width;
+        });
     }
 
     private static bool TryGetSolidColor(Brush? brush, out Color color)
@@ -1597,7 +1629,7 @@ public sealed partial class PaperWindow : Window
 
     private void BuildTopBar()
     {
-        var top = new Grid
+        var top = _topBar = new Grid
         {
             Height = TitleBarHeight,
             Margin = new Thickness(3, 3, 6, 0),
@@ -1649,7 +1681,7 @@ public sealed partial class PaperWindow : Window
         titleArea.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         _paperIconButton = IconButton("", _paper.AlwaysOnTop ? Strings.Get("Unpin") : Strings.Get("Pin"));
-        _paperIconButton.Width = 23;
+        _paperIconButton.Width = AppTypography.FitChrome(23);
         _paperIconButton.HorizontalAlignment = HorizontalAlignment.Left;
         _paperIconButton.VerticalAlignment = VerticalAlignment.Center;
         _paperIconButton.Click += (_, _) => ToggleTopmost();
@@ -1688,9 +1720,7 @@ public sealed partial class PaperWindow : Window
         {
             Foreground = TextBrush,
             FontSize = TitleFontSize,
-            Height = TitleLineHeight + 1,
-            LineHeight = TitleLineHeight,
-            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1705,7 +1735,7 @@ public sealed partial class PaperWindow : Window
             Foreground = TextBrush,
             CaretBrush = TextBrush,
             FontSize = TitleFontSize,
-            Height = TitleLineHeight + 1,
+            MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
             MaxLength = PaperTitles.MaxTitleLength,
             // MaxLength is only a coarse UTF-16 guard; the real title limit is applied on commit
@@ -1782,7 +1812,7 @@ public sealed partial class PaperWindow : Window
         if (_paper.Type == PaperTypes.Note)
         {
             _linkNoteButton = IconButton("⌖", Strings.Get("ToolTipDragNoteToTodo"));
-            _linkNoteButton.Width = 24;
+            _linkNoteButton.Width = AppTypography.FitChrome(24);
             _linkNoteButton.FontSize = AppTypography.Scale(13);
             _linkNoteButton.Cursor = Cursors.Cross;
             _linkNoteButton.Visibility = _controller.State.EnableTodoNoteLinks ? Visibility.Visible : Visibility.Collapsed;
@@ -2683,11 +2713,22 @@ public sealed partial class PaperWindow : Window
         {
             Content = text,
             ToolTip = tooltip,
-            Width = 28,
-            Height = 24,
+            Width = AppTypography.FitChrome(28),
+            Height = AppTypography.FitChrome(24),
             Margin = new Thickness(1, 0, 1, 0),
             Style = BuildIconButtonStyle()
         };
+    }
+
+    private static void UpdateIconButtonChrome(Button? button, double normalWidth = 28)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        button.Width = AppTypography.FitChrome(normalWidth);
+        button.Height = AppTypography.FitChrome(24);
     }
 
     private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)

@@ -778,6 +778,7 @@ public sealed partial class PaperWindow
                 _shell.Height = double.NaN;
 
                 CompletePaperFormTransition(collapsed);
+                ApplyCurrentCollapsedCapsuleWidth();
                 // Re-judge snap state and force re-apply: transition-time position messages
                 // were guarded off, and ResetTransitionVisuals rewrote the corner radius.
                 RefreshSnappedPresentation(forceApply: true);
@@ -838,6 +839,7 @@ public sealed partial class PaperWindow
             Height = finalTargetHeight;
 
             CompletePaperFormTransition(collapsed);
+            ApplyCurrentCollapsedCapsuleWidth();
             // Same as the animated path: re-judge and force re-apply after the transition
             // rewrote the chrome visuals.
             RefreshSnappedPresentation(forceApply: true);

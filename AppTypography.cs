@@ -39,6 +39,13 @@ public static class AppTypography
         return Math.Round(fontSize * _scale, 1, MidpointRounding.AwayFromZero);
     }
 
+    public static double FitChrome(double normalSize)
+    {
+        return _scale <= 1.0
+            ? normalSize
+            : Math.Ceiling(normalSize * _scale);
+    }
+
     public static void Configure(string? preset, double scale = 1.0)
     {
         _preset = UiFontPresets.Normalize(preset);

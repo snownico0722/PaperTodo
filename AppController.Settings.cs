@@ -365,7 +365,7 @@ public sealed partial class AppController
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(0, 4, 0, 8),
             FontSize = AppTypography.Scale(13),
-            Height = 28,
+            Height = AppTypography.FitChrome(28),
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsTextBoxStyle()
@@ -667,6 +667,7 @@ public sealed partial class AppController
             Keyboard.ClearFocus();
         };
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
+        window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
         window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
         window.Closed += (_, _) =>
         {
@@ -680,6 +681,8 @@ public sealed partial class AppController
             _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
             _settingsCapsuleCollapseAllCheckBox = null;
+            _settingsPageScrollViewer = null;
+            _settingsPageScrollViewerPage = null;
             DiscardShortcutDraft();
             _settingsWindow = null;
         };
@@ -701,6 +704,9 @@ public sealed partial class AppController
         }
 
         var window = _settingsWindow;
+        var previousScrollOffset = _settingsPageScrollViewerPage == _settingsPage
+            ? _settingsPageScrollViewer?.VerticalOffset ?? 0
+            : 0;
         var preserveAnchor = window.IsVisible &&
             double.IsFinite(window.Left) &&
             double.IsFinite(window.Top);
@@ -723,6 +729,13 @@ public sealed partial class AppController
             window,
             fittedHeight: needsScroll ? fittedHeight : null,
             enableScroll: needsScroll);
+        if (_settingsPageScrollViewer is { } scrollViewer && previousScrollOffset > 0)
+        {
+            scrollViewer.Loaded += (_, _) => scrollViewer.Dispatcher.BeginInvoke(
+                (Action)(() => scrollViewer.ScrollToVerticalOffset(
+                    Math.Min(previousScrollOffset, scrollViewer.ScrollableHeight))),
+                DispatcherPriority.ContextIdle);
+        }
 
         if (preserveAnchor)
         {
@@ -792,7 +805,14 @@ public sealed partial class AppController
         {
             if (e.ChangedButton == MouseButton.Left)
             {
+                var previousWorkArea = WindowWorkAreaHelper.WorkAreaFor(window);
                 try { window.DragMove(); } catch { }
+                if (!previousWorkArea.Equals(WindowWorkAreaHelper.WorkAreaFor(window)))
+                {
+                    window.Dispatcher.BeginInvoke(
+                        (Action)RefreshSettingsWindowContent,
+                        DispatcherPriority.Background);
+                }
             }
         };
 
@@ -839,13 +859,13 @@ public sealed partial class AppController
         if (_settingsPage == SettingsPage.Shortcuts)
         {
             root.Children.Add(WrapSettingsPageContent(BuildShortcutSettingsPage(), enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight);
+            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
         }
 
         if (_settingsPage == SettingsPage.Visual)
         {
             root.Children.Add(WrapSettingsPageContent(BuildVisualSettingsPage(), enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight);
+            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
         }
 
         var columns = new Grid
@@ -947,7 +967,7 @@ public sealed partial class AppController
 
         root.Children.Add(WrapSettingsPageContent(columns, enableScroll));
 
-        return WrapSettingsWindowContent(root, fittedHeight);
+        return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
     }
 
     private UIElement BuildVisualSettingsPage()
@@ -1156,7 +1176,7 @@ public sealed partial class AppController
         return container;
     }
 
-    private static UIElement WrapSettingsPageContent(UIElement content, bool enableScroll)
+    private UIElement WrapSettingsPageContent(UIElement content, bool enableScroll)
     {
         // Overlay signature sits on the bottom-right; keep bottom inset so the last row is not
         // hidden under it. Only use ScrollViewer when the window is capped by the work area.
@@ -1168,10 +1188,12 @@ public sealed partial class AppController
 
         if (!enableScroll)
         {
+            _settingsPageScrollViewer = null;
+            _settingsPageScrollViewerPage = _settingsPage;
             return body;
         }
 
-        return new ScrollViewer
+        var scrollViewer = new ScrollViewer
         {
             Content = body,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -1179,14 +1201,20 @@ public sealed partial class AppController
             CanContentScroll = false,
             PanningMode = PanningMode.VerticalOnly
         };
+        _settingsPageScrollViewer = scrollViewer;
+        _settingsPageScrollViewerPage = _settingsPage;
+        return scrollViewer;
     }
 
-    private Border WrapSettingsWindowContent(DockPanel root, double? fittedHeight = null)
+    private Border WrapSettingsWindowContent(
+        DockPanel root,
+        double? fittedHeight = null,
+        bool reserveScrollBar = false)
     {
         var overlay = new Grid();
         overlay.Children.Add(root);
 
-        var signature = BuildSettingsSignature();
+        var signature = BuildSettingsSignature(reserveScrollBar);
         Panel.SetZIndex(signature, 10);
         overlay.Children.Add(signature);
 
@@ -1260,7 +1288,7 @@ public sealed partial class AppController
         return Math.Ceiling(maxHeight + 16);
     }
 
-    private UIElement BuildSettingsSignature()
+    private UIElement BuildSettingsSignature(bool reserveScrollBar)
     {
         var signatureText = new TextBlock
         {
@@ -1277,8 +1305,12 @@ public sealed partial class AppController
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
-            // Slight inset from the right edge; keep close to the border (was reserving full scrollbar width).
-            Margin = new Thickness(0, 0, 4, 0),
+            // Keep the overlay clear of the vertical scrollbar when the page is capped.
+            Margin = new Thickness(
+                0,
+                0,
+                reserveScrollBar ? SystemParameters.VerticalScrollBarWidth + 4 : 4,
+                0),
             Padding = new Thickness(6, 2, 0, 2),
             Child = signatureText,
             ToolTip = AuthorGithubUrl
@@ -1322,9 +1354,9 @@ public sealed partial class AppController
         return Math.Clamp(SystemParameters.WorkArea.Width - 96, 560, 680);
     }
 
-    private static double SettingsWindowMaxHeight()
+    private double SettingsWindowMaxHeight()
     {
-        return Math.Max(260, SystemParameters.WorkArea.Height - 48);
+        return Math.Max(260, WindowWorkAreaHelper.WorkAreaFor(_settingsWindow).Height - 48);
     }
 
     private static TextBlock SettingsSectionLabel(string text)

@@ -28,6 +28,8 @@ public sealed partial class AppController
     }
 
     private SettingsPage _settingsPage;
+    private ScrollViewer? _settingsPageScrollViewer;
+    private SettingsPage? _settingsPageScrollViewerPage;
     private GlobalHotkeyManager? _globalHotkeys;
     private Dictionary<string, string>? _shortcutDraft;
     private Dictionary<string, bool>? _shortcutEnabledDraft;
@@ -157,7 +159,7 @@ public sealed partial class AppController
         EnsureShortcutDraft();
         if (definition.IsEdgeCapsule)
         {
-            // 2–3 modifiers only; any non-modifier key (usually 1–9) commits. Digits stay fixed.
+            // A non-modifier key can still confirm; modifier-only recording completes on key-up.
             if (!ShortcutGesture.HasEdgePrefixModifiers(gesture.Modifiers) ||
                 ShortcutGesture.IsModifierKey(gesture.Key) ||
                 gesture.Key == Key.None)
@@ -282,6 +284,41 @@ public sealed partial class AppController
         }
 
         var gesture = new ShortcutGesture(key, modifiers);
+        if (!TrySetRecordedShortcutDraft(commandId, gesture))
+        {
+            return;
+        }
+
+        _shortcutRecordingCommandId = null;
+        ApplyShortcutDraft(commandId);
+    }
+
+    private void OnSettingsWindowPreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (_settingsPage != SettingsPage.Shortcuts ||
+            _shortcutRecordingCommandId is not { Length: > 0 } commandId ||
+            GlobalShortcutCatalog.Find(commandId) is not { IsEdgeCapsule: true } definition)
+        {
+            return;
+        }
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var releasedModifier = key switch
+        {
+            Key.LeftCtrl or Key.RightCtrl => ModifierKeys.Control,
+            Key.LeftAlt or Key.RightAlt => ModifierKeys.Alt,
+            Key.LeftShift or Key.RightShift => ModifierKeys.Shift,
+            Key.LWin or Key.RWin => ModifierKeys.Windows,
+            _ => ModifierKeys.None
+        };
+        if (releasedModifier == ModifierKeys.None)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var modifiers = Keyboard.Modifiers | releasedModifier;
+        var gesture = ShortcutGesture.ForEdgeOrdinal(modifiers, definition.EdgeOrdinal);
         if (!TrySetRecordedShortcutDraft(commandId, gesture))
         {
             return;

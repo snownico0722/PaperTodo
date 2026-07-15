@@ -729,7 +729,7 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>전환 즉시 같은 쪽의 1~9 전체를 등록하거나 해제합니다.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>수정 키(Ctrl / Alt / Shift / Win) 2~3개를 누르고, 필요하면 아무 키로 확정하세요. 숫자 1~9는 고정이며 좌우 큐는 같은 수정 키를 쓸 수 없습니다.</value>
+    <value>수정 키(Ctrl / Alt / Shift / Win) 2~3개를 함께 눌렀다가 놓으면 기록이 완료됩니다. 숫자 1~9는 고정이며 좌우 큐는 같은 수정 키를 쓸 수 없습니다.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>왼쪽 큐</value>

@@ -729,7 +729,7 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
     <value>Register or unregister this side’s full 1–9 shortcuts immediately.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>Press 2–3 modifiers (Ctrl / Alt / Shift / Win), optionally confirmed with any key. Digits 1–9 are fixed. Left and right queues cannot share the same modifiers.</value>
+    <value>Press and release 2–3 modifiers (Ctrl / Alt / Shift / Win) to finish recording. Digits 1–9 are fixed. Left and right queues cannot share the same modifiers.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>Left queue</value>

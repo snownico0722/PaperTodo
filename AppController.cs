@@ -1239,6 +1239,7 @@ public sealed partial class AppController : IDisposable
         {
             m.RefreshEffectiveTopmost();
         }
+        RefreshSettingsWindowContent();
     }
 
     private bool HasDeepCapsuleReorderDragInProgress()
