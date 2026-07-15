@@ -228,6 +228,46 @@ internal sealed class LmdbImageDatabase : IDisposable
         }
     }
 
+    internal void UpdatePendingDeleteFlags(
+        IReadOnlyCollection<LmdbImagePendingDeleteUpdate> updates)
+    {
+        EnsureNotDisposed();
+        if (updates.Count == 0)
+        {
+            return;
+        }
+
+        var transaction = BeginTransaction(write: true);
+        try
+        {
+            foreach (var update in updates)
+            {
+                var key = ImageKey(update.ImageId);
+                if (!TryGet(transaction, _metadataDatabase, key, out var metadata) ||
+                    !TryDeserializeAsset(metadata, out var asset) ||
+                    !string.Equals(asset.Id, update.ImageId, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"Image '{update.ImageId}' has no valid metadata to update.");
+                }
+
+                asset.PendingDelete = update.PendingDelete;
+                Put(
+                    transaction,
+                    _metadataDatabase,
+                    key,
+                    JsonSerializer.SerializeToUtf8Bytes(asset, JsonOptions),
+                    flags: 0);
+            }
+
+            CommitTransaction(ref transaction);
+        }
+        finally
+        {
+            AbortTransaction(ref transaction);
+        }
+    }
+
     internal void DeleteImages(IReadOnlyCollection<string> imageIds)
     {
         EnsureNotDisposed();
@@ -508,3 +548,7 @@ internal sealed record LmdbImageIndex(
     int NextImageNumber);
 
 internal readonly record struct LmdbImageWrite(NoteImageAsset Asset, byte[] Bytes);
+
+internal readonly record struct LmdbImagePendingDeleteUpdate(
+    string ImageId,
+    bool PendingDelete);

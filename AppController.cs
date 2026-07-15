@@ -99,6 +99,7 @@ public sealed partial class AppController : IDisposable
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
         var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
+        TryCollectPendingImageDeletes();
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(State.UiFontPreset);
         ToolTipPreferences.Register(() => State.EnableToolTips);
@@ -2491,6 +2492,26 @@ public sealed partial class AppController : IDisposable
         }
     }
 
+    private void TryCollectPendingImageDeletes()
+    {
+        try
+        {
+            if (!_store.TryCollectProtectedImageIds(State, out var protectedImageIds))
+            {
+                return;
+            }
+
+            // Mark against the current in-memory document first, then physically remove only
+            // candidates that no persisted backup or recovery snapshot can still reach.
+            _imageStore.TrackReferences(State);
+            _imageStore.CollectPendingDeletes(protectedImageIds);
+        }
+        catch
+        {
+            // Collection is optional and destructive; any uncertainty keeps the image bytes.
+        }
+    }
+
     private static Style BuildDialogButtonStyle()
     {
         var style = new Style(typeof(Button));
@@ -2966,7 +2987,10 @@ public sealed partial class AppController : IDisposable
         _topmostRefreshTimer.Stop();
         _displayMetricsRefreshTimer.Stop();
 
-        TrySaveNow(sync: true);
+        if (TrySaveNow(sync: true))
+        {
+            TryCollectPendingImageDeletes();
+        }
 
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
@@ -3033,7 +3057,10 @@ public sealed partial class AppController : IDisposable
                 window.CommitPendingEditsForSave();
             }
 
-            TrySaveNow(sync: true);
+            if (TrySaveNow(sync: true))
+            {
+                TryCollectPendingImageDeletes();
+            }
         }
 
         _lifecycleState = AppLifecycleState.Exiting;

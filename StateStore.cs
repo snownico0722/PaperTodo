@@ -90,6 +90,125 @@ public sealed class StateStore
             innerEx);
     }
 
+    internal bool TryCollectProtectedImageIds(
+        AppState currentState,
+        out HashSet<string> protectedImageIds)
+    {
+        protectedImageIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            // The failed primary has not been copied to its recovery path yet. Until the first
+            // successful save completes, no image can be proven unreachable.
+            if (_preserveRecoveredLoadFilesOnNextSave ||
+                !TryAddImageReferences(currentState, protectedImageIds))
+            {
+                protectedImageIds.Clear();
+                return false;
+            }
+
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var hasPersistedState = FileExistsForCollection(FilePath);
+            AddIfExists(paths, BackupPath);
+
+            var directory = Path.GetDirectoryName(FilePath);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                directory = AppContext.BaseDirectory;
+            }
+
+            AddIfExists(paths, Path.Combine(directory, "data.crash_recovery.json"));
+            foreach (var path in Directory.EnumerateFiles(directory, "data.failed_load.*.json"))
+            {
+                paths.Add(path);
+            }
+            foreach (var path in Directory.EnumerateFiles(directory, "data.backup.used_for_recovery.*.json"))
+            {
+                paths.Add(path);
+            }
+
+            hasPersistedState |= paths.Count > 0;
+            if (!hasPersistedState)
+            {
+                protectedImageIds.Clear();
+                return false;
+            }
+
+            foreach (var path in paths)
+            {
+                var json = File.ReadAllText(path);
+                var snapshot = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
+                if (snapshot == null || !TryAddImageReferences(snapshot, protectedImageIds))
+                {
+                    protectedImageIds.Clear();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            // Image collection is destructive. An unreadable or malformed recovery snapshot
+            // therefore disables the whole collection pass instead of guessing reachability.
+            protectedImageIds.Clear();
+            return false;
+        }
+    }
+
+    private static void AddIfExists(HashSet<string> paths, string path)
+    {
+        if (FileExistsForCollection(path))
+        {
+            paths.Add(path);
+        }
+    }
+
+    private static bool FileExistsForCollection(string path)
+    {
+        try
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.Directory) != 0)
+            {
+                throw new InvalidDataException($"Expected a state file at '{path}'.");
+            }
+
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryAddImageReferences(AppState state, HashSet<string> imageIds)
+    {
+        if (state.Papers == null)
+        {
+            return false;
+        }
+
+        foreach (var paper in state.Papers)
+        {
+            if (paper == null)
+            {
+                return false;
+            }
+
+            var content = MarkdownImageReferences.StripRenderMarkers(paper.Content ?? "");
+            foreach (var imageId in MarkdownImageReferences.CollectImageIds(content))
+            {
+                imageIds.Add(imageId);
+            }
+        }
+
+        return true;
+    }
+
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private long _latestWrittenVersion = 0;
 
