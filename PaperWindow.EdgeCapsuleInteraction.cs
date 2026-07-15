@@ -129,7 +129,7 @@ public sealed partial class PaperWindow
             IconFontSize = CapsuleIconFontSizeForCurrentPaper(),
             LabelFontSize = CapsuleLabelFontSize,
             LabelFontWeight = CapsuleLabelFontWeight,
-            UiFontFamily = AppTypography.UiFontFamily,
+            UiFontFamily = CapsuleLabelFontFamily,
             SymbolFontFamily = AppTypography.SymbolFontFamily,
             Language = AppTypography.Language,
             PaperBrush = PaperBrush,

@@ -46,9 +46,11 @@ public sealed class MasterCapsuleWindow : Window
     private readonly AppController _controller;
     private double MasterGlyphFontSize => AppTypography.Scale(12);
     private double MasterLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
-    private FontWeight MasterLabelFontWeight => _controller.State.CapsuleTextBold
-        ? FontWeights.SemiBold
-        : FontWeights.Normal;
+    private FontFamily MasterLabelFontFamily =>
+        AppTypography.FontFamilyFor(content: false, bold: _controller.State.CapsuleTextBold);
+
+    private FontWeight MasterLabelFontWeight =>
+        AppTypography.FontWeightFor(_controller.State.CapsuleTextBold);
 
     // Which queue this master serves: (monitor device, edge). Each docked-capsule queue has its
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
@@ -201,6 +203,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             Text = Strings.Get("CapsuleCollapseAllLabel"),
             Foreground = Theme.WeakTextBrush,
+            FontFamily = MasterLabelFontFamily,
             FontSize = MasterLabelFontSize,
             FontWeight = MasterLabelFontWeight,
             Margin = new Thickness(MasterGlyphGap, 0, 0, 0),
@@ -314,7 +317,7 @@ public sealed class MasterCapsuleWindow : Window
         Language = AppTypography.Language;
         _glyph.FontFamily = AppTypography.SymbolFontFamily;
         _glyph.FontSize = MasterGlyphFontSize;
-        _label.FontFamily = AppTypography.UiFontFamily;
+        _label.FontFamily = MasterLabelFontFamily;
         _label.FontSize = MasterLabelFontSize;
         _label.FontWeight = MasterLabelFontWeight;
         MoveToTarget(animate: false);
@@ -416,13 +419,13 @@ public sealed class MasterCapsuleWindow : Window
             Strings.Get("CapsuleCollapseAllLabel"),
             MasterLabelFontSize,
             MasterLabelFontWeight,
-            AppTypography.UiFontFamily,
+            MasterLabelFontFamily,
             pixelsPerDip);
         var currentLabelWidth = MeasureText(
             _label.Text,
             MasterLabelFontSize,
             MasterLabelFontWeight,
-            AppTypography.UiFontFamily,
+            MasterLabelFontFamily,
             pixelsPerDip);
         var textWidth = Math.Max(expandedLabelWidth, currentLabelWidth);
         var bodyWidth = Math.Ceiling(

@@ -22,11 +22,11 @@ public static class NoteTypography
     public static double Heading3FontSize =>
         (14 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
 
-    public static FontFamily FontFamily => AppTypography.ContentFontFamily;
+    public static FontFamily FontFamily => AppTypography.FontFamilyFor(content: true, bold: _bold);
     public static FontFamily CodeFontFamily => AppTypography.CodeFontFamily;
     public static FontStyle FontStyle => FontStyles.Normal;
-    public static FontWeight FontWeight => _bold ? FontWeights.SemiBold : FontWeights.Normal;
-    public static FontWeight HeadingFontWeight => _bold ? FontWeights.Bold : FontWeights.SemiBold;
+    public static FontWeight FontWeight => AppTypography.FontWeightFor(_bold);
+    public static FontWeight HeadingFontWeight => AppTypography.HeadingFontWeightFor(_bold);
     public static FontStretch FontStretch => FontStretches.Normal;
     public static XmlLanguage Language => AppTypography.Language;
     public static Thickness ContentPadding => new(13, 8, 6, 8);

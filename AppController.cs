@@ -101,7 +101,7 @@ public sealed partial class AppController : IDisposable
         var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         TryCollectUnprotectedImages();
         NormalizePaperSystemVisibilitySettings();
-        AppTypography.Configure(State.UiFontPreset, State.Zoom);
+        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
 

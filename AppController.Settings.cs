@@ -183,11 +183,17 @@ public sealed partial class AppController
 
     private void ApplyTypographySettingsChange()
     {
-        AppTypography.Configure(State.UiFontPreset, State.Zoom);
+        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         SaveNow();
         RefreshTypography();
         RefreshSettingsWindowContent();
+    }
+
+    private void ToggleCustomFontEnhancedBold()
+    {
+        State.CustomFontEnhancedBold = !State.CustomFontEnhancedBold;
+        ApplyTypographySettingsChange();
     }
 
     private void SetMarkdownRenderMode(string mode)
@@ -996,6 +1002,13 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
+        var customBoldToggle = SettingsToggle(
+            Strings.Get("SettingsCustomFontEnhancedBold"),
+            State.CustomFontEnhancedBold,
+            ToggleCustomFontEnhancedBold);
+        // Only meaningful with papertodo + papertodo_bold (or PaperTodo_Bold) beside the exe.
+        customBoldToggle.IsEnabled = AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont;
+        leftColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsOverallFontScale")), "TipOverallFontScale"));
         leftColumn.Children.Add(CreateOverallFontScaleStepper());
 

@@ -506,6 +506,12 @@
 Choosing YaHei or DengXian unifies the UI, tray, capsules, todos, and note text under that font.
 If papertodo.ttf or papertodo.otf exists in the app folder, that custom font takes priority.</value>
   </data>
+  <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
+    <value>Enhanced custom bold</value>
+  </data>
+  <data name="TipCustomFontEnhancedBold" xml:space="preserve">
+    <value>When enabled, bold note, todo, title, and capsule text uses a bold font file from the app folder (PaperTodo_Bold.ttf / papertodo_bold.ttf) instead of synthetic semi-bold. Requires both the papertodo regular font and a matching bold file.</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>Basic mode applies light highlighting; Enhanced also styles headings, lists, and emphasis.</value>
   </data>

@@ -33,7 +33,7 @@ public sealed partial class PaperWindow
             BrightWeakTextBrush,
             TextBrush,
             WeakTextBrush,
-            AppTypography.UiFontFamily,
+            CapsuleLabelFontFamily,
             AppTypography.SymbolFontFamily,
             AppTypography.Language,
             !_controller.SuppressTopmostForFullscreenForeground));

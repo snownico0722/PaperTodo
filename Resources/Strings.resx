@@ -522,6 +522,12 @@
 手动选择雅黑或等线后，界面、托盘、胶囊、待办和笔记正文会统一使用所选字体。
 程序目录下存在 papertodo.ttf 或 papertodo.otf 时，会优先使用该自定义字体。</value>
   </data>
+  <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
+    <value>自定义字体增强加粗</value>
+  </data>
+  <data name="TipCustomFontEnhancedBold" xml:space="preserve">
+    <value>开启后，笔记、待办、标题和胶囊中勾选了「加粗」的文字会加载程序目录下的粗体字体文件（如 PaperTodo_Bold.ttf / papertodo_bold.ttf），而不是系统合成的半粗。需同时存在 papertodo 正文字体与对应粗体文件时才可启用。</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础模式只做轻量高亮；增强模式进一步美化标题、列表和强调。</value>
   </data>

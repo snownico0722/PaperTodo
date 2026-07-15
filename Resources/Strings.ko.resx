@@ -509,6 +509,12 @@
 YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본문이 선택한 글꼴로 통일됩니다.
 앱 폴더에 papertodo.ttf 또는 papertodo.otf가 있으면 해당 사용자 지정 글꼴을 우선 사용합니다.</value>
   </data>
+  <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
+    <value>사용자 글꼴 굵게 강화</value>
+  </data>
+  <data name="TipCustomFontEnhancedBold" xml:space="preserve">
+    <value>켜면 노트·할 일·제목·캡슐에서 「굵게」로 표시한 글자는 합성 세미볼드 대신 앱 폴더의 굵은 글꼴 파일(PaperTodo_Bold.ttf / papertodo_bold.ttf 등)을 사용합니다. papertodo 본문 글꼴과 대응하는 굵은 글꼴 파일이 모두 있어야 사용할 수 있습니다.</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>기본은 가벼운 강조만 적용하고, 확장은 제목, 목록, 강조까지 더 다듬어 표시합니다.</value>
   </data>

@@ -213,6 +213,10 @@ public sealed class AppState
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
+    /// <summary>
+    /// When a custom papertodo font is present, bold styles load papertodo_bold / PaperTodo_Bold instead of synthetic SemiBold.
+    /// </summary>
+    public bool CustomFontEnhancedBold { get; set; }
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
     public string NoteTextSize { get; set; } = VisualTextSizes.Medium;

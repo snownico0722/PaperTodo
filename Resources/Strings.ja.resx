@@ -509,6 +509,12 @@
 YaHei または DengXian を選ぶと、UI、トレイ、カプセル、ToDo、ノート本文の主文字をそのフォントに統一します。
 アプリフォルダーに papertodo.ttf または papertodo.otf がある場合は、そのカスタムフォントを優先します。</value>
   </data>
+  <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
+    <value>カスタムフォントの太字強化</value>
+  </data>
+  <data name="TipCustomFontEnhancedBold" xml:space="preserve">
+    <value>有効にすると、ノート・ToDo・タイトル・カプセルで「太字」にした文字は、合成 SemiBold ではなくアプリフォルダーの太字フォント（PaperTodo_Bold.ttf / papertodo_bold.ttf など）を使います。papertodo 本文フォントと対応する太字ファイルの両方が必要です。</value>
+  </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基本は軽いハイライトのみ、拡張は見出し・リスト・強調も整えて表示します。</value>
   </data>

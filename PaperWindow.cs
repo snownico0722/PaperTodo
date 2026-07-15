@@ -166,13 +166,15 @@ public sealed partial class PaperWindow : Window
     private const double CapsuleRightPadding = 6;
     private double CapsuleIconFontSize => AppTypography.Scale(13);
     private double CapsuleLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
-    private FontWeight CapsuleLabelFontWeight => _controller.State.CapsuleTextBold
-        ? FontWeights.SemiBold
-        : FontWeights.Normal;
+    private FontFamily CapsuleLabelFontFamily =>
+        AppTypography.FontFamilyFor(content: false, bold: _controller.State.CapsuleTextBold);
+    private FontWeight CapsuleLabelFontWeight =>
+        AppTypography.FontWeightFor(_controller.State.CapsuleTextBold);
     private double TitleFontSize => VisualTextSizes.FontSize(12, _controller.State.TitleTextSize);
-    private FontWeight TitleFontWeight => _controller.State.TitleTextBold
-        ? FontWeights.SemiBold
-        : FontWeights.Normal;
+    private FontFamily TitleFontFamily =>
+        AppTypography.FontFamilyFor(content: false, bold: _controller.State.TitleTextBold);
+    private FontWeight TitleFontWeight =>
+        AppTypography.FontWeightFor(_controller.State.TitleTextBold);
     private double TitleLineHeight => Math.Ceiling(TitleFontSize + 2);
     private const double TitleBarDragThreshold = 1.0;
     private const double CapsuleCloseGlyphNormalOffset = -1;
@@ -1307,7 +1309,7 @@ public sealed partial class PaperWindow : Window
 
         if (_titleText != null)
         {
-            _titleText.FontFamily = AppTypography.UiFontFamily;
+            _titleText.FontFamily = TitleFontFamily;
             _titleText.FontSize = TitleFontSize;
             _titleText.FontWeight = TitleFontWeight;
             _titleText.MinHeight = TitleLineHeight + 1;
@@ -1315,7 +1317,7 @@ public sealed partial class PaperWindow : Window
 
         if (_titleEditBox != null)
         {
-            _titleEditBox.FontFamily = AppTypography.UiFontFamily;
+            _titleEditBox.FontFamily = TitleFontFamily;
             _titleEditBox.FontSize = TitleFontSize;
             _titleEditBox.FontWeight = TitleFontWeight;
             _titleEditBox.MinHeight = TitleLineHeight + 1;
@@ -1375,7 +1377,7 @@ public sealed partial class PaperWindow : Window
 
         if (_capsuleLabelText != null)
         {
-            _capsuleLabelText.FontFamily = AppTypography.UiFontFamily;
+            _capsuleLabelText.FontFamily = CapsuleLabelFontFamily;
             _capsuleLabelText.FontSize = CapsuleLabelFontSize;
             _capsuleLabelText.FontWeight = CapsuleLabelFontWeight;
         }
@@ -1386,7 +1388,7 @@ public sealed partial class PaperWindow : Window
         }
 
         _edgeCapsuleHost?.UpdateTypography(
-            AppTypography.UiFontFamily,
+            CapsuleLabelFontFamily,
             AppTypography.SymbolFontFamily,
             AppTypography.Language,
             CapsuleIconFontSizeForCurrentPaper(),
@@ -1727,6 +1729,7 @@ public sealed partial class PaperWindow : Window
         _titleText = new TextBlock
         {
             Foreground = TextBrush,
+            FontFamily = TitleFontFamily,
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
@@ -1742,6 +1745,7 @@ public sealed partial class PaperWindow : Window
             Background = Brushes.Transparent,
             Foreground = TextBrush,
             CaretBrush = TextBrush,
+            FontFamily = TitleFontFamily,
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
@@ -3036,7 +3040,7 @@ public sealed partial class PaperWindow : Window
             title,
             CapsuleLabelFontSize,
             CapsuleLabelFontWeight,
-            AppTypography.UiFontFamily,
+            CapsuleLabelFontFamily,
             pixelsPerDip);
     }
 

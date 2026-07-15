@@ -14,6 +14,8 @@ public static class AppTypography
 
     private static string _preset = UiFontPresets.Default;
     private static FontFamily? _customFontFamily;
+    private static FontFamily? _customBoldFontFamily;
+    private static bool _customFontEnhancedBold;
     private static double _scale = 1.0;
 
     public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag);
@@ -32,6 +34,14 @@ public static class AppTypography
 
     public static bool HasCustomFont => _customFontFamily != null;
 
+    public static bool HasCustomBoldFont => _customBoldFontFamily != null;
+
+    /// <summary>
+    /// Enhanced bold is armed in settings, a bold face file is present, and the caller wants bold.
+    /// </summary>
+    public static bool UsesCustomBoldFace(bool bold) =>
+        bold && _customFontEnhancedBold && _customBoldFontFamily != null;
+
     public static double ScaleFactor => _scale;
 
     public static double Scale(double fontSize)
@@ -46,11 +56,49 @@ public static class AppTypography
             : Math.Ceiling(normalSize * _scale);
     }
 
-    public static void Configure(string? preset, double scale = 1.0)
+    public static void Configure(string? preset, double scale = 1.0, bool customFontEnhancedBold = false)
     {
         _preset = UiFontPresets.Normalize(preset);
         _scale = OverallFontScales.Normalize(scale);
-        _customFontFamily = TryLoadCustomFontFamily();
+        _customFontEnhancedBold = customFontEnhancedBold;
+        _customFontFamily = TryLoadCustomFontFamilyFromCandidates(CustomRegularFontCandidates());
+        _customBoldFontFamily = TryLoadCustomFontFamilyFromCandidates(CustomBoldFontCandidates());
+    }
+
+    /// <summary>
+    /// Family for UI or content text. When enhanced bold is active, bold runs use papertodo_bold.
+    /// </summary>
+    public static FontFamily FontFamilyFor(bool content, bool bold)
+    {
+        if (UsesCustomBoldFace(bold))
+        {
+            return _customBoldFontFamily!;
+        }
+
+        return content ? ContentFontFamily : UiFontFamily;
+    }
+
+    /// <summary>
+    /// Weight for bold runs. Custom bold face is already heavy, so use Normal on that family.
+    /// </summary>
+    public static FontWeight FontWeightFor(bool bold)
+    {
+        if (UsesCustomBoldFace(bold))
+        {
+            return FontWeights.Normal;
+        }
+
+        return bold ? FontWeights.SemiBold : FontWeights.Normal;
+    }
+
+    public static FontWeight HeadingFontWeightFor(bool bold)
+    {
+        if (UsesCustomBoldFace(bold))
+        {
+            return FontWeights.Normal;
+        }
+
+        return bold ? FontWeights.Bold : FontWeights.SemiBold;
     }
 
     public static void ApplyTextRendering(DependencyObject target)
@@ -99,9 +147,9 @@ public static class AppTypography
         };
     }
 
-    private static FontFamily? TryLoadCustomFontFamily()
+    private static FontFamily? TryLoadCustomFontFamilyFromCandidates(IEnumerable<string> candidates)
     {
-        foreach (var path in CustomFontCandidates())
+        foreach (var path in candidates)
         {
             try
             {
@@ -136,10 +184,29 @@ public static class AppTypography
         return null;
     }
 
-    private static IEnumerable<string> CustomFontCandidates()
+    private static IEnumerable<string> CustomRegularFontCandidates()
     {
         yield return Path.Combine(AppContext.BaseDirectory, "papertodo.ttf");
         yield return Path.Combine(AppContext.BaseDirectory, "papertodo.otf");
+    }
+
+    /// <summary>
+    /// Same folder as the app: papertodo_bold / PaperTodo_Bold (+ ttf/otf).
+    /// </summary>
+    private static IEnumerable<string> CustomBoldFontCandidates()
+    {
+        var dir = AppContext.BaseDirectory;
+        foreach (var name in new[]
+                 {
+                     "papertodo_bold",
+                     "papertodo-bold",
+                     "PaperTodo_Bold",
+                     "PaperTodo-Bold"
+                 })
+        {
+            yield return Path.Combine(dir, name + ".ttf");
+            yield return Path.Combine(dir, name + ".otf");
+        }
     }
 
     private static string PreferredFamilyName(GlyphTypeface glyphTypeface)

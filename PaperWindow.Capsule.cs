@@ -265,7 +265,7 @@ public sealed partial class PaperWindow
         {
             Foreground = WeakTextBrush,
             // Explicit font so the rendered title matches the measured width.
-            FontFamily = AppTypography.UiFontFamily,
+            FontFamily = CapsuleLabelFontFamily,
             FontSize = CapsuleLabelFontSize,
             FontWeight = CapsuleLabelFontWeight,
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),

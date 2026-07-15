@@ -387,8 +387,9 @@ public sealed partial class PaperWindow
             Background = Brushes.Transparent,
             Foreground = item.Done ? BrightWeakTextBrush : TextBrush,
             CaretBrush = TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: false, bold: _controller.State.TodoTextBold),
             FontSize = metrics.TextFontSize,
-            FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
+            FontWeight = AppTypography.FontWeightFor(_controller.State.TodoTextBold),
             Padding = new Thickness(
                 AppTypography.Scale(2),
                 metrics.TextVerticalPadding,
@@ -1558,8 +1559,9 @@ public sealed partial class PaperWindow
         {
             Text = text,
             Foreground = done ? BrightWeakTextBrush : TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: false, bold: _controller.State.TodoTextBold),
             FontSize = metrics.GhostTextFontSize,
-            FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
+            FontWeight = AppTypography.FontWeightFor(_controller.State.TodoTextBold),
             Padding = new Thickness(
                 AppTypography.Scale(2),
                 metrics.TextVerticalPadding,
