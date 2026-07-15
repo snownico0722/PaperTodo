@@ -157,6 +157,8 @@ public sealed partial class PaperWindow
 
     private void CompletePaperWindowClose()
     {
+        WindowNative.ReleaseWindowSwitcherOwner(ref _windowSwitcherHiddenOwner);
+        _windowSwitcherHiddenOwnerApplied = false;
         _windowLifecycle = PaperWindowLifecycleState.Closed;
         _presentationState = PaperPresentationState.Closed;
         CancelPendingTitleEditIntent();

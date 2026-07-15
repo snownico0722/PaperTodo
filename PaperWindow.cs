@@ -75,6 +75,7 @@ public sealed partial class PaperWindow : Window
     private bool _closeForReal;
     // Tracks only the hidden owner that PaperTodo applies for window-switcher hiding.
     private bool _windowSwitcherHiddenOwnerApplied;
+    private IntPtr _windowSwitcherHiddenOwner;
     private string? _pendingFocusItemId;
     private readonly Dictionary<string, TodoTextBox> _todoEditors = new();
     private readonly List<Border> _todoRows = new();
@@ -615,14 +616,20 @@ public sealed partial class PaperWindow : Window
     {
         if (_controller.State.HidePapersFromWindowSwitcher)
         {
-            WindowNative.ApplyWindowSwitcherVisibility(this, visible: false);
+            WindowNative.ApplyWindowSwitcherVisibility(
+                this,
+                visible: false,
+                ref _windowSwitcherHiddenOwner);
             _windowSwitcherHiddenOwnerApplied = true;
             return;
         }
 
         if (_windowSwitcherHiddenOwnerApplied)
         {
-            WindowNative.ApplyWindowSwitcherVisibility(this, visible: true);
+            WindowNative.ApplyWindowSwitcherVisibility(
+                this,
+                visible: true,
+                ref _windowSwitcherHiddenOwner);
             _windowSwitcherHiddenOwnerApplied = false;
         }
     }
@@ -2687,6 +2694,8 @@ public sealed partial class PaperWindow : Window
         EndNoteLinkMouseGesture(commit: false);
         if (_closeForReal)
         {
+            WindowNative.DetachAndReleaseWindowSwitcherOwner(this, ref _windowSwitcherHiddenOwner);
+            _windowSwitcherHiddenOwnerApplied = false;
             CloseExpandedDeepCapsuleSlotHostForReal();
             return;
         }

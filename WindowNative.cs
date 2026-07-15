@@ -30,20 +30,17 @@ internal static class WindowNative
     private const uint SwpNoOwnerZOrder = 0x0200;
     private const int DwmWaExtendedFrameBounds = 9;
 
-    // A tiny off-screen TOOLWINDOW that serves as the native owner for papers hidden from
-    // Alt+Tab. Owned top-level windows do not appear in the window switcher, so setting
-    // this as owner hides the paper without applying WS_EX_TOOLWINDOW to the paper itself
-    // (which would cause Windows to skip it when choosing the next window to activate).
-    private static IntPtr _hiddenOwner;
-
-    private static IntPtr GetOrCreateHiddenOwner()
+    // A tiny off-screen TOOLWINDOW serves as the native owner for a paper hidden from
+    // Alt+Tab. Each paper must keep its own owner: papers sharing one owner become one
+    // native window group, so activating any member can raise the other papers as well.
+    private static IntPtr GetOrCreateHiddenOwner(IntPtr hiddenOwner)
     {
-        if (_hiddenOwner != IntPtr.Zero && IsWindow(_hiddenOwner))
+        if (hiddenOwner != IntPtr.Zero && IsWindow(hiddenOwner))
         {
-            return _hiddenOwner;
+            return hiddenOwner;
         }
 
-        _hiddenOwner = CreateWindowEx(
+        return CreateWindowEx(
             WsExToolWindow,
             "Static",
             "",
@@ -53,7 +50,6 @@ internal static class WindowNative
             IntPtr.Zero,
             IntPtr.Zero,
             IntPtr.Zero);
-        return _hiddenOwner;
     }
 
     // WS_EX_NOACTIVATE: the window can never become foreground, so clicking it never steals
@@ -70,7 +66,10 @@ internal static class WindowNative
         SetWindowLong(handle, GwlExStyle, exStyle | WsExNoActivate);
     }
 
-    public static void ApplyWindowSwitcherVisibility(Window window, bool visible)
+    public static void ApplyWindowSwitcherVisibility(
+        Window window,
+        bool visible,
+        ref IntPtr hiddenOwner)
     {
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero)
@@ -85,10 +84,11 @@ internal static class WindowNative
         }
         else
         {
-            // Set the hidden TOOLWINDOW as owner — owned windows are excluded from
+            // Set this paper's hidden TOOLWINDOW as owner — owned windows are excluded from
             // Alt+Tab without needing WS_EX_TOOLWINDOW on the paper itself, so Windows
             // won't skip the paper when choosing the next window to activate.
-            SetWindowLongPtr(handle, GwlpHwndParent, GetOrCreateHiddenOwner());
+            hiddenOwner = GetOrCreateHiddenOwner(hiddenOwner);
+            SetWindowLongPtr(handle, GwlpHwndParent, hiddenOwner);
         }
 
         // Ensure WS_EX_TOOLWINDOW is cleared from the paper in both cases. This undoes the
@@ -115,6 +115,39 @@ internal static class WindowNative
         {
             RefreshShellWindowListEntry(handle);
         }
+
+        if (visible)
+        {
+            ReleaseWindowSwitcherOwner(ref hiddenOwner);
+        }
+    }
+
+    public static void DetachAndReleaseWindowSwitcherOwner(
+        Window window,
+        ref IntPtr hiddenOwner)
+    {
+        if (hiddenOwner == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle != IntPtr.Zero)
+        {
+            SetWindowLongPtr(handle, GwlpHwndParent, IntPtr.Zero);
+        }
+
+        ReleaseWindowSwitcherOwner(ref hiddenOwner);
+    }
+
+    public static void ReleaseWindowSwitcherOwner(ref IntPtr hiddenOwner)
+    {
+        if (hiddenOwner != IntPtr.Zero && IsWindow(hiddenOwner))
+        {
+            _ = DestroyWindow(hiddenOwner);
+        }
+
+        hiddenOwner = IntPtr.Zero;
     }
 
     private static void RefreshShellWindowListEntry(IntPtr handle)
@@ -409,6 +442,9 @@ internal static class WindowNative
         IntPtr hMenu,
         IntPtr hInstance,
         IntPtr lpParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyWindow(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorPoint
