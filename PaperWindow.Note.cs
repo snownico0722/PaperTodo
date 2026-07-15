@@ -1048,7 +1048,7 @@ public sealed partial class PaperWindow
 
     private double CapsuleIconFontSizeForCurrentPaper()
     {
-        return IsScriptCapsule() ? CapsuleIconFontSize + 2 : CapsuleIconFontSize;
+        return IsScriptCapsule() ? AppTypography.Scale(15) : CapsuleIconFontSize;
     }
 
     private bool IsScriptCapsule()

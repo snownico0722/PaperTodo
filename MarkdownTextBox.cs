@@ -4072,13 +4072,13 @@ public sealed class MarkdownTextBox : TextEditor
                 switch (style.Kind)
                 {
                     case MarkdownLineKind.Heading1:
-                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(17), symbol);
+                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(NoteTypography.Heading1FontSize), symbol);
                         break;
                     case MarkdownLineKind.Heading2:
-                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(15), symbol);
+                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(NoteTypography.Heading2FontSize), symbol);
                         break;
                     case MarkdownLineKind.Heading3:
-                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(14), symbol);
+                        MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(NoteTypography.Heading3FontSize), symbol);
                         break;
                     case MarkdownLineKind.Heading:
                         MarkHeading(line, 0, markerLength, _owner.ScaledFontSize(NoteTypography.FontSize), symbol);
@@ -4101,13 +4101,13 @@ public sealed class MarkdownTextBox : TextEditor
             switch (style.Kind)
             {
                 case MarkdownLineKind.Heading1:
-                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(17), null);
+                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(NoteTypography.Heading1FontSize), null);
                     break;
                 case MarkdownLineKind.Heading2:
-                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(15), null);
+                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(NoteTypography.Heading2FontSize), null);
                     break;
                 case MarkdownLineKind.Heading3:
-                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(14), null);
+                    MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(NoteTypography.Heading3FontSize), null);
                     break;
                 case MarkdownLineKind.Heading:
                     MarkHeading(line, style.ContentStart, contentLength, _owner.ScaledFontSize(NoteTypography.FontSize), null);

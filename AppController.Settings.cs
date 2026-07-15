@@ -94,10 +94,7 @@ public sealed partial class AppController
         }
 
         State.UiFontPreset = normalized;
-        AppTypography.Configure(State.UiFontPreset);
-        SaveNow();
-        RefreshTypography();
-        RefreshSettingsWindowContent();
+        ApplyTypographySettingsChange();
     }
 
     private UIElement CreateUiFontPresetSegmentSelector()
@@ -110,6 +107,87 @@ public sealed partial class AppController
         };
 
         return CreateSegmentSelector(segments, UiFontPresets.Normalize(State.UiFontPreset), SetUiFontPreset);
+    }
+
+    private void SetOverallFontScale(double scale)
+    {
+        var normalized = OverallFontScales.Normalize(scale);
+        if (Math.Abs(State.Zoom - normalized) < 0.001)
+        {
+            return;
+        }
+
+        State.Zoom = normalized;
+        ApplyTypographySettingsChange();
+    }
+
+    private void SetNoteTextSize(string size)
+    {
+        var normalized = VisualTextSizes.Normalize(size);
+        if (State.NoteTextSize == normalized)
+        {
+            return;
+        }
+
+        State.NoteTextSize = normalized;
+        ApplyTypographySettingsChange();
+    }
+
+    private void ToggleNoteTextBold()
+    {
+        State.NoteTextBold = !State.NoteTextBold;
+        ApplyTypographySettingsChange();
+    }
+
+    private void ToggleTodoTextBold()
+    {
+        State.TodoTextBold = !State.TodoTextBold;
+        ApplyTypographySettingsChange();
+    }
+
+    private void SetTitleTextSize(string size)
+    {
+        var normalized = VisualTextSizes.Normalize(size);
+        if (State.TitleTextSize == normalized)
+        {
+            return;
+        }
+
+        State.TitleTextSize = normalized;
+        ApplyTypographySettingsChange();
+    }
+
+    private void ToggleTitleTextBold()
+    {
+        State.TitleTextBold = !State.TitleTextBold;
+        ApplyTypographySettingsChange();
+    }
+
+    private void SetCapsuleTextSize(string size)
+    {
+        var normalized = VisualTextSizes.Normalize(size);
+        if (State.CapsuleTextSize == normalized)
+        {
+            return;
+        }
+
+        State.CapsuleTextSize = normalized;
+        ApplyTypographySettingsChange();
+    }
+
+    private void ToggleCapsuleTextBold()
+    {
+        State.CapsuleTextBold = !State.CapsuleTextBold;
+        ApplyTypographySettingsChange();
+    }
+
+    private void ApplyTypographySettingsChange()
+    {
+        AppTypography.Configure(State.UiFontPreset, State.Zoom);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        SaveNow();
+        RefreshTypography();
+        RefreshSettingsWindowContent();
     }
 
     private void SetMarkdownRenderMode(string mode)
@@ -177,14 +255,7 @@ public sealed partial class AppController
         }
 
         State.TodoVisualSize = normalized;
-        SaveNow();
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTodoVisualSize();
-        }
-
-        RefreshSettingsWindowContent();
+        ApplyTypographySettingsChange();
     }
 
     private UIElement CreateTodoVisualSizeSegmentSelector()
@@ -193,11 +264,92 @@ public sealed partial class AppController
         {
             (TodoVisualSizes.Small, Strings.Get("TodoVisualSizeSmall")),
             (TodoVisualSizes.Medium, Strings.Get("TodoVisualSizeMedium")),
-            (TodoVisualSizes.Large, Strings.Get("TodoVisualSizeLarge")),
-            (TodoVisualSizes.ExtraLarge, Strings.Get("TodoVisualSizeExtraLarge"))
+            (TodoVisualSizes.Large, Strings.Get("TodoVisualSizeLarge"))
         };
 
         return CreateSegmentSelector(segments, TodoVisualSizes.Normalize(State.TodoVisualSize), SetTodoVisualSize);
+    }
+
+    private UIElement CreateVisualTextSizeSegmentSelector(string activeSize, Action<string> onSelect)
+    {
+        var segments = new[]
+        {
+            (VisualTextSizes.Small, Strings.Get("TodoVisualSizeSmall")),
+            (VisualTextSizes.Medium, Strings.Get("TodoVisualSizeMedium")),
+            (VisualTextSizes.Large, Strings.Get("TodoVisualSizeLarge"))
+        };
+
+        return CreateSegmentSelector(segments, VisualTextSizes.Normalize(activeSize), onSelect);
+    }
+
+    private UIElement CreateOverallFontScaleStepper()
+    {
+        var container = new Border
+        {
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 4, 0, 10),
+            Height = 28,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var valueText = new TextBlock
+        {
+            Text = OverallFontScaleText(),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = AppTypography.Scale(13),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TrayTextBrush
+        };
+        Grid.SetColumn(valueText, 1);
+
+        Border StepButton(string glyph, int column, double delta)
+        {
+            var glyphText = new TextBlock
+            {
+                Text = glyph,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = AppTypography.SymbolFontFamily,
+                FontSize = AppTypography.Scale(15),
+                Foreground = TrayTextBrush
+            };
+            var button = new Border
+            {
+                Width = 34,
+                Background = Brushes.Transparent,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Child = glyphText
+            };
+            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
+            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+            button.MouseLeftButtonDown += (_, e) =>
+            {
+                SetOverallFontScale(State.Zoom + delta);
+                e.Handled = true;
+            };
+            Grid.SetColumn(button, column);
+            return button;
+        }
+
+        grid.Children.Add(StepButton("−", 0, -OverallFontScales.Step));
+        grid.Children.Add(valueText);
+        grid.Children.Add(StepButton("＋", 2, OverallFontScales.Step));
+        container.Child = grid;
+        return container;
+    }
+
+    private string OverallFontScaleText()
+    {
+        return $"{Math.Round(OverallFontScales.Normalize(State.Zoom) * 100):0}%";
     }
 
     private UIElement CreateExternalMarkdownExtensionEditor()
@@ -212,7 +364,7 @@ public sealed partial class AppController
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(0, 4, 0, 8),
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             Height = 28,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
@@ -319,7 +471,7 @@ public sealed partial class AppController
                 Text = label,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12,
+                FontSize = AppTypography.Scale(12),
                 FontWeight = isActive ? FontWeights.SemiBold : FontWeights.Normal,
                 Foreground = isActive ? TrayPaperBrush : TrayTextBrush,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -380,7 +532,7 @@ public sealed partial class AppController
             Text = State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,
             Foreground = TrayTextBrush
         };
@@ -394,7 +546,7 @@ public sealed partial class AppController
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = 15,
+                FontSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border
@@ -489,6 +641,7 @@ public sealed partial class AppController
             Topmost = false,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(12),
             Language = AppTypography.Language,
             SnapsToDevicePixels = true,
             UseLayoutRounding = true
@@ -541,6 +694,7 @@ public sealed partial class AppController
         _settingsWindow.Title = Strings.Get("TraySettings");
         _settingsWindow.Content = BuildSettingsWindowContent(_settingsWindow);
         _settingsWindow.FontFamily = AppTypography.UiFontFamily;
+        _settingsWindow.FontSize = AppTypography.Scale(12);
         _settingsWindow.Language = AppTypography.Language;
         ApplyToolTipSetting(_settingsWindow);
     }
@@ -590,7 +744,7 @@ public sealed partial class AppController
         {
             Text = Strings.Get("TraySettings"),
             Foreground = TrayTextBrush,
-            FontSize = 15,
+            FontSize = AppTypography.Scale(15),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -614,7 +768,7 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 16,
+            FontSize = AppTypography.Scale(16),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
             Style = BuildSettingsCloseButtonStyle()
@@ -635,6 +789,15 @@ public sealed partial class AppController
             return WrapSettingsWindowContent(root);
         }
 
+        if (_settingsPage == SettingsPage.Visual)
+        {
+            var visualFooter = BuildSettingsFooter();
+            DockPanel.SetDock(visualFooter, Dock.Bottom);
+            root.Children.Add(visualFooter);
+            root.Children.Add(BuildVisualSettingsPage());
+            return WrapSettingsWindowContent(root);
+        }
+
         var columns = new Grid
         {
             Margin = new Thickness(0, 0, 4, 0)
@@ -652,26 +815,14 @@ public sealed partial class AppController
             Margin = new Thickness(14, 0, 0, 0)
         };
 
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDisplay")));
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayThemeMode")), "TipThemeMode"));
-        leftColumn.Children.Add(CreateThemeSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
-        leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
-        leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode")), "TipMarkdownRender"));
-        leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode")), "TipFullscreenTopmostMode"));
-        leftColumn.Children.Add(CreateFullscreenTopmostModeSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTodoVisualSize")), "TipTodoVisualSize"));
-        leftColumn.Children.Add(CreateTodoVisualSizeSegmentSelector());
-
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewTodoButton"), State.ShowTopBarNewTodoButton, ToggleTopBarNewTodoButton), "TipNewTodoButton"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewNoteButton"), State.ShowTopBarNewNoteButton, ToggleTopBarNewNoteButton), "TipNewNoteButton"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarExternalOpenButton"), State.ShowTopBarExternalOpenButton, ToggleTopBarExternalOpenButton), "TipExternalOpenButton"));
 
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode")), "TipFullscreenTopmostMode"));
+        leftColumn.Children.Add(CreateFullscreenTopmostModeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
         _settingsHidePapersFromTaskbarCheckBox = SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar);
         _settingsHidePapersFromWindowSwitcherCheckBox = SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher);
@@ -759,18 +910,134 @@ public sealed partial class AppController
         return WrapSettingsWindowContent(root);
     }
 
+    private UIElement BuildVisualSettingsPage()
+    {
+        var columns = new Grid
+        {
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var leftColumn = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 14, 0)
+        };
+        var rightColumn = new StackPanel
+        {
+            Margin = new Thickness(14, 0, 0, 0)
+        };
+
+        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDisplay")));
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayThemeMode")), "TipThemeMode"));
+        leftColumn.Children.Add(CreateThemeSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
+        leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
+        leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsOverallFontScale")), "TipOverallFontScale"));
+        leftColumn.Children.Add(CreateOverallFontScaleStepper());
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode")), "TipMarkdownRender"));
+        leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
+
+        void AddTextStyleEditor(
+            StackPanel column,
+            string sectionKey,
+            string tipKey,
+            string activeSize,
+            Action<string> setSize,
+            bool isBold,
+            Action toggleBold)
+        {
+            column.Children.Add(SettingsSectionLabel(Strings.Get(sectionKey)));
+            column.Children.Add(WrapWithHint(
+                SettingsFieldLabel(Strings.Get("SettingsTextSizeCorrection")),
+                tipKey));
+            column.Children.Add(CreateVisualTextSizeSegmentSelector(activeSize, setSize));
+            column.Children.Add(WrapWithHint(
+                SettingsToggle(Strings.Get("SettingsTextBold"), isBold, toggleBold),
+                tipKey));
+        }
+
+        AddTextStyleEditor(
+            rightColumn,
+            "SettingsNoteBodyText",
+            "TipNoteBodyTextStyle",
+            State.NoteTextSize,
+            SetNoteTextSize,
+            State.NoteTextBold,
+            ToggleNoteTextBold);
+
+        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoBodyText")));
+        rightColumn.Children.Add(WrapWithHint(
+            SettingsFieldLabel(Strings.Get("SettingsTextSizeCorrection")),
+            "TipTodoBodyTextStyle"));
+        rightColumn.Children.Add(CreateTodoVisualSizeSegmentSelector());
+        rightColumn.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("SettingsTextBold"), State.TodoTextBold, ToggleTodoTextBold),
+            "TipTodoBodyTextStyle"));
+
+        AddTextStyleEditor(
+            rightColumn,
+            "SettingsTitleText",
+            "TipTitleTextStyle",
+            State.TitleTextSize,
+            SetTitleTextSize,
+            State.TitleTextBold,
+            ToggleTitleTextBold);
+        AddTextStyleEditor(
+            rightColumn,
+            "SettingsCapsuleText",
+            "TipCapsuleTextStyle",
+            State.CapsuleTextSize,
+            SetCapsuleTextSize,
+            State.CapsuleTextBold,
+            ToggleCapsuleTextBold);
+
+        var separator = new Border
+        {
+            Width = 1,
+            Margin = new Thickness(0, 10, 0, 4),
+            Background = TrayBorderBrush,
+            Opacity = 0.65
+        };
+
+        Grid.SetColumn(leftColumn, 0);
+        Grid.SetColumn(separator, 1);
+        Grid.SetColumn(rightColumn, 2);
+        columns.Children.Add(leftColumn);
+        columns.Children.Add(separator);
+        columns.Children.Add(rightColumn);
+
+        return new ScrollViewer
+        {
+            Content = columns,
+            MaxHeight = SettingsOptionsMaxHeight(),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false,
+            PanningMode = PanningMode.VerticalOnly
+        };
+    }
+
     private UIElement CreateSettingsPageSelector()
     {
         const string generalKey = "general";
+        const string visualKey = "visual";
         const string shortcutsKey = "shortcuts";
         var segments = new[]
         {
-            (Key: generalKey, Label: Strings.Get("SettingsGeneral")),
+            (Key: generalKey, Label: Strings.Get("SettingsBehavior")),
+            (Key: visualKey, Label: Strings.Get("SettingsVisual")),
             (Key: shortcutsKey, Label: Strings.Get("SettingsShortcuts"))
         };
-        var activeKey = _settingsPage == SettingsPage.Shortcuts
-            ? shortcutsKey
-            : generalKey;
+        var activeKey = _settingsPage switch
+        {
+            SettingsPage.Visual => visualKey,
+            SettingsPage.Shortcuts => shortcutsKey,
+            _ => generalKey
+        };
 
         // Premium main segmented capsule container
         var container = new Border
@@ -779,13 +1046,15 @@ public sealed partial class AppController
             Background = TrayHoverBrush, // Sunken tab track background
             Margin = new Thickness(0),
             Height = 24,
-            Width = 140,
+            Width = 228,
             HorizontalAlignment = HorizontalAlignment.Left
         };
 
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foreach (var _ in segments)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
 
         for (int i = 0; i < segments.Length; i++)
         {
@@ -807,7 +1076,7 @@ public sealed partial class AppController
                 Text = label,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 11,
+                FontSize = AppTypography.Scale(11),
                 FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
                 Foreground = isActive ? TrayPaperBrush : TrayWeakTextBrush,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -835,7 +1104,12 @@ public sealed partial class AppController
                 {
                     return;
                 }
-                ShowSettingsWindow(key == shortcutsKey ? SettingsPage.Shortcuts : SettingsPage.General);
+                ShowSettingsWindow(key switch
+                {
+                    visualKey => SettingsPage.Visual,
+                    shortcutsKey => SettingsPage.Shortcuts,
+                    _ => SettingsPage.General
+                });
             };
 
             Grid.SetColumn(segmentBorder, i);
@@ -866,7 +1140,7 @@ public sealed partial class AppController
         {
             Text = AuthorName,
             Foreground = TrayWeakTextBrush,
-            FontSize = 11,
+            FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -942,7 +1216,7 @@ public sealed partial class AppController
         {
             Text = text,
             Foreground = TrayWeakTextBrush,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 3)
         };
@@ -954,7 +1228,7 @@ public sealed partial class AppController
         {
             Text = text,
             Foreground = TrayWeakTextBrush,
-            FontSize = 11,
+            FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
             Margin = new Thickness(0, topMargin, 0, 0)
         };
@@ -967,7 +1241,7 @@ public sealed partial class AppController
             Content = text,
             IsChecked = isChecked,
             Foreground = TrayTextBrush,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             Margin = new Thickness(0, 4, 0, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
@@ -998,7 +1272,7 @@ public sealed partial class AppController
             Text = "ⓘ",
             Foreground = TrayWeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -1033,7 +1307,7 @@ public sealed partial class AppController
             {
                 Text = text,
                 Foreground = TrayTextBrush,
-                FontSize = 12,
+                FontSize = AppTypography.Scale(12),
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 240
             },

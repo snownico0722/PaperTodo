@@ -458,6 +458,9 @@ public sealed class StateStore
         state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
         state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
+        state.NoteTextSize = VisualTextSizes.Normalize(state.NoteTextSize);
+        state.TitleTextSize = VisualTextSizes.Normalize(state.TitleTextSize);
+        state.CapsuleTextSize = VisualTextSizes.Normalize(state.CapsuleTextSize);
         state.UiFontPreset = UiFontPresets.Normalize(state.UiFontPreset);
         state.TopBarHeight = 0;
 
@@ -468,11 +471,7 @@ public sealed class StateStore
             state.ShowTopBarNewPaperButtons = null;
         }
 
-        if (double.IsNaN(state.Zoom) || double.IsInfinity(state.Zoom) || state.Zoom <= 0)
-        {
-            state.Zoom = 1.0;
-        }
-        state.Zoom = Math.Clamp(state.Zoom, 0.5, 1.5);
+        state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
         if (!state.UseCapsuleMode)
         {

@@ -379,6 +379,7 @@ public sealed partial class PaperWindow
             Foreground = item.Done ? BrightWeakTextBrush : TextBrush,
             CaretBrush = TextBrush,
             FontSize = metrics.TextFontSize,
+            FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
             Padding = new Thickness(2, metrics.TextVerticalPadding, 2, metrics.TextVerticalPadding),
             VerticalContentAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
@@ -701,7 +702,7 @@ public sealed partial class PaperWindow
             Text = "≡",
             Foreground = WeakTextBrush,
             Opacity = 0.48,
-            FontSize = Math.Max(11, metrics.TextFontSize - 1),
+            FontSize = Math.Max(AppTypography.Scale(11), metrics.TextFontSize - AppTypography.Scale(1)),
             FontFamily = AppTypography.SymbolFontFamily,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -1538,6 +1539,7 @@ public sealed partial class PaperWindow
             Text = text,
             Foreground = done ? BrightWeakTextBrush : TextBrush,
             FontSize = metrics.GhostTextFontSize,
+            FontWeight = _controller.State.TodoTextBold ? FontWeights.SemiBold : FontWeights.Normal,
             Padding = new Thickness(2, metrics.TextVerticalPadding, 2, metrics.TextVerticalPadding),
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
@@ -1556,7 +1558,7 @@ public sealed partial class PaperWindow
             Text = "≡",
             Foreground = WeakTextBrush,
             Opacity = 0.58,
-            FontSize = Math.Max(12, metrics.GhostTextFontSize - 1),
+            FontSize = Math.Max(AppTypography.Scale(12), metrics.GhostTextFontSize - AppTypography.Scale(1)),
             FontFamily = AppTypography.SymbolFontFamily,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center

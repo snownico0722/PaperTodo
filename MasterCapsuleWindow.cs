@@ -41,11 +41,14 @@ public sealed class MasterCapsuleWindow : Window
     private const double MasterLeftPadding = 5;
     private const double MasterGlyphGap = 4;
     private const double MasterRightPadding = 3;
-    private const double MasterGlyphFontSize = 12;
-    private const double MasterLabelFontSize = 12;
     private const double MasterInteriorBorderThickness = 1;
 
     private readonly AppController _controller;
+    private double MasterGlyphFontSize => AppTypography.Scale(12);
+    private double MasterLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
+    private FontWeight MasterLabelFontWeight => _controller.State.CapsuleTextBold
+        ? FontWeights.SemiBold
+        : FontWeights.Normal;
 
     // Which queue this master serves: (monitor device, edge). Each docked-capsule queue has its
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
@@ -128,6 +131,7 @@ public sealed class MasterCapsuleWindow : Window
         Background = Brushes.Transparent;
         ResizeMode = ResizeMode.NoResize;
         FontFamily = AppTypography.UiFontFamily;
+        FontSize = AppTypography.Scale(12);
         Language = AppTypography.Language;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
@@ -198,6 +202,7 @@ public sealed class MasterCapsuleWindow : Window
             Text = Strings.Get("CapsuleCollapseAllLabel"),
             Foreground = Theme.WeakTextBrush,
             FontSize = MasterLabelFontSize,
+            FontWeight = MasterLabelFontWeight,
             Margin = new Thickness(MasterGlyphGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -305,9 +310,13 @@ public sealed class MasterCapsuleWindow : Window
     public void UpdateTypography()
     {
         FontFamily = AppTypography.UiFontFamily;
+        FontSize = AppTypography.Scale(12);
         Language = AppTypography.Language;
         _glyph.FontFamily = AppTypography.SymbolFontFamily;
+        _glyph.FontSize = MasterGlyphFontSize;
         _label.FontFamily = AppTypography.UiFontFamily;
+        _label.FontSize = MasterLabelFontSize;
+        _label.FontWeight = MasterLabelFontWeight;
         MoveToTarget(animate: false);
     }
 
@@ -406,13 +415,13 @@ public sealed class MasterCapsuleWindow : Window
         var expandedLabelWidth = MeasureText(
             Strings.Get("CapsuleCollapseAllLabel"),
             MasterLabelFontSize,
-            FontWeights.Normal,
+            MasterLabelFontWeight,
             AppTypography.UiFontFamily,
             pixelsPerDip);
         var currentLabelWidth = MeasureText(
             _label.Text,
             MasterLabelFontSize,
-            FontWeights.Normal,
+            MasterLabelFontWeight,
             AppTypography.UiFontFamily,
             pixelsPerDip);
         var textWidth = Math.Max(expandedLabelWidth, currentLabelWidth);

@@ -26,6 +26,7 @@ internal static class PaperNoticeDialog
             ShowInTaskbar = false,
             Topmost = owner.Topmost,
             FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(12),
             Language = AppTypography.Language,
             SnapsToDevicePixels = true,
             UseLayoutRounding = true
@@ -55,7 +56,7 @@ internal static class PaperNoticeDialog
         {
             Text = titleText,
             Foreground = Theme.TextBrush,
-            FontSize = 16,
+            FontSize = AppTypography.Scale(16),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -64,7 +65,7 @@ internal static class PaperNoticeDialog
         {
             Text = messageText,
             Foreground = Theme.WeakTextBrush,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
             MaxWidth = 324,
@@ -113,7 +114,7 @@ internal static class PaperNoticeDialog
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(Control.BackgroundProperty, Theme.Tint(28)));
         style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
         style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 72.0));
 

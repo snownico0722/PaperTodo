@@ -134,7 +134,6 @@ public sealed partial class AppController
     private static readonly ControlTemplate SharedTrayContentMenuItemTemplate = BuildTrayContentMenuItemTemplate();
     private static readonly Style SharedTrayMenuItemStyle = BuildTrayMenuItemStyle();
     private static readonly Style SharedTrayContentMenuItemStyle = BuildTrayContentMenuItemStyle();
-    private static readonly Style SharedTrayHeaderStyle = BuildTrayHeaderStyle();
 
     private static ControlTemplate BuildSegmentMenuItemTemplate()
     {
@@ -206,7 +205,6 @@ public sealed partial class AppController
         arrow.SetValue(TextBlock.TextProperty, "›");
         arrow.SetValue(TextBlock.MarginProperty, new Thickness(10, 0, 0, 0));
         arrow.SetValue(TextBlock.ForegroundProperty, new DynamicResourceExtension("TrayWeakTextBrushKey"));
-        arrow.SetValue(TextBlock.FontSizeProperty, 13.0);
         arrow.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
         arrow.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         arrow.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -347,7 +345,7 @@ public sealed partial class AppController
         style.Setters.Add(new Setter(Control.MinHeightProperty, 22.0));
         style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Arrow));
         style.Setters.Add(new Setter(Control.TemplateProperty, SharedTrayMenuItemTemplate));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(12)));
         style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
 
         return style;
@@ -362,7 +360,7 @@ public sealed partial class AppController
             HasDropShadow = true,
             FontFamily = AppTypography.UiFontFamily,
             Language = AppTypography.Language,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             Focusable = true,
             MinWidth = 190,
             MaxHeight = TrayMenuMaxHeight(),
@@ -422,6 +420,7 @@ public sealed partial class AppController
         _trayMenu.BorderBrush = TrayBorderBrush;
         _trayMenu.Foreground = TrayTextBrush;
         _trayMenu.FontFamily = AppTypography.UiFontFamily;
+        _trayMenu.FontSize = AppTypography.Scale(13);
         _trayMenu.Language = AppTypography.Language;
         _trayMenu.MaxHeight = TrayMenuMaxHeight();
 
@@ -574,7 +573,7 @@ public sealed partial class AppController
             Text = "×",
             Foreground = TrayWeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 14,
+            FontSize = AppTypography.Scale(14),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -593,7 +592,7 @@ public sealed partial class AppController
         {
             Text = Strings.Get("TrayInlineConfirmAction"),
             Foreground = System.Windows.Media.Brushes.Red,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -710,7 +709,7 @@ public sealed partial class AppController
             label.FontWeight = FontWeights.Normal;
             deleteText.Text = "×";
             deleteArea.Width = 24;
-            deleteText.FontSize = 14;
+            deleteText.FontSize = AppTypography.Scale(14);
             confirmArea.Visibility = Visibility.Collapsed;
             ResetDeleteVisual();
         }
@@ -727,7 +726,7 @@ public sealed partial class AppController
             label.FontWeight = FontWeights.SemiBold;
             deleteText.Text = Strings.Get("CommonCancel");
             deleteArea.Width = 42;
-            deleteText.FontSize = 12;
+            deleteText.FontSize = AppTypography.Scale(12);
             deleteText.Foreground = TrayTextBrush;
             confirmArea.Visibility = Visibility.Visible;
         }
@@ -822,7 +821,7 @@ public sealed partial class AppController
         {
             Header = text,
             IsEnabled = false,
-            Style = SharedTrayHeaderStyle
+            Style = BuildTrayHeaderStyle()
         };
     }
 
@@ -864,9 +863,10 @@ public sealed partial class AppController
 
     private double PaperTypeIconFontSize(PaperData paper)
     {
-        return paper.Type == PaperTypes.Note && IsCurrentScriptCapsule(paper)
-            ? 15.0
-            : 14.0;
+        return AppTypography.Scale(
+            paper.Type == PaperTypes.Note && IsCurrentScriptCapsule(paper)
+                ? 15.0
+                : 14.0);
     }
 
     private static SolidColorBrush FrozenBrush(Color color)

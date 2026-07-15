@@ -100,18 +100,78 @@ public static class TodoVisualSizes
 
     public static string Normalize(string? size)
     {
-        return size is Small or Large or ExtraLarge ? size : Medium;
+        // extraLarge was offered by older builds. Keep accepting the serialized value, but
+        // migrate it to the new three-level visual scale instead of retaining a hidden fourth
+        // state that cannot be selected in Settings.
+        return size is Small ? Small : size is Large or ExtraLarge ? Large : Medium;
     }
 
     public static TodoVisualMetrics Metrics(string? size)
     {
-        return Normalize(size) switch
+        var metrics = Normalize(size) switch
         {
             Small => new TodoVisualMetrics(12, 2.5, 28, 13, 12, 9.5, 11.5, 21, 13, 23),
             Large => new TodoVisualMetrics(14, 3.5, 32, 15, 14, 11.5, 13.5, 24, 15, 26),
-            ExtraLarge => new TodoVisualMetrics(15.5, 4.5, 36, 16.5, 15.5, 13, 15, 27, 17, 30),
             _ => new TodoVisualMetrics(13, 3, 30, 14, 13, 10.5, 12.5, 22, 14, 24)
         };
+
+        return metrics with
+        {
+            TextFontSize = AppTypography.Scale(metrics.TextFontSize),
+            AppendGlyphFontSize = AppTypography.Scale(metrics.AppendGlyphFontSize),
+            TrashGlyphFontSize = AppTypography.Scale(metrics.TrashGlyphFontSize),
+            LinkedNoteNameFontSize = AppTypography.Scale(metrics.LinkedNoteNameFontSize),
+            LinkedNoteIconFontSize = AppTypography.Scale(metrics.LinkedNoteIconFontSize),
+            GhostTextFontSize = AppTypography.Scale(metrics.GhostTextFontSize)
+        };
+    }
+}
+
+public static class VisualTextSizes
+{
+    public const string Small = "small";
+    public const string Medium = "medium";
+    public const string Large = "large";
+
+    public static string Normalize(string? size)
+    {
+        return size is Small or Large ? size : Medium;
+    }
+
+    public static double Correction(string? size)
+    {
+        return Normalize(size) switch
+        {
+            Small => -1,
+            Large => 1,
+            _ => 0
+        };
+    }
+
+    public static double FontSize(double mediumSize, string? size)
+    {
+        return AppTypography.Scale(mediumSize + Correction(size));
+    }
+}
+
+public static class OverallFontScales
+{
+    public const double Minimum = 0.8;
+    public const double Maximum = 1.2;
+    public const double Step = 0.05;
+
+    public static double Normalize(double scale)
+    {
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0)
+        {
+            return 1.0;
+        }
+
+        var clamped = Math.Clamp(scale, Minimum, Maximum);
+        return Math.Round(
+            Math.Round(clamped / Step, MidpointRounding.AwayFromZero) * Step,
+            2,
+            MidpointRounding.AwayFromZero);
     }
 }
 
@@ -151,6 +211,13 @@ public sealed class AppState
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
+    public string NoteTextSize { get; set; } = VisualTextSizes.Medium;
+    public bool NoteTextBold { get; set; }
+    public bool TodoTextBold { get; set; }
+    public string TitleTextSize { get; set; } = VisualTextSizes.Medium;
+    public bool TitleTextBold { get; set; } = true;
+    public string CapsuleTextSize { get; set; } = VisualTextSizes.Medium;
+    public bool CapsuleTextBold { get; set; }
     public bool UseCapsuleMode { get; set; } = true;
     public bool UseDeepCapsuleMode { get; set; } = true;
     public bool ShowTopBarNewTodoButton { get; set; } = true;

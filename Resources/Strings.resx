@@ -497,7 +497,7 @@
     <value>顶栏按钮</value>
   </data>
   <data name="SettingsBehavior" xml:space="preserve">
-    <value>行为</value>
+    <value>基础行为</value>
   </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>胶囊</value>
@@ -674,6 +674,45 @@
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
     <value>快捷键</value>
+  </data>
+  <data name="SettingsVisual" xml:space="preserve">
+    <value>视觉</value>
+  </data>
+  <data name="SettingsOverallFontScale" xml:space="preserve">
+    <value>整体字体大小</value>
+  </data>
+  <data name="TipOverallFontScale" xml:space="preserve">
+    <value>按 5% 调整应用内文字的整体缩放（80%–120%）；单个笔记的百分比缩放会在此基础上继续叠加。</value>
+  </data>
+  <data name="SettingsTextSizeCorrection" xml:space="preserve">
+    <value>字号补正</value>
+  </data>
+  <data name="SettingsTextBold" xml:space="preserve">
+    <value>加粗</value>
+  </data>
+  <data name="SettingsNoteBodyText" xml:space="preserve">
+    <value>笔记正文</value>
+  </data>
+  <data name="TipNoteBodyTextStyle" xml:space="preserve">
+    <value>在整体字体大小上应用小、中、大三档补正并可加粗；当前单个笔记的百分比缩放仍作为额外缩放。</value>
+  </data>
+  <data name="SettingsTodoBodyText" xml:space="preserve">
+    <value>待办正文</value>
+  </data>
+  <data name="TipTodoBodyTextStyle" xml:space="preserve">
+    <value>调整待办正文及对应行的三档字号补正，并可切换正文加粗。</value>
+  </data>
+  <data name="SettingsTitleText" xml:space="preserve">
+    <value>标题文字</value>
+  </data>
+  <data name="TipTitleTextStyle" xml:space="preserve">
+    <value>调整纸片顶栏标题的小、中、大三档字号补正与加粗。</value>
+  </data>
+  <data name="SettingsCapsuleText" xml:space="preserve">
+    <value>胶囊文字</value>
+  </data>
+  <data name="TipCapsuleTextStyle" xml:space="preserve">
+    <value>统一调整普通胶囊、贴边胶囊、拖动胶囊和主胶囊文字的三档字号补正与加粗。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>边缘胶囊标题测量字符数</value>

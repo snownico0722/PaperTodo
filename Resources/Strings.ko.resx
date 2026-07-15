@@ -484,7 +484,7 @@
     <value>상단 바 버튼</value>
   </data>
   <data name="SettingsBehavior" xml:space="preserve">
-    <value>동작</value>
+    <value>기본 동작</value>
   </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>캡슐</value>
@@ -661,6 +661,45 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
     <value>바로 가기 키</value>
+  </data>
+  <data name="SettingsVisual" xml:space="preserve">
+    <value>시각</value>
+  </data>
+  <data name="SettingsOverallFontScale" xml:space="preserve">
+    <value>전체 글꼴 크기</value>
+  </data>
+  <data name="TipOverallFontScale" xml:space="preserve">
+    <value>앱 전체의 글자를 80%~120% 범위에서 5%씩 조절합니다. 노트별 백분율 확대/축소는 여기에 추가로 적용됩니다.</value>
+  </data>
+  <data name="SettingsTextSizeCorrection" xml:space="preserve">
+    <value>크기 보정</value>
+  </data>
+  <data name="SettingsTextBold" xml:space="preserve">
+    <value>굵게</value>
+  </data>
+  <data name="SettingsNoteBodyText" xml:space="preserve">
+    <value>노트 본문</value>
+  </data>
+  <data name="TipNoteBodyTextStyle" xml:space="preserve">
+    <value>전체 글꼴 크기에 소·중·대 보정과 굵게를 적용합니다. 노트별 백분율 확대/축소는 추가 배율로 유지됩니다.</value>
+  </data>
+  <data name="SettingsTodoBodyText" xml:space="preserve">
+    <value>할 일 본문</value>
+  </data>
+  <data name="TipTodoBodyTextStyle" xml:space="preserve">
+    <value>할 일 본문과 행 레이아웃을 세 단계로 보정하고 본문 굵게를 전환합니다.</value>
+  </data>
+  <data name="SettingsTitleText" xml:space="preserve">
+    <value>제목 글자</value>
+  </data>
+  <data name="TipTitleTextStyle" xml:space="preserve">
+    <value>종이 상단 제목의 소·중·대 크기 보정과 굵게를 조절합니다.</value>
+  </data>
+  <data name="SettingsCapsuleText" xml:space="preserve">
+    <value>캡슐 글자</value>
+  </data>
+  <data name="TipCapsuleTextStyle" xml:space="preserve">
+    <value>일반, 가장자리, 드래그, 마스터 캡슐에 동일한 세 단계 보정과 굵게를 적용합니다.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>가장자리 캡슐 제목 측정 글자 수</value>

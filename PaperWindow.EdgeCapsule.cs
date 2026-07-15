@@ -24,6 +24,7 @@ public sealed partial class PaperWindow
             CapsuleIconText(),
             CapsuleIconFontSizeForCurrentPaper(),
             CapsuleLabelFontSize,
+            CapsuleLabelFontWeight,
             Strings.Get("ToolTipHideThisPaper"),
             PaperBrush,
             PaperBorderBrush,

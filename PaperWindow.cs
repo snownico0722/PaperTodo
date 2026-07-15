@@ -148,13 +148,17 @@ public sealed partial class PaperWindow : Window
     private const double CapsuleCloseWidth = 14;
     private const double CapsuleNormalCloseWidth = 21;
     private const double CapsuleRightPadding = 6;
-    private const double CapsuleIconFontSize = 13;
-    private const double CapsuleLabelFontSize = 12;
-    private const double TitleFontSize = 12;
-    private const double TitleLineHeight = 14;
+    private double CapsuleIconFontSize => AppTypography.Scale(13);
+    private double CapsuleLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
+    private FontWeight CapsuleLabelFontWeight => _controller.State.CapsuleTextBold
+        ? FontWeights.SemiBold
+        : FontWeights.Normal;
+    private double TitleFontSize => VisualTextSizes.FontSize(12, _controller.State.TitleTextSize);
+    private FontWeight TitleFontWeight => _controller.State.TitleTextBold
+        ? FontWeights.SemiBold
+        : FontWeights.Normal;
+    private double TitleLineHeight => Math.Ceiling(TitleFontSize + 2);
     private const double TitleBarDragThreshold = 1.0;
-    private const double TodoPaperIconFontSize = 14;
-    private const double NotePaperIconFontSize = 16;
     private const double CapsuleCloseGlyphNormalOffset = -1;
     private const double DeepCapsuleSlotOutlineThickness = 2;
     private const double DeepCapsuleSlotOutlineOverlap = 1;
@@ -295,7 +299,6 @@ public sealed partial class PaperWindow : Window
 
     private static readonly ControlTemplate SharedContextMenuTemplate = BuildContextMenuTemplate();
     private static readonly Style SharedCompactMenuItemStyle = BuildCompactMenuItemStyle();
-    private static readonly Style SharedIconButtonStyle = BuildIconButtonStyle();
     private static readonly Style SharedCheckBoxStyle = BuildCustomCheckBoxStyle();
 
     private static ControlTemplate BuildContextMenuTemplate()
@@ -372,7 +375,7 @@ public sealed partial class PaperWindow : Window
         style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("WeakTextBrushKey")));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
         style.Setters.Add(new Setter(Control.FontFamilyProperty, AppTypography.SymbolFontFamily));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
         style.Setters.Add(new Setter(Control.FocusableProperty, false));
 
         var border = new FrameworkElementFactory(typeof(Border));
@@ -1156,6 +1159,7 @@ public sealed partial class PaperWindow : Window
         AllowsTransparency = true;
         Background = Brushes.Transparent;
         FontFamily = AppTypography.UiFontFamily;
+        FontSize = AppTypography.Scale(12);
         Language = AppTypography.Language;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
@@ -1265,21 +1269,55 @@ public sealed partial class PaperWindow : Window
     public void UpdateTypography()
     {
         FontFamily = AppTypography.UiFontFamily;
+        FontSize = AppTypography.Scale(12);
         Language = AppTypography.Language;
 
         if (_titleText != null)
         {
             _titleText.FontFamily = AppTypography.UiFontFamily;
+            _titleText.FontSize = TitleFontSize;
+            _titleText.FontWeight = TitleFontWeight;
+            _titleText.Height = TitleLineHeight + 1;
+            _titleText.LineHeight = TitleLineHeight;
         }
 
         if (_titleEditBox != null)
         {
             _titleEditBox.FontFamily = AppTypography.UiFontFamily;
+            _titleEditBox.FontSize = TitleFontSize;
+            _titleEditBox.FontWeight = TitleFontWeight;
+            _titleEditBox.Height = TitleLineHeight + 1;
         }
 
         if (_openMarkdownButton != null)
         {
             _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
+            _openMarkdownButton.FontSize = AppTypography.Scale(10.5);
+        }
+
+        if (_linkNoteButton != null)
+        {
+            _linkNoteButton.FontSize = AppTypography.Scale(13);
+        }
+
+        if (_newTodoButton != null)
+        {
+            _newTodoButton.FontSize = AppTypography.Scale(13);
+        }
+
+        if (_newNoteButton != null)
+        {
+            _newNoteButton.FontSize = AppTypography.Scale(13);
+        }
+
+        if (_closeButton != null)
+        {
+            _closeButton.FontSize = AppTypography.Scale(16);
+        }
+
+        if (_textZoomIndicator != null)
+        {
+            _textZoomIndicator.FontSize = AppTypography.Scale(10.5);
         }
 
         if (_noteBox != null)
@@ -1295,19 +1333,41 @@ public sealed partial class PaperWindow : Window
         if (_capsuleIconText != null)
         {
             _capsuleIconText.FontFamily = AppTypography.SymbolFontFamily;
+            _capsuleIconText.FontSize = CapsuleIconFontSizeForCurrentPaper();
         }
 
         if (_capsuleLabelText != null)
         {
             _capsuleLabelText.FontFamily = AppTypography.UiFontFamily;
+            _capsuleLabelText.FontSize = CapsuleLabelFontSize;
+            _capsuleLabelText.FontWeight = CapsuleLabelFontWeight;
+        }
+
+        if (_capsuleCloseGlyph != null)
+        {
+            _capsuleCloseGlyph.FontSize = AppTypography.Scale(18);
         }
 
         _edgeCapsuleHost?.UpdateTypography(
             AppTypography.UiFontFamily,
             AppTypography.SymbolFontFamily,
-            AppTypography.Language);
+            AppTypography.Language,
+            CapsuleIconFontSizeForCurrentPaper(),
+            CapsuleLabelFontSize,
+            CapsuleLabelFontWeight,
+            AppTypography.Scale(18));
+        RefreshThemedContextMenus();
 
         RefreshPaperTitle();
+        if (_paper.IsCollapsed && !IsPaperFormTransitioning)
+        {
+            MoveWindowWithoutGeometrySave(() =>
+            {
+                var width = CapsuleWindowWidth();
+                MinWidth = width;
+                Width = width;
+            });
+        }
     }
 
     private static bool TryGetSolidColor(Brush? brush, out Color color)
@@ -1603,7 +1663,7 @@ public sealed partial class PaperWindow : Window
         {
             MinWidth = 30,
             MaxWidth = 76,
-            Height = TitleLineHeight + 1,
+            MinHeight = TitleLineHeight + 1,
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -1614,7 +1674,7 @@ public sealed partial class PaperWindow : Window
             Height = TitleLineHeight + 1,
             LineHeight = TitleLineHeight,
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = TitleFontWeight,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = Cursors.IBeam
@@ -1629,7 +1689,7 @@ public sealed partial class PaperWindow : Window
             CaretBrush = TextBrush,
             FontSize = TitleFontSize,
             Height = TitleLineHeight + 1,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = TitleFontWeight,
             MaxLength = PaperTitles.MaxTitleLength,
             // MaxLength is only a coarse UTF-16 guard; the real title limit is applied on commit
             // so IME composition is never interrupted by rewriting TextBox.Text mid-edit.
@@ -1706,7 +1766,7 @@ public sealed partial class PaperWindow : Window
         {
             _linkNoteButton = IconButton("⌖", Strings.Get("ToolTipDragNoteToTodo"));
             _linkNoteButton.Width = 24;
-            _linkNoteButton.FontSize = 13;
+            _linkNoteButton.FontSize = AppTypography.Scale(13);
             _linkNoteButton.Cursor = Cursors.Cross;
             _linkNoteButton.Visibility = _controller.State.EnableTodoNoteLinks ? Visibility.Visible : Visibility.Collapsed;
             _linkNoteButton.PreviewMouseLeftButtonDown += (_, e) => BeginNoteLinkMouseGesture(_linkNoteButton, e);
@@ -1737,13 +1797,13 @@ public sealed partial class PaperWindow : Window
 
             _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
             _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
-            _openMarkdownButton.FontSize = 10.5;
+            _openMarkdownButton.FontSize = AppTypography.Scale(10.5);
             _openMarkdownButton.Click += (_, _) => OpenMarkdownInDefaultEditor();
             buttons.Children.Add(_openMarkdownButton);
         }
 
         _closeButton = IconButton("×", Strings.Get("ToolTipHideThisPaper"));
-        _closeButton.FontSize = 16;
+        _closeButton.FontSize = AppTypography.Scale(16);
         _closeButton.Click += (_, _) =>
         {
             if (CanDisplayAsCapsule())
@@ -1929,7 +1989,7 @@ public sealed partial class PaperWindow : Window
             Text = "✎",
             Foreground = TextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -1939,7 +1999,7 @@ public sealed partial class PaperWindow : Window
             Text = _controller.PaperCapsuleTitle(_paper),
             Foreground = TextBrush,
             FontFamily = AppTypography.UiFontFamily,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             Margin = new Thickness(6, 0, 0, 0),
             MaxWidth = 150,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -2082,7 +2142,7 @@ public sealed partial class PaperWindow : Window
         _textZoomIndicator = new TextBlock
         {
             Foreground = WeakTextBrush,
-            FontSize = 10.5,
+            FontSize = AppTypography.Scale(10.5),
             FontWeight = FontWeights.SemiBold,
             Opacity = 0.55,
             VerticalAlignment = VerticalAlignment.Center
@@ -2449,7 +2509,7 @@ public sealed partial class PaperWindow : Window
         {
             Text = Strings.Get("DeletePaperQuestion"),
             Foreground = TextBrush,
-            FontSize = 16,
+            FontSize = AppTypography.Scale(16),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -2458,7 +2518,7 @@ public sealed partial class PaperWindow : Window
         {
             Text = Strings.Get("DeletePaperBody"),
             Foreground = WeakTextBrush,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
             Margin = new Thickness(0, 2, 0, 0)
@@ -2513,7 +2573,7 @@ public sealed partial class PaperWindow : Window
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(Control.BackgroundProperty, background));
         style.Setters.Add(new Setter(Control.ForegroundProperty, foreground));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
         style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 72.0));
 
@@ -2609,7 +2669,7 @@ public sealed partial class PaperWindow : Window
             Width = 28,
             Height = 24,
             Margin = new Thickness(1, 0, 1, 0),
-            Style = SharedIconButtonStyle
+            Style = BuildIconButtonStyle()
         };
     }
 
@@ -2692,7 +2752,7 @@ public sealed partial class PaperWindow : Window
             Padding = new Thickness(4, 4, 4, 4),
             FontFamily = AppTypography.UiFontFamily,
             Language = AppTypography.Language,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             HasDropShadow = true,
             Template = SharedContextMenuTemplate
         };
@@ -2732,6 +2792,13 @@ public sealed partial class PaperWindow : Window
             if (_themedContextMenus[i].TryGetTarget(out var menu))
             {
                 UpdateContextMenuTheme(menu);
+                menu.FontFamily = AppTypography.UiFontFamily;
+                menu.FontSize = AppTypography.Scale(13);
+                menu.Language = AppTypography.Language;
+                foreach (var header in menu.Items.OfType<MenuItem>().Where(item => !item.IsEnabled))
+                {
+                    header.FontSize = AppTypography.Scale(12);
+                }
             }
             else
             {
@@ -2770,7 +2837,7 @@ public sealed partial class PaperWindow : Window
             IsEnabled = false,
             Padding = new Thickness(8, 2, 10, 2),
             Background = Brushes.Transparent,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold
         };
         item.SetResourceReference(Control.ForegroundProperty, "WeakTextBrushKey");
@@ -2913,7 +2980,7 @@ public sealed partial class PaperWindow : Window
         return MeasureCapsuleTextWidth(
             title,
             CapsuleLabelFontSize,
-            FontWeights.Normal,
+            CapsuleLabelFontWeight,
             AppTypography.UiFontFamily,
             pixelsPerDip);
     }

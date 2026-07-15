@@ -14,6 +14,7 @@ public static class AppTypography
 
     private static string _preset = UiFontPresets.Default;
     private static FontFamily? _customFontFamily;
+    private static double _scale = 1.0;
 
     public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag);
 
@@ -31,9 +32,17 @@ public static class AppTypography
 
     public static bool HasCustomFont => _customFontFamily != null;
 
-    public static void Configure(string? preset)
+    public static double ScaleFactor => _scale;
+
+    public static double Scale(double fontSize)
+    {
+        return Math.Round(fontSize * _scale, 1, MidpointRounding.AwayFromZero);
+    }
+
+    public static void Configure(string? preset, double scale = 1.0)
     {
         _preset = UiFontPresets.Normalize(preset);
+        _scale = OverallFontScales.Normalize(scale);
         _customFontFamily = TryLoadCustomFontFamily();
     }
 

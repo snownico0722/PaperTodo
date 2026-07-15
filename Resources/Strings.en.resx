@@ -483,9 +483,6 @@
   <data name="SettingsTopBarButtons" xml:space="preserve">
     <value>Top-bar buttons</value>
   </data>
-  <data name="SettingsBehavior" xml:space="preserve">
-    <value>Behavior</value>
-  </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>Capsule</value>
   </data>
@@ -661,6 +658,48 @@ If papertodo.ttf or papertodo.otf exists in the app folder, that custom font tak
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
     <value>Keyboard shortcuts</value>
+  </data>
+  <data name="SettingsBehavior" xml:space="preserve">
+    <value>Behavior</value>
+  </data>
+  <data name="SettingsVisual" xml:space="preserve">
+    <value>Visual</value>
+  </data>
+  <data name="SettingsOverallFontScale" xml:space="preserve">
+    <value>Overall font size</value>
+  </data>
+  <data name="TipOverallFontScale" xml:space="preserve">
+    <value>Scale text throughout the app in 5% steps from 80% to 120%. Per-note percentage zoom is applied on top.</value>
+  </data>
+  <data name="SettingsTextSizeCorrection" xml:space="preserve">
+    <value>Size correction</value>
+  </data>
+  <data name="SettingsTextBold" xml:space="preserve">
+    <value>Bold</value>
+  </data>
+  <data name="SettingsNoteBodyText" xml:space="preserve">
+    <value>Note body</value>
+  </data>
+  <data name="TipNoteBodyTextStyle" xml:space="preserve">
+    <value>Apply a small, medium, or large correction on top of the overall font size and optionally bold note text. Per-note percentage zoom remains an additional scale.</value>
+  </data>
+  <data name="SettingsTodoBodyText" xml:space="preserve">
+    <value>Todo body</value>
+  </data>
+  <data name="TipTodoBodyTextStyle" xml:space="preserve">
+    <value>Adjust todo body text and its row layout with three size corrections, and optionally bold the body text.</value>
+  </data>
+  <data name="SettingsTitleText" xml:space="preserve">
+    <value>Title text</value>
+  </data>
+  <data name="TipTitleTextStyle" xml:space="preserve">
+    <value>Adjust paper title text with small, medium, or large size correction and bold styling.</value>
+  </data>
+  <data name="SettingsCapsuleText" xml:space="preserve">
+    <value>Capsule text</value>
+  </data>
+  <data name="TipCapsuleTextStyle" xml:space="preserve">
+    <value>Apply one size correction and bold setting consistently to normal, edge, drag, and master capsules.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Edge capsule title measure limit</value>

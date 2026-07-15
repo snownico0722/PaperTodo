@@ -23,6 +23,7 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required string Label { get; init; }
     public required double IconFontSize { get; init; }
     public required double LabelFontSize { get; init; }
+    public required FontWeight LabelFontWeight { get; init; }
     public required FontFamily UiFontFamily { get; init; }
     public required FontFamily SymbolFontFamily { get; init; }
     public required XmlLanguage Language { get; init; }
@@ -237,6 +238,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
             Foreground = options.LabelBrush,
             FontFamily = options.UiFontFamily,
             FontSize = options.LabelFontSize,
+            FontWeight = options.LabelFontWeight,
             Margin = new Thickness(options.IconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,

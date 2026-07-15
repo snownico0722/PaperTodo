@@ -267,6 +267,7 @@ public sealed partial class PaperWindow
             // Explicit font so the rendered title matches the measured width.
             FontFamily = AppTypography.UiFontFamily,
             FontSize = CapsuleLabelFontSize,
+            FontWeight = CapsuleLabelFontWeight,
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -365,7 +366,7 @@ public sealed partial class PaperWindow
             Text = "×",
             Foreground = WeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 18,
+            FontSize = AppTypography.Scale(18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             RenderTransform = closeGlyphOffset

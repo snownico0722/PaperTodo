@@ -13,6 +13,7 @@ public sealed partial class AppController
     private enum SettingsPage
     {
         General,
+        Visual,
         Shortcuts
     }
 
@@ -307,7 +308,7 @@ public sealed partial class AppController
         {
             Text = Strings.Get(key),
             Foreground = TrayWeakTextBrush,
-            FontSize = 11.5,
+            FontSize = AppTypography.Scale(11.5),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 9, 0, 2)
         };
@@ -345,7 +346,7 @@ public sealed partial class AppController
                 ? Strings.Format(definition.LabelKey, definition.EdgeOrdinal)
                 : Strings.Get(definition.LabelKey),
             Foreground = TrayTextBrush,
-            FontSize = 12.5,
+            FontSize = AppTypography.Scale(12.5),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -378,7 +379,7 @@ public sealed partial class AppController
         {
             Text = Strings.Get(StatusResourceKey(status)),
             Foreground = StatusBrush(status),
-            FontSize = 11.5,
+            FontSize = AppTypography.Scale(11.5),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(8, 0, 4, 0)
@@ -430,7 +431,7 @@ public sealed partial class AppController
         {
             Text = text,
             Foreground = TrayWeakTextBrush,
-            FontSize = 11,
+            FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = column == 0 ? new Thickness(0) : new Thickness(8, 0, 0, 0)
@@ -450,7 +451,7 @@ public sealed partial class AppController
             BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
             Foreground = TrayTextBrush,
-            FontSize = 12,
+            FontSize = AppTypography.Scale(12),
             Cursor = Cursors.Hand,
             Focusable = false,
             Style = BuildSettingsCloseButtonStyle()
@@ -469,7 +470,7 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = 14,
+            FontSize = AppTypography.Scale(14),
             Cursor = Cursors.Hand,
             Focusable = false,
             ToolTip = toolTip,
@@ -737,7 +738,7 @@ public sealed partial class AppController
             Text = DeepCapsuleTitleMeasureLimitText(),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,
             Foreground = TrayTextBrush
         };
@@ -751,7 +752,7 @@ public sealed partial class AppController
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = 15,
+                FontSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border

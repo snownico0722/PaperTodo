@@ -101,7 +101,8 @@ public sealed partial class AppController : IDisposable
         var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         TryCollectUnprotectedImages();
         NormalizePaperSystemVisibilitySettings();
-        AppTypography.Configure(State.UiFontPreset);
+        AppTypography.Configure(State.UiFontPreset, State.Zoom);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
 
         _saveTimer = new DispatcherTimer
@@ -2517,7 +2518,7 @@ public sealed partial class AppController : IDisposable
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
@@ -2590,7 +2591,7 @@ public sealed partial class AppController : IDisposable
                     Text = Strings.Format("SaveFailureMessage", ex.Message),
                     Foreground = Theme.TextBrush,
                     TextWrapping = TextWrapping.Wrap,
-                    FontSize = 14
+                    FontSize = AppTypography.Scale(14)
                 };
                 grid.Children.Add(txt);
                 var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -2655,7 +2656,7 @@ public sealed partial class AppController : IDisposable
         {
             Text = Strings.Get("PaperLimitTitle"),
             Foreground = Theme.TextBrush,
-            FontSize = 16,
+            FontSize = AppTypography.Scale(16),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -2664,7 +2665,7 @@ public sealed partial class AppController : IDisposable
         {
             Text = Strings.Get("PaperLimitMessage"),
             Foreground = Theme.WeakTextBrush,
-            FontSize = 13,
+            FontSize = AppTypography.Scale(13),
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
             Margin = new Thickness(0, 2, 0, 0)

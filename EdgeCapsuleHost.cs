@@ -21,6 +21,7 @@ internal sealed record EdgeCapsuleHostOptions(
     string IconText,
     double IconFontSize,
     double LabelFontSize,
+    FontWeight LabelFontWeight,
     string CloseToolTip,
     Brush PaperBrush,
     Brush PaperBorderBrush,
@@ -377,6 +378,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             Foreground = options.TextBrush,
             FontFamily = options.UiFontFamily,
             FontSize = options.LabelFontSize,
+            FontWeight = options.LabelFontWeight,
             Margin = new Thickness(options.IconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -393,7 +395,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             Text = "×",
             Foreground = options.TextBrush,
             FontFamily = options.SymbolFontFamily,
-            FontSize = 18,
+            FontSize = AppTypography.Scale(18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -586,7 +588,11 @@ internal sealed class EdgeCapsuleHost : IDisposable
     public void UpdateTypography(
         FontFamily uiFontFamily,
         FontFamily symbolFontFamily,
-        System.Windows.Markup.XmlLanguage language)
+        System.Windows.Markup.XmlLanguage language,
+        double iconFontSize,
+        double labelFontSize,
+        FontWeight labelFontWeight,
+        double closeGlyphFontSize)
     {
         if (_disposed)
         {
@@ -595,7 +601,11 @@ internal sealed class EdgeCapsuleHost : IDisposable
         Window.FontFamily = uiFontFamily;
         Window.Language = language;
         Icon.FontFamily = symbolFontFamily;
+        Icon.FontSize = iconFontSize;
         Label.FontFamily = uiFontFamily;
+        Label.FontSize = labelFontSize;
+        Label.FontWeight = labelFontWeight;
+        CloseGlyph.FontSize = closeGlyphFontSize;
     }
 
     public void SetTopmost(bool topmost, IntPtr insertAfter)
