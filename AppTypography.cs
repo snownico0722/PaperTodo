@@ -6,13 +6,6 @@ using System.Windows.Media;
 
 namespace PaperTodo;
 
-internal enum EdgeCapsuleTextRenderingStyle
-{
-    Legacy,
-    Grayscale,
-    SymmetricGrayscale
-}
-
 public static class AppTypography
 {
     private const string SymbolFallback = "Segoe UI Symbol, Segoe UI Emoji";
@@ -25,7 +18,7 @@ public static class AppTypography
     private static CustomFontFace? _customFontFace;
     private static CustomFontFace? _customBoldFontFace;
     private static bool _customFontEnhancedBold;
-    private static string _textRenderingProfile = TextRenderingProfiles.System;
+    private static string _textRenderingProfile = TextRenderingProfiles.Legacy;
     private static double _scale = 1.0;
 
     public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag);
@@ -38,32 +31,16 @@ public static class AppTypography
 
     public static FontFamily SymbolFontFamily { get; } = new(SymbolFallback);
 
-    public static bool UsesEnhancedGrayscale =>
-        _textRenderingProfile == TextRenderingProfiles.EnhancedGrayscale;
+    public static bool UsesExperimentalTextRendering =>
+        _textRenderingProfile == TextRenderingProfiles.Experimental;
 
-    public static TextFormattingMode TextFormattingMode =>
-        UsesEnhancedGrayscale ? TextFormattingMode.Display : TextFormattingMode.Ideal;
+    // Keep glyph layout on WPF's original Ideal path in both profiles. The experimental profile
+    // changes only edge rasterization, so measured widths stay aligned with the legacy profile.
+    public static TextFormattingMode TextFormattingMode => TextFormattingMode.Ideal;
     public static TextRenderingMode TextRenderingMode =>
-        UsesEnhancedGrayscale ? TextRenderingMode.Grayscale : TextRenderingMode.Auto;
-    public static TextHintingMode TextHintingMode => TextHintingMode.Auto;
-
-    internal static EdgeCapsuleTextRenderingStyle CurrentEdgeCapsuleTextRenderingStyle
-    {
-        get
-        {
-            if (!UsesEnhancedGrayscale)
-            {
-                return EdgeCapsuleTextRenderingStyle.Legacy;
-            }
-
-            // DengXian and user-supplied faces such as MiSans can converge on the same hard-edged
-            // result under Display grayscale at capsule sizes. Give those faces symmetric
-            // grayscale while keeping the already-distinct YaHei/default path unchanged.
-            return _preset == UiFontPresets.DengXian || _customFontFace != null
-                ? EdgeCapsuleTextRenderingStyle.SymmetricGrayscale
-                : EdgeCapsuleTextRenderingStyle.Grayscale;
-        }
-    }
+        UsesExperimentalTextRendering ? TextRenderingMode.Grayscale : TextRenderingMode.Auto;
+    public static TextHintingMode TextHintingMode =>
+        UsesExperimentalTextRendering ? TextHintingMode.Animated : TextHintingMode.Auto;
 
     public static bool HasCustomFont => _customFontFace != null;
 
@@ -145,7 +122,7 @@ public static class AppTypography
 
     public static void ApplyTextRendering(DependencyObject target)
     {
-        if (!UsesEnhancedGrayscale)
+        if (!UsesExperimentalTextRendering)
         {
             ClearTextRendering(target);
             return;
@@ -155,25 +132,6 @@ public static class AppTypography
         TextOptions.SetTextRenderingMode(target, TextRenderingMode);
         TextOptions.SetTextHintingMode(target, TextHintingMode);
         target.ClearValue(RenderOptions.ClearTypeHintProperty);
-    }
-
-    internal static void ApplyEdgeCapsuleTextRendering(DependencyObject target)
-    {
-        switch (CurrentEdgeCapsuleTextRenderingStyle)
-        {
-            case EdgeCapsuleTextRenderingStyle.Legacy:
-                ClearTextRendering(target);
-                break;
-            case EdgeCapsuleTextRenderingStyle.SymmetricGrayscale:
-                TextOptions.SetTextFormattingMode(target, TextFormattingMode.Ideal);
-                TextOptions.SetTextRenderingMode(target, TextRenderingMode.Grayscale);
-                TextOptions.SetTextHintingMode(target, TextHintingMode.Animated);
-                target.ClearValue(RenderOptions.ClearTypeHintProperty);
-                break;
-            default:
-                ApplyTextRendering(target);
-                break;
-        }
     }
 
     private static void ClearTextRendering(DependencyObject target)

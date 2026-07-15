@@ -2525,6 +2525,7 @@ public sealed class MarkdownTextBox : TextEditor
         {
             HasDropShadow = true
         };
+        AppTypography.ApplyTextRendering(menu);
         menu.Placement = PlacementMode.MousePoint;
         menu.Opened += (_, _) => IsImageContextMenuOpen = true;
         menu.Closed += (_, _) =>
@@ -3878,6 +3879,8 @@ public sealed class MarkdownTextBox : TextEditor
                             ListMarkerTypeface,
                             _owner.ScaledFontSize(NoteTypography.FontSize),
                             Theme.TextBrush,
+                            null,
+                            AppTypography.TextFormattingMode,
                             VisualTreeHelper.GetDpi(textView).PixelsPerDip);
 
                         drawingContext.DrawText(

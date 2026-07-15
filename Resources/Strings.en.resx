@@ -346,13 +346,13 @@
     <value>DengXian</value>
   </data>
   <data name="SettingsTextRenderingProfile" xml:space="preserve">
-    <value>Text edge style</value>
+    <value>Text rendering</value>
   </data>
-  <data name="TextRenderingSystem" xml:space="preserve">
-    <value>System smooth</value>
+  <data name="TextRenderingLegacy" xml:space="preserve">
+    <value>Legacy</value>
   </data>
-  <data name="TextRenderingEnhancedGrayscale" xml:space="preserve">
-    <value>Unified grayscale</value>
+  <data name="TextRenderingExperimental" xml:space="preserve">
+    <value>Experimental</value>
   </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>Paper</value>
@@ -516,8 +516,8 @@ Choosing YaHei or DengXian unifies the UI, tray, capsules, todos, and note text 
 If papertodo.ttf or papertodo.otf exists in the app folder, that custom font takes priority.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>System smooth lets Windows and each font choose the rendering style, and restores the pre-change rendering path for edge capsules.
-Unified grayscale uses grayscale antialiasing throughout. Notes and edge capsules using DengXian, MiSans, or another custom face receive softer two-axis smoothing.</value>
+    <value>Legacy fully restores the rendering path used before the grayscale-rendering change.
+Experimental applies the same softer two-axis grayscale smoothing to every font and text surface, with no font-specific rules. It keeps the legacy layout mode; appearance can vary by display.</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>Enhanced custom bold</value>

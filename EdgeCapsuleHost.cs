@@ -60,7 +60,6 @@ internal sealed class EdgeCapsuleHost : IDisposable
     private double _appliedCloseWidth;
     private EdgeCapsuleEdge? _appliedEdge;
     private EdgeCapsulePresentationFrame _appliedFrame = EdgeCapsulePresentationFrame.Hidden;
-    private EdgeCapsuleTextRenderingStyle _textRenderingStyle;
     private bool _disposed;
     private Window Window { get; }
     private Grid Root { get; }
@@ -73,7 +72,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
     private TextBlock Icon { get; }
     private Border CloseArea { get; }
     private TextBlock CloseGlyph { get; }
-    private TextBlock Label { get; set; }
+    private TextBlock Label { get; }
 
     private EdgeCapsuleHost(
         EdgeCapsuleHostOptions options,
@@ -88,8 +87,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
         TextBlock icon,
         Border closeArea,
         TextBlock closeGlyph,
-        TextBlock label,
-        EdgeCapsuleTextRenderingStyle textRenderingStyle)
+        TextBlock label)
     {
         _options = options;
         _hoverBrush = options.HoverBrush;
@@ -107,7 +105,6 @@ internal sealed class EdgeCapsuleHost : IDisposable
         CloseArea = closeArea;
         CloseGlyph = closeGlyph;
         Label = label;
-        _textRenderingStyle = textRenderingStyle;
     }
 
     public bool IsVisible => !_disposed && Window.IsVisible;
@@ -453,12 +450,8 @@ internal sealed class EdgeCapsuleHost : IDisposable
             Topmost = options.Topmost,
             Content = root
         };
-        var textRenderingStyle = AppTypography.CurrentEdgeCapsuleTextRenderingStyle;
-        if (textRenderingStyle != EdgeCapsuleTextRenderingStyle.Legacy)
-        {
-            AppTypography.ApplyEdgeCapsuleTextRendering(window);
-            AppTypography.ApplyEdgeCapsuleTextRendering(label);
-        }
+        AppTypography.ApplyTextRendering(window);
+        AppTypography.ApplyTextRendering(label);
 
         return new EdgeCapsuleHost(
             options,
@@ -473,8 +466,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
             icon,
             closeArea,
             closeGlyph,
-            label,
-            textRenderingStyle);
+            label);
     }
 
     public void AttachInput(EdgeCapsuleHostCallbacks callbacks)
@@ -608,60 +600,16 @@ internal sealed class EdgeCapsuleHost : IDisposable
         {
             return;
         }
-        var textRenderingStyle = AppTypography.CurrentEdgeCapsuleTextRenderingStyle;
-        var renderingStyleChanged = _textRenderingStyle != textRenderingStyle;
-        _textRenderingStyle = textRenderingStyle;
         Window.FontFamily = uiFontFamily;
         Window.Language = language;
-        if (renderingStyleChanged)
-        {
-            AppTypography.ApplyEdgeCapsuleTextRendering(Window);
-            RecreateLabel(uiFontFamily, labelFontSize, labelFontWeight);
-        }
-        else if (textRenderingStyle != EdgeCapsuleTextRenderingStyle.Legacy)
-        {
-            AppTypography.ApplyEdgeCapsuleTextRendering(Window);
-            AppTypography.ApplyEdgeCapsuleTextRendering(Label);
-        }
+        AppTypography.ApplyTextRendering(Window);
+        AppTypography.ApplyTextRendering(Label);
         Icon.FontFamily = symbolFontFamily;
         Icon.FontSize = iconFontSize;
         Label.FontFamily = uiFontFamily;
         Label.FontSize = labelFontSize;
         Label.FontWeight = labelFontWeight;
         CloseGlyph.FontSize = closeGlyphFontSize;
-    }
-
-    private void RecreateLabel(
-        FontFamily fontFamily,
-        double fontSize,
-        FontWeight fontWeight)
-    {
-        var previous = Label;
-        var index = ContentGrid.Children.IndexOf(previous);
-        var replacement = new TextBlock
-        {
-            Text = previous.Text,
-            ToolTip = previous.ToolTip,
-            Foreground = previous.Foreground,
-            FontFamily = fontFamily,
-            FontSize = fontSize,
-            FontWeight = fontWeight,
-            Margin = previous.Margin,
-            VerticalAlignment = previous.VerticalAlignment,
-            HorizontalAlignment = previous.HorizontalAlignment,
-            TextTrimming = previous.TextTrimming
-        };
-        Grid.SetColumn(replacement, Grid.GetColumn(previous));
-        ContentGrid.Children.RemoveAt(index);
-        ContentGrid.Children.Insert(index, replacement);
-        Label = replacement;
-
-        // A fresh text visual is intentional here. It restores the untouched pre-grayscale path
-        // when returning to Legacy and makes inherited TextOptions resolve again for this label.
-        if (_textRenderingStyle != EdgeCapsuleTextRenderingStyle.Legacy)
-        {
-            AppTypography.ApplyEdgeCapsuleTextRendering(Label);
-        }
     }
 
     public void SetTopmost(bool topmost, IntPtr insertAfter)

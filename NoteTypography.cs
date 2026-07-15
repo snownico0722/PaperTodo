@@ -39,20 +39,6 @@ public static class NoteTypography
 
     public static void ApplyTextRendering(DependencyObject target)
     {
-        if (!AppTypography.UsesEnhancedGrayscale)
-        {
-            target.ClearValue(TextOptions.TextFormattingModeProperty);
-            target.ClearValue(TextOptions.TextRenderingModeProperty);
-            target.ClearValue(TextOptions.TextHintingModeProperty);
-            target.ClearValue(RenderOptions.ClearTypeHintProperty);
-            return;
-        }
-
-        TextOptions.SetTextFormattingMode(target, TextFormattingMode.Ideal);
-        TextOptions.SetTextRenderingMode(target, TextRenderingMode.Grayscale);
-        // Animated hinting makes WPF use symmetric grayscale antialiasing for Ideal text,
-        // smoothing both axes instead of merely hardening diagonal and curved CJK edges.
-        TextOptions.SetTextHintingMode(target, TextHintingMode.Animated);
-        target.ClearValue(RenderOptions.ClearTypeHintProperty);
+        AppTypography.ApplyTextRendering(target);
     }
 }

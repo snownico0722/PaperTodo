@@ -39,6 +39,11 @@ public static class ToolTipPreferences
             FrameworkElement.ToolTipOpeningEvent,
             new ToolTipEventHandler(OnToolTipOpening),
             handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(ToolTip),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(OnToolTipLoaded),
+            handledEventsToo: true);
         _isRegistered = true;
     }
 
@@ -59,6 +64,14 @@ public static class ToolTipPreferences
             !IsAlwaysEnabled(owner))
         {
             e.Handled = true;
+        }
+    }
+
+    private static void OnToolTipLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is DependencyObject toolTip)
+        {
+            AppTypography.ApplyTextRendering(toolTip);
         }
     }
 

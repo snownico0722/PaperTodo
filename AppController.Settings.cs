@@ -125,8 +125,8 @@ public sealed partial class AppController
     {
         var segments = new[]
         {
-            (TextRenderingProfiles.System, Strings.Get("TextRenderingSystem")),
-            (TextRenderingProfiles.EnhancedGrayscale, Strings.Get("TextRenderingEnhancedGrayscale"))
+            (TextRenderingProfiles.Legacy, Strings.Get("TextRenderingLegacy")),
+            (TextRenderingProfiles.Experimental, Strings.Get("TextRenderingExperimental"))
         };
 
         return CreateSegmentSelector(

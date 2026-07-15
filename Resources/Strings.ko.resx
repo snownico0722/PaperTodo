@@ -346,13 +346,13 @@
     <value>DengXian</value>
   </data>
   <data name="SettingsTextRenderingProfile" xml:space="preserve">
-    <value>글자 가장자리</value>
+    <value>텍스트 렌더링</value>
   </data>
-  <data name="TextRenderingSystem" xml:space="preserve">
-    <value>시스템 부드럽게</value>
+  <data name="TextRenderingLegacy" xml:space="preserve">
+    <value>기존 방식</value>
   </data>
-  <data name="TextRenderingEnhancedGrayscale" xml:space="preserve">
-    <value>통합 회색조</value>
+  <data name="TextRenderingExperimental" xml:space="preserve">
+    <value>실험적</value>
   </data>
   <data name="ColorSchemeWarm" xml:space="preserve">
     <value>종이</value>
@@ -519,8 +519,8 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
 앱 폴더에 papertodo.ttf 또는 papertodo.otf가 있으면 해당 사용자 지정 글꼴을 우선 사용합니다.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>시스템 부드럽게는 Windows와 글꼴이 렌더링 방식을 선택하고, 가장자리 캡슐을 새 렌더링 도입 전 방식으로 표시합니다.
-통합 회색조는 모든 화면에 회색조 안티앨리어싱을 적용합니다. 노트와 DengXian, MiSans 같은 글꼴을 쓰는 가장자리 캡슐에는 더 부드러운 양방향 평활화를 적용합니다.</value>
+    <value>기존 방식은 회색조 렌더링 변경 전의 표시 경로를 완전히 복원합니다.
+실험적 방식은 글꼴이나 화면을 구분하지 않고 모든 텍스트에 동일한 부드러운 양방향 회색조 평활화를 적용합니다. 글자 배치는 기존 방식과 같으며, 실제 모양은 디스플레이에 따라 달라질 수 있습니다.</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>사용자 글꼴 굵게 강화</value>
