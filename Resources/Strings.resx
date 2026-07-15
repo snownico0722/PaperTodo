@@ -320,6 +320,9 @@
   <data name="SaveFailureIgnore" xml:space="preserve">
     <value>忽略本次</value>
   </data>
+  <data name="ExitSaveFailureMessage" xml:space="preserve">
+    <value>PaperTodo 保存失败，即将退出。本次未保存的修改可能丢失。</value>
+  </data>
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>保存数据失败：
 {0}

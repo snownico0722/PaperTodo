@@ -2551,11 +2551,21 @@ public sealed partial class AppController : IDisposable
 
     private void HandleSaveFailure(Exception ex)
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
         if (!_hasShownSaveFailure && !_ignoreSaveFailures)
         {
             _hasShownSaveFailure = true;
             Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                if (IsExiting)
+                {
+                    return;
+                }
+
                 var dlg = new Window
                 {
                     Title = Strings.Get("SaveFailureTitle"),
@@ -2977,6 +2987,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         foreach (var window in _windows.Values.ToList())
         {
             window.CommitPendingEditsForSave();
@@ -2987,9 +2998,21 @@ public sealed partial class AppController : IDisposable
         _topmostRefreshTimer.Stop();
         _displayMetricsRefreshTimer.Stop();
 
-        if (TrySaveNow(sync: true))
+        var saved = TrySaveNow(sync: true);
+        if (saved)
         {
             TryCollectPendingImageDeletes();
+        }
+        else
+        {
+            TryExitCleanup(() =>
+            {
+                MessageBox.Show(
+                    Strings.Get("ExitSaveFailureMessage"),
+                    Strings.Get("SaveFailureTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            });
         }
 
         DisposeRuntimeResources();

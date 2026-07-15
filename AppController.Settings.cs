@@ -241,15 +241,15 @@ public sealed partial class AppController
         return textBox;
     }
 
-    private void CommitSettingsExternalMarkdownEditor()
+    private void CommitSettingsExternalMarkdownEditor(bool saveImmediately = true)
     {
         if (_settingsExternalMarkdownTextBox != null)
         {
-            CommitExternalMarkdownExtension(_settingsExternalMarkdownTextBox);
+            CommitExternalMarkdownExtension(_settingsExternalMarkdownTextBox, saveImmediately);
         }
     }
 
-    private void CommitExternalMarkdownExtension(TextBox textBox)
+    private void CommitExternalMarkdownExtension(TextBox textBox, bool saveImmediately = true)
     {
         var normalized = ExternalMarkdownFileExtensions.Normalize(textBox.Text);
         if (textBox.Text != normalized)
@@ -258,10 +258,10 @@ public sealed partial class AppController
             textBox.CaretIndex = textBox.Text.Length;
         }
 
-        SetExternalMarkdownExtension(normalized);
+        SetExternalMarkdownExtension(normalized, saveImmediately);
     }
 
-    private void SetExternalMarkdownExtension(string extension)
+    private void SetExternalMarkdownExtension(string extension, bool saveImmediately = true)
     {
         var normalized = ExternalMarkdownFileExtensions.Normalize(extension);
         if (State.ExternalMarkdownExtension == normalized)
@@ -270,7 +270,10 @@ public sealed partial class AppController
         }
 
         State.ExternalMarkdownExtension = normalized;
-        SaveNow();
+        if (saveImmediately)
+        {
+            SaveNow();
+        }
 
         foreach (var window in _windows.Values)
         {

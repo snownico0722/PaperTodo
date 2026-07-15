@@ -309,6 +309,9 @@
   <data name="SaveFailureIgnore" xml:space="preserve">
     <value>Ignore this time</value>
   </data>
+  <data name="ExitSaveFailureMessage" xml:space="preserve">
+    <value>PaperTodo failed to save and will now exit. Unsaved changes may be lost.</value>
+  </data>
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>Failed to save data:&#x0A;{0}&#x0A;Please check disk space or permissions.</value>
   </data>

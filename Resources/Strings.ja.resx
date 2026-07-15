@@ -309,6 +309,9 @@
   <data name="SaveFailureIgnore" xml:space="preserve">
     <value>今回は無視</value>
   </data>
+  <data name="ExitSaveFailureMessage" xml:space="preserve">
+    <value>PaperTodo は保存に失敗したため終了します。未保存の変更は失われる可能性があります。</value>
+  </data>
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>データの保存に失敗しました:&#x0A;{0}&#x0A;ディスク容量または権限を確認してください。</value>
   </data>
