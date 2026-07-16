@@ -24,6 +24,8 @@ internal sealed class EdgeCapsulePresenter
     private EdgeCapsuleLayoutSnapshot? _layoutSnapshot;
     private bool _hasFramePointerOverride;
     private DeviceScreenPoint? _framePointerOverride;
+    private int _forceApplyVersion;
+    private int _appliedForceApplyVersion;
     private EdgeCapsuleMotion _pendingMotion =
         EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State);
 
@@ -85,6 +87,14 @@ internal sealed class EdgeCapsulePresenter
                 _pendingMotion.Kind != EdgeCapsuleMotionKind.Snap))
         {
             _pendingMotion = motion;
+        }
+    }
+
+    public void ForceApplyCurrentPresentation()
+    {
+        unchecked
+        {
+            _forceApplyVersion++;
         }
     }
 
@@ -178,6 +188,8 @@ internal sealed class EdgeCapsulePresenter
         Func<EdgeCapsulePresentationFrame, bool> apply,
         long nowTimestamp)
     {
+        var forceApplyVersion = _forceApplyVersion;
+        var forceApply = _appliedForceApplyVersion != forceApplyVersion;
         var plan = EdgeCapsuleTargetPlanner.Calculate(Model, layout);
         var targetChanged = plan != TargetPlan;
         var motionMustRebase = _pendingMotion.Kind == EdgeCapsuleMotionKind.Snap &&
@@ -198,11 +210,12 @@ internal sealed class EdgeCapsulePresenter
         var sample = Transition is { } active
             ? EdgeCapsuleTransitionPolicy.Sample(active, nowTimestamp)
             : new EdgeCapsuleTransitionSample(TargetPresentation.ToFrame(), true);
-        var shouldApply = sample.Frame != AppliedPresentation || targetChanged;
+        var shouldApply = forceApply || sample.Frame != AppliedPresentation || targetChanged;
         var applied = !shouldApply || apply(sample.Frame);
         if (applied && shouldApply)
         {
             AppliedPresentation = sample.Frame;
+            _appliedForceApplyVersion = forceApplyVersion;
         }
 
         if (!applied)
@@ -277,6 +290,7 @@ internal sealed class EdgeCapsulePresenter
         TargetPlan = EdgeCapsulePresentationPlan.Hidden;
         AppliedPresentation = EdgeCapsulePresentationFrame.Hidden;
         _layoutSnapshot = null;
+        _appliedForceApplyVersion = _forceApplyVersion;
         _pendingMotion = EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State);
         ClearDeferredWork();
     }

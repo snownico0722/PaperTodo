@@ -1287,10 +1287,10 @@ public sealed partial class AppController : IDisposable
 
         if (_displayMetricsRefreshState == DisplayMetricsRefreshState.DeferredForCapsuleDrag)
         {
-            // The display refresh performs a complete non-animated arrange with fresh monitor
-            // geometry, so it also consumes any ordinary arrange request accumulated by the drag.
+            // Commit the accumulated queue move before the floating drag HWND is destroyed. The
+            // delayed display refresh remains as a second pass after WPF finishes its DPI hand-off.
             _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
-            _deepCapsuleArrangeGate.Clear();
+            FlushPendingDeepCapsuleArrange();
             ScheduleDisplayMetricsRefresh();
             return;
         }

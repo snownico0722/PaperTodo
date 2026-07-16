@@ -219,10 +219,12 @@ public sealed partial class PaperWindow
             return;
         }
 
-        // The controller has already resolved the destination queue. Snap the permanently docked
-        // host while hidden, then destroy the floating HWND before revealing the docked tree.
-        // Keeping this hand-off synchronous avoids a third, mixed-DPI transition state.
-        FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
+        // The gesture has ended and the controller has now applied the destination queue. Refresh
+        // the monitor/edge snapshot synchronously while the floating HWND still covers the hand-off,
+        // then destroy it only after the permanent docked host has reached the destination.
+        FlushEdgeCapsulePresentation(
+            EdgeCapsuleTransitionReason.FloatingTransfer,
+            EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
         CloseDeepCapsuleFloatingDragHost();
     }
 
@@ -496,15 +498,15 @@ public sealed partial class PaperWindow
         }
         finally
         {
+            // Keep the gesture alive through the queue mutation so arrange calls are coalesced. End
+            // it before completing the controller gate, allowing the destination placement to be
+            // measured and committed while the floating HWND is still visible.
+            FinishEdgeCapsulePointerInteraction();
+            _controller.CompleteDeepCapsuleReorderDrag();
             if (wasFloatingDrag || _deepCapsuleFloatingDragHost != null)
             {
                 CompleteDeepCapsuleFloatingDragDrop();
             }
-            // Keep the gesture state alive through the controller operation. Queue arrange calls
-            // are then deferred instead of racing the drag session, and a floating docked host
-            // remains suppressed until its replacement HWND has been destroyed.
-            FinishEdgeCapsulePointerInteraction();
-            _controller.CompleteDeepCapsuleReorderDrag();
             _controller.RefreshFloatingSurfaceZOrder();
             FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
         }

@@ -59,6 +59,14 @@ public sealed partial class PaperWindow
         if (msg is WmDpiChanged or WmDisplayChange or WmSettingChange)
         {
             WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+            if (msg == WmDpiChanged)
+            {
+                // WPF may rewrite the HWND after this hook returns. Mark native metrics dirty and
+                // force re-apply; the Presenter runs the actual correction on its Loaded-priority
+                // reconcile (after WPF finishes the DPI hand-off).
+                _edgeCapsuleHost?.InvalidateNativeMetrics();
+                _edgeCapsule.ForceApplyCurrentPresentation();
+            }
             _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
                 EdgeCapsuleTransitionReason.DisplayMetrics));
             InvalidateEdgeCapsule(

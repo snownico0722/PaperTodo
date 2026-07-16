@@ -264,7 +264,9 @@ internal static class EdgeCapsuleReducer
             State = model.State with
             {
                 Gesture = EdgeCapsuleGestureState.DockedReordering,
-                Visual = EdgeCapsuleVisualState.Hovered
+                Visual = model.State.Visual == EdgeCapsuleVisualState.Active
+                    ? EdgeCapsuleVisualState.Active
+                    : EdgeCapsuleVisualState.Hovered
             },
             DragSession = session,
             DockedDragTopDipOverride = intent.TopDip

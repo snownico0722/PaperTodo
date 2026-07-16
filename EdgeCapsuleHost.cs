@@ -60,6 +60,8 @@ internal sealed class EdgeCapsuleHost : IDisposable
     private double _appliedCloseWidth;
     private EdgeCapsuleEdge? _appliedEdge;
     private EdgeCapsulePresentationFrame _appliedFrame = EdgeCapsulePresentationFrame.Hidden;
+    private int _nativeMetricsVersion;
+    private int _appliedNativeMetricsVersion;
     private bool _disposed;
     private Window Window { get; }
     private Grid Root { get; }
@@ -177,11 +179,14 @@ internal sealed class EdgeCapsuleHost : IDisposable
                 : frame.HostBounds.Right == frame.Bounds.Right),
             "The visible capsule must fit inside a host pinned to the same wall.");
         var previousFrame = _appliedFrame;
+        var nativeMetricsVersion = _nativeMetricsVersion;
+        var nativeMetricsChanged = _appliedNativeMetricsVersion != nativeMetricsVersion;
         var firstShow = !window.IsVisible;
         var edgeChanged = firstShow ||
             !previousFrame.Visible ||
             previousFrame.Edge != frame.Edge;
-        var visualSurfaceChanged = edgeChanged ||
+        var visualSurfaceChanged = nativeMetricsChanged ||
+            edgeChanged ||
             previousFrame.Bounds.Width != frame.Bounds.Width ||
             previousFrame.Bounds.Height != frame.Bounds.Height ||
             Math.Abs(previousFrame.DpiScaleX - frame.DpiScaleX) > 0.001 ||
@@ -191,8 +196,22 @@ internal sealed class EdgeCapsuleHost : IDisposable
             Math.Abs(previousFrame.MaximumCloseWidthDip - frame.MaximumCloseWidthDip) > 0.001;
         var nativeBoundsChanged = firstShow ||
             !previousFrame.Visible ||
-            previousFrame.HostBounds != frame.HostBounds;
+            previousFrame.HostBounds != frame.HostBounds ||
+            !WindowNative.TryGetWindowDeviceBounds(window, out var actualHostBounds) ||
+            actualHostBounds != frame.HostBounds;
 
+        if (firstShow)
+        {
+            window.Opacity = 0;
+        }
+        if (nativeBoundsChanged && !WindowNative.TrySetWindowDeviceBounds(window, frame.HostBounds))
+        {
+            return false;
+        }
+
+        // Move the HWND before changing edge-specific columns and corners. If the native move is
+        // rejected or superseded by a per-monitor DPI hand-off, the old monitor must never display
+        // a visual tree that has already been flipped for the destination edge.
         if (edgeChanged)
         {
             ApplyFixedLayout(frame.Edge);
@@ -221,22 +240,18 @@ internal sealed class EdgeCapsuleHost : IDisposable
                 _appliedCloseWidth >= _maximumCloseWidth - 0.5;
         }
 
-        if (firstShow)
-        {
-            window.Opacity = 0;
-        }
         _appliedFrame = frame;
-        if (nativeBoundsChanged && !WindowNative.TrySetWindowDeviceBounds(window, frame.HostBounds))
-        {
-            _appliedFrame = previousFrame;
-            return false;
-        }
         if (firstShow)
         {
             window.Show();
             if (!WindowNative.TrySetWindowDeviceBounds(window, frame.HostBounds))
             {
-                _appliedFrame = previousFrame;
+                // Show succeeded but the post-Show placement did not. Hide immediately so the
+                // half-committed edge layout never stays on a wrong HWND; the next apply treats
+                // this as a fresh firstShow and retries the full path.
+                window.Hide();
+                window.Opacity = 0;
+                _appliedFrame = EdgeCapsulePresentationFrame.Hidden;
                 return false;
             }
         }
@@ -262,7 +277,21 @@ internal sealed class EdgeCapsuleHost : IDisposable
         {
             window.Opacity = opacity;
         }
+        _appliedNativeMetricsVersion = nativeMetricsVersion;
         return true;
+    }
+
+    public void InvalidateNativeMetrics()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        unchecked
+        {
+            _nativeMetricsVersion++;
+        }
     }
 
     private bool ContainsScreenPoint(DeviceScreenPoint point)
