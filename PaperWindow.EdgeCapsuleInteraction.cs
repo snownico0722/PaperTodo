@@ -5,6 +5,10 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    // Passed through the callback chain rather than stored on PaperWindow, so cancellation or a
+    // later drag cannot inherit an exhausted budget from an earlier floating HWND.
+    private const int MaximumDeepCapsuleDockingHandoffRestarts = 3;
+
     private void OnEdgeCapsulePointerPressed(DeviceScreenPoint screenPosition) =>
         BeginEdgeCapsulePointerInteraction(screenPosition);
 
@@ -275,7 +279,8 @@ public sealed partial class PaperWindow
             dirty);
     }
 
-    private void CompleteDeepCapsuleFloatingDragDrop()
+    private void CompleteDeepCapsuleFloatingDragDrop(
+        int handoffRestartsRemaining = MaximumDeepCapsuleDockingHandoffRestarts)
     {
         var floatingHost = _deepCapsuleFloatingDragHost;
         if (floatingHost == null)
@@ -305,7 +310,7 @@ public sealed partial class PaperWindow
                 floatingHost.RestoreDockingCover();
                 if (BeginEdgeCapsuleDockingHandoff())
                 {
-                    BeginDeepCapsuleFloatingDockingHandoff();
+                    BeginDeepCapsuleFloatingDockingHandoff(handoffRestartsRemaining);
                 }
                 else
                 {
@@ -325,7 +330,8 @@ public sealed partial class PaperWindow
         });
     }
 
-    private void BeginDeepCapsuleFloatingDockingHandoff()
+    private void BeginDeepCapsuleFloatingDockingHandoff(
+        int handoffRestartsRemaining = MaximumDeepCapsuleDockingHandoffRestarts)
     {
         var floatingHost = _deepCapsuleFloatingDragHost;
         if (floatingHost == null ||
@@ -334,7 +340,7 @@ public sealed partial class PaperWindow
             _edgeCapsuleHost == null)
         {
             FinishEdgeCapsulePointerInteraction();
-            CompleteDeepCapsuleFloatingDragDrop();
+            CompleteDeepCapsuleFloatingDragDrop(handoffRestartsRemaining);
             return;
         }
 
@@ -354,14 +360,17 @@ public sealed partial class PaperWindow
                 : default;
             if (!settled || targetBounds.IsEmpty)
             {
-                RecoverDeepCapsuleFloatingDockingHandoff(floatingHost);
+                RecoverDeepCapsuleFloatingDockingHandoff(
+                    floatingHost,
+                    handoffRestartsRemaining);
                 return;
             }
 
             AnimateDeepCapsuleFloatingDockingHandoff(
                 floatingHost,
                 targetBounds,
-                targetEdge);
+                targetEdge,
+                handoffRestartsRemaining);
         });
     }
 
@@ -397,7 +406,8 @@ public sealed partial class PaperWindow
     private void AnimateDeepCapsuleFloatingDockingHandoff(
         EdgeCapsuleDragWindow floatingHost,
         DeviceScreenRect targetBounds,
-        EdgeCapsuleEdge targetEdge)
+        EdgeCapsuleEdge targetEdge,
+        int handoffRestartsRemaining)
     {
         floatingHost.AnimateDockingHandoff(
             targetBounds,
@@ -429,7 +439,9 @@ public sealed partial class PaperWindow
                         : default;
                     if (!dockedSettled || latestTargetBounds.IsEmpty)
                     {
-                        RecoverDeepCapsuleFloatingDockingHandoff(floatingHost);
+                        RecoverDeepCapsuleFloatingDockingHandoff(
+                            floatingHost,
+                            handoffRestartsRemaining);
                         return;
                     }
                     if (!DeepCapsuleFloatingHandoffTargetMatches(
@@ -438,24 +450,36 @@ public sealed partial class PaperWindow
                             targetBounds,
                             targetEdge))
                     {
+                        if (handoffRestartsRemaining <= 0)
+                        {
+                            CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(
+                                floatingHost);
+                            return;
+                        }
+
                         // A topology/measure update during the flight becomes a new authoritative
-                        // target. One physical pixel is normal mixed-DPI rounding, not a new flight.
+                        // target. One physical pixel is normal mixed-DPI rounding, not a new flight;
+                        // larger changes consume the shared hand-off restart budget.
                         AnimateDeepCapsuleFloatingDockingHandoff(
                             floatingHost,
                             latestTargetBounds,
-                            latestTargetEdge);
+                            latestTargetEdge,
+                            handoffRestartsRemaining - 1);
                         return;
                     }
                     if (!floatingSettled)
                     {
-                        RecoverDeepCapsuleFloatingDockingHandoff(floatingHost);
+                        RecoverDeepCapsuleFloatingDockingHandoff(
+                            floatingHost,
+                            handoffRestartsRemaining);
                         return;
                     }
 
                     BeginDeepCapsuleDockingReveal(
                         floatingHost,
                         latestTargetBounds,
-                        latestTargetEdge);
+                        latestTargetEdge,
+                        handoffRestartsRemaining);
                 });
             });
     }
@@ -463,13 +487,16 @@ public sealed partial class PaperWindow
     private void BeginDeepCapsuleDockingReveal(
         EdgeCapsuleDragWindow floatingHost,
         DeviceScreenRect coverBounds,
-        EdgeCapsuleEdge coverEdge)
+        EdgeCapsuleEdge coverEdge,
+        int handoffRestartsRemaining)
     {
         if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
             !IsDeepCapsuleDockingFlight ||
             !BeginEdgeCapsuleDockingReveal())
         {
-            RecoverDeepCapsuleFloatingDockingHandoff(floatingHost);
+            RecoverDeepCapsuleFloatingDockingHandoff(
+                floatingHost,
+                handoffRestartsRemaining);
             return;
         }
 
@@ -486,7 +513,9 @@ public sealed partial class PaperWindow
                 }
                 if (!dockedSettled)
                 {
-                    RollBackDeepCapsuleDockingReveal(floatingHost);
+                    RollBackDeepCapsuleDockingReveal(
+                        floatingHost,
+                        handoffRestartsRemaining);
                     return;
                 }
                 var currentCoverBounds = CurrentDeepCapsuleFloatingHandoffTargetBounds(
@@ -497,7 +526,9 @@ public sealed partial class PaperWindow
                         coverBounds,
                         coverEdge))
                 {
-                    RollBackDeepCapsuleDockingReveal(floatingHost);
+                    RollBackDeepCapsuleDockingReveal(
+                        floatingHost,
+                        handoffRestartsRemaining);
                     return;
                 }
 
@@ -509,7 +540,8 @@ public sealed partial class PaperWindow
                         floatingHost,
                         floatingFaded,
                         coverBounds,
-                        coverEdge));
+                        coverEdge,
+                        handoffRestartsRemaining));
             },
             allowImmediateReplay: false,
             dirty: EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
@@ -519,7 +551,8 @@ public sealed partial class PaperWindow
         EdgeCapsuleDragWindow floatingHost,
         bool floatingFaded,
         DeviceScreenRect coverBounds,
-        EdgeCapsuleEdge coverEdge)
+        EdgeCapsuleEdge coverEdge,
+        int handoffRestartsRemaining)
     {
         if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
             !IsDeepCapsuleDockingReveal)
@@ -528,7 +561,9 @@ public sealed partial class PaperWindow
         }
         if (!floatingFaded)
         {
-            RollBackDeepCapsuleDockingReveal(floatingHost);
+            RollBackDeepCapsuleDockingReveal(
+                floatingHost,
+                handoffRestartsRemaining);
             return;
         }
         var currentCoverBounds = CurrentDeepCapsuleFloatingHandoffTargetBounds(
@@ -539,7 +574,9 @@ public sealed partial class PaperWindow
                 coverBounds,
                 coverEdge))
         {
-            RollBackDeepCapsuleDockingReveal(floatingHost);
+            RollBackDeepCapsuleDockingReveal(
+                floatingHost,
+                handoffRestartsRemaining);
             return;
         }
 
@@ -547,7 +584,9 @@ public sealed partial class PaperWindow
         // so it can be committed synchronously while the transparent cover is still available.
         if (!FinishEdgeCapsuleDockingHandoff())
         {
-            RollBackDeepCapsuleDockingReveal(floatingHost);
+            RollBackDeepCapsuleDockingReveal(
+                floatingHost,
+                handoffRestartsRemaining);
             return;
         }
         FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
@@ -555,7 +594,9 @@ public sealed partial class PaperWindow
         if (!applied.IsHitTestVisible ||
             _edgeCapsuleHost?.ConfirmPresentationSettled(applied) != true)
         {
-            RollBackDeepCapsuleDockingReveal(floatingHost);
+            RollBackDeepCapsuleDockingReveal(
+                floatingHost,
+                handoffRestartsRemaining);
             return;
         }
 
@@ -565,7 +606,9 @@ public sealed partial class PaperWindow
         _controller.RefreshFloatingSurfaceZOrder();
     }
 
-    private void RollBackDeepCapsuleDockingReveal(EdgeCapsuleDragWindow floatingHost)
+    private void RollBackDeepCapsuleDockingReveal(
+        EdgeCapsuleDragWindow floatingHost,
+        int handoffRestartsRemaining)
     {
         if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost))
         {
@@ -579,18 +622,25 @@ public sealed partial class PaperWindow
         }
         if (!IsDeepCapsuleDockingFlight && !BeginEdgeCapsuleDockingHandoff())
         {
-            CompleteDeepCapsuleFloatingDragDrop();
+            CompleteDeepCapsuleFloatingDragDrop(handoffRestartsRemaining);
             return;
         }
 
         // Leaving Reveal releases any display/arrange batch deferred across the ownership switch.
         // Its fresh target is then consumed by the normal stable-target hand-off path.
         _controller.CompleteDeepCapsuleReorderDrag();
-        BeginDeepCapsuleFloatingDockingHandoff();
+        if (handoffRestartsRemaining <= 0)
+        {
+            CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(floatingHost);
+            return;
+        }
+
+        BeginDeepCapsuleFloatingDockingHandoff(handoffRestartsRemaining - 1);
     }
 
     private void RecoverDeepCapsuleFloatingDockingHandoff(
-        EdgeCapsuleDragWindow floatingHost)
+        EdgeCapsuleDragWindow floatingHost,
+        int handoffRestartsRemaining)
     {
         if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
             !IsDeepCapsuleDockingFlight ||
@@ -599,6 +649,12 @@ public sealed partial class PaperWindow
         {
             FinishEdgeCapsulePointerInteraction();
             CloseDeepCapsuleFloatingDragHost();
+            return;
+        }
+
+        if (handoffRestartsRemaining <= 0)
+        {
+            CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(floatingHost);
             return;
         }
 
@@ -628,7 +684,8 @@ public sealed partial class PaperWindow
                 AnimateDeepCapsuleFloatingDockingHandoff(
                     floatingHost,
                     targetBounds,
-                    targetEdge);
+                    targetEdge,
+                    handoffRestartsRemaining - 1);
             },
             allowImmediateReplay: true,
             flushImmediately: false);
