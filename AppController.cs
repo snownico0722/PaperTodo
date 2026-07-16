@@ -1411,8 +1411,7 @@ public sealed partial class AppController : IDisposable
 
         if (window != null)
         {
-            var saveGeometry = !window.IsDeepCapsulePlaced;
-            if (!paper.IsCollapsed && saveGeometry)
+            if (!paper.IsCollapsed && !window.IsDeepCapsulePlaced)
             {
                 window.SaveGeometryForCurrentPresentation();
             }
@@ -1439,10 +1438,6 @@ public sealed partial class AppController : IDisposable
                     }
 
                     window.HideWithoutGeometrySave();
-                    if (paper.IsCollapsed)
-                    {
-                        window.SetCollapsedState(false, animate: false, saveGeometry: saveGeometry);
-                    }
                 };
                 window.BeginAnimation(Window.OpacityProperty, fadeOut);
             }
@@ -1451,15 +1446,7 @@ public sealed partial class AppController : IDisposable
                 window.BeginAnimation(Window.OpacityProperty, null);
                 window.Opacity = 1;
                 window.HideWithoutGeometrySave();
-                if (paper.IsCollapsed)
-                {
-                    window.SetCollapsedState(false, animate: false, saveGeometry: saveGeometry);
-                }
             }
-        }
-        else
-        {
-            SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
         }
 
         ArrangeDeepCapsules();
@@ -1519,15 +1506,18 @@ public sealed partial class AppController : IDisposable
         {
             // Fully detach from the stack, not just the expanded reservation: a docked collapsed
             // capsule shows its own slot-host window that a reservation-only clear leaves on screen.
-            var saveGeometry = !window.IsDeepCapsulePlaced;
             window.DetachFromDeepCapsuleStack();
             window.HideWithoutGeometrySave();
-            window.SetCollapsedState(false, animate: false, saveGeometry: saveGeometry);
         }
 
-        foreach (var paper in State.Papers)
+        // Linked-note buttons cache whether their note currently has an expanded surface. Keep
+        // hidden todo windows current so showing only one paper later cannot revive a stale state.
+        foreach (var paper in State.Papers.Where(paper => paper.Type == PaperTypes.Todo))
         {
-            SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
+            if (_windows.TryGetValue(paper.Id, out var window))
+            {
+                window.RefreshTodoRowsForExternalChange();
+            }
         }
 
         ArrangeDeepCapsules();

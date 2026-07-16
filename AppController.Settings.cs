@@ -1251,8 +1251,7 @@ public sealed partial class AppController
 
     private void RestoreGeneralSettingsPageDefaults()
     {
-        // Only fields on the Behavior page; does not touch visual typography or hotkeys.
-        State.Theme = "system";
+        // Only fields on the Behavior page; does not touch visual/theme or hotkeys.
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;
         State.EnableToolTips = true;
@@ -1300,11 +1299,12 @@ public sealed partial class AppController
 
         // Capsule toggles / visibility can change stack presence.
         ApplyCapsuleModeSettingsAfterRestore();
-        RefreshThemeSurfaces();
     }
 
     private void RestoreVisualSettingsPageDefaults()
     {
+        // Theme lives on the visual page with color scheme / fonts.
+        State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
@@ -2379,6 +2379,27 @@ public sealed partial class AppController
 
     private void ToggleDeepCapsuleMode()
     {
+        List<(PaperWindow Window, PaperWindow.DeepCapsuleModeHandoff Handoff)>? handoffs = null;
+        if (State.UseDeepCapsuleMode)
+        {
+            // Capture normal queue slots before disabling collapse-all and resetting queue
+            // margins; once the hosts are detached, only the stale ordinary X/Y remains.
+            var windows = _windows.Values.ToList();
+            foreach (var window in windows)
+            {
+                window.PrepareForCapsulePresentationModeChange();
+            }
+
+            handoffs = new List<(PaperWindow, PaperWindow.DeepCapsuleModeHandoff)>();
+            foreach (var window in windows)
+            {
+                if (window.TryCaptureDeepCapsuleModeHandoff(out var handoff))
+                {
+                    handoffs.Add((window, handoff));
+                }
+            }
+        }
+
         State.UseDeepCapsuleMode = !State.UseDeepCapsuleMode;
 
         if (State.UseDeepCapsuleMode && !State.UseCapsuleMode)
@@ -2403,6 +2424,13 @@ public sealed partial class AppController
         }
 
         ArrangeDeepCapsules();
+        if (handoffs != null)
+        {
+            foreach (var (window, handoff) in handoffs)
+            {
+                window.RestoreCollapsedSurfaceAfterDeepCapsuleModeDisabled(handoff);
+            }
+        }
         RestoreMissingVisiblePaperSurfaces();
         SaveNow();
         RebuildTrayMenu();

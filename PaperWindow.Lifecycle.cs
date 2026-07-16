@@ -115,6 +115,18 @@ public sealed partial class PaperWindow
         AbortAllInteractions(InteractionAbortReason.Hiding);
     }
 
+    internal void PrepareForCapsulePresentationModeChange()
+    {
+        CommitPendingEditsForSave();
+        SettlePaperFormPresentation();
+        AbortAllInteractions(InteractionAbortReason.FormChanging);
+        if (!_paper.IsVisible)
+        {
+            CancelPendingVisibilityTransitions();
+            HideWithoutGeometrySave();
+        }
+    }
+
     internal void SettleAnimationsForDisabledSetting()
     {
         CancelPendingVisibilityTransitions();

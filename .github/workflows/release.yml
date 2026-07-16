@@ -56,9 +56,15 @@ jobs:
         id: meta
         run: |
           $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
-          $version = $project.Project.PropertyGroup.Version
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "PaperTodo.csproj does not define <Version>."
+          # Multiple PropertyGroups exist; .PropertyGroup.Version is an array that stringifies
+          # with a trailing space (e.g. "3.0 "). Read the single Version element instead.
+          $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
+          if ($versionNodes.Count -ne 1) {
+            throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
+          }
+          $version = ([string]$versionNodes[0].InnerText).Trim()
+          if ([string]::IsNullOrWhiteSpace($version) -or $version -match '\s') {
+            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$version'."
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT

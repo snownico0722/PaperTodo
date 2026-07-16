@@ -5,6 +5,101 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     internal readonly record struct ProgrammaticPaperExpansionOrigin(double Left, double Top);
+    internal readonly record struct DeepCapsuleModeHandoff(double Left, double Top);
+
+    internal bool TryCaptureDeepCapsuleModeHandoff(out DeepCapsuleModeHandoff handoff)
+    {
+        handoff = default;
+        if (!_paper.IsVisible ||
+            !_paper.IsCollapsed ||
+            !HasDeepCapsuleSlotPlacement ||
+            !_edgeCapsule.Placement.IsPlaced)
+        {
+            return false;
+        }
+
+        var layout = CaptureEdgeCapsuleLayoutSnapshot();
+        if (!layout.IsUsable)
+        {
+            return false;
+        }
+
+        // Use the normal queue target rather than the currently applied frame. The applied frame
+        // may be hovered, moving, or retracted into the master; those transient states must not
+        // make ordinary capsules overlap or inherit a temporary horizontal width.
+        var slotEdges = EdgeCapsuleGeometry.CalculateVerticalEdges(
+            layout.Monitor,
+            layout.NormalTopDip,
+            layout.HeightDip);
+
+        // Size and clamp in the target monitor's physical coordinate space. Subtracting a WPF
+        // width directly from a global/system-DPI wall coordinate is wrong on mixed-DPI screens.
+        var targetWidthDevice = Math.Max(1, (int)Math.Round(
+            DesiredCapsuleWindowWidth * Math.Max(1, layout.Monitor.DpiScaleX),
+            MidpointRounding.AwayFromZero));
+        var targetHeightDevice = Math.Max(1, (int)Math.Round(
+            PaperLayoutDefaults.CapsuleHeight * Math.Max(1, layout.Monitor.DpiScaleY),
+            MidpointRounding.AwayFromZero));
+        var targetLeftDevice = layout.Edge == EdgeCapsuleEdge.Left
+            ? layout.Monitor.WorkArea.Left
+            : Math.Max(
+                layout.Monitor.WorkArea.Left,
+                layout.Monitor.WorkArea.Right - targetWidthDevice);
+        var maxTopDevice = Math.Max(
+            layout.Monitor.WorkArea.Top,
+            layout.Monitor.WorkArea.Bottom - targetHeightDevice);
+        var targetTopDevice = Math.Clamp(
+            slotEdges.Top,
+            layout.Monitor.WorkArea.Top,
+            maxTopDevice);
+        var targetOrigin = WindowWorkAreaHelper.DeviceScreenPointToDip(new DeviceScreenPoint(
+            targetLeftDevice,
+            targetTopDevice));
+
+        handoff = new DeepCapsuleModeHandoff(targetOrigin.X, targetOrigin.Y);
+        return true;
+    }
+
+    internal bool RestoreCollapsedSurfaceAfterDeepCapsuleModeDisabled(
+        DeepCapsuleModeHandoff handoff)
+    {
+        if (!_paper.IsVisible ||
+            !_paper.IsCollapsed ||
+            !_controller.State.UseCapsuleMode ||
+            _controller.State.UseDeepCapsuleMode ||
+            HasDeepCapsuleSlotPlacement)
+        {
+            return false;
+        }
+
+        BeginAnimation(Window.OpacityProperty, null);
+        Opacity = 1.0;
+        var width = DesiredCapsuleWindowWidth;
+        MoveWindowWithoutGeometrySave(() =>
+        {
+            ShowActivated = false;
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+
+            MinWidth = width;
+            MinHeight = PaperLayoutDefaults.CapsuleHeight;
+            ResizeMode = ResizeMode.NoResize;
+            Width = width;
+            Height = PaperLayoutDefaults.CapsuleHeight;
+            Left = handoff.Left;
+            Top = handoff.Top;
+            if (!IsVisible)
+            {
+                Show();
+            }
+        });
+
+        RefreshEffectiveTopmost();
+        SaveGeometryForCurrentPresentation();
+        return true;
+    }
 
     internal void ActivateFromEdgeShortcut()
     {
