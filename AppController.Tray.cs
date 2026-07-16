@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -134,16 +135,22 @@ public sealed partial class AppController
     private static readonly ControlTemplate SharedTrayContentMenuItemTemplate = BuildTrayContentMenuItemTemplate();
     private static readonly Style SharedTrayMenuItemStyle = BuildTrayMenuItemStyle();
     private static readonly Style SharedTrayContentMenuItemStyle = BuildTrayContentMenuItemStyle();
+    private static readonly Style SharedTrayToolbarItemStyle = BuildTrayToolbarItemStyle();
 
     private static ControlTemplate BuildSegmentMenuItemTemplate()
     {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
         presenter.SetValue(ContentPresenter.ContentSourceProperty, "Header");
         presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        border.AppendChild(presenter);
 
         return new ControlTemplate(typeof(MenuItem))
         {
-            VisualTree = presenter
+            VisualTree = border
         };
     }
 
@@ -336,17 +343,16 @@ public sealed partial class AppController
         return style;
     }
 
-    private static Style BuildTrayHeaderStyle()
+    private static Style BuildTrayToolbarItemStyle()
     {
         var style = new Style(typeof(MenuItem));
         style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("TrayWeakTextBrushKey")));
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 2, 12, 2)));
-        style.Setters.Add(new Setter(Control.MinHeightProperty, 22.0));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 2, 6, 2)));
+        style.Setters.Add(new Setter(Control.MinHeightProperty, 26.0));
         style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Arrow));
-        style.Setters.Add(new Setter(Control.TemplateProperty, SharedTrayMenuItemTemplate));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(12)));
-        style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        style.Setters.Add(new Setter(Control.TemplateProperty, SharedSegmentMenuItemTemplate));
+        style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
 
         return style;
     }
@@ -428,22 +434,13 @@ public sealed partial class AppController
 
         _trayMenu.Items.Clear();
 
-        _trayMenu.Items.Add(TrayHeader(AppDisplayName));
-        _trayMenu.Items.Add(TrayItem(Strings.Get("TrayNewTodo"), () => CreatePaper(PaperTypes.Todo, show: true)));
-        _trayMenu.Items.Add(TrayItem(Strings.Get("TrayNewNote"), () => CreatePaper(PaperTypes.Note, show: true)));
+        _trayMenu.Items.Add(TrayTitleBar());
         _trayMenu.Items.Add(TraySeparator());
 
-        _trayMenu.Items.Add(TrayItem(Strings.Get("TraySettings"), ShowSettingsWindow));
-        _trayMenu.Items.Add(TraySeparator());
-
-        _trayMenu.Items.Add(TrayItem(Strings.Get("TrayShowAll"), ShowAllPapers));
-        _trayMenu.Items.Add(TrayItem(Strings.Get("TrayHideAll"), HideAllPapers));
+        _trayMenu.Items.Add(TrayPaperToolbar());
 
         if (State.Papers.Count > 0)
         {
-            _trayMenu.Items.Add(TraySeparator());
-            _trayMenu.Items.Add(TrayHeader(Strings.Get("TrayPapers")));
-
             for (var index = 0; index < State.Papers.Count; index++)
             {
                 var paper = State.Papers[index];
@@ -479,13 +476,329 @@ public sealed partial class AppController
 
         item.Click += (_, _) =>
         {
-            if (_trayMenu != null)
-            {
-                _trayMenu.IsOpen = false;
-            }
-            _ = Application.Current.Dispatcher.InvokeAsync(action, DispatcherPriority.Background);
+            InvokeTrayAction(action);
         };
         return item;
+    }
+
+    private void InvokeTrayAction(Action action)
+    {
+        if (_trayMenu != null)
+        {
+            _trayMenu.IsOpen = false;
+        }
+        _ = Application.Current.Dispatcher.InvokeAsync(action, DispatcherPriority.Background);
+    }
+
+    private MenuItem TrayTitleBar()
+    {
+        var item = new MenuItem
+        {
+            Style = SharedTrayToolbarItemStyle,
+            StaysOpenOnClick = true
+        };
+
+        var grid = new Grid
+        {
+            MinWidth = 168
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        KeyboardNavigation.SetTabNavigation(grid, KeyboardNavigationMode.Cycle);
+
+        var label = new TextBlock
+        {
+            Text = AppDisplayName,
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(3, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var settingsTip = Strings.Get("TraySettings");
+        var settingsButton = TrayToolbarAction(
+            CreateTraySettingsIcon(),
+            settingsTip,
+            ShowSettingsWindow);
+
+        Grid.SetColumn(label, 0);
+        Grid.SetColumn(settingsButton, 1);
+        grid.Children.Add(label);
+        grid.Children.Add(settingsButton);
+
+        item.Header = grid;
+        item.Click += (_, e) => e.Handled = true;
+        item.PreviewKeyDown += (_, e) =>
+        {
+            if (e.OriginalSource == item && (e.Key is Key.Enter or Key.Space))
+            {
+                InvokeTrayAction(ShowSettingsWindow);
+                e.Handled = true;
+            }
+        };
+        return item;
+    }
+
+    private MenuItem TrayPaperToolbar()
+    {
+        var paperCount = State.Papers.Count;
+        var shownCount = State.Papers.Count(IsPaperShown);
+        var anyShown = shownCount > 0;
+        var allShown = paperCount > 0 && shownCount == paperCount;
+
+        var item = new MenuItem
+        {
+            Style = SharedTrayToolbarItemStyle,
+            StaysOpenOnClick = true
+        };
+
+        var grid = new Grid
+        {
+            MinWidth = 168
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        KeyboardNavigation.SetTabNavigation(grid, KeyboardNavigationMode.Cycle);
+
+        var visibilityTip = Strings.Get(anyShown ? "TrayHideAll" : "TrayShowAll");
+        Action visibilityAction = anyShown ? HideAllPapers : ShowAllPapers;
+        var visibilityButton = TrayToolbarAction(
+            CreateTrayVisibilityIcon(anyShown, allShown),
+            visibilityTip,
+            visibilityAction,
+            isEnabled: paperCount > 0);
+
+        var label = new TextBlock
+        {
+            Text = Strings.Get("TrayPapers"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(3, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var newTodoButton = TrayToolbarAction(
+            CreateTrayAddIcon("✓"),
+            Strings.Get("TrayNewTodo"),
+            () => CreatePaper(PaperTypes.Todo, show: true));
+        var newNoteButton = TrayToolbarAction(
+            CreateTrayAddIcon("✎"),
+            Strings.Get("TrayNewNote"),
+            () => CreatePaper(PaperTypes.Note, show: true));
+
+        Grid.SetColumn(visibilityButton, 0);
+        Grid.SetColumn(label, 1);
+        Grid.SetColumn(newTodoButton, 2);
+        Grid.SetColumn(newNoteButton, 3);
+        grid.Children.Add(visibilityButton);
+        grid.Children.Add(label);
+        grid.Children.Add(newTodoButton);
+        grid.Children.Add(newNoteButton);
+
+        item.Header = grid;
+        item.Click += (_, e) => e.Handled = true;
+        item.PreviewKeyDown += (_, e) =>
+        {
+            if (paperCount > 0 && e.OriginalSource == item && (e.Key is Key.Enter or Key.Space))
+            {
+                InvokeTrayAction(visibilityAction);
+                e.Handled = true;
+            }
+        };
+        return item;
+    }
+
+    private Border TrayToolbarAction(
+        FrameworkElement icon,
+        string toolTip,
+        Action action,
+        bool isEnabled = true)
+    {
+        const double normalOpacity = 0.74;
+
+        var area = new Border
+        {
+            Width = 26,
+            Height = 22,
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Cursor = isEnabled ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
+            Focusable = isEnabled,
+            IsHitTestVisible = isEnabled,
+            Opacity = isEnabled ? normalOpacity : 0.28,
+            ToolTip = isEnabled ? toolTip : null,
+            Child = icon
+        };
+        AutomationProperties.SetName(area, toolTip);
+        KeyboardNavigation.SetIsTabStop(area, isEnabled);
+        ToolTipService.SetInitialShowDelay(area, 300);
+
+        if (!isEnabled)
+        {
+            return area;
+        }
+
+        void ResetVisual()
+        {
+            area.Background = area.IsKeyboardFocusWithin ? TrayHoverBrush : Brushes.Transparent;
+            area.Opacity = area.IsKeyboardFocusWithin ? 1.0 : normalOpacity;
+        }
+
+        void InvokeAction()
+        {
+            InvokeTrayAction(action);
+        }
+
+        area.MouseEnter += (_, _) =>
+        {
+            area.Background = TrayHoverBrush;
+            area.Opacity = 1.0;
+        };
+        area.MouseLeave += (_, _) => ResetVisual();
+        area.GotKeyboardFocus += (_, _) =>
+        {
+            area.Background = TrayHoverBrush;
+            area.Opacity = 1.0;
+        };
+        area.LostKeyboardFocus += (_, _) => ResetVisual();
+        area.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            area.CaptureMouse();
+            area.Opacity = 0.58;
+            e.Handled = true;
+        };
+        area.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            var point = Mouse.GetPosition(area);
+            var releasedInside = point.X >= 0 &&
+                point.Y >= 0 &&
+                point.X <= area.ActualWidth &&
+                point.Y <= area.ActualHeight;
+            if (area.IsMouseCaptured)
+            {
+                area.ReleaseMouseCapture();
+            }
+            ResetVisual();
+            if (releasedInside)
+            {
+                InvokeAction();
+            }
+            e.Handled = true;
+        };
+        area.LostMouseCapture += (_, _) => ResetVisual();
+        area.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                InvokeAction();
+                e.Handled = true;
+            }
+        };
+
+        return area;
+    }
+
+    private FrameworkElement CreateTraySettingsIcon()
+    {
+        return new System.Windows.Shapes.Path
+        {
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+            Data = Geometry.Parse(
+                "M 6.1,0.7 L 7.9,0.7 L 8.25,2.35 C 8.72,2.5 9.15,2.72 9.53,3 L 11.1,2.2 L 12.3,3.4 L 11.5,4.97 " +
+                "C 11.78,5.35 12,5.78 12.15,6.25 L 13.8,6.6 L 13.8,8.4 L 12.15,8.75 C 12,9.22 11.78,9.65 11.5,10.03 " +
+                "L 12.3,11.6 L 11.1,12.8 L 9.53,12 L 8.25,12.65 L 7.9,14.3 L 6.1,14.3 L 5.75,12.65 C 5.28,12.5 4.85,12.28 " +
+                "4.47,12 L 2.9,12.8 L 1.7,11.6 L 2.5,10.03 C 2.22,9.65 2,9.22 1.85,8.75 L 0.2,8.4 L 0.2,6.6 L 1.85,6.25 " +
+                "C 2,5.78 2.22,5.35 2.5,4.97 L 1.7,3.4 L 2.9,2.2 L 4.47,3 C 4.85,2.72 5.28,2.5 5.75,2.35 Z M 7,4.6 " +
+                "C 5.67,4.6 4.6,5.67 4.6,7 C 4.6,8.33 5.67,9.4 7,9.4 C 8.33,9.4 9.4,8.33 9.4,7 C 9.4,5.67 8.33,4.6 7,4.6 Z"),
+            Stroke = TrayTextBrush,
+            StrokeThickness = 1.2,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
+    private FrameworkElement CreateTrayVisibilityIcon(bool anyShown, bool allShown)
+    {
+        var icon = new Grid
+        {
+            Width = 16,
+            Height = 16
+        };
+
+        var outline = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 1.4,8 C 3.2,4.8 5.5,3.1 8,3.1 C 10.5,3.1 12.8,4.8 14.6,8 C 12.8,11.2 10.5,12.9 8,12.9 C 5.5,12.9 3.2,11.2 1.4,8 Z"),
+            Stroke = TrayTextBrush,
+            StrokeThickness = 1.35,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent
+        };
+        var pupil = new System.Windows.Shapes.Ellipse
+        {
+            Width = 4,
+            Height = 4,
+            Fill = TrayTextBrush,
+            Opacity = allShown ? 1.0 : 0.5,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        icon.Children.Add(outline);
+        icon.Children.Add(pupil);
+
+        if (!anyShown)
+        {
+            icon.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M 2.2,2.2 L 13.8,13.8"),
+                Stroke = TrayTextBrush,
+                StrokeThickness = 1.7,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            });
+        }
+
+        return icon;
+    }
+
+    private FrameworkElement CreateTrayAddIcon(string glyph)
+    {
+        var icon = new Grid
+        {
+            Width = 17,
+            Height = 17
+        };
+        icon.Children.Add(new TextBlock
+        {
+            Text = glyph,
+            Foreground = TrayTextBrush,
+            FontFamily = new FontFamily("Segoe UI Symbol"),
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 4, 3),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        icon.Children.Add(new TextBlock
+        {
+            Text = "+",
+            Foreground = TrayTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(9),
+            FontWeight = FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom
+        });
+        return icon;
     }
 
     private MenuItem TrayPaperItem(PaperData paper)
@@ -815,16 +1128,6 @@ public sealed partial class AppController
         };
 
         return item;
-    }
-
-    private static MenuItem TrayHeader(string text)
-    {
-        return new MenuItem
-        {
-            Header = text,
-            IsEnabled = false,
-            Style = BuildTrayHeaderStyle()
-        };
     }
 
     private static string AppDisplayName

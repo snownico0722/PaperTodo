@@ -463,10 +463,10 @@
     <value>Confirm</value>
   </data>
   <data name="TrayNewNote" xml:space="preserve">
-    <value>+ New note paper</value>
+    <value>New note paper</value>
   </data>
   <data name="TrayNewTodo" xml:space="preserve">
-    <value>+ New todo paper</value>
+    <value>New todo paper</value>
   </data>
   <data name="TrayPapers" xml:space="preserve">
     <value>Papers</value>
@@ -508,86 +508,90 @@
     <value>General</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
-    <value>Choose light, dark, or follow the Windows system theme.</value>
+    <value>Light, dark, or follow the Windows system theme.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>Switch the paper color tone, including backgrounds, accents, and muted text.</value>
+    <value>Paper colors: background, accents, and muted text.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>Language default chooses suitable system fonts for UI and note text separately.
-Choosing YaHei or DengXian unifies the UI, tray, capsules, todos, and note text under that font.
-If papertodo.ttf or papertodo.otf exists in the app folder, that custom font takes priority.</value>
+    <value>Language default picks system fonts for UI and note body separately.
+YaHei or DengXian unifies UI, tray, capsules, todos, and notes.
+If papertodo.ttf / .otf is in the app folder, that font is preferred.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>Standard follows the Windows/WPF default text path for the best compatibility.
-Soft uses layout-stable two-axis grayscale smoothing and can look slightly soft at some display scales.
-Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines, but a few fonts may change width slightly.</value>
+    <value>Standard: Windows/WPF default path; best compatibility.
+Soft: two-axis grayscale smoothing; may look softer at some scales.
+Sharp: stronger pixel alignment; clearer outlines; a few fonts may change width slightly.</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>Enhanced custom bold</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>When enabled, bold note, todo, title, and capsule text uses a bold font file from the app folder (PaperTodo_Bold.ttf / papertodo_bold.ttf) instead of synthetic semi-bold. Requires both the papertodo regular font and a matching bold file.</value>
+    <value>Bold text uses the bold font file from the app folder.
+Place both papertodo and PaperTodo_Bold (.ttf/.otf).</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>Basic mode applies light highlighting; Enhanced also styles headings, lists, and emphasis.</value>
+    <value>Basic: light Markdown highlighting.
+Enhanced: nicer headings, lists, and emphasis.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>When video, games, or other fullscreen windows are detected, papers and edge capsules can temporarily step aside. Stay on top keeps them visible.</value>
+    <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
+“Stay on top” keeps them always visible.</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>Adjust todo text, row height, and spacing.</value>
+    <value>Todo text, row height, and spacing.</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>Drag a note onto a todo item to link it, then open the note directly from that item.</value>
+    <value>Drag a note onto a todo to link it, then open the note from that item.</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
-    <value>Show the linked note title after the todo item.</value>
+    <value>Show the linked note title after the todo.</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>When off, linked note titles stay compact. When on, they expand to fit content: about 5 full-width characters on one-line todos and 10 on multiline todos.</value>
+    <value>Off: compact. On: wider to fit content.
+About 5 full-width characters on one line, 10 on multiline.</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>Notes linked to todo items no longer appear in the capsule list, avoiding duplicate entry points.</value>
+    <value>Notes linked to todos leave the capsule list, avoiding duplicate entries.</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>When a linked entry points to a script capsule, left-click runs it and right-click opens it for editing. Off by default to prevent accidental runs.</value>
+    <value>If linked to a script capsule: left-click runs it, right-click opens edit.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
-    <value>Show the new todo button in the paper top bar.</value>
+    <value>Show “New todo” in the paper top bar.</value>
   </data>
   <data name="TipNewNoteButton" xml:space="preserve">
-    <value>Show the new note button in the paper top bar.</value>
+    <value>Show “New note” in the paper top bar.</value>
   </data>
   <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>Show the external open button in the top bar, writing the current note to a temporary file and handing it to the default app.</value>
+    <value>Top-bar external open: write the note to a temp file and hand it to the default app.</value>
   </data>
   <data name="TipExternalExtension" xml:space="preserve">
-    <value>Choose the file type used when handing the note to an external app, such as .md or .txt.</value>
+    <value>File suffix for external open, e.g. .md or .txt.</value>
   </data>
   <data name="TipCapsuleMode" xml:space="preserve">
-    <value>Allow papers to collapse into small capsules to save desktop space. Edge capsule features require this first.</value>
+    <value>Collapse papers into small capsules to free desktop space. Edge features need this first.</value>
   </data>
   <data name="TipDeepCapsuleMode" xml:space="preserve">
-    <value>Capsules dock to the screen edge as a queue and slide out on hover.</value>
+    <value>Dock capsules to the screen edge as a queue; they slide out on hover.</value>
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
-    <value>After opening a paper from an edge capsule, keep its edge entry visible. When off, that entry is hidden while the paper is open.</value>
+    <value>Keep the edge entry after expanding a paper; when off, hide it while open.</value>
   </data>
   <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>When opening a paper from an edge capsule, restore the last expanded window position and size. If unavailable, use the normal edge-aligned placement.</value>
+    <value>When expanding from the edge, restore the last position and size; otherwise use edge placement.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>When a paper is open from an edge capsule, click the same capsule again to retract the paper.</value>
+    <value>If the paper is already expanded from the edge, click the same capsule again to retract it.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
-    <value>Show a main capsule at the top of the capsule queue to collapse or expand the current queue.</value>
+    <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Maximum number of characters shown in paper titles and capsules.</value>
+    <value>Max characters shown in paper titles and capsules.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
-    <value>Launch PaperTodo automatically when Windows starts.</value>
+    <value>Start PaperTodo when Windows signs in.</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>Show hover hints</value>
@@ -596,37 +600,47 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Hide icons from taskbar</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
-    <value>When on, expanded papers do not appear on the Windows taskbar. They remain accessible from the tray, desktop papers, and capsules. On by default. This is enabled automatically when papers are hidden from window switching.</value>
+    <value>Expanded papers do not appear on the taskbar.
+Still reachable via tray, desktop papers, and capsules.
+Also forced on when “Hide papers from window switching” is on.</value>
   </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>Hide papers from window switching</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>When on, expanded papers are hidden from Alt+Tab and Task View, and their taskbar icons are hidden as well. They remain accessible from the tray, desktop papers, and capsules.</value>
+    <value>Hide expanded papers from Alt+Tab and Task View, and hide taskbar icons too.
+Still reachable via tray, desktop papers, and capsules.</value>
   </data>
   <data name="TipEnableToolTips" xml:space="preserve">
-    <value>Show brief hints when the pointer rests on buttons or interactive areas. Setting info icons stay available either way.</value>
+    <value>Brief hints when the pointer rests on buttons or interactive areas.
+Settings info icons always stay available.</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
     <value>Enable animations</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
-    <value>Enable transition animations for common actions. Turn off for a more direct response.</value>
+    <value>Transition animations for common actions; off feels more immediate.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>!pf / !powerf reuse a persistent process for faster startup, but variables and state may carry between scripts. Turning this off ends that process.</value>
+    <value>!pf / !powerf use a persistent process for faster starts; variables and state may carry across scripts.
+Turning this off ends that process.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>Prefer PowerShell 7 (pwsh.exe); fall back to Windows PowerShell when unavailable. Scripts can also use !pwsh or !ps5 to choose.</value>
+    <value>Prefer pwsh.exe (PowerShell 7); fall back to Windows PowerShell if missing.
+Scripts can also use !pwsh / !ps5.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>Hide the script window. Normal !p / !power waits for completion and captures errors; !pf / !powerf only submits to the persistent process.</value>
+    <value>Hide the script run window.
+!p / !power wait for exit and capture errors; !pf / !powerf only submit to the persistent process.</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>Remove a todo from the current paper as soon as you check it as done. Undo can bring it back.</value>
+    <value>Checking a todo as done removes it from the paper; Undo can restore it.</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
-    <value>When enabled, images over 8 MB or wider/taller than 2048 pixels are resized proportionally to a 2048-pixel longest edge and re-encoded. Import is canceled if compression is unsafe, fails, remains over 8 MB, or does not make the file smaller. When disabled, images are not compressed and files over 8 MB are rejected immediately. In either mode, images wider or taller than 4096 pixels are rejected.</value>
+    <value>Over 8 MB, or any side over 2048 px: try scaling to a 2048-px longest edge and re-encode.
+Cancel import if compression is unsafe, fails, stays over 8 MB, or does not shrink the file.
+Off: no compression; over 8 MB is rejected.
+Either way, any side over 4096 px is rejected.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>Enable todo-note links</value>
@@ -692,7 +706,8 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Restore defaults</value>
   </data>
   <data name="TipAdvancedSettingsMode" xml:space="preserve">
-    <value>Show less common settings such as taskbar/window-switcher hiding, script capsules, fullscreen avoidance, title limits, and image markup. Turning this off only hides those controls; it does not reset or disable any selected options.</value>
+    <value>When on, shows advanced settings.
+When off, only hides those items; selected values stay unchanged.</value>
   </data>
   <data name="SettingsVisual" xml:space="preserve">
     <value>Visual</value>
@@ -701,13 +716,16 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Overall font size</value>
   </data>
   <data name="TipOverallFontScale" xml:space="preserve">
-    <value>Scale text throughout the app in 5% steps from 80% to 120%. Per-note percentage zoom is applied on top.</value>
+    <value>Overall text scale 80%–120% in 5% steps.
+Per-note percentage zoom stacks on top.</value>
   </data>
   <data name="SettingsImageReferenceText" xml:space="preserve">
     <value>Image markup visibility</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>Control the Markdown markup for images. Editing only hides it while viewing; Always hide keeps the source intact. Show it again before editing image size or other markup.</value>
+    <value>Controls Markdown image markup visibility.
+“Editing only”: hidden while viewing.
+“Always hide”: text is transparent but still selectable.</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>Always show</value>
@@ -725,31 +743,33 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Note body</value>
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
-    <value>Apply a small, medium, or large size on top of the overall font size and optionally bold note text. Per-note percentage zoom remains an additional scale.</value>
+    <value>Small / medium / large on top of overall size, optional bold.
+Per-note percentage zoom stacks on top.</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>Todo body</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>Adjust todo body text and its row layout with small, medium, or large size, and optionally bold the body text.</value>
+    <value>Todo body and row height: small / medium / large, optional bold.</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>Title text</value>
   </data>
   <data name="TipTitleTextStyle" xml:space="preserve">
-    <value>Adjust paper title text with small, medium, or large size and bold styling.</value>
+    <value>Paper title bar: small / medium / large, optional bold.</value>
   </data>
   <data name="SettingsCapsuleText" xml:space="preserve">
     <value>Capsule text</value>
   </data>
   <data name="TipCapsuleTextStyle" xml:space="preserve">
-    <value>Apply one size and bold setting consistently to normal, edge, drag, and master capsules.</value>
+    <value>Normal, edge, drag, and master capsule text: one size and bold setting.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Edge title max length</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>Measure edge capsule width from at most the first N Unicode text characters. The title remains intact and normal capsules are unaffected. All keeps the original width behavior.</value>
+    <value>Measure edge capsule width from the first N title characters only; the title is not truncated and normal capsules are unchanged.
+“All” keeps the previous width behavior.</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>All</value>
@@ -770,13 +790,15 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Quick-launch edge capsules</value>
   </data>
   <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
-    <value>Use modifiers + digits 1–9 to open the Nth capsule in an edge queue. The master capsule is not counted; edge shortcuts are ignored while dragging an edge capsule.</value>
+    <value>Modifiers + digits 1–9 open the Nth capsule in a side queue.
+Master capsule is not counted.</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
-    <value>Register or unregister this side’s full 1–9 shortcuts immediately.</value>
+    <value>Register or unregister this side’s full 1–9 set immediately.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>Press and release 2–3 modifiers (Ctrl / Alt / Shift / Win) to finish recording. Digits 1–9 are fixed. Left and right queues cannot share the same modifiers.</value>
+    <value>Press and release 2–3 modifiers (Ctrl / Alt / Shift / Win) to finish recording.
+Digits 1–9 are fixed; left and right queues cannot share the same modifiers.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>Left queue</value>
@@ -785,16 +807,18 @@ Sharp uses more strongly pixel-aligned grayscale rendering for clearer outlines,
     <value>Right queue</value>
   </data>
   <data name="ShortcutEdgeLeftTip" xml:space="preserve">
-    <value>Prefer the left edge queue’s 1st–9th capsules, then the opposite side and neighboring monitors. Default modifiers: Ctrl+Shift.</value>
+    <value>Prefer this monitor’s left queue 1–9, then the opposite side and neighbors.
+Default modifiers: Ctrl+Shift.</value>
   </data>
   <data name="ShortcutEdgeRightTip" xml:space="preserve">
-    <value>Prefer the right edge queue’s 1st–9th capsules, then the opposite side and neighboring monitors. Default modifiers: Ctrl+Alt.</value>
+    <value>Prefer this monitor’s right queue 1–9, then the opposite side and neighbors.
+Default modifiers: Ctrl+Alt.</value>
   </data>
   <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
     <value>1–9</value>
   </data>
   <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
-    <value>Digits are fixed to 1–9 and cannot be changed; only the modifiers can be customized.</value>
+    <value>Digits are fixed to 1–9; only the modifiers can change.</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>Command</value>

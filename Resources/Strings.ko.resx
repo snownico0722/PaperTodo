@@ -463,10 +463,10 @@
     <value>확인</value>
   </data>
   <data name="TrayNewNote" xml:space="preserve">
-    <value>＋ 메모 종이 만들기</value>
+    <value>메모 종이 만들기</value>
   </data>
   <data name="TrayNewTodo" xml:space="preserve">
-    <value>＋ 할 일 종이 만들기</value>
+    <value>할 일 종이 만들기</value>
   </data>
   <data name="TrayPapers" xml:space="preserve">
     <value>종이</value>
@@ -505,7 +505,8 @@
     <value>기본값 복원</value>
   </data>
   <data name="TipAdvancedSettingsMode" xml:space="preserve">
-    <value>작업 표시줄/창 전환 숨기기, 스크립트 캡슐, 전체 화면 회피, 제목 길이, 이미지 마크업 등 사용 빈도가 낮은 설정을 표시합니다. 꺼도 항목만 숨겨지며 이미 선택한 옵션은 초기화되거나 비활성화되지 않습니다.</value>
+    <value>켜면 고급 설정을 표시합니다.
+꺼도 항목만 숨기며, 이미 선택한 값은 바뀌지 않습니다.</value>
   </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>캡슐</value>
@@ -520,86 +521,90 @@
     <value>일반</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
-    <value>라이트, 다크 또는 Windows 시스템 테마 따르기를 선택합니다.</value>
+    <value>라이트, 다크 또는 Windows 시스템 테마 따르기.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>종이의 전체 색조를 바꿉니다. 배경, 강조색, 약한 글자색에 영향을 줍니다.</value>
+    <value>종이 배색: 배경, 강조색, 약한 글자색.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>언어 기본값은 UI와 본문에 각각 알맞은 시스템 글꼴을 사용합니다.
-YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본문이 선택한 글꼴로 통일됩니다.
-앱 폴더에 papertodo.ttf 또는 papertodo.otf가 있으면 해당 사용자 지정 글꼴을 우선 사용합니다.</value>
+    <value>언어 기본값은 UI와 노트 본문에 각각 알맞은 시스템 글꼴을 씁니다.
+YaHei 또는 DengXian을 고르면 UI, 트레이, 캡슐, 할 일, 노트가 그 글꼴로 통일됩니다.
+앱 폴더에 papertodo.ttf / .otf가 있으면 우선 사용합니다.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>표준은 Windows/WPF 기본 텍스트 렌더링을 따라 호환성을 우선합니다.
-부드럽게는 레이아웃을 유지하는 양방향 회색조 평활화를 사용하며 일부 화면 배율에서는 다소 부드럽게 보일 수 있습니다.
-선명하게는 픽셀 정렬을 강화해 윤곽을 또렷하게 하지만 일부 글꼴의 글자 폭이 약간 달라질 수 있습니다.</value>
+    <value>표준: Windows/WPF 기본 경로, 호환성 우선.
+부드럽게: 양방향 회색조 평활화. 일부 배율에서 다소 부드럽게 보일 수 있음.
+선명하게: 픽셀 정렬 강화, 윤곽은 또렷하지만 일부 글꼴 폭이 약간 달라질 수 있음.</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>사용자 글꼴 굵게 강화</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>켜면 노트·할 일·제목·캡슐에서 「굵게」로 표시한 글자는 합성 세미볼드 대신 앱 폴더의 굵은 글꼴 파일(PaperTodo_Bold.ttf / papertodo_bold.ttf 등)을 사용합니다. papertodo 본문 글꼴과 대응하는 굵은 글꼴 파일이 모두 있어야 사용할 수 있습니다.</value>
+    <value>「굵게」로 표시한 글자는 앱 폴더의 굵은 글꼴 파일을 사용합니다.
+papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>기본은 가벼운 강조만 적용하고, 확장은 제목, 목록, 강조까지 더 다듬어 표시합니다.</value>
+    <value>기본: Markdown 가벼운 강조.
+확장: 제목, 목록, 강조를 더 다듬어 표시.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>동영상, 게임 등 전체 화면 창이 감지되면 종이와 가장자리 캡슐을 잠시 피하게 할 수 있습니다. 위에 유지는 항상 보이게 합니다.</value>
+    <value>동영상, 게임 등 전체 화면이 감지되면 종이와 가장자리 캡슐을 잠시 피할 수 있습니다.
+「위에 유지」는 항상 보이게 합니다.</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>할 일 항목의 글자, 행 높이, 간격을 조정합니다.</value>
+    <value>할 일 글자, 행 높이, 간격.</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>메모를 할 일 항목으로 드래그해 연결하고, 이후 해당 항목에서 바로 메모를 열 수 있습니다.</value>
+    <value>메모를 할 일 항목으로 드래그해 연결한 뒤, 해당 항목에서 메모를 엽니다.</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>할 일 항목 뒤에 연결된 메모 제목을 표시합니다.</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>끄면 간결한 표시를 유지합니다. 켜면 연결된 메모 제목이 내용에 맞게 넓어지며, 한 줄에서는 전각 약 5자, 여러 줄에서는 전각 약 10자까지 표시합니다.</value>
+    <value>끔: 간결. 켬: 내용에 맞게 넓힘.
+한 줄 전각 약 5자, 여러 줄 약 10자.</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>할 일 항목에 연결된 메모는 캡슐 목록에 표시하지 않아 중복 진입점을 피합니다.</value>
+    <value>할 일에 연결된 메모는 캡슐 목록에 나오지 않아 중복 입구를 피합니다.</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>연결 항목이 스크립트 캡슐이면 왼쪽 클릭으로 실행하고 오른쪽 클릭으로 편집을 엽니다. 실수 실행을 피하도록 기본값은 꺼짐입니다.</value>
+    <value>연결이 스크립트 캡슐이면: 왼쪽 클릭 실행, 오른쪽 클릭 편집.</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
-    <value>종이 상단 바에 새 할 일 버튼을 표시합니다.</value>
+    <value>종이 상단 바에 「새 할 일」을 표시합니다.</value>
   </data>
   <data name="TipNewNoteButton" xml:space="preserve">
-    <value>종이 상단 바에 새 메모 버튼을 표시합니다.</value>
+    <value>종이 상단 바에 「새 메모」를 표시합니다.</value>
   </data>
   <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>상단 바에 외부 열기 버튼을 표시하고, 현재 노트를 임시 파일로 쓴 뒤 시스템 기본 앱으로 엽니다.</value>
+    <value>상단 바 외부 열기: 노트를 임시 파일로 쓴 뒤 기본 앱에 넘깁니다.</value>
   </data>
   <data name="TipExternalExtension" xml:space="preserve">
-    <value>외부 앱에 넘길 때 사용할 파일 형식을 선택합니다. 예: .md, .txt.</value>
+    <value>외부 열기용 확장자. 예: .md, .txt.</value>
   </data>
   <data name="TipCapsuleMode" xml:space="preserve">
-    <value>종이를 작은 캡슐로 접어 데스크톱 공간을 줄입니다. 캡슐 가장자리 기능은 먼저 이 항목을 켜야 합니다.</value>
+    <value>종이를 작은 캡슐로 접어 데스크톱 공간을 줄입니다. 가장자리 기능은 먼저 이 항목을 켜야 합니다.</value>
   </data>
   <data name="TipDeepCapsuleMode" xml:space="preserve">
-    <value>캡슐을 화면 가장자리에 붙여 줄로 배치하고, 마우스를 올리면 슬라이드되어 나타납니다.</value>
+    <value>캡슐을 화면 가장자리에 붙여 줄로 두고, 마우스를 올리면 슬라이드됩니다.</value>
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
-    <value>가장자리 캡슐에서 종이를 연 뒤에도 가장자리에 해당 입구를 남깁니다. 끄면 열려 있는 동안 그 입구를 잠시 숨깁니다.</value>
+    <value>가장자리 캡슐에서 펼친 뒤에도 입구를 남깁니다. 끄면 열려 있는 동안만 숨깁니다.</value>
   </data>
   <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>가장자리 캡슐에서 종이를 열 때 마지막으로 펼친 창 위치와 크기를 복원합니다. 사용할 수 없으면 일반 가장자리 맞춤 위치로 엽니다.</value>
+    <value>가장자리에서 열 때 마지막 위치와 크기를 복원합니다. 쓸 수 없으면 가장자리 맞춤으로 엽니다.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>가장자리 캡슐에서 열린 종이에 대해 같은 캡슐을 다시 클릭하면 종이를 접습니다.</value>
+    <value>가장자리에서 이미 열린 종이에 대해 같은 캡슐을 다시 클릭하면 접습니다.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
-    <value>캡슐 줄 위에 메인 캡슐을 표시해 현재 줄을 한 번에 접거나 펼칩니다.</value>
+    <value>줄 맨 위에 메인 캡슐을 두어 현재 줄을 한 번에 접거나 펼칩니다.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>종이 제목과 캡슐에 표시되는 최대 글자 수입니다.</value>
+    <value>종이 제목과 캡슐에 표시되는 최대 글자 수.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
-    <value>Windows 시작 시 PaperTodo를 자동으로 실행합니다.</value>
+    <value>Windows 시작 시 PaperTodo를 자동 실행합니다.</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
     <value>호버 도움말 표시</value>
@@ -608,37 +613,47 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>작업 표시줄에서 아이콘 숨기기</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
-    <value>켜면 펼쳐진 종이가 Windows 작업 표시줄에 표시되지 않습니다. 트레이, 데스크톱의 종이, 캡슐에서는 계속 열 수 있습니다. 기본값은 켜짐입니다. 창 전환에서 종이를 숨기면 자동으로 켜집니다.</value>
+    <value>펼친 종이가 작업 표시줄에 나타나지 않습니다.
+트레이, 데스크톱 종이, 캡슐로는 계속 열 수 있습니다.
+「창 전환에서 숨기기」를 켜면 함께 켜집니다.</value>
   </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>창 전환에서 종이 숨기기</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>켜면 펼쳐진 종이가 Alt+Tab과 작업 보기에서 숨겨지고 작업 표시줄 아이콘도 함께 숨겨집니다. 트레이, 데스크톱의 종이, 캡슐에서는 계속 열 수 있습니다.</value>
+    <value>펼친 종이를 Alt+Tab과 작업 보기에서 숨기고 작업 표시줄 아이콘도 함께 숨깁니다.
+트레이, 데스크톱 종이, 캡슐로는 계속 열 수 있습니다.</value>
   </data>
   <data name="TipEnableToolTips" xml:space="preserve">
-    <value>버튼이나 조작 가능한 영역에 포인터를 올렸을 때 짧은 설명을 표시합니다. 설정 설명 아이콘은 항상 사용할 수 있습니다.</value>
+    <value>버튼이나 조작 영역에 포인터를 올리면 짧은 설명을 표시합니다.
+설정 설명 아이콘은 항상 사용할 수 있습니다.</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
     <value>애니메이션 효과 사용</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
-    <value>일반적인 작업에 전환 애니메이션을 적용합니다. 끄면 반응이 더 직접적입니다.</value>
+    <value>자주 쓰는 작업에 전환 애니메이션을 적용합니다. 끄면 반응이 더 직접적입니다.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>!pf / !powerf는 상주 프로세스를 재사용해 더 빠르게 시작하지만, 변수와 상태가 스크립트 사이에 남을 수 있습니다. 끄면 해당 프로세스를 종료합니다.</value>
+    <value>!pf / !powerf는 상주 프로세스를 사용해 더 빠르게 시작하지만, 변수와 상태가 스크립트 사이에 남을 수 있습니다.
+끄면 해당 프로세스를 종료합니다.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>PowerShell 7(pwsh.exe)을 우선 사용하고, 없으면 Windows PowerShell로 돌아갑니다. 스크립트에서 !pwsh / !ps5로도 지정할 수 있습니다.</value>
+    <value>pwsh.exe(PowerShell 7)를 우선하고, 없으면 Windows PowerShell로 돌아갑니다.
+스크립트에서 !pwsh / !ps5로도 지정할 수 있습니다.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>스크립트 실행 창을 숨깁니다. 일반 !p / !power는 종료를 기다리고 오류를 캡처하며, !pf / !powerf는 상주 프로세스에 전달만 합니다.</value>
+    <value>스크립트 실행 창을 숨깁니다.
+!p / !power는 종료를 기다리고 오류를 캡처하며, !pf / !powerf는 상주 프로세스에 전달만 합니다.</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>할 일을 완료로 체크하면 현재 종이에서 바로 제거합니다. 실행 취소로 되돌릴 수 있습니다.</value>
+    <value>완료로 체크하면 현재 종이에서 바로 제거합니다. 실행 취소로 되돌릴 수 있습니다.</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
-    <value>켜면 8MB를 초과하거나 너비·높이 중 한쪽이 2048픽셀을 초과하는 이미지를 긴 변 2048픽셀에 맞춰 비율대로 축소하고 다시 인코딩합니다. 안전하게 압축할 수 없거나, 압축에 실패하거나, 압축 후에도 8MB를 초과하거나, 파일이 더 작아지지 않으면 가져오기를 취소합니다. 끄면 압축하지 않으며 8MB를 초과하는 이미지는 즉시 거부합니다. 설정과 관계없이 너비 또는 높이가 4096픽셀을 초과하는 이미지는 거부합니다.</value>
+    <value>8MB 초과, 또는 한 변이 2048픽셀 초과면 긴 변 2048에 맞춰 축소 후 다시 인코딩을 시도합니다.
+안전하게 압축할 수 없거나, 실패하거나, 여전히 8MB 초과이거나, 파일이 작아지지 않으면 가져오기를 취소합니다.
+끄면 압축하지 않으며 8MB 초과는 즉시 거부합니다.
+설정과 관계없이 한 변이 4096픽셀을 넘으면 거부합니다.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>할 일-메모 연결 사용</value>
@@ -701,13 +716,16 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>전체 글꼴 크기</value>
   </data>
   <data name="TipOverallFontScale" xml:space="preserve">
-    <value>앱 전체의 글자를 80%~120% 범위에서 5%씩 조절합니다. 노트별 백분율 확대/축소는 여기에 추가로 적용됩니다.</value>
+    <value>전체 글자를 80%~120% 범위에서 5%씩 조절합니다.
+노트별 백분율 확대/축소는 여기에 추가로 적용됩니다.</value>
   </data>
   <data name="SettingsImageReferenceText" xml:space="preserve">
     <value>이미지 마크업 표시</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>이미지의 Markdown 마크업 표시를 조절합니다. '편집할 때만'은 보기 상태에서 숨기며, '항상 숨김'도 원문은 유지합니다. 이미지 크기 등의 마크업을 수정하기 전에 다시 표시하세요.</value>
+    <value>이미지 Markdown 마크업 표시를 조절합니다.
+「편집할 때만」: 보기 상태에서 숨김.
+「항상 숨김」: 글자는 투명하지만 선택할 수 있습니다.</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>항상 표시</value>
@@ -725,31 +743,33 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>노트 본문</value>
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
-    <value>전체 글꼴 크기에 소·중·대 크기와 굵게를 적용합니다. 노트별 백분율 확대/축소는 추가 배율로 유지됩니다.</value>
+    <value>전체 크기에 소/중/대를 얹고 굵게를 켤 수 있습니다.
+노트별 백분율 확대/축소는 계속 추가됩니다.</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>할 일 본문</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>할 일 본문과 행 레이아웃을 소·중·대로 조절하고 본문 굵게를 전환합니다.</value>
+    <value>할 일 본문과 행 높이: 소/중/대, 굵게 가능.</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>제목 글자</value>
   </data>
   <data name="TipTitleTextStyle" xml:space="preserve">
-    <value>종이 상단 제목의 소·중·대 크기와 굵게를 조절합니다.</value>
+    <value>종이 상단 제목: 소/중/대, 굵게 가능.</value>
   </data>
   <data name="SettingsCapsuleText" xml:space="preserve">
     <value>캡슐 글자</value>
   </data>
   <data name="TipCapsuleTextStyle" xml:space="preserve">
-    <value>일반, 가장자리, 드래그, 마스터 캡슐에 동일한 소·중·대 크기와 굵게를 적용합니다.</value>
+    <value>일반, 가장자리, 드래그, 마스터 캡슐 글자: 동일한 소/중/대와 굵게.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>가장자리 제목 최대 길이</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>제목의 앞 N개 Unicode 텍스트 문자만 사용해 가장자리 캡슐 너비를 계산합니다. 제목 내용과 일반 캡슐은 바뀌지 않으며, “전체”는 기존 너비를 유지합니다.</value>
+    <value>제목 앞 N자만으로 가장자리 캡슐 너비를 계산합니다. 제목 자체는 잘리지 않고 일반 캡슐은 영향 없습니다.
+「전체」는 기존 너비 동작을 유지합니다.</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>전체</value>
@@ -770,13 +790,15 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>가장자리 캡슐 빠른 실행</value>
   </data>
   <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
-    <value>수정 키 + 숫자 1~9로 가장자리 큐의 N번째 캡슐을 엽니다. 마스터 캡슐은 번호에 포함되지 않으며, 가장자리 캡슐을 끄는 동안에는 무시됩니다.</value>
+    <value>수정 키 + 숫자 1~9로 가장자리 큐의 N번째 캡슐을 엽니다.
+마스터 캡슐은 번호에 포함되지 않습니다.</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
-    <value>전환 즉시 같은 쪽의 1~9 전체를 등록하거나 해제합니다.</value>
+    <value>전환 즉시 같은 쪽 1~9 전체를 등록하거나 해제합니다.</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>수정 키(Ctrl / Alt / Shift / Win) 2~3개를 함께 눌렀다가 놓으면 기록이 완료됩니다. 숫자 1~9는 고정이며 좌우 큐는 같은 수정 키를 쓸 수 없습니다.</value>
+    <value>수정 키(Ctrl / Alt / Shift / Win) 2~3개를 함께 눌렀다가 놓으면 기록이 완료됩니다.
+숫자 1~9는 고정이며 좌우 큐는 같은 수정 키를 쓸 수 없습니다.</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>왼쪽 큐</value>
@@ -785,16 +807,18 @@ YaHei 또는 DengXian을 선택하면 UI, 트레이, 캡슐, 할 일, 노트 본
     <value>오른쪽 큐</value>
   </data>
   <data name="ShortcutEdgeLeftTip" xml:space="preserve">
-    <value>왼쪽 가장자리 큐 1~9번을 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다. 기본 수정 키는 Ctrl+Shift입니다.</value>
+    <value>이 모니터 왼쪽 큐 1~9를 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다.
+기본 수정 키: Ctrl+Shift.</value>
   </data>
   <data name="ShortcutEdgeRightTip" xml:space="preserve">
-    <value>오른쪽 가장자리 큐 1~9번을 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다. 기본 수정 키는 Ctrl+Alt입니다.</value>
+    <value>이 모니터 오른쪽 큐 1~9를 우선 찾고, 반대쪽·인접 모니터 순으로 검색합니다.
+기본 수정 키: Ctrl+Alt.</value>
   </data>
   <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
     <value>1–9</value>
   </data>
   <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
-    <value>숫자는 1~9로 고정되어 바꿀 수 없으며, 수정 키만 변경할 수 있습니다.</value>
+    <value>숫자는 1~9로 고정되며, 수정 키만 바꿀 수 있습니다.</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>명령</value>

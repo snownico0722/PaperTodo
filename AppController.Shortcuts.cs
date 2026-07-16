@@ -682,9 +682,11 @@ public sealed partial class AppController
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(142) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
+        // Command column stays flexible but slightly tighter so the key column can fit
+        // edge rows: modifier button + "+" + fixed 1–9 chip without clipping.
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.95, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(172) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         return grid;
     }

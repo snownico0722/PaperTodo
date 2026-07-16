@@ -476,10 +476,10 @@
     <value>确认</value>
   </data>
   <data name="TrayNewNote" xml:space="preserve">
-    <value>＋ 新建笔记纸</value>
+    <value>新建笔记纸</value>
   </data>
   <data name="TrayNewTodo" xml:space="preserve">
-    <value>＋ 新建待办纸</value>
+    <value>新建待办纸</value>
   </data>
   <data name="TrayPapers" xml:space="preserve">
     <value>纸片</value>
@@ -518,7 +518,8 @@
     <value>恢复默认</value>
   </data>
   <data name="TipAdvancedSettingsMode" xml:space="preserve">
-    <value>显示任务栏/窗口切换隐藏、脚本胶囊、全屏避让、标题长度、图片标记等低频设置。关闭后只隐藏这些项，不会回退或停用已经选择的选项。</value>
+    <value>开启后显示高级设置。
+关闭后只隐藏对应项，不会改动已选配置。</value>
   </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>胶囊</value>
@@ -533,89 +534,96 @@
     <value>通用</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
-    <value>选择浅色、深色，或跟随 Windows 系统主题。</value>
+    <value>浅色、深色，或跟随 Windows 系统主题。</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>切换纸片的配色基调，包括背景、强调色和弱化文字。</value>
+    <value>切换纸片配色：背景、强调色与弱化文字。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>语言默认会为界面和笔记正文分别选择合适的系统字体。
-手动选择雅黑或等线后，界面、托盘、胶囊、待办和笔记正文会统一使用所选字体。
-程序目录下存在 papertodo.ttf 或 papertodo.otf 时，会优先使用该自定义字体。</value>
+    <value>语言默认会分别为界面与笔记正文挑选系统字体。
+选雅黑或等线后，界面、托盘、胶囊、待办和笔记统一用该字体。
+程序目录有 papertodo.ttf / .otf 时优先用它。</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>标准沿用 Windows/WPF 默认文字渲染，兼容性最好。
-柔和使用布局稳定的双向灰阶平滑，部分显示比例下可能偏软。
-锐利使用像素对齐更强的灰阶渲染，轮廓更清楚，但个别字体的字宽可能轻微变化。</value>
+    <value>标准：沿用 Windows/WPF 默认路径，兼容性最好。
+柔和：双向灰阶平滑，部分缩放比例下可能偏软。
+锐利：像素对齐更强，轮廓更清，个别字体字宽可能略变。</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>自定义字体增强加粗</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>开启后，笔记、待办、标题和胶囊中勾选了「加粗」的文字会加载程序目录下的粗体字体文件（如 PaperTodo_Bold.ttf / papertodo_bold.ttf），而不是系统合成的半粗。需同时存在 papertodo 正文字体与对应粗体文件时才可启用。</value>
+    <value>勾选了「加粗」的文字，改用程序目录中的粗体文件。
+需同时放置 papertodo 与 PaperTodo_Bold（.ttf/.otf）。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>基础模式只做轻量高亮；增强模式进一步美化标题、列表和强调。</value>
+    <value>基础：为md渲染轻量高亮。
+增强：标题、列表和强调更美观。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>检测到视频、游戏等全屏窗口时，纸片和边缘胶囊可临时避让；选择保持置顶则始终可见。</value>
+    <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；
+「保持置顶」则始终可见。</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>调整待办项的文字、行高和间距。</value>
+    <value>调整待办文字、行高与间距。</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>允许把笔记拖到待办项上建立关联，之后可从待办项直接打开对应笔记。</value>
+    <value>把笔记拖到待办项上建立关联，再从该项打开笔记。</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
     <value>在待办项后显示已关联笔记的标题。</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>关闭时保持紧凑显示；开启后关联笔记标题会按内容扩展，单行最多约 5 个全角字符，多行最多约 10 个。</value>
+    <value>关闭时紧凑显示；开启后按内容加宽。
+单行约 5 个全角字，多行约 10 个。</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>已关联到待办项的笔记不再出现在胶囊列表中，避免重复入口。</value>
+    <value>已关联到待办的笔记不再出现在胶囊列表，避免重复入口。</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
-    <value>关联入口指向脚本胶囊时，左键直接运行脚本，右键打开编辑。默认关闭以避免误触。</value>
+    <value>关联到脚本胶囊时：左键运行，右键打开编辑。</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>勾选待办为完成后立即从当前纸片移除；可通过撤销恢复。</value>
+    <value>勾选完成后立即从当前纸片移除；可用撤销恢复。</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
-    <value>开启后，插入超过 8 MB 或宽、高任一边超过 2048 像素的图片时，会尝试等比缩小至最长边 2048 像素并重新编码。压缩不安全、失败、压缩后仍超过 8 MB 或文件没有变小时会取消导入。关闭后不会压缩，超过 8 MB 的图片会直接拒绝。无论是否开启，宽或高超过 4096 像素的图片都会拒绝导入。</value>
+    <value>超过 8 MB，或任一边超过 2048 像素时，尝试缩到最长边 2048 并重编码。
+压缩不安全、失败、仍超 8 MB 或没有变小则取消导入。
+关闭时不压缩，超过 8 MB 直接拒绝。
+无论开关，任一边超过 4096 像素都拒绝。</value>
   </data>
   <data name="TipNewTodoButton" xml:space="preserve">
-    <value>在纸片顶栏显示新建待办按钮。</value>
+    <value>在纸片顶栏显示「新建待办」。</value>
   </data>
   <data name="TipNewNoteButton" xml:space="preserve">
-    <value>在纸片顶栏显示新建笔记按钮。</value>
+    <value>在纸片顶栏显示「新建笔记」。</value>
   </data>
   <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>在顶栏显示外部打开按钮，将当前笔记写入临时文件并交给系统默认程序打开。</value>
+    <value>顶栏显示外部打开：把当前笔记写入临时文件，交给系统默认程序。</value>
   </data>
   <data name="TipExternalExtension" xml:space="preserve">
-    <value>选择交给外部程序打开时使用的文件类型，例如 .md 或 .txt。</value>
+    <value>外部打开时使用的后缀，例如 .md、.txt。</value>
   </data>
   <data name="TipCapsuleMode" xml:space="preserve">
-    <value>允许纸片折叠为小胶囊，减少桌面占用；胶囊贴边等功能需要先开启此项。</value>
+    <value>允许纸片折成小胶囊，少占桌面；贴边等功能需先开此项。</value>
   </data>
   <data name="TipDeepCapsuleMode" xml:space="preserve">
-    <value>胶囊会自动停靠到屏幕边缘并排列成队列，鼠标悬停时滑出。</value>
+    <value>胶囊停靠屏幕边缘并排成队列，悬停时滑出。</value>
   </data>
   <data name="TipShowDeepCapsuleWhileExpanded" xml:space="preserve">
-    <value>从边缘胶囊打开纸片后，边缘仍保留对应入口；关闭后，打开期间暂时隐藏该入口。</value>
+    <value>从边缘胶囊展开纸片后仍保留该入口；关闭则打开期间暂时隐藏。</value>
   </data>
   <data name="TipRememberDeepCapsuleExpandedPosition" xml:space="preserve">
-    <value>从边缘胶囊打开纸片时，恢复上次展开后的窗口位置和大小；无记忆或位置不可用时仍按边缘展开。</value>
+    <value>从边缘展开时，恢复上次位置与大小；无记忆或不可用时仍按边缘展开。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>纸片已从边缘胶囊展开时，再次点击同一胶囊会把纸片收回。</value>
+    <value>纸片已从边缘展开时，再点同一胶囊会收回。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
-    <value>在胶囊队列顶部显示主胶囊，用于一键收起或展开当前队列。</value>
+    <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>纸片标题和胶囊显示的最大字数。</value>
+    <value>纸片标题与胶囊显示的最大字数。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>开机时自动启动 PaperTodo。</value>
@@ -627,31 +635,38 @@
     <value>从任务栏隐藏图标</value>
   </data>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
-    <value>开启后，展开的纸片不会显示在 Windows 任务栏上；仍可通过托盘、桌面纸片和胶囊访问。默认开启。从窗口切换中隐藏纸片时会自动启用。</value>
+    <value>展开的纸片不出现在任务栏。
+仍可用托盘、桌面纸片与胶囊访问。
+开启「从窗口切换中隐藏」时会一并启用。</value>
   </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>从窗口切换中隐藏纸片</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>开启后，展开的纸片会从 Alt+Tab 和任务视图中隐藏，并同时隐藏任务栏图标；仍可通过托盘、桌面纸片和胶囊访问。</value>
+    <value>展开的纸片不出现在 Alt+Tab 与任务视图，并同时隐藏任务栏图标。
+仍可用托盘、桌面纸片与胶囊访问。</value>
   </data>
   <data name="TipEnableToolTips" xml:space="preserve">
-    <value>指针停在按钮和可操作区域上时显示简短说明；设置页说明图标始终可用。</value>
+    <value>指针停在按钮或可操作区时显示简短说明。
+设置页的说明图标始终可用。</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
     <value>启用动画效果</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
-    <value>为常见操作启用过渡动画；关闭后响应更直接。</value>
+    <value>常见操作使用过渡动画；关闭后响应更直接。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
-    <value>!pf / !powerf 会复用常驻进程，启动更快，但脚本间的变量和状态可能保留。关闭后结束该进程。</value>
+    <value>!pf / !powerf 使用常驻进程，启动更快，但变量与状态可能跨脚本保留。
+关闭后结束该进程。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>优先使用 PowerShell 7（pwsh.exe）；找不到时回退到 Windows PowerShell。脚本中也可用 !pwsh 或 !ps5 指定。</value>
+    <value>优先 pwsh.exe（PowerShell 7）；找不到则回退 Windows PowerShell。
+脚本内也可用 !pwsh / !ps5 指定。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>隐藏脚本运行窗口。普通 !p / !power 会等待脚本结束并捕获错误；!pf / !powerf 只投递到常驻进程。</value>
+    <value>隐藏脚本运行窗口。
+!p / !power 会等待结束并捕获错误；!pf / !powerf 只投递到常驻进程。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
     <value>启用待办关联笔记</value>
@@ -714,13 +729,16 @@
     <value>整体字体大小</value>
   </data>
   <data name="TipOverallFontScale" xml:space="preserve">
-    <value>按 5% 调整应用内文字的整体缩放（80%–120%）；单个笔记的百分比缩放会在此基础上继续叠加。</value>
+    <value>整体文字 80%–120%，步进 5%。
+单个笔记的百分比缩放会继续叠加。</value>
   </data>
   <data name="SettingsImageReferenceText" xml:space="preserve">
     <value>图片标记显示</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>控制图片对应的 Markdown 标记。“仅编辑时”会在浏览状态隐藏；“始终隐藏”只隐藏界面，原文仍会保留。修改图片尺寸等标记前请先切回显示。</value>
+    <value>控制图片对应 Markdown 标记的显示。
+「仅编辑时」：浏览态隐藏；
+「始终隐藏」：文字透明显示，可被选中。</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>始终显示</value>
@@ -738,31 +756,33 @@
     <value>笔记正文</value>
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
-    <value>在整体字体大小上应用小、中、大三档字号，并可加粗；单个笔记的百分比缩放会继续叠加。</value>
+    <value>在整体字号上再设小 / 中 / 大，并可加粗。
+单个笔记的百分比缩放会继续叠加。</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>待办正文</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>调整待办正文及对应行的小、中、大字号，并可切换正文加粗。</value>
+    <value>待办正文与行高：小 / 中 / 大，并可加粗。</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>标题文字</value>
   </data>
   <data name="TipTitleTextStyle" xml:space="preserve">
-    <value>调整纸片顶栏标题的小、中、大字号与加粗。</value>
+    <value>纸片顶栏标题：小 / 中 / 大，并可加粗。</value>
   </data>
   <data name="SettingsCapsuleText" xml:space="preserve">
     <value>胶囊文字</value>
   </data>
   <data name="TipCapsuleTextStyle" xml:space="preserve">
-    <value>统一调整普通胶囊、贴边胶囊、拖动胶囊和主胶囊文字的小、中、大字号与加粗。</value>
+    <value>普通、贴边、拖动与主胶囊文字：统一小 / 中 / 大与加粗。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>边缘标题最大长度</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>仅用标题前 N 个 Unicode 文本字符计算边缘胶囊宽度；标题内容不会截断，普通胶囊不受影响。选择“全部”时保持原有宽度。</value>
+    <value>仅用标题前 N 个字符计算边缘胶囊宽度；标题本身不截断，普通胶囊不受影响。
+「全部」保持原有宽度。</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>全部</value>
@@ -783,13 +803,15 @@
     <value>快速启动侧边胶囊</value>
   </data>
   <data name="ShortcutGroupEdgeSequencesTip" xml:space="preserve">
-    <value>用修饰键 + 数字 1–9 快速打开侧边队列中的第 N 个胶囊。主胶囊不计入序号；拖动边缘胶囊时会暂时忽略这些快捷键。</value>
+    <value>修饰键 + 数字 1–9 打开侧边队列第 N 个胶囊。
+主胶囊不计入序号。</value>
   </data>
   <data name="ShortcutEdgeEnableTip" xml:space="preserve">
     <value>切换后立即注册或注销本侧 1–9 整组快捷键。</value>
   </data>
   <data name="ShortcutEdgeKeyTip" xml:space="preserve">
-    <value>同时按下并松开 2～3 个修饰键（Ctrl / Alt / Shift / Win）即可完成录入。数字 1–9 固定不可改；左右队列不能使用相同修饰键。</value>
+    <value>同时按下并松开 2～3 个修饰键（Ctrl / Alt / Shift / Win）完成录入。
+数字 1–9 固定；左右队列不能用相同修饰键。</value>
   </data>
   <data name="ShortcutEdgeLeftSequence" xml:space="preserve">
     <value>左侧队列</value>
@@ -798,16 +820,18 @@
     <value>右侧队列</value>
   </data>
   <data name="ShortcutEdgeLeftTip" xml:space="preserve">
-    <value>优先查找左侧贴边队列的第 1–9 个胶囊，再按对侧与邻屏顺序搜索。默认修饰键为 Ctrl+Shift。</value>
+    <value>优先本显示器左侧队列 1–9，再对侧与邻屏。
+默认修饰键：Ctrl+Shift。</value>
   </data>
   <data name="ShortcutEdgeRightTip" xml:space="preserve">
-    <value>优先查找右侧贴边队列的第 1–9 个胶囊，再按对侧与邻屏顺序搜索。默认修饰键为 Ctrl+Alt。</value>
+    <value>优先本显示器右侧队列 1–9，再对侧与邻屏。
+默认修饰键：Ctrl+Alt。</value>
   </data>
   <data name="ShortcutEdgeDigitsFixed" xml:space="preserve">
     <value>1–9</value>
   </data>
   <data name="ShortcutEdgeDigitsFixedTip" xml:space="preserve">
-    <value>数字固定为 1–9，不可修改；只可更换前面的修饰键。</value>
+    <value>数字固定 1–9，只能改前面的修饰键。</value>
   </data>
   <data name="ShortcutCommandHeader" xml:space="preserve">
     <value>命令</value>
