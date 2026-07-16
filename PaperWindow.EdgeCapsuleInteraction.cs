@@ -288,6 +288,13 @@ public sealed partial class PaperWindow
                 return;
             }
 
+            if (settled)
+            {
+                // ContextIdle has let WPF submit the revealed docked surface. Do not destroy the
+                // floating cover until DWM has presented that update, otherwise two independent
+                // layered HWNDs can expose the desktop for one or two refresh frames.
+                WindowNative.FlushDesktopComposition();
+            }
             CloseDeepCapsuleFloatingDragHost();
             if (!settled)
             {

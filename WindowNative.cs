@@ -324,6 +324,11 @@ internal static class WindowNative
         return false;
     }
 
+    // Presenter settle runs after WPF's Render work, but a transparent top-level window's new
+    // surface can still be waiting for the desktop compositor. Use this only at a cross-HWND
+    // hand-off boundary, never on an animation frame or ordinary presentation update.
+    public static void FlushDesktopComposition() => _ = DwmFlush();
+
     private static Point DevicePointToWindowDip(Window window, Point point)
     {
         if (PresentationSource.FromVisual(window)?.CompositionTarget is { } target)
@@ -418,6 +423,9 @@ internal static class WindowNative
         int dwAttribute,
         out NativeRect pvAttribute,
         int cbAttribute);
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmFlush();
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
