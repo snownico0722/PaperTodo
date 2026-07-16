@@ -431,7 +431,11 @@ public sealed class StateStore
 
     private static void NormalizeAfterLoad(AppState state)
     {
-        state.Papers ??= new List<PaperData>();
+        if (state.Papers == null)
+        {
+            throw new JsonException("Required property 'papers' cannot be null.");
+        }
+
         RemoveNullEntriesInPlace(state.Papers);
 
         NormalizeGlobalState(state);

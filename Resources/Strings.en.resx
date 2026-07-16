@@ -24,6 +24,9 @@
   <data name="AppUnhandledExceptionMessage" xml:space="preserve">
     <value>The app hit an unhandled error. Current data has been saved to data.crash_recovery.json.&#x0A;&#x0A;Restart the app; if the problem continues, you can try restoring from that file.&#x0A;&#x0A;Error: {0}</value>
   </data>
+  <data name="AppUnhandledExceptionRecoveryFailedMessage" xml:space="preserve">
+    <value>The app hit an unhandled error and could not create this run's recovery file, data.crash_recovery.json.&#x0A;&#x0A;Restart the app and check that its directory is writable and has free space.&#x0A;&#x0A;Error: {0}</value>
+  </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - Unexpected Exit</value>
   </data>

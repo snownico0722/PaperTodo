@@ -24,6 +24,9 @@
   <data name="AppUnhandledExceptionMessage" xml:space="preserve">
     <value>처리되지 않은 오류가 발생했습니다. 현재 데이터는 data.crash_recovery.json에 저장되었습니다.&#x0A;&#x0A;앱을 다시 시작해 주세요. 문제가 계속되면 이 파일로 복원을 시도할 수 있습니다.&#x0A;&#x0A;오류: {0}</value>
   </data>
+  <data name="AppUnhandledExceptionRecoveryFailedMessage" xml:space="preserve">
+    <value>처리되지 않은 오류가 발생했으며 이번 복구 파일 data.crash_recovery.json을 만들지 못했습니다.&#x0A;&#x0A;앱을 다시 시작하고 앱 폴더의 쓰기 권한과 남은 공간을 확인해 주세요.&#x0A;&#x0A;오류: {0}</value>
+  </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - 비정상 종료</value>
   </data>

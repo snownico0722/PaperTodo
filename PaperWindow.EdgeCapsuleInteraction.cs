@@ -43,12 +43,14 @@ public sealed partial class PaperWindow
             return true;
         }
 
-        var deltaX = Math.Abs(currentScreenPosition.X - session.PointerDownScreenPosition.X);
-        var deltaY = Math.Abs(currentScreenPosition.Y - session.PointerDownScreenPosition.Y);
-        if (CanReorderDeepCapsuleSlot())
+        var canReorder = CanReorderDeepCapsuleSlot();
+        var movedEnough = WindowWorkAreaHelper.ExceedsDragThreshold(
+            session.PointerDownScreenPosition,
+            currentScreenPosition,
+            additionalDistanceDip: canReorder ? DeepCapsuleReorderDragExtraThreshold : 0);
+        if (canReorder)
         {
-            if (deltaY >= SystemParameters.MinimumVerticalDragDistance + DeepCapsuleReorderDragExtraThreshold ||
-                deltaX >= SystemParameters.MinimumHorizontalDragDistance + DeepCapsuleReorderDragExtraThreshold)
+            if (movedEnough)
             {
                 StartDeepCapsuleReorderDrag(currentScreenPosition);
                 return true;
@@ -56,8 +58,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        if (deltaX >= SystemParameters.MinimumHorizontalDragDistance ||
-            deltaY >= SystemParameters.MinimumVerticalDragDistance)
+        if (movedEnough)
         {
             FinishEdgeCapsulePointerInteraction();
             _edgeCapsuleHost?.ReleaseContentPointer();
@@ -589,8 +590,7 @@ public sealed partial class PaperWindow
     }
 
     private void RecoverDeepCapsuleFloatingDockingHandoff(
-        EdgeCapsuleDragWindow floatingHost,
-        bool scheduleDisplayRefresh = true)
+        EdgeCapsuleDragWindow floatingHost)
     {
         if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
             !IsDeepCapsuleDockingFlight ||
@@ -614,11 +614,7 @@ public sealed partial class PaperWindow
                 }
                 if (!settled)
                 {
-                    // Keep one passive observer armed after the explicit refresh. A later external
-                    // display batch can resume the transaction without a permanent retry timer.
-                    RecoverDeepCapsuleFloatingDockingHandoff(
-                        floatingHost,
-                        scheduleDisplayRefresh: false);
+                    CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(floatingHost);
                     return;
                 }
 
@@ -626,9 +622,7 @@ public sealed partial class PaperWindow
                     out var targetEdge);
                 if (targetBounds.IsEmpty)
                 {
-                    RecoverDeepCapsuleFloatingDockingHandoff(
-                        floatingHost,
-                        scheduleDisplayRefresh: false);
+                    CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(floatingHost);
                     return;
                 }
                 AnimateDeepCapsuleFloatingDockingHandoff(
@@ -638,10 +632,52 @@ public sealed partial class PaperWindow
             },
             allowImmediateReplay: true,
             flushImmediately: false);
-        if (scheduleDisplayRefresh)
+        _controller.ScheduleDisplayMetricsRefresh();
+    }
+
+    private void CompleteDeepCapsuleFloatingDockingHandoffWithoutAnimation(
+        EdgeCapsuleDragWindow floatingHost)
+    {
+        if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
+            !IsDeepCapsuleDockingFlight)
         {
-            _controller.ScheduleDisplayMetricsRefresh();
+            return;
         }
+
+        // The destination queue mutation is already committed. If its native host still cannot
+        // be verified after the normal replay and display refresh, end the visual transaction at
+        // that destination instead of waiting for unrelated Presenter work forever.
+        floatingHost.RestoreDockingCover();
+        if (!FinishEdgeCapsulePointerInteraction())
+        {
+            CancelDeepCapsuleReorderDrag();
+            _controller.ScheduleDisplayMetricsRefresh();
+            return;
+        }
+
+        // Finishing the gesture changes the permanent host to its final interactive frame. Give
+        // that frame one active, bounded Presenter settle before releasing the floating cover.
+        // Presenter apply retries terminate on their own, so a broken HWND still cannot leave the
+        // hand-off alive forever.
+        AwaitDeepCapsuleDockedPresentation(
+            floatingHost,
+            settled =>
+            {
+                if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost))
+                {
+                    return;
+                }
+
+                if (settled)
+                {
+                    WindowNative.FlushDesktopComposition();
+                }
+                CloseDeepCapsuleFloatingDragHost();
+                _controller.RefreshFloatingSurfaceZOrder();
+                _controller.ScheduleDisplayMetricsRefresh();
+            },
+            allowImmediateReplay: false,
+            dirty: EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
     }
 
     private void StartDeepCapsuleReorderDrag(DeviceScreenPoint currentScreenPos)

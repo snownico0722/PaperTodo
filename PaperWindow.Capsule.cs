@@ -295,11 +295,10 @@ public sealed partial class PaperWindow
             }
 
             var currentScreenPos = CapsulePointerScreenPosition(e);
-            var deltaX = Math.Abs(currentScreenPos.X - _capsulePointerSession.PointerDownScreenPosition.X);
-            var deltaY = Math.Abs(currentScreenPos.Y - _capsulePointerSession.PointerDownScreenPosition.Y);
-
-            if (deltaX >= SystemParameters.MinimumHorizontalDragDistance ||
-                deltaY >= SystemParameters.MinimumVerticalDragDistance)
+            if (WindowWorkAreaHelper.ExceedsDragThreshold(
+                    _capsulePointerSession.PointerDownScreenPosition,
+                    currentScreenPos,
+                    this))
             {
                 SetCapsulePointerState(CapsulePointerState.NativeMoving);
 

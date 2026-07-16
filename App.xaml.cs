@@ -200,6 +200,7 @@ public partial class App : Application
     {
         WriteCrashLog(ex);
 
+        var recoverySaved = false;
         try
         {
             var controller = AppController.Current;
@@ -218,6 +219,7 @@ public partial class App : Application
                 var recoveryPath = Path.Combine(AppContext.BaseDirectory, "data.crash_recovery.json");
                 var json = store.SerializeState(controller.State);
                 File.WriteAllText(recoveryPath, json);
+                recoverySaved = true;
             }
         }
         catch
@@ -228,7 +230,11 @@ public partial class App : Application
         try
         {
             MessageBox.Show(
-                Strings.Format("AppUnhandledExceptionMessage", ex.Message),
+                Strings.Format(
+                    recoverySaved
+                        ? "AppUnhandledExceptionMessage"
+                        : "AppUnhandledExceptionRecoveryFailedMessage",
+                    ex.Message),
                 Strings.Get("AppUnhandledExceptionTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

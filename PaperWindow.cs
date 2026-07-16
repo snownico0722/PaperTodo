@@ -264,14 +264,14 @@ public sealed partial class PaperWindow : Window
 
     private sealed class NoteLinkDragState
     {
-        public NoteLinkDragState(FrameworkElement handle, Point startScreenPoint)
+        public NoteLinkDragState(FrameworkElement handle, DeviceScreenPoint startScreenPoint)
         {
             Handle = handle;
             StartScreenPoint = startScreenPoint;
         }
 
         public FrameworkElement Handle { get; }
-        public Point StartScreenPoint { get; }
+        public DeviceScreenPoint StartScreenPoint { get; }
         public bool IsDragging { get; set; }
         public Window? Ghost { get; set; }
         // Show() of the top-level ghost can steal capture and re-enter LostMouseCapture → End.
@@ -1923,7 +1923,9 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        _noteLinkDrag = new NoteLinkDragState(handle, PointToScreen(e.GetPosition(this)));
+        _noteLinkDrag = new NoteLinkDragState(
+            handle,
+            DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))));
         handle.CaptureMouse();
         e.Handled = true;
     }
@@ -1944,14 +1946,13 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        var currentScreenPoint = PointToScreen(e.GetPosition(this));
+        var currentScreenPoint = DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this)));
         if (!state.IsDragging)
         {
-            var movedEnough =
-                Math.Abs(currentScreenPoint.X - state.StartScreenPoint.X) >= SystemParameters.MinimumHorizontalDragDistance ||
-                Math.Abs(currentScreenPoint.Y - state.StartScreenPoint.Y) >= SystemParameters.MinimumVerticalDragDistance;
-
-            if (!movedEnough)
+            if (!WindowWorkAreaHelper.ExceedsDragThreshold(
+                    state.StartScreenPoint,
+                    currentScreenPoint,
+                    this))
             {
                 return;
             }
@@ -2002,10 +2003,10 @@ public sealed partial class PaperWindow : Window
             }
         }
 
-        MoveNoteLinkDragGhost(state, currentScreenPoint);
+        MoveNoteLinkDragGhost(state, currentScreenPoint.ToPoint());
         if (_noteLinkDrag == state)
         {
-            _controller.UpdateNoteLinkDrag(_paper, currentScreenPoint);
+            _controller.UpdateNoteLinkDrag(_paper, currentScreenPoint.ToPoint());
         }
         e.Handled = true;
     }

@@ -231,6 +231,7 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;

@@ -260,6 +260,27 @@ internal static class WindowWorkAreaHelper
         out MonitorGeometry geometry)
         => TryGetMonitorGeometryAtDeviceScreenPoint(screenPoint, dpiWindow: null, out geometry);
 
+    public static bool ExceedsDragThreshold(
+        DeviceScreenPoint start,
+        DeviceScreenPoint current,
+        Window? dpiWindow = null,
+        double additionalDistanceDip = 0)
+    {
+        var scaleX = 1.0;
+        var scaleY = 1.0;
+        if (TryGetMonitorGeometryAtDeviceScreenPoint(start, dpiWindow, out var geometry))
+        {
+            scaleX = geometry.DpiScaleX;
+            scaleY = geometry.DpiScaleY;
+        }
+
+        var additionalDistance = Math.Max(0, additionalDistanceDip);
+        return Math.Abs(current.X - start.X) / scaleX >=
+                SystemParameters.MinimumHorizontalDragDistance + additionalDistance ||
+            Math.Abs(current.Y - start.Y) / scaleY >=
+                SystemParameters.MinimumVerticalDragDistance + additionalDistance;
+    }
+
     public static bool TryGetMonitorGeometryAtDeviceScreenPoint(
         DeviceScreenPoint screenPoint,
         Window? dpiWindow,

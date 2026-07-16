@@ -31,6 +31,13 @@
 
 错误信息：{0}</value>
   </data>
+  <data name="AppUnhandledExceptionRecoveryFailedMessage" xml:space="preserve">
+    <value>程序发生未处理错误，并且无法创建本次恢复文件 data.crash_recovery.json。
+
+请重启程序，并检查程序目录的写入权限和剩余空间。
+
+错误信息：{0}</value>
+  </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - 异常退出</value>
   </data>

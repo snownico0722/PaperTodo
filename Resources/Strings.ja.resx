@@ -24,6 +24,9 @@
   <data name="AppUnhandledExceptionMessage" xml:space="preserve">
     <value>未処理のエラーが発生しました。現在のデータは data.crash_recovery.json に保存されています。&#x0A;&#x0A;アプリを再起動してください。問題が続く場合は、このファイルからの復元を試せます。&#x0A;&#x0A;エラー: {0}</value>
   </data>
+  <data name="AppUnhandledExceptionRecoveryFailedMessage" xml:space="preserve">
+    <value>未処理のエラーが発生し、今回の復元ファイル data.crash_recovery.json を作成できませんでした。&#x0A;&#x0A;アプリを再起動し、アプリのフォルダーへの書き込み権限と空き容量を確認してください。&#x0A;&#x0A;エラー: {0}</value>
+  </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - 異常終了</value>
   </data>

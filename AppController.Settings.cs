@@ -668,10 +668,7 @@ public sealed partial class AppController
         State.MaxTitleLength = normalized;
 
         // Re-clamp existing custom titles to the new limit and refresh everything that shows them.
-        foreach (var paper in State.Papers)
-        {
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, normalized);
-        }
+        ClampPaperTitlesToMaxLength(normalized);
 
         foreach (var window in _windows.Values)
         {
@@ -682,6 +679,14 @@ public sealed partial class AppController
         SaveNow();
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
+    }
+
+    private void ClampPaperTitlesToMaxLength(int maxLength)
+    {
+        foreach (var paper in State.Papers)
+        {
+            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, maxLength);
+        }
     }
 
     private void ShowSettingsWindow()
@@ -1281,6 +1286,7 @@ public sealed partial class AppController
         State.HideLinkedNotesFromCapsules = false;
         State.RunLinkedScriptCapsulesOnClick = false;
         NormalizePaperSystemVisibilitySettings();
+        ClampPaperTitlesToMaxLength(State.MaxTitleLength);
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
 
         if (!State.UsePersistentPowerShellProcess)
@@ -1289,16 +1295,7 @@ public sealed partial class AppController
         }
 
         SaveNow();
-        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
-        RefreshTopBarNewPaperButtonsSetting();
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateMarkdownRenderMode();
-            window.UpdateExternalMarkdownExtension();
-        }
-
-        // Capsule toggles / visibility can change stack presence.
-        ApplyCapsuleModeSettingsAfterRestore();
+        ApplyGeneralSettingsAfterRestore();
     }
 
     private void RestoreVisualSettingsPageDefaults()
@@ -1336,15 +1333,26 @@ public sealed partial class AppController
         RefreshThemeSurfaces();
     }
 
-    private void ApplyCapsuleModeSettingsAfterRestore()
+    private void ApplyGeneralSettingsAfterRestore()
     {
+        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
+        RefreshTopBarNewPaperButtonsSetting();
+        RefreshTopmostForForegroundWindow();
+
         foreach (var window in _windows.Values)
         {
+            window.UpdateMarkdownRenderMode();
+            window.UpdateExternalMarkdownExtension();
+            window.UpdateTodoLinkFeature();
+            window.RefreshPaperTitle();
             window.UpdateCapsuleMode();
             window.UpdateDeepCapsuleMode();
+            window.UpdateDeepCapsuleExpandedSlotMode();
         }
 
         ArrangeDeepCapsules(animate: false);
+        RebuildTrayMenu();
+        RefreshToolTipSetting();
     }
 
     private UIElement CreateSettingsPageSelector()
