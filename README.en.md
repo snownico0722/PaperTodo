@@ -6,7 +6,7 @@
 
 A minimal Windows desktop sticky-note app built with native WPF. No main window, no account, no manager.
 
-![version](https://img.shields.io/badge/version-v2.1-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
+![version](https://img.shields.io/badge/version-v3.0-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
 
 **Language: [中文](README.md) | English**
 

@@ -19,7 +19,7 @@
 错误信息：{0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.2</value>
+    <value>3.0</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - 启动失败</value>

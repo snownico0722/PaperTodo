@@ -16,7 +16,7 @@
     <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.&#x0A;To avoid overwriting existing data, the app has stopped.&#x0A;&#x0A;Error: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
-    <value>2.2</value>
+    <value>3.0</value>
   </data>
   <data name="AppStartupFailureTitle" xml:space="preserve">
     <value>PaperTodo - Startup Failed</value>
