@@ -308,6 +308,9 @@ public sealed partial class PaperWindow
                 }
                 else
                 {
+                    // The queue can disappear while native confirmation is pending. There is no
+                    // valid transaction to resume, so do not leave an ownerless floating HWND.
+                    CancelDeepCapsuleReorderDrag();
                     _controller.ScheduleDisplayMetricsRefresh();
                 }
                 return;
@@ -379,6 +382,17 @@ public sealed partial class PaperWindow
                 : default;
     }
 
+    private static bool DeepCapsuleFloatingHandoffTargetMatches(
+        DeviceScreenRect firstBounds,
+        EdgeCapsuleEdge firstEdge,
+        DeviceScreenRect secondBounds,
+        EdgeCapsuleEdge secondEdge) =>
+        firstEdge == secondEdge &&
+        EdgeCapsuleGeometry.DeviceBoundsMatch(
+            firstBounds,
+            secondBounds,
+            tolerance: 1);
+
     private void AnimateDeepCapsuleFloatingDockingHandoff(
         EdgeCapsuleDragWindow floatingHost,
         DeviceScreenRect targetBounds,
@@ -417,12 +431,14 @@ public sealed partial class PaperWindow
                         RecoverDeepCapsuleFloatingDockingHandoff(floatingHost);
                         return;
                     }
-                    if (latestTargetBounds != targetBounds ||
-                        latestTargetEdge != targetEdge)
+                    if (!DeepCapsuleFloatingHandoffTargetMatches(
+                            latestTargetBounds,
+                            latestTargetEdge,
+                            targetBounds,
+                            targetEdge))
                     {
                         // A topology/measure update during the flight becomes a new authoritative
-                        // target. Re-run from the actual visible endpoint until one target remains
-                        // stable; this is not limited to a single stale retarget.
+                        // target. One physical pixel is normal mixed-DPI rounding, not a new flight.
                         AnimateDeepCapsuleFloatingDockingHandoff(
                             floatingHost,
                             latestTargetBounds,
@@ -474,7 +490,11 @@ public sealed partial class PaperWindow
                 }
                 var currentCoverBounds = CurrentDeepCapsuleFloatingHandoffTargetBounds(
                     out var currentCoverEdge);
-                if (currentCoverBounds != coverBounds || currentCoverEdge != coverEdge)
+                if (!DeepCapsuleFloatingHandoffTargetMatches(
+                        currentCoverBounds,
+                        currentCoverEdge,
+                        coverBounds,
+                        coverEdge))
                 {
                     RollBackDeepCapsuleDockingReveal(floatingHost);
                     return;
@@ -512,7 +532,11 @@ public sealed partial class PaperWindow
         }
         var currentCoverBounds = CurrentDeepCapsuleFloatingHandoffTargetBounds(
             out var currentCoverEdge);
-        if (currentCoverBounds != coverBounds || currentCoverEdge != coverEdge)
+        if (!DeepCapsuleFloatingHandoffTargetMatches(
+                currentCoverBounds,
+                currentCoverEdge,
+                coverBounds,
+                coverEdge))
         {
             RollBackDeepCapsuleDockingReveal(floatingHost);
             return;
@@ -920,8 +944,10 @@ public sealed partial class PaperWindow
     private void CancelDeepCapsuleReorderDrag(bool restoreLayout = false)
     {
         var wasReordering = IsDeepCapsuleReordering;
+        var wasDockingHandoff = IsDeepCapsuleDockingHandoff;
         var wasDockingReveal = IsDeepCapsuleDockingReveal;
         if (!wasReordering &&
+            !wasDockingHandoff &&
             !IsDeepCapsuleSlotPendingClick &&
             _deepCapsuleFloatingDragHost == null)
         {

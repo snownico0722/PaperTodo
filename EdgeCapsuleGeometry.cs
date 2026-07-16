@@ -244,6 +244,15 @@ internal static class EdgeCapsuleGeometry
             top + height);
     }
 
+    public static bool DeviceBoundsMatch(
+        DeviceScreenRect first,
+        DeviceScreenRect second,
+        int tolerance) =>
+        Math.Abs(first.Left - second.Left) <= tolerance &&
+        Math.Abs(first.Top - second.Top) <= tolerance &&
+        Math.Abs(first.Right - second.Right) <= tolerance &&
+        Math.Abs(first.Bottom - second.Bottom) <= tolerance;
+
     public static EdgeCapsuleVerticalEdges CalculateVerticalEdges(
         MonitorGeometry monitor,
         double topDip,

@@ -392,7 +392,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
             WindowNative.TryGetWindowDeviceBounds(this, out actualHostBounds) &&
             actualHostBounds == animation.Geometry.HostTargetBounds &&
             TryGetVisualSurfaceDeviceBounds(out actualSurfaceBounds) &&
-            DeviceBoundsMatch(
+            EdgeCapsuleGeometry.DeviceBoundsMatch(
                 actualSurfaceBounds,
                 animation.Geometry.SurfaceTargetBounds,
                 tolerance: 1);
@@ -495,15 +495,6 @@ internal sealed class EdgeCapsuleDragWindow : Window
         bounds = new DeviceScreenRect(left, top, left + width, top + height);
         return true;
     }
-
-    private static bool DeviceBoundsMatch(
-        DeviceScreenRect actual,
-        DeviceScreenRect expected,
-        int tolerance) =>
-        Math.Abs(actual.Left - expected.Left) <= tolerance &&
-        Math.Abs(actual.Top - expected.Top) <= tolerance &&
-        Math.Abs(actual.Right - expected.Right) <= tolerance &&
-        Math.Abs(actual.Bottom - expected.Bottom) <= tolerance;
 
     private static long AnimationDurationTicks(int durationMilliseconds) =>
         Math.Max(
