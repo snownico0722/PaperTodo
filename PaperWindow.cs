@@ -185,6 +185,7 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleCrossQueueDragUnlockDistance = 56;
     private const double DeepCapsuleCrossQueueDragScaleFrom = 0.97;
     private const int DeepCapsuleCrossQueueDragMorphMilliseconds = 90;
+    private const int DeepCapsuleDockingHandoffMilliseconds = 160;
     // 圆角阶梯：所有元素只从这四档取值，避免散落的随手圆角。
     // 小元素（勾选框）/ 控件（按钮、徽标、行）/ 块（菜单、面板）/ 外壳（纸片、顶栏）。
     private const double RadiusSmall = 4;

@@ -25,6 +25,7 @@ public sealed partial class PaperWindow
     private bool IsDeepCapsuleSlotPendingClick => EdgeCapsuleGesture == EdgeCapsuleGestureState.PendingClick;
     private bool IsDeepCapsuleDockedReordering => EdgeCapsuleGesture == EdgeCapsuleGestureState.DockedReordering;
     private bool IsDeepCapsuleFloatingReordering => EdgeCapsuleGesture == EdgeCapsuleGestureState.FloatingReordering;
+    private bool IsDeepCapsuleDockingHandoff => EdgeCapsuleGesture == EdgeCapsuleGestureState.DockingHandoff;
     private bool IsDeepCapsuleReordering => EdgeCapsuleGesture is
         EdgeCapsuleGestureState.DockedReordering or
         EdgeCapsuleGestureState.FloatingTransfer or
@@ -124,6 +125,9 @@ public sealed partial class PaperWindow
 
     private bool BeginEdgeCapsuleFloatingReorder() =>
         DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.FloatingReorderStarted());
+
+    private bool BeginEdgeCapsuleDockingHandoff() =>
+        DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.DockingHandoffStarted());
 
     private bool FinishEdgeCapsulePointerInteraction() =>
         DispatchEdgeCapsuleIntent(

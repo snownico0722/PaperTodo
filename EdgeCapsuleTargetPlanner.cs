@@ -27,7 +27,8 @@ internal static class EdgeCapsuleTargetPlanner
             EdgeCapsuleSlotState.RetractingExpanded;
         var floating = model.State.Gesture is
             EdgeCapsuleGestureState.FloatingTransfer or
-            EdgeCapsuleGestureState.FloatingReordering;
+            EdgeCapsuleGestureState.FloatingReordering or
+            EdgeCapsuleGestureState.DockingHandoff;
         var expanded = !retracted && model.State.Visual is
             EdgeCapsuleVisualState.Hovered or
             EdgeCapsuleVisualState.Active;

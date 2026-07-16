@@ -141,6 +141,50 @@ internal static class EdgeCapsuleGeometry
             visibleBounds.Bottom);
     }
 
+    /// <summary>
+    /// Final floating-HWND rectangle whose pill body matches the docked tag. Its symmetric
+    /// wall-side chrome margin finishes just outside the work area, while the interior edge stays
+    /// aligned with the docked surface for a gap-free visual hand-off.
+    /// </summary>
+    public static DeviceScreenRect FloatingHandoffBoundsForDockedBounds(
+        DeviceScreenRect dockedBounds,
+        EdgeCapsuleEdge edge,
+        double dpiScaleX,
+        double chromeMarginDip)
+    {
+        if (dockedBounds.IsEmpty)
+        {
+            return default;
+        }
+
+        var wallMargin = Math.Max(0, RoundDevice(
+            Math.Max(0, chromeMarginDip) * Math.Max(1, dpiScaleX)));
+        return edge == EdgeCapsuleEdge.Left
+            ? new DeviceScreenRect(
+                dockedBounds.Left - wallMargin,
+                dockedBounds.Top,
+                dockedBounds.Right,
+                dockedBounds.Bottom)
+            : new DeviceScreenRect(
+                dockedBounds.Left,
+                dockedBounds.Top,
+                dockedBounds.Right + wallMargin,
+                dockedBounds.Bottom);
+    }
+
+    public static DeviceScreenRect InterpolateDeviceBounds(
+        DeviceScreenRect start,
+        DeviceScreenRect target,
+        double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        return new DeviceScreenRect(
+            LerpDevice(start.Left, target.Left, progress),
+            LerpDevice(start.Top, target.Top, progress),
+            LerpDevice(start.Right, target.Right, progress),
+            LerpDevice(start.Bottom, target.Bottom, progress));
+    }
+
     public static EdgeCapsuleVerticalEdges CalculateVerticalEdges(
         MonitorGeometry monitor,
         double topDip,
@@ -154,4 +198,7 @@ internal static class EdgeCapsuleGeometry
 
     private static int RoundDevice(double value) =>
         (int)Math.Round(value, MidpointRounding.AwayFromZero);
+
+    private static int LerpDevice(int from, int to, double progress) =>
+        RoundDevice(from + (to - from) * progress);
 }

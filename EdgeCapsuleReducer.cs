@@ -29,6 +29,7 @@ internal static class EdgeCapsuleReducer
             EdgeCapsuleIntent.BeginFloatingTransfer transfer =>
                 BeginFloatingTransfer(model, transfer.Point),
             EdgeCapsuleIntent.BeginFloatingReorder => BeginFloatingReorder(model),
+            EdgeCapsuleIntent.BeginDockingHandoff => BeginDockingHandoff(model),
             EdgeCapsuleIntent.FinishPointer => FinishPointer(model),
             EdgeCapsuleIntent.MarkOpenedFromEdge => Accept(model, model with
             {
@@ -354,6 +355,21 @@ internal static class EdgeCapsuleReducer
         });
     }
 
+    private static EdgeCapsuleDispatchResult BeginDockingHandoff(EdgeCapsuleModel model)
+    {
+        if (model.State.Gesture != EdgeCapsuleGestureState.Idle ||
+            model.DragSession != null ||
+            model.State.Slot == EdgeCapsuleSlotState.None)
+        {
+            return Reject(model, "Docking hand-off requires a completed floating pointer interaction.");
+        }
+        return Accept(model, model with
+        {
+            State = model.State with { Gesture = EdgeCapsuleGestureState.DockingHandoff },
+            DockedDragTopDipOverride = null
+        });
+    }
+
     private static EdgeCapsuleDispatchResult FinishPointer(EdgeCapsuleModel model) =>
         Accept(model, model with
         {
@@ -380,9 +396,14 @@ internal static class EdgeCapsuleReducer
     private static bool HasStructuralInvariants(EdgeCapsuleModel model)
     {
         var attached = model.State.Slot != EdgeCapsuleSlotState.None;
+        var hasPointerSession = model.State.Gesture is
+            EdgeCapsuleGestureState.PendingClick or
+            EdgeCapsuleGestureState.DockedReordering or
+            EdgeCapsuleGestureState.FloatingTransfer or
+            EdgeCapsuleGestureState.FloatingReordering;
         return attached == model.Placement.IsPlaced &&
             (attached || !model.PeerReorderActive) &&
-            ((model.State.Gesture == EdgeCapsuleGestureState.Idle) == (model.DragSession == null)) &&
+            (hasPointerSession == (model.DragSession != null)) &&
             (model.State.Slot is not (
                 EdgeCapsuleSlotState.RetractedCollapsed or
                 EdgeCapsuleSlotState.RetractedExpanded or
@@ -392,7 +413,8 @@ internal static class EdgeCapsuleReducer
             (model.State.Gesture is not (
                 EdgeCapsuleGestureState.DockedReordering or
                 EdgeCapsuleGestureState.FloatingTransfer or
-                EdgeCapsuleGestureState.FloatingReordering) || attached);
+                EdgeCapsuleGestureState.FloatingReordering or
+                EdgeCapsuleGestureState.DockingHandoff) || attached);
     }
 
     private static EdgeCapsuleDispatchResult Accept(

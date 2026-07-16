@@ -200,6 +200,17 @@ public sealed partial class PaperWindow
         host.UnexpectedlyClosed -= OnDeepCapsuleFloatingDragHostUnexpectedlyClosed;
         _deepCapsuleFloatingDragHost = null;
         _edgeCapsule.ClearPresentationSettleNotification();
+        if (IsDeepCapsuleDockingHandoff)
+        {
+            // The visual cover disappeared unexpectedly. Reveal the already-committed destination
+            // through the normal Presenter path and let the topology settle pass verify it.
+            FinishEdgeCapsulePointerInteraction();
+            FlushEdgeCapsulePresentation(
+                EdgeCapsuleTransitionReason.FloatingTransfer,
+                EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
+            _controller.ScheduleDisplayMetricsRefresh();
+            return;
+        }
         if (!IsDeepCapsuleFloatingReordering)
         {
             return;
@@ -208,24 +219,19 @@ public sealed partial class PaperWindow
         CancelDeepCapsuleReorderDrag(restoreLayout: true);
     }
 
-    private void CompleteDeepCapsuleFloatingDragDrop(bool allowImmediateReplay = true)
+    private void AwaitDeepCapsuleDockedPresentation(
+        EdgeCapsuleDragWindow floatingHost,
+        Action<bool> completed,
+        bool allowImmediateReplay = true)
     {
-        if (_deepCapsuleFloatingDragHost == null)
+        if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
+            !HasDeepCapsuleSlotPlacement ||
+            _edgeCapsuleHost == null)
         {
+            completed(false);
             return;
         }
 
-        if (!HasDeepCapsuleSlotPlacement || _edgeCapsuleHost == null)
-        {
-            CloseDeepCapsuleFloatingDragHost();
-            return;
-        }
-
-        // The gesture has ended and the controller has now applied the destination queue. Keep the
-        // floating HWND as a cover until Host.Apply has both accepted and verified the permanent
-        // docked HWND after WPF's later layout priorities. A transient DPI/display hand-off retries
-        // on the shared frame scheduler before the cover can be removed.
-        var floatingHost = _deepCapsuleFloatingDragHost;
         _edgeCapsule.NotifyWhenPresentationSettled(pipelineSettled =>
         {
             if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost))
@@ -245,7 +251,40 @@ public sealed partial class PaperWindow
                 // while the floating HWND continues to cover the hand-off.
                 _edgeCapsule.ResetPresentation();
                 InvalidateEdgeCapsuleDisplayMetrics();
-                CompleteDeepCapsuleFloatingDragDrop(allowImmediateReplay: false);
+                AwaitDeepCapsuleDockedPresentation(
+                    floatingHost,
+                    completed,
+                    allowImmediateReplay: false);
+                return;
+            }
+
+            completed(settled);
+        });
+        FlushEdgeCapsulePresentation(
+            EdgeCapsuleTransitionReason.FloatingTransfer,
+            EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
+    }
+
+    private void CompleteDeepCapsuleFloatingDragDrop()
+    {
+        var floatingHost = _deepCapsuleFloatingDragHost;
+        if (floatingHost == null)
+        {
+            return;
+        }
+
+        if (!HasDeepCapsuleSlotPlacement || _edgeCapsuleHost == null)
+        {
+            CloseDeepCapsuleFloatingDragHost();
+            return;
+        }
+
+        // Keep the floating HWND as a cover until Host.Apply has both accepted and verified the
+        // permanent docked HWND after WPF's later layout priorities.
+        AwaitDeepCapsuleDockedPresentation(floatingHost, settled =>
+        {
+            if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost))
+            {
                 return;
             }
 
@@ -257,9 +296,110 @@ public sealed partial class PaperWindow
                 _controller.ScheduleDisplayMetricsRefresh();
             }
         });
-        FlushEdgeCapsulePresentation(
-            EdgeCapsuleTransitionReason.FloatingTransfer,
-            EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
+    }
+
+    private void BeginDeepCapsuleFloatingDockingHandoff()
+    {
+        var floatingHost = _deepCapsuleFloatingDragHost;
+        if (floatingHost == null ||
+            !IsDeepCapsuleDockingHandoff ||
+            !HasDeepCapsuleSlotPlacement ||
+            _edgeCapsuleHost == null)
+        {
+            FinishEdgeCapsulePointerInteraction();
+            CompleteDeepCapsuleFloatingDragDrop();
+            return;
+        }
+
+        // First commit the destination host invisibly. This supplies the animation with the same
+        // verified physical frame that will be revealed at the end, including mixed-DPI geometry.
+        AwaitDeepCapsuleDockedPresentation(floatingHost, settled =>
+        {
+            if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
+                !IsDeepCapsuleDockingHandoff)
+            {
+                return;
+            }
+
+            var targetBounds = settled
+                ? CurrentDeepCapsuleFloatingHandoffTargetBounds()
+                : default;
+            if (targetBounds.IsEmpty)
+            {
+                FinishEdgeCapsulePointerInteraction();
+                CompleteDeepCapsuleFloatingDragDrop();
+                return;
+            }
+
+            AnimateDeepCapsuleFloatingDockingHandoff(
+                floatingHost,
+                targetBounds,
+                allowRetarget: true);
+        });
+    }
+
+    private DeviceScreenRect CurrentDeepCapsuleFloatingHandoffTargetBounds()
+    {
+        var frame = _edgeCapsule.AppliedPresentation;
+        return frame.Visible &&
+            frame.Surface == EdgeCapsuleSurfaceKind.DockedSuppressed &&
+            !frame.Bounds.IsEmpty
+                ? EdgeCapsuleGeometry.FloatingHandoffBoundsForDockedBounds(
+                    frame.Bounds,
+                    frame.Edge,
+                    frame.DpiScaleX,
+                    WindowChromeMargin)
+                : default;
+    }
+
+    private void AnimateDeepCapsuleFloatingDockingHandoff(
+        EdgeCapsuleDragWindow floatingHost,
+        DeviceScreenRect targetBounds,
+        bool allowRetarget)
+    {
+        floatingHost.AnimateDockingHandoff(
+            targetBounds,
+            DeepCapsuleDockingHandoffMilliseconds,
+            floatingSettled =>
+            {
+                if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
+                    !IsDeepCapsuleDockingHandoff)
+                {
+                    return;
+                }
+
+                // The queue or monitor topology can change during the short native flight. Ask
+                // the Presenter for its latest verified suppressed frame before revealing it.
+                AwaitDeepCapsuleDockedPresentation(floatingHost, dockedSettled =>
+                {
+                    if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
+                        !IsDeepCapsuleDockingHandoff)
+                    {
+                        return;
+                    }
+
+                    var latestTargetBounds = dockedSettled
+                        ? CurrentDeepCapsuleFloatingHandoffTargetBounds()
+                        : default;
+                    if (allowRetarget &&
+                        !latestTargetBounds.IsEmpty &&
+                        (!floatingSettled || latestTargetBounds != targetBounds))
+                    {
+                        AnimateDeepCapsuleFloatingDockingHandoff(
+                            floatingHost,
+                            latestTargetBounds,
+                            allowRetarget: false);
+                        return;
+                    }
+
+                    // Reveal the permanent host only after the floating pill reaches its exact
+                    // current cover rectangle. If one retry still races topology, the existing
+                    // settle/Confirm path owns the reliable synchronous fallback.
+                    FinishEdgeCapsulePointerInteraction();
+                    CompleteDeepCapsuleFloatingDragDrop();
+                    _controller.RefreshFloatingSurfaceZOrder();
+                });
+            });
     }
 
     private void StartDeepCapsuleReorderDrag(DeviceScreenPoint currentScreenPos)
@@ -481,6 +621,7 @@ public sealed partial class PaperWindow
             return;
         }
         var wasFloatingDrag = IsDeepCapsuleFloatingReordering;
+        var shouldAnimateFloatingDrop = false;
         try
         {
             Mouse.OverrideCursor = null;
@@ -525,6 +666,9 @@ public sealed partial class PaperWindow
                 {
                     _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
                 }
+                shouldAnimateFloatingDrop =
+                    _controller.State.EnableAnimations &&
+                    _deepCapsuleFloatingDragHost != null;
                 return;
             }
 
@@ -537,12 +681,21 @@ public sealed partial class PaperWindow
             // measured and committed while the floating HWND is still visible.
             FinishEdgeCapsulePointerInteraction();
             _controller.CompleteDeepCapsuleReorderDrag();
-            if (wasFloatingDrag || _deepCapsuleFloatingDragHost != null)
-            {
-                CompleteDeepCapsuleFloatingDragDrop();
-            }
+            var handoffStarted = shouldAnimateFloatingDrop &&
+                BeginEdgeCapsuleDockingHandoff();
             _controller.RefreshFloatingSurfaceZOrder();
-            FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
+            if (handoffStarted)
+            {
+                BeginDeepCapsuleFloatingDockingHandoff();
+            }
+            else
+            {
+                if (wasFloatingDrag || _deepCapsuleFloatingDragHost != null)
+                {
+                    CompleteDeepCapsuleFloatingDragDrop();
+                }
+                FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
+            }
         }
     }
 
