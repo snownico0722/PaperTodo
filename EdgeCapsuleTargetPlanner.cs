@@ -123,7 +123,7 @@ internal static class EdgeCapsuleTargetPlanner
                 layout.RestingWidthDip + EdgeCapsuleLayout.WindowChromeMargin),
             height,
             bodyHeight,
-            bodyHeight / 2,
+            Math.Min(EdgeCapsuleLayout.CornerRadius, bodyHeight / 2),
             outlineVisible);
     }
 }

@@ -335,11 +335,12 @@ internal static class EdgeCapsuleReducer
         {
             return Reject(model, "Floating transfer requires a docked reorder session.");
         }
+        // The docked HWND remains composited while the floating HWND is created. Preserve its last
+        // drag position until FinishPointer clears the session, so suppression cannot first snap it.
         return Accept(model, model with
         {
             State = model.State with { Gesture = EdgeCapsuleGestureState.FloatingTransfer },
-            DragSession = session with { LastScreenPosition = point },
-            DockedDragTopDipOverride = null
+            DragSession = session with { LastScreenPosition = point }
         });
     }
 

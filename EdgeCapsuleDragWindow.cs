@@ -60,6 +60,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
     private readonly double _heightDip;
     private readonly Grid _root;
     private readonly Grid _surface;
+    private readonly Border _outline;
     private DeviceScreenPoint _lastPointer;
     private DeviceScreenRect _surfaceDeviceBounds;
     private DockingHandoffAnimation? _dockingHandoffAnimation;
@@ -91,7 +92,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
             "EdgeCapsuleDragWindow only renders the FloatingFree shape.");
         _widthDip = options.Shape.WindowWidthDip;
         _heightDip = options.Shape.WindowHeightDip;
-        (_root, _surface) = BuildContent(options);
+        (_root, _surface, _outline) = BuildContent(options);
         Content = _root;
 
         SourceInitialized += (_, _) =>
@@ -195,6 +196,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
         _entranceScale.ScaleX = 1;
         _entranceScale.ScaleY = 1;
         _surface.Opacity = 1;
+        _outline.Opacity = 1;
         if (!TryGetCurrentSurfaceDeviceBounds(out var startSurfaceBounds))
         {
             completed(false);
@@ -248,6 +250,9 @@ internal sealed class EdgeCapsuleDragWindow : Window
             return;
         }
 
+        // The confirmed docked host owns the final outline. Keep the floating body as the
+        // anti-flash cover, but do not cross-fade two outlines with different edge geometry.
+        _outline.Opacity = 0;
         var startOpacity = Math.Clamp(_surface.Opacity, 0, 1);
         if (startOpacity <= 0.001)
         {
@@ -275,6 +280,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
             return;
         }
 
+        _outline.Opacity = 1;
         _surface.Opacity = 1;
         WindowNative.BringToFrontNoActivate(this);
     }
@@ -594,7 +600,8 @@ internal sealed class EdgeCapsuleDragWindow : Window
         CancelDockingHandoffAnimation();
     }
 
-    private (Grid Root, Grid Surface) BuildContent(EdgeCapsuleDragWindowOptions options)
+    private (Grid Root, Grid Surface, Border Outline) BuildContent(
+        EdgeCapsuleDragWindowOptions options)
     {
         var root = new Grid
         {
@@ -692,6 +699,6 @@ internal sealed class EdgeCapsuleDragWindow : Window
         };
         Panel.SetZIndex(outline, 20);
         surface.Children.Add(outline);
-        return (root, surface);
+        return (root, surface, outline);
     }
 }
