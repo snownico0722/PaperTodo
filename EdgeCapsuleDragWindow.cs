@@ -61,7 +61,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
     private readonly Grid _root;
     private readonly Grid _surface;
     private readonly Border _outline;
-    private DeviceScreenPoint _lastPointer;
+    private DeviceScreenRect _dragTargetDeviceBounds;
     private DeviceScreenRect _surfaceDeviceBounds;
     private DockingHandoffAnimation? _dockingHandoffAnimation;
     private int _dpiSettleGeneration;
@@ -152,7 +152,6 @@ internal sealed class EdgeCapsuleDragWindow : Window
             return;
         }
 
-        _lastPointer = pointer;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, this, out var geometry))
         {
             return;
@@ -162,18 +161,27 @@ internal sealed class EdgeCapsuleDragWindow : Window
         var height = Math.Max(1, (int)Math.Round(_heightDip * geometry.DpiScaleY, MidpointRounding.AwayFromZero));
         var left = (int)Math.Round(pointer.X - width / 2.0, MidpointRounding.AwayFromZero);
         var top = (int)Math.Round(pointer.Y - height / 2.0, MidpointRounding.AwayFromZero);
-        var bounds = new DeviceScreenRect(left, top, left + width, top + height);
-        if (!WindowNative.TrySetWindowDeviceBounds(this, bounds))
+        _dragTargetDeviceBounds = new DeviceScreenRect(left, top, left + width, top + height);
+        ApplyDragTargetDeviceBounds();
+    }
+
+    private void ApplyDragTargetDeviceBounds()
+    {
+        var bounds = _dragTargetDeviceBounds;
+        if (_isClosed || _dockingPresentationActive || bounds.IsEmpty ||
+            !WindowNative.TrySetWindowDeviceBounds(this, bounds))
         {
             return;
         }
-        if (!WindowNative.TryGetWindowDeviceBounds(this, out var actualBounds) ||
-            actualBounds != bounds)
+
+        if (WindowNative.TryGetWindowDeviceBounds(this, out var actualBounds))
         {
-            WindowNative.TrySetWindowDeviceBounds(this, bounds);
-            WindowNative.TryGetWindowDeviceBounds(this, out actualBounds);
+            _surfaceDeviceBounds = actualBounds;
         }
-        _surfaceDeviceBounds = actualBounds.IsEmpty ? bounds : actualBounds;
+        else
+        {
+            _surfaceDeviceBounds = bounds;
+        }
     }
 
     public void AnimateDockingHandoff(
@@ -530,7 +538,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
                 {
                     if (!_isClosed && generation == _dpiSettleGeneration)
                     {
-                        SettleDpiPresentation(generation, scheduleVerification: true);
+                        SettleDpiPresentation(generation);
                     }
                 }),
                 System.Windows.Threading.DispatcherPriority.Loaded);
@@ -539,26 +547,42 @@ internal sealed class EdgeCapsuleDragWindow : Window
         return IntPtr.Zero;
     }
 
-    private void SettleDpiPresentation(int generation, bool scheduleVerification)
+    private void SettleDpiPresentation(int generation)
     {
-        if (_isClosed || generation != _dpiSettleGeneration)
+        if (_isClosed || _dockingPresentationActive || generation != _dpiSettleGeneration)
         {
             return;
         }
 
-        MoveCenteredAt(_lastPointer);
+        // Pointer motion is the sole owner of drag geometry. DPI settle may refresh WPF's client
+        // layout, but it only reapplies the latest physical target instead of calculating another
+        // monitor-sized rectangle from delayed work.
         RefreshNativeMetricsLayout();
-        MoveCenteredAt(_lastPointer);
-        if (!scheduleVerification || generation != _dpiSettleGeneration)
+        ApplyDragTargetDeviceBounds();
+
+        // WPF can rewrite the HWND once more after its first destination-DPI render. The later pass
+        // is read-only when settled and performs at most one bounded replay of the same target.
+        Dispatcher.BeginInvoke(
+            (Action)(() => VerifyDragTargetDeviceBounds(generation)),
+            System.Windows.Threading.DispatcherPriority.ContextIdle);
+    }
+
+    private void VerifyDragTargetDeviceBounds(int generation)
+    {
+        if (_isClosed || _dockingPresentationActive || generation != _dpiSettleGeneration ||
+            _dragTargetDeviceBounds.IsEmpty)
         {
             return;
         }
 
-        // One later pass observes the client area after WPF's first render at the destination DPI.
-        // It is topology-only work, never part of ordinary pointer-move frames.
-        Dispatcher.BeginInvoke(
-            (Action)(() => SettleDpiPresentation(generation, scheduleVerification: false)),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
+        if (WindowNative.TryGetWindowDeviceBounds(this, out var actualBounds) &&
+            actualBounds == _dragTargetDeviceBounds)
+        {
+            _surfaceDeviceBounds = actualBounds;
+            return;
+        }
+
+        ApplyDragTargetDeviceBounds();
     }
 
     private void RefreshNativeMetricsLayout()
