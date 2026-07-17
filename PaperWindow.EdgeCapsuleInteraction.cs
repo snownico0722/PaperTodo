@@ -864,6 +864,17 @@ public sealed partial class PaperWindow
             WindowNative.BringToFrontNoActivate(floatingHost);
             RefreshDeepCapsuleSlotTopmost();
             Mouse.OverrideCursor = Cursors.SizeAll;
+
+            // The staged docked-content blank and this brand-new layered window's first frame must
+            // reach the screen as one swap. A fresh HWND's first presentation can lag one
+            // composition behind an existing surface's dirty update, which showed as a one-frame
+            // hole between hiding the docked pill and revealing the floating pill. Submit both in
+            // one render pass, then wait for the compositor before the modal move loop starts.
+            Dispatcher.Invoke(
+                () => { },
+                System.Windows.Threading.DispatcherPriority.Render);
+            WindowNative.FlushDesktopComposition();
+
             // From here through button release, Windows is the sole drag owner. The reducer stays
             // in FloatingReordering only so queue/layout work remains deferred until we sample the
             // final native cursor position.
