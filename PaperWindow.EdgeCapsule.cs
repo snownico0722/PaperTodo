@@ -114,6 +114,19 @@ public sealed partial class PaperWindow
             CapsuleIconFontSizeForCurrentPaper());
     }
 
+    public void UpdateEdgeCapsuleCloseButtonMode()
+    {
+        if (_edgeCapsuleHost == null && !HasDeepCapsuleSlotPlacement)
+        {
+            return;
+        }
+
+        RequestEdgeCapsulePresentation(
+            animate: false,
+            EdgeCapsuleTransitionReason.State,
+            refreshLayout: true);
+    }
+
     private void RequestEdgeCapsulePresentation(
         bool animate,
         EdgeCapsuleTransitionReason reason,
@@ -174,7 +187,8 @@ public sealed partial class PaperWindow
                 Math.Min(
                     EdgeCapsuleLayout.HostCapacityWidth,
                     monitor.LocalWorkAreaDip.Width)),
-            PaperLayoutDefaults.CapsuleHeight));
+            PaperLayoutDefaults.CapsuleHeight,
+            _controller.State.HideEdgeCapsuleCloseButtonOnHover));
     }
 
     private bool ApplyEdgeCapsulePresentationFrame(EdgeCapsulePresentationFrame frame)

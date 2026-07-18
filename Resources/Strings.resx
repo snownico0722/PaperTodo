@@ -437,6 +437,9 @@
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>再次点击边缘胶囊收回纸片</value>
   </data>
+  <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>悬停时隐藏关闭按钮</value>
+  </data>
   <data name="CapsuleCollapseAllLabel" xml:space="preserve">
     <value>收起</value>
   </data>
@@ -628,6 +631,9 @@
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
+  </data>
+  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>纸片标题与胶囊显示的最大字数。</value>

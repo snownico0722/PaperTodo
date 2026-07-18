@@ -8,7 +8,8 @@ internal readonly record struct EdgeCapsuleLayoutFacts(
     double RestingWidthDip,
     double MaximumCloseWidthDip,
     double HostWidthDip,
-    double HeightDip);
+    double HeightDip,
+    bool CloseSegmentActsAsContent);
 
 /// <summary>
 /// Converts measured/environment facts into the planner snapshot. PaperWindow supplies target
@@ -42,7 +43,8 @@ internal static class EdgeCapsuleLayoutService
             facts.RestingWidthDip,
             facts.MaximumCloseWidthDip,
             facts.HostWidthDip,
-            facts.HeightDip);
+            facts.HeightDip,
+            facts.CloseSegmentActsAsContent);
     }
 
     public static double TopForVisualIndex(

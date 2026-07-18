@@ -420,6 +420,9 @@
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>가장자리 캡슐을 다시 클릭해 종이 접기</value>
   </data>
+  <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>닫기 버튼 숨기기</value>
+  </data>
   <data name="CapsuleCollapseAllLabel" xml:space="preserve">
     <value>접기</value>
   </data>
@@ -602,6 +605,9 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>줄 맨 위에 메인 캡슐을 두어 현재 줄을 한 번에 접거나 펼칩니다.</value>
+  </data>
+  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>마우스를 올리면 기존처럼 늘어나지만 추가 영역은 닫기 버튼 없이 일반 캡슐 영역으로 동작합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>종이 제목과 캡슐에 표시되는 최대 글자 수.</value>

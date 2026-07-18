@@ -1056,6 +1056,12 @@ public sealed partial class AppController
         RefreshSettingsCapsuleToggleStates();
         if (advanced)
         {
+            rightColumn.Children.Add(WrapWithHint(
+                SettingsToggle(
+                    Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
+                    State.HideEdgeCapsuleCloseButtonOnHover,
+                    ToggleHideEdgeCapsuleCloseButtonOnHover),
+                "TipHideEdgeCapsuleCloseButtonOnHover"));
             rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"));
             rightColumn.Children.Add(CreateMaxTitleLengthStepper());
             rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"));
@@ -1273,6 +1279,7 @@ public sealed partial class AppController
         State.UseCapsuleMode = true;
         State.UseDeepCapsuleMode = true;
         State.ShowDeepCapsuleWhileExpanded = true;
+        State.HideEdgeCapsuleCloseButtonOnHover = false;
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CollapseExpandedDeepCapsuleOnClick = false;
@@ -1296,6 +1303,7 @@ public sealed partial class AppController
 
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
+        RefreshSettingsWindowContent();
     }
 
     private void RestoreVisualSettingsPageDefaults()
@@ -1348,6 +1356,7 @@ public sealed partial class AppController
             window.UpdateCapsuleMode();
             window.UpdateDeepCapsuleMode();
             window.UpdateDeepCapsuleExpandedSlotMode();
+            window.UpdateEdgeCapsuleCloseButtonMode();
         }
 
         ArrangeDeepCapsules(animate: false);
@@ -2457,6 +2466,17 @@ public sealed partial class AppController
         ArrangeDeepCapsules(animate: State.EnableAnimations);
         SaveNow();
         RefreshSettingsCapsuleToggleStates();
+    }
+
+    private void ToggleHideEdgeCapsuleCloseButtonOnHover()
+    {
+        State.HideEdgeCapsuleCloseButtonOnHover = !State.HideEdgeCapsuleCloseButtonOnHover;
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateEdgeCapsuleCloseButtonMode();
+        }
+
+        SaveNow();
     }
 
     private void ToggleCollapseExpandedDeepCapsuleOnClick()

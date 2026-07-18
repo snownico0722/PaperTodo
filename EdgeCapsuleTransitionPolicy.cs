@@ -106,7 +106,8 @@ internal static class EdgeCapsuleTransitionPolicy
             Lerp(start.Opacity, target.Opacity, progress),
             Lerp(start.ContentOpacity, target.ContentOpacity, progress),
             target.OutlineVisible,
-            target.IsHitTestVisible);
+            target.IsHitTestVisible,
+            target.CloseSegmentActsAsContent);
         return new EdgeCapsuleTransitionSample(frame, false);
     }
 
@@ -127,7 +128,8 @@ internal static class EdgeCapsuleTransitionPolicy
         Math.Abs(applied.Opacity - target.Opacity) < 0.001 &&
         Math.Abs(applied.ContentOpacity - target.ContentOpacity) < 0.001 &&
         applied.OutlineVisible == target.OutlineVisible &&
-        applied.IsHitTestVisible == target.IsHitTestVisible;
+        applied.IsHitTestVisible == target.IsHitTestVisible &&
+        applied.CloseSegmentActsAsContent == target.CloseSegmentActsAsContent;
 
     private static int LerpDevice(int from, int to, double progress) =>
         (int)Math.Round(Lerp(from, to, progress), MidpointRounding.AwayFromZero);

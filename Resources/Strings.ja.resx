@@ -420,6 +420,9 @@
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>端のカプセルを再クリックして紙片を戻す</value>
   </data>
+  <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>閉じるボタンを隠す</value>
+  </data>
   <data name="CapsuleCollapseAllLabel" xml:space="preserve">
     <value>折りたたむ</value>
   </data>
@@ -602,6 +605,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
+  </data>
+  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>紙片タイトルとカプセルに表示する最大文字数。</value>

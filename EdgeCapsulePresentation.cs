@@ -49,8 +49,8 @@ internal readonly record struct EdgeCapsuleMotion(
 }
 
 /// <summary>
-/// Environment facts captured from the target monitor and WPF text measurement. This value
-/// contains no state decisions; the shape planner owns all Resting/Hover/Active/Floating policy.
+/// Environment facts and stable presentation options captured for the target monitor. This value
+/// contains no reducer state decisions; the shape planner owns all Resting/Hover/Active/Floating policy.
 /// </summary>
 internal readonly record struct EdgeCapsuleLayoutSnapshot(
     MonitorGeometry Monitor,
@@ -60,7 +60,8 @@ internal readonly record struct EdgeCapsuleLayoutSnapshot(
     double RestingWidthDip,
     double MaximumCloseWidthDip,
     double HostWidthDip,
-    double HeightDip)
+    double HeightDip,
+    bool CloseSegmentActsAsContent)
 {
     public bool IsUsable =>
         !Monitor.WorkArea.IsEmpty &&
@@ -109,7 +110,8 @@ internal readonly record struct EdgeCapsuleTargetPresentation(
     double Opacity,
     double ContentOpacity,
     bool OutlineVisible,
-    bool IsHitTestVisible)
+    bool IsHitTestVisible,
+    bool CloseSegmentActsAsContent)
 {
     public static EdgeCapsuleTargetPresentation Hidden => new(
         false,
@@ -125,6 +127,7 @@ internal readonly record struct EdgeCapsuleTargetPresentation(
         0,
         0,
         0,
+        false,
         false,
         false);
 
@@ -143,7 +146,8 @@ internal readonly record struct EdgeCapsuleTargetPresentation(
         Opacity,
         ContentOpacity,
         OutlineVisible,
-        IsHitTestVisible);
+        IsHitTestVisible,
+        CloseSegmentActsAsContent);
 }
 
 internal readonly record struct EdgeCapsulePresentationPlan(
@@ -175,7 +179,8 @@ internal readonly record struct EdgeCapsulePresentationFrame(
     double Opacity,
     double ContentOpacity,
     bool OutlineVisible,
-    bool IsHitTestVisible)
+    bool IsHitTestVisible,
+    bool CloseSegmentActsAsContent)
 {
     public static EdgeCapsulePresentationFrame Hidden =>
         EdgeCapsuleTargetPresentation.Hidden.ToFrame();

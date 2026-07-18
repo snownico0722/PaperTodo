@@ -420,6 +420,9 @@
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
     <value>Click edge capsule again to retract paper</value>
   </data>
+  <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>Hide edge close button</value>
+  </data>
   <data name="CapsuleCollapseAllLabel" xml:space="preserve">
     <value>Collapse</value>
   </data>
@@ -589,6 +592,9 @@ About 5 full-width characters on one line, 10 on multiline.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
+  </data>
+  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
+    <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>Max characters shown in paper titles and capsules.</value>

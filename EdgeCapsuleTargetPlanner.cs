@@ -75,7 +75,8 @@ internal static class EdgeCapsuleTargetPlanner
             retracted ? 0 : 1,
             dockedSuppressed ? 0 : 1,
             !retracted && !dockedSuppressed && model.State.Visual == EdgeCapsuleVisualState.Active,
-            hitTest);
+            hitTest,
+            layout.CloseSegmentActsAsContent);
 
         var floatingShape = ownsFloatingHost
             ? CreateFloatingShape(layout, model.State.Visual == EdgeCapsuleVisualState.Active)

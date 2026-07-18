@@ -195,6 +195,9 @@ internal sealed class EdgeCapsuleHost : IDisposable
         var segmentLayoutChanged = visualSurfaceChanged ||
             previousFrame.BodyWindowWidthDevice != frame.BodyWindowWidthDevice ||
             Math.Abs(previousFrame.MaximumCloseWidthDip - frame.MaximumCloseWidthDip) > 0.001;
+        var closeSegmentModeChanged = firstShow ||
+            !previousFrame.Visible ||
+            previousFrame.CloseSegmentActsAsContent != frame.CloseSegmentActsAsContent;
         var nativeHandoff = previousFrame.Visible && (
             previousFrame.Edge != frame.Edge ||
             previousFrame.WallDeviceX != frame.WallDeviceX ||
@@ -229,6 +232,10 @@ internal sealed class EdgeCapsuleHost : IDisposable
         {
             ApplyVisualSurface(frame);
         }
+        if (closeSegmentModeChanged)
+        {
+            ApplyCloseSegmentMode(frame);
+        }
         if (segmentLayoutChanged)
         {
             var closeWidth = EdgeCapsuleGeometry.CloseWidthForAppliedDeviceWidth(
@@ -242,11 +249,14 @@ internal sealed class EdgeCapsuleHost : IDisposable
                 frame.MaximumCloseWidthDip,
                 frame.IsHitTestVisible);
         }
-        else if (previousFrame.IsHitTestVisible != frame.IsHitTestVisible)
+        else if (previousFrame.IsHitTestVisible != frame.IsHitTestVisible ||
+            closeSegmentModeChanged)
         {
             CloseArea.IsHitTestVisible = frame.IsHitTestVisible &&
                 _maximumCloseWidth > 0 &&
-                _appliedCloseWidth >= _maximumCloseWidth - 0.5;
+                (frame.CloseSegmentActsAsContent
+                    ? _appliedCloseWidth > 0
+                    : _appliedCloseWidth >= _maximumCloseWidth - 0.5);
         }
 
         _appliedFrame = frame;
@@ -612,23 +622,14 @@ internal sealed class EdgeCapsuleHost : IDisposable
         var close = CloseArea;
         var closeGlyph = CloseGlyph;
 
-        content.MouseEnter += (_, _) => content.Background = _hoverBrush;
-        content.MouseLeave += (_, _) => content.Background = Brushes.Transparent;
-        shell.MouseEnter += (_, _) => callbacks.PointerInvalidated();
-        shell.MouseLeave += (_, _) => callbacks.PointerInvalidated();
-        content.PreviewMouseLeftButtonDown += (_, e) =>
+        void BeginContentPointer(MouseButtonEventArgs e)
         {
             callbacks.PointerPressed(PointerScreenPosition(e));
             content.CaptureMouse();
             e.Handled = true;
-        };
-        content.PreviewMouseMove += (_, e) =>
-        {
-            e.Handled = callbacks.PointerMoved(
-                PointerScreenPosition(e),
-                e.LeftButton == MouseButtonState.Pressed);
-        };
-        content.PreviewMouseLeftButtonUp += (_, e) =>
+        }
+
+        void CompleteContentPointer(MouseButtonEventArgs e)
         {
             if (!callbacks.PointerReleased(PointerScreenPosition(e)))
             {
@@ -639,7 +640,34 @@ internal sealed class EdgeCapsuleHost : IDisposable
                 content.ReleaseMouseCapture();
             }
             e.Handled = true;
+        }
+
+        content.MouseEnter += (_, _) =>
+        {
+            content.Background = _hoverBrush;
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                close.Background = _hoverBrush;
+            }
         };
+        content.MouseLeave += (_, _) =>
+        {
+            content.Background = Brushes.Transparent;
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                close.Background = Brushes.Transparent;
+            }
+        };
+        shell.MouseEnter += (_, _) => callbacks.PointerInvalidated();
+        shell.MouseLeave += (_, _) => callbacks.PointerInvalidated();
+        content.PreviewMouseLeftButtonDown += (_, e) => BeginContentPointer(e);
+        content.PreviewMouseMove += (_, e) =>
+        {
+            e.Handled = callbacks.PointerMoved(
+                PointerScreenPosition(e),
+                e.LeftButton == MouseButtonState.Pressed);
+        };
+        content.PreviewMouseLeftButtonUp += (_, e) => CompleteContentPointer(e);
         content.LostMouseCapture += (_, _) =>
         {
             var action = callbacks.CaptureLost(Mouse.LeftButton == MouseButtonState.Pressed);
@@ -651,23 +679,45 @@ internal sealed class EdgeCapsuleHost : IDisposable
 
         close.MouseEnter += (_, _) =>
         {
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                content.Background = _hoverBrush;
+                close.Background = _hoverBrush;
+                return;
+            }
             content.Background = Brushes.Transparent;
             close.Background = _hoverBrush;
             closeGlyph.Foreground = _textBrush;
         };
         close.MouseLeave += (_, _) =>
         {
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                content.Background = Brushes.Transparent;
+                close.Background = Brushes.Transparent;
+                return;
+            }
             close.Background = Brushes.Transparent;
             closeGlyph.Foreground = _weakTextBrush;
             close.Opacity = Math.Clamp(_appliedCloseWidth / Math.Max(1, _maximumCloseWidth), 0, 1);
         };
         close.MouseLeftButtonDown += (_, e) =>
         {
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                BeginContentPointer(e);
+                return;
+            }
             close.Opacity = 0.72;
             e.Handled = true;
         };
         close.MouseLeftButtonUp += (_, e) =>
         {
+            if (_appliedFrame.CloseSegmentActsAsContent)
+            {
+                CompleteContentPointer(e);
+                return;
+            }
             callbacks.CloseInvoked();
             e.Handled = true;
         };
@@ -678,6 +728,9 @@ internal sealed class EdgeCapsuleHost : IDisposable
         if (!_disposed)
         {
             ContentArea.ContextMenu = contextMenu;
+            CloseArea.ContextMenu = _appliedFrame.CloseSegmentActsAsContent
+                ? contextMenu
+                : null;
         }
     }
 
@@ -891,6 +944,16 @@ internal sealed class EdgeCapsuleHost : IDisposable
         surface.Height = frame.Bounds.Height / Math.Max(1, frame.DpiScaleY);
     }
 
+    private void ApplyCloseSegmentMode(EdgeCapsulePresentationFrame frame)
+    {
+        var actsAsContent = frame.CloseSegmentActsAsContent;
+        CloseGlyph.Visibility = actsAsContent ? Visibility.Collapsed : Visibility.Visible;
+        CloseArea.ToolTip = actsAsContent ? null : _options.CloseToolTip;
+        CloseArea.ContextMenu = actsAsContent ? ContentArea.ContextMenu : null;
+        ContentArea.Background = Brushes.Transparent;
+        CloseArea.Background = Brushes.Transparent;
+    }
+
     private void ApplySegmentWidths(
         EdgeCapsulePresentationFrame frame,
         double width,
@@ -918,9 +981,14 @@ internal sealed class EdgeCapsuleHost : IDisposable
             Shell.ColumnDefinitions[1].Width = new GridLength(width);
         }
         CloseArea.Width = double.NaN;
-        CloseArea.Opacity = maximumWidth <= 0 ? 0 : width / maximumWidth;
+        CloseArea.Opacity = frame.CloseSegmentActsAsContent
+            ? 1
+            : maximumWidth <= 0 ? 0 : width / maximumWidth;
         CloseArea.IsHitTestVisible =
-            enableHitTest && maximumWidth > 0 && width >= maximumWidth - 0.5;
+            enableHitTest && maximumWidth > 0 &&
+            (frame.CloseSegmentActsAsContent
+                ? width > 0
+                : width >= maximumWidth - 0.5);
     }
 
     private void ApplyContentOrder(EdgeCapsuleEdge edge, EdgeCapsuleHostOptions options)
@@ -928,6 +996,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
         var leftEdge = edge == EdgeCapsuleEdge.Left;
         ContentArea.Cursor = Cursors.Hand;
         Grid.SetColumn(ContentArea, leftEdge ? 1 : 0);
+        Grid.SetColumnSpan(ContentArea, 1);
         Grid.SetColumn(CloseArea, leftEdge ? 0 : 1);
 
         ContentGrid.Margin = leftEdge
