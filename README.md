@@ -8,6 +8,8 @@
 
 ![version](https://img.shields.io/badge/version-v3.0-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
 
+[qq交流群：551612664——奇奇怪怪的魔法研究基地](https://qm.qq.com/q/Mp7spYLrig)
+
 **语言：中文 | [English](README.en.md)**
 
 </div>
