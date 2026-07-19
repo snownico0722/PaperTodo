@@ -97,11 +97,16 @@ public sealed partial class PaperWindow
 
     private EdgeCapsuleCaptureAction OnEdgeCapsuleCaptureLost(bool leftButtonPressed)
     {
+        var wasPendingClick = IsDeepCapsuleSlotPendingClick;
         var action = _edgeCapsule.HandleCaptureLost(leftButtonPressed);
         if (action == EdgeCapsuleCaptureAction.CancelDrag)
         {
             EndDeepCapsuleReorderDrag(commit: false);
             ClearCapsuleInteractionKeyboardFocus();
+        }
+        else if (wasPendingClick && action == EdgeCapsuleCaptureAction.None)
+        {
+            InvalidateEdgeCapsule(EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
         }
         return action;
     }

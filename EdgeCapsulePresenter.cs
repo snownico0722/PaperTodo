@@ -353,6 +353,13 @@ internal sealed class EdgeCapsulePresenter
         return Dispatch(EdgeCapsuleIntent.PointerSampled(over)).Changed;
     }
 
+    private bool NeedsPointerTracking =>
+        State.Slot == EdgeCapsuleSlotState.CollapsedDocked &&
+        State.Visual == EdgeCapsuleVisualState.Hovered &&
+        State.Gesture == EdgeCapsuleGestureState.Idle &&
+        !ContextMenuOpen &&
+        _applyRetryAttempts < MaximumApplyRetryFrames;
+
     private void Configure(
         Dispatcher dispatcher,
         Func<EdgeCapsuleDirty, EdgeCapsuleDirty> reconcile)
@@ -411,7 +418,9 @@ internal sealed class EdgeCapsulePresenter
             needsFrame = false;
         }
 
-        if (needsFrame || (needsApplyRetry && _applyRetryAttempts < MaximumApplyRetryFrames))
+        if (needsFrame ||
+            (needsApplyRetry && _applyRetryAttempts < MaximumApplyRetryFrames) ||
+            NeedsPointerTracking)
         {
             StartFrameScheduler();
         }
@@ -503,11 +512,12 @@ internal sealed class EdgeCapsulePresenter
         EdgeCapsuleFrameScheduler scheduler,
         DeviceScreenPoint? pointer)
     {
+        var pointerTracking = NeedsPointerTracking;
         var applyRetryPending = (_dirty & EdgeCapsuleDirty.ApplyRetry) != 0;
         if (!UsesSharedFrameScheduler(scheduler) ||
             _dispatcher == null ||
             _reconcile == null ||
-            (!Transition.HasValue && !applyRetryPending))
+            (!Transition.HasValue && !applyRetryPending && !pointerTracking))
         {
             StopFrameScheduler();
             return false;
@@ -518,6 +528,10 @@ internal sealed class EdgeCapsulePresenter
         if (Transition.HasValue)
         {
             _dirty |= EdgeCapsuleDirty.Frame;
+        }
+        else if (pointerTracking)
+        {
+            _dirty |= EdgeCapsuleDirty.Pointer;
         }
         if (applyRetryPending)
         {
@@ -537,6 +551,8 @@ internal sealed class EdgeCapsulePresenter
             _hasFramePointerOverride = false;
         }
         return UsesSharedFrameScheduler(scheduler) &&
-            (Transition.HasValue || (_dirty & EdgeCapsuleDirty.ApplyRetry) != 0);
+            (Transition.HasValue ||
+                (_dirty & EdgeCapsuleDirty.ApplyRetry) != 0 ||
+                NeedsPointerTracking);
     }
 }
