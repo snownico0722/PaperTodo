@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<!-- PaperTodo website preview · 2026-07-21 · r3 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2eee5">
+  <title>PaperTodo - Windows 桌面便签、待办与 Markdown 笔记</title>
+  <meta name="application-name" content="PaperTodo">
+  <meta name="description" content="PaperTodo 是一款极简 Windows 桌面便签工具。每张纸都是独立窗口，支持待办、Markdown 笔记、脚本胶囊和边缘贴靠；数据全部保存在本地，无需账号。">
+  <meta name="keywords" content="PaperTodo,Windows 桌面便签,桌面待办,Markdown 笔记,胶囊贴边,本地便签,sticky notes,desktop todo">
+  <meta name="author" content="snownico0722">
+  <meta name="robots" content="index, follow, max-snippet:-1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="canonical" href="https://snownico0722.github.io/PaperTodo/">
+  <link rel="alternate" hreflang="zh-CN" href="https://snownico0722.github.io/PaperTodo/">
+  <link rel="alternate" hreflang="en" href="https://snownico0722.github.io/PaperTodo/?lang=en">
+  <link rel="alternate" hreflang="x-default" href="https://snownico0722.github.io/PaperTodo/">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="PaperTodo">
+  <meta property="og:title" content="PaperTodo - Windows 桌面便签、待办与 Markdown 笔记">
+  <meta property="og:description" content="独立桌面纸片，支持待办、Markdown 笔记、脚本胶囊和边缘贴靠。本地保存，无账号、无云端。">
+  <meta property="og:url" content="https://snownico0722.github.io/PaperTodo/">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="PaperTodo - Windows 桌面便签、待办与 Markdown 笔记">
+  <meta name="twitter:description" content="独立桌面纸片，支持待办、Markdown 笔记、脚本胶囊和边缘贴靠。本地保存，无需账号。">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://snownico0722.github.io/PaperTodo/#website",
+        "url": "https://snownico0722.github.io/PaperTodo/",
+        "name": "PaperTodo",
+        "alternateName": "一张纸",
+        "description": "Windows 桌面便签、待办与 Markdown 笔记工具。",
+        "inLanguage": ["zh-CN", "en"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://snownico0722.github.io/PaperTodo/#software",
+        "name": "PaperTodo",
+        "alternateName": "一张纸",
+        "url": "https://snownico0722.github.io/PaperTodo/",
+        "mainEntityOfPage": {"@id": "https://snownico0722.github.io/PaperTodo/#website"},
+        "description": "A minimal Windows desktop sticky-note app with todos, Markdown notes, script capsules and edge docking. Free, open source and local-only.",
+        "operatingSystem": "Windows 10, Windows 11",
+        "softwareRequirements": "Windows 10 or Windows 11, x64",
+        "applicationCategory": "ProductivityApplication",
+        "applicationSubCategory": "Desktop notes and task lists",
+        "softwareVersion": "3.0.1",
+        "downloadUrl": "https://github.com/snownico0722/PaperTodo/releases/latest",
+        "releaseNotes": "https://github.com/snownico0722/PaperTodo/releases",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock",
+          "url": "https://github.com/snownico0722/PaperTodo/releases/latest"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "snownico0722",
+          "url": "https://github.com/snownico0722"
+        },
+        "sameAs": ["https://github.com/snownico0722/PaperTodo"],
+        "inLanguage": ["zh-CN", "en", "ja", "ko"],
+        "featureList": [
+          "Independent desktop paper windows",
+          "Todo lists and lightweight Markdown notes",
+          "Edge-docked capsules and cross-display dragging",
+          "Script capsules",
+          "Local-only storage without an account"
+        ]
+      }
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "PaperTodo 免费吗？需要联网吗？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "PaperTodo 完全免费并开源。日常使用不需要联网，也不需要注册账号。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "PaperTodo 支持哪些 Windows 版本？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "支持 Windows 10 与 Windows 11 x64。自包含版本无需另行安装 .NET。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "如何备份或迁移 PaperTodo 数据？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "退出 PaperTodo 后复制整个程序文件夹即可，纸片、设置和笔记图片会一起迁移。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "为什么 PaperTodo 首次运行会出现 SmartScreen？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "项目暂未购买商业代码签名证书。选择“更多信息”后点击“仍要运行”即可，每台电脑通常只需确认一次。"
+        }
+      }
+    ]
+  }
+  </script>
+  <style>
+    :root{
+      color-scheme:light;
+      --page:#f2eee5;
+      --page-2:#e9e3d8;
+      --ink:#211f1b;
+      --muted:#6d675e;
+      --faint:#9e968a;
+      --line:#d8d0c3;
+      --accent:#aa5b43;
+      --accent-dark:#87442f;
+      --stage:#a9c4d5;
+      --serif:Georgia,"Noto Serif SC","Songti SC",serif;
+      --sans:"Segoe UI Variable","Microsoft YaHei UI","PingFang SC","Segoe UI",sans-serif;
+      --ui:"Segoe UI Variable","Microsoft YaHei UI","Segoe UI",sans-serif;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    section[id]{scroll-margin-top:84px}
+    body{position:relative;isolation:isolate;margin:0;color:var(--ink);background:var(--page);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+    body::before{content:"";position:fixed;z-index:-1;inset:0;pointer-events:none;opacity:.18;background-image:radial-gradient(rgba(55,48,39,.11) .55px,transparent .55px);background-size:5px 5px}
+    button,a{font:inherit}
+    a{color:inherit;text-decoration:none}
+    code{font-family:"Cascadia Mono",Consolas,monospace}
+    :where(a,button,input,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+    .wrap{width:min(1280px,calc(100% - 64px));margin-inline:auto}
+    .kicker{margin:0;color:var(--accent);font-size:.72rem;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    .section-title{margin:18px 0 0;font-size:clamp(2.7rem,5.6vw,5.8rem);font-weight:760;line-height:.98;letter-spacing:-.065em}
+    .section-lead{max-width:680px;margin:28px 0 0;color:var(--muted);font-size:1.02rem;line-height:1.85}
+
+    /* navigation */
+    .nav{position:sticky;z-index:60;top:0;background:rgba(242,238,229,.88);border-bottom:1px solid rgba(133,121,104,.22);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+    .nav-inner{display:flex;min-height:72px;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:10px;font-size:1.25rem;font-weight:780;letter-spacing:-.04em}
+    .brand-dot{width:10px;height:10px;border-radius:3px 7px 7px 7px;background:var(--accent);transform:rotate(45deg)}
+    .nav-links{display:flex;align-items:center;gap:27px;color:#514c45;font-size:.86rem}
+    .nav-links a{position:relative;padding:8px 0}
+    .nav-links a::after{content:"";position:absolute;right:0;bottom:3px;left:0;height:1px;background:var(--accent);transform:scaleX(0);transition:transform .2s}
+    .nav-links a:hover::after,.nav-links a:focus-visible::after{transform:scaleX(1)}
+    .nav-links .github-link{display:inline-flex;align-items:center;gap:7px;font-weight:720;color:#2f2b26}
+    .nav-links .github-link svg{width:16px;height:16px;flex:0 0 16px;fill:currentColor}
+    .nav-links .github-link::after{right:auto;width:16px}
+    .lang-btn{width:44px;height:38px;border:1px solid var(--line);background:rgba(255,255,255,.28);cursor:pointer;transition:border-color .2s,background .2s}
+    .lang-btn:hover,.lang-btn:focus-visible{border-color:var(--accent);background:#fff8ed}
+
+    /* hero */
+    .hero{position:relative;display:grid;min-height:calc(100vh - 112px);grid-template-columns:minmax(420px,.96fr) minmax(560px,1.04fr);border-bottom:1px solid #2b2823}
+    .hero-copy{display:flex;min-height:760px;flex-direction:column;justify-content:center;padding:92px clamp(36px,4vw,72px)}
+    .hero h1{max-width:760px;margin:28px 0 0;font-size:clamp(3.6rem,4.8vw,6.1rem);font-weight:780;line-height:.94;letter-spacing:-.075em}
+    .hero h1 span{display:block;white-space:nowrap}
+    .hero-lead{max-width:610px;margin:36px 0 0;color:#575149;font-size:1.06rem;line-height:1.9}
+    .hero-actions{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:38px}
+    .primary-btn{display:inline-flex;height:52px;align-items:center;justify-content:center;padding:0 24px;color:#fff9ef;background:var(--accent);border:1px solid var(--accent);font-weight:720;transition:transform .18s,background .18s}
+    .primary-btn:hover,.primary-btn:focus-visible{background:var(--accent-dark);transform:translateY(-2px)}
+    .text-btn{display:inline-flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #8e8579;color:#524b43}
+    .text-btn span:last-child{color:var(--accent);transition:transform .18s}
+    .text-btn:hover span:last-child{transform:translateX(4px)}
+    .hero-facts{display:flex;flex-wrap:wrap;gap:10px 24px;margin:40px 0 0;padding:20px 0 0;border-top:1px solid var(--line);list-style:none;color:#756e65;font-size:.78rem}
+    .hero-facts li+li::before{content:"·";margin-right:24px;color:#aaa095}
+
+    /* CSS product stage */
+    .hero-product{position:relative;min-height:760px;overflow:hidden;background:#242724;border-left:1px solid rgba(255,255,255,.08)}
+    .palette-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .palette-head{position:absolute;z-index:20;right:26px;bottom:25px;left:28px;display:flex;align-items:center;justify-content:space-between;padding:9px 11px;color:rgba(255,255,255,.7);background:rgba(20,25,26,.28);border:1px solid rgba(255,255,255,.13);border-radius:2px;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .palette-controls{display:flex;align-items:center;gap:9px}
+    .palette-controls label{position:relative;cursor:pointer;transition:transform .2s,opacity .2s,filter .2s}
+    .palette-controls label:hover{transform:translateY(-2px)}
+    .palette-controls label:not(.theme-control){width:22px;height:22px;border:0;border-radius:50%;opacity:.68;background:linear-gradient(135deg,var(--swatch-paper) 0 58%,var(--swatch-accent) 58%);filter:drop-shadow(0 3px 5px rgba(0,0,0,.22))}
+    .palette-controls label[for="palette-warm"]{--swatch-paper:#fff4d7;--swatch-accent:#9d7951}
+    .palette-controls label[for="palette-ink"]{--swatch-paper:#eef1f5;--swatch-accent:#5a6c86}
+    .palette-controls label[for="palette-forest"]{--swatch-paper:#e9f4e7;--swatch-accent:#588260}
+    .palette-controls label[for="palette-rosy"]{--swatch-paper:#f8e9ed;--swatch-accent:#9e6876}
+    .palette-controls .theme-control{width:36px;height:22px;margin-left:3px;border-radius:11px;background:rgba(255,255,255,.18)}
+    .palette-controls .theme-control::before{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff9ea;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s,background .2s}
+    #theme-dark:checked~.palette-head .theme-control::before{transform:translateX(14px);background:#24262b}
+    #palette-warm:checked~.palette-head label[for="palette-warm"],
+    #palette-ink:checked~.palette-head label[for="palette-ink"],
+    #palette-forest:checked~.palette-head label[for="palette-forest"],
+    #palette-rosy:checked~.palette-head label[for="palette-rosy"]{opacity:1;transform:translateY(-1px) scale(1.15);filter:drop-shadow(0 4px 7px rgba(0,0,0,.3))}
+    #palette-warm:focus-visible~.palette-head label[for="palette-warm"],
+    #palette-ink:focus-visible~.palette-head label[for="palette-ink"],
+    #palette-forest:focus-visible~.palette-head label[for="palette-forest"],
+    #palette-rosy:focus-visible~.palette-head label[for="palette-rosy"],
+    #theme-dark:focus-visible~.palette-head label[for="theme-dark"]{outline:2px solid #fff;outline-offset:3px}
+    .desktop-stage{position:absolute;inset:0;overflow:hidden;--paper:#fff9ea;--bar:#f9f2e1;--paper-line:#e0cea7;--paper-text:#33291e;--paper-weak:#8a7a63;--paper-active:#8c7350;--paper-code:#f7edd2;--paper-quote:#d4be92;--paper-link:#b06242;--paper-check:#b4a078;background:linear-gradient(145deg,#b6cfde 0%,#90b4ca 62%,#789fb8 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+    #palette-ink:checked~.desktop-stage{--paper:#f6f7f9;--bar:#eef1f5;--paper-line:#d0d6de;--paper-text:#262c36;--paper-weak:#767e8a;--paper-active:#5a6c86;--paper-code:#eceff3;--paper-quote:#c6ced8;--paper-link:#42689c;--paper-check:#aab4c2}
+    #palette-forest:checked~.desktop-stage{--paper:#f3f8f1;--bar:#ebf3e9;--paper-line:#c8dac6;--paper-text:#26322a;--paper-weak:#6e8070;--paper-active:#588260;--paper-code:#e9f2e7;--paper-quote:#c0d6c0;--paper-link:#3c8260;--paper-check:#a8c0a8}
+    #palette-rosy:checked~.desktop-stage{--paper:#fdf5f6;--bar:#f7edef;--paper-line:#e4cdd2;--paper-text:#36262a;--paper-weak:#8c7278;--paper-active:#9e6876;--paper-code:#f8ecee;--paper-quote:#e0c6cc;--paper-link:#b2546e;--paper-check:#d8b8c0}
+    #theme-dark:checked~.desktop-stage{--paper:#211f1c;--bar:#2a2723;--paper-line:#4c453d;--paper-text:#e7e0d4;--paper-weak:#92897b;--paper-active:#a88e6a;--paper-code:#2d2a26;--paper-quote:#5e564b;--paper-link:#d69678;--paper-check:#6e6455}
+    #palette-ink:checked~#theme-dark:checked~.desktop-stage{--paper:#1a1c20;--bar:#22252a;--paper-line:#3c424c;--paper-text:#dee3ea;--paper-weak:#8a929e;--paper-active:#849cbc;--paper-code:#26292f;--paper-quote:#4e5662;--paper-link:#84aad6;--paper-check:#606a78}
+    #palette-forest:checked~#theme-dark:checked~.desktop-stage{--paper:#1a1e1b;--bar:#222823;--paper-line:#3a463c;--paper-text:#dce4dc;--paper-weak:#869488;--paper-active:#7ca886;--paper-code:#252a26;--paper-quote:#4a5a4c;--paper-link:#80be96;--paper-check:#5c6e5e}
+    #palette-rosy:checked~#theme-dark:checked~.desktop-stage{--paper:#211c1e;--bar:#2a2426;--paper-line:#4e4044;--paper-text:#e8dcdf;--paper-weak:#988489;--paper-active:#be8694;--paper-code:#2c2628;--paper-quote:#5c4c50;--paper-link:#e094aa;--paper-check:#604e52}
+    .desktop-stage::before,.desktop-stage::after,.capsule-scene::before,.script-scene::before{content:"";position:absolute;pointer-events:none;border-radius:48% 52% 40% 60%/56% 44% 56% 44%;filter:saturate(1.05)}
+    .desktop-stage::before{right:-26%;bottom:-18%;width:74%;height:69%;background:linear-gradient(145deg,rgba(22,79,169,.52),rgba(22,102,207,.16));transform:rotate(-19deg)}
+    .desktop-stage::after{right:-10%;bottom:-42%;width:83%;height:72%;border:48px solid rgba(12,75,169,.18);transform:rotate(28deg)}
+    .desktop-grid{display:none}
+
+    /* faithful WPF paper primitives */
+    .app-paper{position:absolute;overflow:hidden;color:var(--paper-text);background:var(--paper);border:1px solid var(--paper-line);border-radius:16px;box-shadow:0 14px 30px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.12);font-family:var(--ui);font-size:12px;transition:background .25s,border-color .25s,color .25s}
+    .paper-bar{display:grid;height:24px;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:0 7px 0 9px;background:var(--bar);border-bottom:1px solid color-mix(in srgb,var(--paper-line),transparent 18%);border-radius:15px 15px 0 0}
+    .paper-name{display:flex;min-width:0;align-items:center;gap:0;font-weight:650}
+    .paper-name strong{max-width:76px;overflow:hidden;padding:0 5px 0 4px;border-bottom:1px solid color-mix(in srgb,var(--paper-line),transparent 28%);border-radius:8px;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+    .paper-pin{position:relative;width:23px;height:24px;flex:0 0 23px;color:var(--paper-active)}
+    .paper-pin::before{content:"";position:absolute;top:4px;left:7px;width:10px;height:12px;background:currentColor;clip-path:polygon(18% 0,82% 0,74% 34%,100% 66%,58% 66%,58% 84%,42% 84%,42% 66%,0 66%,26% 34%)}
+    .paper-pin::after{content:"";position:absolute;top:13px;left:11px;width:2px;height:7px;background:currentColor;clip-path:polygon(0 0,100% 0,50% 100%)}
+    .paper-tools{display:flex;align-items:center;gap:0;color:color-mix(in srgb,var(--paper-text),transparent 42%);font-size:12px;white-space:nowrap}
+    .paper-tools>span{display:grid;width:25px;height:24px;margin:0 1px;place-items:center}
+    .paper-tools .md{font-size:10px;letter-spacing:.03em}
+    .paper-body{position:absolute;inset:24px 0 0;padding:12px 9px 10px}
+    .todo-list{display:grid;align-content:start;gap:2px}
+    .todo-row{display:grid;min-height:30px;grid-template-columns:22px minmax(0,1fr) 18px;align-items:center;padding:1px 1px;border-radius:8px}
+    .todo-row:hover{background:color-mix(in srgb,var(--paper-text),transparent 95%)}
+    .checkbox{position:relative;width:16px;height:16px;border:1.5px solid var(--paper-check);border-radius:4px}
+    .checkbox.checked{border-color:var(--paper-active);background:var(--paper-active)}
+    .checkbox.checked::after{content:"✓";position:absolute;inset:-4px 0 0;display:grid;place-items:center;color:var(--paper);font-size:10px;font-weight:800}
+    .todo-row.done .todo-text{color:var(--paper-weak);text-decoration:line-through;text-decoration-thickness:1px}
+    .todo-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+    .drag-handle{color:var(--paper-weak);font-size:10px;text-align:center}
+    .append-row{display:grid;height:38px;margin-top:7px;place-items:center;border:1px solid color-mix(in srgb,var(--paper-line),transparent 12%);border-radius:8px;color:var(--paper-weak);background:color-mix(in srgb,var(--paper-text),transparent 97%);font-size:16px}
+    .note-copy{padding:8px 8px 24px 13px;font-size:13px;line-height:1.55}
+    .note-copy p{margin:0 0 10px}
+    .note-copy h4{margin:0 0 14px;font-size:17px;line-height:1.25}
+    .note-copy .syntax{color:var(--paper-weak)}
+    .note-copy .quote{padding-left:9px;border-left:3px solid var(--paper-quote);color:var(--paper-weak)}
+    .note-copy code{padding:2px 5px;border-radius:4px;background:var(--paper-code);color:var(--paper-text);font-size:11px}
+    .zoom-mark{position:absolute;right:18px;bottom:8px;color:var(--paper-weak);font-size:10.5px;font-weight:600;opacity:.55}
+    .resize-grip{position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;opacity:.65;background:repeating-linear-gradient(135deg,transparent 0 3px,color-mix(in srgb,var(--paper-line),var(--paper-text) 12%) 3px 4px)}
+    .hero-todo,.hero-note{will-change:transform,opacity,border-radius;transform-origin:right center;transition:transform 220ms cubic-bezier(.22,.72,.24,1),opacity 120ms ease,filter 180ms ease,border-radius 220ms}
+    .hero-todo .paper-body,.hero-note .paper-body{transition:opacity 90ms ease}
+    .hero-todo{z-index:5;top:8%;left:8%;width:42%;height:auto;aspect-ratio:280/340}
+    .hero-note{z-index:6;bottom:7%;left:27%;width:48%;height:auto;aspect-ratio:320/360}
+    .hero-master-toggle,.hero-edge-toggle{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .hero-edge-stack{position:absolute;z-index:9;top:11%;right:0;display:grid;width:104px;justify-items:end;gap:4px}
+    .hero-edge-pill{position:relative;display:flex;width:max-content;max-width:104px;height:30px;align-items:center;gap:6px;overflow:hidden;padding:0 6px;border:1px solid var(--paper-line);border-right:0;border-radius:12px 0 0 12px;color:var(--paper-text);background:var(--paper);box-shadow:0 2px 12px rgba(30,38,40,.2);font:10.5px var(--ui);white-space:nowrap;transition:max-width 180ms,padding 180ms,transform 160ms,opacity 120ms,border-color 160ms}
+    .hero-edge-child{cursor:pointer;user-select:none}
+    .hero-edge-child::after{content:"×";display:grid;width:0;height:28px;flex:0 0 auto;place-items:center;overflow:hidden;border-left:0 solid var(--paper-line);opacity:0;transition:width 160ms,opacity 120ms,border-width 160ms}
+    .hero-edge-child:hover::after{width:10px;border-left-width:1px;opacity:.68}
+    .hero-edge-pill span{color:var(--paper-active);font-weight:800}
+    .hero-edge-pill b{min-width:0;overflow:hidden;text-overflow:ellipsis}
+    .hero-master-pill{width:50px;max-width:50px;cursor:pointer;user-select:none}
+    .hero-master-pill .expanded-copy,.hero-master-pill .collapsed-copy{min-width:0;overflow:hidden;text-overflow:ellipsis;color:inherit}
+    .hero-master-pill:hover{border-color:color-mix(in srgb,var(--paper-active),var(--paper-line) 35%)}
+    .hero-master-pill .collapsed-copy,.hero-master-pill .collapsed-icon{display:none}
+    #hero-master-toggle:checked~.desktop-stage .hero-master-pill .expanded-copy,
+    #hero-master-toggle:checked~.desktop-stage .hero-master-pill .expanded-icon{display:none}
+    #hero-master-toggle:checked~.desktop-stage .hero-master-pill .collapsed-copy,
+    #hero-master-toggle:checked~.desktop-stage .hero-master-pill .collapsed-icon{display:inline}
+    #hero-master-toggle:checked~.desktop-stage .hero-edge-child{opacity:0;pointer-events:none}
+    #hero-master-toggle:checked~.desktop-stage .hero-edge-child:nth-child(2){transform:translateY(-34px) scale(.82)}
+    #hero-master-toggle:checked~.desktop-stage .hero-edge-child:nth-child(3){transform:translateY(-68px) scale(.82)}
+    #hero-master-toggle:focus-visible~.desktop-stage .hero-master-pill{outline:2px solid #fff;outline-offset:3px}
+    #hero-todo-pill-toggle:checked~.desktop-stage .hero-todo{opacity:0;filter:none;transform:translate(120%,-28%) scale(.34,.22);border-radius:12px;pointer-events:none}
+    #hero-script-pill-toggle:checked~.desktop-stage .hero-note{opacity:0;filter:none;transform:translate(52%,-110%) scale(.33,.12);border-radius:12px;pointer-events:none}
+    #hero-todo-pill-toggle:checked~.desktop-stage .hero-todo .paper-body,
+    #hero-script-pill-toggle:checked~.desktop-stage .hero-note .paper-body{opacity:.18}
+    #hero-todo-pill-toggle:checked~.desktop-stage .hero-todo-pill,
+    #hero-script-pill-toggle:checked~.desktop-stage .hero-script-pill{border-color:var(--paper-active);box-shadow:0 0 0 2px color-mix(in srgb,var(--paper-active),transparent 78%),0 2px 12px rgba(30,38,40,.22)}
+    #hero-todo-pill-toggle:checked~.desktop-stage .hero-todo-pill::after,
+    #hero-script-pill-toggle:checked~.desktop-stage .hero-script-pill::after{content:"↙"}
+    #hero-todo-pill-toggle:focus-visible~.desktop-stage .hero-todo-pill,
+    #hero-script-pill-toggle:focus-visible~.desktop-stage .hero-script-pill{outline:2px solid #fff;outline-offset:3px}
+
+    /* capsule */
+    .capsule-section{padding:0;border-top:1px solid #292621;border-bottom:1px solid #292621}
+    .capsule-layout{display:grid;grid-template-columns:minmax(580px,1.08fr) minmax(430px,.92fr)}
+    .capsule-visual{min-height:760px;padding:48px;background:#222621}
+    .capsule-scene{position:relative;height:100%;min-height:640px;overflow:hidden;border:1px solid rgba(255,255,255,.22);background:linear-gradient(145deg,#b8d0df,#8fb5cb 64%,#759eb8);box-shadow:0 24px 54px rgba(0,0,0,.26)}
+    .capsule-scene::before{right:-20%;bottom:-26%;width:68%;height:70%;background:linear-gradient(145deg,rgba(22,80,174,.6),rgba(38,128,231,.14));transform:rotate(-23deg)}
+    .capsule-state-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .capsule-paper{z-index:3;top:14%;right:112px;width:min(280px,46%);height:340px;--paper:#fff9ea;--bar:#f9f2e1;--paper-line:#e0cea7;--paper-text:#33291e;--paper-weak:#8a7a63;--paper-active:#8c7350;--paper-code:#f7edd2;--paper-quote:#d4be92;--paper-link:#b06242;--paper-check:#b4a078;transform-origin:right center;pointer-events:none;transition:top 220ms,right 220ms,width 220ms,height 220ms,opacity 120ms,border-radius 220ms}
+    #capsule-demo-toggle:checked~.capsule-paper{top:33%;right:0;width:94px;height:30px;border-radius:12px;opacity:0}
+    #capsule-demo-toggle:checked~.capsule-paper .paper-body{opacity:.18}
+    .capsule-paper .paper-body{transition:opacity 90ms}
+    .screen-edge{position:absolute;z-index:2;top:0;right:0;bottom:0;width:1px;background:rgba(255,255,255,.28)}
+    .screen-edge span{display:none}
+    .edge-pill{position:absolute;z-index:6;right:0;display:flex;width:max-content;max-width:104px;height:30px;align-items:center;gap:6px;padding:0 6px;border:1px solid #e0cea7;border-right:0;border-radius:12px 0 0 12px;color:#33291e;background:#fff9ea;box-shadow:0 2px 12px rgba(28,38,42,.22);font:10.5px var(--ui);white-space:nowrap;pointer-events:none;transition:opacity 120ms,border-color 160ms,box-shadow 160ms}
+    .edge-pill::after{content:"×";display:grid;width:0;height:28px;flex:0 0 auto;place-items:center;overflow:hidden;border-left:0 solid #e0cea7;opacity:0;transition:width 160ms,opacity 120ms,border-width 160ms}
+    .edge-pill b{min-width:0;overflow:hidden;text-overflow:ellipsis}
+    .edge-pill .pill-icon{font-weight:800;color:#8e816b}
+    .master-pill{top:9%;width:50px;max-width:50px}
+    .pill-one{top:17%}
+    .pill-two{top:25%}
+    .pill-current{top:33%;opacity:0;cursor:pointer;user-select:none}
+    .pill-current::after{content:"↙"}
+    #capsule-demo-toggle:checked~.pill-current{opacity:1;pointer-events:auto}
+    #capsule-demo-toggle:checked~.pill-current:hover{border-color:#b69261;box-shadow:0 0 0 2px rgba(255,249,234,.34),0 5px 18px rgba(28,38,42,.28)}
+    #capsule-demo-toggle:checked~.pill-current:hover::after{width:10px;border-left-width:1px;opacity:.68}
+    .capsule-state-readout{position:absolute;z-index:9;top:24px;left:24px;display:flex;align-items:center;gap:10px;padding:7px 10px;color:rgba(255,255,255,.86);background:rgba(23,35,38,.34);border:1px solid rgba(255,255,255,.18);border-radius:8px;font-size:.68rem;letter-spacing:.06em;backdrop-filter:blur(8px)}
+    .capsule-state-readout>span{display:none}
+    #capsule-demo-toggle:not(:checked)~.capsule-state-readout .state-paper,
+    #capsule-demo-toggle:checked~.capsule-state-readout .state-capsule{display:inline}
+    .capsule-action{position:absolute;z-index:10;bottom:22px;left:24px;display:inline-flex;min-height:44px;align-items:center;padding:0 15px;color:#fff;border:1px solid #d78b70;border-radius:8px;background:rgba(170,91,67,.82);font-size:.68rem;font-weight:700;cursor:pointer;transition:background 160ms,border-color 160ms,transform 160ms}
+    .capsule-action:hover{background:#aa5b43;transform:translateY(-1px)}
+    .capsule-action>span{align-items:center;gap:8px}
+    .capsule-action .action-collapse{display:inline-flex}
+    .capsule-action .action-restore{display:none}
+    #capsule-demo-toggle:checked~.capsule-action .action-collapse{display:none}
+    #capsule-demo-toggle:checked~.capsule-action .action-restore{display:inline-flex}
+    #capsule-demo-toggle:focus-visible~.capsule-action{outline:2px solid #fff;outline-offset:3px}
+    .capsule-copy{display:flex;flex-direction:column;justify-content:center;padding:78px clamp(52px,6vw,102px)}
+    .capsule-copy h2{margin:22px 0 0;font-size:clamp(3rem,5vw,5.6rem);line-height:.97;letter-spacing:-.067em}
+    .capsule-copy h2 span{display:block}
+    .capsule-copy>p:not(.kicker){margin:34px 0 0;color:var(--muted);line-height:1.85}
+    .feature-lines{margin:48px 0 0;padding:0;border-top:1px solid var(--line);list-style:none}
+    .feature-lines li{display:grid;grid-template-columns:42px 1fr;gap:10px;padding:17px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+    .feature-lines b{color:var(--accent);font-size:.68rem;letter-spacing:.08em}
+
+    /* markdown */
+    .work-section{padding:116px 0}
+    .work-head{display:grid;grid-template-columns:.72fr 1.28fr;gap:72px;align-items:start}
+    .work-head>div:last-child{grid-column:2}
+    .markdown-stage{margin-top:72px;padding:34px 42px 42px;background:#222521;border:1px solid #222521}
+    .md-mode-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .md-mode-switch{display:grid;width:min(590px,100%);grid-template-columns:repeat(3,1fr);gap:5px;margin:0 auto 20px;padding:5px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.06)}
+    .md-mode-switch label{display:flex;min-height:40px;align-items:center;justify-content:center;gap:8px;color:rgba(255,255,255,.48);border-radius:8px;font-size:.66rem;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:color 160ms,background 160ms,box-shadow 160ms}
+    .md-mode-switch label span:first-child{color:#d78b70;font-size:.58rem}
+    .md-mode-switch label:hover{color:rgba(255,255,255,.86)}
+    #md-off:checked~.md-mode-switch label[for="md-off"],
+    #md-basic:checked~.md-mode-switch label[for="md-basic"],
+    #md-enhanced:checked~.md-mode-switch label[for="md-enhanced"]{color:#fff;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+    #md-off:focus-visible~.md-mode-switch label[for="md-off"],
+    #md-basic:focus-visible~.md-mode-switch label[for="md-basic"],
+    #md-enhanced:focus-visible~.md-mode-switch label[for="md-enhanced"]{outline:2px solid #d78b70;outline-offset:2px}
+    .md-canvas{display:grid;place-items:center}
+    .md-paper{position:relative;width:min(590px,100%);height:620px;--paper:#fff9ea;--bar:#f9f2e1;--paper-line:#e0cea7;--paper-text:#33291e;--paper-weak:#8a7a63;--paper-active:#8c7350;--paper-code:#f7edd2;--paper-quote:#d4be92;--paper-link:#b06242;--paper-check:#b4a078}
+    .md-paper .paper-body{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#d9cba9 transparent}
+    .md-paper .paper-body::after{content:"";position:absolute;top:18px;right:4px;bottom:34px;width:4px;border-radius:2px;background:#d9cba9;opacity:.72}
+    .md-view{display:none}
+    #md-off:checked~.md-canvas .md-view-off,
+    #md-basic:checked~.md-canvas .md-view-basic,
+    #md-enhanced:checked~.md-canvas .md-view-enhanced{display:block}
+    .md-copy{padding:16px 24px 38px;font-size:12.5px;line-height:1.58}
+    .md-copy p{margin:0 0 10px}
+    .md-copy .md-h{font-size:inherit;font-weight:400}
+    .md-view-basic .md-h,.md-view-enhanced .md-h{font-size:19px;font-weight:750}
+    .md-copy .subhead{margin:12px 0 8px;font-size:13px}
+    .md-copy .basic-syntax{color:var(--paper-active)}
+    .md-copy .muted-syntax{color:var(--paper-weak);opacity:.42}
+    .md-copy .task-syntax{color:var(--paper-active)}
+    .md-copy .strong{font-weight:750}
+    .md-copy .strike{text-decoration:line-through}
+    .md-copy .link{color:var(--paper-link);text-decoration:underline;text-underline-offset:2px}
+    .md-list-lines{padding-left:4px}
+    .md-list-lines p{margin-bottom:5px}
+    .md-list-lines .drawn-item{position:relative;padding-left:13px}
+    .md-list-lines .drawn-item::before{content:"";position:absolute;top:.72em;left:2px;width:5px;height:5px;border-radius:50%;background:var(--paper-text);transform:translateY(-50%)}
+    .md-copy .render-quote{padding:3px 8px;border-left:3px solid var(--paper-quote);color:var(--paper-weak)}
+    .md-copy .render-code{display:block;padding:6px 8px;background:var(--paper-code);border-radius:4px;font:10px/1.45 "Cascadia Mono",monospace}
+    .md-rule-row{display:flex;align-items:center;gap:8px;height:15px;margin:8px 0 10px}
+    .md-rule-row::after{content:"";height:1px;flex:1;background:var(--paper-quote)}
+    .md-rule-row.enhanced-rule{gap:0}
+    .md-rule-row.enhanced-rule .muted-syntax{width:0;overflow:hidden;opacity:0}
+    .md-image{position:relative;height:150px;margin:14px 0 16px;overflow:hidden;border:1px solid color-mix(in srgb,var(--paper-line),#839ca5 22%);border-radius:9px;background:linear-gradient(#a9cee0 0 55%,#d7e1c6 55% 100%);box-shadow:inset 0 0 26px rgba(255,255,255,.32)}
+    .md-image::before{content:"";position:absolute;right:-8%;bottom:32%;left:-7%;height:55%;background:linear-gradient(135deg,#8eb29e,#597f70);clip-path:polygon(0 80%,16% 48%,27% 65%,45% 18%,62% 66%,78% 39%,100% 76%,100% 100%,0 100%)}
+    .md-image::after{content:"";position:absolute;right:-8%;bottom:-26%;left:18%;height:62%;border-radius:50% 0 0 0;background:linear-gradient(160deg,rgba(255,255,255,.86),#8ebed0 43%,#5d91a8);transform:rotate(-5deg)}
+    .md-image .md-sun{position:absolute;z-index:1;top:18px;right:45px;width:22px;height:22px;border-radius:50%;background:#f0cf83;box-shadow:0 0 0 7px rgba(255,230,165,.18)}
+    .md-image .md-bank{position:absolute;z-index:2;right:-5%;bottom:-12px;left:-5%;height:52px;background:#708b61;clip-path:polygon(0 42%,17% 26%,34% 53%,55% 22%,75% 48%,100% 18%,100% 100%,0 100%)}
+    .md-image-caption{display:flex;justify-content:space-between;margin-top:-10px;color:var(--paper-weak);font-size:10px}
+    .md-mode-explain{width:min(590px,100%);margin:18px auto 0;color:rgba(255,255,255,.62);font-size:.78rem;line-height:1.7;text-align:center}
+    .md-mode-explain span{display:none}
+    #md-off:checked~.md-mode-explain .explain-off,
+    #md-basic:checked~.md-mode-explain .explain-basic,
+    #md-enhanced:checked~.md-mode-explain .explain-enhanced{display:inline}
+
+    /* script */
+    .script-section{padding:0;border-top:1px solid #292621}
+    .script-layout{display:grid;grid-template-columns:.82fr 1.18fr}
+    .script-copy{display:flex;flex-direction:column;justify-content:center;padding:88px clamp(52px,7vw,120px)}
+    .script-copy h2{margin:20px 0 0;font-size:clamp(2.9rem,4.7vw,5.2rem);line-height:.98;letter-spacing:-.065em}
+    .script-copy p:not(.kicker){margin:30px 0 0;color:var(--muted);line-height:1.85}
+    .script-scene-wrap{min-height:680px;padding:48px;background:#222521}
+    .script-scene{position:relative;height:100%;min-height:576px;overflow:hidden;background:linear-gradient(145deg,#b8d1e0,#8fb5cb 65%,#739cb6);border:1px solid rgba(255,255,255,.22)}
+    .script-toggle{position:absolute;width:1px;height:1px;opacity:0}
+    .script-scene::before{left:-28%;bottom:-45%;width:72%;height:82%;border:46px solid rgba(7,82,200,.46);transform:rotate(24deg)}
+    .browser-window{position:absolute;z-index:2;top:3%;bottom:3%;left:6%;width:58%;overflow:hidden;border:1px solid #b6c0c8;border-radius:12px;background:#fff;box-shadow:0 18px 40px rgba(27,45,54,.25)}
+    .browser-tabs{display:flex;height:68px;flex-direction:column;color:#4b5258;background:#e7edf2}
+    .browser-tab{display:flex;height:32px;align-items:center;gap:8px;padding:0 14px;background:#f7f9fb;border-radius:10px 10px 0 0;font-size:10px}
+    .browser-address{display:flex;height:36px;align-items:center;gap:9px;padding:0 12px;background:#fff;font-size:10px}
+    .address-pill{display:flex;height:24px;flex:1;align-items:center;padding:0 10px;border-radius:12px;background:#edf2f7;color:#5f6871}
+    .browser-content{position:absolute;inset:68px 0 0;display:grid;place-items:center;color:#65707a;background:#fff;font-size:11px}
+    .browser-after{display:none}
+    #run-script:checked~.browser-window .browser-before{display:none}
+    #run-script:checked~.browser-window .browser-after{display:inline}
+    .browser-result{position:absolute;inset:0;display:grid;visibility:hidden;place-items:center;background:#f0f0f2;opacity:0;pointer-events:none;transition:opacity .24s,visibility 0s linear .24s}
+    .browser-result div{max-width:260px;padding:28px;text-align:left}
+    .browser-result strong{display:block;color:#1f1f1f;font:700 24px/1.1 Georgia,serif}
+    .browser-result p{margin:14px 0 10px;color:#333;font:11px/1.55 Arial,sans-serif}
+    .browser-result a{color:#38488f;font:10.5px Arial,sans-serif;text-decoration:underline}
+    #run-script:checked~.browser-window .browser-result{visibility:visible;opacity:1;pointer-events:auto;transition-delay:0s}
+    .script-paper{z-index:4;right:1%;bottom:1%;width:40%;height:auto;aspect-ratio:320/360;--paper:#fff9ea;--bar:#f9f2e1;--paper-line:#e0cea7;--paper-text:#33291e;--paper-weak:#8a7a63;--paper-active:#8c7350;--paper-code:#f7edd2;--paper-quote:#d4be92;--paper-link:#b06242;--paper-check:#b4a078}
+    .script-paper .note-copy{font-size:12px}
+    .script-paper .command{font-size:13px}
+    .script-paper .comment{color:#b8ab92;font-size:16px;font-weight:700}
+    .script-pill{position:absolute;z-index:7;right:0;top:44%;display:flex;width:max-content;height:30px;align-items:center;gap:7px;padding:0 7px;border:1px solid #c5ac81;border-right:0;border-radius:12px 0 0 12px;color:#4b3b2d;background:#fff9ea;box-shadow:0 2px 12px rgba(40,46,46,.22);font:11px var(--ui);cursor:pointer;transition:border-color 160ms,box-shadow 160ms}
+    .script-pill span{color:#aa5b43;font-size:15px}
+    .script-pill:hover,#run-script:checked~.script-pill{border-color:#b06242;box-shadow:0 0 0 2px rgba(255,249,234,.28),0 4px 16px rgba(40,46,46,.25)}
+    #run-script:focus-visible~.script-pill{outline:2px solid #fff;outline-offset:3px}
+    .script-cursor{position:absolute;z-index:10;top:68%;right:16%;width:18px;height:24px;background:#fff;clip-path:polygon(0 0,0 78%,25% 60%,42% 100%,58% 92%,41% 57%,72% 55%);filter:drop-shadow(0 1px 2px rgba(0,0,0,.72));animation:script-cursor-hint 5s ease-in-out infinite;pointer-events:none}
+
+    /* boundary, faq */
+    .boundary{display:grid;grid-template-columns:.8fr 1.2fr;gap:90px;padding:112px 0}
+    .boundary h2{max-width:540px;margin:20px 0 0;font-size:clamp(3.1rem,5vw,5.7rem);line-height:.98;letter-spacing:-.065em}
+    .boundary>p{align-self:end;margin:0;color:var(--muted);font-size:1.03rem;line-height:1.9}
+    .faq-section{padding:104px 0;border-top:1px solid #292621}
+    .faq-grid{display:grid;grid-template-columns:.72fr 1.28fr;gap:80px}
+    .faq-grid h2{margin:20px 0 0;font-size:clamp(3rem,4.7vw,5rem);line-height:1;letter-spacing:-.06em}
+    .faq-list{border-top:1px solid #292621}
+    details{border-bottom:1px solid var(--line)}
+    summary{display:flex;min-height:78px;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;font-weight:650}
+    summary::-webkit-details-marker{display:none}
+    summary::after{content:"＋";color:var(--accent);font-size:1rem;transition:transform .2s}
+    details[open] summary::after{transform:rotate(45deg)}
+    details p{margin:-4px 48px 22px 0;color:var(--muted);font-size:.9rem;line-height:1.75}
+
+    /* download */
+    .download{position:relative;overflow:hidden;color:#f7efe1;background:#222521}
+    .download::after{content:"";position:absolute;right:-10%;bottom:-45%;width:56%;aspect-ratio:1;border:1px solid rgba(255,255,255,.13);border-radius:50%;box-shadow:0 0 0 72px rgba(255,255,255,.025),0 0 0 144px rgba(255,255,255,.018)}
+    .download-inner{position:relative;z-index:2;max-width:830px;padding:112px 0 124px}
+    .download .kicker{color:#d78b70}
+    .download h2{margin:24px 0 0;font-size:clamp(4rem,7.2vw,8rem);line-height:.9;letter-spacing:-.075em}
+    .download h2 span{display:block}
+    .download p:not(.kicker){max-width:590px;margin:34px 0 0;color:rgba(247,239,225,.58);line-height:1.85}
+    .download-actions{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:center;margin-top:42px}
+    .download-actions .primary-btn{background:#c26f51;border-color:#c26f51}
+    .download-actions>a:not(.primary-btn){padding:9px 0;border-bottom:1px solid rgba(255,255,255,.28);color:rgba(255,255,255,.77);font-size:.88rem}
+    footer{color:#7a746a;background:#222521;border-top:1px solid rgba(255,255,255,.1)}
+    .footer-inner{display:flex;min-height:88px;align-items:center;justify-content:space-between;gap:24px;color:rgba(247,239,225,.46);font-size:.78rem}
+    .footer-links{display:flex;gap:24px}
+    .footer-links a:hover{color:#fff}
+
+    /* language */
+    [data-zh],[data-en]{display:none}
+    body[data-lang="zh"] [data-zh]{display:revert}
+    body[data-lang="en"] [data-en]{display:revert}
+    body[data-lang="zh"] span[data-zh]{display:inline}
+    body[data-lang="en"] span[data-en]{display:inline}
+
+    /* motion */
+    @keyframes script-cursor-hint{0%,42%,100%{opacity:.3;transform:translate(0,0)}58%,78%{opacity:.9;transform:translate(30px,-135px)}}
+
+    /* responsive */
+    @media(max-width:1080px){
+      .wrap{width:min(100% - 48px,1280px)}
+      .hero{grid-template-columns:1fr}
+      .hero-copy{min-height:640px;padding:84px max(34px,7vw)}
+      .hero-product{min-height:720px}
+      .capsule-layout,.script-layout{grid-template-columns:1fr}
+      .capsule-copy{order:-1;padding:96px max(34px,8vw)}
+      .capsule-visual,.script-scene-wrap{min-height:680px}
+      .work-head,.boundary,.faq-grid{grid-template-columns:1fr;gap:34px}
+      .work-head>div:last-child{grid-column:1}
+      .boundary>p{max-width:720px}
+    }
+    @media(max-width:760px){
+      .wrap{width:calc(100% - 38px)}
+      .nav-inner{min-height:64px}
+      .nav-links{gap:14px}
+      .nav-links a:not(.github-link){display:none}
+      .hero{min-height:auto}
+      .hero-copy{min-height:auto;padding:78px 20px 72px}
+      .hero h1{font-size:clamp(3.25rem,15vw,5rem)}
+      .hero h1 span{white-space:normal}
+      .hero-lead{font-size:.96rem}
+      .hero-facts{gap:8px 16px}
+      .hero-facts li+li::before{display:none}
+      .hero-product{min-height:560px}
+      .hero-todo{top:8%;left:7%;width:62%;height:auto}
+      .hero-note{bottom:7%;left:31%;width:62%;height:auto}
+      .palette-head{right:18px;bottom:17px;left:18px}
+      .work-section{padding:92px 0}
+      .capsule-copy{padding:80px 20px}
+      .capsule-visual,.script-scene-wrap{min-height:540px;padding:20px}
+      .capsule-scene{min-height:500px}
+      .capsule-paper{right:104px;width:min(230px,55%);height:280px}
+      #capsule-demo-toggle:checked~.capsule-paper{top:33%;right:0;width:88px;height:30px}
+      .capsule-action{bottom:12px;left:12px;min-height:42px;padding:0 13px;font-size:.62rem}
+      .capsule-state-readout{top:14px;left:14px}
+      .markdown-stage{margin-top:48px;padding:20px 14px 24px}
+      .md-mode-switch{gap:3px;margin-bottom:14px;padding:4px}
+      .md-mode-switch label{min-height:38px;gap:4px;font-size:.56rem;letter-spacing:.03em}
+      .md-paper{width:100%;height:590px}
+      .md-copy{padding:14px 16px 34px;font-size:11.5px}
+      .md-image{height:132px}
+      .script-copy{padding:82px 20px}
+      .script-scene{min-height:500px}
+      .browser-window{top:7%;bottom:14%;left:4%;width:66%}
+      .script-paper{right:-8%;bottom:4%;width:64%;height:auto}
+      .boundary,.faq-section{padding:90px 0}
+      .download-inner{padding:104px 0 112px}
+      .download h2{font-size:clamp(3.7rem,16vw,5.4rem)}
+      .footer-inner{align-items:flex-start;flex-direction:column;justify-content:center;padding:24px 0}
+    }
+    @media(prefers-reduced-motion:reduce){
+      html{scroll-behavior:auto}
+      *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+      .script-cursor{display:none}
+    }
+  </style>
+</head>
+<body data-lang="zh">
+  <header class="nav">
+    <div class="nav-inner wrap">
+      <a class="brand" href="#top" aria-label="PaperTodo home">PaperTodo<span class="brand-dot" aria-hidden="true"></span></a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#capsules"><span data-zh>胶囊</span><span data-en>Capsules</span></a>
+        <a href="#markdown">Markdown</a>
+        <a href="#script"><span data-zh>脚本</span><span data-en>Scripts</span></a>
+        <a href="#download"><span data-zh>下载</span><span data-en>Download</span></a>
+        <a class="github-link" href="https://github.com/snownico0722/PaperTodo" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.06.79 2.14v3.17c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg><span>GitHub</span></a>
+        <button class="lang-btn" id="langToggle" type="button" aria-label="Switch language">EN</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="kicker" data-zh>原生 Windows 桌面纸片</p>
+        <p class="kicker" data-en>Native Windows desktop papers</p>
+        <h1 id="hero-title" data-zh><span>桌面上几张</span><span>安静、可用的纸</span></h1>
+        <h1 id="hero-title-en" data-en><span>A few quiet,</span><span>useful papers.</span></h1>
+        <p class="hero-lead" data-zh>没有主窗口，只有独立纸片。想法出现时直接写在桌面；完成后顺手勾掉；暂时不用时，折成胶囊贴到屏幕边缘。</p>
+        <p class="hero-lead" data-en>No main window—only independent papers. Write on the desktop, check work off, then fold a paper to the screen edge when it can step aside.</p>
+        <div class="hero-actions">
+          <a class="primary-btn" href="https://github.com/snownico0722/PaperTodo/releases/latest" target="_blank" rel="noreferrer"><span data-zh>下载最新版</span><span data-en>Download latest</span></a>
+          <a class="text-btn" href="https://github.com/snownico0722/PaperTodo" target="_blank" rel="noreferrer"><span data-zh>查看源代码</span><span data-en>View source</span><span>→</span></a>
+        </div>
+        <ul class="hero-facts" aria-label="Product facts">
+          <li>Windows 10 / 11</li>
+          <li data-zh>免费开源</li><li data-en>Free &amp; open source</li>
+          <li data-zh>本地保存</li><li data-en>Local-only</li>
+          <li data-zh>绿色免安装</li><li data-en>Portable</li>
+        </ul>
+      </div>
+
+      <div class="hero-product">
+        <input class="palette-input" type="radio" name="palette" id="palette-warm" aria-label="暖纸 / Warm" checked>
+        <input class="palette-input" type="radio" name="palette" id="palette-ink" aria-label="墨 / Ink">
+        <input class="palette-input" type="radio" name="palette" id="palette-forest" aria-label="林 / Forest">
+        <input class="palette-input" type="radio" name="palette" id="palette-rosy" aria-label="霞 / Rose">
+        <input class="palette-input" type="checkbox" id="theme-dark" aria-label="切换深色主题 / Toggle dark theme">
+        <input class="hero-master-toggle" type="checkbox" id="hero-master-toggle" aria-label="收起或展开全部边缘胶囊 / Collapse or expand all edge capsules">
+        <input class="hero-edge-toggle" type="checkbox" id="hero-todo-pill-toggle" aria-label="收起或展开今日待办纸片 / Collapse or expand Today paper">
+        <input class="hero-edge-toggle" type="checkbox" id="hero-script-pill-toggle" aria-label="收起或展开快速开网页纸片 / Collapse or expand Open website paper">
+        <div class="palette-head">
+          <span data-zh>选择实机配色</span><span data-en>Choose a real palette</span>
+          <div class="palette-controls" role="group" aria-label="Paper palette">
+            <label for="palette-warm" title="Warm paper"></label>
+            <label for="palette-ink" title="Ink"></label>
+            <label for="palette-forest" title="Forest"></label>
+            <label for="palette-rosy" title="Rosy"></label>
+            <label class="theme-control" for="theme-dark" title="Light / dark"></label>
+          </div>
+        </div>
+        <div class="desktop-stage" role="group" aria-label="PaperTodo 待办、笔记与贴边胶囊的 CSS 实机复刻">
+          <div class="desktop-grid" aria-hidden="true"></div>
+          <div class="app-paper hero-todo">
+            <div class="paper-bar"><div class="paper-name"><span class="paper-pin"></span><strong data-zh>今日待办</strong><strong data-en>Today</strong></div><div class="paper-tools"><span>＋✓</span><span>＋✎</span><span>─</span></div></div>
+            <div class="paper-body todo-list">
+              <div class="todo-row done"><span class="checkbox checked"></span><span class="todo-text" data-zh>整理发布说明</span><span class="todo-text" data-en>Polish release notes</span><span class="drag-handle">≡</span></div>
+              <div class="todo-row"><span class="checkbox"></span><span class="todo-text" data-zh>回复产品反馈</span><span class="todo-text" data-en>Reply to feedback</span><span class="drag-handle">≡</span></div>
+              <div class="todo-row"><span class="checkbox"></span><span class="todo-text" data-zh>准备明天的演示</span><span class="todo-text" data-en>Prepare tomorrow's demo</span><span class="drag-handle">≡</span></div>
+              <div class="append-row">＋</div>
+            </div>
+            <span class="resize-grip"></span>
+          </div>
+          <div class="app-paper hero-note">
+            <div class="paper-bar"><div class="paper-name"><span class="paper-pin"></span><strong data-zh>产品想法</strong><strong data-en>Product idea</strong></div><div class="paper-tools"><span>⌖</span><span class="md">MD</span><span>＋✓</span><span>＋✎</span><span>─</span></div></div>
+            <div class="paper-body note-copy">
+              <h4><span class="syntax">#</span> <span data-zh>更安静的桌面</span><span data-en>A quieter desktop</span></h4>
+              <p data-zh>把此刻需要记住的事留在眼前，把其余空间还给工作。</p><p data-en>Keep what matters in sight and give the rest of the desktop back to work.</p>
+              <p class="quote" data-zh>不是管理器，只是一张纸。</p><p class="quote" data-en>Not a manager. Just paper.</p>
+              <code>winget install PaperTodo</code>
+            </div>
+            <span class="resize-grip"></span>
+          </div>
+          <div class="hero-edge-stack">
+            <label class="hero-edge-pill hero-master-pill" for="hero-master-toggle"><span class="expanded-icon">▾</span><span class="collapsed-icon">▸</span><span class="expanded-copy"><b data-zh>收起</b><b data-en>Fold</b></span><span class="collapsed-copy"><b data-zh>2个</b><b data-en>2</b></span></label>
+            <label class="hero-edge-pill hero-edge-child hero-todo-pill" for="hero-todo-pill-toggle" data-testid="hero-todo-pill" title="点击收起或展开对应纸片 / Click to collapse or expand the paper"><span>✓</span><b data-zh>今日待办</b><b data-en>Today</b></label>
+            <label class="hero-edge-pill hero-edge-child hero-script-pill" for="hero-script-pill-toggle" data-testid="hero-script-pill" title="点击收起或展开对应纸片 / Click to collapse or expand the paper"><span>⚡</span><b data-zh>快速开网页</b><b data-en>Open site</b></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="capsule-section" id="capsules" aria-labelledby="capsule-title">
+      <div class="capsule-layout">
+        <div class="capsule-visual">
+          <div class="capsule-scene" role="group" aria-label="将纸片收成边缘胶囊并恢复的交互演示">
+            <input class="capsule-state-input" type="checkbox" id="capsule-demo-toggle" aria-label="收成边缘胶囊或恢复纸片 / Collapse to an edge capsule or restore the paper">
+            <div class="app-paper capsule-paper">
+              <div class="paper-bar"><div class="paper-name"><span class="paper-pin"></span><strong data-zh>今日待办</strong><strong data-en>Today</strong></div><div class="paper-tools"><span>＋✓</span><span>＋✎</span><span>─</span></div></div>
+              <div class="paper-body todo-list">
+                <div class="todo-row done"><span class="checkbox checked"></span><span class="todo-text" data-zh>完成产品文档</span><span class="todo-text" data-en>Finish product docs</span><span class="drag-handle">≡</span></div>
+                <div class="todo-row"><span class="checkbox"></span><span class="todo-text" data-zh>整理反馈</span><span class="todo-text" data-en>Triage feedback</span><span class="drag-handle">≡</span></div>
+                <div class="todo-row"><span class="checkbox"></span><span class="todo-text" data-zh>发布新版本</span><span class="todo-text" data-en>Ship the release</span><span class="drag-handle">≡</span></div>
+                <div class="append-row">＋</div>
+              </div>
+            </div>
+            <div class="screen-edge"><span data-zh>屏幕边缘</span><span data-en>SCREEN EDGE</span></div>
+            <div class="edge-pill master-pill"><span class="pill-icon">▾</span><b data-zh>收起</b><b data-en>Fold</b></div>
+            <div class="edge-pill pill-one"><span class="pill-icon">✓</span><b data-zh>研究计划</b><b data-en>Research</b></div>
+            <div class="edge-pill pill-two"><span class="pill-icon">✎</span><b data-zh>灵感记录</b><b data-en>Ideas</b></div>
+            <label class="edge-pill pill-current" for="capsule-demo-toggle" title="点击恢复纸片 / Click to restore the paper"><span class="pill-icon">✓</span><b data-zh>今日待办</b><b data-en>Today</b></label>
+            <div class="capsule-state-readout" aria-live="polite"><span class="state-paper"><b>●</b> · <span data-zh>纸片留在桌面</span><span data-en>Paper on desktop</span></span><span class="state-capsule"><b>●</b> · <span data-zh>已收成边缘胶囊</span><span data-en>Docked as a capsule</span></span></div>
+            <label class="capsule-action" for="capsule-demo-toggle"><span class="action-collapse"><b>→</b><span data-zh>收成边缘胶囊</span><span data-en>Collapse to edge</span></span><span class="action-restore"><b>↙</b><span data-zh>恢复纸片</span><span data-en>Restore paper</span></span></label>
+          </div>
+        </div>
+        <div class="capsule-copy">
+          <p class="kicker">02 / <span data-zh>边缘胶囊</span><span data-en>Edge capsules</span></p>
+          <h2 id="capsule-title" data-zh><span>用得上时是纸，</span><span>用不上时是胶囊。</span></h2>
+          <h2 id="capsule-title-en" data-en><span>Paper when needed.</span><span>A capsule when not.</span></h2>
+          <p data-zh>胶囊不是一张伪装的预览卡片，而是纸片真正缩成的轻量窗口。它自动加入屏幕边缘队列，平时只露出一小段；鼠标靠近时滑出，点击恢复完整纸片。</p>
+          <p data-en>A capsule is not a preview card. It is the paper itself reduced to a lightweight window, queued at the screen edge, sliding out on hover and restoring on click.</p>
+          <ul class="feature-lines">
+            <li><b>01</b><span data-zh>一键让出桌面，需要时点击即回到原位</span><span data-en>Clear the desktop in one click, then restore in place</span></li>
+            <li><b>02</b><span data-zh>每个屏幕、左右两侧都有独立队列</span><span data-en>Independent left/right queues on every display</span></li>
+            <li><b>03</b><span data-zh>拖动胶囊即可换边、换屏、重新排序</span><span data-en>Drag to change side, display, or queue order</span></li>
+            <li><b>04</b><span data-zh>全屏游戏或演示时自动避让</span><span data-en>Steps aside for fullscreen work</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="work-section wrap" id="markdown" aria-labelledby="markdown-title">
+      <div class="work-head">
+        <p class="kicker">03 / Markdown</p>
+        <div><h2 class="section-title" id="markdown-title" data-zh>同一份纯文本，<br>三档阅读视图。</h2><h2 class="section-title" id="markdown-title-en" data-en>One plain-text note.<br>Three reading views.</h2><p class="section-lead" data-zh>PaperTodo 不把笔记做成复杂块编辑器。文本始终是普通文本，只按需要从原文、基础高亮走到增强渲染。</p><p class="section-lead" data-en>PaperTodo never turns notes into a complex block editor. The content remains plain text, with three increasingly quiet render levels.</p></div>
+      </div>
+      <div class="markdown-stage">
+        <input class="md-mode-input" type="radio" name="md-mode" id="md-off" aria-label="Markdown 原文模式 / Source mode">
+        <input class="md-mode-input" type="radio" name="md-mode" id="md-basic" aria-label="Markdown 基础模式 / Basic mode" checked>
+        <input class="md-mode-input" type="radio" name="md-mode" id="md-enhanced" aria-label="Markdown 增强模式 / Enhanced mode">
+        <div class="md-mode-switch" role="group" aria-label="Markdown 渲染档位 / Markdown render level">
+          <label for="md-off"><span>01</span><b data-zh>原文</b><b data-en>SOURCE</b></label>
+          <label for="md-basic"><span>02</span><b data-zh>基础</b><b data-en>BASIC</b></label>
+          <label for="md-enhanced"><span>03</span><b data-zh>增强</b><b data-en>ENHANCED</b></label>
+        </div>
+        <div class="md-canvas">
+          <div class="app-paper md-paper">
+            <div class="paper-bar"><div class="paper-name"><span class="paper-pin"></span><strong data-zh>笔记1</strong><strong data-en>Note 1</strong></div><div class="paper-tools"><span>⌖</span><span class="md">MD</span><span>＋✓</span><span>＋✎</span><span>─</span></div></div>
+            <div class="paper-body md-copy">
+              <div class="md-view md-view-off">
+                <p class="md-h"># <span data-zh>这周要推进的事</span><span data-en>What to move forward this week</span></p>
+                <p data-zh>把 **重要内容** 放在桌面上，需要时再打开完整笔记。</p><p data-en>Keep **important content** on the desktop and open the full note only when needed.</p>
+                <p>![<span data-zh>河岸与远山</span><span data-en>Riverbank and distant hills</span>](i:24072001)</p>
+                <p class="subhead">## <span data-zh>发布清单</span><span data-en>Release checklist</span></p>
+                <p>- [x] <span data-zh>整理界面细节</span><span data-en>Polish interface details</span><br>- [ ] <span data-zh>验证图片迁移</span><span data-en>Verify image migration</span><br>- [ ] <span data-zh>发布 3.0</span><span data-en>Ship 3.0</span></p>
+                <p>&gt; <span data-zh>图片与文本一起保存在本地。</span><span data-en>Images and text stay together locally.</span></p>
+                <p>```powershell<br>winget install PaperTodo<br>```</p>
+              </div>
+              <div class="md-view md-view-basic">
+                <p class="md-h"><span class="basic-syntax">#</span> <span data-zh>这周要推进的事</span><span data-en>What to move forward this week</span></p>
+                <p data-zh>把 <span class="basic-syntax">**</span><span class="strong">重要内容</span><span class="basic-syntax">**</span> 放在桌面上，需要时再打开完整笔记。</p><p data-en>Keep <span class="basic-syntax">**</span><span class="strong">important content</span><span class="basic-syntax">**</span> on the desktop and open the full note only when needed.</p>
+                <div class="md-image" role="img" aria-label="CSS 绘制的河岸、河流与远山插图"><span class="md-sun"></span><span class="md-bank"></span></div>
+                <p class="md-image-caption"><span data-zh>河岸与远山</span><span data-en>Riverbank and distant hills</span><span>i:24072001</span></p>
+                <p class="subhead"><span class="basic-syntax">##</span> <span class="strong" data-zh>发布清单</span><span class="strong" data-en>Release checklist</span></p>
+                <div class="md-list-lines"><p><span class="basic-syntax">-</span> <span data-zh>本地发布任务</span><span data-en>Local release tasks</span></p><p><span class="task-syntax">- [x]</span> <span data-zh>整理界面细节</span><span data-en>Polish interface details</span></p><p><span class="task-syntax">- [ ]</span> <span data-zh>验证图片迁移</span><span data-en>Verify image migration</span></p><p><span class="task-syntax">- [ ]</span> <span data-zh>发布 3.0</span><span data-en>Ship 3.0</span></p></div>
+                <div class="md-rule-row"><span class="basic-syntax">---</span></div>
+                <p class="render-quote"><span class="basic-syntax">&gt;</span> <span data-zh>图片与文本一起保存在本地。</span><span data-en>Images and text stay together locally.</span></p>
+                <p><span class="basic-syntax">```powershell</span><span class="render-code">winget install PaperTodo</span><span class="basic-syntax">```</span></p>
+              </div>
+              <div class="md-view md-view-enhanced">
+                <p class="md-h"><span class="muted-syntax">#</span> <span data-zh>这周要推进的事</span><span data-en>What to move forward this week</span></p>
+                <p data-zh>把 <span class="muted-syntax">**</span><span class="strong">重要内容</span><span class="muted-syntax">**</span> 放在桌面上，需要时再打开完整笔记。</p><p data-en>Keep <span class="muted-syntax">**</span><span class="strong">important content</span><span class="muted-syntax">**</span> on the desktop and open the full note only when needed.</p>
+                <div class="md-image" role="img" aria-label="CSS 绘制的河岸、河流与远山插图"><span class="md-sun"></span><span class="md-bank"></span></div>
+                <p class="md-image-caption"><span data-zh>河岸与远山</span><span data-en>Riverbank and distant hills</span><span>i:24072001</span></p>
+                <p class="subhead"><span class="muted-syntax">##</span> <span class="strong" data-zh>发布清单</span><span class="strong" data-en>Release checklist</span></p>
+                <div class="md-list-lines enhanced-list"><p class="drawn-item"><span data-zh>本地发布任务</span><span data-en>Local release tasks</span></p><p><span class="task-syntax">- [x]</span> <span data-zh>整理界面细节</span><span data-en>Polish interface details</span></p><p><span class="task-syntax">- [ ]</span> <span data-zh>验证图片迁移</span><span data-en>Verify image migration</span></p><p><span class="task-syntax">- [ ]</span> <span data-zh>发布 3.0</span><span data-en>Ship 3.0</span></p></div>
+                <div class="md-rule-row enhanced-rule"><span class="muted-syntax">---</span></div>
+                <p class="render-quote"><span data-zh>图片与文本一起保存在本地。</span><span data-en>Images and text stay together locally.</span></p>
+                <p><span class="muted-syntax">```powershell</span><span class="render-code">winget install PaperTodo</span><span class="muted-syntax">```</span></p>
+              </div>
+            </div><span class="zoom-mark">80%</span>
+          </div>
+        </div>
+        <p class="md-mode-explain"><span class="explain-off"><span data-zh>原文：完整保留 Markdown 字符和图片引用。</span><span data-en>Source: keeps every Markdown character and image reference.</span></span><span class="explain-basic"><span data-zh>基础：应用标题、粗体、引用、代码和图片样式，同时保留语法标记。</span><span data-en>Basic: styles headings, emphasis, quotes, code and images while keeping markers visible.</span></span><span class="explain-enhanced"><span data-zh>增强：沿用基础样式，只弱化语法，并重绘普通列表符号与分隔线。</span><span data-en>Enhanced: keeps the Basic styling, then fades syntax and redraws ordinary list markers and rules.</span></span></p>
+      </div>
+    </section>
+
+    <section class="script-section" id="script" aria-labelledby="script-title">
+      <div class="script-layout">
+        <div class="script-copy">
+          <p class="kicker">04 / <span data-zh>脚本胶囊</span><span data-en>Script capsules</span></p>
+          <h2 id="script-title" data-zh>把重复动作，<br>折成一次点击。</h2><h2 id="script-title-en" data-en>Fold repetition<br>into one click.</h2>
+          <p data-zh>笔记首行写入 <code>!p</code> 或 <code>!pf</code>，后续内容就成为 PowerShell 脚本。折叠后显示闪电胶囊：左键运行，右键回到纸片继续编辑。</p>
+          <p data-en>Start a note with <code>!p</code> or <code>!pf</code> and the rest becomes a PowerShell script. Fold it into a lightning capsule: left-click to run, right-click to edit.</p>
+          <ul class="feature-lines">
+            <li><b>01</b><span data-zh>仍然是普通文本，不制造新的脚本管理器</span><span data-en>Still plain text, not another script manager</span></li>
+            <li><b>02</b><span data-zh>可选择 PowerShell 7 与常驻进程</span><span data-en>PowerShell 7 and persistent process options</span></li>
+            <li><b>03</b><span data-zh>可与待办关联，从任务行直接执行</span><span data-en>Link to a todo and run from its task row</span></li>
+          </ul>
+        </div>
+        <div class="script-scene-wrap">
+          <div class="script-scene" role="group" aria-label="CSS demo of a PaperTodo PowerShell capsule opening a website">
+            <input class="script-toggle" type="checkbox" id="run-script" aria-label="运行脚本胶囊 / Run script capsule">
+            <div class="browser-window">
+              <div class="browser-tabs"><div class="browser-tab"><span>●</span><b><span class="browser-before">about:blank</span><span class="browser-after">Example Domain</span></b><span>×</span></div><div class="browser-address"><span>←</span><span>↻</span><span class="address-pill"><span class="browser-before">about:blank</span><span class="browser-after">https://example.com</span></span><span>☆</span></div></div>
+              <div class="browser-content"><span data-zh>点击右侧闪电胶囊运行脚本</span><span data-en>Click the lightning capsule to run</span><div class="browser-result"><div><strong>Example Domain</strong><p>This domain is for use in illustrative examples in documents.</p><a href="https://www.iana.org/help/example-domains" target="_blank" rel="noreferrer">More information...</a></div></div></div>
+            </div>
+            <div class="app-paper script-paper">
+              <div class="paper-bar"><div class="paper-name"><span class="paper-pin"></span><strong data-zh>快速开网页</strong><strong data-en>Open website</strong></div><div class="paper-tools"><span>⌖</span><span class="md">MD</span><span>＋✓</span><span>＋✎</span><span>─</span></div></div>
+              <div class="paper-body note-copy"><p class="command">!pf</p><p><span class="comment">#</span> <strong data-zh>定义要访问的网址</strong><strong data-en>Target URL</strong><br>$url = &quot;https://example.com&quot;</p><p><span class="comment">#</span> <strong data-zh>使用 Start-Process 打开网页</strong><strong data-en>Open in browser</strong><br>Start-Process $url</p></div>
+            </div>
+            <label class="script-pill" for="run-script"><span>⚡</span><b data-zh>快速开网页</b><b data-en>Open website</b></label>
+            <div class="script-cursor"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="boundary wrap">
+      <div><p class="kicker" data-zh>有意保持简单</p><p class="kicker" data-en>Intentionally simple</p><h2 data-zh>它不想管理你的生活。</h2><h2 data-en>It does not want to manage your life.</h2></div>
+      <p data-zh>没有分类、标签、项目树、统计、提醒或日历。PaperTodo 只处理桌面上此刻需要看见的内容。需要团队协作和完整知识库时，请使用更适合的工具。</p>
+      <p data-en>No categories, tags, project trees, statistics, reminders, or calendars. PaperTodo handles only what deserves a place on your desktop right now.</p>
+    </section>
+
+    <section class="faq-section" id="faq">
+      <div class="faq-grid wrap">
+        <div><p class="kicker">Q / A</p><h2 data-zh>常见问题</h2><h2 data-en>Common questions</h2></div>
+        <div class="faq-list">
+          <details><summary><span data-zh>免费吗？需要联网吗？</span><span data-en>Is it free? Does it need internet?</span></summary><p data-zh>完全免费并开源。日常使用不需要联网，也不需要注册账号。</p><p data-en>It is completely free and open source. Daily use requires neither internet nor an account.</p></details>
+          <details><summary><span data-zh>支持哪些 Windows 版本？</span><span data-en>Which Windows versions are supported?</span></summary><p data-zh>支持 Windows 10 与 Windows 11 x64。自包含版本无需另装 .NET。</p><p data-en>Windows 10 and Windows 11 x64. The self-contained build needs no separate .NET installation.</p></details>
+          <details><summary><span data-zh>数据如何备份和迁移？</span><span data-en>How do I back up or move my data?</span></summary><p data-zh>退出 PaperTodo 后复制整个程序文件夹即可；纸片、设置和笔记图片会一起带走。</p><p data-en>Exit PaperTodo and copy the whole app folder. Papers, settings, and note images move together.</p></details>
+          <details><summary><span data-zh>为什么首次运行会出现 SmartScreen？</span><span data-en>Why does SmartScreen appear the first time?</span></summary><p data-zh>项目暂未购买商业代码签名证书。选择“更多信息 → 仍要运行”即可，每台电脑通常只需确认一次。</p><p data-en>The project does not yet use a commercial code-signing certificate. Choose “More info → Run anyway.”</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="download" id="download">
+      <div class="download-inner wrap">
+        <p class="kicker">05 / <span data-zh>下载</span><span data-en>Download</span></p>
+        <h2 data-zh><span>把几张纸，</span><span>放回你的桌面。</span></h2><h2 data-en><span>Put a few papers</span><span>back on your desktop.</span></h2>
+        <p data-zh>Windows x64 单文件应用，绿色免安装。下载后放进任意可写文件夹即可运行。</p><p data-en>A portable single-file Windows x64 app. Download it, place it in any writable folder, and run.</p>
+        <div class="download-actions">
+          <a class="primary-btn" href="https://github.com/snownico0722/PaperTodo/releases/latest" target="_blank" rel="noreferrer"><span data-zh>下载最新版</span><span data-en>Download latest</span></a>
+          <a href="https://github.com/snownico0722/PaperTodo/releases" target="_blank" rel="noreferrer"><span data-zh>查看全部版本 ↗</span><span data-en>All releases ↗</span></a>
+          <a href="https://github.com/snownico0722/PaperTodo/blob/main/README.md" target="_blank" rel="noreferrer"><span data-zh>阅读完整文档 ↗</span><span data-en>Full documentation ↗</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner wrap"><div><strong>PaperTodo</strong> · <span data-zh>桌面上的几张纸</span><span data-en>A few papers on your desktop</span></div><div class="footer-links"><a href="https://github.com/snownico0722/PaperTodo" target="_blank" rel="noreferrer">GitHub</a><a href="https://github.com/snownico0722/PaperTodo/releases" target="_blank" rel="noreferrer">Releases</a><span>© 2026</span></div></div>
+  </footer>
+
+  <script>
+    (function(){
+      var body=document.body;
+      var button=document.getElementById('langToggle');
+      var labelledSections=[
+        ['.hero','hero-title','hero-title-en'],
+        ['#capsules','capsule-title','capsule-title-en'],
+        ['#markdown','markdown-title','markdown-title-en'],
+        ['#script','script-title','script-title-en']
+      ];
+      var query=new URLSearchParams(location.search).get('lang');
+      var stored='';
+      try{stored=localStorage.getItem('papertodo-lang')||''}catch(e){}
+      var initial=query==='en'||query==='zh'?query:(stored==='en'?'en':'zh');
+      function setLang(lang){
+        body.dataset.lang=lang;
+        document.documentElement.lang=lang==='zh'?'zh-CN':'en';
+        button.textContent=lang==='zh'?'EN':'中';
+        button.setAttribute('aria-label',lang==='zh'?'切换到英文':'Switch to Chinese');
+        labelledSections.forEach(function(item){
+          var section=document.querySelector(item[0]);
+          if(section)section.setAttribute('aria-labelledby',lang==='zh'?item[1]:item[2]);
+        });
+        document.querySelector('.desktop-stage').setAttribute('aria-label',lang==='zh'?'PaperTodo 待办、笔记与贴边胶囊的 CSS 实机复刻':'CSS recreation of PaperTodo papers and edge capsules');
+        document.querySelector('.capsule-scene').setAttribute('aria-label',lang==='zh'?'将纸片收成边缘胶囊并恢复的交互演示':'Interactive demo of collapsing a paper to the edge and restoring it');
+        document.querySelector('.script-scene').setAttribute('aria-label',lang==='zh'?'点击闪电胶囊运行脚本并打开网页':'Run a script capsule to open a web page');
+        document.title=lang==='zh'
+          ?'PaperTodo - Windows 桌面便签、待办与 Markdown 笔记'
+          :'PaperTodo - Desktop sticky notes, todos and Markdown for Windows';
+        try{localStorage.setItem('papertodo-lang',lang)}catch(e){}
+      }
+      setLang(initial);
+      button.addEventListener('click',function(){setLang(body.dataset.lang==='zh'?'en':'zh')});
+    }());
+  </script>
+</body>
+</html>
