@@ -147,7 +147,7 @@ public static class AnimationHelper
         var from = (double)target.GetValue(property);
         var animatable = (IAnimatable)target;
         animatable.BeginAnimation(property, null);
-        target.SetCurrentValue(property, value);
+        target.SetValue(property, value);
 
         var animation = new DoubleAnimation(from, value, TimeSpan.FromMilliseconds(duration))
         {
