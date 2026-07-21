@@ -15,11 +15,8 @@ internal static class WindowNative
     private const int WsExTopmost = 0x00000008;
     private const int WsExToolWindow = 0x00000080;
     private const int WsExAppWindow = 0x00040000;
-    private const int WmCancelMode = 0x001F;
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;
-    private const uint ModNoRepeat = 0x4000;
-    private const uint VkEscape = 0x1B;
     private static readonly IntPtr DpiAwarenessContextSystemAware = new(-2);
     private static readonly IntPtr HwndTop = IntPtr.Zero;
     private static readonly IntPtr HwndTopmost = new(-1);
@@ -504,103 +501,6 @@ internal static class WindowNative
         return true;
     }
 
-    // The system move loop consumes mouse messages before WPF sees them. Observe the current UI
-    // thread's loop directly so a real left-button release, rather than incidental capture-change
-    // messages, is the authoritative signal that a detached drag completed normally.
-    public static CaptionDragInputMonitor WatchCurrentThreadCaptionDragInput() => new();
-
-    // The floating capsule is WS_EX_NOACTIVATE, so Escape may belong to another app's keyboard
-    // thread and never reach this HWND as WM_KEYDOWN. Register it only for the duration of the
-    // native move; WM_HOTKEY remains focus-independent without polling global button state.
-    public static bool TryRegisterCaptionDragEscapeHotKey(Window window, int hotKeyId)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        return handle != IntPtr.Zero &&
-            RegisterHotKey(handle, hotKeyId, ModNoRepeat, VkEscape);
-    }
-
-    public static void UnregisterCaptionDragEscapeHotKey(Window window, int hotKeyId)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        if (handle != IntPtr.Zero)
-        {
-            _ = UnregisterHotKey(handle, hotKeyId);
-        }
-    }
-
-    // Posting avoids re-entering the native move loop while its WM_HOTKEY handler is on-stack.
-    public static bool TryCancelWindowCaptionDrag(IntPtr handle) =>
-        handle != IntPtr.Zero &&
-        PostMessage(handle, WmCancelMode, IntPtr.Zero, IntPtr.Zero);
-
-    internal sealed class CaptionDragInputMonitor : IDisposable
-    {
-        private const int WhMouse = 7;
-        private const int WmNcLButtonUp = 0x00A2;
-        private const int WmLButtonUp = 0x0202;
-
-        private readonly MouseHookProc _mouseHookProc;
-        private IntPtr _mouseHook;
-
-        public CaptionDragInputMonitor()
-        {
-            _mouseHookProc = OnMouseMessage;
-            _mouseHook = SetWindowsHookEx(
-                WhMouse,
-                _mouseHookProc,
-                IntPtr.Zero,
-                GetCurrentThreadId());
-        }
-
-        public bool CanObserveLeftButtonRelease => _mouseHook != IntPtr.Zero;
-        public bool LeftButtonReleased { get; private set; }
-
-        private IntPtr OnMouseMessage(int code, IntPtr wParam, IntPtr lParam)
-        {
-            if (code >= 0 &&
-                (wParam.ToInt32() == WmLButtonUp ||
-                    wParam.ToInt32() == WmNcLButtonUp))
-            {
-                LeftButtonReleased = true;
-            }
-
-            return CallNextHookEx(_mouseHook, code, wParam, lParam);
-        }
-
-        public void Dispose()
-        {
-            var hook = _mouseHook;
-            _mouseHook = IntPtr.Zero;
-            if (hook != IntPtr.Zero)
-            {
-                _ = UnhookWindowsHookEx(hook);
-            }
-            GC.KeepAlive(_mouseHookProc);
-        }
-
-        private delegate IntPtr MouseHookProc(int code, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern IntPtr SetWindowsHookEx(
-            int idHook,
-            MouseHookProc hookProc,
-            IntPtr module,
-            uint threadId);
-
-        [DllImport("user32.dll")]
-        private static extern bool UnhookWindowsHookEx(IntPtr hook);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr CallNextHookEx(
-            IntPtr hook,
-            int code,
-            IntPtr wParam,
-            IntPtr lParam);
-
-        [DllImport("kernel32.dll")]
-        private static extern uint GetCurrentThreadId();
-    }
-
     private static IntPtr PackScreenPoint(DeviceScreenPoint point)
     {
         var x = (int)Math.Round(point.X, MidpointRounding.AwayFromZero);
@@ -690,15 +590,6 @@ internal static class WindowNative
 
     [DllImport("user32.dll", EntryPoint = "SendMessageW")]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
-    private static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("user32.dll")]
     private static extern bool IsWindow(IntPtr hWnd);

@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -49,11 +48,6 @@ internal readonly record struct EdgeCapsuleNativeDragOutcome(
 // one-sided tag or any of its edge-specific columns, margins, corners, or width animation state.
 internal sealed class EdgeCapsuleDragWindow : Window
 {
-    private const int WmHotKey = 0x0312;
-    private const int WmEnterSizeMove = 0x0231;
-    private const int WmExitSizeMove = 0x0232;
-    private const int NativeDragEscapeHotKeyId = 0x4543;
-
     private enum DockingHandoffAnimationPhase
     {
         Flight,
@@ -83,9 +77,6 @@ internal sealed class EdgeCapsuleDragWindow : Window
     private bool _dockingPresentationActive;
     private bool _closingByOwner;
     private bool _nativeDragAttemptActive;
-    private bool _nativeDragEntered;
-    private bool _nativeDragExited;
-    private bool _nativeDragEscapePressed;
     private bool _isClosed;
 
     public EdgeCapsuleDragWindow(EdgeCapsuleDragWindowOptions options)
@@ -117,14 +108,7 @@ internal sealed class EdgeCapsuleDragWindow : Window
         (_root, _surface, _outline) = BuildContent(options);
         Content = _root;
 
-        SourceInitialized += (_, _) =>
-        {
-            WindowNative.ApplyNoActivateStyle(this);
-            if (PresentationSource.FromVisual(this) is HwndSource source)
-            {
-                source.AddHook(OnNativeMessage);
-            }
-        };
+        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
     }
 
     public event EventHandler? UnexpectedlyClosed;
@@ -198,58 +182,31 @@ internal sealed class EdgeCapsuleDragWindow : Window
                 this,
                 _widthDip,
                 _heightDip,
-                out var cursorAnchor) ||
-            !WindowNative.TryGetWindowDeviceBounds(this, out var startBounds) ||
-            startBounds.IsEmpty)
+                out var cursorAnchor))
         {
             return new EdgeCapsuleNativeDragOutcome(
                 EdgeCapsuleNativeDragResult.NotStarted,
                 default);
         }
 
-        using var inputMonitor = WindowNative.WatchCurrentThreadCaptionDragInput();
         _nativeDragAttemptActive = true;
-        _nativeDragEntered = false;
-        _nativeDragExited = false;
-        _nativeDragEscapePressed = false;
-        var escapeHotKeyRegistered = false;
         try
         {
-            escapeHotKeyRegistered = WindowNative.TryRegisterCaptionDragEscapeHotKey(
-                this,
-                NativeDragEscapeHotKeyId);
-            if (!WindowNative.TryBeginWindowCaptionDrag(this, cursorAnchor) ||
-                !_nativeDragEntered)
+            // Caption drag is intentional and modal until the left button is released. Escape is not
+            // a product cancel for floating capsule reorder: do not register hotkeys or treat the
+            // system move-loop Escape restore as Abort. When the loop ends for any reason, land at
+            // the live cursor so sorting / cross-queue still commits.
+            //
+            // SendMessage blocks in DefWindowProc's move loop. Do not require ENTERSIZEMOVE /
+            // EXITSIZEMOVE — those are not reliable on layered NOACTIVATE HWNDs.
+            if (!WindowNative.TryBeginWindowCaptionDrag(this, cursorAnchor))
             {
                 return new EdgeCapsuleNativeDragOutcome(
                     EdgeCapsuleNativeDragResult.NotStarted,
                     default);
             }
-            if (!_nativeDragExited ||
-                _nativeDragEscapePressed ||
-                (inputMonitor.CanObserveLeftButtonRelease &&
-                    !inputMonitor.LeftButtonReleased))
-            {
-                return new EdgeCapsuleNativeDragOutcome(
-                    EdgeCapsuleNativeDragResult.Aborted,
-                    default);
-            }
-            if (!WindowNative.TryGetWindowDeviceBounds(this, out var finalBounds) ||
-                finalBounds.IsEmpty ||
-                !WindowNative.TryGetCursorScreenPosition(out var finalCursor))
-            {
-                return new EdgeCapsuleNativeDragOutcome(
-                    EdgeCapsuleNativeDragResult.Aborted,
-                    default);
-            }
 
-            // If the thread hook was unavailable, retain the geometric fallback for native Escape:
-            // Windows restores the start rectangle but leaves the cursor at the cancelled target.
-            // When the hook is active, its mouse-up observation already distinguishes a real
-            // zero-distance release from cancellation without guessing from geometry.
-            if (!inputMonitor.CanObserveLeftButtonRelease &&
-                EdgeCapsuleGeometry.DeviceBoundsMatch(finalBounds, startBounds, tolerance: 2) &&
-                !ContainsDevicePoint(finalBounds, finalCursor, tolerance: 2))
+            if (!WindowNative.TryGetCursorScreenPosition(out var finalCursor))
             {
                 return new EdgeCapsuleNativeDragOutcome(
                     EdgeCapsuleNativeDragResult.Aborted,
@@ -263,53 +220,8 @@ internal sealed class EdgeCapsuleDragWindow : Window
         finally
         {
             _nativeDragAttemptActive = false;
-            if (escapeHotKeyRegistered)
-            {
-                WindowNative.UnregisterCaptionDragEscapeHotKey(
-                    this,
-                    NativeDragEscapeHotKeyId);
-            }
         }
     }
-
-    private IntPtr OnNativeMessage(
-        IntPtr hwnd,
-        int msg,
-        IntPtr wParam,
-        IntPtr lParam,
-        ref bool handled)
-    {
-        if (!_nativeDragAttemptActive)
-        {
-            return IntPtr.Zero;
-        }
-
-        if (msg == WmHotKey && wParam.ToInt32() == NativeDragEscapeHotKeyId)
-        {
-            _nativeDragEscapePressed = true;
-            _ = WindowNative.TryCancelWindowCaptionDrag(hwnd);
-            handled = true;
-        }
-        else if (msg == WmEnterSizeMove)
-        {
-            _nativeDragEntered = true;
-        }
-        else if (_nativeDragEntered && msg == WmExitSizeMove)
-        {
-            _nativeDragExited = true;
-        }
-
-        return IntPtr.Zero;
-    }
-
-    private static bool ContainsDevicePoint(
-        DeviceScreenRect bounds,
-        DeviceScreenPoint point,
-        int tolerance) =>
-        point.X >= bounds.Left - tolerance &&
-        point.X <= bounds.Right + tolerance &&
-        point.Y >= bounds.Top - tolerance &&
-        point.Y <= bounds.Bottom + tolerance;
 
     public void AnimateDockingHandoff(
         DeviceScreenRect dockingAnchorBounds,

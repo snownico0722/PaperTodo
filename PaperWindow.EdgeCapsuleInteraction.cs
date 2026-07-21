@@ -156,9 +156,11 @@ public sealed partial class PaperWindow
         _deepCapsuleFloatingFullscreenAvoidanceWindow = IntPtr.Zero;
         try
         {
+            // No entrance morph on pull-out: the HWND must be ready for caption drag immediately.
+            // A 90ms scale-in here only delays ownership hand-off and reads as sticky detach.
             host.ShowWithEntrance(
                 pointer,
-                _controller.State.EnableAnimations,
+                animate: false,
                 DeepCapsuleCrossQueueDragScaleFrom,
                 DeepCapsuleCrossQueueDragMorphMilliseconds);
             RefreshDeepCapsuleSlotTopmost();
@@ -886,26 +888,25 @@ public sealed partial class PaperWindow
             RefreshDeepCapsuleSlotTopmost();
             Mouse.OverrideCursor = Cursors.SizeAll;
 
-            // The staged docked-content blank and this brand-new layered window's first frame must
-            // reach the screen as one swap. A fresh HWND's first presentation can lag one
-            // composition behind an existing surface's dirty update, which showed as a one-frame
-            // hole between hiding the docked pill and revealing the floating pill. Submit both in
-            // one render pass, then wait for the compositor before the modal move loop starts.
+            // Push one render pass so the docked blank and new floating HWND share a layout tick.
+            // Do not DwmFlush or pump Input here: both freeze this UI thread while the cursor keeps
+            // moving, which feels like a sticky pull-out. A one-frame composition race is cheaper
+            // than a multi-frame hitch before the system move loop owns the pill. Fast release is
+            // handled after SendMessage returns (button already up → Completed at cursor).
             Dispatcher.Invoke(
                 () => { },
                 System.Windows.Threading.DispatcherPriority.Render);
-            WindowNative.FlushDesktopComposition();
-
-            // DwmFlush can span the physical button release. Let queued WPF input run while the
-            // docked content still owns capture, so a fast release completes through the ordinary
-            // PreviewMouseLeftButtonUp path instead of a global button-state query.
-            Dispatcher.Invoke(
-                () => { },
-                System.Windows.Threading.DispatcherPriority.Input);
 
             if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
                 !IsDeepCapsuleFloatingReordering)
             {
+                return;
+            }
+
+            if (Mouse.LeftButton != MouseButtonState.Pressed)
+            {
+                CommitDeepCapsuleFloatingReorderAtCursor(currentScreenPos);
+                edgeHost.ReleaseContentPointer();
                 return;
             }
 
@@ -919,24 +920,38 @@ public sealed partial class PaperWindow
             {
                 return;
             }
+
             if (nativeDragOutcome.Result != EdgeCapsuleNativeDragResult.Completed)
             {
                 CancelDeepCapsuleReorderDrag(restoreLayout: true);
                 ClearCapsuleInteractionKeyboardFocus();
                 return;
             }
-            if (!UpdateEdgeCapsuleDragPointer(nativeDragOutcome.DropPosition))
-            {
-                CancelDeepCapsuleReorderDrag(restoreLayout: true);
-                return;
-            }
-            EndDeepCapsuleReorderDrag(commit: true);
-            ClearCapsuleInteractionKeyboardFocus();
+
+            CommitDeepCapsuleFloatingReorderAtCursor(nativeDragOutcome.DropPosition);
         }
         catch
         {
             CancelDeepCapsuleReorderDrag(restoreLayout: true);
         }
+    }
+
+    private void CommitDeepCapsuleFloatingReorderAtCursor(DeviceScreenPoint fallbackPosition)
+    {
+        var dropPosition = fallbackPosition;
+        if (WindowNative.TryGetCursorScreenPosition(out var livePosition))
+        {
+            dropPosition = livePosition;
+        }
+
+        if (!UpdateEdgeCapsuleDragPointer(dropPosition))
+        {
+            CancelDeepCapsuleReorderDrag(restoreLayout: true);
+            return;
+        }
+
+        EndDeepCapsuleReorderDrag(commit: true);
+        ClearCapsuleInteractionKeyboardFocus();
     }
 
     private bool ShouldUnlockDeepCapsuleCrossQueueDrag(DeviceScreenPoint currentScreenPos)
