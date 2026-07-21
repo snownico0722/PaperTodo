@@ -40,7 +40,7 @@ internal sealed record EdgeCapsuleHostCallbacks(
     Action<DeviceScreenPoint> PointerPressed,
     Func<DeviceScreenPoint, bool, bool> PointerMoved,
     Func<DeviceScreenPoint, bool> PointerReleased,
-    Func<bool, EdgeCapsuleCaptureAction> CaptureLost,
+    Func<EdgeCapsuleCaptureLoss, EdgeCapsuleCaptureAction> CaptureLost,
     Action CloseInvoked);
 
 /// <summary>
@@ -60,6 +60,7 @@ internal sealed class EdgeCapsuleHost : IDisposable
     private double _appliedCloseWidth;
     private EdgeCapsuleEdge? _appliedEdge;
     private EdgeCapsulePresentationFrame _appliedFrame = EdgeCapsulePresentationFrame.Hidden;
+    private EdgeCapsuleCaptureLossReason _contentCaptureLossReason;
     private int _nativeMetricsVersion;
     private int _appliedNativeMetricsVersion;
     private bool _disposed;
@@ -670,7 +671,11 @@ internal sealed class EdgeCapsuleHost : IDisposable
         content.PreviewMouseLeftButtonUp += (_, e) => CompleteContentPointer(e);
         content.LostMouseCapture += (_, _) =>
         {
-            var action = callbacks.CaptureLost(Mouse.LeftButton == MouseButtonState.Pressed);
+            var reason = _contentCaptureLossReason;
+            _contentCaptureLossReason = EdgeCapsuleCaptureLossReason.Unplanned;
+            var action = callbacks.CaptureLost(new EdgeCapsuleCaptureLoss(
+                Mouse.LeftButton == MouseButtonState.Pressed,
+                reason));
             if (action == EdgeCapsuleCaptureAction.Recapture && content.IsVisible && content.IsEnabled)
             {
                 content.CaptureMouse();
@@ -741,6 +746,27 @@ internal sealed class EdgeCapsuleHost : IDisposable
         if (!_disposed && ContentArea.IsMouseCaptured)
         {
             ContentArea.ReleaseMouseCapture();
+        }
+    }
+
+    public EdgeCapsuleNativeDragOutcome TransferContentPointerToNativeDrag(
+        Func<EdgeCapsuleNativeDragOutcome> runNativeDrag)
+    {
+        if (_disposed || !ContentArea.IsMouseCaptured)
+        {
+            return runNativeDrag();
+        }
+
+        _contentCaptureLossReason = EdgeCapsuleCaptureLossReason.NativeDragTransfer;
+        try
+        {
+            // RunNativeDrag releases Win32 capture immediately before entering the caption move
+            // loop. Keeping WPF capture until then leaves no gap where a fast MouseUp can be lost.
+            return runNativeDrag();
+        }
+        finally
+        {
+            _contentCaptureLossReason = EdgeCapsuleCaptureLossReason.Unplanned;
         }
     }
 

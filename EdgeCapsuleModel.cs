@@ -53,6 +53,16 @@ internal enum EdgeCapsuleCaptureAction
     CancelDrag
 }
 
+internal enum EdgeCapsuleCaptureLossReason
+{
+    Unplanned,
+    NativeDragTransfer
+}
+
+internal readonly record struct EdgeCapsuleCaptureLoss(
+    bool LeftButtonPressed,
+    EdgeCapsuleCaptureLossReason Reason);
+
 [Flags]
 internal enum EdgeCapsuleDirty
 {
@@ -140,6 +150,7 @@ internal abstract record EdgeCapsuleIntent
     internal sealed record BeginPeerReorder : EdgeCapsuleIntent;
     internal sealed record FinishPeerReorder : EdgeCapsuleIntent;
     internal sealed record BeginPointer(DeviceScreenPoint Point) : EdgeCapsuleIntent;
+    internal sealed record LoseCapture(EdgeCapsuleCaptureLoss CaptureLoss) : EdgeCapsuleIntent;
 
     internal sealed record BeginDockedReorder(
         DeviceScreenPoint Point,
@@ -200,6 +211,9 @@ internal abstract record EdgeCapsuleIntent
     public static EdgeCapsuleIntent PointerPressed(DeviceScreenPoint point) =>
         new BeginPointer(point);
 
+    public static EdgeCapsuleIntent CaptureLost(EdgeCapsuleCaptureLoss captureLoss) =>
+        new LoseCapture(captureLoss);
+
     public static EdgeCapsuleIntent DockedReorderStarted(
         DeviceScreenPoint point,
         string startMonitorDeviceName,
@@ -257,7 +271,8 @@ internal enum EdgeCapsuleDispatchStatus
 internal readonly record struct EdgeCapsuleDispatchResult(
     EdgeCapsuleDispatchStatus Status,
     EdgeCapsuleModel Model,
-    string? Error = null)
+    string? Error = null,
+    EdgeCapsuleCaptureAction CaptureAction = EdgeCapsuleCaptureAction.None)
 {
     public bool Accepted => Status != EdgeCapsuleDispatchStatus.Rejected;
     public bool Changed => Status == EdgeCapsuleDispatchStatus.Applied;

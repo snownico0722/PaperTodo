@@ -21,6 +21,7 @@ internal static class EdgeCapsuleReducer
             EdgeCapsuleIntent.BeginPeerReorder => ChangePeerReorder(model, active: true),
             EdgeCapsuleIntent.FinishPeerReorder => ChangePeerReorder(model, active: false),
             EdgeCapsuleIntent.BeginPointer pointer => BeginPointer(model, pointer.Point),
+            EdgeCapsuleIntent.LoseCapture capture => LoseCapture(model, capture.CaptureLoss),
             EdgeCapsuleIntent.BeginDockedReorder reorder => BeginDockedReorder(model, reorder),
             EdgeCapsuleIntent.MoveDockedReorder reorder => MoveDockedReorder(model, reorder),
             EdgeCapsuleIntent.MoveDragPointer pointer => UpdateDragPointer(model, pointer.Point),
@@ -243,6 +244,35 @@ internal static class EdgeCapsuleReducer
             DragSession = EdgeCapsuleDragSession.Begin(point),
             DockedDragTopDipOverride = null
         });
+    }
+
+    private static EdgeCapsuleDispatchResult LoseCapture(
+        EdgeCapsuleModel model,
+        EdgeCapsuleCaptureLoss captureLoss)
+    {
+        if (model.State.Gesture == EdgeCapsuleGestureState.PendingClick)
+        {
+            return FinishPointer(model);
+        }
+
+        var action = model.State.Gesture switch
+        {
+            EdgeCapsuleGestureState.DockedReordering =>
+                captureLoss.LeftButtonPressed
+                    ? EdgeCapsuleCaptureAction.Recapture
+                    : EdgeCapsuleCaptureAction.CancelDrag,
+            EdgeCapsuleGestureState.FloatingTransfer or
+            EdgeCapsuleGestureState.FloatingReordering =>
+                captureLoss.Reason == EdgeCapsuleCaptureLossReason.NativeDragTransfer ||
+                captureLoss.LeftButtonPressed
+                    ? EdgeCapsuleCaptureAction.IgnoreExpectedTransfer
+                    : EdgeCapsuleCaptureAction.CancelDrag,
+            _ => EdgeCapsuleCaptureAction.None
+        };
+        return new EdgeCapsuleDispatchResult(
+            EdgeCapsuleDispatchStatus.Unchanged,
+            model,
+            CaptureAction: action);
     }
 
     private static EdgeCapsuleDispatchResult BeginDockedReorder(

@@ -95,10 +95,10 @@ public sealed partial class PaperWindow
         return true;
     }
 
-    private EdgeCapsuleCaptureAction OnEdgeCapsuleCaptureLost(bool leftButtonPressed)
+    private EdgeCapsuleCaptureAction OnEdgeCapsuleCaptureLost(EdgeCapsuleCaptureLoss captureLoss)
     {
         var wasPendingClick = IsDeepCapsuleSlotPendingClick;
-        var action = _edgeCapsule.HandleCaptureLost(leftButtonPressed);
+        var action = _edgeCapsule.HandleCaptureLost(captureLoss);
         if (action == EdgeCapsuleCaptureAction.CancelDrag)
         {
             EndDeepCapsuleReorderDrag(commit: false);
@@ -877,12 +877,6 @@ public sealed partial class PaperWindow
             var floatingHost = CreateDeepCapsuleFloatingDragHost(
                 currentScreenPos,
                 _edgeCapsule.FloatingShape);
-            if (Mouse.LeftButton != MouseButtonState.Pressed)
-            {
-                CancelDeepCapsuleReorderDrag(restoreLayout: true);
-                ClearCapsuleInteractionKeyboardFocus();
-                return;
-            }
             if (!BeginEdgeCapsuleFloatingReorder())
             {
                 CancelDeepCapsuleReorderDrag(restoreLayout: true);
@@ -902,67 +896,36 @@ public sealed partial class PaperWindow
                 System.Windows.Threading.DispatcherPriority.Render);
             WindowNative.FlushDesktopComposition();
 
+            // DwmFlush can span the physical button release. Let queued WPF input run while the
+            // docked content still owns capture, so a fast release completes through the ordinary
+            // PreviewMouseLeftButtonUp path instead of a global button-state query.
+            Dispatcher.Invoke(
+                () => { },
+                System.Windows.Threading.DispatcherPriority.Input);
+
             if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
                 !IsDeepCapsuleFloatingReordering)
             {
-                return;
-            }
-
-            if (!WindowNative.IsLeftMouseButtonPhysicallyPressed())
-            {
-                var releasedPosition = currentScreenPos;
-                if (WindowNative.TryGetCursorScreenPosition(out var liveReleasedPosition))
-                {
-                    releasedPosition = liveReleasedPosition;
-                }
-                if (!UpdateEdgeCapsuleDragPointer(releasedPosition))
-                {
-                    CancelDeepCapsuleReorderDrag(restoreLayout: true);
-                    return;
-                }
-
-                EndDeepCapsuleReorderDrag(commit: true);
-                edgeHost.ReleaseContentPointer();
-                ClearCapsuleInteractionKeyboardFocus();
                 return;
             }
 
             // From here through button release, Windows is the sole drag owner. The reducer stays
             // in FloatingReordering only so queue/layout work remains deferred until we sample the
             // final native cursor position.
-            edgeHost.ReleaseContentPointer();
+            var nativeDragOutcome = edgeHost.TransferContentPointerToNativeDrag(
+                floatingHost.RunNativeDragFromCursor);
             if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
                 !IsDeepCapsuleFloatingReordering)
             {
                 return;
             }
-            if (!floatingHost.TryBeginNativeDragFromMessageAnchor())
-            {
-                CancelDeepCapsuleReorderDrag(restoreLayout: true);
-                return;
-            }
-            if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
-                !IsDeepCapsuleFloatingReordering)
-            {
-                return;
-            }
-            if (WindowNative.IsLeftMouseButtonPhysicallyPressed())
+            if (nativeDragOutcome.Result != EdgeCapsuleNativeDragResult.Completed)
             {
                 CancelDeepCapsuleReorderDrag(restoreLayout: true);
                 ClearCapsuleInteractionKeyboardFocus();
                 return;
             }
-
-            var dropPosition = currentScreenPos;
-            if (!WindowNative.TryGetCursorScreenPosition(out dropPosition) &&
-                WindowNative.TryGetWindowDeviceBounds(floatingHost, out var bounds) &&
-                !bounds.IsEmpty)
-            {
-                dropPosition = new DeviceScreenPoint(
-                    bounds.Left + bounds.Width / 2.0,
-                    bounds.Top + bounds.Height / 2.0);
-            }
-            if (!UpdateEdgeCapsuleDragPointer(dropPosition))
+            if (!UpdateEdgeCapsuleDragPointer(nativeDragOutcome.DropPosition))
             {
                 CancelDeepCapsuleReorderDrag(restoreLayout: true);
                 return;

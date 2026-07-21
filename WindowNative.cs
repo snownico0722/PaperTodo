@@ -17,7 +17,6 @@ internal static class WindowNative
     private const int WsExAppWindow = 0x00040000;
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;
-    private const int VkLButton = 0x01;
     private static readonly IntPtr DpiAwarenessContextSystemAware = new(-2);
     private static readonly IntPtr HwndTop = IntPtr.Zero;
     private static readonly IntPtr HwndTopmost = new(-1);
@@ -259,18 +258,6 @@ internal static class WindowNative
         point = default;
         return false;
     }
-
-    public static bool TryGetLastMessageScreenPosition(out DeviceScreenPoint point)
-    {
-        var packed = GetMessagePos();
-        point = new DeviceScreenPoint(
-            unchecked((short)(packed & 0xffff)),
-            unchecked((short)((packed >> 16) & 0xffff)));
-        return true;
-    }
-
-    public static bool IsLeftMouseButtonPhysicallyPressed() =>
-        (GetAsyncKeyState(VkLButton) & 0x8000) != 0;
 
     // The detached drag capsule deliberately uses the stable System Aware behavior of the
     // pre-PMv2 implementation. Only its HWND is created in this temporary context; the process,
@@ -578,12 +565,6 @@ internal static class WindowNative
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetMessagePos();
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);

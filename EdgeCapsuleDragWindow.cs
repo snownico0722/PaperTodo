@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -33,10 +34,28 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required bool Topmost { get; init; }
 }
 
+internal enum EdgeCapsuleNativeDragResult
+{
+    Completed,
+    NotStarted,
+    Aborted
+}
+
+internal readonly record struct EdgeCapsuleNativeDragOutcome(
+    EdgeCapsuleNativeDragResult Result,
+    DeviceScreenPoint DropPosition);
+
 // A detached capsule is a complete, real-size pill in its own HWND. It never reuses the docked
 // one-sided tag or any of its edge-specific columns, margins, corners, or width animation state.
 internal sealed class EdgeCapsuleDragWindow : Window
 {
+    private const int WmCancelMode = 0x001F;
+    private const int WmKeyDown = 0x0100;
+    private const int WmCaptureChanged = 0x0215;
+    private const int WmEnterSizeMove = 0x0231;
+    private const int WmExitSizeMove = 0x0232;
+    private const int VkEscape = 0x1B;
+
     private enum DockingHandoffAnimationPhase
     {
         Flight,
@@ -65,6 +84,10 @@ internal sealed class EdgeCapsuleDragWindow : Window
     private EdgeCapsuleEdge _currentDockingEdge;
     private bool _dockingPresentationActive;
     private bool _closingByOwner;
+    private bool _nativeDragAttemptActive;
+    private bool _nativeDragEntered;
+    private bool _nativeDragExited;
+    private bool _nativeDragCancelled;
     private bool _isClosed;
 
     public EdgeCapsuleDragWindow(EdgeCapsuleDragWindowOptions options)
@@ -96,7 +119,14 @@ internal sealed class EdgeCapsuleDragWindow : Window
         (_root, _surface, _outline) = BuildContent(options);
         Content = _root;
 
-        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
+        SourceInitialized += (_, _) =>
+        {
+            WindowNative.ApplyNoActivateStyle(this);
+            if (PresentationSource.FromVisual(this) is HwndSource source)
+            {
+                source.AddHook(OnNativeMessage);
+            }
+        };
     }
 
     public event EventHandler? UnexpectedlyClosed;
@@ -161,22 +191,115 @@ internal sealed class EdgeCapsuleDragWindow : Window
         }
     }
 
-    public bool TryBeginNativeDragFromMessageAnchor()
+    public EdgeCapsuleNativeDragOutcome RunNativeDragFromCursor()
     {
         if (_isClosed ||
             _dockingPresentationActive ||
-            !WindowNative.TryGetLastMessageScreenPosition(out var messageAnchor) ||
-            !WindowNative.TryCenterSystemAwareWindowAtScreenPoint(
+            _nativeDragAttemptActive ||
+            !WindowNative.TryCenterSystemAwareWindowAtCursor(
                 this,
                 _widthDip,
                 _heightDip,
-                messageAnchor))
+                out var cursorAnchor) ||
+            !WindowNative.TryGetWindowDeviceBounds(this, out var startBounds) ||
+            startBounds.IsEmpty)
         {
-            return false;
+            return new EdgeCapsuleNativeDragOutcome(
+                EdgeCapsuleNativeDragResult.NotStarted,
+                default);
         }
 
-        return WindowNative.TryBeginWindowCaptionDrag(this, messageAnchor);
+        _nativeDragAttemptActive = true;
+        _nativeDragEntered = false;
+        _nativeDragExited = false;
+        _nativeDragCancelled = false;
+        try
+        {
+            if (!WindowNative.TryBeginWindowCaptionDrag(this, cursorAnchor) ||
+                !_nativeDragEntered)
+            {
+                return new EdgeCapsuleNativeDragOutcome(
+                    EdgeCapsuleNativeDragResult.NotStarted,
+                    default);
+            }
+            if (!_nativeDragExited || _nativeDragCancelled)
+            {
+                return new EdgeCapsuleNativeDragOutcome(
+                    EdgeCapsuleNativeDragResult.Aborted,
+                    default);
+            }
+            if (!WindowNative.TryGetWindowDeviceBounds(this, out var finalBounds) ||
+                finalBounds.IsEmpty ||
+                !WindowNative.TryGetCursorScreenPosition(out var finalCursor))
+            {
+                return new EdgeCapsuleNativeDragOutcome(
+                    EdgeCapsuleNativeDragResult.Aborted,
+                    default);
+            }
+
+            // Escape restores a native move to its starting rectangle while leaving the cursor at
+            // the cancelled destination. Treat that as an abort. A legitimate zero-distance drop
+            // keeps the cursor inside the capsule and remains a completed drag.
+            if (EdgeCapsuleGeometry.DeviceBoundsMatch(finalBounds, startBounds, tolerance: 2) &&
+                !ContainsDevicePoint(finalBounds, finalCursor, tolerance: 2))
+            {
+                return new EdgeCapsuleNativeDragOutcome(
+                    EdgeCapsuleNativeDragResult.Aborted,
+                    default);
+            }
+
+            return new EdgeCapsuleNativeDragOutcome(
+                EdgeCapsuleNativeDragResult.Completed,
+                finalCursor);
+        }
+        finally
+        {
+            _nativeDragAttemptActive = false;
+        }
     }
+
+    private IntPtr OnNativeMessage(
+        IntPtr hwnd,
+        int msg,
+        IntPtr wParam,
+        IntPtr lParam,
+        ref bool handled)
+    {
+        if (!_nativeDragAttemptActive)
+        {
+            return IntPtr.Zero;
+        }
+
+        if (msg == WmEnterSizeMove)
+        {
+            _nativeDragEntered = true;
+        }
+        else if (_nativeDragEntered && msg == WmExitSizeMove)
+        {
+            _nativeDragExited = true;
+        }
+        else if (_nativeDragEntered &&
+            !_nativeDragExited &&
+            (msg == WmCancelMode ||
+                (msg == WmCaptureChanged &&
+                    lParam != IntPtr.Zero &&
+                    lParam != hwnd) ||
+                (msg == WmKeyDown && wParam.ToInt32() == VkEscape)))
+        {
+            _nativeDragCancelled = true;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static bool ContainsDevicePoint(
+        DeviceScreenRect bounds,
+        DeviceScreenPoint point,
+        int tolerance) =>
+        point.X >= bounds.Left - tolerance &&
+        point.X <= bounds.Right + tolerance &&
+        point.Y >= bounds.Top - tolerance &&
+        point.Y <= bounds.Bottom + tolerance;
 
     public void AnimateDockingHandoff(
         DeviceScreenRect dockingAnchorBounds,
