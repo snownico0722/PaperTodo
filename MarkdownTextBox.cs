@@ -1084,7 +1084,7 @@ public sealed class MarkdownTextBox : TextEditor
         return false;
     }
 
-    public bool TryInsertImageFromClipboard()
+    public bool TryInsertImageFromClipboard(IDataObject? clipboardData = null)
     {
         if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId) || IsReadOnly)
         {
@@ -1094,13 +1094,14 @@ public sealed class MarkdownTextBox : TextEditor
         BitmapSource? bitmap = null;
         try
         {
-            var clipboardData = Clipboard.GetDataObject();
-            if (clipboardData != null)
+            clipboardData ??= Clipboard.GetDataObject();
+            if (clipboardData != null &&
+                TryInsertImagesFromDataObject(clipboardData))
             {
-                TryGetBitmapSource(clipboardData, out bitmap);
+                return true;
             }
 
-            bitmap ??= Clipboard.GetImage();
+            bitmap = Clipboard.GetImage();
         }
         catch
         {
@@ -1387,9 +1388,9 @@ public sealed class MarkdownTextBox : TextEditor
 
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
-        // AvalonEdit's built-in paste command no-ops when the clipboard holds only a
-        // bitmap (no text), so its pasting handler never fires. Intercept Ctrl+V and
-        // insert the clipboard image ourselves before the editor swallows the key.
+        // AvalonEdit's built-in paste command no-ops when the clipboard holds only image
+        // data or copied image files (no text), so its pasting handler never fires. Intercept
+        // Ctrl+V and insert the clipboard images ourselves before the editor swallows the key.
         if (!IsReadOnly &&
             e.Key == System.Windows.Input.Key.V &&
             Keyboard.Modifiers == ModifierKeys.Control &&
@@ -1860,7 +1861,7 @@ public sealed class MarkdownTextBox : TextEditor
 
         if (!IsReadOnly &&
             string.IsNullOrEmpty(clipboardText) &&
-            (TryInsertImagesFromDataObject(e.DataObject) || TryInsertImageFromClipboard()))
+            TryInsertImageFromClipboard(e.DataObject))
         {
             e.CancelCommand();
             return;
