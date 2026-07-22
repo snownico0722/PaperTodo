@@ -451,23 +451,4 @@ public sealed partial class PaperWindow
             : area.Right - width - edgeInset);
         Top = RoundToDevicePixelY(targetTop);
     }
-
-    internal void ReconcileExpandedDeepCapsuleInset()
-    {
-        if (_paper.IsCollapsed ||
-            !HoldsDeepCapsuleSlotWhileExpanded ||
-            !_paper.IsVisible ||
-            !IsVisible)
-        {
-            return;
-        }
-
-        var width = Math.Max(ActualWidth > 0 ? ActualWidth : Width, PaperLayoutDefaults.MinWidth);
-        var height = Math.Max(ActualHeight > 0 ? ActualHeight : Height, PaperLayoutDefaults.MinHeight);
-        MoveWindowWithoutGeometrySave(() => AlignExpandedToDockedEdge(
-            width,
-            height,
-            ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap));
-        _controller.UpdateGeometry(_paper, this);
-    }
 }

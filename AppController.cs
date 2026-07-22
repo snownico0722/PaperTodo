@@ -534,13 +534,6 @@ public sealed partial class AppController : IDisposable
         if (_windows.TryGetValue(paper.Id, out var window))
         {
             window.RefreshPaperTitle();
-            if (State.UseCapsuleMode && State.UseDeepCapsuleMode)
-            {
-                // The slot schedules its own real-width refresh. A title edit does not change
-                // queue order or slot semantics, so a global non-animated arrange would only
-                // snap unrelated hover/close animations.
-                window.ReconcileExpandedDeepCapsuleInset();
-            }
         }
         if (paper.Type == PaperTypes.Note)
         {
