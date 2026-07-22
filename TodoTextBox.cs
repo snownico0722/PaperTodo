@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Color = System.Windows.Media.Color;
 using Pen = System.Windows.Media.Pen;
@@ -26,6 +27,20 @@ public sealed class TodoTextBox : TextBox
     {
         get => (bool)GetValue(IsDoneProperty);
         set => SetValue(IsDoneProperty, value);
+    }
+
+    protected override void OnPreviewMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseLeftButtonDown(e);
+
+        if (e.ClickCount != 2)
+        {
+            return;
+        }
+
+        Focus();
+        SelectAll();
+        e.Handled = true;
     }
 
     protected override void OnRender(DrawingContext drawingContext)
