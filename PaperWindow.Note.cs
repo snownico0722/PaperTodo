@@ -306,6 +306,7 @@ public sealed partial class PaperWindow
             isOpeningImagePicker = true;
             try
             {
+                ShowEditor(focus: false);
                 InsertImageFromFilePicker(box);
             }
             finally

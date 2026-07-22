@@ -1005,11 +1005,14 @@ public sealed class MarkdownTextBox : TextEditor
 
     public bool CanInsertImagesFromDataObject(IDataObject dataObject)
     {
-        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId) || IsReadOnly)
+        if (_imageStore == null || string.IsNullOrWhiteSpace(_noteId))
         {
             return false;
         }
 
+        // External dragging can temporarily move keyboard focus away, which puts the note
+        // into preview mode. This method only identifies supported data; the drop handler
+        // enters edit mode before the guarded insertion methods are called.
         if (TryGetImageFileDrop(dataObject, out var paths) && paths.Count > 0)
         {
             return true;
