@@ -24,6 +24,7 @@ public sealed class NoteImageStore : IDisposable
     private readonly HashSet<string> _retiredImageIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _verifiedImageIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _corruptedImageIds = new(StringComparer.Ordinal);
+    private readonly Queue<ReusableImageNumberRange> _reusableImageNumberRanges = new();
     private LmdbImageDatabase? _database;
     private long _totalImageBytes;
     private int _nextImageNumber = 1;
@@ -48,6 +49,7 @@ public sealed class NoteImageStore : IDisposable
             _retiredImageIds.Clear();
             _verifiedImageIds.Clear();
             _corruptedImageIds.Clear();
+            _reusableImageNumberRanges.Clear();
             _totalImageBytes = 0;
             _nextImageNumber = 1;
             _writeDisabled = false;
@@ -463,6 +465,7 @@ public sealed class NoteImageStore : IDisposable
             var replacements = new Dictionary<string, string>(StringComparer.Ordinal);
             var writes = new List<LmdbImageWrite>(foreignAssets.Count);
             var nextImageNumber = _nextImageNumber;
+            var reusableImageNumberRanges = CloneReusableImageNumberRangesLocked();
             foreach (var source in foreignAssets)
             {
                 if (!TryReadImageBytesLocked(source, out var bytes))
@@ -472,7 +475,7 @@ public sealed class NoteImageStore : IDisposable
 
                 var clone = new NoteImageAsset
                 {
-                    Id = AllocateImageIdLocked(ref nextImageNumber),
+                    Id = AllocateImageIdLocked(ref nextImageNumber, reusableImageNumberRanges),
                     NoteId = noteId,
                     Mime = source.Mime,
                     Width = source.Width,
@@ -494,6 +497,7 @@ public sealed class NoteImageStore : IDisposable
             }
             _totalImageBytes += additionalBytes;
             _nextImageNumber = nextImageNumber;
+            ReplaceReusableImageNumberRangesLocked(reusableImageNumberRanges);
 
             return ReplaceImageReferenceIds(markdown, replacements);
         }
@@ -605,6 +609,51 @@ public sealed class NoteImageStore : IDisposable
             foreach (var imageId in removedIds)
             {
                 RemoveImageLocked(imageId, reserveIdUntilRestart: true);
+            }
+        }
+    }
+
+    internal void PrepareReusableImageNumbers()
+    {
+        lock (_gate)
+        {
+            _reusableImageNumberRanges.Clear();
+            if (_writeDisabled || _nextImageNumber <= 1)
+            {
+                return;
+            }
+
+            // Startup collection runs before editors and undo stacks exist, so ids retired by
+            // that pass can safely join the new-session allocation pool.
+            _retiredImageIds.Clear();
+
+            var occupiedNumbers = new SortedSet<int>();
+            foreach (var imageId in _images.Keys.Concat(_corruptedImageIds))
+            {
+                if (int.TryParse(imageId, NumberStyles.None, CultureInfo.InvariantCulture, out var number) &&
+                    number > 0 &&
+                    number < _nextImageNumber)
+                {
+                    occupiedNumbers.Add(number);
+                }
+            }
+
+            var rangeStart = 1;
+            foreach (var occupiedNumber in occupiedNumbers)
+            {
+                if (rangeStart < occupiedNumber)
+                {
+                    _reusableImageNumberRanges.Enqueue(
+                        new ReusableImageNumberRange(rangeStart, occupiedNumber - 1));
+                }
+
+                rangeStart = occupiedNumber + 1;
+            }
+
+            if (rangeStart < _nextImageNumber)
+            {
+                _reusableImageNumberRanges.Enqueue(
+                    new ReusableImageNumberRange(rangeStart, _nextImageNumber - 1));
             }
         }
     }
@@ -731,11 +780,12 @@ public sealed class NoteImageStore : IDisposable
 
             var writes = new List<LmdbImageWrite>(images.Count);
             var nextImageNumber = _nextImageNumber;
+            var reusableImageNumberRanges = CloneReusableImageNumberRangesLocked();
             foreach (var image in images)
             {
                 var asset = new NoteImageAsset
                 {
-                    Id = AllocateImageIdLocked(ref nextImageNumber),
+                    Id = AllocateImageIdLocked(ref nextImageNumber, reusableImageNumberRanges),
                     NoteId = noteId,
                     Mime = NormalizeMime(image.Mime),
                     Width = image.Width,
@@ -756,12 +806,33 @@ public sealed class NoteImageStore : IDisposable
             }
             _totalImageBytes += additionalBytes;
             _nextImageNumber = nextImageNumber;
+            ReplaceReusableImageNumberRangesLocked(reusableImageNumberRanges);
             return writes.Select(write => write.Asset).ToList();
         }
     }
 
-    private string AllocateImageIdLocked(ref int nextImageNumber)
+    private string AllocateImageIdLocked(
+        ref int nextImageNumber,
+        Queue<ReusableImageNumberRange> reusableImageNumberRanges)
     {
+        while (reusableImageNumberRanges.Count > 0)
+        {
+            var range = reusableImageNumberRanges.Peek();
+            var number = range.NextNumber++;
+            if (range.NextNumber > range.LastNumber)
+            {
+                reusableImageNumberRanges.Dequeue();
+            }
+
+            var id = FormatImageId(number);
+            if (!_images.ContainsKey(id) &&
+                !_retiredImageIds.Contains(id) &&
+                !_corruptedImageIds.Contains(id))
+            {
+                return id;
+            }
+        }
+
         while (nextImageNumber <= 99_999_999)
         {
             var number = nextImageNumber++;
@@ -777,10 +848,38 @@ public sealed class NoteImageStore : IDisposable
         throw new InvalidOperationException(Strings.Get("ImageImportUnsupported"));
     }
 
+    private Queue<ReusableImageNumberRange> CloneReusableImageNumberRangesLocked()
+    {
+        var clone = new Queue<ReusableImageNumberRange>(_reusableImageNumberRanges.Count);
+        foreach (var range in _reusableImageNumberRanges)
+        {
+            clone.Enqueue(new ReusableImageNumberRange(range.NextNumber, range.LastNumber));
+        }
+
+        return clone;
+    }
+
+    private void ReplaceReusableImageNumberRangesLocked(
+        Queue<ReusableImageNumberRange> ranges)
+    {
+        _reusableImageNumberRanges.Clear();
+        foreach (var range in ranges)
+        {
+            _reusableImageNumberRanges.Enqueue(range);
+        }
+    }
+
     private static string FormatImageId(int number)
         => number < 1000
             ? number.ToString("000", CultureInfo.InvariantCulture)
             : number.ToString(CultureInfo.InvariantCulture);
+
+    private sealed class ReusableImageNumberRange(int nextNumber, int lastNumber)
+    {
+        public int NextNumber { get; set; } = nextNumber;
+
+        public int LastNumber { get; } = lastNumber;
+    }
 
     private static void ValidateImageDimensions(int width, int height)
     {

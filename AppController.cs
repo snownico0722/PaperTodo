@@ -147,6 +147,7 @@ public sealed partial class AppController : IDisposable
         _imageStore.Load();
         var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         TryCollectUnprotectedImages();
+        _imageStore.PrepareReusableImageNumbers();
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
