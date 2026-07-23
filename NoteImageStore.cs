@@ -293,6 +293,10 @@ public sealed class NoteImageStore : IDisposable
     {
         ValidateImageDimensions(source.PixelWidth, source.PixelHeight);
 
+        // Clipboard CF_DIB / GetImage often reports Bgra32 with every alpha byte = 0 while RGB
+        // still holds the screenshot. Encoding that as PNG makes the whole image invisible.
+        source = NormalizeVacuousAlpha(source);
+
         byte[] originalBytes;
         try
         {
@@ -1024,6 +1028,70 @@ public sealed class NoteImageStore : IDisposable
         }
 
         return source.Palette?.Colors.Any(color => color.A < byte.MaxValue) == true;
+    }
+
+    /// <summary>
+    /// Windows clipboard bitmaps frequently expose a 32-bit format with an unused alpha plane
+    /// left at 0. If every pixel is fully transparent but RGB is present, treat alpha as absent
+    /// and force the image opaque before PNG encode.
+    /// </summary>
+    private static BitmapSource NormalizeVacuousAlpha(BitmapSource source)
+    {
+        if (!HasAlphaChannel(source) || source.PixelWidth <= 0 || source.PixelHeight <= 0)
+        {
+            return source;
+        }
+
+        BitmapSource bgra = source.Format == PixelFormats.Bgra32
+            ? source
+            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+        var width = bgra.PixelWidth;
+        var height = bgra.PixelHeight;
+        var stride = width * 4;
+        var pixels = new byte[checked(stride * height)];
+        bgra.CopyPixels(pixels, stride, 0);
+
+        var hasVisibleAlpha = false;
+        var hasRgbContent = false;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i + 3] != 0)
+            {
+                hasVisibleAlpha = true;
+                break;
+            }
+
+            if (!hasRgbContent &&
+                (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0))
+            {
+                hasRgbContent = true;
+            }
+        }
+
+        // Real transparent images keep non-zero alpha on at least some pixels.
+        // All-zero alpha with any RGB is the broken clipboard DIB pattern.
+        if (hasVisibleAlpha || !hasRgbContent)
+        {
+            return source;
+        }
+
+        for (var i = 3; i < pixels.Length; i += 4)
+        {
+            pixels[i] = 255;
+        }
+
+        var fixedBitmap = BitmapSource.Create(
+            width,
+            height,
+            bgra.DpiX,
+            bgra.DpiY,
+            PixelFormats.Bgra32,
+            null,
+            pixels,
+            stride);
+        fixedBitmap.Freeze();
+        return fixedBitmap;
     }
 
     private static byte[] EncodePng(BitmapSource source)

@@ -2654,17 +2654,20 @@ public sealed class MarkdownTextBox : TextEditor
 
     private static bool TryGetBitmapSource(IDataObject dataObject, out BitmapSource? bitmap)
     {
-        if (TryGetBitmapData(dataObject, DataFormats.Bitmap, autoConvert: true, out bitmap))
-        {
-            return true;
-        }
-
+        // Prefer encoded clipboard formats (PNG/JPEG/GIF). Windows screenshot tools often
+        // put a correct PNG next to a CF_DIB/Bitmap whose alpha channel is all zeros; taking
+        // Bitmap first would re-encode a fully transparent image.
         foreach (var format in EncodedClipboardImageFormats)
         {
             if (TryGetBitmapData(dataObject, format, autoConvert: false, out bitmap))
             {
                 return true;
             }
+        }
+
+        if (TryGetBitmapData(dataObject, DataFormats.Bitmap, autoConvert: true, out bitmap))
+        {
+            return true;
         }
 
         bitmap = null;
