@@ -2821,8 +2821,11 @@ public sealed class MarkdownTextBox : TextEditor
                 return false;
             }
 
+            // Capability probe and insert share this filter so drag/paste of non-image files
+            // does not claim the image path or surface an import-failure dialog.
             paths = dropped
-                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Where(path => !string.IsNullOrWhiteSpace(path) &&
+                    NoteImageStore.IsSupportedImageFile(path))
                 .ToList();
             return paths.Count > 0;
         }
