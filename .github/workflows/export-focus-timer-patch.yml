@@ -1,10 +1,10 @@
 name: Export WPF Focus Timer Patch
 
 on:
-  push:
-    branches:
-      - agent/add-wpf-focus-timer-plugin
+  pull_request:
     paths:
+      - "plugin-samples/PaperTodo.Plugin.FocusTimer/**"
+      - "plugin-samples/README.md"
       - ".github/workflows/export-focus-timer-patch.yml"
 
 permissions:
