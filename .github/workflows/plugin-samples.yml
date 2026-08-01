@@ -1,0 +1,42 @@
+name: Plugin samples
+
+on:
+  pull_request:
+    paths:
+      - "PaperTodo.Plugin.Abstractions/**"
+      - "plugin-samples/**"
+      - ".github/workflows/plugin-samples.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "PaperTodo.Plugin.Abstractions/**"
+      - "plugin-samples/**"
+      - ".github/workflows/plugin-samples.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-native-samples:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build native plugin samples
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
+            Sort-Object FullName
+          if (-not $projects) {
+            throw "No native plugin sample projects were found."
+          }
+          foreach ($project in $projects) {
+            Write-Host "Building $($project.FullName)"
+            dotnet build $project.FullName -c Release
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          }
