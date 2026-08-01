@@ -1,0 +1,38 @@
+name: Export WPF Focus Timer Patch
+
+on:
+  push:
+    branches:
+      - agent/add-wpf-focus-timer-plugin
+    paths:
+      - ".github/workflows/export-focus-timer-patch.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Export and verify patch
+        shell: bash
+        run: |
+          git fetch origin main
+          git diff --binary --full-index origin/main...HEAD -- . \
+            ':(exclude).github/workflows/export-focus-timer-patch.yml' \
+            > PaperTodo-WPF-FocusTimer.patch
+          git worktree add "$RUNNER_TEMP/papertodo-main" origin/main
+          git -C "$RUNNER_TEMP/papertodo-main" apply --check \
+            "$GITHUB_WORKSPACE/PaperTodo-WPF-FocusTimer.patch"
+
+      - name: Upload patch
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-WPF-FocusTimer-patch
+          path: PaperTodo-WPF-FocusTimer.patch
+          if-no-files-found: error
