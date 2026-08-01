@@ -1,0 +1,12 @@
+{
+  "kind": "native",
+  "id": "sample.focus-timer.native",
+  "name": "专注计时器",
+  "description": "完全使用 WPF 控件实现，支持折叠后台计时和状态恢复。",
+  "version": "1.0.0",
+  "apiVersion": "1.1",
+  "stateVersion": 1,
+  "entry": "PaperTodo.Plugin.FocusTimer.dll",
+  "capabilities": ["textZoom"],
+  "requires": ["backgroundUpdates"]
+}
