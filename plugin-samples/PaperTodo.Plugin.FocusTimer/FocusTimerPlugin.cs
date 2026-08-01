@@ -410,6 +410,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
         {
             _theme = theme;
             var scale = Math.Clamp(theme.FontScale, 0.7, 2.5);
+            var fontFamily = new FontFamily(theme.FontFamily);
             var text = ToBrush(theme.TextColor, "#202020");
             var weak = ToBrush(theme.WeakTextColor, "#707070");
             var border = ToBrush(theme.BorderColor, "#807050");
@@ -417,7 +418,10 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 theme.IsDark ? "#18FFFFFF" : "#0C000000",
                 "#0C000000");
 
-            _root.FontFamily = new FontFamily(theme.FontFamily);
+            _timeText.FontFamily = fontFamily;
+            _statusText.FontFamily = fontFamily;
+            _completedText.FontFamily = fontFamily;
+            _durationText.FontFamily = fontFamily;
             _timeText.FontSize = 46 * scale;
             _statusText.FontSize = 12 * scale;
             _completedText.FontSize = 11 * scale;
@@ -431,6 +435,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
 
             foreach (var button in _buttons)
             {
+                button.FontFamily = fontFamily;
                 button.FontSize = 12 * scale;
                 button.Foreground = text;
                 button.Background = background;
