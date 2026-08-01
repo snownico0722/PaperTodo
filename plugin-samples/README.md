@@ -5,9 +5,18 @@
 - `plugin-samples/` 保存插件源码、清单源文件和构建说明；
 - `plugins/` 只保存已经构建、可由 PaperTodo 直接加载的最终产物；
 - `plugins/data/` 保存 PaperTodo 代管的插件全局设置和纸片状态；
+- 插件自己的 `.runtime/` 可保存运行缓存或独立于纸片的长期数据，构建安装脚本会保留它；
 - PaperTodo 的本地发布和 GitHub Release 都不携带插件，插件需要单独分发。
 
 最终原生插件目录只保留 `plugin.json`、入口 DLL、必要的 `.deps.json`、插件私有依赖和原生库。不要放入 PDB、XML 文档、重复 DLL 或 PaperTodo 宿主已经提供的共享程序集。
+
+## 示例定位
+
+- `PaperTodo.Plugin.SampleClock`：完整 WPF 时钟，演示多种宿主设置、主题、缩放、后台更新和运行时标题；
+- `PaperTodo.Plugin.OfficialClockWeb`：与原生时钟功能接近的 Web 对照实现；
+- `PaperTodo.Plugin.FocusTimer`：完整 WPF 番茄钟，演示状态恢复、自动轮转、声音和每日统计；
+- `PaperTodo.Plugin.ReviewArchive`：Issue #37 的实现，演示协议 1.3 数据读取、事件监听、插件私有长期存储和 CSV 导出；
+- `PaperTodo.Plugin.CloudGenshin`：WebView2 远程应用嵌入、导航、输入占用和进程恢复示例。
 
 ## 原生插件构建与安装
 
@@ -21,10 +30,13 @@
   -ProjectPath .\plugin-samples\PaperTodo.Plugin.FocusTimer\PaperTodo.Plugin.FocusTimer.csproj
 
 .\plugin-samples\Build-And-Install-NativePlugin.ps1 `
+  -ProjectPath .\plugin-samples\PaperTodo.Plugin.ReviewArchive\PaperTodo.Plugin.ReviewArchive.csproj
+
+.\plugin-samples\Build-And-Install-NativePlugin.ps1 `
   -ProjectPath .\plugin-samples\PaperTodo.Plugin.CloudGenshin\PaperTodo.Plugin.CloudGenshin.csproj
 ```
 
-`PaperTodo.Plugin.FocusTimer` 是不依赖 WebView2 的完整 WPF 示例，包含原生交互、状态保存、后台运行、运行时标题和主题适配。纯 Web 插件不需要编译，直接将清单和 `web/` 静态文件复制到对应的 `plugins/<插件 ID>/` 目录。
+纯 Web 插件不需要编译，直接将清单和 `web/` 静态文件复制到对应的 `plugins/<插件 ID>/` 目录。
 
 ## 部署目录
 
@@ -42,7 +54,7 @@ plugins\
    │  ├─ index.html
    │  └─ CSS、脚本与图片
    ├─ WeatherPlugin.dll / 依赖 DLL / 原生库
-   └─ .runtime\                     # WebView2 Profile、缓存和临时运行数据
+   └─ .runtime\                     # 插件私有缓存或长期数据
 ```
 
 当前 PaperTodo 插件协议为 **1.3**。同一主版本内向后兼容：插件声明的小版本不高于宿主即可加载；使用 `permissions` 必须声明 1.3。目录名必须与 `id` 一致，`data` 是宿主保留 ID。
@@ -97,7 +109,9 @@ plugins\
 }
 ```
 
-每个插件的数据保存在 `plugins/data/<插件 ID>.json`：`settings` 是插件所有纸片共享的设置，`papers` 以纸片 ID 保存独立状态。单张纸片状态上限为 1 MiB（只在保存时按 UTF-8 JSON 字节数检查）。这些数据不写入 `data.json`，旧版 `BodyStates` 不迁移；删除纸片时会同步删除各插件中的对应状态。正常数据文件无法读取时，原文件保持不变，插件从空状态运行，之后只写入唯一的 `<插件 ID>.json.recovered`，该文件存在时会优先使用。
+每个插件的宿主管理数据保存在 `plugins/data/<插件 ID>.json`：`settings` 是插件所有纸片共享的设置，`papers` 以纸片 ID 保存独立状态。单张纸片状态上限为 1 MiB（只在保存时按 UTF-8 JSON 字节数检查）。这些数据不写入 `data.json`，旧版 `BodyStates` 不迁移；删除纸片时会同步删除各插件中的对应状态。正常数据文件无法读取时，原文件保持不变，插件从空状态运行，之后只写入唯一的 `<插件 ID>.json.recovered`，该文件存在时会优先使用。
+
+`.runtime/` 不受宿主状态协议管理，适合 WebView2 Profile、可重建缓存或必须独立于纸片生命周期的插件私有数据。原生插件应自行负责格式版本、原子写入、损坏恢复和容量控制，不应把普通单纸片界面状态重复放入 `.runtime`。
 
 原生插件通过 `PaperBodyContext.SettingsJson` 获取初始设置，并通过 `IPaperBodySession.OnSettingsChanged` 接收更新。
 
@@ -108,6 +122,7 @@ plugins\
 支持：`papers.read/observe/create/delete`、`todos.read/observe/append/update/delete`、`notes.read/observe/append/replace`。写入结果只返回 ID 或内容长度，不会绕过独立的读取权限。
 
 原生插件使用 `PaperBodyContext.Host`；Web 插件使用 `papertodo.request()` 与 `papertodo.onHostEvent()`。
+
 ## Web 插件
 
 Web 插件的 `entry` 所在目录会成为本地静态根；建议固定使用 `web/`，使同一插件目录下的 `.runtime/` 不会被网页映射。插件自己的本地顶层页面运行在 `https://<id>.papertodo.local/`，只有该本地顶层页面会获得 `window.papertodo` 桥接。外部顶层导航、远程 iframe、弹窗和浏览器权限请求使用 WebView2 默认行为。
@@ -117,12 +132,12 @@ Web 插件的 `entry` 所在目录会成为本地静态根；建议固定使用 
 可通过 `window.papertodo` 调用：
 
 ```js
-papertodo.saveState({ city: "Shanghai" }); // 每次状态变化后立即调用
-papertodo.registerStateProvider(() => currentState); // 关闭前的辅助快照，不能替代即时保存
-papertodo.setTitle("上海天气"); // 持久化、可由用户编辑的正式标题
-papertodo.setDisplayTitle("26°C 晴"); // 运行时标题，同时显示在顶栏和胶囊
-papertodo.setInputClaims(["escapeKey", "contextMenu"]); // 进入交互模式前声明
-papertodo.setInputClaims([]); // 离开交互模式后释放
+papertodo.saveState({ city: "Shanghai" });
+papertodo.registerStateProvider(() => currentState);
+papertodo.setTitle("上海天气");
+papertodo.setDisplayTitle("26°C 晴");
+papertodo.setInputClaims(["escapeKey", "contextMenu"]);
+papertodo.setInputClaims([]);
 papertodo.markDirty();
 papertodo.openExternal("https://example.com");
 papertodo.onEvent(message => console.log(message));
