@@ -17,10 +17,13 @@
   -ProjectPath .\plugin-samples\PaperTodo.Plugin.SampleClock\PaperTodo.Plugin.SampleClock.csproj
 
 .\plugin-samples\Build-And-Install-NativePlugin.ps1 `
+  -ProjectPath .\plugin-samples\PaperTodo.Plugin.FocusTimer\PaperTodo.Plugin.FocusTimer.csproj
+
+.\plugin-samples\Build-And-Install-NativePlugin.ps1 `
   -ProjectPath .\plugin-samples\PaperTodo.Plugin.CloudGenshin\PaperTodo.Plugin.CloudGenshin.csproj
 ```
 
-纯 Web 插件不需要编译，直接将清单和 `web/` 静态文件复制到对应的 `plugins/<插件 ID>/` 目录。
+`PaperTodo.Plugin.FocusTimer` 是不依赖 WebView2 的完整 WPF 示例，包含原生交互、状态保存、后台运行、运行时标题和主题适配。纯 Web 插件不需要编译，直接将清单和 `web/` 静态文件复制到对应的 `plugins/<插件 ID>/` 目录。
 
 ## 部署目录
 
