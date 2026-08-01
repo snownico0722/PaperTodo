@@ -1,0 +1,146 @@
+{
+  "kind": "native",
+  "id": "sample.review-archive.native",
+  "name": "待办复盘记录池",
+  "description": "记录待办创建、完成和删除时间，保留历史并导出 Excel 可直接打开的 CSV。",
+  "version": "1.0.0",
+  "apiVersion": "1.3",
+  "stateVersion": 1,
+  "entry": "PaperTodo.Plugin.ReviewArchive.dll",
+  "capabilities": ["textZoom"],
+  "requires": ["backgroundUpdates"],
+  "permissions": [
+    "papers.read",
+    "papers.observe",
+    "todos.read",
+    "todos.observe"
+  ],
+  "settings": [
+    {
+      "id": "trackCreated",
+      "type": "boolean",
+      "name": "记录创建时间",
+      "description": "为新建待办保存精确创建时刻。",
+      "default": true,
+      "quick": true
+    },
+    {
+      "id": "keepDeleted",
+      "type": "boolean",
+      "name": "保留已删除来源",
+      "description": "删除原待办或整张待办纸后仍保留复盘记录。",
+      "default": true,
+      "quick": true
+    },
+    {
+      "id": "showOpenItems",
+      "type": "boolean",
+      "name": "显示进行中待办",
+      "description": "在“全部记录”和“进行中”筛选中显示尚未完成的项目。",
+      "default": false,
+      "quick": true
+    },
+    {
+      "id": "initialImport",
+      "type": "select",
+      "name": "首次导入现有待办",
+      "default": "completed",
+      "options": [
+        { "value": "none", "name": "不自动导入" },
+        { "value": "completed", "name": "仅已完成" },
+        { "value": "all", "name": "全部待办" }
+      ]
+    },
+    {
+      "id": "defaultFilter",
+      "type": "select",
+      "name": "默认筛选",
+      "default": "completed",
+      "options": [
+        { "value": "completed", "name": "已完成" },
+        { "value": "today", "name": "今天完成" },
+        { "value": "week", "name": "近 7 天" },
+        { "value": "month", "name": "近 30 天" },
+        { "value": "all", "name": "全部记录" }
+      ]
+    },
+    {
+      "id": "retentionDays",
+      "type": "number",
+      "name": "保留天数",
+      "description": "0 表示永久保留。",
+      "default": 0,
+      "min": 0,
+      "max": 3650,
+      "step": 30,
+      "suffix": "天"
+    },
+    {
+      "id": "maxRecords",
+      "type": "number",
+      "name": "最大记录数",
+      "default": 10000,
+      "min": 100,
+      "max": 50000,
+      "step": 100,
+      "suffix": "条"
+    },
+    {
+      "id": "exportEncoding",
+      "type": "select",
+      "name": "CSV 编码",
+      "default": "utf8bom",
+      "options": [
+        { "value": "utf8bom", "name": "UTF-8 BOM（推荐 Excel）" },
+        { "value": "utf8", "name": "UTF-8" }
+      ]
+    },
+    {
+      "id": "exportDateFormat",
+      "type": "select",
+      "name": "时间格式",
+      "default": "local",
+      "options": [
+        { "value": "local", "name": "本地时间（到分钟）" },
+        { "value": "iso", "name": "ISO 风格（到秒）" }
+      ]
+    },
+    {
+      "id": "includePaperTitle",
+      "type": "boolean",
+      "name": "包含所属纸片",
+      "default": true
+    },
+    {
+      "id": "showDeletedBadge",
+      "type": "boolean",
+      "name": "标记来源已删除",
+      "default": true
+    },
+    {
+      "id": "confirmClear",
+      "type": "boolean",
+      "name": "清空前确认",
+      "default": true
+    },
+    {
+      "id": "titleMode",
+      "type": "select",
+      "name": "胶囊标题",
+      "default": "summary",
+      "options": [
+        { "value": "summary", "name": "累计完成数" },
+        { "value": "today", "name": "今日完成数" },
+        { "value": "fixed", "name": "固定文字" }
+      ]
+    },
+    {
+      "id": "fixedTitle",
+      "type": "string",
+      "name": "固定标题",
+      "default": "复盘记录",
+      "maxLength": 40,
+      "placeholder": "复盘记录"
+    }
+  ]
+}
