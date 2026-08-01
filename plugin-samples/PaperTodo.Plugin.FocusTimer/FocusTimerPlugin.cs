@@ -29,6 +29,10 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
 
     private sealed class State
     {
+        public State()
+        {
+        }
+
         public TimerMode Mode { get; set; } = TimerMode.Focus;
         public int FocusMinutes { get; set; } = 25;
         public int BreakMinutes { get; set; } = 5;
@@ -118,7 +122,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             center.Children.Add(_statusText);
             center.Children.Add(_progress);
 
-            _minusButton = MakeButton("−");
+            _minusButton = MakeButton("−5");
             _durationText = new TextBlock
             {
                 MinWidth = 86,
@@ -126,7 +130,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 VerticalAlignment = VerticalAlignment.Center,
                 TextAlignment = TextAlignment.Center
             };
-            _plusButton = MakeButton("+");
+            _plusButton = MakeButton("+5");
 
             var durationRow = new StackPanel
             {
