@@ -2,11 +2,105 @@
   "kind": "native",
   "id": "sample.focus-timer.native",
   "name": "专注计时器",
-  "description": "完全使用 WPF 控件实现，支持折叠后台计时和状态恢复。",
-  "version": "1.1.0",
+  "description": "完整的 WPF 番茄钟示例，支持自动轮转、声音、每日目标和折叠后台计时。",
+  "version": "1.2.0",
   "apiVersion": "1.2",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.FocusTimer.dll",
   "capabilities": ["textZoom"],
-  "requires": ["backgroundUpdates"]
+  "requires": ["backgroundUpdates"],
+  "settings": [
+    {
+      "id": "autoStartNext",
+      "type": "boolean",
+      "name": "自动开始下一阶段",
+      "description": "专注结束后自动开始休息，休息结束后自动开始专注。",
+      "default": false,
+      "quick": true
+    },
+    {
+      "id": "showProgress",
+      "type": "boolean",
+      "name": "显示进度条",
+      "default": true,
+      "quick": true
+    },
+    {
+      "id": "showCompleted",
+      "type": "boolean",
+      "name": "显示完成统计",
+      "default": true,
+      "quick": true
+    },
+    {
+      "id": "focusMinutes",
+      "type": "number",
+      "name": "默认专注时长",
+      "default": 25,
+      "min": 1,
+      "max": 180,
+      "step": 1,
+      "suffix": "分钟"
+    },
+    {
+      "id": "breakMinutes",
+      "type": "number",
+      "name": "默认休息时长",
+      "default": 5,
+      "min": 1,
+      "max": 180,
+      "step": 1,
+      "suffix": "分钟"
+    },
+    {
+      "id": "adjustStep",
+      "type": "number",
+      "name": "加减步长",
+      "default": 5,
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "suffix": "分钟"
+    },
+    {
+      "id": "dailyGoal",
+      "type": "number",
+      "name": "每日目标",
+      "description": "0 表示只显示完成数，不显示目标。",
+      "default": 4,
+      "min": 0,
+      "max": 24,
+      "step": 1,
+      "suffix": "轮"
+    },
+    {
+      "id": "sound",
+      "type": "select",
+      "name": "结束提示音",
+      "default": "asterisk",
+      "options": [
+        { "value": "none", "name": "静音" },
+        { "value": "beep", "name": "蜂鸣" },
+        { "value": "asterisk", "name": "提示" },
+        { "value": "exclamation", "name": "警示" }
+      ]
+    },
+    {
+      "id": "titleStyle",
+      "type": "select",
+      "name": "胶囊标题",
+      "default": "countdown",
+      "options": [
+        { "value": "countdown", "name": "阶段与倒计时" },
+        { "value": "status", "name": "仅阶段状态" },
+        { "value": "fixed", "name": "固定标题" }
+      ]
+    },
+    {
+      "id": "confirmReset",
+      "type": "boolean",
+      "name": "重置前确认",
+      "default": true
+    }
+  ]
 }
