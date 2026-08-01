@@ -11,39 +11,161 @@
       --text: #222;
       --weak: #777;
       --accent: #b07a31;
+      --border: #807050;
       --font: system-ui, sans-serif;
-      --scale: 1;
+      --host-scale: 1;
+      --clock-scale: 1;
     }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; background: var(--paper); }
+    html, body { width: 100%; height: 100%; margin: 0; background: transparent; }
     body {
       display: grid;
       place-items: center;
       color: var(--text);
       font-family: var(--font);
-      font-size: calc(16px * var(--scale));
+      font-size: calc(16px * var(--host-scale));
       user-select: none;
       overflow: hidden;
     }
-    main { text-align: center; padding: 20px; }
-    #time { font-size: clamp(38px, 15vw, 76px); font-weight: 650; letter-spacing: .04em; }
-    #date { margin-top: 10px; color: var(--weak); font-size: .86em; }
+    main {
+      width: min(100%, 620px);
+      padding: clamp(18px, 5vw, 32px);
+      text-align: center;
+    }
+    .zone {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+      border-radius: 999px;
+      color: var(--weak);
+      font-size: .72em;
+      letter-spacing: .04em;
+    }
+    .zone::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .time-row {
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      margin-top: 12px;
+      white-space: nowrap;
+    }
+    #time {
+      font-size: calc(clamp(48px, 16vw, 92px) * var(--clock-scale));
+      font-weight: 650;
+      line-height: 1;
+      letter-spacing: .025em;
+      font-variant-numeric: tabular-nums;
+    }
     #seconds { color: var(--accent); }
+    #meridiem {
+      margin-left: 10px;
+      color: var(--weak);
+      font-size: .78em;
+      font-weight: 600;
+    }
+    #date {
+      min-height: 1.4em;
+      margin-top: 12px;
+      color: var(--weak);
+      font-size: .9em;
+    }
+    .progress {
+      height: 5px;
+      margin: 20px 10px 0;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text) 13%, transparent);
+      overflow: hidden;
+    }
+    #progress {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width .4s ease;
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 9px;
+      color: var(--weak);
+      font-size: .68em;
+    }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <main>
-    <div id="time"><span id="hours"></span>:<span id="minutes"></span><span id="seconds"></span></div>
+    <div id="zone" class="zone"></div>
+    <div class="time-row">
+      <div id="time"><span id="hours"></span>:<span id="minutes"></span><span id="seconds"></span></div>
+      <span id="meridiem"></span>
+    </div>
     <div id="date"></div>
+    <div id="progressTrack" class="progress"><div id="progress"></div></div>
+    <div class="meta">
+      <span id="week"></span>
+      <span id="dayPercent"></span>
+    </div>
   </main>
   <script>
+    const defaults = Object.freeze({
+      showSeconds: true,
+      showDate: true,
+      showWeekday: true,
+      showDayProgress: true,
+      showWeekNumber: true,
+      hourCycle: '24',
+      dateFormat: 'long',
+      timeZone: 'local',
+      titleMode: 'time',
+      customTitle: '',
+      clockScale: 1
+    });
+
+    let settings = { ...defaults };
     let visible = true;
-    let showSeconds = true;
     let timer = 0;
-    const hoursElement = document.getElementById('hours');
-    const minutesElement = document.getElementById('minutes');
-    const secondsElement = document.getElementById('seconds');
-    const dateElement = document.getElementById('date');
+
+    const $ = id => document.getElementById(id);
+    const hoursElement = $('hours');
+    const minutesElement = $('minutes');
+    const secondsElement = $('seconds');
+    const meridiemElement = $('meridiem');
+    const dateElement = $('date');
+    const zoneElement = $('zone');
+    const progressTrack = $('progressTrack');
+    const progressElement = $('progress');
+    const weekElement = $('week');
+    const dayPercentElement = $('dayPercent');
+
+    const zoneMap = Object.freeze({
+      local: undefined,
+      utc: 'UTC',
+      beijing: 'Asia/Shanghai',
+      tokyo: 'Asia/Tokyo',
+      london: 'Europe/London',
+      newYork: 'America/New_York',
+      losAngeles: 'America/Los_Angeles'
+    });
+    const zoneLabels = Object.freeze({
+      local: '本地时间',
+      utc: 'UTC',
+      beijing: '北京时间',
+      tokyo: '东京时间',
+      london: '伦敦时间',
+      newYork: '纽约时间',
+      losAngeles: '洛杉矶时间'
+    });
 
     function applyTheme(theme) {
       if (!theme) return;
@@ -52,29 +174,108 @@
       root.setProperty('--text', theme.textColor || '#222');
       root.setProperty('--weak', theme.weakTextColor || '#777');
       root.setProperty('--accent', theme.accentColor || '#b07a31');
+      root.setProperty('--border', theme.borderColor || '#807050');
       root.setProperty('--font', JSON.stringify(theme.fontFamily || 'system-ui'));
-      root.setProperty('--scale', String(theme.fontScale || 1));
+      root.setProperty('--host-scale', String(theme.fontScale || 1));
     }
 
-    function applySettings(settings) {
-      showSeconds = settings?.showSeconds !== false;
+    function applySettings(value) {
+      settings = { ...defaults, ...(value || {}) };
+      settings.clockScale = Math.min(1.6, Math.max(.75, Number(settings.clockScale) || 1));
+      document.documentElement.style.setProperty('--clock-scale', String(settings.clockScale));
+      progressTrack.hidden = !settings.showDayProgress;
+      weekElement.hidden = !settings.showWeekNumber;
+    }
+
+    function zonedParts(date) {
+      const timeZone = zoneMap[settings.timeZone];
+      const parts = new Intl.DateTimeFormat(undefined, {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        weekday: 'long',
+        hour12: settings.hourCycle === '12'
+      }).formatToParts(date);
+      return Object.fromEntries(parts.map(part => [part.type, part.value]));
+    }
+
+    function formatDate(date, parts) {
+      if (!settings.showDate && !settings.showWeekday) return '';
+      let base = '';
+      if (settings.showDate) {
+        const y = parts.year;
+        const m = parts.month;
+        const d = parts.day;
+        base = settings.dateFormat === 'short' ? `${y}-${m}-${d}`
+          : settings.dateFormat === 'slash' ? `${y}/${m}/${d}`
+          : settings.dateFormat === 'us' ? `${m}/${d}/${y}`
+          : settings.dateFormat === 'eu' ? `${d}/${m}/${y}`
+          : `${y}年${Number(m)}月${Number(d)}日`;
+      }
+      return [base, settings.showWeekday ? parts.weekday : ''].filter(Boolean).join(' · ');
+    }
+
+    function zonedClockParts(date) {
+      const timeZone = zoneMap[settings.timeZone];
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+      }).formatToParts(date);
+      return Object.fromEntries(parts.map(part => [part.type, part.value]));
+    }
+
+    function isoWeek(year, month, dayOfMonth) {
+      const value = new Date(Date.UTC(Number(year), Number(month) - 1, Number(dayOfMonth)));
+      const day = value.getUTCDay() || 7;
+      value.setUTCDate(value.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
+      return Math.ceil((((value - yearStart) / 86400000) + 1) / 7);
+    }
+
+    function titleText(timeText, dateText) {
+      if (settings.titleMode === 'date') return dateText.split(' · ')[0] || timeText;
+      if (settings.titleMode === 'zone') return `${zoneLabels[settings.timeZone] || '本地时间'} · ${timeText}`;
+      if (settings.titleMode === 'fixed') return '时钟';
+      if (settings.titleMode === 'custom' && String(settings.customTitle || '').trim()) {
+        return String(settings.customTitle).trim();
+      }
+      return timeText;
     }
 
     function render() {
       const now = new Date();
-      const two = value => String(value).padStart(2, '0');
-      hoursElement.textContent = two(now.getHours());
-      minutesElement.textContent = two(now.getMinutes());
-      secondsElement.textContent = showSeconds ? ':' + two(now.getSeconds()) : '';
-      dateElement.textContent = new Intl.DateTimeFormat(undefined, {
-        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
-      }).format(now);
-      window.papertodo?.setDisplayTitle(`${two(now.getHours())}:${two(now.getMinutes())}`);
+      const parts = zonedParts(now);
+      hoursElement.textContent = parts.hour;
+      minutesElement.textContent = parts.minute;
+      secondsElement.textContent = settings.showSeconds ? `:${parts.second}` : '';
+      meridiemElement.textContent = settings.hourCycle === '12' ? (parts.dayPeriod || '') : '';
+
+      const dateText = formatDate(now, parts);
+      dateElement.textContent = dateText;
+      dateElement.hidden = !dateText;
+      zoneElement.textContent = zoneLabels[settings.timeZone] || '本地时间';
+
+      const clock = zonedClockParts(now);
+      const elapsed = Number(clock.hour) * 3600 + Number(clock.minute) * 60 + Number(clock.second);
+      const percent = Math.min(100, Math.max(0, elapsed / 864));
+      progressElement.style.width = `${percent}%`;
+      dayPercentElement.textContent = `今日 ${percent.toFixed(1)}%`;
+      weekElement.textContent = `第 ${isoWeek(parts.year, parts.month, parts.day)} 周`;
+
+      const timeText = `${parts.hour}:${parts.minute}`;
+      window.papertodo?.setDisplayTitle(titleText(timeText, dateText));
     }
 
     function updateTimer() {
       clearInterval(timer);
-      if (visible) timer = setInterval(render, 1000);
+      if (visible) timer = setInterval(render, settings.showSeconds ? 250 : 1000);
       render();
     }
 
@@ -87,7 +288,7 @@
         updateTimer();
       } else if (message.type === 'settingsChanged') {
         applySettings(message.settings);
-        render();
+        updateTimer();
       } else if (message.type === 'themeChanged' || message.type === 'typographyChanged') {
         applyTheme(message.theme);
       } else if (message.type === 'visibilityChanged') {
@@ -96,6 +297,7 @@
       }
     });
 
+    applySettings(defaults);
     render();
   </script>
 </body>
