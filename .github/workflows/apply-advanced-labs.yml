@@ -1,14 +1,12 @@
 name: Apply advanced labs commits
 
 on:
-  push:
-    branches:
-      - automation/advanced-labs-20260807
-    paths:
-      - .publish/advanced-labs/trigger
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: apply-advanced-labs-20260807
@@ -16,6 +14,7 @@ concurrency:
 
 jobs:
   apply:
+    if: github.event.issue.title == '[automation] Apply advanced labs commits'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout staging branch
@@ -40,8 +39,8 @@ jobs:
 
           git fetch origin main
           bootstrap="$(git rev-parse origin/main)"
-          test "$(git rev-parse "${bootstrap}^")" = "e7b74261dc2de0b5e389569843189c9d5b572454"
-          test "$(git diff-tree --no-commit-id --name-only -r "$bootstrap")" = ".github/workflows/apply-advanced-labs.yml"
+          test "$(git merge-base e7b74261dc2de0b5e389569843189c9d5b572454 "$bootstrap")" = "e7b74261dc2de0b5e389569843189c9d5b572454"
+          test "$(git diff --name-only e7b74261dc2de0b5e389569843189c9d5b572454.."$bootstrap")" = ".github/workflows/apply-advanced-labs.yml"
 
           git config user.name "OpenAI"
           git config user.email "noreply@openai.com"
@@ -55,3 +54,10 @@ jobs:
         if: success()
         shell: bash
         run: git push origin --delete automation/advanced-labs-20260807 || true
+
+      - name: Close trigger issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --comment "A、B、C 三个提交已应用到 main。"
