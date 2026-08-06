@@ -1,0 +1,57 @@
+name: Apply advanced labs commits
+
+on:
+  push:
+    branches:
+      - automation/advanced-labs-20260807
+    paths:
+      - .publish/advanced-labs/trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-advanced-labs-20260807
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: automation/advanced-labs-20260807
+          fetch-depth: 0
+
+      - name: Verify and apply A B C commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .publish/advanced-labs/chunk-* > /tmp/patches.tar.gz.b64
+          test "$(sha256sum /tmp/patches.tar.gz.b64 | cut -d' ' -f1)" = "a2c8c51e50a15683c0523fa4db903c615188ab20055d4353e42143bc98562c0a"
+          base64 --decode /tmp/patches.tar.gz.b64 > /tmp/patches.tar.gz
+          test "$(sha256sum /tmp/patches.tar.gz | cut -d' ' -f1)" = "e00a509f6353663503a31dc3d91413ff7d7f62f4acce95a8df047c1553c593dc"
+          mkdir -p /tmp/patches
+          tar -xzf /tmp/patches.tar.gz -C /tmp/patches
+          test "$(sha256sum /tmp/patches/0001-a.patch | cut -d' ' -f1)" = "c23d6d372febf7bfb62a7f2d4b629c60158211be0efe54abe9504329935ee789"
+          test "$(sha256sum /tmp/patches/0002-b.patch | cut -d' ' -f1)" = "50269b7eea583cb31322d8ead354227929797f5ddff5253d4da75af43c77974e"
+          test "$(sha256sum /tmp/patches/0003-c.patch | cut -d' ' -f1)" = "7b3b364a54031c420d2575ae275c1e08dd025f4ddda8bd52795c4145b55ad65d"
+
+          git fetch origin main
+          bootstrap="$(git rev-parse origin/main)"
+          test "$(git rev-parse "${bootstrap}^")" = "e7b74261dc2de0b5e389569843189c9d5b572454"
+          test "$(git diff-tree --no-commit-id --name-only -r "$bootstrap")" = ".github/workflows/apply-advanced-labs.yml"
+
+          git config user.name "OpenAI"
+          git config user.email "noreply@openai.com"
+          git checkout -B main e7b74261dc2de0b5e389569843189c9d5b572454
+          git am /tmp/patches/0001-a.patch
+          git am /tmp/patches/0002-b.patch
+          git am /tmp/patches/0003-c.patch
+          git push --force-with-lease=refs/heads/main:"$bootstrap" origin HEAD:main
+
+      - name: Remove staging branch
+        if: success()
+        shell: bash
+        run: git push origin --delete automation/advanced-labs-20260807 || true
