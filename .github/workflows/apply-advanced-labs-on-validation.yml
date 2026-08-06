@@ -1,0 +1,107 @@
+name: Apply advanced labs after validation trigger
+
+on:
+  workflow_run:
+    workflows:
+      - Apply native reflow and selection patch
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-advanced-labs-final
+  cancel-in-progress: false
+
+jobs:
+  apply-build-publish:
+    if: github.event.workflow_run.head_branch == 'agent/native-reflow-selection-host-select'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+      BASE_SHA: e7b74261dc2de0b5e389569843189c9d5b572454
+      STAGING_BRANCH: automation/advanced-labs-20260807
+    steps:
+      - name: Checkout publisher bootstrap
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Reconstruct and verify A B C patches
+        run: |
+          git fetch origin $env:STAGING_BRANCH
+          $encodedPath = Join-Path $env:RUNNER_TEMP 'advanced-labs-patches.tar.gz.b64'
+          $archivePath = Join-Path $env:RUNNER_TEMP 'advanced-labs-patches.tar.gz'
+          $patchDir = Join-Path $env:RUNNER_TEMP 'advanced-labs-patches'
+          $encoded = ''
+          0..5 | ForEach-Object {
+            $suffix = $_.ToString('00')
+            $encoded += git show "origin/$($env:STAGING_BRANCH):.publish/advanced-labs/chunk-$suffix"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          [IO.File]::WriteAllText($encodedPath, $encoded, [Text.Encoding]::ASCII)
+          if ((Get-FileHash $encodedPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a2c8c51e50a15683c0523fa4db903c615188ab20055d4353e42143bc98562c0a') { throw 'Encoded bundle checksum mismatch.' }
+          [IO.File]::WriteAllBytes($archivePath, [Convert]::FromBase64String($encoded))
+          if ((Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e00a509f6353663503a31dc3d91413ff7d7f62f4acce95a8df047c1553c593dc') { throw 'Archive checksum mismatch.' }
+          New-Item -ItemType Directory -Path $patchDir -Force | Out-Null
+          tar -xzf $archivePath -C $patchDir
+          $expected = @{
+            '0001-a.patch' = 'c23d6d372febf7bfb62a7f2d4b629c60158211be0efe54abe9504329935ee789'
+            '0002-b.patch' = '50269b7eea583cb31322d8ead354227929797f5ddff5253d4da75af43c77974e'
+            '0003-c.patch' = '7b3b364a54031c420d2575ae275c1e08dd025f4ddda8bd52795c4145b55ad65d'
+          }
+          foreach ($entry in $expected.GetEnumerator()) {
+            $actual = (Get-FileHash (Join-Path $patchDir $entry.Key) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $entry.Value) { throw "Patch checksum mismatch: $($entry.Key)" }
+          }
+          "PATCH_DIR=$patchDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify bootstrap and apply three commits
+        run: |
+          git fetch origin main
+          $bootstrap = (git rev-parse origin/main).Trim()
+          $parent = (git rev-parse "$bootstrap^").Trim()
+          if ($parent -ne $env:BASE_SHA) { throw "Unexpected main parent: $parent" }
+          $changed = @(git diff-tree --no-commit-id --name-only -r $bootstrap)
+          if ($changed.Count -ne 1 -or $changed[0] -ne '.github/workflows/apply-advanced-labs-on-validation.yml') { throw "Unexpected bootstrap files: $($changed -join ', ')" }
+          git config user.name 'OpenAI'
+          git config user.email 'noreply@openai.com'
+          git checkout -B advanced-labs-publish $env:BASE_SHA
+          git am (Join-Path $env:PATCH_DIR '0001-a.patch')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git am (Join-Path $env:PATCH_DIR '0002-b.patch')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git am (Join-Path $env:PATCH_DIR '0003-c.patch')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "BOOTSTRAP_SHA=$bootstrap" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Static audit
+        run: |
+          git diff --check $env:BASE_SHA..HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $count = [int](git rev-list --count "$($env:BASE_SHA)..HEAD")
+          if ($count -ne 3) { throw "Expected exactly three commits, got $count." }
+          $subjects = @(git log --format='%s' --reverse "$($env:BASE_SHA)..HEAD")
+          $expected = @(
+            'ui: simplify labs and plugin settings',
+            'feat: add advanced lock and opacity shortcuts',
+            'feat: add strict collapse and non-topmost docked capsules'
+          )
+          if (Compare-Object $subjects $expected) { throw "Unexpected commit subjects: $($subjects -join ' | ')" }
+
+      - name: Build native LMDB library
+        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Build PaperTodo
+        run: dotnet build .\PaperTodo.csproj -c Release
+
+      - name: Publish A B C to main
+        run: |
+          git push --force-with-lease="refs/heads/main:$($env:BOOTSTRAP_SHA)" origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
