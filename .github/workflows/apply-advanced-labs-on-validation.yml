@@ -1,23 +1,25 @@
 name: Publish advanced labs A B C D
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .publish/advanced-labs/run-now
+  pull_request_target:
+    types:
+      - closed
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: apply-advanced-labs-final
   cancel-in-progress: false
 
 jobs:
-  apply-publish:
+  apply-build-publish:
+    if: github.event.pull_request.merged == true && github.event.pull_request.title == '[automation] Publish advanced labs A B C D'
     runs-on: ubuntu-latest
     env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
       BASE_SHA: e7b74261dc2de0b5e389569843189c9d5b572454
       STAGING_BRANCH: automation/advanced-labs-20260807
     steps:
@@ -25,8 +27,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
-      - name: Reconstruct patches
+      - name: Reconstruct and verify patches
         shell: bash
         run: |
           set -euo pipefail
@@ -43,6 +46,9 @@ jobs:
           test "$(sha256sum "$archive" | cut -d' ' -f1)" = "e00a509f6353663503a31dc3d91413ff7d7f62f4acce95a8df047c1553c593dc"
           mkdir -p "$patch_dir"
           tar -xzf "$archive" -C "$patch_dir"
+          test "$(sha256sum "$patch_dir/0001-a.patch" | cut -d' ' -f1)" = "c23d6d372febf7bfb62a7f2d4b629c60158211be0efe54abe9504329935ee789"
+          test "$(sha256sum "$patch_dir/0002-b.patch" | cut -d' ' -f1)" = "50269b7eea583cb31322d8ead354227929797f5ddff5253d4da75af43c77974e"
+          test "$(sha256sum "$patch_dir/0003-c.patch" | cut -d' ' -f1)" = "7b3b364a54031c420d2575ae275c1e08dd025f4ddda8bd52795c4145b55ad65d"
           git show "origin/$STAGING_BRANCH:.publish/advanced-labs/0004-d.patch" > "$patch_dir/0004-d.patch"
           echo "PATCH_DIR=$patch_dir" >> "$GITHUB_ENV"
 
@@ -76,6 +82,10 @@ jobs:
           test "${subjects[1]}" = "feat: add advanced lock and opacity shortcuts"
           test "${subjects[2]}" = "feat: add strict collapse and non-topmost docked capsules"
           test "${subjects[3]}" = "fix: tighten strict collapse input tracking"
+
+      - name: Build PaperTodo
+        shell: bash
+        run: dotnet build ./PaperTodo.csproj -c Release -p:EnableWindowsTargeting=true
 
       - name: Publish A B C D to main
         shell: bash
