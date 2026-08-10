@@ -131,38 +131,32 @@ internal sealed partial class EdgeCapsuleHost
             1,
             frame.Bounds.Height - chromeMarginDevice * 2);
         var bodyHeight = bodyHeightDevice / dpiScaleY;
-        var outlineMarginDip =
-            _options.WindowChromeMargin -
-            _options.OutlineThickness +
-            _options.OutlineOverlap;
-        var outlineMarginDevice = Math.Max(
-            0,
-            (int)Math.Round(
-                outlineMarginDip * dpiScaleY,
-                MidpointRounding.AwayFromZero));
-        var outlineHeightDevice = Math.Max(
-            0,
-            frame.Bounds.Height - outlineMarginDevice * 2);
 
-        // Keep the rounded shell inside the exact physical-pixel budget owned by frame.Bounds.
-        // This avoids the lower inner corner being cut by one device pixel while a preview shrinks
-        // on fractional DPI: margins and body height now consume one shared device-pixel budget.
-        Chrome.VerticalAlignment = VerticalAlignment.Top;
-        Chrome.Height = bodyHeight;
-        Shell.VerticalAlignment = VerticalAlignment.Top;
-        Shell.Height = bodyHeight;
-        Outline.VerticalAlignment = VerticalAlignment.Top;
-        Outline.Height = outlineHeightDevice / dpiScaleY;
+        // VisualSurface owns the exact device-pixel frame in both axes. Keep all three shells
+        // stretched inside that one surface so width and height are committed by the same WPF
+        // layout pass; assigning three independent heights here makes the native height resize
+        // visibly lead the surface-width update while a preview is shrinking.
+        Chrome.VerticalAlignment = VerticalAlignment.Stretch;
+        Chrome.Height = double.NaN;
+        Shell.VerticalAlignment = VerticalAlignment.Stretch;
+        Shell.Height = double.NaN;
+        Outline.VerticalAlignment = VerticalAlignment.Stretch;
+        Outline.Height = double.NaN;
 
         var heightExpanded =
             bodyHeight > _options.BodyHeight + 0.5;
-        var visible = heightExpanded;
+        var previewSurface =
+            frame.Surface == EdgeCapsuleSurfaceKind.DockedPreview;
+        // Opening starts with the old compact bounds, while an outgoing preview deliberately keeps
+        // DockedPreview until the width/height transition reaches its common final frame. Surface,
+        // not the intermediate height threshold, therefore owns the preview tree's lifetime.
+        var retainPreview = previewSurface || heightExpanded;
 
         var hasContent =
             _previewViewportLayer != null &&
             _previewContentLayer != null &&
             _previewContent != null;
-        _previewVisible = visible && hasContent;
+        _previewVisible = retainPreview && hasContent;
 
         if (_previewContentLayer != null)
         {
@@ -174,15 +168,18 @@ internal sealed partial class EdgeCapsuleHost
             _previewVisible,
             _previewVisible && frame.IsHitTestVisible);
 
-        // Compact and preview text are mutually exclusive. The preview tree is prepared before the
-        // transaction starts and remains fully rendered while its viewport reveals/shrinks it; the
-        // compact title returns only after the preview has reached the fully compact frame.
-        ApplyCompactContentVisibility(suppressed: visible);
+        // Compact and preview text are mutually exclusive. During a rapid third-card transfer the
+        // controller may deliberately release the oldest tree before its non-interactive shell has
+        // finished shrinking; keep that shell blank, but retain the compact title if an interactive
+        // preview ever reaches Apply without staged content.
+        ApplyCompactContentVisibility(
+            suppressed: _previewVisible ||
+                (retainPreview && !frame.IsHitTestVisible));
 
-        if (!visible && hasContent)
+        if (!retainPreview && hasContent)
         {
             // Keep the outgoing final-size tree while the viewport shrinks, then release it on the
-            // first fully compact frame. The controller may clear an older outgoing tree earlier
+            // common final compact frame. The controller may clear an older outgoing tree earlier
             // during a rapid third-card transfer.
             DetachPreviewContent();
         }
