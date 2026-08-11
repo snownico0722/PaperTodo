@@ -21,6 +21,8 @@ internal sealed class EdgeCapsuleFrameScheduler
     private bool _isTicking;
     private bool _acceptingPostCommitCallbacks;
     private int _pendingLoadedReconciles;
+    private bool _hasRenderingTime;
+    private TimeSpan _lastRenderingTime;
 #if DEBUG
     private long _lastRenderingTimestamp;
     private long _debugFrameSequence;
@@ -96,6 +98,29 @@ internal sealed class EdgeCapsuleFrameScheduler
             _pendingLoadedReconciles > 0)
         {
             return;
+        }
+
+        // WPF can raise CompositionTarget.Rendering more than once for the same compositor frame
+        // when multiple visual trees invalidate around one render pass. A queue-wide native batch
+        // is expensive enough that replaying the exact same RenderingTime is never useful: all
+        // intermediate target changes stay in Presenter state and the next real display frame
+        // samples the latest target once.
+        if (e is RenderingEventArgs renderingArgs)
+        {
+            if (_hasRenderingTime &&
+                renderingArgs.RenderingTime == _lastRenderingTime)
+            {
+#if DEBUG
+                EdgeCapsulePerformanceDiagnostics.Trace(
+                    $"scheduler.frame skipped=duplicate-render " +
+                    $"renderMs={renderingArgs.RenderingTime.TotalMilliseconds:F3} " +
+                    $"presenters={_presenters.Count} loadedPending={_pendingLoadedReconciles}");
+#endif
+                return;
+            }
+
+            _lastRenderingTime = renderingArgs.RenderingTime;
+            _hasRenderingTime = true;
         }
 
 #if DEBUG
@@ -208,6 +233,8 @@ internal sealed class EdgeCapsuleFrameScheduler
         double slowestPresenterMilliseconds = 0;
         var slowestPresenter = "<none>";
         var debugOutcome = "exception";
+        var debugNativeWindowCount = 0;
+        var debugNativeCommitAttempted = false;
 #endif
         try
         {
@@ -278,6 +305,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                     statusMilliseconds +=
                         EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(
                             statusStartedAt);
+                    debugNativeWindowCount = nativeBoundsBatch.PendingWindowCount;
                     var nativeCommitStartedAt =
                         EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
@@ -286,6 +314,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                     nativeCommitMilliseconds +=
                         EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(
                             nativeCommitStartedAt);
+                    debugNativeCommitAttempted = nativeBoundsBatch.PerformedNativeCommit;
 #endif
                 }
 
@@ -379,6 +408,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                 $"reconcileMs={reconcileMilliseconds:F3} statusMs={statusMilliseconds:F3} " +
                 $"nativeCommitMs={nativeCommitMilliseconds:F3} completeMs={completionMilliseconds:F3} " +
                 $"postCommitMs={postCommitMilliseconds:F3} presenters={presenters.Count} " +
+                $"nativeWindows={debugNativeWindowCount} nativeCommit={debugNativeCommitAttempted} " +
                 $"slowest={slowestPresenter}:{slowestPresenterMilliseconds:F3} " +
                 $"transaction={transactionGroupId}");
 #endif
@@ -431,6 +461,8 @@ internal sealed class EdgeCapsuleFrameScheduler
         {
             CompositionTarget.Rendering -= OnRendering;
             _renderingSubscribed = false;
+            _hasRenderingTime = false;
+            _lastRenderingTime = default;
 #if DEBUG
             _lastRenderingTimestamp = 0;
 #endif
