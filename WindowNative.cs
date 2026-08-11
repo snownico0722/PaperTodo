@@ -452,7 +452,14 @@ internal static class WindowNative
             }
             if (batch.IsAvailable)
             {
-                return batch.TryDefer(handle, bounds);
+                if (batch.TryDefer(handle, bounds))
+                {
+                    return true;
+                }
+                if (batch.HasFailed)
+                {
+                    return false;
+                }
             }
         }
 
