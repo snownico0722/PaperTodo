@@ -2,6 +2,31 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
+    internal bool HasDeepCapsuleFloatingDragCoverForQueue(
+        PaperWindow inputWindow)
+    {
+        var queueKey = QueueKey(inputWindow.EdgeCapsulePreviewPaper);
+        return _windows.Values.Any(candidate =>
+            !candidate.IsClosed &&
+            candidate.HasDeepCapsuleFloatingDragCover &&
+            string.Equals(
+                QueueKey(candidate.EdgeCapsulePreviewPaper),
+                queueKey,
+                StringComparison.Ordinal));
+    }
+
+    private void CancelPreviewActivationBehindFloatingDrag(
+        PaperWindow inputWindow)
+    {
+        _edgeCapsulePreviewQueuedTransferPaperId = null;
+        unchecked
+        {
+            _edgeCapsulePreviewTransferGeneration++;
+        }
+        CancelEdgeCapsulePreviewActivationIntent(
+            inputWindow.EdgeCapsulePreviewPaperId);
+    }
+
     /// <summary>
     /// Physical pointer authority for edge-preview input. Host/native input may prove that the
     /// pointer is inside a real applied rectangle even while the Presenter's cosmetic hover bit is
@@ -14,6 +39,15 @@ public sealed partial class AppController
     {
         if (IsExiting)
         {
+            return;
+        }
+
+        // During floating/docking handoff the floating HWND is already the queue's visual cover.
+        // A physical hit on a peer must not start a second preview proxy underneath that cover.
+        // Invalidate a transfer already queued earlier in the same reconcile notification turn.
+        if (HasDeepCapsuleFloatingDragCoverForQueue(inputWindow))
+        {
+            CancelPreviewActivationBehindFloatingDrag(inputWindow);
             return;
         }
 

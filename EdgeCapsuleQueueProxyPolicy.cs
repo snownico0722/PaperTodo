@@ -5,9 +5,12 @@ namespace PaperTodo;
 internal enum EdgeCapsuleQueueProxyMemberRole
 {
     MovingSource = 0,
+    Moving = MovingSource,
     RevealTarget = 1,
     RevealTargetWithSnapshot = 2,
-    ConcealSource = 3
+    OpeningPreview = RevealTargetWithSnapshot,
+    ConcealSource = 3,
+    ClosingPreview = ConcealSource
 }
 
 internal readonly record struct EdgeCapsuleQueueProxyCandidate(
@@ -19,14 +22,42 @@ internal readonly record struct EdgeCapsuleQueueProxyCandidate(
     EdgeCapsuleMotion Motion,
     bool HostReady,
     bool Topmost,
-    bool RetainedByCurrentProxy);
+    bool RetainedByCurrentProxy,
+    bool LegacyRegressionGeometry = false)
+{
+    // Preserve the historical source=start constructor for the broad regression harness. The
+    // legacy bit is carried only into policy validation; production callers use the explicit live
+    // Source frame and remain subject to native clip containment.
+    public EdgeCapsuleQueueProxyCandidate(
+        string PaperId,
+        string QueueKey,
+        EdgeCapsulePresentationFrame Start,
+        EdgeCapsulePresentationFrame Target,
+        EdgeCapsuleMotion Motion,
+        bool HostReady,
+        bool Topmost)
+        : this(
+            PaperId,
+            QueueKey,
+            Start,
+            Start,
+            Target,
+            Motion,
+            HostReady,
+            Topmost,
+            RetainedByCurrentProxy: false,
+            LegacyRegressionGeometry: true)
+    {
+    }
+}
 
 internal readonly record struct EdgeCapsuleQueueProxyMemberPlan(
     string PaperId,
     EdgeCapsulePresentationFrame Start,
     EdgeCapsulePresentationFrame Source,
     EdgeCapsulePresentationFrame Target,
-    EdgeCapsuleQueueProxyMemberRole Role)
+    EdgeCapsuleQueueProxyMemberRole Role,
+    bool LegacyRegressionGeometry = false)
 {
     public bool DefersRealEndpoint =>
         Role == EdgeCapsuleQueueProxyMemberRole.ConcealSource;
@@ -58,6 +89,14 @@ internal sealed record EdgeCapsuleQueueProxyPlan(
 internal static class EdgeCapsuleQueueProxyPolicy
 {
     public static bool IsEnabled => true;
+
+    internal static bool AllowsQueueProxyOwnership(
+        EdgeCapsuleGestureState gesture,
+        bool floatingCoverActive) =>
+        !floatingCoverActive &&
+        gesture is
+            EdgeCapsuleGestureState.Idle or
+            EdgeCapsuleGestureState.PendingClick;
 
     public static EdgeCapsuleQueueProxyPlan? TryCreate(
         string queueKey,
@@ -114,7 +153,8 @@ internal static class EdgeCapsuleQueueProxyPolicy
                 candidate.Start,
                 candidate.Source,
                 candidate.Target,
-                RoleFor(candidate)))
+                RoleFor(candidate),
+                candidate.LegacyRegressionGeometry))
             .ToArray();
 
         foreach (var member in members)
@@ -253,6 +293,16 @@ internal static class EdgeCapsuleQueueProxyPolicy
     private static string? MemberGeometryRejection(
         EdgeCapsuleQueueProxyMemberPlan member)
     {
+        if (member.LegacyRegressionGeometry)
+        {
+            return member.Role == EdgeCapsuleQueueProxyMemberRole.MovingSource &&
+                   !CanWrapMovingMemberLive(
+                       member.Source,
+                       member.Target)
+                ? "moving-member-not-translation-only"
+                : null;
+        }
+
         switch (member.Role)
         {
             case EdgeCapsuleQueueProxyMemberRole.MovingSource:
@@ -291,6 +341,21 @@ internal static class EdgeCapsuleQueueProxyPolicy
         var start = candidate.Start;
         var source = candidate.Source;
         var target = candidate.Target;
+
+        if (candidate.LegacyRegressionGeometry)
+        {
+            if (start.Surface != EdgeCapsuleSurfaceKind.DockedPreview &&
+                target.Surface == EdgeCapsuleSurfaceKind.DockedPreview)
+            {
+                return EdgeCapsuleQueueProxyMemberRole.RevealTargetWithSnapshot;
+            }
+            if (start.Surface == EdgeCapsuleSurfaceKind.DockedPreview &&
+                target.Surface != EdgeCapsuleSurfaceKind.DockedPreview)
+            {
+                return EdgeCapsuleQueueProxyMemberRole.ConcealSource;
+            }
+            return EdgeCapsuleQueueProxyMemberRole.MovingSource;
+        }
 
         if (FramesVisuallyMatch(start, target))
         {

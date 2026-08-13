@@ -37,7 +37,11 @@ internal static class EdgeCapsuleTargetPlanner
         var preview = !retracted &&
             !dockedSuppressed &&
             model.Preview == EdgeCapsulePreviewState.Open;
-        var expanded = !preview &&
+        // Once the floating HWND owns the visible drag pixels, the permanent docked source is only
+        // an invisible destination. Snap that source to its compact body instead of preserving a
+        // stale Hovered/Active close segment and animating hidden SetWindowPos width frames.
+        var expanded = !ownsFloatingHost &&
+            !preview &&
             !retracted &&
             (model.State.Visual is
                 EdgeCapsuleVisualState.Hovered or

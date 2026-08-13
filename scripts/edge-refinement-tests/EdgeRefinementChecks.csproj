@@ -18,6 +18,7 @@
     <Compile Include="PreviewTransferLayoutRegression.cs" />
     <Compile Include="NativeBatchReentrancyRegression.cs" />
     <Compile Include="QueueProxyNativeClipRegression.cs" />
+    <Compile Include="FloatingDragPlanningRegression.cs" />
     <Compile Include="QueueProxyAdmissionRegression.cs" />
     <Compile Include="..\..\ScreenGeometry.cs" Link="ScreenGeometry.cs" />
     <Compile Include="..\..\EdgeCapsulePreviewCorridor.cs" Link="EdgeCapsulePreviewCorridor.cs" />
