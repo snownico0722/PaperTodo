@@ -48,6 +48,11 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private bool _pendingSuccessorCompletionSuccess = true;
     private bool _coverPublished;
     private bool _targetRootInstalled;
+    private bool _handoffRetirementPending;
+    private bool _disposeAfterHandoffRetirement;
+#if DEBUG
+    private long _handoffRetirementStartedAtTimestamp;
+#endif
 
     private EdgeCapsuleQueueCompositionProxy(
         long sessionOrdinal,

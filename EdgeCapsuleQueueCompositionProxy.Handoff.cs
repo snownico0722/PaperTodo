@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using Vortice.DirectComposition;
 
 namespace PaperTodo;
@@ -8,7 +9,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 {
     private bool ContainsVisual(DeviceScreenPoint point)
     {
-        if (_disposed || _coverLost)
+        if (_disposed || _coverLost || _sourcesReleased)
         {
             return false;
         }
@@ -182,21 +183,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         DisposeCore(clearTargetRoot: false);
     }
 
-    public bool TryReleaseForHandoff()
+    private bool TryUncloakSourcesForHandoff()
     {
-        if (_disposed || _sourcesReleased)
-        {
-            return _sourcesReleased;
-        }
-        if (_coverLost)
-        {
-            return ReleaseAfterCoverLoss();
-        }
-        if (!ReferenceEquals(_host.Current, this))
-        {
-            return false;
-        }
-
         var restored =
             new List<IntPtr>(_cloakedRealSourceHandles.Count);
         var allRestored = true;
@@ -219,46 +207,139 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             }
         }
 
-        if (!allRestored)
+        if (allRestored)
         {
-            foreach (var handle in restored)
+            return true;
+        }
+
+        foreach (var handle in restored)
+        {
+            if (WindowNative.IsWindowHandleAlive(handle))
             {
-                if (WindowNative.IsWindowHandleAlive(handle))
-                {
-                    _ = WindowNative.TrySetWindowCloaked(
-                        handle,
-                        cloaked: true);
-                }
+                _ = WindowNative.TrySetWindowCloaked(
+                    handle,
+                    cloaked: true);
             }
-            WindowNative.FlushDesktopComposition();
+        }
+        WindowNative.FlushDesktopComposition();
+        return false;
+    }
+
+    public bool TryReleaseForHandoff()
+    {
+        if (_disposed)
+        {
+            return false;
+        }
+        if (_handoffRetirementPending || _sourcesReleased)
+        {
+            return true;
+        }
+        if (_coverLost)
+        {
+            return ReleaseAfterCoverLoss();
+        }
+        if (!ReferenceEquals(_host.Current, this) ||
+            !TryUncloakSourcesForHandoff())
+        {
             return false;
         }
 
+        // The exact final proxy frame remains above the newly uncloaked native endpoints, but the
+        // desktop barrier runs off the UI dispatcher. Existing controller cleanup can remove the
+        // logical route immediately; Dispose defers physical DComp teardown until this overlap ends.
         _sourcesReleased = true;
         _cloakedRealSourceHandles.Clear();
+        _handoffRetirementPending = true;
+        _sampleTimer.Stop();
+        _completionTimer.Stop();
+#if DEBUG
+        _handoffRetirementStartedAtTimestamp =
+            EdgeCapsulePerformanceDiagnostics.Timestamp();
+        EdgeCapsulePerformanceDiagnostics.Trace(
+            $"proxy.handoff phase=retire-begin session={_sessionOrdinal} " +
+            $"cold={IsColdSession} queue={_plan.QueueKey}");
+#endif
+
+        var dispatcher = _members[0].Window.Dispatcher;
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                WindowNative.FlushDesktopComposition();
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning(
+                    "Edge capsule queue asynchronous DWM barrier failed. Queue={0}; Session={1}; Exception={2}",
+                    _plan.QueueKey,
+                    _sessionOrdinal,
+                    ex);
+            }
+
+            if (dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+            try
+            {
+                _ = dispatcher.BeginInvoke(
+                    DispatcherPriority.Render,
+                    (Action)CompleteHandoffRetirement);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning(
+                    "Edge capsule queue retirement dispatch failed. Queue={0}; Session={1}; Exception={2}",
+                    _plan.QueueKey,
+                    _sessionOrdinal,
+                    ex);
+            }
+        });
+        return true;
+    }
+
+    private void CompleteHandoffRetirement()
+    {
+        if (_disposed || !_handoffRetirementPending)
+        {
+            return;
+        }
+
         try
         {
-            // Keep the exact final proxy pixels above the newly uncloaked endpoints for one desktop
-            // composition barrier. Only after DWM accepts the real endpoints is the root detached.
-            WindowNative.FlushDesktopComposition();
             if (ReferenceEquals(_host.Current, this))
             {
                 _target.SetRoot(null!).CheckError();
                 _device.Commit().CheckError();
-                _device.WaitForCommitCompletion().CheckError();
                 _targetRootInstalled = false;
                 _window.Hide();
             }
         }
         catch (Exception ex)
         {
+            _coverLost = true;
+            try { _window.Hide(); } catch { }
             Trace.TraceError(
-                "Edge capsule queue proxy release failed. Queue={0}; Session={1}; Exception={2}",
+                "Edge capsule queue asynchronous retirement failed. Queue={0}; Session={1}; Exception={2}",
                 _plan.QueueKey,
                 _sessionOrdinal,
                 ex);
         }
-        return true;
+        finally
+        {
+            _handoffRetirementPending = false;
+#if DEBUG
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"proxy.handoff phase=retire-complete session={_sessionOrdinal} " +
+                $"cold={IsColdSession} queue={_plan.QueueKey} " +
+                $"barrierMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(_handoffRetirementStartedAtTimestamp):F3}");
+#endif
+            if (_disposeAfterHandoffRetirement)
+            {
+                DisposeCore(clearTargetRoot: false);
+            }
+        }
     }
 
     public bool ReleaseAfterCoverLoss()
@@ -323,6 +404,11 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             AbortStaged();
             return;
         }
+        if (_handoffRetirementPending)
+        {
+            _disposeAfterHandoffRetirement = true;
+            return;
+        }
         if (_sourcesReleased &&
             !ReferenceEquals(_host.Current, this))
         {
@@ -343,6 +429,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             return;
         }
 
+        _handoffRetirementPending = false;
+        _disposeAfterHandoffRetirement = false;
         _ = TryRestoreSourcesAfterCoverLoss();
         _sourcesReleased = true;
         _cloakedRealSourceHandles.Clear();
@@ -359,6 +447,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         _disposed = true;
+        _handoffRetirementPending = false;
+        _disposeAfterHandoffRetirement = false;
         _sampleTimer.Stop();
         _completionTimer.Stop();
         try
