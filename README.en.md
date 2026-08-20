@@ -279,4 +279,4 @@ Thanks to the [linux.do](https://linux.do/) community.
 
 ## Star History
 
-[![PaperTodo Star History Chart](https://api.star-history.com/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.com/#snownico0722/PaperTodo&Date)
+[![PaperTodo Star History Chart](https://star-history.dera.page/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.dera.page/#snownico0722/PaperTodo&type=Date)

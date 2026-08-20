@@ -284,4 +284,4 @@ dotnet build -c Release
 
 ## Star 增长曲线
 
-[![PaperTodo Star 增长曲线](https://api.star-history.com/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.com/#snownico0722/PaperTodo&Date)
+[![PaperTodo Star 增长曲线](https://star-history.dera.page/svg?repos=snownico0722/PaperTodo&type=Date)](https://star-history.dera.page/#snownico0722/PaperTodo&type=Date)
