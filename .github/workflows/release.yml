@@ -43,6 +43,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
