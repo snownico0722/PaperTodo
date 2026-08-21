@@ -10,7 +10,7 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
@@ -34,7 +34,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: true
 
@@ -42,36 +41,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
-
-      - name: Apply settings UI backport
-        run: |
-          if (-not (Test-Path -LiteralPath ".\UiLanguages.cs" -PathType Leaf)) {
-            git fetch origin main
-            python .\.github\scripts\backport-3.3-settings-ui.py
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -- App.xaml.cs StateJsonReadPolicy.cs UiLanguages.cs Strings.cs SettingsSelectControl.cs AppController.SettingsSelects.cs Models.cs EdgeCapsuleLayout.cs AppController.Settings.cs AppController.Shortcuts.cs GlobalHotkeys.cs AppTypography.cs MasterCapsuleWindow.cs PaperWindow.cs EdgeCapsuleHost.cs EdgeCapsuleDragWindow.cs Resources/Strings.resx Resources/Strings.en.resx Resources/Strings.ja.resx Resources/Strings.ko.resx CHANGELOG.md
-            if (git diff --cached --quiet) { throw "Backport produced no source changes." }
-            git commit -m "feat: add stable 3.3 settings and UI enhancements"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          }
-
-      - name: Fix stable runtime gap compatibility
-        run: |
-          $path = ".\PaperWindow.cs"
-          $text = Get-Content -LiteralPath $path -Raw
-          $old = "private const double DeepCapsuleGap = EdgeCapsuleLayout.Gap;"
-          $new = "private static double DeepCapsuleGap => EdgeCapsuleLayout.Gap;"
-          if ($text.Contains($old)) {
-            $text = $text.Replace($old, $new)
-            Set-Content -LiteralPath $path -Value $text -Encoding utf8 -NoNewline
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -- PaperWindow.cs
-            git commit -m "fix: resolve configurable edge capsule gap at runtime"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          }
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
