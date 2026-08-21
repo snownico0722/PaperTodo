@@ -65,6 +65,7 @@ public sealed partial class AppController : IDisposable
     private bool _ignoreSaveFailures;
     private int _trayRefreshSuppressionDepth;
     private bool _isRestoringStartupPapers;
+    private bool _isRestoringRuntimePaperBatch;
     private bool _isPreparingStartupEdgeCapsules;
     private int _paperSurfaceRestoreGeneration;
     private int _startupShellPrewarmGeneration;
@@ -1350,13 +1351,16 @@ public sealed partial class AppController : IDisposable
             window.Activate();
         }
         if (!_isRestoringStartupPapers &&
+            !_isRestoringRuntimePaperBatch &&
             State.UseCapsuleMode &&
             State.UseDeepCapsuleMode &&
             ShouldPaperOccupyDeepCapsuleSlot(paper, window))
         {
             ArrangeDeepCapsules(animate: State.EnableAnimations);
         }
-        if (showAsDeepCapsuleOnly && !window.IsShellBuilt)
+        if (showAsDeepCapsuleOnly &&
+            !window.IsShellBuilt &&
+            !_isRestoringRuntimePaperBatch)
         {
             ScheduleDeferredShellPrewarm(paper, window);
         }
@@ -1871,24 +1875,58 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
-    public async void ShowAllPapers()
+    public void ShowAllPapers()
     {
         if (IsExiting)
         {
             return;
         }
 
+        // A runtime show supersedes any startup restore still waiting below Render/Loaded.
+        _paperSurfaceRestoreGeneration++;
+        _startupShellPrewarmGeneration++;
+        _isPreparingStartupEdgeCapsules = false;
         EnsurePapersOnScreen();
+
+        // Runtime show-all follows normal per-paper restore so remembered expanded geometry
+        // wins before edge placement. Queue arrange and shell prewarm are batched afterward.
         var papersToShow = State.Papers.ToList();
-        foreach (var paper in papersToShow)
+        var wasSuppressingDirty = _suppressDirty;
+        var wasRestoringRuntimePaperBatch = _isRestoringRuntimePaperBatch;
+        _suppressDirty = true;
+        _trayRefreshSuppressionDepth++;
+        _isRestoringRuntimePaperBatch = true;
+        try
         {
-            paper.IsVisible = true;
+            var activationPaper = papersToShow.LastOrDefault(paper =>
+                !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
+            foreach (var paper in papersToShow)
+            {
+                ShowPaper(paper, activate: ReferenceEquals(paper, activationPaper));
+            }
+        }
+        finally
+        {
+            _isRestoringRuntimePaperBatch = wasRestoringRuntimePaperBatch;
+            _trayRefreshSuppressionDepth--;
+            _suppressDirty = wasSuppressingDirty;
         }
 
-        await RestorePaperSurfacesAsync(papersToShow);
-        if (!IsExiting)
+        ArrangeDeepCapsules(animate: State.EnableAnimations);
+        ScheduleStartupShellPrewarm(papersToShow);
+        RefreshAllTodoRowsForPaperVisibility();
+        RefreshTrayMenu();
+        MarkDirty();
+    }
+
+    private void RefreshAllTodoRowsForPaperVisibility()
+    {
+        foreach (var paper in State.Papers.Where(paper => paper.Type == PaperTypes.Todo))
         {
-            MarkDirty();
+            if (_windows.TryGetValue(paper.Id, out var window))
+            {
+                window.RefreshTodoRowsForExternalChange();
+            }
         }
     }
 
