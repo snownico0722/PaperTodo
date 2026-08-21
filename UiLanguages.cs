@@ -23,6 +23,7 @@ public static class UiLanguages
 
     public static CultureInfo EffectiveCulture { get; private set; } = SystemCulture;
     public static CultureInfo EffectiveUiCulture { get; private set; } = SystemUiCulture;
+    public static bool ShouldApplyThreadCulture { get; private set; }
 
     public static string Normalize(string? language)
         => language is ChineseSimplified or English or Japanese or Korean ? language : System;
@@ -59,10 +60,12 @@ public static class UiLanguages
         {
             EffectiveCulture = commandCulture;
             EffectiveUiCulture = commandCulture;
+            ShouldApplyThreadCulture = true;
             return;
         }
 
         var preference = LoadPersistedPreference();
+        ShouldApplyThreadCulture = Normalize(preference) != System;
         EffectiveCulture = ResolveCulture(preference, SystemCulture);
         EffectiveUiCulture = ResolveCulture(preference, SystemUiCulture);
     }

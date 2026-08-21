@@ -166,7 +166,10 @@ public partial class App : Application
         // Explicit --language/--lang remains highest priority. Without it, use the
         // persisted Settings choice; "system" preserves the real process culture.
         UiLanguages.ConfigureStartupLanguage(defaultLanguage);
-        ApplyCulture(UiLanguages.EffectiveCulture);
+        if (UiLanguages.ShouldApplyThreadCulture)
+        {
+            ApplyCulture(UiLanguages.EffectiveCulture);
+        }
     }
 
 
