@@ -120,6 +120,25 @@ public static class DeepCapsuleSides
     }
 }
 
+public static class DeepCapsuleGapSizes
+{
+    public const string Narrow = "narrow";
+    public const string Standard = "standard";
+    public const string Wide = "wide";
+    public const double StandardGap = 4;
+    public const double VariantDelta = 4;
+
+    public static string Normalize(string? size) =>
+        size is Narrow or Wide ? size : Standard;
+
+    public static double Value(string? size) => Normalize(size) switch
+    {
+        Narrow => StandardGap - VariantDelta,
+        Wide => StandardGap + VariantDelta,
+        _ => StandardGap
+    };
+}
+
 public static class TodoVisualSizes
 {
     public const string Small = "small";
@@ -250,6 +269,7 @@ public sealed class AppState
 {
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
+    public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
@@ -275,6 +295,7 @@ public sealed class AppState
     public bool CapsuleTextBold { get; set; }
     public bool UseCapsuleMode { get; set; } = true;
     public bool UseDeepCapsuleMode { get; set; } = true;
+    public string DeepCapsuleGapSize { get; set; } = DeepCapsuleGapSizes.Standard;
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
@@ -306,6 +327,8 @@ public sealed class AppState
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
+    // Preserve 3.x behavior on upgrade: number-row and numpad keys remain distinct unless the user opts into mixed response.
+    public bool DistinguishNumpadShortcutDigits { get; set; } = true;
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
     // instead of the docked edge / remembered expanded geometry.
     public bool OpenEdgeCapsuleShortcutAtCursor { get; set; } = true;

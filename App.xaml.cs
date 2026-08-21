@@ -163,16 +163,12 @@ public partial class App : Application
 
     private static void ApplyStartupCultureOverride(string? defaultLanguage)
     {
-        if (TryResolveStartupCulture(defaultLanguage, out var startupCulture))
-        {
-            ApplyCulture(startupCulture);
-            return;
-        }
-
-#if PAPERTODO_DEFAULT_ENGLISH
-        ApplyCulture(CultureInfo.GetCultureInfo("en-US"));
-#endif
+        // Explicit --language/--lang remains highest priority. Without it, use the
+        // persisted Settings choice; "system" preserves the real process culture.
+        UiLanguages.ConfigureStartupLanguage(defaultLanguage);
+        ApplyCulture(UiLanguages.EffectiveCulture);
     }
+
 
     private static bool TryResolveStartupCulture(string? language, out CultureInfo culture)
     {

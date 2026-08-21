@@ -1025,6 +1025,7 @@ public sealed partial class AppController
 
         // Left: everyday desktop / window behavior. Right: paper features, capsule first.
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
+        leftColumn.Children.Add(CreateUiLanguageSettingsRow());
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
@@ -1154,6 +1155,10 @@ public sealed partial class AppController
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
             "TipResizeGripMode"));
         leftColumn.Children.Add(CreateResizeGripModeSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")),
+            "TipSettingsDeepCapsuleGap"));
+        leftColumn.Children.Add(CreateDeepCapsuleGapSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
@@ -1287,6 +1292,7 @@ public sealed partial class AppController
     private void RestoreGeneralSettingsPageDefaults()
     {
         // Only fields on the Behavior page; does not touch visual/theme or hotkeys.
+        State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;
         State.EnableToolTips = true;
@@ -1349,6 +1355,7 @@ public sealed partial class AppController
         State.CapsuleTextSize = VisualTextSizes.Medium;
         State.CapsuleTextBold = false;
         State.ResizeGripMode = ResizeGripModes.Soft;
+        State.DeepCapsuleGapSize = DeepCapsuleGapSizes.Standard;
 
         AppTypography.Configure(
             State.UiFontPreset,
@@ -2327,7 +2334,6 @@ public sealed partial class AppController
         if (!State.UseCapsuleMode)
         {
             State.UseDeepCapsuleMode = false;
-            State.UseCapsuleCollapseAll = false;
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();
@@ -2483,7 +2489,6 @@ public sealed partial class AppController
         }
         else if (!State.UseDeepCapsuleMode)
         {
-            State.UseCapsuleCollapseAll = false;
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();

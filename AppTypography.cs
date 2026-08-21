@@ -20,7 +20,7 @@ public static class AppTypography
     private static string _textRenderingProfile = TextRenderingProfiles.Standard;
     private static double _scale = 1.0;
 
-    public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(CultureInfo.CurrentUICulture.IetfLanguageTag);
+    public static XmlLanguage Language { get; } = XmlLanguage.GetLanguage(UiLanguages.EffectiveUiCulture.IetfLanguageTag);
 
     public static FontFamily UiFontFamily => _customFontFace?.Family ?? ResolveUiFontFamily();
 
@@ -184,8 +184,8 @@ public static class AppTypography
 
     private static FontFamily DefaultBodyFontFamily()
     {
-        var cultureName = CultureInfo.CurrentUICulture.Name;
-        var language = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var cultureName = UiLanguages.EffectiveUiCulture.Name;
+        var language = UiLanguages.EffectiveUiCulture.TwoLetterISOLanguageName;
 
         return language switch
         {
@@ -267,7 +267,7 @@ public static class AppTypography
 
     private static string PreferredFamilyName(GlyphTypeface glyphTypeface)
     {
-        var culture = CultureInfo.CurrentUICulture;
+        var culture = UiLanguages.EffectiveUiCulture;
         if (glyphTypeface.Win32FamilyNames.TryGetValue(culture, out var localized))
         {
             return localized;

@@ -20,8 +20,11 @@ public static class EdgeCapsuleLayout
     public const double TopMargin = 8;
     // Where slot 0 starts from the top of the work area (leaves room above for reach).
     public const double StartTopMargin = 48;
-    // Vertical gap between stacked capsules.
-    public const double Gap = 4;
+    // Vertical gap between stacked capsules. Standard preserves the 3.2 layout.
+    public static double Gap =>
+        AppController.Current is { State: { } state }
+            ? DeepCapsuleGapSizes.Value(state.DeepCapsuleGapSize)
+            : DeepCapsuleGapSizes.StandardGap;
     // Shared pill corner radius for the real capsules and the master capsule.
     public const double CornerRadius = 12;
     // Transparent outer chrome around the capsule body. Edge capsules omit this margin on the
