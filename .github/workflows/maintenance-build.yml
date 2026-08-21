@@ -10,7 +10,7 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
@@ -34,8 +34,23 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: true
+
+      - name: Add PR 126 changelog entry
+        run: |
+          if (Test-Path -LiteralPath ".\.github\scripts\add-pr126-changelog.py" -PathType Leaf) {
+            python .\.github\scripts\add-pr126-changelog.py
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- CHANGELOG.md
+            if (-not (git diff --cached --quiet)) {
+              git commit -m "docs: add bare Markdown links to v3.3 changelog"
+              git push origin HEAD:${{ github.event.pull_request.head.ref }}
+            }
+          }
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
