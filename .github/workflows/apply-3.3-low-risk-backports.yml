@@ -1,0 +1,148 @@
+name: Apply 3.3 low-risk backports
+
+on:
+  push:
+    branches:
+      - backport/3.3-low-risk-fixes
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: backport/3.3-low-risk-fixes
+          fetch-depth: 0
+
+      - name: Apply exact backports
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, got {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          menu_path = "DeepCapsuleContextMenuSession.cs"
+          menu = Path(menu_path).read_text(encoding="utf-8")
+          anchor = "\n    private void QueueClose(ContextMenu menu, long version)\n"
+          if menu.count(anchor) != 1:
+              raise SystemExit(f"{menu_path}: QueueClose anchor mismatch")
+          helper = r'''
+    private static bool IsPointInsideOpenMenuItems(
+        ItemsControl owner,
+        Point screenPoint)
+    {
+        for (var index = 0; index < owner.Items.Count; index++)
+        {
+            var container =
+                owner.ItemContainerGenerator.ContainerFromIndex(index) as FrameworkElement ??
+                owner.Items[index] as FrameworkElement;
+            if (container == null || !container.IsVisible)
+            {
+                continue;
+            }
+
+            // WPF renders each submenu in a separate Popup HWND. PointFromScreen still works on
+            // the generated child MenuItem/Separator even though it is no longer inside the root
+            // ContextMenu's visual rectangle, so treat those live containers as part of the same
+            // logical menu surface.
+            if (IsPointInsideElement(container, screenPoint))
+            {
+                return true;
+            }
+
+            if (container is MenuItem menuItem &&
+                menuItem.IsSubmenuOpen &&
+                IsPointInsideOpenMenuItems(menuItem, screenPoint))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+'''
+          menu = menu.replace(anchor, "\n" + helper + anchor, 1)
+          old_close = '''        _closeScheduled = true;
+        _ = _dispatcher.BeginInvoke(new Action(ExecuteQueuedClose));'''
+          new_close = '''        _closeScheduled = true;
+        // The low-level hook observes mouse-down before WPF dispatches the same input. Keep an
+        // asynchronous close as a final guard for real outside clicks; open submenu surfaces are
+        // filtered explicitly in IsPointInsideContextSurface instead of relying on this delay.
+        _ = _dispatcher.BeginInvoke(
+            new Action(ExecuteQueuedClose),
+            DispatcherPriority.Background);'''
+          if menu.count(old_close) != 1:
+              raise SystemExit(f"{menu_path}: close scheduling anchor mismatch")
+          menu = menu.replace(old_close, new_close, 1)
+          old_surface = '''    private bool IsPointInsideContextSurface(Point screenPoint)
+    {
+        if (IsPointInsideElement(_activeMenu, screenPoint))
+        {
+            return true;
+        }
+
+        return _isPointInsideOwnerSurface(screenPoint);
+    }'''
+          new_surface = '''    private bool IsPointInsideContextSurface(Point screenPoint)
+    {
+        var menu = _activeMenu;
+        if (IsPointInsideElement(menu, screenPoint) ||
+            (menu != null && IsPointInsideOpenMenuItems(menu, screenPoint)))
+        {
+            return true;
+        }
+
+        return _isPointInsideOwnerSurface(screenPoint);
+    }'''
+          if menu.count(old_surface) != 1:
+              raise SystemExit(f"{menu_path}: context surface anchor mismatch")
+          menu = menu.replace(old_surface, new_surface, 1)
+          Path(menu_path).write_text(menu, encoding="utf-8")
+
+          edge_path = "PaperWindow.EdgeCapsule.cs"
+          old_edge = '''        _edgeCapsule.RequestPresentation(animate
+            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            : EdgeCapsuleMotion.Snap(reason));
+        var dirty = EdgeCapsuleDirty.Presentation;'''
+          new_edge = '''        _edgeCapsule.RequestPresentation(animate
+            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            : EdgeCapsuleMotion.Snap(reason));
+
+        // State-driven requests may depend on controller settings captured in the layout snapshot.
+        // Reusing the previous snapshot makes a setting change visible only after the next pointer
+        // or placement invalidation, so explicit state refreshes must recapture those facts.
+        if (reason == EdgeCapsuleTransitionReason.State)
+        {
+            refreshLayout = true;
+        }
+
+        var dirty = EdgeCapsuleDirty.Presentation;'''
+          replace_once(edge_path, old_edge, new_edge)
+
+          changelog_path = "CHANGELOG.md"
+          old_notes = '''- 提升旧版 Windows 启动兼容性，避免部分环境在程序界面出现前直接启动失败。'''
+          new_notes = '''- 提升旧版 Windows 启动兼容性，避免部分环境在程序界面出现前直接启动失败。
+- 修复贴边深胶囊右键菜单打开二级菜单后，点击子项可能被外部点击保护提前关闭的问题。
+- 修复部分贴边胶囊设置变化后，需要等下一次鼠标或布局变化才刷新显示的问题；状态设置现在会立即重算布局。'''
+          replace_once(changelog_path, old_notes, new_notes)
+
+      - name: Verify and commit
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- DeepCapsuleContextMenuSession.cs PaperWindow.EdgeCapsule.cs CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- DeepCapsuleContextMenuSession.cs PaperWindow.EdgeCapsule.cs CHANGELOG.md
+          git commit -m "fix: backport low-risk fixes for 3.3"
+          git push origin HEAD:backport/3.3-low-risk-fixes
