@@ -367,32 +367,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $actualForkCommit = (git -C vendor/wpf-notifyicon rev-parse HEAD).Trim()
 if ($actualForkCommit -ne $forkCommit) { throw "Unexpected fork commit: $actualForkCommit" }
 
-# Release checkout must materialize submodules.
-Replace-Exact '.github/workflows/release.yml' @'
-      - name: Check out source
-        uses: actions/checkout@v4
-'@ @'
-      - name: Check out source
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-'@
-
-# Restore the normal maintenance workflow from base, then add submodule checkout to that clean copy.
-$maintenance = git show origin/3.2:.github/workflows/maintenance-build.yml
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$maintenanceText = ($maintenance -join "`n") + "`n"
-[IO.File]::WriteAllText('.github/workflows/maintenance-build.yml', $maintenanceText, [Text.UTF8Encoding]::new($false))
-Replace-Exact '.github/workflows/maintenance-build.yml' @'
-      - name: Check out source
-        uses: actions/checkout@v4
-'@ @'
-      - name: Check out source
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-'@
-
 # Release notes: remove the 4.0-only bullet and document the actual fixes.
 Replace-Exact 'CHANGELOG.md' @'
 - 修复部分贴边胶囊设置变化后，需要等下一次鼠标或布局变化才刷新显示的问题；状态设置现在会立即重算布局。
@@ -402,12 +376,11 @@ Replace-Exact 'CHANGELOG.md' @'
 - 修复运行中切换 Windows 显示缩放或跨不同 DPI 显示器后，托盘右键菜单可能偏离鼠标位置或首次打开异常关闭的问题。
 '@
 
-# Remove one-shot transport files.
-Remove-Item -LiteralPath '.github/workflows/patch-3.3-final-stability.yml' -Force -ErrorAction SilentlyContinue
+# Remove non-workflow transport files. Workflow cleanup is done by the GitHub connector because
+# Actions GITHUB_TOKEN intentionally has no workflows permission.
 Remove-Item -LiteralPath '.backport-3.3-trigger' -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath '.github/scripts/apply-3.3-final-stability.ps1' -Force
 
-# Stage only the intended final paths plus the transport deletions.
 $paths = @(
     '.gitmodules',
     'vendor/wpf-notifyicon',
@@ -418,9 +391,6 @@ $paths = @(
     'PaperWindow.cs',
     'PaperWindow.Note.cs',
     'CHANGELOG.md',
-    '.github/workflows/maintenance-build.yml',
-    '.github/workflows/release.yml',
-    '.github/workflows/patch-3.3-final-stability.yml',
     '.backport-3.3-trigger',
     '.github/scripts/apply-3.3-final-stability.ps1'
 )
