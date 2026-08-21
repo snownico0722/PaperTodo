@@ -1,0 +1,4 @@
+[submodule "vendor/wpf-notifyicon"]
+	path = vendor/wpf-notifyicon
+	url = https://github.com/snownico0722/wpf-notifyicon.git
+	branch = develop
