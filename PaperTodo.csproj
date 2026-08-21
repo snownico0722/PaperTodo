@@ -6,17 +6,20 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- .NET 9+ publishes can opt into CET User Shadow Stack compatibility. Some legacy Windows
+         environments fail before managed startup when the flag is present, so keep it disabled. -->
+    <CETCompat>false</CETCompat>
     <!-- Declare AvalonEdit's WinForms cursor dependency explicitly. Framework-dependent publishes
          still load it from the installed Microsoft.WindowsDesktop.App shared framework. -->
     <UseWindowsForms>true</UseWindowsForms>
     <!-- WPF keeps DPI policy in app.manifest (PerMonitorV2); ignore WinForms-only WFO0003. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>3.2.1</Version>
-    <AssemblyVersion>3.2.1.0</AssemblyVersion>
-    <FileVersion>3.2.1.0</FileVersion>
-    <InformationalVersion>3.2.1</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v3.2.1" free of +commit suffixes from SourceLink. -->
+    <Version>3.3</Version>
+    <AssemblyVersion>3.3.0.0</AssemblyVersion>
+    <FileVersion>3.3.0.0</FileVersion>
+    <InformationalVersion>3.3</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v3.3" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\icons\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
