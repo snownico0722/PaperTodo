@@ -88,6 +88,9 @@ public sealed partial class PaperWindow : Window
     private NoteLinkDragState? _noteLinkDrag;
     private MarkdownTextBox? _noteBox;
     private readonly List<WeakReference<ContextMenu>> _themedContextMenus = new();
+    private bool _paperContextMenuOpening;
+    private int _paperContextMenuOpeningVersion;
+    private bool _paperContextMenuRefreshPending;
     private Action? _showNotePreview;
     private readonly List<List<PaperItem>> _undoStack = new();
     private bool _updatingTopBarResponsiveLayout;
@@ -606,6 +609,7 @@ public sealed partial class PaperWindow : Window
         PreviewMouseMove += OnWindowPreviewMouseMove;
         PreviewMouseWheel += OnWindowPreviewMouseWheel;
         PreviewMouseLeftButtonUp += OnWindowPreviewMouseLeftButtonUp;
+        ContextMenuOpening += (_, _) => BeginPaperContextMenuOpening();
         LostMouseCapture += OnLostMouseCapture;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewKeyUp += OnWindowPreviewKeyUp;
@@ -3220,10 +3224,54 @@ public sealed partial class PaperWindow : Window
 
             UpdateContextMenuTheme(menu);
         };
+        menu.Closed += (_, _) => Dispatcher.BeginInvoke(
+            (Action)FlushPendingPaperContextMenuRefresh,
+            System.Windows.Threading.DispatcherPriority.Background);
 
         menu.Resources.Add(typeof(MenuItem), SharedCompactMenuItemStyle);
         RegisterThemedContextMenu(menu);
         return menu;
+    }
+
+    private bool IsPaperContextMenuInteractionActive =>
+        _paperContextMenuOpening || HasOpenOwnedContextMenu();
+
+    private bool HasOpenOwnedContextMenu()
+    {
+        for (var i = _themedContextMenus.Count - 1; i >= 0; i--)
+        {
+            if (_themedContextMenus[i].TryGetTarget(out var menu))
+            {
+                if (menu.IsOpen)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                _themedContextMenus.RemoveAt(i);
+            }
+        }
+
+        return false;
+    }
+
+    private void BeginPaperContextMenuOpening()
+    {
+        _paperContextMenuOpening = true;
+        var version = ++_paperContextMenuOpeningVersion;
+        Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                if (version != _paperContextMenuOpeningVersion)
+                {
+                    return;
+                }
+
+                _paperContextMenuOpening = false;
+                FlushPendingPaperContextMenuRefresh();
+            }),
+            System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     private void RegisterThemedContextMenu(ContextMenu menu)

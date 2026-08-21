@@ -79,6 +79,14 @@ public sealed partial class PaperWindow
             return;
         }
 
+        if (IsPaperContextMenuInteractionActive)
+        {
+            _paperContextMenuRefreshPending = true;
+            return;
+        }
+
+        _paperContextMenuRefreshPending = false;
+
         // WPF ContextMenu instances cannot be shared by multiple owners.
         _paperChrome.ContextMenu = BuildPaperContextMenu();
 
@@ -105,6 +113,22 @@ public sealed partial class PaperWindow
                 _noteBox.ContextMenu = _notePreviewContextMenu;
             }
         }
+    }
+
+    private void FlushPendingPaperContextMenuRefresh()
+    {
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive)
+        {
+            _paperContextMenuRefreshPending = false;
+            return;
+        }
+
+        if (!_paperContextMenuRefreshPending || IsPaperContextMenuInteractionActive)
+        {
+            return;
+        }
+
+        RefreshPaperContextMenus();
     }
 
     public void UpdateCapsuleMode()

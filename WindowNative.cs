@@ -11,6 +11,7 @@ internal static class WindowNative
 {
     private const int GwlExStyle = -20;
     private const int GwlpHwndParent = -8;
+    private const uint GwOwner = 4;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExTopmost = 0x00000008;
     private const int WsExToolWindow = 0x00000080;
@@ -167,8 +168,9 @@ internal static class WindowNative
             SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder | SwpShowWindow);
     }
 
-    // Set topmost / no-topmost without moving, sizing, or activating the window. When dropping
-    // out of topmost, optionally re-insert directly above a specific window (fullscreen avoidance).
+    // Set topmost / no-topmost without moving, sizing, or activating the window. Fullscreen
+    // avoidance is owner-aware for non-topmost targets because hidden paper windows can have
+    // an invisible same-process owner.
     public static void ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
     {
         ApplyTopmostZOrder(new WindowInteropHelper(window).Handle, topmost, insertAfter);
@@ -189,12 +191,58 @@ internal static class WindowNative
 
         if (!topmost && insertAfter != IntPtr.Zero)
         {
-            SetWindowPos(
+            ApplyFullscreenAvoidanceZOrder(handle, insertAfter);
+        }
+    }
+
+    private static void ApplyFullscreenAvoidanceZOrder(IntPtr handle, IntPtr insertAfter)
+    {
+        if (insertAfter == handle ||
+            !IsWindow(insertAfter) ||
+            (GetWindowLong(insertAfter, GwlExStyle) & WsExTopmost) != 0)
+        {
+            return;
+        }
+
+        const uint flags = SwpNoMove | SwpNoSize | SwpNoActivate;
+        var owner = GetWindow(handle, GwOwner);
+        if (!IsHiddenOwnerFromSameProcess(handle, owner))
+        {
+            _ = SetWindowPos(
                 handle,
                 insertAfter,
                 0, 0, 0, 0,
-                SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
+                flags | SwpNoOwnerZOrder);
+            return;
         }
+
+        // Owned windows cannot be placed behind their owner. Move the invisible owner behind
+        // the fullscreen target first, then insert the visible paper immediately behind it.
+        var ownerMoved = SetWindowPos(
+            owner,
+            insertAfter,
+            0, 0, 0, 0,
+            flags);
+
+        _ = SetWindowPos(
+            handle,
+            insertAfter,
+            0, 0, 0, 0,
+            flags | (ownerMoved ? SwpNoOwnerZOrder : 0u));
+    }
+
+    private static bool IsHiddenOwnerFromSameProcess(IntPtr handle, IntPtr owner)
+    {
+        if (owner == IntPtr.Zero ||
+            !IsWindow(owner) ||
+            IsWindowVisible(owner))
+        {
+            return false;
+        }
+
+        _ = GetWindowThreadProcessId(handle, out var processId);
+        _ = GetWindowThreadProcessId(owner, out var ownerProcessId);
+        return processId != 0 && ownerProcessId == processId;
     }
 
     public static bool IsTopmost(Window window)
@@ -568,6 +616,15 @@ internal static class WindowNative
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);

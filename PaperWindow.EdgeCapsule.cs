@@ -139,14 +139,6 @@ public sealed partial class PaperWindow
             ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
             : EdgeCapsuleMotion.Snap(reason));
 
-        // State-driven requests are allowed to depend on controller settings captured in the
-        // layout snapshot (resting opacity, close-button behavior, sizing facts, etc.). Reusing
-        // the previous snapshot makes a settings change appear only after the next pointer or
-        // placement invalidation. Always recapture those facts for an explicit state refresh.
-        if (reason == EdgeCapsuleTransitionReason.State)
-        {
-            refreshLayout = true;
-        }
 
         var dirty = EdgeCapsuleDirty.Presentation;
         if (refreshLayout)
