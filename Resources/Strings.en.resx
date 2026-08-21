@@ -77,7 +77,7 @@ Error: {0}</value>
     <value>Link</value>
   </data>
   <data name="ToolTipDragNoteToTodo" xml:space="preserve">
-    <value>Drag onto a todo item to link this note</value>
+    <value>Drag onto a todo item to link this paper</value>
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>Open linked note: {0}</value>
@@ -242,13 +242,13 @@ Error: {0}</value>
     <value>The image store has reached its total limit ({0} MB).</value>
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
-    <value>Open linked note: {0}</value>
+    <value>Open linked paper: {0}</value>
   </data>
   <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
     <value>Edit linked script: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
-    <value>Unlink note</value>
+    <value>Unlink paper</value>
   </data>
   <data name="MenuItalic" xml:space="preserve">
     <value>Italic</value>
@@ -558,17 +558,16 @@ Enhanced: nicer headings, lists, and emphasis.</value>
     <value>Todo text, row height, and spacing.</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>Drag a note onto a todo to link it, then open the note from that item.</value>
+    <value>Allow todo items to link to another built-in todo or note paper.</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
-    <value>Show the linked note title after the todo.</value>
+    <value>Show the linked paper or quick-launch path name beside a todo.</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>Off: compact. On: wider to fit content.
-About 5 full-width characters on one line, 10 on multiline.</value>
+    <value>Allow linked names to use more horizontal space; off keeps the compact label.</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>Notes linked to todos leave the capsule list, avoiding duplicate entries.</value>
+    <value>A paper linked from a todo can leave the docked capsule queue until it is unlinked.</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>If linked to a script capsule: left-click runs it, right-click opens edit.</value>
@@ -678,7 +677,7 @@ Off: no compression; over 8 MB is rejected.
 Either way, any side over 4096 px is rejected.</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
-    <value>Enable todo-note links</value>
+    <value>Todo paper links</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
     <value>Auto-clear completed todos</value>
@@ -705,13 +704,13 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Show external open button</value>
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
-    <value>Show linked note title</value>
+    <value>Show linked name</value>
   </data>
   <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>Long linked note titles</value>
+    <value>Allow longer linked names</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>Linked notes not shown as capsules</value>
+    <value>Hide linked papers from capsule queues</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>Restore note zoom</value>
@@ -963,5 +962,50 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
     <value>The numpad mode could not be changed because existing bindings conflict across number-row/numpad digits, or a required mixed-mode combination is already owned by another app. Existing bindings were not changed.</value>
+  </data>
+  <data name="LinkedPathDropFailureMessage" xml:space="preserve">
+    <value>Could not link this file or folder: {0}</value>
+  </data>
+  <data name="LinkedPathDropFailureTitle" xml:space="preserve">
+    <value>Could not link path</value>
+  </data>
+  <data name="LinkedPathMissingMessage" xml:space="preserve">
+    <value>The file or folder could not be found: {0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
+    <value>Could not open this path: {0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
+    <value>Could not open path</value>
+  </data>
+  <data name="LinkedPathSingleDropMessage" xml:space="preserve">
+    <value>A todo can link to only one file or folder at a time.</value>
+  </data>
+  <data name="MenuOpenLinkedPath" xml:space="preserve">
+    <value>Open quick-launch path</value>
+  </data>
+  <data name="MenuOpenLinkedPathLocation" xml:space="preserve">
+    <value>Open containing location</value>
+  </data>
+  <data name="MenuUnlinkPath" xml:space="preserve">
+    <value>Unlink quick-launch path</value>
+  </data>
+  <data name="SettingsAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>Move completed todos to bottom</value>
+  </data>
+  <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>Show extension only for short path labels</value>
+  </data>
+  <data name="TipAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>Move a completed todo to the end of the completed area and restore it to the end of the unfinished area. Disabled while auto-clear is active.</value>
+  </data>
+  <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>With long linked names off, file quick-launch labels can show only the extension; folders keep their name.</value>
+  </data>
+  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
+    <value>Path is missing: {0}</value>
+  </data>
+  <data name="ToolTipOpenLinkedPath" xml:space="preserve">
+    <value>Open: {0}</value>
   </data>
 </root>

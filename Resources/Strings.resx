@@ -84,7 +84,7 @@
     <value>链接</value>
   </data>
   <data name="ToolTipDragNoteToTodo" xml:space="preserve">
-    <value>拖到待办项上关联笔记</value>
+    <value>拖到待办项以关联当前纸片</value>
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>打开关联笔记：{0}</value>
@@ -252,13 +252,13 @@
     <value>图片总容量已达到上限（{0} MB）。</value>
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
-    <value>打开关联笔记：{0}</value>
+    <value>打开关联纸片：{0}</value>
   </data>
   <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
     <value>编辑关联脚本：{0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
-    <value>取消关联笔记</value>
+    <value>解除纸片关联</value>
   </data>
   <data name="MenuItalic" xml:space="preserve">
     <value>斜体</value>
@@ -584,17 +584,16 @@
     <value>调整待办文字、行高与间距。</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>把笔记拖到待办项上建立关联，再从该项打开笔记。</value>
+    <value>允许把待办项关联到其他待办纸或笔记纸；点击关联入口可打开目标纸片。</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
-    <value>在待办项后显示已关联笔记的标题。</value>
+    <value>在待办项右侧显示关联纸片或快启路径的名称。</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>关闭时紧凑显示；开启后按内容加宽。
-单行约 5 个全角字，多行约 10 个。</value>
+    <value>允许关联名称使用更多横向空间；关闭时保持紧凑显示。</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>已关联到待办的笔记不再出现在胶囊列表，避免重复入口。</value>
+    <value>被待办关联的纸片可退出贴边胶囊队列；解除关联后恢复。</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>关联到脚本胶囊时：左键运行，右键打开编辑。</value>
@@ -704,7 +703,7 @@
 !p / !power 会等待结束并捕获错误；!pf / !powerf 只投递到常驻进程。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
-    <value>启用待办关联笔记</value>
+    <value>待办关联纸片</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
     <value>完成后自动清除待办</value>
@@ -731,13 +730,13 @@
     <value>显示外部打开按钮</value>
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
-    <value>显示关联笔记标题</value>
+    <value>显示关联名称</value>
   </data>
   <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>关联笔记显示长标题</value>
+    <value>允许较长关联名称</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>关联笔记不显示为胶囊</value>
+    <value>关联纸片退出胶囊队列</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>恢复笔记缩放</value>
@@ -976,5 +975,50 @@
   </data>
   <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
     <value>无法切换小键盘模式：现有快捷键存在数字键/小键盘冲突，或混合响应所需的组合已被其他程序占用。现有快捷键不会被修改。</value>
+  </data>
+  <data name="LinkedPathDropFailureMessage" xml:space="preserve">
+    <value>无法关联该文件或文件夹：{0}</value>
+  </data>
+  <data name="LinkedPathDropFailureTitle" xml:space="preserve">
+    <value>无法关联路径</value>
+  </data>
+  <data name="LinkedPathMissingMessage" xml:space="preserve">
+    <value>找不到该文件或文件夹：{0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
+    <value>无法打开该路径：{0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
+    <value>无法打开路径</value>
+  </data>
+  <data name="LinkedPathSingleDropMessage" xml:space="preserve">
+    <value>每个待办一次只能关联一个文件或文件夹。</value>
+  </data>
+  <data name="MenuOpenLinkedPath" xml:space="preserve">
+    <value>打开快启路径</value>
+  </data>
+  <data name="MenuOpenLinkedPathLocation" xml:space="preserve">
+    <value>打开所在位置</value>
+  </data>
+  <data name="MenuUnlinkPath" xml:space="preserve">
+    <value>解除快启路径</value>
+  </data>
+  <data name="SettingsAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>已完成待办自动置底</value>
+  </data>
+  <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>短路径名称仅显示扩展名</value>
+  </data>
+  <data name="TipAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>完成待办时移到已完成区域末尾，取消完成时移到未完成区域末尾；自动清除已完成待办时暂不执行。</value>
+  </data>
+  <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>关闭较长关联名称时，文件快启可只显示扩展名；文件夹仍显示名称。</value>
+  </data>
+  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
+    <value>路径已失效：{0}</value>
+  </data>
+  <data name="ToolTipOpenLinkedPath" xml:space="preserve">
+    <value>打开：{0}</value>
   </data>
 </root>

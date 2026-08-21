@@ -1096,13 +1096,26 @@ public sealed partial class AppController
         }
 
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoClearCompletedTodos"), State.AutoClearCompletedTodos, ToggleAutoClearCompletedTodos), "TipAutoClearCompletedTodos"));
+        var autoMoveCompletedToggle = SettingsToggle(
+            Strings.Get("SettingsAutoMoveCompletedTodosToBottom"),
+            State.AutoMoveCompletedTodosToBottom,
+            ToggleAutoMoveCompletedTodosToBottom);
+        autoMoveCompletedToggle.IsEnabled = !State.AutoClearCompletedTodos;
+        autoMoveCompletedToggle.Opacity = autoMoveCompletedToggle.IsEnabled ? 1.0 : 0.55;
+        rightColumn.Children.Add(WrapWithHint(autoMoveCompletedToggle, "TipAutoMoveCompletedTodosToBottom"));
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableTodoNoteLinks"), State.EnableTodoNoteLinks, ToggleTodoNoteLinks), "TipEnableTodoNoteLinks"));
         var showLinkedNoteNameToggle = SettingsToggle(Strings.Get("SettingsShowLinkedNoteName"), State.ShowLinkedNoteName, ToggleLinkedNoteNameDisplay);
-        showLinkedNoteNameToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(showLinkedNoteNameToggle, "TipShowLinkedNoteName"));
         var allowLongLinkedNoteTitlesToggle = SettingsToggle(Strings.Get("SettingsAllowLongLinkedNoteTitles"), State.AllowLongLinkedNoteTitles, ToggleLongLinkedNoteTitles);
-        allowLongLinkedNoteTitlesToggle.IsEnabled = State.EnableTodoNoteLinks && State.ShowLinkedNoteName;
+        allowLongLinkedNoteTitlesToggle.IsEnabled = State.ShowLinkedNoteName;
         rightColumn.Children.Add(WrapWithHint(allowLongLinkedNoteTitlesToggle, "TipAllowLongLinkedNoteTitles"));
+        var linkedPathExtensionOnlyToggle = SettingsToggle(
+            Strings.Get("SettingsShowLinkedPathExtensionOnly"),
+            State.ShowLinkedPathExtensionOnly,
+            ToggleLinkedPathExtensionOnly);
+        linkedPathExtensionOnlyToggle.IsEnabled = State.ShowLinkedNoteName && !State.AllowLongLinkedNoteTitles;
+        linkedPathExtensionOnlyToggle.Opacity = linkedPathExtensionOnlyToggle.IsEnabled ? 1.0 : 0.55;
+        rightColumn.Children.Add(WrapWithHint(linkedPathExtensionOnlyToggle, "TipShowLinkedPathExtensionOnly"));
         var hideLinkedNotesFromCapsulesToggle = SettingsToggle(Strings.Get("SettingsHideLinkedNotesFromCapsules"), State.HideLinkedNotesFromCapsules, ToggleHideLinkedNotesFromCapsules);
         hideLinkedNotesFromCapsulesToggle.IsEnabled = State.EnableTodoNoteLinks;
         rightColumn.Children.Add(WrapWithHint(hideLinkedNotesFromCapsulesToggle, "TipHideLinkedNotesFromCapsules"));
@@ -1317,9 +1330,11 @@ public sealed partial class AppController
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
         State.AutoCompressLargeImages = true;
         State.AutoClearCompletedTodos = false;
+        State.AutoMoveCompletedTodosToBottom = false;
         State.EnableTodoNoteLinks = true;
         State.ShowLinkedNoteName = false;
         State.AllowLongLinkedNoteTitles = false;
+        State.ShowLinkedPathExtensionOnly = false;
         State.HideLinkedNotesFromCapsules = false;
         State.RunLinkedScriptCapsulesOnClick = false;
         NormalizePaperSystemVisibilitySettings();
@@ -2213,6 +2228,13 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+    private void ToggleAutoMoveCompletedTodosToBottom()
+    {
+        State.AutoMoveCompletedTodosToBottom = !State.AutoMoveCompletedTodosToBottom;
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
     private void ToggleAutoCompressLargeImages()
     {
         State.AutoCompressLargeImages = !State.AutoCompressLargeImages;
@@ -2390,6 +2412,17 @@ public sealed partial class AppController
             window.RefreshTodoRowsForExternalChange();
         }
 
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleLinkedPathExtensionOnly()
+    {
+        State.ShowLinkedPathExtensionOnly = !State.ShowLinkedPathExtensionOnly;
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshTodoRowsForExternalChange();
+        }
         SaveNow();
         RefreshSettingsWindowContent();
     }

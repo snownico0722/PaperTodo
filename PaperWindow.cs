@@ -2012,6 +2012,41 @@ public sealed partial class PaperWindow : Window
         _newNoteButton = IconButton("＋✎", Strings.Get("ToolTipNewNotePaper"));
         _newNoteButton.Click += (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper);
 
+        if (_paper.Type == PaperTypes.Todo)
+        {
+            _linkNoteButton = IconButton("⌖", Strings.Get("ToolTipDragNoteToTodo"));
+            _linkNoteButton.Width = 24;
+            _linkNoteButton.FontSize = AppTypography.Scale(13);
+            _linkNoteButton.Cursor = Cursors.Cross;
+            _linkNoteButton.PreviewMouseLeftButtonDown += (_, e) => BeginNoteLinkMouseGesture(_linkNoteButton, e);
+            _linkNoteButton.PreviewMouseMove += (_, e) => UpdateNoteLinkMouseGesture(e);
+            _linkNoteButton.PreviewMouseLeftButtonUp += (_, e) => EndNoteLinkMouseGestureFromMouseUp(e);
+            _linkNoteButton.LostMouseCapture += (_, _) =>
+            {
+                var state = _noteLinkDrag;
+                if (state?.SuppressCaptureLossEnd == true)
+                {
+                    return;
+                }
+
+                // Ghost Show() may steal capture while the button is still down; re-capture so
+                // the drag does not tear down mid-gesture (same class of bug as capsule floating drag).
+                if (state != null &&
+                    Mouse.LeftButton == MouseButtonState.Pressed &&
+                    state.Handle.IsVisible &&
+                    state.Handle.IsEnabled)
+                {
+                    state.Handle.CaptureMouse();
+                    return;
+                }
+
+                EndNoteLinkMouseGesture(commit: false);
+            };
+            RefreshNoteLinkButton();
+            actionButtons.Children.Add(_linkNoteButton);
+
+        }
+
         if (_paper.Type == PaperTypes.Note)
         {
             _linkNoteButton = IconButton("⌖", Strings.Get("ToolTipDragNoteToTodo"));
@@ -2244,7 +2279,8 @@ public sealed partial class PaperWindow : Window
 
     private void BeginNoteLinkMouseGesture(FrameworkElement handle, MouseButtonEventArgs e)
     {
-        if (!_controller.State.EnableTodoNoteLinks || _paper.Type != PaperTypes.Note)
+        if (!_controller.State.EnableTodoNoteLinks ||
+            _paper.Type is not (PaperTypes.Note or PaperTypes.Todo))
         {
             return;
         }

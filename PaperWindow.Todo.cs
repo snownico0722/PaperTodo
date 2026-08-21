@@ -314,6 +314,7 @@ public sealed partial class PaperWindow
         var linkedNoteTitle = "";
         var hasLinkedNote = _controller.State.EnableTodoNoteLinks &&
             _controller.TryGetLinkedNoteTitle(item.LinkedNoteId, out linkedNoteTitle);
+        var hasLinkedPath = !hasLinkedNote && !string.IsNullOrWhiteSpace(item.LinkedPath);
         var runLinkedScriptOnClick = hasLinkedNote &&
             _controller.ShouldRunLinkedScriptCapsule(item.LinkedNoteId);
 
@@ -337,6 +338,8 @@ public sealed partial class PaperWindow
             },
             RenderTransformOrigin = new Point(0.5, 0.5)
         };
+
+        ConfigureTodoPathDrop(row, item);
 
         row.MouseEnter += (_, _) =>
         {
@@ -441,6 +444,7 @@ public sealed partial class PaperWindow
 
         check.Checked += (_, _) =>
         {
+            var focusedItemId = CurrentFocusedTodoItemId();
             PushUndoSnapshot();
             item.Done = true;
             text.IsDone = true;
@@ -453,6 +457,12 @@ public sealed partial class PaperWindow
                 return;
             }
 
+            if (MoveTodoItemAfterDoneChange(item, done: true))
+            {
+                RebuildTodoRows(focusedItemId);
+                return;
+            }
+
             // 完成动画：只淡化，不缩小
             if (_controller.State.EnableAnimations)
             {
@@ -462,11 +472,18 @@ public sealed partial class PaperWindow
 
         check.Unchecked += (_, _) =>
         {
+            var focusedItemId = CurrentFocusedTodoItemId();
             PushUndoSnapshot();
             item.Done = false;
             text.IsDone = false;
             text.Foreground = TextBrush;
             _controller.MarkDirty();
+
+            if (MoveTodoItemAfterDoneChange(item, done: false))
+            {
+                RebuildTodoRows(focusedItemId);
+                return;
+            }
 
             // 取消完成动画
             if (_controller.State.EnableAnimations)
@@ -491,6 +508,13 @@ public sealed partial class PaperWindow
                     : Strings.Format("MenuOpenLinkedNote", linkedNoteTitle);
                 itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedNote(item.LinkedNoteId, this)));
                 itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkNote"), (_, _) => UnlinkNoteFromTodoItem(item)));
+                itemMenu.Items.Add(MenuSeparator());
+            }
+            else if (hasLinkedPath)
+            {
+                itemMenu.Items.Add(MenuItem(Strings.Get("MenuOpenLinkedPath"), (_, _) => OpenLinkedPath(item.LinkedPath)));
+                itemMenu.Items.Add(MenuItem(Strings.Get("MenuOpenLinkedPathLocation"), (_, _) => OpenLinkedPathLocation(item.LinkedPath)));
+                itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkPath"), (_, _) => UnlinkPathFromTodoItem(item)));
                 itemMenu.Items.Add(MenuSeparator());
             }
             itemMenu.Items.Add(MenuItem(Strings.Get("MenuDeleteItem"), (_, _) => RemoveItem(item)));
@@ -731,6 +755,12 @@ public sealed partial class PaperWindow
             Grid.SetColumn(linkButton, 2);
             grid.Children.Add(linkButton);
         }
+        else if (hasLinkedPath)
+        {
+            var pathButton = BuildTodoPathLinkButton(item, text, metrics);
+            Grid.SetColumn(pathButton, 2);
+            grid.Children.Add(pathButton);
+        }
 
         var handleGlyph = new TextBlock
         {
@@ -818,7 +848,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (e.Key == Key.Back && string.IsNullOrEmpty(box.Text) && _paper.Items.Count > 1)
+        if (e.Key == Key.Back && string.IsNullOrEmpty(box.Text) &&
+            !TodoRules.HasNonTextContent(item) && _paper.Items.Count > 1)
         {
             var previous = PreviousItem(item);
             var next = NextItem(item);
@@ -1288,7 +1319,8 @@ public sealed partial class PaperWindow
 
     public bool LinkNoteToTodo(string itemId, string noteId)
     {
-        if (!_controller.State.EnableTodoNoteLinks || _paper.Type != PaperTypes.Todo || !_controller.IsExistingNote(noteId))
+        if (!_controller.State.EnableTodoNoteLinks || _paper.Type != PaperTypes.Todo ||
+            string.Equals(_paper.Id, noteId, StringComparison.Ordinal) || !_controller.IsExistingNote(noteId))
         {
             return false;
         }
@@ -1308,6 +1340,7 @@ public sealed partial class PaperWindow
         var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
         item.LinkedNoteId = noteId;
+        item.LinkedPath = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
         RefreshCapsuleEligibilityForLinkedNoteChanges(previousItems);
@@ -1773,7 +1806,7 @@ public sealed partial class PaperWindow
 
     private static bool IsBlank(PaperItem item)
     {
-        return string.IsNullOrWhiteSpace(item.Text);
+        return TodoRules.IsPlaceholder(item);
     }
 
     private string? CurrentFocusedTodoItemId()
@@ -1877,7 +1910,8 @@ public sealed partial class PaperWindow
             Text = i.Text,
             Done = i.Done,
             Order = i.Order,
-            LinkedNoteId = i.LinkedNoteId
+            LinkedNoteId = i.LinkedNoteId,
+            LinkedPath = i.LinkedPath
         }).ToList();
     }
 
