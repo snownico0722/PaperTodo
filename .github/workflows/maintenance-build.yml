@@ -10,7 +10,7 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
@@ -34,6 +34,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: true
 
@@ -41,6 +42,20 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+
+      - name: Apply PR 124 review fixes
+        run: |
+          if (Test-Path -LiteralPath ".\.github\scripts\fix-pr124-review.py" -PathType Leaf) {
+            python .\.github\scripts\fix-pr124-review.py
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- App.xaml.cs UiLanguages.cs StateStore.cs
+            if (-not (git diff --cached --quiet)) {
+              git commit -m "fix: address 3.3 settings review findings"
+              git push origin HEAD:${{ github.event.pull_request.head.ref }}
+            }
+          }
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
