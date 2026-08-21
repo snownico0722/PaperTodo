@@ -276,6 +276,7 @@ public sealed class AppState
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public bool AutoClearCompletedTodos { get; set; }
+    public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
     public string TextRenderingProfile { get; set; } = TextRenderingProfiles.Standard;
@@ -304,6 +305,7 @@ public sealed class AppState
     public bool EnableTodoNoteLinks { get; set; } = true;
     public bool ShowLinkedNoteName { get; set; }
     public bool AllowLongLinkedNoteTitles { get; set; }
+    public bool ShowLinkedPathExtensionOnly { get; set; }
     public bool HideLinkedNotesFromCapsules { get; set; }
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
@@ -404,6 +406,18 @@ public sealed class PaperItem
     public bool Done { get; set; }
     public int Order { get; set; }
 
+    // Keep the 3.x serialized field name for downgrade compatibility. In 3.3 the value may
+    // point to either built-in paper type (todo or note).
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LinkedNoteId { get; set; }
+
+    [JsonIgnore]
+    public string? LinkedPaperId
+    {
+        get => LinkedNoteId;
+        set => LinkedNoteId = value;
+    }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LinkedPath { get; set; }
 }

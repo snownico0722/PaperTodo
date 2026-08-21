@@ -804,12 +804,12 @@ public sealed partial class AppController : IDisposable
 
     public bool IsExistingNote(string? noteId)
     {
-        return FindNote(noteId) != null;
+        return FindLinkedPaper(noteId) != null;
     }
 
     public bool TryGetLinkedNoteTitle(string? noteId, out string title)
     {
-        var note = FindNote(noteId);
+        var note = FindLinkedPaper(noteId);
         if (note == null)
         {
             title = "";
@@ -822,7 +822,7 @@ public sealed partial class AppController : IDisposable
 
     public bool IsLinkedNoteShown(string? noteId)
     {
-        var note = FindNote(noteId);
+        var note = FindLinkedPaper(noteId);
         return note != null &&
             _windows.TryGetValue(note.Id, out var window) &&
             note.IsVisible &&
@@ -838,13 +838,13 @@ public sealed partial class AppController : IDisposable
 
     private bool IsLinkedScriptCapsule(string? noteId)
     {
-        var note = FindNote(noteId);
+        var note = FindLinkedPaper(noteId);
         return note != null && IsCurrentScriptCapsule(note);
     }
 
     public bool RunLinkedScriptCapsule(string? noteId)
     {
-        var note = FindNote(noteId);
+        var note = FindLinkedPaper(noteId);
         if (note == null || !IsCurrentScriptCapsule(note))
         {
             return false;
@@ -884,7 +884,7 @@ public sealed partial class AppController : IDisposable
 
     public bool IsNoteLinkedToAnyTodo(PaperData paper)
     {
-        if (paper.Type != PaperTypes.Note)
+        if (paper.Type is not (PaperTypes.Note or PaperTypes.Todo))
         {
             return false;
         }
@@ -923,7 +923,7 @@ public sealed partial class AppController : IDisposable
 
     public void OpenLinkedNote(string? noteId, Window? anchorWindow = null)
     {
-        var note = FindNote(noteId);
+        var note = FindLinkedPaper(noteId);
         if (note == null)
         {
             return;
@@ -980,7 +980,8 @@ public sealed partial class AppController : IDisposable
 
     public void BeginNoteLinkDrag(PaperData sourceNote)
     {
-        if (!State.EnableTodoNoteLinks || sourceNote.Type != PaperTypes.Note)
+        if (!State.EnableTodoNoteLinks ||
+            sourceNote.Type is not (PaperTypes.Note or PaperTypes.Todo))
         {
             return;
         }
@@ -990,7 +991,8 @@ public sealed partial class AppController : IDisposable
 
     public void UpdateNoteLinkDrag(PaperData sourceNote, Point screenPoint)
     {
-        if (!State.EnableTodoNoteLinks || sourceNote.Type != PaperTypes.Note)
+        if (!State.EnableTodoNoteLinks ||
+            sourceNote.Type is not (PaperTypes.Note or PaperTypes.Todo))
         {
             ClearNoteLinkDropTarget();
             return;
@@ -999,8 +1001,13 @@ public sealed partial class AppController : IDisposable
         PaperWindow? targetWindow = null;
         string? targetItemId = null;
 
-        foreach (var window in _windows.Values)
+        foreach (var (paperId, window) in _windows)
         {
+            if (string.Equals(paperId, sourceNote.Id, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             if (window.TryHitTodoRow(screenPoint, out var itemId))
             {
                 targetWindow = window;
@@ -1027,7 +1034,7 @@ public sealed partial class AppController : IDisposable
     public void EndNoteLinkDrag(PaperData sourceNote, bool commit)
     {
         if (State.EnableTodoNoteLinks &&
-            sourceNote.Type == PaperTypes.Note &&
+            sourceNote.Type is PaperTypes.Note or PaperTypes.Todo &&
             commit &&
             _noteLinkTargetWindow != null &&
             !string.IsNullOrWhiteSpace(_noteLinkTargetItemId))
@@ -1100,6 +1107,18 @@ public sealed partial class AppController : IDisposable
         _noteLinkTargetWindow?.SetNoteLinkDropTarget(null);
         _noteLinkTargetWindow = null;
         _noteLinkTargetItemId = null;
+    }
+
+    private PaperData? FindLinkedPaper(string? paperId)
+    {
+        if (string.IsNullOrWhiteSpace(paperId))
+        {
+            return null;
+        }
+
+        return State.Papers.FirstOrDefault(paper =>
+            string.Equals(paper.Id, paperId, StringComparison.Ordinal) &&
+            paper.Type is PaperTypes.Note or PaperTypes.Todo);
     }
 
     private PaperData? FindNote(string? noteId)
@@ -2020,7 +2039,7 @@ public sealed partial class AppController : IDisposable
         var refreshedAny = false;
         foreach (var noteId in linkedNoteIds)
         {
-            var note = FindNote(noteId);
+            var note = FindLinkedPaper(noteId);
             if (note == null)
             {
                 continue;
@@ -2053,7 +2072,9 @@ public sealed partial class AppController : IDisposable
 
         return !paper.Items.Any(item =>
             !string.IsNullOrWhiteSpace(item.Text) ||
-            IsExistingNote(item.LinkedNoteId));
+            item.Done ||
+            IsExistingNote(item.LinkedNoteId) ||
+            !string.IsNullOrWhiteSpace(item.LinkedPath));
     }
 
     public int VisibleDeepCapsuleCount()

@@ -617,35 +617,49 @@ public sealed class StateStore
 
     private static void NormalizeLinks(AppState state)
     {
-        var noteIds = state.Papers
-            .Where(p => p.Type == PaperTypes.Note)
-            .Select(p => p.Id)
+        var paperIds = state.Papers
+            .Select(paper => paper.Id)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var item in state.Papers.SelectMany(p => p.Items))
+        foreach (var paper in state.Papers)
         {
-            if (string.IsNullOrWhiteSpace(item.LinkedNoteId) ||
-                !noteIds.Contains(item.LinkedNoteId))
+            foreach (var item in paper.Items)
             {
-                item.LinkedNoteId = null;
+                var linkedPaperId = item.LinkedNoteId;
+                if (string.IsNullOrWhiteSpace(linkedPaperId))
+                {
+                    continue;
+                }
+
+                if (!paperIds.Contains(linkedPaperId) ||
+                    string.Equals(linkedPaperId, paper.Id, StringComparison.Ordinal))
+                {
+                    item.LinkedNoteId = null;
+                    continue;
+                }
+
+                // A persisted malformed state containing both kinds resolves to the paper link,
+                // matching the runtime rule that paper/path quick-launch targets are exclusive.
+                item.LinkedPath = null;
             }
         }
 
         if (state.EnableTodoNoteLinks && state.HideLinkedNotesFromCapsules)
         {
-            var linkedNoteIds = state.Papers
-                .Where(p => p.Type == PaperTypes.Todo)
-                .SelectMany(p => p.Items)
+            var linkedPaperIds = state.Papers
+                .Where(paper => paper.Type == PaperTypes.Todo)
+                .SelectMany(paper => paper.Items)
                 .Select(item => item.LinkedNoteId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToHashSet(StringComparer.Ordinal);
 
-            foreach (var note in state.Papers.Where(p => p.Type == PaperTypes.Note && linkedNoteIds.Contains(p.Id)))
+            foreach (var linkedPaper in state.Papers.Where(paper => linkedPaperIds.Contains(paper.Id)))
             {
-                note.IsCollapsed = false;
+                linkedPaper.IsCollapsed = false;
             }
         }
     }
+
 
     private static void RemoveNullEntriesInPlace<T>(List<T> items)
         where T : class

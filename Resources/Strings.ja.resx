@@ -77,7 +77,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>リンク</value>
   </data>
   <data name="ToolTipDragNoteToTodo" xml:space="preserve">
-    <value>ToDo項目の上へドラッグしてメモを関連付け</value>
+    <value>ToDo 項目へドラッグしてこの紙を関連付ける</value>
   </data>
   <data name="ToolTipOpenLinkedNote" xml:space="preserve">
     <value>関連メモを開く: {0}</value>
@@ -242,13 +242,13 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>画像保存容量の上限（{0} MB）に達しました。</value>
   </data>
   <data name="MenuOpenLinkedNote" xml:space="preserve">
-    <value>関連メモを開く: {0}</value>
+    <value>関連紙を開く：{0}</value>
   </data>
   <data name="MenuEditLinkedScriptCapsule" xml:space="preserve">
     <value>関連スクリプトを編集: {0}</value>
   </data>
   <data name="MenuUnlinkNote" xml:space="preserve">
-    <value>メモの関連付けを解除</value>
+    <value>紙の関連を解除</value>
   </data>
   <data name="MenuItalic" xml:space="preserve">
     <value>斜体</value>
@@ -571,17 +571,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ToDo の文字、行高、間隔を調整します。</value>
   </data>
   <data name="TipEnableTodoNoteLinks" xml:space="preserve">
-    <value>ノートを ToDo にドラッグして関連付け、その項目からノートを開けます。</value>
+    <value>ToDo 項目を別の ToDo 紙またはノート紙に関連付けます。</value>
   </data>
   <data name="TipShowLinkedNoteName" xml:space="preserve">
-    <value>ToDo の後ろに関連ノートのタイトルを表示します。</value>
+    <value>関連する紙またはクイック起動パスの名前を ToDo に表示します。</value>
   </data>
   <data name="TipAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>オフ：コンパクト。オン：内容に合わせて広げます。
-1 行は全角約 5 文字、複数行は約 10 文字。</value>
+    <value>関連名により広い横幅を使えるようにします。</value>
   </data>
   <data name="TipHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>ToDo に関連付けたノートはカプセル一覧に出さず、入口の重複を避けます。</value>
+    <value>ToDo から関連付けられた紙を、解除されるまで端のカプセル列から外せます。</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>関連先がスクリプトカプセルのとき：左クリックで実行、右クリックで編集。</value>
@@ -691,7 +690,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
 設定に関係なく、いずれかの辺が 4096 ピクセル超なら拒否します。</value>
   </data>
   <data name="SettingsEnableTodoNoteLinks" xml:space="preserve">
-    <value>ToDo とメモの関連付けを有効化</value>
+    <value>ToDo の紙リンク</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
     <value>完了した ToDo を自動クリア</value>
@@ -718,13 +717,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>外部で開くボタンを表示</value>
   </data>
   <data name="SettingsShowLinkedNoteName" xml:space="preserve">
-    <value>関連ノートのタイトルを表示</value>
+    <value>関連名を表示</value>
   </data>
   <data name="SettingsAllowLongLinkedNoteTitles" xml:space="preserve">
-    <value>関連タイトルを長く表示</value>
+    <value>長い関連名を許可</value>
   </data>
   <data name="SettingsHideLinkedNotesFromCapsules" xml:space="preserve">
-    <value>関連ノートをカプセルに表示しない</value>
+    <value>関連紙をカプセル列から外す</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>ノートのズームを戻す</value>
@@ -963,5 +962,50 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
     <value>既存の数字列/テンキー割り当てが競合しているか、混合応答に必要な組み合わせを他のアプリが使用しているため切り替えできません。既存の割り当ては変更されません。</value>
+  </data>
+  <data name="LinkedPathDropFailureMessage" xml:space="preserve">
+    <value>このファイルまたはフォルダーを関連付けできません：{0}</value>
+  </data>
+  <data name="LinkedPathDropFailureTitle" xml:space="preserve">
+    <value>パスを関連付けできません</value>
+  </data>
+  <data name="LinkedPathMissingMessage" xml:space="preserve">
+    <value>ファイルまたはフォルダーが見つかりません：{0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
+    <value>このパスを開けません：{0}</value>
+  </data>
+  <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
+    <value>パスを開けません</value>
+  </data>
+  <data name="LinkedPathSingleDropMessage" xml:space="preserve">
+    <value>1 つの ToDo には一度に 1 つのファイルまたはフォルダーだけ関連付けられます。</value>
+  </data>
+  <data name="MenuOpenLinkedPath" xml:space="preserve">
+    <value>クイック起動パスを開く</value>
+  </data>
+  <data name="MenuOpenLinkedPathLocation" xml:space="preserve">
+    <value>保存場所を開く</value>
+  </data>
+  <data name="MenuUnlinkPath" xml:space="preserve">
+    <value>クイック起動パスを解除</value>
+  </data>
+  <data name="SettingsAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>完了 ToDo を下へ移動</value>
+  </data>
+  <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>短いパス名は拡張子のみ表示</value>
+  </data>
+  <data name="TipAutoMoveCompletedTodosToBottom" xml:space="preserve">
+    <value>完了時は完了領域の末尾へ、未完了に戻すと未完了領域の末尾へ移動します。自動削除中は実行しません。</value>
+  </data>
+  <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
+    <value>長い関連名を無効にした場合、ファイルのクイック起動名を拡張子だけにできます。フォルダーは名前を表示します。</value>
+  </data>
+  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
+    <value>パスが見つかりません：{0}</value>
+  </data>
+  <data name="ToolTipOpenLinkedPath" xml:space="preserve">
+    <value>開く：{0}</value>
   </data>
 </root>
