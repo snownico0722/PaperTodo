@@ -123,7 +123,6 @@ internal static class GlobalShortcutCatalog
                 : definition.DefaultEnabled;
         }
 
-        // Left/right edge sequences are one user-facing switch each; keep 1–9 in lockstep.
         foreach (var group in new[] { GlobalShortcutGroup.EdgeLeft, GlobalShortcutGroup.EdgeRight })
         {
             var groupDefinitions = DefinitionsInGroup(group);
@@ -295,9 +294,6 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         return CountSupportedModifiers(modifiers) == 2;
     }
 
-    /// <summary>
-    /// Edge queue prefixes: 2–3 of Ctrl/Alt/Shift/Win (no bare single modifier).
-    /// </summary>
     public static bool HasEdgePrefixModifiers(ModifierKeys modifiers)
     {
         var count = CountSupportedModifiers(modifiers);
@@ -531,16 +527,12 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
 internal enum GlobalShortcutRegistrationFailure
 {
     None,
+    Conflict,
     SystemOccupied,
-    RegistrationFailed
+    RegistrationFailed,
+    UnregistrationFailed
 }
 
-/// <summary>
-/// One logical shortcut owner. All instances share <see cref="GlobalHotkeyBroker"/>, which is the
-/// only process-level RegisterHotKey authority. A manager can reserve configured gestures without
-/// activating them, allowing an unavailable plugin command to keep its PaperTodo-internal ownership
-/// while releasing the actual Windows hotkey until it becomes executable again.
-/// </summary>
 internal sealed class GlobalHotkeyManager : IDisposable
 {
     private readonly Guid _ownerId = Guid.NewGuid();
@@ -548,7 +540,13 @@ internal sealed class GlobalHotkeyManager : IDisposable
 
     public GlobalHotkeyManager()
     {
-        GlobalHotkeyBroker.AddOwner(_ownerId, commandId => Invoked?.Invoke(commandId));
+        GlobalHotkeyBroker.AddOwner(_ownerId, commandId =>
+        {
+            if (!_disposed)
+            {
+                Invoked?.Invoke(commandId);
+            }
+        });
     }
 
     public event Action<string>? Invoked;
@@ -589,10 +587,6 @@ internal sealed class GlobalHotkeyManager : IDisposable
             out failure);
     }
 
-    /// <summary>
-    /// Releases this owner's native registrations but keeps its configured reservations in the
-    /// broker. Used while another shortcut recorder/transaction needs the key events themselves.
-    /// </summary>
     public void Suspend()
     {
         if (_disposed)
@@ -613,11 +607,6 @@ internal sealed class GlobalHotkeyManager : IDisposable
     }
 }
 
-/// <summary>
-/// Process-global native hotkey authority. Owner states are combined transactionally before any
-/// RegisterHotKey mutation, so host and plugin shortcuts cannot temporarily steal each other's
-/// configured gestures. One global numpad mode is applied to every owner during each transaction.
-/// </summary>
 internal static class GlobalHotkeyBroker
 {
     private const int WmHotkey = 0x0312;
@@ -719,7 +708,7 @@ internal static class GlobalHotkeyBroker
                 out var desiredNative,
                 out failedCommandId))
         {
-            failure = GlobalShortcutRegistrationFailure.RegistrationFailed;
+            failure = GlobalShortcutRegistrationFailure.Conflict;
             return false;
         }
 
@@ -734,10 +723,7 @@ internal static class GlobalHotkeyBroker
             if (!TryRegisterGesture(pair.Key, out var nativeId, out failure))
             {
                 failedCommandId = pair.Value.CommandId;
-                foreach (var gesture in newlyRegistered)
-                {
-                    TryUnregisterGesture(gesture);
-                }
+                RollbackNewRegistrations(newlyRegistered);
                 return false;
             }
 
@@ -747,12 +733,26 @@ internal static class GlobalHotkeyBroker
             newlyRegistered.Add(pair.Key);
         }
 
+        var removedRegistrations = new List<(ShortcutGesture Gesture, NativeBinding Binding)>();
         foreach (var pair in NativeByGesture.ToArray())
         {
-            if (!desiredNative.ContainsKey(pair.Key))
+            if (desiredNative.ContainsKey(pair.Key))
             {
-                TryUnregisterGesture(pair.Key);
+                continue;
             }
+
+            if (!TryUnregisterGesture(pair.Key))
+            {
+                failure = GlobalShortcutRegistrationFailure.UnregistrationFailed;
+                failedCommandId = pair.Value.OwnerId == ownerId
+                    ? pair.Value.CommandId
+                    : candidateActive.FirstOrDefault() ?? candidateReserved.FirstOrDefault();
+                RollbackNewRegistrations(newlyRegistered);
+                RestoreRemovedRegistrations(removedRegistrations);
+                return false;
+            }
+
+            removedRegistrations.Add((pair.Key, pair.Value));
         }
 
         foreach (var pair in desiredNative)
@@ -807,15 +807,54 @@ internal static class GlobalHotkeyBroker
             return;
         }
 
-        _ = TryApply(
-            ownerId,
-            owner.Bindings,
-            Array.Empty<string>(),
-            Array.Empty<string>(),
-            _distinguishNumpadDigits,
-            out _,
-            out _);
+        if (!TryApply(
+                ownerId,
+                owner.Bindings,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                _distinguishNumpadDigits,
+                out _,
+                out _))
+        {
+            // Keep the broker owner record if the OS refused to release one of its native hotkeys.
+            // The manager has already marked itself disposed, so the retained dispatch is inert and
+            // cannot execute a stale command. A later process teardown still releases the HWND.
+            return;
+        }
         Owners.Remove(ownerId);
+    }
+
+    private static void RollbackNewRegistrations(IEnumerable<ShortcutGesture> gestures)
+    {
+        foreach (var gesture in gestures.Reverse())
+        {
+            _ = TryUnregisterGesture(gesture);
+        }
+    }
+
+    private static void RestoreRemovedRegistrations(
+        IEnumerable<(ShortcutGesture Gesture, NativeBinding Binding)> registrations)
+    {
+        foreach (var (gesture, binding) in registrations.Reverse())
+        {
+            _ = TryRestoreGesture(gesture, binding);
+        }
+    }
+
+    private static bool TryRestoreGesture(ShortcutGesture gesture, NativeBinding binding)
+    {
+        if (!RegisterHotKey(
+                Source.Handle,
+                binding.NativeId,
+                NativeModifiers(gesture.Modifiers) | ModNoRepeat,
+                (uint)KeyInterop.VirtualKeyFromKey(gesture.Key)))
+        {
+            return false;
+        }
+
+        NativeByGesture[gesture] = binding;
+        NativeById[binding.NativeId] = binding;
+        return true;
     }
 
     private static bool TryBuildCombinedPlan(
