@@ -50,6 +50,7 @@ public sealed partial class AppController
                 out _shortcutApplyFailureId,
                 out _shortcutApplyFailure))
         {
+            _shortcutApplyFailureStatus = FailureStatus(_shortcutApplyFailure);
             return;
         }
 
@@ -119,7 +120,6 @@ public sealed partial class AppController
             !hotkeys.ActiveBindings.TryGetValue(commandId, out var binding) ||
             string.IsNullOrEmpty(binding))
         {
-            // A WM_HOTKEY received during recording must never fall through to its old action.
             return true;
         }
 
@@ -156,7 +156,6 @@ public sealed partial class AppController
         EnsureShortcutDraft();
         if (definition.IsEdgeCapsule)
         {
-            // A non-modifier key can still confirm; modifier-only recording completes on key-up.
             if (!ShortcutGesture.HasEdgePrefixModifiers(gesture.Modifiers) ||
                 ShortcutGesture.IsModifierKey(gesture.Key) ||
                 gesture.Key == Key.None)
@@ -235,17 +234,23 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+    private static ShortcutUiStatus? FailureStatus(
+        GlobalShortcutRegistrationFailure failure) => failure switch
+    {
+        GlobalShortcutRegistrationFailure.Conflict => ShortcutUiStatus.Duplicate,
+        GlobalShortcutRegistrationFailure.SystemOccupied => ShortcutUiStatus.SystemOccupied,
+        _ => null
+    };
+
     private void RollbackShortcutDraftAfterFailure(
         string? failedCommandId,
         GlobalShortcutRegistrationFailure registrationFailure,
         ShortcutUiStatus? status = null)
     {
-        // TryApply is transactional and leaves the previous native registrations active. Mirror
-        // that same transaction in the UI so the displayed gesture always matches runtime state.
         ResetShortcutDraftToSavedState();
         _shortcutApplyFailureId = failedCommandId;
         _shortcutApplyFailure = registrationFailure;
-        _shortcutApplyFailureStatus = status;
+        _shortcutApplyFailureStatus = status ?? FailureStatus(registrationFailure);
         RefreshShortcutSettingsUi();
     }
 
@@ -277,7 +282,6 @@ public sealed partial class AppController
             return;
         }
 
-        // Edge prefixes cannot be cleared; general shortcuts use ↺ restore default instead of × clear.
         if ((key == Key.Back || key == Key.Delete) && Keyboard.Modifiers == ModifierKeys.None)
         {
             return;
@@ -410,13 +414,10 @@ public sealed partial class AppController
         };
         rows.Children.Add(distinguishNumpadToggle);
 
-        // Align the edge group title with "常用" (left edge of the page), tip glued to text.
-        // Left/right queue command tips share a min width so their ⓘ stay level with each other.
         var edgeQueueTipLabelWidth = MeasureShortcutTipLabelMinWidth(
             (Strings.Get("ShortcutEdgeLeftSequence"), AppTypography.Scale(12.5), FontWeights.Normal),
             (Strings.Get("ShortcutEdgeRightSequence"), AppTypography.Scale(12.5), FontWeights.Normal));
 
-        // One user-facing setting per side; digits 1–9 stay fixed behind the scenes.
         rows.Children.Add(BuildShortcutInlineHintLabel(
             Strings.Get("ShortcutGroupEdgeSequences"),
             "ShortcutGroupEdgeSequencesTip",
@@ -428,7 +429,6 @@ public sealed partial class AppController
                 edgeQueueTipLabelWidth));
         }
 
-        // Tip glued to the label (not star-stretched to the far right of the page).
         var openAtCursorToggle = SettingsToggle(
             Strings.Get("SettingsOpenEdgeCapsuleShortcutAtCursor"),
             State.OpenEdgeCapsuleShortcutAtCursor,
@@ -559,9 +559,6 @@ public sealed partial class AppController
             .ToArray();
         var manager = EnsureGlobalHotkeyManager();
 
-        // Plugin hotkeys use their own WM_HOTKEY owner. Release the old registration set while
-        // changing numeric alias semantics so it cannot make the built-in transaction fail merely
-        // because a plugin still owns a key that will be re-evaluated under the new mode.
         SuspendPluginShortcutRegistrations();
         if (!manager.TryApply(
                 desiredBindings,
@@ -717,8 +714,6 @@ public sealed partial class AppController
             Grid.SetColumn(keyButton, 0);
             keyCell.Children.Add(keyButton);
 
-            // Quiet "+" join, then a read-only chip for fixed digits (not the same control as the
-            // editable modifier button, so 1–9 does not look pressable).
             var fixedTail = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -801,7 +796,6 @@ public sealed partial class AppController
             if (isEdgeSequence &&
                 ShortcutGesture.TryParse(definition.DefaultGesture, out var defaultGesture))
             {
-                // Reset modifiers only; edge sequences stay off unless the user enables them.
                 SetEdgeShortcutModifiersDraft(definition.Group, defaultGesture.Modifiers);
                 SetEdgeShortcutEnabledDraft(definition.Group, definition.DefaultEnabled);
             }
@@ -820,10 +814,6 @@ public sealed partial class AppController
         return grid;
     }
 
-    /// <summary>
-    /// Label + ⓘ glued to the text. Pass a shared <paramref name="labelMinWidth"/> so peer
-    /// tips (left/right queues) line up while still sitting just after the text.
-    /// </summary>
     private UIElement BuildShortcutInlineHintLabel(
         string text,
         string tipKey,
@@ -834,7 +824,6 @@ public sealed partial class AppController
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            // Match BuildShortcutGroupLabel so "快速启动侧边胶囊" lines up with "常用".
             Margin = isGroupHeader ? new Thickness(0, 9, 0, 2) : new Thickness(0)
         };
 
@@ -879,8 +868,6 @@ public sealed partial class AppController
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-        // Command column stays flexible but slightly tighter so the key column can fit
-        // edge rows: modifier button + "+" + fixed 1–9 chip without clipping.
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.95, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(172) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
@@ -977,7 +964,6 @@ public sealed partial class AppController
             }
         }
 
-        // Same modifier prefix on left and right collides for every digit 1–9.
         MarkEdgePrefixConflictsAsDuplicates();
         if (!State.DistinguishNumpadShortcutDigits && _shortcutEnabledDraft != null)
         {
@@ -1239,7 +1225,7 @@ public sealed partial class AppController
         {
             RollbackShortcutDraftAfterFailure(
                 changedCommandId ?? _shortcutDuplicateIds.FirstOrDefault(),
-                GlobalShortcutRegistrationFailure.RegistrationFailed,
+                GlobalShortcutRegistrationFailure.Conflict,
                 ShortcutUiStatus.Duplicate);
             return;
         }
