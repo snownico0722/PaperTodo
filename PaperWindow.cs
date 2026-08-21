@@ -131,7 +131,7 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
     private const double DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
-    private const double DeepCapsuleGap = EdgeCapsuleLayout.Gap;
+    private static double DeepCapsuleGap => EdgeCapsuleLayout.Gap;
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double WindowChromeInset = WindowChromeMargin * 2;
     // Grow top bar with overall font scale, but only half as much as full FitChrome (shell zoom).
