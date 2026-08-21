@@ -10,28 +10,13 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  patch-final-stability:
-    name: Apply final 3.3 stability patch
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out PR branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - name: Apply and push final patch
-        shell: pwsh
-        run: .\.github\scripts\apply-3.3-final-stability.ps1
-
   build:
     name: Build PaperTodo
     runs-on: windows-latest
@@ -48,6 +33,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
