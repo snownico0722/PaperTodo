@@ -44,3 +44,47 @@ jobs:
 
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+
+      - name: Publish single-file smoke test
+        run: |
+          $selfContainedOut = Join-Path $env:RUNNER_TEMP "maintenance-self-contained"
+          $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "maintenance-no-runtime"
+          Remove-Item -LiteralPath $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o $selfContainedOut `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=true `
+            /p:PublishTrimmed=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -PathType Leaf)) {
+            throw "Self-contained publish did not produce PaperTodo.exe"
+          }
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o $frameworkDependentOut `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=false `
+            /p:PublishTrimmed=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -PathType Leaf)) {
+            throw "Framework-dependent publish did not produce PaperTodo.exe"
+          }
