@@ -25,6 +25,39 @@ public sealed partial class AppController
         Disposing
     }
 
+    // Keep the lifecycle rules pure and deterministic so async WebView/native callbacks cannot
+    // silently redefine the state machine. The policy is also directly exercised by protocol tests.
+    private static class PluginAppRuntimeTransitions
+    {
+        public static PluginAppRuntimeState BeginStart(PluginAppRuntimeState state) =>
+            state == PluginAppRuntimeState.Stopped
+                ? PluginAppRuntimeState.Starting
+                : state;
+
+        public static PluginAppRuntimeState StartSucceeded(PluginAppRuntimeState state) =>
+            state == PluginAppRuntimeState.Starting
+                ? PluginAppRuntimeState.Running
+                : state;
+
+        public static PluginAppRuntimeState StartFailed(int failureCount, int retryCount) =>
+            failureCount <= retryCount
+                ? PluginAppRuntimeState.Backoff
+                : PluginAppRuntimeState.Failed;
+
+        public static PluginAppRuntimeState RetryElapsed(PluginAppRuntimeState state) =>
+            state == PluginAppRuntimeState.Backoff
+                ? PluginAppRuntimeState.Stopped
+                : state;
+
+        public static PluginAppRuntimeState DescriptorChanged(PluginAppRuntimeState state) =>
+            state == PluginAppRuntimeState.Failed
+                ? PluginAppRuntimeState.Stopped
+                : state;
+
+        public static bool RuntimeMatches(Guid currentRuntimeId, Guid callbackRuntimeId) =>
+            currentRuntimeId == callbackRuntimeId;
+    }
+
     private sealed class PluginAppRuntimeLifetime
     {
         public bool Active { get; set; } = true;
@@ -139,7 +172,23 @@ public sealed partial class AppController
             }
             else
             {
+                var descriptorChanged = slot.Descriptor != null &&
+                    !string.Equals(
+                        slot.Descriptor.Fingerprint,
+                        descriptor.Fingerprint,
+                        StringComparison.Ordinal);
                 slot.Descriptor = descriptor;
+                if (descriptorChanged && slot.State == PluginAppRuntimeState.Failed)
+                {
+                    // Bounded automatic retries stay bounded. A real plugin rescan/content change is
+                    // the explicit recovery signal that allows a previously failed provider to try
+                    // again without requiring PaperTodo to restart.
+                    slot.State = PluginAppRuntimeTransitions.DescriptorChanged(slot.State);
+                    slot.FailureCount = 0;
+                    slot.RetryGeneration++;
+                    slot.RestartRequested = false;
+                    statusChanged = true;
+                }
             }
 
             if (slot.State == PluginAppRuntimeState.Stopped)
@@ -182,7 +231,7 @@ public sealed partial class AppController
             return;
         }
 
-        slot.State = PluginAppRuntimeState.Starting;
+        slot.State = PluginAppRuntimeTransitions.BeginStart(slot.State);
         slot.Descriptor = descriptor;
         slot.RuntimeId = Guid.NewGuid();
         slot.RestartRequested = false;
@@ -230,7 +279,7 @@ public sealed partial class AppController
 
             slot.Lease = lease;
             lease = null;
-            slot.State = PluginAppRuntimeState.Running;
+            slot.State = PluginAppRuntimeTransitions.StartSucceeded(slot.State);
             slot.FailureCount = 0;
             slot.RetryGeneration++;
             QueuePluginStatusUiRefresh();
@@ -388,10 +437,13 @@ public sealed partial class AppController
             attempt,
             exception.GetBaseException());
 
-        if (attempt <= PluginAppRuntimeRetryDelays.Length &&
+        var nextState = PluginAppRuntimeTransitions.StartFailed(
+            attempt,
+            PluginAppRuntimeRetryDelays.Length);
+        if (nextState == PluginAppRuntimeState.Backoff &&
             IsPluginAppRuntimeDesired(descriptor.Id))
         {
-            slot.State = PluginAppRuntimeState.Backoff;
+            slot.State = nextState;
             SchedulePluginAppRuntimeRetry(
                 slot,
                 PluginAppRuntimeRetryDelays[attempt - 1]);
@@ -449,7 +501,7 @@ public sealed partial class AppController
                     return;
                 }
 
-                slot.State = PluginAppRuntimeState.Stopped;
+                slot.State = PluginAppRuntimeTransitions.RetryElapsed(slot.State);
                 ReconcilePluginAppRuntimes();
             }),
             DispatcherPriority.Background);
@@ -462,7 +514,7 @@ public sealed partial class AppController
         _pluginAppRuntimeReconciliationEnabled &&
         _pluginAppRuntimeSlots.TryGetValue(slot.ProviderId, out var current) &&
         ReferenceEquals(current, slot) &&
-        slot.RuntimeId == runtimeId &&
+        PluginAppRuntimeTransitions.RuntimeMatches(slot.RuntimeId, runtimeId) &&
         slot.State != PluginAppRuntimeState.Disposing;
 
     private bool IsPluginAppRuntimeDesired(string providerId) =>
@@ -495,7 +547,7 @@ public sealed partial class AppController
                 if (_pluginAppRuntimeDisposing ||
                     IsExiting ||
                     !_pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) ||
-                    slot.RuntimeId != runtimeId)
+                    !PluginAppRuntimeTransitions.RuntimeMatches(slot.RuntimeId, runtimeId))
                 {
                     return;
                 }
