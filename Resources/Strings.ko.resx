@@ -916,4 +916,52 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="ShortcutExit" xml:space="preserve">
     <value>종료</value>
   </data>
+  <data name="SettingsUiLanguage" xml:space="preserve">
+    <value>인터페이스 언어</value>
+  </data>
+  <data name="TipSettingsUiLanguage" xml:space="preserve">
+    <value>PaperTodo 인터페이스 언어를 선택합니다. 저장 후 다시 시작하면 적용되며 명시적인 시작 언어가 우선합니다.</value>
+  </data>
+  <data name="UiLanguageSystem" xml:space="preserve">
+    <value>시스템 설정 따르기</value>
+  </data>
+  <data name="UiLanguageZhHans" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="UiLanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="UiLanguageJapanese" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="UiLanguageKorean" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="SettingsDeepCapsuleGap" xml:space="preserve">
+    <value>가장자리 캡슐 간격</value>
+  </data>
+  <data name="TipSettingsDeepCapsuleGap" xml:space="preserve">
+    <value>도킹된 캡슐 열의 세로 간격을 조정합니다. 표준은 기존 4 DIP를 유지합니다.</value>
+  </data>
+  <data name="DeepCapsuleGapNarrow" xml:space="preserve">
+    <value>좁게</value>
+  </data>
+  <data name="DeepCapsuleGapStandard" xml:space="preserve">
+    <value>표준</value>
+  </data>
+  <data name="DeepCapsuleGapWide" xml:space="preserve">
+    <value>넓게</value>
+  </data>
+  <data name="SettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>숫자 키패드 숫자 구분</value>
+  </data>
+  <data name="TipSettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>켜면 숫자열과 숫자 키패드를 따로 등록할 수 있습니다. 끄면 저장된 값을 바꾸지 않고 둘 다 반응합니다. 가장자리 빠른 실행 시퀀스에는 영향을 주지 않습니다.</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictTitle" xml:space="preserve">
+    <value>숫자 키패드 단축키 충돌</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
+    <value>기존 숫자열/숫자 키패드 바인딩이 충돌하거나 혼합 응답에 필요한 조합을 다른 앱이 사용 중이라 모드를 변경할 수 없습니다. 기존 바인딩은 변경되지 않습니다.</value>
+  </data>
 </root>

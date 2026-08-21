@@ -929,4 +929,52 @@
   <data name="ShortcutExit" xml:space="preserve">
     <value>退出</value>
   </data>
+  <data name="SettingsUiLanguage" xml:space="preserve">
+    <value>界面语言</value>
+  </data>
+  <data name="TipSettingsUiLanguage" xml:space="preserve">
+    <value>选择 PaperTodo 的界面语言；保存后重启程序生效。显式启动语言参数仍优先。</value>
+  </data>
+  <data name="UiLanguageSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="UiLanguageZhHans" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="UiLanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="UiLanguageJapanese" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="UiLanguageKorean" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="SettingsDeepCapsuleGap" xml:space="preserve">
+    <value>边缘胶囊间距</value>
+  </data>
+  <data name="TipSettingsDeepCapsuleGap" xml:space="preserve">
+    <value>调整贴边胶囊队列的纵向间距；标准保持旧版 4 DIP。</value>
+  </data>
+  <data name="DeepCapsuleGapNarrow" xml:space="preserve">
+    <value>较窄</value>
+  </data>
+  <data name="DeepCapsuleGapStandard" xml:space="preserve">
+    <value>标准</value>
+  </data>
+  <data name="DeepCapsuleGapWide" xml:space="preserve">
+    <value>较宽</value>
+  </data>
+  <data name="SettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>区分小键盘数字键</value>
+  </data>
+  <data name="TipSettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>开启后数字键与小键盘数字键可分别注册；关闭后两者混合响应，但不会修改已保存的快捷键。快速启动侧边胶囊不受影响。</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictTitle" xml:space="preserve">
+    <value>小键盘快捷键冲突</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
+    <value>无法切换小键盘模式：现有快捷键存在数字键/小键盘冲突，或混合响应所需的组合已被其他程序占用。现有快捷键不会被修改。</value>
+  </data>
 </root>

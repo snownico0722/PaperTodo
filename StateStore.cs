@@ -449,6 +449,7 @@ public sealed class StateStore
             state.Theme = "system";
         }
 
+        state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
 
         if (!MarkdownRenderModes.IsValid(state.MarkdownRenderMode))
@@ -460,6 +461,7 @@ public sealed class StateStore
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);
         state.ResizeGripMode = ResizeGripModes.Normalize(state.ResizeGripMode);
         state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
+        state.DeepCapsuleGapSize = DeepCapsuleGapSizes.Normalize(state.DeepCapsuleGapSize);
         state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
         state.NoteTextSize = VisualTextSizes.Normalize(state.NoteTextSize);
@@ -489,18 +491,17 @@ public sealed class StateStore
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
         state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(state.GlobalHotkeyEnabled);
 
-        if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
-        {
-            state.UseCapsuleCollapseAll = false;
-        }
-
-        if (!state.UseCapsuleCollapseAll)
+        var collapseAllRuntimeEnabled =
+            state.UseCapsuleMode &&
+            state.UseDeepCapsuleMode &&
+            state.UseCapsuleCollapseAll;
+        if (!collapseAllRuntimeEnabled)
         {
             state.CapsuleCollapseAllActive = false;
         }
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.CapsuleCollapseAllActiveQueues = NormalizeCollapseAllActiveQueues(state.CapsuleCollapseAllActiveQueues);
-        if (!state.UseCapsuleCollapseAll)
+        if (!collapseAllRuntimeEnabled)
         {
             state.CapsuleCollapseAllActiveQueues.Clear();
         }
@@ -519,7 +520,7 @@ public sealed class StateStore
             }
         }
 
-        var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
+        var keepDeepCapsuleStartTopMargins = collapseAllRuntimeEnabled;
         state.DeepCapsuleStartTopMargin = keepDeepCapsuleStartTopMargins
             ? NormalizeDeepCapsuleStartTopMargin(state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName)
             : EdgeCapsuleLayout.StartTopMargin;

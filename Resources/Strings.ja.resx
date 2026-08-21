@@ -916,4 +916,52 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="ShortcutExit" xml:space="preserve">
     <value>終了</value>
   </data>
+  <data name="SettingsUiLanguage" xml:space="preserve">
+    <value>表示言語</value>
+  </data>
+  <data name="TipSettingsUiLanguage" xml:space="preserve">
+    <value>PaperTodo の表示言語を選択します。保存後、再起動すると反映されます。明示的な起動言語指定が優先されます。</value>
+  </data>
+  <data name="UiLanguageSystem" xml:space="preserve">
+    <value>システムに従う</value>
+  </data>
+  <data name="UiLanguageZhHans" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="UiLanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="UiLanguageJapanese" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="UiLanguageKorean" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="SettingsDeepCapsuleGap" xml:space="preserve">
+    <value>端カプセルの間隔</value>
+  </data>
+  <data name="TipSettingsDeepCapsuleGap" xml:space="preserve">
+    <value>端に固定したカプセル列の縦間隔を調整します。標準は従来の 4 DIP を維持します。</value>
+  </data>
+  <data name="DeepCapsuleGapNarrow" xml:space="preserve">
+    <value>狭い</value>
+  </data>
+  <data name="DeepCapsuleGapStandard" xml:space="preserve">
+    <value>標準</value>
+  </data>
+  <data name="DeepCapsuleGapWide" xml:space="preserve">
+    <value>広い</value>
+  </data>
+  <data name="SettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>テンキー数字を区別</value>
+  </data>
+  <data name="TipSettingsDistinguishNumpadShortcutDigits" xml:space="preserve">
+    <value>オンでは数字列とテンキーを別々に登録できます。オフでは保存値を書き換えず両方で反応します。端のクイック起動シーケンスには影響しません。</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictTitle" xml:space="preserve">
+    <value>テンキーショートカットの競合</value>
+  </data>
+  <data name="ShortcutNumpadModeConflictMessage" xml:space="preserve">
+    <value>既存の数字列/テンキー割り当てが競合しているか、混合応答に必要な組み合わせを他のアプリが使用しているため切り替えできません。既存の割り当ては変更されません。</value>
+  </data>
 </root>

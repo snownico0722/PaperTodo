@@ -131,7 +131,7 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
     private const double DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
-    private const double DeepCapsuleGap = EdgeCapsuleLayout.Gap;
+    private static double DeepCapsuleGap => EdgeCapsuleLayout.Gap;
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double WindowChromeInset = WindowChromeMargin * 2;
     // Grow top bar with overall font scale, but only half as much as full FitChrome (shell zoom).
@@ -1003,7 +1003,7 @@ public sealed partial class PaperWindow : Window
         _paperChrome.Margin = new Thickness(WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
         _paperChrome.Effect = isCapsule
-            ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.08)
+            ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
     }
 
@@ -1296,12 +1296,15 @@ public sealed partial class PaperWindow : Window
         return false;
     }
 
-    private static DropShadowEffect CreatePaperChromeShadow(double blurRadius = 14, double opacity = 0.18)
+    private static DropShadowEffect CreatePaperChromeShadow(
+        double blurRadius = 14,
+        double opacity = 0.22,
+        double shadowDepth = 2)
     {
         return new DropShadowEffect
         {
             BlurRadius = blurRadius,
-            ShadowDepth = 2,
+            ShadowDepth = shadowDepth,
             Opacity = opacity
         };
     }
@@ -3537,7 +3540,7 @@ public sealed partial class PaperWindow : Window
         {
             var formatted = new FormattedText(
                 text,
-                CultureInfo.CurrentUICulture,
+                UiLanguages.EffectiveUiCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,

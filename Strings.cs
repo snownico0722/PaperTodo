@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Resources;
 
 namespace PaperTodo;
@@ -9,11 +8,11 @@ public static class Strings
 
     public static string Get(string key)
     {
-        return Manager.GetString(key, CultureInfo.CurrentUICulture) ?? key;
+        return Manager.GetString(key, UiLanguages.EffectiveUiCulture) ?? key;
     }
 
     public static string Format(string key, params object[] args)
     {
-        return string.Format(CultureInfo.CurrentCulture, Get(key), args);
+        return string.Format(UiLanguages.EffectiveCulture, Get(key), args);
     }
 }

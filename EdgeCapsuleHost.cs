@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Interop;
@@ -470,7 +471,13 @@ internal sealed class EdgeCapsuleHost : IDisposable
             BorderThickness = new Thickness(1),
             Background = options.PaperBrush,
             BorderBrush = options.PaperBorderBrush,
-            SnapsToDevicePixels = true
+            SnapsToDevicePixels = true,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 4,
+                ShadowDepth = 0,
+                Opacity = 0.10
+            }
         };
         Panel.SetZIndex(chrome, 0);
         visualSurface.Children.Add(chrome);

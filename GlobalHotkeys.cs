@@ -278,6 +278,35 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         return key is (>= Key.D1 and <= Key.D9) or (>= Key.NumPad1 and <= Key.NumPad9);
     }
 
+    public bool IsDigitKey =>
+        Key is (>= Key.D0 and <= Key.D9) or (>= Key.NumPad0 and <= Key.NumPad9);
+
+    public ShortcutGesture NormalizeNumpadDigit()
+    {
+        if (Key is >= Key.NumPad0 and <= Key.NumPad9)
+        {
+            var ordinal = (int)Key - (int)Key.NumPad0;
+            return new ShortcutGesture((Key)((int)Key.D0 + ordinal), Modifiers);
+        }
+        return this;
+    }
+
+    public IEnumerable<ShortcutGesture> RegistrationGestures(bool includeDigitAlias)
+    {
+        yield return this;
+        if (!includeDigitAlias) yield break;
+        if (Key is >= Key.D0 and <= Key.D9)
+        {
+            var ordinal = (int)Key - (int)Key.D0;
+            yield return new ShortcutGesture((Key)((int)Key.NumPad0 + ordinal), Modifiers);
+        }
+        else if (Key is >= Key.NumPad0 and <= Key.NumPad9)
+        {
+            var ordinal = (int)Key - (int)Key.NumPad0;
+            yield return new ShortcutGesture((Key)((int)Key.D0 + ordinal), Modifiers);
+        }
+    }
+
     public string ToEdgePrefixDisplayString()
     {
         if (!HasEdgePrefixModifiers(Modifiers))
@@ -482,13 +511,15 @@ internal sealed class GlobalHotkeyManager : IDisposable
     public bool TryApply(
         IReadOnlyDictionary<string, string> desiredBindings,
         IReadOnlyCollection<string> activeCommandIds,
+        bool distinguishNumpadDigits,
         out string? failedCommandId,
         out GlobalShortcutRegistrationFailure failure)
     {
         failedCommandId = null;
         failure = GlobalShortcutRegistrationFailure.None;
         var activeIds = activeCommandIds.ToHashSet(StringComparer.Ordinal);
-        var desired = new List<(string CommandId, string Text, ShortcutGesture Gesture)>();
+        var desiredCommands = new List<(string CommandId, string Text, ShortcutGesture Gesture)>();
+        var desiredRegistrations = new List<(string CommandId, ShortcutGesture Gesture)>();
         var commandByGesture = new Dictionary<ShortcutGesture, string>();
         foreach (var pair in desiredBindings)
         {
@@ -500,18 +531,27 @@ internal sealed class GlobalHotkeyManager : IDisposable
                 continue;
             }
 
-            if (!commandByGesture.TryAdd(gesture, pair.Key))
+            var definition = GlobalShortcutCatalog.Find(pair.Key);
+            var includeDigitAlias =
+                !distinguishNumpadDigits &&
+                definition?.IsEdgeCapsule != true &&
+                gesture.IsDigitKey;
+            foreach (var registrationGesture in gesture.RegistrationGestures(includeDigitAlias))
             {
-                failedCommandId = pair.Key;
-                failure = GlobalShortcutRegistrationFailure.RegistrationFailed;
-                return false;
+                if (!commandByGesture.TryAdd(registrationGesture, pair.Key))
+                {
+                    failedCommandId = pair.Key;
+                    failure = GlobalShortcutRegistrationFailure.RegistrationFailed;
+                    return false;
+                }
+                desiredRegistrations.Add((pair.Key, registrationGesture));
             }
 
-            desired.Add((pair.Key, pair.Value, gesture));
+            desiredCommands.Add((pair.Key, pair.Value, gesture));
         }
 
         var newlyRegistered = new List<ShortcutGesture>();
-        foreach (var binding in desired)
+        foreach (var binding in desiredRegistrations)
         {
             if (_nativeIdByGesture.ContainsKey(binding.Gesture))
             {
@@ -533,7 +573,7 @@ internal sealed class GlobalHotkeyManager : IDisposable
             newlyRegistered.Add(binding.Gesture);
         }
 
-        var activeByGesture = desired
+        var activeByGesture = desiredRegistrations
             .ToDictionary(binding => binding.Gesture, binding => binding.CommandId);
 
         foreach (var pair in _nativeIdByGesture.ToArray())
@@ -547,10 +587,11 @@ internal sealed class GlobalHotkeyManager : IDisposable
             TryUnregisterGesture(pair.Key);
         }
 
-        _activeBindings = desired
+        _activeBindings = desiredCommands
             .ToDictionary(binding => binding.CommandId, binding => binding.Text, StringComparer.Ordinal);
         return true;
     }
+
 
     private bool TryRegisterGesture(
         ShortcutGesture gesture,

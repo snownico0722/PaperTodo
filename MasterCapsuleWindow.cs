@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Animation;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
@@ -169,7 +170,13 @@ public sealed class MasterCapsuleWindow : Window
             Background = Theme.PaperBrush,
             BorderBrush = Theme.PaperBorderBrush,
             SnapsToDevicePixels = true,
-            Cursor = System.Windows.Input.Cursors.Hand
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 4,
+                ShadowDepth = 0,
+                Opacity = 0.10
+            }
         };
 
         // The pill background stays opaque (PaperBrush) at all times. Hover tint is a separate
@@ -373,7 +380,7 @@ public sealed class MasterCapsuleWindow : Window
     {
         _glyph.Text = _active ? "▸" : "▾";
         _label.Text = _active
-            ? string.Format(CultureInfo.CurrentUICulture, Strings.Get("CapsuleCollapseAllCountFormat"), _count)
+            ? string.Format(UiLanguages.EffectiveUiCulture, Strings.Get("CapsuleCollapseAllCountFormat"), _count)
             : Strings.Get("CapsuleCollapseAllLabel");
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
@@ -529,7 +536,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             var formatted = new FormattedText(
                 text,
-                CultureInfo.CurrentUICulture,
+                UiLanguages.EffectiveUiCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,

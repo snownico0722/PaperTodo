@@ -56,6 +56,7 @@ public sealed partial class AppController
         if (!manager.TryApply(
                 State.GlobalHotkeys,
                 enabledCommandIds,
+                State.DistinguishNumpadShortcutDigits,
                 out _shortcutApplyFailureId,
                 out _shortcutApplyFailure))
         {
@@ -357,6 +358,7 @@ public sealed partial class AppController
             }
 
             State.OpenEdgeCapsuleShortcutAtCursor = true;
+            State.DistinguishNumpadShortcutDigits = true;
             _shortcutRecordingCommandId = null;
             ApplyShortcutDraft();
         };
@@ -374,6 +376,13 @@ public sealed partial class AppController
         {
             rows.Children.Add(BuildShortcutRow(definition));
         }
+
+        rows.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsDistinguishNumpadShortcutDigits"),
+                State.DistinguishNumpadShortcutDigits,
+                ToggleDistinguishNumpadShortcutDigits),
+            "TipSettingsDistinguishNumpadShortcutDigits"));
 
         // Align the edge group title with "常用" (left edge of the page), tip glued to text.
         // Left/right queue command tips share a min width so their ⓘ stay level with each other.
@@ -425,6 +434,51 @@ public sealed partial class AppController
     {
         State.OpenEdgeCapsuleShortcutAtCursor = !State.OpenEdgeCapsuleShortcutAtCursor;
         MarkDirty();
+    }
+
+    private void ToggleDistinguishNumpadShortcutDigits()
+    {
+        var desiredMode = !State.DistinguishNumpadShortcutDigits;
+        var desiredBindings = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
+        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
+        if (!desiredMode && NumpadEquivalentConflictIds(desiredBindings, desiredEnabled).Count > 0)
+        {
+            ShowNumpadShortcutModeConflict();
+            RefreshSettingsWindowContent();
+            return;
+        }
+
+        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
+            .Where(id => desiredEnabled.GetValueOrDefault(id))
+            .ToArray();
+        var manager = EnsureGlobalHotkeyManager();
+        if (!manager.TryApply(
+                desiredBindings,
+                enabledCommandIds,
+                desiredMode,
+                out _,
+                out _))
+        {
+            ShowNumpadShortcutModeConflict();
+            RefreshSettingsWindowContent();
+            return;
+        }
+
+        State.DistinguishNumpadShortcutDigits = desiredMode;
+        ClearShortcutApplyFailure();
+        SaveNow();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ShowNumpadShortcutModeConflict()
+    {
+        if (_settingsWindow != null)
+        {
+            PaperNoticeDialog.Show(
+                _settingsWindow,
+                Strings.Get("ShortcutNumpadModeConflictTitle"),
+                Strings.Get("ShortcutNumpadModeConflictMessage"));
+        }
     }
 
     private void FocusShortcutRecorder()
@@ -696,7 +750,7 @@ public sealed partial class AppController
         {
             var formatted = new FormattedText(
                 text,
-                CultureInfo.CurrentUICulture,
+                UiLanguages.EffectiveUiCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(AppTypography.UiFontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
@@ -812,6 +866,40 @@ public sealed partial class AppController
 
         // Same modifier prefix on left and right collides for every digit 1–9.
         MarkEdgePrefixConflictsAsDuplicates();
+        if (!State.DistinguishNumpadShortcutDigits && _shortcutEnabledDraft != null)
+        {
+            _shortcutDuplicateIds.UnionWith(
+                NumpadEquivalentConflictIds(_shortcutDraft, _shortcutEnabledDraft));
+        }
+    }
+
+    private static HashSet<string> NumpadEquivalentConflictIds(
+        IReadOnlyDictionary<string, string> bindings,
+        IReadOnlyDictionary<string, bool> enabled)
+    {
+        var conflicts = new HashSet<string>(StringComparer.Ordinal);
+        var firstCommandByGesture = new Dictionary<ShortcutGesture, string>();
+        foreach (var pair in bindings)
+        {
+            if (!enabled.GetValueOrDefault(pair.Key) ||
+                GlobalShortcutCatalog.Find(pair.Key)?.IsEdgeCapsule == true ||
+                !ShortcutGesture.TryParse(pair.Value, out var gesture) ||
+                !gesture.IsDigitKey)
+            {
+                continue;
+            }
+            var normalized = gesture.NormalizeNumpadDigit();
+            if (firstCommandByGesture.TryGetValue(normalized, out var firstCommandId))
+            {
+                conflicts.Add(firstCommandId);
+                conflicts.Add(pair.Key);
+            }
+            else
+            {
+                firstCommandByGesture[normalized] = pair.Key;
+            }
+        }
+        return conflicts;
     }
 
     private void MarkEdgePrefixConflictsAsDuplicates()
@@ -993,6 +1081,7 @@ public sealed partial class AppController
         if (!manager.TryApply(
                 desiredBindings,
                 enabledCommandIds,
+                State.DistinguishNumpadShortcutDigits,
                 out var failedCommandId,
                 out var registrationFailure))
         {
@@ -1050,6 +1139,7 @@ public sealed partial class AppController
         if (!manager.TryApply(
                 desired,
                 enabledCommandIds,
+                State.DistinguishNumpadShortcutDigits,
                 out var failedCommandId,
                 out var registrationFailure))
         {

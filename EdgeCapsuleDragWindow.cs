@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Animation;
 
 namespace PaperTodo;
@@ -619,7 +620,13 @@ internal sealed class EdgeCapsuleDragWindow : Window
             BorderBrush = options.PaperBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(options.Shape.CornerRadiusDip),
-            SnapsToDevicePixels = true
+            SnapsToDevicePixels = true,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 8,
+                ShadowDepth = 1,
+                Opacity = 0.12
+            }
         });
 
         var shell = new Grid
