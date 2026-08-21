@@ -10,53 +10,13 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  patch-release-notes:
-    name: Patch v3.3 release notes
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out PR branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-
-      - name: Append low-risk backport notes
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path("CHANGELOG.md")
-          text = path.read_text(encoding="utf-8")
-          anchor = "- 提升旧版 Windows 启动兼容性，避免部分环境在程序界面出现前直接启动失败。"
-          replacement = anchor + "\n" + (
-              "- 修复贴边深胶囊右键菜单打开二级菜单后，点击子项可能被外部点击保护提前关闭的问题。\n"
-              "- 修复部分贴边胶囊设置变化后，需要等下一次鼠标或布局变化才刷新显示的问题；状态设置现在会立即重算布局。"
-          )
-
-          if text.count(anchor) != 1:
-              raise SystemExit(f"expected exactly one v3.3 anchor, got {text.count(anchor)}")
-          if "修复贴边深胶囊右键菜单打开二级菜单后" in text:
-              raise SystemExit("v3.3 backport notes already present")
-
-          path.write_text(text.replace(anchor, replacement, 1), encoding="utf-8")
-
-      - name: Verify and push note update
-        shell: bash
-        run: |
-          git diff --check
-          git diff -- CHANGELOG.md
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- CHANGELOG.md
-          git commit -m "docs: add 3.3 capsule backport notes"
-          git push origin HEAD:${{ github.head_ref }}
-
   build:
     name: Build PaperTodo
     runs-on: windows-latest
