@@ -10,7 +10,7 @@ on:
       - ".github/workflows/release.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: maintenance-build-${{ github.event.pull_request.number }}
@@ -34,23 +34,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: true
-
-      - name: Replay PR 125 semantic delta on latest 3.2
-        run: |
-          if (-not (Test-Path -LiteralPath ".\TodoRules.cs" -PathType Leaf)) {
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            python .\.github\scripts\replay-pr125-semantic.py
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            git status --short
-            git commit -m "feat: replay stable 3.3 todo enhancements on latest 3.2"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
