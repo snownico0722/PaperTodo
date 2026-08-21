@@ -1,0 +1,188 @@
+name: Apply show-all remembered-position backport
+
+on:
+  push:
+    branches:
+      - backport/show-all-remembered-position-3.2
+
+permissions:
+  contents: write
+
+jobs:
+  apply-backport:
+    if: ${{ !contains(github.event.head_commit.message, '[backport-applied]') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact 3.2 backport
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+
+          replace_once(
+              "AppController.cs",
+              """    private int _trayRefreshSuppressionDepth;
+              private bool _isRestoringStartupPapers;
+              private bool _isPreparingStartupEdgeCapsules;
+          """,
+              """    private int _trayRefreshSuppressionDepth;
+              private bool _isRestoringStartupPapers;
+              private bool _isRestoringRuntimePaperBatch;
+              private bool _isPreparingStartupEdgeCapsules;
+          """)
+
+          replace_once(
+              "AppController.cs",
+              """        if (!_isRestoringStartupPapers &&
+                      State.UseCapsuleMode &&
+                      State.UseDeepCapsuleMode &&
+                      ShouldPaperOccupyDeepCapsuleSlot(paper, window))
+                  {
+                      ArrangeDeepCapsules(animate: State.EnableAnimations);
+                  }
+                  if (showAsDeepCapsuleOnly && !window.IsShellBuilt)
+                  {
+                      ScheduleDeferredShellPrewarm(paper, window);
+                  }
+          """,
+              """        if (!_isRestoringStartupPapers &&
+                      !_isRestoringRuntimePaperBatch &&
+                      State.UseCapsuleMode &&
+                      State.UseDeepCapsuleMode &&
+                      ShouldPaperOccupyDeepCapsuleSlot(paper, window))
+                  {
+                      ArrangeDeepCapsules(animate: State.EnableAnimations);
+                  }
+                  if (showAsDeepCapsuleOnly &&
+                      !window.IsShellBuilt &&
+                      !_isRestoringRuntimePaperBatch)
+                  {
+                      ScheduleDeferredShellPrewarm(paper, window);
+                  }
+          """)
+
+          replace_once(
+              "AppController.cs",
+              """    public async void ShowAllPapers()
+              {
+                  if (IsExiting)
+                  {
+                      return;
+                  }
+
+                  EnsurePapersOnScreen();
+                  var papersToShow = State.Papers.ToList();
+                  foreach (var paper in papersToShow)
+                  {
+                      paper.IsVisible = true;
+                  }
+
+                  await RestorePaperSurfacesAsync(papersToShow);
+                  if (!IsExiting)
+                  {
+                      MarkDirty();
+                  }
+              }
+          """,
+              """    public void ShowAllPapers()
+              {
+                  if (IsExiting)
+                  {
+                      return;
+                  }
+
+                  // A runtime show supersedes any startup restore still waiting below Render/Loaded.
+                  _paperSurfaceRestoreGeneration++;
+                  _startupShellPrewarmGeneration++;
+                  _isPreparingStartupEdgeCapsules = false;
+                  EnsurePapersOnScreen();
+
+                  // Runtime show-all follows normal per-paper restore so remembered expanded geometry
+                  // wins before edge placement. Queue arrange and shell prewarm are batched afterward.
+                  var papersToShow = State.Papers.ToList();
+                  var wasSuppressingDirty = _suppressDirty;
+                  var wasRestoringRuntimePaperBatch = _isRestoringRuntimePaperBatch;
+                  _suppressDirty = true;
+                  _trayRefreshSuppressionDepth++;
+                  _isRestoringRuntimePaperBatch = true;
+                  try
+                  {
+                      var activationPaper = papersToShow.LastOrDefault(paper =>
+                          !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
+                      foreach (var paper in papersToShow)
+                      {
+                          ShowPaper(paper, activate: ReferenceEquals(paper, activationPaper));
+                      }
+                  }
+                  finally
+                  {
+                      _isRestoringRuntimePaperBatch = wasRestoringRuntimePaperBatch;
+                      _trayRefreshSuppressionDepth--;
+                      _suppressDirty = wasSuppressingDirty;
+                  }
+
+                  ArrangeDeepCapsules(animate: State.EnableAnimations);
+                  ScheduleStartupShellPrewarm(papersToShow);
+                  RefreshAllTodoRowsForPaperVisibility();
+                  RefreshTrayMenu();
+                  MarkDirty();
+              }
+
+              private void RefreshAllTodoRowsForPaperVisibility()
+              {
+                  foreach (var paper in State.Papers.Where(paper => paper.Type == PaperTypes.Todo))
+                  {
+                      if (_windows.TryGetValue(paper.Id, out var window))
+                      {
+                          window.RefreshTodoRowsForExternalChange();
+                      }
+                  }
+              }
+          """)
+
+          replace_once(
+              "CHANGELOG.md",
+              """### v3.3
+
+          **优化和修复**
+
+          - Markdown 裸 `http://` / `https://` 地址可直接点击打开；行内代码和围栏代码中的示例地址保持普通文本，句末标点、括号和成对强调标记不会混入实际网址。
+          """,
+              """### v3.3
+
+          **优化和修复**
+
+          - 修复通过全局快捷键、托盘“显示全部”或显隐切换重新显示纸片时，开启“记住边缘胶囊展开位置”的纸片可能无法回到上次展开位置的问题；同时优化多纸片批量恢复，减少重复胶囊重排，并同步刷新待办关联笔记的显示状态。
+          - Markdown 裸 `http://` / `https://` 地址可直接点击打开；行内代码和围栏代码中的示例地址保持普通文本，句末标点、括号和成对强调标记不会混入实际网址。
+          """)
+          PY
+
+      - name: Verify patch
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- AppController.cs CHANGELOG.md
+
+      - name: Commit backport
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- AppController.cs CHANGELOG.md
+          git diff --cached --quiet && { echo "No backport changes produced"; exit 1; }
+          git commit -m "fix: backport remembered show-all restoration [backport-applied]"
+          git push origin HEAD:${GITHUB_REF_NAME}
