@@ -1,31 +1,29 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using System.Windows;
-using Microsoft.Web.WebView2.Wpf;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
 internal sealed partial class WebPaperBodySession
 {
-    // WebView2CompositionControl can retain an initialized document while its capture-backed WPF
-    // surface loses the last frame after the mini host leaves and later rejoins the visual tree.
-    // A normally ticking/animated page repairs that state by producing another browser frame, but a
-    // static or paused mini has no reason to repaint and can therefore remain transparent forever.
-    // Keep this recovery host-owned: on a warm re-Load, briefly add/remove one almost-invisible
-    // pixel so Chromium must submit fresh damage without reloading the document or touching plugin
-    // state. The first cold Load has no CoreWebView2 yet and deliberately bypasses this path.
-    private const int MiniSurfaceRecoverySettleMilliseconds = 34;
-
-    private static readonly ConditionalWeakTable<FrameworkElement, MiniSurfaceRecoveryState>
+    // WebView2CompositionControl mirrors WPF IsVisible into CoreWebView2Controller.IsVisible.
+    // A warm mini can keep its document/plugin readiness while the capture-backed presentation
+    // loses its last frame across preview detach/reattach. Recover only that presentation lifetime:
+    // after a mini was physically unloaded while logically hidden, briefly make the WebView itself
+    // Hidden and restore it after WPF has had a render opportunity. This restarts WebView2's own
+    // visibility/presentation path without executing script, mutating plugin DOM/state or reloading.
+    private static readonly ConditionalWeakTable<WebPluginMiniViewHost, MiniSurfaceRecoveryState>
         MiniSurfaceRecoveryStates = new();
 
     private sealed class MiniSurfaceRecoveryState
     {
         public int Generation;
+        public bool NeedsRecovery;
+        public bool VisibilityCycleActive;
+        public Visibility RestoreVisibility = Visibility.Visible;
     }
 
-    [ModuleInitializer]
-    internal static void RegisterMiniSurfaceRecovery()
+    static WebPaperBodySession()
     {
         EventManager.RegisterClassHandler(
             typeof(WebPluginMiniViewHost),
@@ -41,7 +39,7 @@ internal sealed partial class WebPaperBodySession
 
     private static void OnWebMiniSurfaceUnloaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement host)
+        if (sender is not WebPluginMiniViewHost host)
         {
             return;
         }
@@ -51,106 +49,144 @@ internal sealed partial class WebPaperBodySession
         {
             state.Generation++;
         }
+
+        // Never leave the control locally Hidden if a rapid close/reparent invalidates an in-flight
+        // visibility cycle before its queued restore callback runs.
+        RestoreMiniSurfaceVisibility(host, state);
+
+        // Loaded/Unloaded can also occur for WPF tree/template reasons. Only a physical detach that
+        // follows the mini's own logical SetVisible(false) is evidence that the next attach needs
+        // capture-surface recovery.
+        state.NeedsRecovery =
+            !host._disposed &&
+            !host._visible &&
+            host._documentReady &&
+            host._pluginReportedReady &&
+            host._webView.CoreWebView2 != null;
+
+#if DEBUG
+        if (state.NeedsRecovery)
+        {
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"preview.webmini phase=surface-detached " +
+                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)}");
+        }
+#endif
     }
 
-    private static async void OnWebMiniSurfaceLoaded(object sender, RoutedEventArgs e)
+    private static void OnWebMiniSurfaceLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not WebPluginMiniViewHost host)
         {
             return;
         }
 
-        WebView2CompositionControl? webView = null;
-        foreach (UIElement child in host.Children)
+        var state = MiniSurfaceRecoveryStates.GetOrCreateValue(host);
+        if (!state.NeedsRecovery ||
+            state.VisibilityCycleActive ||
+            host._disposed ||
+            !host._documentReady ||
+            !host._pluginReportedReady ||
+            host._webView.CoreWebView2 == null)
         {
-            if (child is WebView2CompositionControl candidate)
-            {
-                webView = candidate;
-                break;
-            }
-        }
-
-        var core = webView?.CoreWebView2;
-        if (core == null || webView?.Source == null)
-        {
-            // Cold mini initialization starts only after the first Loaded event, so there is no
-            // stale capture surface to recover on that path.
             return;
         }
 
-        var state = MiniSurfaceRecoveryStates.GetOrCreateValue(host);
+        state.NeedsRecovery = false;
         int generation;
         unchecked
         {
             generation = ++state.Generation;
         }
 
-        var markerId = $"__papertodo-mini-repaint-{Guid.NewGuid():N}";
-        var markerJson = JsonSerializer.Serialize(markerId);
-        var addMarkerScript = $$"""
-            (() => {
-              const id = {{markerJson}};
-              document.getElementById(id)?.remove();
-              const parent = document.body || document.documentElement;
-              if (!parent) return false;
-              const marker = document.createElement('i');
-              marker.id = id;
-              marker.setAttribute('aria-hidden', 'true');
-              marker.style.cssText =
-                'position:fixed;left:0;top:0;width:1px;height:1px;' +
-                'margin:0;padding:0;border:0;pointer-events:none;' +
-                'z-index:2147483647;background:#fff;opacity:.02;';
-              parent.appendChild(marker);
-              return true;
-            })();
-            """;
-        var removeMarkerScript = $$"""
-            (() => {
-              document.getElementById({{markerJson}})?.remove();
-              return true;
-            })();
-            """;
+        state.RestoreVisibility = host._webView.Visibility;
+        if (state.RestoreVisibility != Visibility.Visible)
+        {
+            // PaperTodo never hides a healthy mini through the WebView's local Visibility property.
+            // Respect an unexpected owner/plugin value rather than overriding it as a recovery side
+            // effect. A later real detach can arm recovery again.
+            return;
+        }
 
         try
         {
-            // The first mutation forces browser-side paint damage. Keep it alive across roughly two
-            // 60 Hz frames so the composition-control capture path has time to observe a committed
-            // frame even when the plugin itself is completely static.
-            await core.ExecuteScriptAsync(addMarkerScript);
-            await Task.Delay(MiniSurfaceRecoverySettleMilliseconds);
+            state.VisibilityCycleActive = true;
+            host._webView.Visibility = Visibility.Hidden;
+#if DEBUG
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"preview.webmini phase=surface-recovery-hide " +
+                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)} " +
+                $"generation={generation}");
+#endif
+
+            // Visibility invalidation queues layout/render work. ContextIdle runs behind that work,
+            // so WebView2 observes a real false -> true IsVisible transition without a wall-clock
+            // delay or assumptions about 60/120/240 Hz refresh rates.
+            _ = host.Dispatcher.BeginInvoke(
+                DispatcherPriority.ContextIdle,
+                (Action)(() => CompleteMiniSurfaceRecovery(host, state, generation)));
         }
         catch
         {
-            // Process/navigation failure continues through the existing Web mini fallback paths.
+            RestoreMiniSurfaceVisibility(host, state);
         }
-        finally
+    }
+
+    private static void CompleteMiniSurfaceRecovery(
+        WebPluginMiniViewHost host,
+        MiniSurfaceRecoveryState state,
+        int generation)
+    {
+        if (!state.VisibilityCycleActive || generation != state.Generation)
         {
-            try
-            {
-                await core.ExecuteScriptAsync(removeMarkerScript);
-            }
-            catch
-            {
-            }
+            return;
         }
 
-        if (!host.IsLoaded || generation != state.Generation)
+        if (host._disposed ||
+            !host.IsLoaded ||
+            !host._documentReady ||
+            !host._pluginReportedReady)
+        {
+            RestoreMiniSurfaceVisibility(host, state);
+            return;
+        }
+
+        try
+        {
+            host._webView.Visibility = state.RestoreVisibility;
+            state.VisibilityCycleActive = false;
+            host._webView.InvalidateVisual();
+#if DEBUG
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"preview.webmini phase=surface-recovery-complete " +
+                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)} " +
+                $"generation={generation}");
+#endif
+        }
+        catch
+        {
+            RestoreMiniSurfaceVisibility(host, state);
+        }
+    }
+
+    private static void RestoreMiniSurfaceVisibility(
+        WebPluginMiniViewHost host,
+        MiniSurfaceRecoveryState state)
+    {
+        if (!state.VisibilityCycleActive)
         {
             return;
         }
 
         try
         {
-            // Removing the marker is the second damage event. Let it settle as well, then invalidate
-            // only the WPF wrapper so its next composition pass samples the refreshed capture image.
-            await Task.Delay(MiniSurfaceRecoverySettleMilliseconds);
-            if (host.IsLoaded && generation == state.Generation)
-            {
-                webView.InvalidateVisual();
-            }
+            host._webView.Visibility = state.RestoreVisibility;
         }
         catch
         {
+            // Browser/process failure is still handled by the existing Web mini ProcessFailed and
+            // fallback paths. Recovery must never turn a presentation glitch into an app failure.
         }
+        state.VisibilityCycleActive = false;
     }
 }
