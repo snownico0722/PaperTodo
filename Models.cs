@@ -329,8 +329,8 @@ public sealed class AppState
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
-    // Preserve 3.x behavior on upgrade: number-row and numpad keys remain distinct unless the user opts into mixed response.
-    public bool DistinguishNumpadShortcutDigits { get; set; } = true;
+    // 3.3 defaults to mixed number-row/numpad response; users can opt into distinguishing them.
+    public bool DistinguishNumpadShortcutDigits { get; set; }
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
     // instead of the docked edge / remembered expanded geometry.
     public bool OpenEdgeCapsuleShortcutAtCursor { get; set; } = true;
