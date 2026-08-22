@@ -762,10 +762,7 @@ public sealed partial class AppController : IDisposable
         {
             window.RefreshPaperTitle();
         }
-        if (paper.Type == PaperTypes.Note)
-        {
-            RefreshTodoRowsForLinkedNote(paper.Id);
-        }
+        RefreshTodoRowsForLinkedNote(paper.Id);
         RefreshTrayMenu();
         MarkDirty();
     }
@@ -1365,7 +1362,7 @@ public sealed partial class AppController : IDisposable
             ScheduleDeferredShellPrewarm(paper, window);
         }
         RefreshTrayMenu();
-        if (!_suppressDirty && paper.Type == PaperTypes.Note)
+        if (!_suppressDirty)
         {
             RefreshTodoRowsForLinkedNote(paper.Id);
         }
@@ -1868,10 +1865,7 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);
         RefreshTrayMenu();
-        if (paper.Type == PaperTypes.Note)
-        {
-            RefreshTodoRowsForLinkedNote(paper.Id);
-        }
+        RefreshTodoRowsForLinkedNote(paper.Id);
         MarkDirty();
     }
 
@@ -1971,7 +1965,6 @@ public sealed partial class AppController : IDisposable
 
     public void DeletePaper(PaperData paper)
     {
-        var deletedNoteId = paper.Type == PaperTypes.Note ? paper.Id : null;
         paper.IsVisible = false;
         NextVisibilityAnimationVersion(paper.Id);
 
@@ -1984,10 +1977,7 @@ public sealed partial class AppController : IDisposable
         State.Papers.RemoveAll(p => p.Id == paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
 
-        if (!string.IsNullOrWhiteSpace(deletedNoteId))
-        {
-            ClearTodoLinksToNote(deletedNoteId);
-        }
+        ClearTodoLinksToNote(paper.Id);
 
         if (State.Papers.Count == 0)
         {
