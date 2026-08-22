@@ -155,10 +155,16 @@ public sealed partial class PaperWindow
         var showName = _controller.State.ShowLinkedNoteName;
         var longName = showName && _controller.State.AllowLongLinkedNoteTitles;
         var displayName = PathDisplayName(path);
-        if (showName && !longName && _controller.State.ShowLinkedPathExtensionOnly && File.Exists(path))
+        if (showName && !longName && _controller.State.ShowLinkedPathExtensionOnly)
         {
-            var extension = Path.GetExtension(path);
-            if (!string.IsNullOrWhiteSpace(extension)) displayName = extension;
+            try
+            {
+                var extension = Path.GetExtension(displayName);
+                if (!string.IsNullOrWhiteSpace(extension)) displayName = extension;
+            }
+            catch
+            {
+            }
         }
         if (showName && !longName)
         {
@@ -188,23 +194,15 @@ public sealed partial class PaperWindow
 
         void Refresh(bool hovered)
         {
-            var valid = File.Exists(path) || Directory.Exists(path);
-            var isDirectory = valid && Directory.Exists(path);
-            glyph.Text = valid
-                ? showName ? displayName : isDirectory ? "\uE8B7" : "\uE7C3"
-                : "!";
-            glyph.FontFamily = showName || !valid
+            glyph.Text = showName ? displayName : "\uE71B";
+            glyph.FontFamily = showName
                 ? AppTypography.UiFontFamily
                 : new FontFamily("Segoe MDL2 Assets");
             glyph.FontSize = showName ? metrics.LinkedNoteNameFontSize : metrics.LinkedNoteIconFontSize;
-            glyph.Foreground = valid ? (hovered ? TextBrush : WeakTextBrush) : TrashTextBrush;
-            glyph.Opacity = valid ? (hovered ? 1.0 : 0.72) : 1.0;
-            button.Background = valid
-                ? (hovered ? LinkedNoteLightBgBrush : LinkedNoteNormalBgBrush)
-                : (hovered ? TrashHoverBgBrush : TrashBgBrush);
-            button.ToolTip = valid
-                ? Strings.Format("ToolTipOpenLinkedPath", path)
-                : Strings.Format("ToolTipLinkedPathMissing", path);
+            glyph.Foreground = hovered ? TextBrush : WeakTextBrush;
+            glyph.Opacity = hovered ? 1.0 : 0.72;
+            button.Background = hovered ? LinkedNoteLightBgBrush : LinkedNoteNormalBgBrush;
+            button.ToolTip = Strings.Format("ToolTipOpenLinkedPath", path);
         }
 
         Refresh(false);
