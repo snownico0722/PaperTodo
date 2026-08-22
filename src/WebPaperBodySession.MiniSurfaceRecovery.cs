@@ -1,17 +1,18 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace PaperTodo;
 
 internal sealed partial class WebPaperBodySession
 {
     // WebView2CompositionControl mirrors WPF IsVisible into CoreWebView2Controller.IsVisible.
-    // A warm mini can keep its document/plugin readiness while the capture-backed presentation
-    // loses its last frame across preview detach/reattach. Recover only that presentation lifetime:
-    // after a mini was physically unloaded while logically hidden, briefly make the WebView itself
-    // Hidden and restore it after WPF has had a render opportunity. This restarts WebView2's own
-    // visibility/presentation path without executing script, mutating plugin DOM/state or reloading.
+    // A warm mini can retain its document while the capture-backed presentation loses its last
+    // frame after a real preview detach/reattach. Keep recovery entirely host-side: only a physical
+    // detach (no remaining WPF parent) arms the next Load, then briefly drive the WebView through a
+    // Hidden -> Visible transition so WebView2 restarts its own presentation path. No plugin script,
+    // DOM/state mutation, reload or refresh-rate-dependent delay is involved.
     private static readonly ConditionalWeakTable<WebPluginMiniViewHost, MiniSurfaceRecoveryState>
         MiniSurfaceRecoveryStates = new();
 
@@ -50,26 +51,23 @@ internal sealed partial class WebPaperBodySession
             state.Generation++;
         }
 
-        // Never leave the control locally Hidden if a rapid close/reparent invalidates an in-flight
-        // visibility cycle before its queued restore callback runs.
-        RestoreMiniSurfaceVisibility(host, state);
+        var webView = FindMiniWebView(host);
+        RestoreMiniSurfaceVisibility(webView, state);
 
-        // Loaded/Unloaded can also occur for WPF tree/template reasons. Only a physical detach that
-        // follows the mini's own logical SetVisible(false) is evidence that the next attach needs
-        // capture-surface recovery.
+        // Loaded/Unloaded may also occur while WPF reconnects an otherwise intact tree (for
+        // example around template/theme work). Only removing the mini from its parent is the Edge
+        // Preview lifetime boundary that can invalidate the capture-backed presentation surface.
         state.NeedsRecovery =
-            !host._disposed &&
-            !host._visible &&
-            host._documentReady &&
-            host._pluginReportedReady &&
-            host._webView.CoreWebView2 != null;
+            host.Parent == null &&
+            webView?.CoreWebView2 != null &&
+            webView.Source != null;
 
 #if DEBUG
         if (state.NeedsRecovery)
         {
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.webmini phase=surface-detached " +
-                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)}");
+                $"host={RuntimeHelpers.GetHashCode(host):x}");
         }
 #endif
     }
@@ -82,12 +80,12 @@ internal sealed partial class WebPaperBodySession
         }
 
         var state = MiniSurfaceRecoveryStates.GetOrCreateValue(host);
+        var webView = FindMiniWebView(host);
         if (!state.NeedsRecovery ||
             state.VisibilityCycleActive ||
-            host._disposed ||
-            !host._documentReady ||
-            !host._pluginReportedReady ||
-            host._webView.CoreWebView2 == null)
+            !host.IsLoaded ||
+            webView?.CoreWebView2 == null ||
+            webView.Source == null)
         {
             return;
         }
@@ -99,41 +97,55 @@ internal sealed partial class WebPaperBodySession
             generation = ++state.Generation;
         }
 
-        state.RestoreVisibility = host._webView.Visibility;
+        state.RestoreVisibility = webView.Visibility;
         if (state.RestoreVisibility != Visibility.Visible)
         {
-            // PaperTodo never hides a healthy mini through the WebView's local Visibility property.
-            // Respect an unexpected owner/plugin value rather than overriding it as a recovery side
-            // effect. A later real detach can arm recovery again.
+            // The mini host normally leaves local Visibility at Visible and controls presentation
+            // with opacity/hit testing. Respect any unexpected local visibility owner instead of
+            // overriding it as a recovery side effect.
             return;
         }
 
         try
         {
             state.VisibilityCycleActive = true;
-            host._webView.Visibility = Visibility.Hidden;
+            webView.Visibility = Visibility.Hidden;
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.webmini phase=surface-recovery-hide " +
-                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)} " +
-                $"generation={generation}");
+                $"host={RuntimeHelpers.GetHashCode(host):x} generation={generation}");
 #endif
 
-            // Visibility invalidation queues layout/render work. ContextIdle runs behind that work,
-            // so WebView2 observes a real false -> true IsVisible transition without a wall-clock
-            // delay or assumptions about 60/120/240 Hz refresh rates.
+            // Setting Hidden invalidates WPF layout/render while preserving the slot's size.
+            // ContextIdle runs after higher-priority render work, giving WebView2 a real false ->
+            // true IsVisible transition without guessing how long one or two display frames take.
             _ = host.Dispatcher.BeginInvoke(
                 DispatcherPriority.ContextIdle,
-                (Action)(() => CompleteMiniSurfaceRecovery(host, state, generation)));
+                (Action)(() =>
+                    CompleteMiniSurfaceRecovery(host, webView, state, generation)));
         }
         catch
         {
-            RestoreMiniSurfaceVisibility(host, state);
+            RestoreMiniSurfaceVisibility(webView, state);
         }
+    }
+
+    private static WebView2CompositionControl? FindMiniWebView(
+        WebPluginMiniViewHost host)
+    {
+        foreach (UIElement child in host.Children)
+        {
+            if (child is WebView2CompositionControl webView)
+            {
+                return webView;
+            }
+        }
+        return null;
     }
 
     private static void CompleteMiniSurfaceRecovery(
         WebPluginMiniViewHost host,
+        WebView2CompositionControl webView,
         MiniSurfaceRecoveryState state,
         int generation)
     {
@@ -142,35 +154,33 @@ internal sealed partial class WebPaperBodySession
             return;
         }
 
-        if (host._disposed ||
-            !host.IsLoaded ||
-            !host._documentReady ||
-            !host._pluginReportedReady)
+        if (!host.IsLoaded ||
+            webView.CoreWebView2 == null ||
+            webView.Source == null)
         {
-            RestoreMiniSurfaceVisibility(host, state);
+            RestoreMiniSurfaceVisibility(webView, state);
             return;
         }
 
         try
         {
-            host._webView.Visibility = state.RestoreVisibility;
+            webView.Visibility = state.RestoreVisibility;
             state.VisibilityCycleActive = false;
-            host._webView.InvalidateVisual();
+            webView.InvalidateVisual();
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.webmini phase=surface-recovery-complete " +
-                $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(host._owner._context.PaperId)} " +
-                $"generation={generation}");
+                $"host={RuntimeHelpers.GetHashCode(host):x} generation={generation}");
 #endif
         }
         catch
         {
-            RestoreMiniSurfaceVisibility(host, state);
+            RestoreMiniSurfaceVisibility(webView, state);
         }
     }
 
     private static void RestoreMiniSurfaceVisibility(
-        WebPluginMiniViewHost host,
+        WebView2CompositionControl? webView,
         MiniSurfaceRecoveryState state)
     {
         if (!state.VisibilityCycleActive)
@@ -178,14 +188,17 @@ internal sealed partial class WebPaperBodySession
             return;
         }
 
-        try
+        if (webView != null)
         {
-            host._webView.Visibility = state.RestoreVisibility;
-        }
-        catch
-        {
-            // Browser/process failure is still handled by the existing Web mini ProcessFailed and
-            // fallback paths. Recovery must never turn a presentation glitch into an app failure.
+            try
+            {
+                webView.Visibility = state.RestoreVisibility;
+            }
+            catch
+            {
+                // Browser/process failure is handled by the existing Web mini ProcessFailed and
+                // fallback paths. Recovery must not turn a presentation glitch into an app failure.
+            }
         }
         state.VisibilityCycleActive = false;
     }
