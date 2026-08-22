@@ -866,17 +866,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+        foreach (var window in _windows.Values.ToArray())
         {
-            if (!paper.Items.Any(item => string.Equals(item.LinkedNoteId, noteId, StringComparison.Ordinal)))
-            {
-                continue;
-            }
-
-            if (_windows.TryGetValue(paper.Id, out var window))
-            {
-                window.RefreshTodoRowsForExternalChange();
-            }
+            window.RefreshLinkedNoteRows(noteId);
         }
     }
 
