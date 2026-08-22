@@ -172,41 +172,6 @@ public partial class App : Application
         }
     }
 
-
-    private static bool TryResolveStartupCulture(string? language, out CultureInfo culture)
-    {
-        culture = null!;
-        var value = (language ?? "").Trim().Replace('_', '-');
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        try
-        {
-            var requested = CultureInfo.GetCultureInfo(value);
-            if (requested.TwoLetterISOLanguageName is not ("zh" or "en" or "ja" or "ko"))
-            {
-                return false;
-            }
-
-            culture = requested.IsNeutralCulture
-                ? CultureInfo.GetCultureInfo(requested.TwoLetterISOLanguageName switch
-                {
-                    "zh" => "zh-CN",
-                    "ja" => "ja-JP",
-                    "ko" => "ko-KR",
-                    _ => "en-US"
-                })
-                : requested;
-            return true;
-        }
-        catch (CultureNotFoundException)
-        {
-            return false;
-        }
-    }
-
     private static void ApplyCulture(CultureInfo culture)
     {
         CultureInfo.DefaultThreadCurrentCulture = culture;
