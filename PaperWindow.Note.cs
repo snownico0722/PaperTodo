@@ -836,7 +836,7 @@ public sealed partial class PaperWindow
             }),
             true);
 
-        box.MouseMove += (_, e) =>
+        box.MouseMove += (sender, e) =>
         {
             if (!isPreviewing &&
                 (Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
