@@ -259,7 +259,18 @@ Release notes are taken from the matching section in [`CHANGELOG.md`](CHANGELOG.
 
 ## Build And Dependencies
 
+Clone the 3.2 branch with submodules before building:
+
 ```powershell
+git clone --recurse-submodules --branch 3.2 https://github.com/snownico0722/PaperTodo.git
+cd PaperTodo
+dotnet build -c Release
+```
+
+For an existing clone, initialize the submodules first:
+
+```powershell
+git submodule update --init --recursive
 dotnet build -c Release
 ```
 

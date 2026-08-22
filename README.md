@@ -264,7 +264,18 @@ Release 发行说明从 [`CHANGELOG.md`](CHANGELOG.md) 自动提取对应 tag �
 
 ## 构建与依赖
 
+首次克隆 3.2 分支请同时初始化子模块：
+
 ```powershell
+git clone --recurse-submodules --branch 3.2 https://github.com/snownico0722/PaperTodo.git
+cd PaperTodo
+dotnet build -c Release
+```
+
+如果已经按普通方式克隆，请先初始化子模块：
+
+```powershell
+git submodule update --init --recursive
 dotnet build -c Release
 ```
 
