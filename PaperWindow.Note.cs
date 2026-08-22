@@ -845,7 +845,7 @@ public sealed partial class PaperWindow
                 return;
             }
 
-            var isOverLink = box.TryGetOpenableLinkFromTextViewPoint(e.GetPosition(box.TextArea.TextView), out _);
+            var isOverLink = box.TryGetOpenableLinkFromTextViewPointFast(e.GetPosition(box.TextArea.TextView), out _);
             if (isPreviewing)
             {
                 box.SetInteractionCursor(isOverLink ? Cursors.Hand : Cursors.Arrow);
