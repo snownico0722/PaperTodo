@@ -1,6 +1,5 @@
 using System;
 using System.Windows;
-using System.Windows.Input;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
 
@@ -8,38 +7,7 @@ namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox
 {
-    static MarkdownTextBox()
-    {
-        EventManager.RegisterClassHandler(
-            typeof(MarkdownTextBox),
-            UIElement.MouseMoveEvent,
-            new MouseEventHandler(OnOptimizedLinkHoverMouseMove));
-    }
-
-    private static void OnOptimizedLinkHoverMouseMove(object sender, MouseEventArgs e)
-    {
-        if (sender is not MarkdownTextBox box ||
-            (!box.IsPreviewMode &&
-             (Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control))
-        {
-            return;
-        }
-
-        var isOverLink = box.TryGetOpenableLinkFromTextViewPointFast(
-            e.GetPosition(box.TextArea.TextView),
-            out _);
-        box.SetInteractionCursor(
-            isOverLink
-                ? Cursors.Hand
-                : box.IsPreviewMode ? Cursors.Arrow : Cursors.IBeam);
-
-        // PaperWindow's older instance MouseMove handler performs a full visible-line scan.
-        // The class handler runs first, so handling this event keeps hover hit-testing local to
-        // the line under the pointer while click handling retains the existing full parser path.
-        e.Handled = true;
-    }
-
-    private bool TryGetOpenableLinkFromTextViewPointFast(Point point, out string url)
+    public bool TryGetOpenableLinkFromTextViewPointFast(Point point, out string url)
     {
         url = "";
         if (Document == null)
