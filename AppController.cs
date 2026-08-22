@@ -2023,17 +2023,21 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        RefreshCapsuleEligibilityForLinkedNotes();
+        RefreshCapsuleEligibilityForLinkedNotesCore();
     }
 
-    public void RefreshCapsuleEligibilityForLinkedNotes()
+    private void RefreshCapsuleEligibilityForLinkedNotesCore()
     {
         foreach (var window in _windows.Values)
         {
             window.RefreshAssociationButton();
             window.RefreshCapsuleEligibility();
         }
+    }
 
+    public void RefreshCapsuleEligibilityForLinkedNotes()
+    {
+        RefreshCapsuleEligibilityForLinkedNotesCore();
         ArrangeDeepCapsules(animate: State.EnableAnimations);
         RefreshTrayMenu();
     }
