@@ -42,6 +42,31 @@ jobs:
           if ($end -lt 0) { throw 'Patch end marker not found.' }
           $script = $workflow.Substring($start, $end - $start)
           $script = (($script -split "`n") | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+
+          $oldReplace = @'
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+          '@
+          $newReplace = @'
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count == 1:
+                  return text.replace(old, new, 1)
+              if label == "remove legacy quick validation" and count == 0:
+                  start = text.find("            if (setting.Quick && ++quickCount > 3)")
+                  end_marker = "            if (setting.MaxLength is < 0)"
+                  end = text.find(end_marker, start) if start >= 0 else -1
+                  if start >= 0 and end >= 0:
+                      return text[:start] + text[end:]
+              raise RuntimeError(f"{label}: expected one match, found {count}")
+          '@
+          $oldReplace = (($oldReplace -replace "`r`n", "`n") -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          $newReplace = (($newReplace -replace "`r`n", "`n") -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          if (-not $script.Contains($oldReplace)) { throw 'replace_once helper not found.' }
+          $script = $script.Replace($oldReplace, $newReplace)
           $script | python -
 
       - name: Build host and policy checks
