@@ -1,16 +1,17 @@
 name: PR138 settings finalizer
 
 on:
-  push:
-    branches:
-      - feature/plugin-settings-layout-20260824
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   finalize:
-    if: github.actor != 'github-actions[bot]'
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -19,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/plugin-settings-layout-20260824
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: recursive
 
@@ -51,4 +52,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(plugin): make advanced settings opt-in"
-          git push origin HEAD:feature/plugin-settings-layout-20260824
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
