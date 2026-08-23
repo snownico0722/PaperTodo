@@ -264,5 +264,6 @@
       "placeholder": "复盘记录",
       "category": "显示"
     }
-  ]
+  ],
+  "advancedSettings": true
 }

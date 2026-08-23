@@ -250,6 +250,90 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         IReadOnlyList<PaperBodyPluginSettingManifest> settings)
     {
+        return descriptor.Manifest?.AdvancedSettings == true
+            ? BuildAdvancedPluginSettingsPanel(descriptor, settings)
+            : BuildInlinePluginSettingsPanel(descriptor, settings);
+    }
+
+    private FrameworkElement BuildInlinePluginSettingsPanel(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
+        var root = new StackPanel
+        {
+            Margin = new Thickness(12, 0, 0, 0)
+        };
+        var quick = settings.Where(item => item.Quick).Take(3).ToArray();
+        var remaining = settings.Where(item => !item.Quick).ToArray();
+        if (remaining.Length == 0)
+        {
+            foreach (var setting in quick)
+            {
+                root.Children.Add(BuildPluginSettingControl(descriptor, setting));
+            }
+            return root;
+        }
+
+        var more = new StackPanel
+        {
+            Visibility = Visibility.Collapsed
+        };
+        foreach (var setting in remaining)
+        {
+            more.Children.Add(BuildPluginSettingControl(descriptor, setting));
+        }
+
+        var toggle = PluginPageButton(Strings.Get("PluginsMoreSettings"));
+        toggle.MinWidth = 0;
+        toggle.HorizontalAlignment = HorizontalAlignment.Left;
+        toggle.Click += (_, _) =>
+        {
+            var expand = more.Visibility != Visibility.Visible;
+            more.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
+            toggle.Content = Strings.Get(
+                expand ? "PluginsLessSettings" : "PluginsMoreSettings");
+        };
+
+        if (quick.Length == 0)
+        {
+            toggle.HorizontalAlignment = HorizontalAlignment.Right;
+            root.Children.Add(toggle);
+        }
+        else
+        {
+            foreach (var setting in quick[..^1])
+            {
+                root.Children.Add(BuildPluginSettingControl(descriptor, setting));
+            }
+
+            var tail = new Grid();
+            tail.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(1, GridUnitType.Star)
+            });
+            tail.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = GridLength.Auto
+            });
+            var finalQuick = BuildPluginSettingControl(descriptor, quick[^1]);
+            finalQuick.Margin = new Thickness(0, 4, 8, 0);
+            toggle.Margin = new Thickness(8, 4, 0, 0);
+            toggle.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(finalQuick, 0);
+            Grid.SetColumn(toggle, 1);
+            tail.Children.Add(finalQuick);
+            tail.Children.Add(toggle);
+            root.Children.Add(tail);
+        }
+
+        root.Children.Add(more);
+        return root;
+    }
+
+    private FrameworkElement BuildAdvancedPluginSettingsPanel(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
         var root = new StackPanel
         {
             Margin = new Thickness(12, 0, 0, 0)
@@ -326,6 +410,10 @@ public sealed partial class AppController
         window.Content = BuildPluginSettingsWindowContent(window, descriptor, settings);
         ApplyToolTipSetting(window);
         window.ShowDialog();
+        if (!IsExiting)
+        {
+            RefreshSettingsWindowContent();
+        }
     }
 
     private UIElement BuildPluginSettingsWindowContent(
@@ -473,7 +561,7 @@ public sealed partial class AppController
 
         var useColumns = elements.Any(item =>
                 item.Column is "left" or "right") ||
-            naturalHeight > availableHeight;
+            (elements.Count > 1 && naturalHeight > availableHeight);
         if (!useColumns)
         {
             var single = new StackPanel();

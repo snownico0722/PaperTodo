@@ -1,6 +1,6 @@
 # WPF 原生时钟
 
-这是一个完全由 WPF 控件构成的 PaperTodo 原生主示例。除正文外，它实现协议 1.7 `IPaperCapsuleViewProvider` 和协议 1.8 `IPaperMiniViewProvider`，并持续保留协议 1.6 模板作为启动、拖动交接和失败回退：
+这是一个完全由 WPF 控件构成、当前使用协议 2.0 的 PaperTodo 原生主示例。除正文外，它实现协议 1.7 `IPaperCapsuleViewProvider` 和协议 1.8 `IPaperMiniViewProvider`，并持续保留协议 1.6 模板作为启动、拖动交接和失败回退：
 
 - 12 / 24 小时制和秒数显示；
 - 多种日期格式、星期和日进度；

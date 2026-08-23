@@ -8,7 +8,7 @@
 "apiVersion": "2.0"
 ```
 
-宿主继续兼容加载既有 `1.8` 插件，但 **Top Bar / app runtime 扩展只属于 2.0**；新开发和升级中的插件不要再把 1.8 当作目标版本。
+当前宿主只接受 `2.0` 插件；旧 `1.8` manifest 不再兼容加载。
 
 插件公开类型以 [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) 为编译期合同；宿主实际校验和运行行为以当前代码为准。需要理解 PaperTodo 内部 ownership 时再看 [`../ARCHITECTURE.md`](../ARCHITECTURE.md)，插件作者不需要先阅读主程序架构才能开始开发。
 
@@ -235,7 +235,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `name` | 显示名称；为空时回退到 ID |
 | `description` | 插件说明 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.0"`；宿主兼容既有 `"1.8"`，但 1.8 没有 Top Bar/app runtime 能力 |
+| `apiVersion` | 必须为 `"2.0"` |
 | `stateVersion` | per-paper state 版本，至少为 1 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
 | `miniEntry` | 可选，仅 Web；专属 Edge Mini 页面 |
@@ -245,9 +245,10 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `capabilities` | 可选：`textZoom`、`noteLinks`；2.0 还支持生命周期能力 `appRuntime` |
 | `requires` | 可选；当前支持 `backgroundUpdates` |
 | `permissions` | 可选；Paper/Todo/Note Workspace 权限 |
-| `primarySettings` | 可选，2.0；插件卡片直接显示前 1～3 个设置，省略时默认 3 |
-| `settingCategories` | 可选，2.0；完整设置页的分类及可选 `left` / `right` 列位置 |
-| `settings` | 可选；由宿主绘制和保存的全局设置；2.0 设置项可写 `category` |
+| `advancedSettings` | 可选，默认 `false`；声明 `true` 后启用独立完整设置页 |
+| `primarySettings` | 可选；仅 `advancedSettings: true` 时有效，插件卡片直接显示前 1～3 个设置，省略时默认 3 |
+| `settingCategories` | 可选；仅 `advancedSettings: true` 时有效，声明完整设置页分类及可选 `left` / `right` 列位置 |
+| `settings` | 可选；由宿主绘制和保存的全局设置；高级模式下设置项可写 `category` |
 | `startupPaper` | 可选；按用户设置自动创建/恢复一张插件纸片 |
 
 未知 `requires` 或 `permissions` 会拒绝加载。`appRuntime` 是 provider 生命周期声明，不会变成 `PaperBodyCapabilities` 的 body flag。
@@ -506,12 +507,15 @@ papertodo.registerStateProvider(() => currentState);
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置按 `settings` 数组顺序显示；插件什么都不额外声明时，卡片自动直接显示前 3 个，超过 3 个自动出现“更多设置”，点击后打开独立的完整设置页。`primarySettings` 可选设为 1～3，只覆盖卡片直接显示的数量，不改变设置存储和读取。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置仍只有一份存储和读写协议，下面两种只是宿主展示方式。
 
-协议 2.0 的设置项还可以写 `category`。同名分类会在完整设置页自动归组；插件可用顶层 `settingCategories` 为分类声明 `column: "left"` 或 `"right"`，不写 `column` 就交给宿主自动安排。宿主会先尝试单列，实际高度放不下时自动改为左右两列；没有分类的设置也能直接使用，不要求插件为布局补元数据。可用约束包括：`default`、`min/max/step`、`maxLength`、`suffix`、`placeholder`、`options`、`description`。
+默认不声明 `advancedSettings`（或为 `false`）时，行为保持原样：最多三个 `quick: true` 设置直接显示在插件卡片上，其余设置通过“更多设置”在**当前卡片内**展开/收起。没有 `quick` 时不会自动猜主要设置。
+
+声明 `"advancedSettings": true` 后才启用新的高级设置模式：插件卡片自动直接显示 `settings` 前 3 项，超过后“更多设置”打开独立完整设置页；可用 `primarySettings: 1..3` 覆盖直接显示数量。完整页的设置项可写 `category`，同名分类自动归组；顶层 `settingCategories` 可以给分类指定 `column: "left"` 或 `"right"`，不写列就交给宿主自动安排。宿主先尝试单列，纵向放不下且确实有多个可分配块时才自动分成左右两列；同一分类不会被拆开。
 
 ```json
 {
+  "advancedSettings": true,
   "primarySettings": 2,
   "settingCategories": [
     { "name": "常规", "column": "left" },

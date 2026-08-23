@@ -20,15 +20,15 @@ internal sealed partial class PaperBodyPluginRegistry
     {
         manifest.Settings ??= [];
         manifest.SettingCategories ??= [];
-        if (manifest.PrimarySettings is < 1 or > 3)
-        {
-            throw new InvalidDataException("primarySettings must be between 1 and 3.");
-        }
-        if (!ApiAtLeast(manifest.ApiVersion, 2, 0) &&
+        if (!manifest.AdvancedSettings &&
             (manifest.PrimarySettings.HasValue || manifest.SettingCategories.Length > 0))
         {
             throw new InvalidDataException(
-                "primarySettings and settingCategories require apiVersion 2.0 or newer.");
+                "primarySettings and settingCategories require advancedSettings: true.");
+        }
+        if (manifest.PrimarySettings is < 1 or > 3)
+        {
+            throw new InvalidDataException("primarySettings must be between 1 and 3.");
         }
 
         var categoryNames = new HashSet<string>(StringComparer.Ordinal);
@@ -53,6 +53,7 @@ internal sealed partial class PaperBodyPluginRegistry
         NormalizeProtocolFeatures(manifest);
         var hasAppRuntime = manifest.Capabilities.Contains("appRuntime", StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
+        var quickCount = 0;
         foreach (var setting in manifest.Settings)
         {
             setting.Id = setting.Id?.Trim() ?? "";
@@ -69,10 +70,10 @@ internal sealed partial class PaperBodyPluginRegistry
                 : PluginShortcutActions.Normalize(setting.ShortcutAction);
             setting.Options ??= [];
 
-            if (setting.Category.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 2, 0))
+            if (setting.Category.Length > 0 && !manifest.AdvancedSettings)
             {
                 throw new InvalidDataException(
-                    $"Plugin setting '{setting.Id}' category requires apiVersion 2.0 or newer.");
+                    $"Plugin setting '{setting.Id}' category requires advancedSettings: true.");
             }
 
             if (!SettingIdPattern.IsMatch(setting.Id) || !ids.Add(setting.Id))
@@ -101,6 +102,10 @@ internal sealed partial class PaperBodyPluginRegistry
             {
                 throw new InvalidDataException(
                     $"Plugin shortcut setting '{setting.Id}' uses custom action '{setting.ShortcutAction}' but the plugin does not declare the appRuntime capability.");
+            }
+            if (!manifest.AdvancedSettings && setting.Quick && ++quickCount > 3)
+            {
+                throw new InvalidDataException("A plugin may expose at most three quick settings.");
             }
             if (setting.MaxLength is < 0)
             {
@@ -263,6 +268,7 @@ internal sealed class PaperBodyPluginSettingManifest
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public JsonElement Default { get; set; }
+    public bool Quick { get; set; }
     public string Category { get; set; } = "";
     public double? Min { get; set; }
     public double? Max { get; set; }

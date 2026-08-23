@@ -19,7 +19,8 @@
       "type": "shortcut",
       "name": "显示 / 隐藏纸片",
       "default": "Ctrl+Alt+Shift+U",
-      "shortcutAction": "paper.toggle"
+      "shortcutAction": "paper.toggle",
+      "quick": true
     }
   ]
 }

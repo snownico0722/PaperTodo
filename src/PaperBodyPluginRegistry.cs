@@ -64,6 +64,7 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginMiniSizeManifest? MiniSize { get; set; }
     public PaperBodyPluginMiniSizeManifest? MiniMaxSize { get; set; }
     public string[] Capabilities { get; set; } = [];
+    public bool AdvancedSettings { get; set; }
     public int? PrimarySettings { get; set; }
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
     public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];
@@ -90,7 +91,7 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string SupportedPluginApiVersion = "2.0";
-    internal const string MinimumPluginApiVersion = "1.8";
+    internal const string MinimumPluginApiVersion = "2.0";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -316,11 +317,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
         if (!string.IsNullOrWhiteSpace(manifest.MiniEntry))
         {
-            if (!ApiAtLeast(manifest.ApiVersion, 1, 8))
-            {
-                throw new InvalidDataException(
-                    "miniEntry requires apiVersion 1.8 or newer.");
-            }
             if (kind != PaperBodyPluginKind.Web)
             {
                 throw new InvalidDataException(
@@ -785,7 +781,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             minor < 0)
         {
             throw new InvalidDataException(
-                "apiVersion must be a quoted major.minor string such as \"1.2\".");
+                "apiVersion must be a quoted major.minor string such as \"2.0\".");
         }
 
         return $"{major}.{minor}";
@@ -793,14 +789,16 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private static void ValidateManifestApiVersion(string pluginApiVersion)
     {
-        if (string.Equals(pluginApiVersion, "1.8", StringComparison.Ordinal) ||
-            string.Equals(pluginApiVersion, SupportedPluginApiVersion, StringComparison.Ordinal))
+        if (string.Equals(
+                pluginApiVersion,
+                SupportedPluginApiVersion,
+                StringComparison.Ordinal))
         {
             return;
         }
 
         throw new InvalidDataException(
-            $"Unsupported plugin API version {pluginApiVersion}; host supports 1.8 compatibility and {SupportedPluginApiVersion}.");
+            $"Unsupported plugin API version {pluginApiVersion}; host requires {SupportedPluginApiVersion}.");
     }
 
     private static Version ParseVersion(string? value)

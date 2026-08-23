@@ -183,5 +183,7 @@
       "default": true,
       "category": "计时"
     }
-  ]
+  ],
+  "advancedSettings": true,
+  "primarySettings": 2
 }
