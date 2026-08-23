@@ -22,6 +22,10 @@ public sealed partial class AppController
             SettingsFieldLabel(Strings.Get("SettingsUiLanguage"), topMargin: 4),
             "TipSettingsUiLanguage"));
         panel.Children.Add(CreateUiLanguageSelector());
+        if (State.AdvancedSettingsMode)
+        {
+            panel.Children.Add(CreateAnonymousUsageStatisticsSettingsCard());
+        }
         return panel;
     }
 
