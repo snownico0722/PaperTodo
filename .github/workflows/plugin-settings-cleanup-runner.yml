@@ -1,0 +1,55 @@
+name: Plugin settings cleanup runner
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-and-verify:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Clean generated blocks
+        shell: pwsh
+        run: python .\.github\scripts\plugin-settings-cleanup.py
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+          git diff --check
+
+      - name: Commit clean diff
+        shell: pwsh
+        run: |
+          Remove-Item .\.github\workflows\plugin-settings-cleanup-runner.yml -Force
+          Remove-Item .\.github\scripts\plugin-settings-cleanup.py -Force
+          if (Test-Path .\.github\plugin-settings-cleanup.trigger) {
+            Remove-Item .\.github\plugin-settings-cleanup.trigger -Force
+          }
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(plugin): clean settings layout diff"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
