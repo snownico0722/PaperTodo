@@ -184,6 +184,11 @@ jobs:
           }
 
           $isStable = $tag -notmatch '(?i)(alpha|beta|preview|rc)'
+          $expectedTag = "v${{ steps.meta.outputs.version }}"
+          if ($isStable -and $tag -ne $expectedTag) {
+            throw "Stable release tag '$tag' does not match the checked-out project version. Expected '$expectedTag'."
+          }
+
           $stableConfirmed = "${{ inputs.stable_release_confirmed }}" -eq "true"
           if ($isStable -and "${{ github.event_name }}" -ne "workflow_dispatch") {
             throw "Stable releases must be published from workflow_dispatch after final hand checks. Prerelease tags may still publish from tag pushes."

@@ -1,9 +1,9 @@
-name: 3.2 maintenance build
+name: 3.x maintenance build
 
 on:
   pull_request:
     branches:
-      - 3.2
+      - 3.x
     paths-ignore:
       - "docs/**"
       - "**/*.md"

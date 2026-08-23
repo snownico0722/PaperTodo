@@ -6,7 +6,7 @@
 
 一个极简的 Windows 桌面便签工具，只用 WPF 原生实现，没有主窗口、没有账号、没有管理器。
 
-![version](https://img.shields.io/badge/version-v3.1-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
+![version](https://img.shields.io/badge/version-v3.3-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
 
 **官网**：[https://snownico0722.github.io/PaperTodo/](https://snownico0722.github.io/PaperTodo/) 
 
@@ -59,7 +59,7 @@
 - **胶囊模式**（默认启用）— 点击右上角折叠成小胶囊，减少桌面占用，需要时点击展开。
 - **自动贴边排列**（默认启用）— 折叠的胶囊会自动贴到屏幕边缘；支持多屏，拖动单个胶囊就能换边或挪到其他显示器。
 - **脚本胶囊** — 笔记首行写入 `!p` / `!power`，把笔记内容当 PowerShell 脚本快捷运行。
-- **待办关联笔记** — 把笔记拖到待办项上建立关联，之后可以直接打开关联的笔记。
+- **待办关联与快启** — 待办项可关联任意待办纸或笔记纸，也可拖入本地文件/文件夹作为快启入口。
 - **笔记图片** — 粘贴、拖入或从菜单选图，都能插入本地图片。
 - **数据本地保存** — 纸片内容自动保存到 `data.json` 并保留备份；笔记图片存在单个 `note-assets.lmdb` 文件里，安全增量写入。
 
@@ -114,8 +114,9 @@
 - **视觉大小** — 设置里可选小 / 中 / 大
 - **撤销 / 重做** — `Ctrl+Z` / `Ctrl+Y`
 - **完成后自动清除** — 可在设置中开启；勾选完成的项会自动清掉
+- **已完成自动置底** — 可在设置中开启；完成项自动移到已完成区域末尾，取消完成后回到未完成区域末尾
 
-**关联笔记**：可以把一张笔记从顶栏拖到待办项上建立关联。关联后，待办项后面会显示打开入口
+**关联与快启**：可以把任意纸片从顶栏拖到待办项上建立关联；也可以直接拖入本地文件或文件夹作为快启路径。
 
 ---
 
@@ -162,7 +163,7 @@
 - **顶栏按钮** — 可单独隐藏新建待办、新建笔记和外部打开
 - **外部打开** — 自定义笔记临时文件后缀
 - **胶囊** — 胶囊模式、自动贴边、展开时保留边缘胶囊、记住展开位置、显示主胶囊（收起全部）、再次点击边缘胶囊收回纸片；高级另有悬停时隐藏关闭按钮、标题字数上限、边缘标题最大长度
-- **待办与笔记** — 完成后自动清除、关联笔记、显示名称、关联笔记显示长标题、已关联笔记是否显示为胶囊、关联脚本点击运行；高级另有 自动压缩过大图片
+- **待办与纸片** — 完成后自动清除、已完成自动置底、关联任意纸片、文件/文件夹快启、显示关联名称、关联标题长显示、已关联笔记是否显示为胶囊、关联脚本点击运行；高级另有自动压缩过大图片
 - **脚本胶囊**（高级）— 优先 PowerShell 7、隐藏运行窗口、常驻进程
 - **全屏置顶策略**（高级）— 外部全屏时纸片和贴边胶囊是避让还是保持在上层
 - **从窗口切换中隐藏纸片**（高级）— 展开的纸片不出现在 Alt+Tab 与任务视图（并会隐藏任务栏图标）
@@ -264,10 +265,10 @@ Release 发行说明从 [`CHANGELOG.md`](CHANGELOG.md) 自动提取对应 tag �
 
 ## 构建与依赖
 
-首次克隆 3.2 分支请同时初始化子模块：
+首次克隆 3.x 分支请同时初始化子模块：
 
 ```powershell
-git clone --recurse-submodules --branch 3.2 https://github.com/snownico0722/PaperTodo.git
+git clone --recurse-submodules --branch 3.x https://github.com/snownico0722/PaperTodo.git
 cd PaperTodo
 dotnet build -c Release
 ```
