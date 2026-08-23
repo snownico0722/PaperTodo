@@ -4,66 +4,220 @@
   "name": "Web 时钟",
   "description": "完整的 Web 插件示例：主题、时区、日期格式、标题和日进度均可配置。",
   "version": "1.4.0",
-  "apiVersion": "1.8",
+  "apiVersion": "2.0",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
-  "miniSize": { "width": 300, "height": 190 },
-  "capabilities": ["textZoom"],
-  "requires": ["backgroundUpdates"],
+  "miniSize": {
+    "width": 300,
+    "height": 190
+  },
+  "capabilities": [
+    "textZoom"
+  ],
+  "requires": [
+    "backgroundUpdates"
+  ],
   "startupPaper": {
     "enabledSetting": "autoStartCapsule",
     "instanceKey": "main",
     "presentation": "capsule",
     "title": "Web 时钟"
   },
+  "miniMaxSize": {
+    "width": 360,
+    "height": 240
+  },
+  "settingCategories": [
+    {
+      "name": "显示",
+      "column": "left"
+    },
+    {
+      "name": "时间与标题",
+      "column": "right"
+    },
+    {
+      "name": "启动",
+      "column": "right"
+    }
+  ],
   "settings": [
-    { "id": "autoStartCapsule", "type": "boolean", "name": "启动后自动创建时钟胶囊", "description": "PaperTodo 启动稳定后创建或恢复同一个时钟胶囊，不会重复创建。", "default": false },
-    { "id": "showSeconds", "type": "boolean", "name": "显示秒数", "default": true, "quick": true },
-    { "id": "showDate", "type": "boolean", "name": "显示日期", "default": true, "quick": true },
-    { "id": "showDayProgress", "type": "boolean", "name": "显示日进度", "description": "在底部显示今天已经过去的比例。", "default": true, "quick": true },
-    { "id": "showWeekday", "type": "boolean", "name": "显示星期", "default": true },
     {
-      "id": "hourCycle", "type": "select", "name": "时间制式", "default": "24",
-      "options": [
-        { "value": "24", "name": "24 小时" },
-        { "value": "12", "name": "12 小时" }
-      ]
+      "id": "showSeconds",
+      "type": "boolean",
+      "name": "显示秒数",
+      "default": true,
+      "category": "显示"
     },
     {
-      "id": "dateFormat", "type": "select", "name": "日期格式", "default": "long",
-      "options": [
-        { "value": "long", "name": "2026年8月1日" },
-        { "value": "short", "name": "2026-08-01" },
-        { "value": "slash", "name": "2026/08/01" },
-        { "value": "us", "name": "08/01/2026" },
-        { "value": "eu", "name": "01/08/2026" }
-      ]
+      "id": "showDate",
+      "type": "boolean",
+      "name": "显示日期",
+      "default": true,
+      "category": "显示"
     },
     {
-      "id": "timeZone", "type": "select", "name": "时区", "default": "local",
-      "options": [
-        { "value": "local", "name": "本地时间" },
-        { "value": "utc", "name": "UTC" },
-        { "value": "beijing", "name": "北京时间" },
-        { "value": "tokyo", "name": "东京时间" },
-        { "value": "london", "name": "伦敦时间" },
-        { "value": "newYork", "name": "纽约时间" },
-        { "value": "losAngeles", "name": "洛杉矶时间" }
-      ]
+      "id": "showDayProgress",
+      "type": "boolean",
+      "name": "显示日进度",
+      "description": "在底部显示今天已经过去的比例。",
+      "default": true,
+      "category": "显示"
     },
     {
-      "id": "titleMode", "type": "select", "name": "胶囊标题", "default": "time",
-      "options": [
-        { "value": "time", "name": "当前时间" },
-        { "value": "date", "name": "当前日期" },
-        { "value": "zone", "name": "时区和时间" },
-        { "value": "fixed", "name": "固定为“时钟”" },
-        { "value": "custom", "name": "自定义文字" }
-      ]
+      "id": "autoStartCapsule",
+      "type": "boolean",
+      "name": "启动后自动创建时钟胶囊",
+      "description": "PaperTodo 启动稳定后创建或恢复同一个时钟胶囊，不会重复创建。",
+      "default": false,
+      "category": "启动"
     },
-    { "id": "customTitle", "type": "string", "name": "自定义标题", "placeholder": "仅在标题模式为自定义时使用", "maxLength": 40, "default": "" },
-    { "id": "showWeekNumber", "type": "boolean", "name": "显示周数", "default": true },
-    { "id": "clockScale", "type": "number", "name": "时钟字号倍率", "default": 1, "min": 0.75, "max": 1.6, "step": 0.05, "suffix": "×" }
+    {
+      "id": "showWeekday",
+      "type": "boolean",
+      "name": "显示星期",
+      "default": true,
+      "category": "显示"
+    },
+    {
+      "id": "hourCycle",
+      "type": "select",
+      "name": "时间制式",
+      "default": "24",
+      "options": [
+        {
+          "value": "24",
+          "name": "24 小时"
+        },
+        {
+          "value": "12",
+          "name": "12 小时"
+        }
+      ],
+      "category": "时间与标题"
+    },
+    {
+      "id": "dateFormat",
+      "type": "select",
+      "name": "日期格式",
+      "default": "long",
+      "options": [
+        {
+          "value": "long",
+          "name": "2026年8月1日"
+        },
+        {
+          "value": "short",
+          "name": "2026-08-01"
+        },
+        {
+          "value": "slash",
+          "name": "2026/08/01"
+        },
+        {
+          "value": "us",
+          "name": "08/01/2026"
+        },
+        {
+          "value": "eu",
+          "name": "01/08/2026"
+        }
+      ],
+      "category": "时间与标题"
+    },
+    {
+      "id": "timeZone",
+      "type": "select",
+      "name": "时区",
+      "default": "local",
+      "options": [
+        {
+          "value": "local",
+          "name": "本地时间"
+        },
+        {
+          "value": "utc",
+          "name": "UTC"
+        },
+        {
+          "value": "beijing",
+          "name": "北京时间"
+        },
+        {
+          "value": "tokyo",
+          "name": "东京时间"
+        },
+        {
+          "value": "london",
+          "name": "伦敦时间"
+        },
+        {
+          "value": "newYork",
+          "name": "纽约时间"
+        },
+        {
+          "value": "losAngeles",
+          "name": "洛杉矶时间"
+        }
+      ],
+      "category": "时间与标题"
+    },
+    {
+      "id": "titleMode",
+      "type": "select",
+      "name": "胶囊标题",
+      "default": "time",
+      "options": [
+        {
+          "value": "time",
+          "name": "当前时间"
+        },
+        {
+          "value": "date",
+          "name": "当前日期"
+        },
+        {
+          "value": "zone",
+          "name": "时区和时间"
+        },
+        {
+          "value": "fixed",
+          "name": "固定为“时钟”"
+        },
+        {
+          "value": "custom",
+          "name": "自定义文字"
+        }
+      ],
+      "category": "时间与标题"
+    },
+    {
+      "id": "customTitle",
+      "type": "string",
+      "name": "自定义标题",
+      "placeholder": "仅在标题模式为自定义时使用",
+      "maxLength": 40,
+      "default": "",
+      "category": "时间与标题"
+    },
+    {
+      "id": "showWeekNumber",
+      "type": "boolean",
+      "name": "显示周数",
+      "default": true,
+      "category": "显示"
+    },
+    {
+      "id": "clockScale",
+      "type": "number",
+      "name": "时钟字号倍率",
+      "default": 1,
+      "min": 0.75,
+      "max": 1.6,
+      "step": 0.05,
+      "suffix": "×",
+      "category": "显示"
+    }
   ]
 }

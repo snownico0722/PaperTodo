@@ -7,8 +7,13 @@
   "apiVersion": "2.0",
   "stateVersion": 1,
   "entry": "web/index.html",
-  "capabilities": ["appRuntime"],
-  "permissions": ["papers.read"],
+  "capabilities": [
+    "appRuntime"
+  ],
+  "permissions": [
+    "papers.read"
+  ],
+  "primarySettings": 1,
   "settings": [
     {
       "id": "togglePaperShortcut",
@@ -16,8 +21,7 @@
       "name": "显示 / 隐藏纸片",
       "description": "由 PaperTodo 注册并执行 paper.toggle；纸片隐藏后仍然有效。",
       "default": "Ctrl+Alt+Shift+U",
-      "shortcutAction": "paper.toggle",
-      "quick": true
+      "shortcutAction": "paper.toggle"
     },
     {
       "id": "runtimePingShortcut",

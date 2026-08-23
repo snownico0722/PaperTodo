@@ -245,7 +245,9 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `capabilities` | 可选：`textZoom`、`noteLinks`；2.0 还支持生命周期能力 `appRuntime` |
 | `requires` | 可选；当前支持 `backgroundUpdates` |
 | `permissions` | 可选；Paper/Todo/Note Workspace 权限 |
-| `settings` | 可选；由宿主绘制和保存的全局设置 |
+| `primarySettings` | 可选，2.0；插件卡片直接显示前 1～3 个设置，省略时默认 3 |
+| `settingCategories` | 可选，2.0；完整设置页的分类及可选 `left` / `right` 列位置 |
+| `settings` | 可选；由宿主绘制和保存的全局设置；2.0 设置项可写 `category` |
 | `startupPaper` | 可选；按用户设置自动创建/恢复一张插件纸片 |
 
 未知 `requires` 或 `permissions` 会拒绝加载。`appRuntime` 是 provider 生命周期声明，不会变成 `PaperBodyCapabilities` 的 body flag。
@@ -504,7 +506,29 @@ papertodo.registerStateProvider(() => currentState);
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`。最多三个 `quick: true` 设置。可用约束包括：`default`、`min/max/step`、`maxLength`、`suffix`、`placeholder`、`options`、`description`。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置按 `settings` 数组顺序显示；插件什么都不额外声明时，卡片自动直接显示前 3 个，超过 3 个自动出现“更多设置”，点击后打开独立的完整设置页。`primarySettings` 可选设为 1～3，只覆盖卡片直接显示的数量，不改变设置存储和读取。
+
+协议 2.0 的设置项还可以写 `category`。同名分类会在完整设置页自动归组；插件可用顶层 `settingCategories` 为分类声明 `column: "left"` 或 `"right"`，不写 `column` 就交给宿主自动安排。宿主会先尝试单列，实际高度放不下时自动改为左右两列；没有分类的设置也能直接使用，不要求插件为布局补元数据。可用约束包括：`default`、`min/max/step`、`maxLength`、`suffix`、`placeholder`、`options`、`description`。
+
+```json
+{
+  "primarySettings": 2,
+  "settingCategories": [
+    { "name": "常规", "column": "left" },
+    { "name": "网络", "column": "right" },
+    { "name": "调试" }
+  ],
+  "settings": [
+    { "id": "enabled", "type": "boolean", "name": "启用", "category": "常规" },
+    { "id": "mode", "type": "select", "name": "模式", "category": "常规", "options": [
+      { "value": "auto", "name": "自动" },
+      { "value": "manual", "name": "手动" }
+    ] },
+    { "id": "timeout", "type": "number", "name": "超时", "category": "网络" },
+    { "id": "debug", "type": "boolean", "name": "调试日志", "category": "调试" }
+  ]
+}
+```
 
 Native paper session 从 `SettingsJson` 读取初始设置，并通过 `OnSettingsChanged` 接收更新。Web body 从 `initialize.settings` 读取，并接收 `settingsChanged`。
 

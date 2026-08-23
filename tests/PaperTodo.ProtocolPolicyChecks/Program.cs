@@ -15,6 +15,7 @@ internal static class Program
             CheckRuntimeSlotAuthority(host);
             CheckRuntimeTransitions(host);
             CheckCapabilityNormalization(host);
+            CheckSettingsLayoutManifest(host);
             CheckProtocolBoundaries(host);
             CheckSharedWebInfrastructure(host);
             CheckWebBodyNavigationIdentity(host);
@@ -248,6 +249,30 @@ internal static class Program
         var values = (string[]?)capabilities.GetValue(canonicalManifest) ?? [];
         Assert(values.SequenceEqual(new[] { "appRuntime", "textZoom", "noteLinks" }),
             "Capability normalization did not produce one canonical representation.");
+    }
+
+    private static void CheckSettingsLayoutManifest(Assembly host)
+    {
+        var manifestType = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
+        var settingType = RequireType(host, "PaperTodo.PaperBodyPluginSettingManifest");
+        var categoryType = RequireType(host, "PaperTodo.PaperBodyPluginSettingCategoryManifest");
+
+        Assert(
+  manifestType.GetProperty("PrimarySettings")?.PropertyType == typeof(int?),
+  "Plugin manifest must expose optional primarySettings metadata.");
+        Assert(
+  manifestType.GetProperty("SettingCategories")?.PropertyType == categoryType.MakeArrayType(),
+  "Plugin manifest must expose settingCategories metadata.");
+        Assert(
+  settingType.GetProperty("Category")?.PropertyType == typeof(string),
+  "Plugin settings must expose an optional category name.");
+        Assert(
+  settingType.GetProperty("Quick") == null,
+  "Per-setting quick metadata must not remain in the 2.0 settings contract.");
+        Assert(
+  categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
+  categoryType.GetProperty("Column")?.PropertyType == typeof(string),
+  "Setting categories must carry their display name and optional column placement.");
     }
 
     private static void CheckProtocolBoundaries(Assembly host)

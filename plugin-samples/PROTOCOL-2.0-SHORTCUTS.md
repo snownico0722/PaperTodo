@@ -19,14 +19,13 @@
       "type": "shortcut",
       "name": "显示 / 隐藏纸片",
       "default": "Ctrl+Alt+Shift+U",
-      "shortcutAction": "paper.toggle",
-      "quick": true
+      "shortcutAction": "paper.toggle"
     }
   ]
 }
 ```
 
-用户在 **插件自己的设置卡片** 中录制或修改快捷键。它不会作为第三方动作塞进 PaperTodo 的全局快捷键设置页。
+用户在**插件自己的设置卡片或“更多设置”页**中录制或修改快捷键。它不会作为第三方动作塞进 PaperTodo 的全局快捷键设置页。
 
 PaperTodo 负责：
 

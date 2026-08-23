@@ -64,6 +64,8 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginMiniSizeManifest? MiniSize { get; set; }
     public PaperBodyPluginMiniSizeManifest? MiniMaxSize { get; set; }
     public string[] Capabilities { get; set; } = [];
+    public int? PrimarySettings { get; set; }
+    public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
     public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];
     public PaperBodyPluginStartupManifest? StartupPaper { get; set; }
 

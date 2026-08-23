@@ -4,17 +4,35 @@
   "name": "专注计时器",
   "description": "可关联 PaperTodo 待办的 WPF 番茄钟，支持完成联动、自动选择下一项和折叠后台计时。",
   "version": "1.4.0",
-  "apiVersion": "1.8",
+  "apiVersion": "2.0",
   "stateVersion": 3,
   "entry": "PaperTodo.Plugin.FocusTimer.dll",
-  "capabilities": ["textZoom"],
-  "requires": ["backgroundUpdates"],
+  "capabilities": [
+    "textZoom"
+  ],
+  "requires": [
+    "backgroundUpdates"
+  ],
   "permissions": [
     "papers.read",
     "papers.observe",
     "todos.read",
     "todos.observe",
     "todos.update"
+  ],
+  "settingCategories": [
+    {
+      "name": "联动",
+      "column": "left"
+    },
+    {
+      "name": "显示",
+      "column": "left"
+    },
+    {
+      "name": "计时",
+      "column": "right"
+    }
   ],
   "settings": [
     {
@@ -23,7 +41,7 @@
       "name": "自动开始下一阶段",
       "description": "专注结束后自动开始休息，休息结束后自动开始专注。",
       "default": false,
-      "quick": true
+      "category": "联动"
     },
     {
       "id": "showLinkedTodo",
@@ -31,7 +49,7 @@
       "name": "显示关联待办",
       "description": "在计时器中显示可实时同步的 PaperTodo 待办选择器。",
       "default": true,
-      "quick": true
+      "category": "联动"
     },
     {
       "id": "completeLinkedTodo",
@@ -39,26 +57,29 @@
       "name": "专注结束后完成待办",
       "description": "完整完成一轮专注时，将当前关联待办标记为完成；跳过不触发。",
       "default": false,
-      "quick": true
+      "category": "联动"
     },
     {
       "id": "autoSelectNextTodo",
       "type": "boolean",
       "name": "完成后选择下一项",
       "description": "自动完成关联待办后，按纸片和顺序选择下一条未完成待办。",
-      "default": false
+      "default": false,
+      "category": "联动"
     },
     {
       "id": "showProgress",
       "type": "boolean",
       "name": "显示进度条",
-      "default": true
+      "default": true,
+      "category": "显示"
     },
     {
       "id": "showCompleted",
       "type": "boolean",
       "name": "显示完成统计",
-      "default": true
+      "default": true,
+      "category": "显示"
     },
     {
       "id": "focusMinutes",
@@ -68,7 +89,8 @@
       "min": 1,
       "max": 180,
       "step": 1,
-      "suffix": "分钟"
+      "suffix": "分钟",
+      "category": "计时"
     },
     {
       "id": "breakMinutes",
@@ -78,7 +100,8 @@
       "min": 1,
       "max": 180,
       "step": 1,
-      "suffix": "分钟"
+      "suffix": "分钟",
+      "category": "计时"
     },
     {
       "id": "adjustStep",
@@ -88,7 +111,8 @@
       "min": 1,
       "max": 30,
       "step": 1,
-      "suffix": "分钟"
+      "suffix": "分钟",
+      "category": "计时"
     },
     {
       "id": "dailyGoal",
@@ -99,7 +123,8 @@
       "min": 0,
       "max": 24,
       "step": 1,
-      "suffix": "轮"
+      "suffix": "轮",
+      "category": "计时"
     },
     {
       "id": "sound",
@@ -107,11 +132,24 @@
       "name": "结束提示音",
       "default": "asterisk",
       "options": [
-        { "value": "none", "name": "静音" },
-        { "value": "beep", "name": "蜂鸣" },
-        { "value": "asterisk", "name": "提示" },
-        { "value": "exclamation", "name": "警示" }
-      ]
+        {
+          "value": "none",
+          "name": "静音"
+        },
+        {
+          "value": "beep",
+          "name": "蜂鸣"
+        },
+        {
+          "value": "asterisk",
+          "name": "提示"
+        },
+        {
+          "value": "exclamation",
+          "name": "警示"
+        }
+      ],
+      "category": "计时"
     },
     {
       "id": "titleStyle",
@@ -119,17 +157,31 @@
       "name": "胶囊标题",
       "default": "task",
       "options": [
-        { "value": "task", "name": "待办与倒计时" },
-        { "value": "countdown", "name": "阶段与倒计时" },
-        { "value": "status", "name": "仅阶段状态" },
-        { "value": "fixed", "name": "固定标题" }
-      ]
+        {
+          "value": "task",
+          "name": "待办与倒计时"
+        },
+        {
+          "value": "countdown",
+          "name": "阶段与倒计时"
+        },
+        {
+          "value": "status",
+          "name": "仅阶段状态"
+        },
+        {
+          "value": "fixed",
+          "name": "固定标题"
+        }
+      ],
+      "category": "显示"
     },
     {
       "id": "confirmReset",
       "type": "boolean",
       "name": "重置前确认",
-      "default": true
+      "default": true,
+      "category": "计时"
     }
   ]
 }
