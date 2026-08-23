@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="SectionTitle" xml:space="preserve"><value>匿名使用统计</value></data>
+  <data name="HelpImprove" xml:space="preserve"><value>帮助改进 PaperTodo</value></data>
+  <data name="Description" xml:space="preserve"><value>仅发送应用版本、语言、国家/地区、显示器数量和功能使用次数等匿名统计；不会发送纸片、待办、Markdown、脚本、图片、文件路径或剪贴板内容。</value></data>
+</root>
