@@ -18,7 +18,7 @@ internal static class TelemetryService
     private const int SchemaVersion = 1;
     private const int WmHotkey = 0x0312;
     private const string Endpoint = "https://1251449999-60pjzyd4uu.ap-beijing.tencentscf.com";
-    private const int MaxPendingReports = 64;
+    private const int MaxPendingReports = 31;
     private static readonly TimeSpan ActiveInputWindow = TimeSpan.FromSeconds(15);
     private static readonly object Gate = new();
     private static readonly HttpClient Http = new()
@@ -74,20 +74,18 @@ internal static class TelemetryService
         lock (Gate)
         {
             NormalizePersistedState(_persisted);
-
             if (!_persisted.Enabled)
             {
                 ClearQueuedDataLocked();
             }
             else
             {
-                // Merge before rollover so a crash from the prior session lands in the still-open
-                // previous day, then again after rollover for an early crash from today.
+                // Merge crash markers before and after rollover so a crash around local midnight
+                // lands on the correct local day before that day is finalized.
                 MergeCrashMarkersLocked();
                 EnsureCurrentDayLocked(controller.State, countLaunch: true);
                 MergeCrashMarkersLocked();
             }
-
             SaveLocked();
         }
 
@@ -102,7 +100,8 @@ internal static class TelemetryService
         _timer.Tick += OnTimerTick;
         _timer.Start();
 
-        _ = UploadPendingAsync();
+        // Only completed previous-day reports are queued. Send the whole backlog in one request.
+        _ = UploadPendingBatchAsync();
     }
 
     public static void Detach()
@@ -161,18 +160,12 @@ internal static class TelemetryService
             {
                 EnsureCurrentDayLocked(_controller.State, countLaunch: true, resetCurrentDay: true);
             }
-
             SaveLocked();
         }
 
         if (_controller != null)
         {
             _previousSnapshot = CaptureSnapshot(_controller.State, previous: null);
-        }
-
-        if (enabled)
-        {
-            _ = UploadPendingAsync();
         }
     }
 
@@ -219,7 +212,6 @@ internal static class TelemetryService
     {
         _persisted.PendingReports.Clear();
         _persisted.CurrentDay = null;
-        _persisted.LastPresenceDate = "";
         TryDeleteCrashMarker();
     }
 
@@ -354,8 +346,6 @@ internal static class TelemetryService
             }
 
             _ticks++;
-            // Track interaction transitions responsively while the user is active, but avoid
-            // rebuilding snapshots every two seconds while PaperTodo is idle in the tray.
             if ((_ticks % 2 == 0 && recentlyActive) || _ticks % 30 == 0)
             {
                 CaptureTransitionsAndSnapshot();
@@ -366,12 +356,6 @@ internal static class TelemetryService
                 {
                     SaveLocked();
                 }
-            }
-            // Immediate attempt happens on attach/opt-in. After a failure, ten-minute retries
-            // are enough for offline recovery without waking the network repeatedly.
-            if (_ticks % 600 == 0)
-            {
-                _ = UploadPendingAsync();
             }
         }
         catch
@@ -479,10 +463,7 @@ internal static class TelemetryService
         foreach (var paper in state.Papers)
         {
             PaperUsageSnapshot? previousPaper = null;
-            if (previous != null)
-            {
-                previous.Papers.TryGetValue(paper.Id, out previousPaper);
-            }
+            previous?.Papers.TryGetValue(paper.Id, out previousPaper);
 
             var itemStates = new Dictionary<string, TodoItemSnapshot>(StringComparer.Ordinal);
             if (paper.Type == PaperTypes.Todo)
@@ -585,8 +566,6 @@ internal static class TelemetryService
                 1,
                 1000);
         }
-
-        EnsureDailyPresenceLocked(state, today);
     }
 
     private static TelemetryDayState CreateDay(string date, AppState state)
@@ -595,22 +574,6 @@ internal static class TelemetryService
         RefreshEnvironment(day);
         ApplyStateMetrics(day, state);
         return day;
-    }
-
-    private static void EnsureDailyPresenceLocked(AppState state, string date)
-    {
-        if (string.Equals(_persisted.LastPresenceDate, date, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var day = CreateDay(date, state);
-        var report = CreateReport(day, "daily_presence", "presence");
-        _persisted.PendingReports.RemoveAll(existing =>
-            string.Equals(existing.ReportId, report.ReportId, StringComparison.Ordinal));
-        _persisted.PendingReports.Add(report);
-        _persisted.LastPresenceDate = date;
-        TrimPendingReportsLocked();
     }
 
     private static void RefreshEnvironment(TelemetryDayState day)
@@ -640,20 +603,20 @@ internal static class TelemetryService
             return;
         }
 
-        var report = CreateReport(day, "daily_usage", "usage");
+        var report = CreateReport(day);
         _persisted.PendingReports.RemoveAll(existing =>
             string.Equals(existing.ReportId, report.ReportId, StringComparison.Ordinal));
         _persisted.PendingReports.Add(report);
         TrimPendingReportsLocked();
     }
 
-    private static TelemetryReport CreateReport(TelemetryDayState day, string kind, string reportKind)
+    private static TelemetryReport CreateReport(TelemetryDayState day)
     {
         return new TelemetryReport
         {
-            Kind = kind,
+            Kind = "daily_usage",
             SchemaVersion = SchemaVersion,
-            ReportId = $"{_persisted.InstallId}_{day.Date}_{reportKind}_v{SchemaVersion}",
+            ReportId = $"{_persisted.InstallId}_{day.Date}_v{SchemaVersion}",
             InstallId = _persisted.InstallId,
             Date = day.Date,
             TelemetryFirstSeenDate = _persisted.FirstSeenDate,
@@ -683,58 +646,50 @@ internal static class TelemetryService
         };
     }
 
-    private static async Task UploadPendingAsync()
+    private static async Task UploadPendingBatchAsync()
     {
+        List<TelemetryReport> batch;
         lock (Gate)
         {
             if (_uploading || !_persisted.Enabled || _persisted.PendingReports.Count == 0)
             {
                 return;
             }
+
             _uploading = true;
+            batch = _persisted.PendingReports.ToList();
         }
 
         try
         {
-            while (true)
+            var envelope = new TelemetryBatch
             {
-                TelemetryReport report;
-                lock (Gate)
-                {
-                    if (!_persisted.Enabled || _persisted.PendingReports.Count == 0)
-                    {
-                        return;
-                    }
-                    report = _persisted.PendingReports[0];
-                }
+                SchemaVersion = SchemaVersion,
+                Reports = batch
+            };
+            var json = JsonSerializer.Serialize(envelope, WireJsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await Http.PostAsync(Endpoint, content).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return;
+            }
 
-                try
-                {
-                    var json = JsonSerializer.Serialize(report, WireJsonOptions);
-                    using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                    using var response = await Http.PostAsync(Endpoint, content).ConfigureAwait(false);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        return;
-                    }
-                }
-                catch
+            var sentIds = batch.Select(report => report.ReportId).ToHashSet(StringComparer.Ordinal);
+            lock (Gate)
+            {
+                if (!_persisted.Enabled)
                 {
                     return;
                 }
 
-                lock (Gate)
-                {
-                    if (!_persisted.Enabled)
-                    {
-                        return;
-                    }
-
-                    _persisted.PendingReports.RemoveAll(item =>
-                        string.Equals(item.ReportId, report.ReportId, StringComparison.Ordinal));
-                    SaveLocked();
-                }
+                _persisted.PendingReports.RemoveAll(report => sentIds.Contains(report.ReportId));
+                SaveLocked();
             }
+        }
+        catch
+        {
+            // Keep the whole batch for the next application launch.
         }
         finally
         {
@@ -747,19 +702,17 @@ internal static class TelemetryService
 
     private static void MergeCrashMarkersLocked()
     {
-        Dictionary<string, int>? counts = null;
+        Dictionary<string, int>? counts;
         try
         {
-            if (File.Exists(CrashPath))
-            {
-                counts = JsonSerializer.Deserialize<Dictionary<string, int>>(
+            counts = File.Exists(CrashPath)
+                ? JsonSerializer.Deserialize<Dictionary<string, int>>(
                     File.ReadAllText(CrashPath),
-                    DiskJsonOptions);
-            }
+                    DiskJsonOptions)
+                : null;
         }
         catch
         {
-            // Leave an unreadable marker alone; it is never allowed to affect startup.
             return;
         }
 
@@ -788,7 +741,7 @@ internal static class TelemetryService
             }
 
             var report = _persisted.PendingReports.FirstOrDefault(item =>
-                item.Kind == "daily_usage" && string.Equals(item.Date, date, StringComparison.Ordinal));
+                string.Equals(item.Date, date, StringComparison.Ordinal));
             if (report != null)
             {
                 report.CrashCount = AddBounded(report.CrashCount, count, 1000);
@@ -862,6 +815,7 @@ internal static class TelemetryService
             state.FirstSeenDate = LocalDateString();
         }
         state.PendingReports ??= new List<TelemetryReport>();
+        state.PendingReports.RemoveAll(report => report.Kind != "daily_usage");
     }
 
     private static void TrimPendingReportsLocked()
@@ -954,7 +908,6 @@ internal static class TelemetryService
         public bool Enabled { get; set; } = true;
         public string InstallId { get; set; } = Guid.NewGuid().ToString("N");
         public string FirstSeenDate { get; set; } = LocalDateString();
-        public string LastPresenceDate { get; set; } = "";
         public TelemetryDayState? CurrentDay { get; set; }
         public List<TelemetryReport> PendingReports { get; set; } = new();
     }
@@ -992,6 +945,12 @@ internal static class TelemetryService
                    TodoCreated > 0 || TodoCompleted > 0 || PillExpand > 0 || PillCollapse > 0 ||
                    MarkdownPreview > 0 || ImageInserted > 0 || HotkeyTriggered > 0 || CrashCount > 0;
         }
+    }
+
+    private sealed class TelemetryBatch
+    {
+        public int SchemaVersion { get; set; }
+        public List<TelemetryReport> Reports { get; set; } = new();
     }
 
     private sealed class TelemetryReport
