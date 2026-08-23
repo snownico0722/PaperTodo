@@ -1,1 +1,1 @@
-temporary trigger for plugin settings cleanup
+trigger deterministic plugin settings cleanup runner
