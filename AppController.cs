@@ -866,7 +866,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        foreach (var window in _windows.Values.ToArray())
+        foreach (var window in _windows.Values)
         {
             window.RefreshLinkedNoteRows(noteId);
         }

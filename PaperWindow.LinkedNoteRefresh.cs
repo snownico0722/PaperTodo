@@ -23,7 +23,6 @@ public sealed partial class PaperWindow
         }
 
         var focusedItemId = CurrentFocusedTodoItemId();
-        _todoRowsGeneration++;
 
         foreach (var item in affectedItems)
         {
@@ -55,7 +54,7 @@ public sealed partial class PaperWindow
             _todoRows.RemoveAt(rowIndex);
             _todoPanel.Children.RemoveAt(panelIndex);
 
-            var newRow = BuildTodoRow(item, isNewItem: false);
+            var newRow = (System.Windows.Controls.Border)BuildTodoRow(item, isNewItem: false);
             _todoRows.Remove(newRow);
             _todoRows.Insert(rowIndex, newRow);
             _todoPanel.Children.Insert(panelIndex, newRow);

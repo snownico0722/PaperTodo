@@ -641,6 +641,7 @@ public sealed class StateStore
                 // A persisted malformed state containing both kinds resolves to the paper link,
                 // matching the runtime rule that paper/path quick-launch targets are exclusive.
                 item.LinkedPath = null;
+                item.LinkedPathIsDirectory = null;
             }
         }
 

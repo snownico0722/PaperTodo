@@ -101,7 +101,8 @@ public static class UiLanguages
                         preference = reader.TokenType == JsonTokenType.String
                             ? Normalize(reader.GetString())
                             : Default;
-                        return true;
+                        expectingLanguageValue = false;
+                        continue;
                     }
 
                     if (reader.TokenType == JsonTokenType.PropertyName &&

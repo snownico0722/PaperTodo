@@ -1341,6 +1341,7 @@ public sealed partial class PaperWindow
         PushUndoSnapshot();
         item.LinkedNoteId = noteId;
         item.LinkedPath = null;
+        item.LinkedPathIsDirectory = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
         RefreshCapsuleEligibilityForLinkedNoteChanges(previousItems);
@@ -1911,7 +1912,8 @@ public sealed partial class PaperWindow
             Done = i.Done,
             Order = i.Order,
             LinkedNoteId = i.LinkedNoteId,
-            LinkedPath = i.LinkedPath
+            LinkedPath = i.LinkedPath,
+            LinkedPathIsDirectory = i.LinkedPathIsDirectory
         }).ToList();
     }
 

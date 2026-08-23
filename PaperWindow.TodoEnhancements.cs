@@ -87,14 +87,16 @@ public sealed partial class PaperWindow
                     return;
                 }
                 var path = Path.GetFullPath(paths[0]);
-                if (!File.Exists(path) && !Directory.Exists(path))
+                var isFile = File.Exists(path);
+                var isDirectory = !isFile && Directory.Exists(path);
+                if (!isFile && !isDirectory)
                 {
                     MessageBox.Show(this, Strings.Format("LinkedPathMissingMessage", path),
                         Strings.Get("LinkedPathOpenFailureTitle"), MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                     return;
                 }
-                LinkPathToTodo(item, path);
+                LinkPathToTodo(item, path, isDirectory);
             }
             catch (Exception ex)
             {
@@ -122,10 +124,11 @@ public sealed partial class PaperWindow
         return paths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
     }
 
-    private void LinkPathToTodo(PaperItem item, string path)
+    private void LinkPathToTodo(PaperItem item, string path, bool isDirectory)
     {
         if (string.Equals(item.LinkedPath, path, StringComparison.OrdinalIgnoreCase) &&
-            string.IsNullOrWhiteSpace(item.LinkedPaperId))
+            string.IsNullOrWhiteSpace(item.LinkedPaperId) &&
+            item.LinkedPathIsDirectory == isDirectory)
         {
             return;
         }
@@ -133,6 +136,7 @@ public sealed partial class PaperWindow
         var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
         item.LinkedPath = path;
+        item.LinkedPathIsDirectory = isDirectory;
         item.LinkedPaperId = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
@@ -145,6 +149,7 @@ public sealed partial class PaperWindow
         var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
         PushUndoSnapshot();
         item.LinkedPath = null;
+        item.LinkedPathIsDirectory = null;
         _controller.MarkDirty();
         RebuildTodoRows(focusedId);
     }
@@ -155,7 +160,8 @@ public sealed partial class PaperWindow
         var showName = _controller.State.ShowLinkedNoteName;
         var longName = showName && _controller.State.AllowLongLinkedNoteTitles;
         var displayName = PathDisplayName(path);
-        if (showName && !longName && _controller.State.ShowLinkedPathExtensionOnly)
+        if (showName && !longName && _controller.State.ShowLinkedPathExtensionOnly &&
+            item.LinkedPathIsDirectory == false)
         {
             try
             {
