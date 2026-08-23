@@ -33,7 +33,7 @@ The SCF receiver is intentionally append-only: a response can be lost after CLS 
 
 Before summing usage metrics or counting installs, analytics queries must first keep the row with the greatest `received_at_ms` for each `report_id` (for example with CLS `max_by(value, received_at_ms)`). The same rule handles both ordinary network retries and the first-day provisional → completed-row replacement without adding a database or device secret.
 
-Canonical copy-paste queries for new users, DAU, completed-day totals, and latest-row inspection live in [`CLS_QUERIES.md`](CLS_QUERIES.md). Dashboard queries must use that dedup-first shape instead of summing raw ingestion rows.
+Canonical copy-paste queries for new users, DAU, completed-day totals, and latest-row inspection live in [`tools/telemetry-ingest/CLS_QUERIES.md`](tools/telemetry-ingest/CLS_QUERIES.md). Dashboard queries must use that dedup-first shape instead of summing raw ingestion rows.
 
 After retry deduplication, `telemetry_first_seen_date` can be used for new-user cohorts, while `install_id` + `date` can be used for DAU-style device counts.
 
