@@ -8,7 +8,6 @@ SCHEMA_VERSION = 1
 MAX_REPORTS = 31
 INSTALL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-REPORT_STAGES = {"first_seen", "complete"}
 
 
 def response(status_code, body=""):
@@ -73,25 +72,16 @@ def sanitize_report(data, received_at, received_at_ms):
     if not date or not first_seen_date:
         return None
 
-    # Old v1 clients did not send report_stage; those rows are completed-day reports.
-    report_stage = data.get("report_stage") or "complete"
-    if report_stage not in REPORT_STAGES:
-        return None
-    if report_stage == "first_seen" and date != first_seen_date:
-        return None
-
+    # Both a new-user provisional row and the later completed-day row deliberately use the
+    # same deterministic report_id. Analytics keeps the latest row for that ID.
     report_id = data.get("report_id")
-    if report_stage == "first_seen":
-        expected_report_id = f"{install_id}_{date}_first_v{SCHEMA_VERSION}"
-    else:
-        expected_report_id = f"{install_id}_{date}_v{SCHEMA_VERSION}"
+    expected_report_id = f"{install_id}_{date}_v{SCHEMA_VERSION}"
     if report_id != expected_report_id:
         return None
 
     # Explicit whitelist: unknown client fields are discarded before reaching CLS.
     return {
         "kind": "daily_usage",
-        "report_stage": report_stage,
         "schema_version": SCHEMA_VERSION,
         "report_id": report_id,
         "install_id": install_id,
@@ -127,8 +117,8 @@ def sanitize_report(data, received_at, received_at_ms):
         "hotkey_triggered": bounded_int(data.get("hotkey_triggered"), 100000),
         "crash_count": bounded_int(data.get("crash_count"), 1000),
 
-        # Raw CLS ingestion is intentionally at-least-once. Analytics must select the latest
-        # row per deterministic report_id; this integer is the stable ordering key for max_by().
+        # Raw CLS ingestion is intentionally at-least-once. This integer is the stable ordering
+        # key used to keep the latest row for each deterministic report_id.
         "received_at": received_at,
         "received_at_ms": received_at_ms
     }
@@ -175,9 +165,9 @@ def main_handler(event, context):
         report_ids.add(telemetry["report_id"])
         telemetry_rows.append(telemetry)
 
-    # One Function URL request can contain several reports, but CLS still gets one clean JSON
-    # row per report. Network retries may append the same deterministic report_id again; dashboards
-    # must use received_at_ms + max_by() to keep only the latest row before aggregating metrics.
+    # One Function URL request can contain several reports, but CLS still gets one JSON row per
+    # report. Network retries and the first-day provisional row may append the same deterministic
+    # report_id again; dashboards must keep the row with the greatest received_at_ms first.
     for telemetry in telemetry_rows:
         print(json.dumps(telemetry, ensure_ascii=False, separators=(",", ":")))
 
