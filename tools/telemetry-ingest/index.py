@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 
 
 SCHEMA_VERSION = 1
-ALLOWED_KINDS = {"daily_presence", "daily_usage"}
+MAX_REPORTS = 31
 INSTALL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
-REPORT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -58,46 +57,30 @@ def bool_as_int(value):
     return 0
 
 
-def main_handler(event, context):
-    # Function URL: only accept POST. Do not log the raw request, headers, or client IP.
-    if not isinstance(event, dict) or event.get("httpMethod") != "POST":
-        return response(405)
-
-    raw_body = event.get("body") or ""
-    if not isinstance(raw_body, str):
-        return response(400)
-
-    # Normal reports are well below 2 KB. 8 KB leaves ample schema headroom while bounding abuse.
-    if len(raw_body.encode("utf-8")) > 8192:
-        return response(413)
-
-    try:
-        data = json.loads(raw_body)
-    except (json.JSONDecodeError, TypeError):
-        return response(400)
-
-    if not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION:
-        return response(400)
-
-    kind = data.get("kind")
-    if kind not in ALLOWED_KINDS:
-        return response(400)
+def sanitize_report(data, received_at):
+    if not isinstance(data, dict):
+        return None
+    if data.get("schema_version") != SCHEMA_VERSION or data.get("kind") != "daily_usage":
+        return None
 
     install_id = data.get("install_id")
-    report_id = data.get("report_id")
     if not isinstance(install_id, str) or not INSTALL_ID_RE.fullmatch(install_id):
-        return response(400)
-    if not isinstance(report_id, str) or not REPORT_ID_RE.fullmatch(report_id):
-        return response(400)
+        return None
 
     date = clean_date(data.get("date"))
     first_seen_date = clean_date(data.get("telemetry_first_seen_date"))
     if not date or not first_seen_date:
-        return response(400)
+        return None
 
-    # Explicit whitelist: unknown client fields are discarded before the business record reaches CLS.
-    telemetry = {
-        "kind": kind,
+    # One deterministic report per install/day. This keeps retry duplicates identifiable in CLS.
+    report_id = data.get("report_id")
+    expected_report_id = f"{install_id}_{date}_v{SCHEMA_VERSION}"
+    if report_id != expected_report_id:
+        return None
+
+    # Explicit whitelist: unknown client fields are discarded before reaching CLS.
+    return {
+        "kind": "daily_usage",
         "schema_version": SCHEMA_VERSION,
         "report_id": report_id,
         "install_id": install_id,
@@ -133,8 +116,47 @@ def main_handler(event, context):
         "hotkey_triggered": bounded_int(data.get("hotkey_triggered"), 100000),
         "crash_count": bounded_int(data.get("crash_count"), 1000),
 
-        "received_at": datetime.now(timezone.utc).isoformat()
+        "received_at": received_at
     }
 
-    print(json.dumps(telemetry, ensure_ascii=False, separators=(",", ":")))
+
+def main_handler(event, context):
+    # Function URL: only accept POST. Do not log the raw request, headers, or client IP.
+    if not isinstance(event, dict) or event.get("httpMethod") != "POST":
+        return response(405)
+
+    raw_body = event.get("body") or ""
+    if not isinstance(raw_body, str):
+        return response(400)
+
+    # Up to 31 compact daily summaries fit comfortably under this cap.
+    if len(raw_body.encode("utf-8")) > 65536:
+        return response(413)
+
+    try:
+        data = json.loads(raw_body)
+    except (json.JSONDecodeError, TypeError):
+        return response(400)
+
+    if not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION:
+        return response(400)
+
+    reports = data.get("reports")
+    if not isinstance(reports, list) or not 1 <= len(reports) <= MAX_REPORTS:
+        return response(400)
+
+    received_at = datetime.now(timezone.utc).isoformat()
+    telemetry_rows = []
+    for report in reports:
+        telemetry = sanitize_report(report, received_at)
+        if telemetry is None:
+            # Validate the whole batch before writing anything, so retries are all-or-nothing.
+            return response(400)
+        telemetry_rows.append(telemetry)
+
+    # One Function URL request can contain several completed days, but CLS still gets one clean
+    # daily_usage row per day so SQL grouping remains simple.
+    for telemetry in telemetry_rows:
+        print(json.dumps(telemetry, ensure_ascii=False, separators=(",", ":")))
+
     return response(204)
