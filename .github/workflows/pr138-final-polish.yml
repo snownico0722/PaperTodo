@@ -1,0 +1,53 @@
+name: PR138 final polish
+
+on:
+  pull_request:
+    types: [reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feature/plugin-settings-layout-20260824' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/plugin-settings-layout-20260824
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Apply final polish
+        shell: pwsh
+        run: python .\tools\pr138-polish.py
+
+      - name: Verify host and protocol policy
+        shell: pwsh
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+          git diff --check
+
+      - name: Commit final tree
+        shell: pwsh
+        run: |
+          Remove-Item .\tools\pr138-polish.py -Force
+          Remove-Item .\.github\workflows\pr138-final-polish.yml -Force
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(plugin): finalize advanced settings opt-in"
+          git push origin HEAD:feature/plugin-settings-layout-20260824
