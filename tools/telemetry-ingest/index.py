@@ -8,6 +8,7 @@ SCHEMA_VERSION = 1
 MAX_REPORTS = 31
 INSTALL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+REPORT_STAGES = {"first_seen", "complete"}
 
 
 def response(status_code, body=""):
@@ -57,7 +58,7 @@ def bool_as_int(value):
     return 0
 
 
-def sanitize_report(data, received_at):
+def sanitize_report(data, received_at, received_at_ms):
     if not isinstance(data, dict):
         return None
     if data.get("schema_version") != SCHEMA_VERSION or data.get("kind") != "daily_usage":
@@ -72,15 +73,25 @@ def sanitize_report(data, received_at):
     if not date or not first_seen_date:
         return None
 
-    # One deterministic report per install/day. This keeps retry duplicates identifiable in CLS.
+    # Old v1 clients did not send report_stage; those rows are completed-day reports.
+    report_stage = data.get("report_stage") or "complete"
+    if report_stage not in REPORT_STAGES:
+        return None
+    if report_stage == "first_seen" and date != first_seen_date:
+        return None
+
     report_id = data.get("report_id")
-    expected_report_id = f"{install_id}_{date}_v{SCHEMA_VERSION}"
+    if report_stage == "first_seen":
+        expected_report_id = f"{install_id}_{date}_first_v{SCHEMA_VERSION}"
+    else:
+        expected_report_id = f"{install_id}_{date}_v{SCHEMA_VERSION}"
     if report_id != expected_report_id:
         return None
 
     # Explicit whitelist: unknown client fields are discarded before reaching CLS.
     return {
         "kind": "daily_usage",
+        "report_stage": report_stage,
         "schema_version": SCHEMA_VERSION,
         "report_id": report_id,
         "install_id": install_id,
@@ -116,7 +127,10 @@ def sanitize_report(data, received_at):
         "hotkey_triggered": bounded_int(data.get("hotkey_triggered"), 100000),
         "crash_count": bounded_int(data.get("crash_count"), 1000),
 
-        "received_at": received_at
+        # Raw CLS ingestion is intentionally at-least-once. Analytics must select the latest
+        # row per deterministic report_id; this integer is the stable ordering key for max_by().
+        "received_at": received_at,
+        "received_at_ms": received_at_ms
     }
 
 
@@ -145,17 +159,25 @@ def main_handler(event, context):
     if not isinstance(reports, list) or not 1 <= len(reports) <= MAX_REPORTS:
         return response(400)
 
-    received_at = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    received_at = now.isoformat()
+    received_at_ms = int(now.timestamp() * 1000)
+
     telemetry_rows = []
+    report_ids = set()
     for report in reports:
-        telemetry = sanitize_report(report, received_at)
+        telemetry = sanitize_report(report, received_at, received_at_ms)
         if telemetry is None:
             # Validate the whole batch before writing anything, so retries are all-or-nothing.
             return response(400)
+        if telemetry["report_id"] in report_ids:
+            return response(400)
+        report_ids.add(telemetry["report_id"])
         telemetry_rows.append(telemetry)
 
-    # One Function URL request can contain several completed days, but CLS still gets one clean
-    # daily_usage row per day so SQL grouping remains simple.
+    # One Function URL request can contain several reports, but CLS still gets one clean JSON
+    # row per report. Network retries may append the same deterministic report_id again; dashboards
+    # must use received_at_ms + max_by() to keep only the latest row before aggregating metrics.
     for telemetry in telemetry_rows:
         print(json.dumps(telemetry, ensure_ascii=False, separators=(",", ":")))
 
