@@ -63,8 +63,8 @@ jobs:
                       return text[:start] + text[end:]
               raise RuntimeError(f"{label}: expected one match, found {count}")
           '@
-          $oldReplace = (($oldReplace -replace "`r`n", "`n") -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
-          $newReplace = (($newReplace -replace "`r`n", "`n") -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          $oldReplace = $oldReplace -replace "`r`n", "`n"
+          $newReplace = $newReplace -replace "`r`n", "`n"
           if (-not $script.Contains($oldReplace)) { throw 'replace_once helper not found.' }
           $script = $script.Replace($oldReplace, $newReplace)
           $script | python -
