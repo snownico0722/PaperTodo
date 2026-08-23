@@ -307,7 +307,7 @@ internal static class TelemetryService
 
     private static void OnPreProcessInput(object sender, PreProcessInputEventArgs e)
     {
-        if (!_runtimeActive || !Enabled)
+        if (!_runtimeActive)
         {
             return;
         }
@@ -321,46 +321,52 @@ internal static class TelemetryService
         var now = DateTimeOffset.UtcNow;
         _lastInputUtc = now;
 
-        if (Keyboard.FocusedElement is TodoTextBox todoBox)
-        {
-            var todoState = TodoInputStates.GetValue(todoBox, static _ => new TodoInputState());
-            if (!todoState.Initialized)
-            {
-                todoState.Initialized = true;
-                todoState.HasText = !string.IsNullOrWhiteSpace(todoBox.Text);
-            }
-            _pendingTodoBox = new WeakReference<TodoTextBox>(todoBox);
-        }
-
-        var markdownBox = FindAncestor<MarkdownTextBox>(Keyboard.FocusedElement as DependencyObject);
-        if (markdownBox != null)
-        {
-            var previewState = PreviewFocusStates.GetValue(markdownBox, static _ => new PreviewFocusState());
-            previewState.WasEditing = true;
-            _pendingMarkdownEditor = new WeakReference<MarkdownTextBox>(markdownBox);
-        }
-
-        if (input is MouseButtonEventArgs mouseButton &&
-            mouseButton.ChangedButton == MouseButton.Left)
-        {
-            var check = FindAncestor<CheckBox>(mouseButton.OriginalSource as DependencyObject);
-            if (mouseButton.ButtonState == MouseButtonState.Pressed &&
-                check != null &&
-                check.IsLoaded &&
-                Window.GetWindow(check) is PaperWindow)
-            {
-                _pendingCheckBox = new WeakReference<CheckBox>(check);
-                _pendingCheckWasChecked = check.IsChecked == true;
-                _pendingCheckReleaseObserved = false;
-            }
-            else if (mouseButton.ButtonState == MouseButtonState.Released &&
-                _pendingCheckBox != null)
-            {
-                _pendingCheckReleaseObserved = true;
-            }
-        }
-
         var forcePostCapture = input is KeyboardEventArgs or MouseButtonEventArgs;
+        if (forcePostCapture)
+        {
+            if (Keyboard.FocusedElement is TodoTextBox todoBox)
+            {
+                var todoState = TodoInputStates.GetValue(todoBox, static _ => new TodoInputState());
+                if (!todoState.Initialized)
+                {
+                    todoState.Initialized = true;
+                    todoState.HasText = !string.IsNullOrWhiteSpace(todoBox.Text);
+                }
+                _pendingTodoBox = new WeakReference<TodoTextBox>(todoBox);
+            }
+
+            var markdownBox = FindAncestor<MarkdownTextBox>(Keyboard.FocusedElement as DependencyObject);
+            if (markdownBox != null)
+            {
+                var previewState = PreviewFocusStates.GetValue(markdownBox, static _ => new PreviewFocusState());
+                previewState.WasEditing = true;
+                _pendingMarkdownEditor = new WeakReference<MarkdownTextBox>(markdownBox);
+            }
+
+            if (input is MouseButtonEventArgs mouseButton &&
+                mouseButton.ChangedButton == MouseButton.Left)
+            {
+                var inputSource =
+                    mouseButton.OriginalSource as DependencyObject ??
+                    Mouse.DirectlyOver as DependencyObject;
+                var check = FindAncestor<CheckBox>(inputSource);
+                if (mouseButton.ButtonState == MouseButtonState.Pressed &&
+                    check != null &&
+                    check.IsLoaded &&
+                    Window.GetWindow(check) is PaperWindow)
+                {
+                    _pendingCheckBox = new WeakReference<CheckBox>(check);
+                    _pendingCheckWasChecked = check.IsChecked == true;
+                    _pendingCheckReleaseObserved = false;
+                }
+                else if (mouseButton.ButtonState == MouseButtonState.Released &&
+                    _pendingCheckBox != null)
+                {
+                    _pendingCheckReleaseObserved = true;
+                }
+            }
+        }
+
         if (forcePostCapture || now - _lastMouseTransitionQueueUtc >= MouseTransitionThrottle)
         {
             _lastMouseTransitionQueueUtc = now;
@@ -376,7 +382,7 @@ internal static class TelemetryService
         }
 
         _captureOnPostProcess = false;
-        if (!_runtimeActive || !Enabled || _controller == null)
+        if (!_runtimeActive || _controller == null)
         {
             return;
         }
@@ -548,7 +554,7 @@ internal static class TelemetryService
 
     private static void OnThreadPreprocessMessage(ref MSG msg, ref bool handled)
     {
-        if (!_runtimeActive || !Enabled || msg.message != WmHotkey)
+        if (!_runtimeActive || msg.message != WmHotkey)
         {
             return;
         }
