@@ -1,0 +1,733 @@
+name: Plugin settings layout one-shot
+
+on:
+  push:
+    branches:
+      - feature/plugin-settings-layout-20260824
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Apply feature patch
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import json
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path, text):
+              Path(path).write_text(text, encoding="utf-8", newline="\n")
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          # Manifest contract: host defaults to the first three settings. 2.0 may optionally
+          # override the primary count and describe category placement for the full settings page.
+          path = "src/PaperBodyPluginRegistry.cs"
+          text = read(path)
+          text = replace_once(
+              text,
+              '    public string[] Capabilities { get; set; } = [];\n    public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];',
+              '    public string[] Capabilities { get; set; } = [];\n    public int? PrimarySettings { get; set; }\n    public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];\n    public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];',
+              "manifest settings layout fields")
+          write(path, text)
+
+          path = "src/PaperBodyPluginRegistry.Settings.cs"
+          text = read(path)
+          text = replace_once(
+              text,
+              '        manifest.Settings ??= [];\n',
+              '''        manifest.Settings ??= [];
+        manifest.SettingCategories ??= [];
+        if (manifest.PrimarySettings is < 1 or > 3)
+        {
+            throw new InvalidDataException("primarySettings must be between 1 and 3.");
+        }
+        if (!ApiAtLeast(manifest.ApiVersion, 2, 0) &&
+            (manifest.PrimarySettings.HasValue || manifest.SettingCategories.Length > 0))
+        {
+            throw new InvalidDataException(
+                "primarySettings and settingCategories require apiVersion 2.0 or newer.");
+        }
+
+        var categoryNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var category in manifest.SettingCategories)
+        {
+            category.Name = category.Name?.Trim() ?? "";
+            category.Column = category.Column?.Trim().ToLowerInvariant() ?? "";
+            if (category.Name.Length == 0 || !categoryNames.Add(category.Name))
+            {
+                throw new InvalidDataException(
+                    "Plugin setting categories must have unique non-empty names.");
+            }
+            if (category.Column is not ("" or "left" or "right"))
+            {
+                throw new InvalidDataException(
+                    $"Plugin setting category '{category.Name}' has unsupported column '{category.Column}'.");
+            }
+        }
+''',
+              "settings layout validation prelude")
+          text = replace_once(
+              text,
+              '        var ids = new HashSet<string>(StringComparer.Ordinal);\n        var quickCount = 0;\n',
+              '        var ids = new HashSet<string>(StringComparer.Ordinal);\n',
+              "remove quick counter")
+          text = replace_once(
+              text,
+              '            setting.Description = setting.Description?.Trim() ?? "";\n            setting.Suffix = setting.Suffix?.Trim() ?? "";',
+              '            setting.Description = setting.Description?.Trim() ?? "";\n            setting.Category = setting.Category?.Trim() ?? "";\n            setting.Suffix = setting.Suffix?.Trim() ?? "";',
+              "normalize setting category")
+          text = replace_once(
+              text,
+              '            setting.Options ??= [];\n\n            if (!SettingIdPattern.IsMatch(setting.Id)',
+              '''            setting.Options ??= [];
+
+            if (setting.Category.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 2, 0))
+            {
+                throw new InvalidDataException(
+                    $"Plugin setting '{setting.Id}' category requires apiVersion 2.0 or newer.");
+            }
+
+            if (!SettingIdPattern.IsMatch(setting.Id)''',
+              "category protocol gate")
+          text = replace_once(
+              text,
+              '''            if (setting.Quick && ++quickCount > 3)
+            {
+                throw new InvalidDataException("A plugin may expose at most three quick settings.");
+            }
+''',
+              '',
+              "remove legacy quick validation")
+          text = replace_once(
+              text,
+              '    public JsonElement Default { get; set; }\n    public bool Quick { get; set; }\n    public double? Min { get; set; }',
+              '    public JsonElement Default { get; set; }\n    public string Category { get; set; } = "";\n    public double? Min { get; set; }',
+              "replace quick with category")
+          text = replace_once(
+              text,
+              '''internal sealed class PaperBodyPluginSettingOptionManifest
+{
+''',
+              '''internal sealed class PaperBodyPluginSettingCategoryManifest
+{
+    public string Name { get; set; } = "";
+    public string Column { get; set; } = "";
+}
+
+internal sealed class PaperBodyPluginSettingOptionManifest
+{
+''',
+              "setting category manifest type")
+          write(path, text)
+
+          # Replace the old inline expand/collapse panel with a default-first-three card and a
+          # separate full settings window. Category blocks are atomic when explicitly named;
+          # uncategorized settings remain freely balanceable by the host.
+          path = "src/AppController.Plugins.cs"
+          text = read(path)
+          pattern = re.compile(
+              r'    private FrameworkElement BuildPluginSettingsPanel\(.*?^    private FrameworkElement BuildPluginSettingControl\(',
+              re.S | re.M)
+          replacement = r'''    private FrameworkElement BuildPluginSettingsPanel(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
+        var root = new StackPanel
+        {
+            Margin = new Thickness(12, 0, 0, 0)
+        };
+        var primaryCount = Math.Min(
+            settings.Count,
+            descriptor.Manifest?.PrimarySettings ?? 3);
+        for (var index = 0; index < primaryCount; index++)
+        {
+            root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
+        }
+
+        if (settings.Count > primaryCount)
+        {
+            var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
+            more.MinWidth = 0;
+            more.Margin = new Thickness(0, 8, 0, 0);
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
+            root.Children.Add(more);
+        }
+
+        return root;
+    }
+
+    private void ShowPluginSettingsWindow(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
+        var height = Math.Min(
+            680,
+            Math.Max(420, SystemParameters.WorkArea.Height - 120));
+        var window = new Window
+        {
+            Title = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
+            Width = 720,
+            Height = height,
+            SizeToContent = SizeToContent.Manual,
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            ShowInTaskbar = false,
+            Topmost = false,
+            WindowStartupLocation = _settingsWindow != null
+                ? WindowStartupLocation.CenterOwner
+                : WindowStartupLocation.CenterScreen,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(12),
+            Language = AppTypography.Language,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
+        };
+        if (_settingsWindow != null)
+        {
+            window.Owner = _settingsWindow;
+        }
+        AppTypography.ApplyTextRendering(window);
+        window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
+        window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
+        window.Closed += (_, _) =>
+        {
+            if (_pluginShortcutRecordingCommandId == null)
+            {
+                return;
+            }
+
+            _pluginShortcutRecordingCommandId = null;
+            if (!IsExiting)
+            {
+                RestoreAllHotkeysAfterPluginRecording();
+            }
+        };
+        window.Content = BuildPluginSettingsWindowContent(window, descriptor, settings);
+        ApplyToolTipSetting(window);
+        window.ShowDialog();
+    }
+
+    private UIElement BuildPluginSettingsWindowContent(
+        Window window,
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
+        var frame = new Border
+        {
+            Background = TrayPaperBrush,
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14),
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 20,
+                ShadowDepth = 2,
+                Opacity = 0.22
+            }
+        };
+        var root = new DockPanel();
+        var titleRow = new Grid
+        {
+            Margin = new Thickness(0, 0, 0, 10),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.SizeAll
+        };
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleRow.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Left)
+            {
+                return;
+            }
+            try { window.DragMove(); } catch { }
+        };
+
+        var title = new TextBlock
+        {
+            Text = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
+            Foreground = TrayTextBrush,
+            FontSize = AppTypography.Scale(15),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(title, 0);
+        titleRow.Children.Add(title);
+
+        var closeButton = new Button
+        {
+            Content = "×",
+            Width = 28,
+            Height = 24,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.Transparent,
+            Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(16),
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            Style = BuildSettingsCloseButtonStyle()
+        };
+        closeButton.Click += (_, _) => window.Close();
+        Grid.SetColumn(closeButton, 1);
+        titleRow.Children.Add(closeButton);
+        DockPanel.SetDock(titleRow, Dock.Top);
+        root.Children.Add(titleRow);
+
+        var availableWidth = Math.Max(480, window.Width - 56);
+        var availableHeight = Math.Max(260, window.Height - 92);
+        var layout = BuildPluginFullSettingsLayout(
+            descriptor,
+            settings,
+            availableWidth,
+            availableHeight);
+        var scroll = new ScrollViewer
+        {
+            Content = layout,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        root.Children.Add(scroll);
+        frame.Child = root;
+        return frame;
+    }
+
+    private FrameworkElement BuildPluginFullSettingsLayout(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings,
+        double availableWidth,
+        double availableHeight)
+    {
+        var categoryColumns = (descriptor.Manifest?.SettingCategories ?? [])
+            .ToDictionary(
+                item => item.Name,
+                item => item.Column,
+                StringComparer.Ordinal);
+        var groupedCategories = new HashSet<string>(StringComparer.Ordinal);
+        var units = new List<(
+            string Category,
+            string Column,
+            PaperBodyPluginSettingManifest[] Settings)>();
+
+        foreach (var setting in settings)
+        {
+            if (string.IsNullOrWhiteSpace(setting.Category))
+            {
+                units.Add(("", "", new[] { setting }));
+                continue;
+            }
+            if (!groupedCategories.Add(setting.Category))
+            {
+                continue;
+            }
+
+            categoryColumns.TryGetValue(setting.Category, out var column);
+            units.Add((
+                setting.Category,
+                column ?? "",
+                settings.Where(item => string.Equals(
+                    item.Category,
+                    setting.Category,
+                    StringComparison.Ordinal)).ToArray()));
+        }
+
+        var elements = new List<(FrameworkElement Element, string Column)>();
+        var naturalHeight = 0d;
+        foreach (var unit in units)
+        {
+            var element = BuildPluginSettingCategory(
+                descriptor,
+                unit.Category,
+                unit.Settings);
+            element.Measure(new Size(availableWidth, double.PositiveInfinity));
+            naturalHeight += element.DesiredSize.Height + 8;
+            elements.Add((element, unit.Column));
+        }
+
+        var useColumns = elements.Any(item =>
+                item.Column is "left" or "right") ||
+            naturalHeight > availableHeight;
+        if (!useColumns)
+        {
+            var single = new StackPanel();
+            foreach (var item in elements)
+            {
+                item.Element.Margin = new Thickness(0, 0, 0, 8);
+                single.Children.Add(item.Element);
+            }
+            return single;
+        }
+
+        var columns = new Grid();
+        columns.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        var left = new StackPanel();
+        var right = new StackPanel();
+        var halfWidth = Math.Max(220, (availableWidth - 25) / 2);
+        var leftHeight = 0d;
+        var rightHeight = 0d;
+
+        foreach (var item in elements)
+        {
+            item.Element.Measure(new Size(halfWidth, double.PositiveInfinity));
+            var measuredHeight = item.Element.DesiredSize.Height + 8;
+            var placeRight = string.Equals(item.Column, "right", StringComparison.Ordinal) ||
+                (!string.Equals(item.Column, "left", StringComparison.Ordinal) &&
+                 rightHeight < leftHeight);
+            item.Element.Margin = new Thickness(0, 0, 0, 8);
+            if (placeRight)
+            {
+                right.Children.Add(item.Element);
+                rightHeight += measuredHeight;
+            }
+            else
+            {
+                left.Children.Add(item.Element);
+                leftHeight += measuredHeight;
+            }
+        }
+
+        var separator = new Border
+        {
+            Width = 1,
+            Background = TrayBorderBrush,
+            Opacity = 0.65,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(separator, 1);
+        Grid.SetColumn(right, 2);
+        columns.Children.Add(left);
+        columns.Children.Add(separator);
+        columns.Children.Add(right);
+        return columns;
+    }
+
+    private FrameworkElement BuildPluginSettingCategory(
+        PaperBodyPluginDescriptor descriptor,
+        string category,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
+    {
+        var root = new StackPanel();
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            root.Children.Add(SettingsSectionLabel(category));
+        }
+        foreach (var setting in settings)
+        {
+            root.Children.Add(BuildPluginSettingControl(descriptor, setting));
+        }
+        return root;
+    }
+
+    private FrameworkElement BuildPluginSettingControl('''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise RuntimeError(f"plugin settings UI replacement: expected one block, found {count}")
+          write(path, text)
+
+          # Protocol policy checks pin the slim public manifest shape: no per-setting quick flag;
+          # optional primary count and category metadata live at the manifest/category level.
+          path = "tests/PaperTodo.ProtocolPolicyChecks/Program.cs"
+          text = read(path)
+          text = replace_once(
+              text,
+              '            CheckCapabilityNormalization(host);\n            CheckProtocolBoundaries(host);',
+              '            CheckCapabilityNormalization(host);\n            CheckSettingsLayoutManifest(host);\n            CheckProtocolBoundaries(host);',
+              "policy check registration")
+          anchor = '    private static void CheckProtocolBoundaries(Assembly host)\n'
+          method = '''    private static void CheckSettingsLayoutManifest(Assembly host)
+    {
+        var manifestType = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
+        var settingType = RequireType(host, "PaperTodo.PaperBodyPluginSettingManifest");
+        var categoryType = RequireType(host, "PaperTodo.PaperBodyPluginSettingCategoryManifest");
+
+        Assert(
+            manifestType.GetProperty("PrimarySettings")?.PropertyType == typeof(int?),
+            "Plugin manifest must expose optional primarySettings metadata.");
+        Assert(
+            manifestType.GetProperty("SettingCategories")?.PropertyType == categoryType.MakeArrayType(),
+            "Plugin manifest must expose settingCategories metadata.");
+        Assert(
+            settingType.GetProperty("Category")?.PropertyType == typeof(string),
+            "Plugin settings must expose an optional category name.");
+        Assert(
+            settingType.GetProperty("Quick") == null,
+            "Per-setting quick metadata must not remain in the 2.0 settings contract.");
+        Assert(
+            categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
+            categoryType.GetProperty("Column")?.PropertyType == typeof(string),
+            "Setting categories must carry their display name and optional column placement.");
+    }
+
+'''
+          text = replace_once(text, anchor, method + anchor, "settings layout policy check")
+          write(path, text)
+
+          # All source examples now target protocol 2.0. Native manifest and runtime declarations
+          # must move together or the host correctly rejects them as mismatched.
+          native_plugins = [
+              "plugin-samples/PaperTodo.Plugin.CloudGenshin/CloudGenshinPlugin.cs",
+              "plugin-samples/PaperTodo.Plugin.FocusTimer/FocusTimerPlugin.cs",
+              "plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchivePlugin.cs",
+              "plugin-samples/PaperTodo.Plugin.SampleClock/SampleClockPlugin.cs",
+          ]
+          for native_path in native_plugins:
+              native_text = read(native_path)
+              native_text = replace_once(
+                  native_text,
+                  'ApiVersion => "1.8";',
+                  'ApiVersion => "2.0";',
+                  f"{native_path} api version")
+              write(native_path, native_text)
+
+          category_layouts = {
+              "sample.focus-timer.native": {
+                  "categories": [
+                      {"name": "联动", "column": "left"},
+                      {"name": "显示", "column": "left"},
+                      {"name": "计时", "column": "right"},
+                  ],
+                  "assign": {
+                      "autoStartNext": "联动", "showLinkedTodo": "联动",
+                      "completeLinkedTodo": "联动", "autoSelectNextTodo": "联动",
+                      "showProgress": "显示", "showCompleted": "显示", "titleStyle": "显示",
+                      "focusMinutes": "计时", "breakMinutes": "计时", "adjustStep": "计时",
+                      "dailyGoal": "计时", "sound": "计时", "confirmReset": "计时",
+                  },
+              },
+              "sample.clock.native": {
+                  "categories": [
+                      {"name": "显示", "column": "left"},
+                      {"name": "时间与标题", "column": "right"},
+                  ],
+                  "assign": {
+                      "showSeconds": "显示", "showDate": "显示", "showDayProgress": "显示",
+                      "showWeekday": "显示", "clockScale": "显示",
+                      "hourCycle": "时间与标题", "dateFormat": "时间与标题",
+                      "timeZone": "时间与标题", "titleMode": "时间与标题",
+                      "customTitle": "时间与标题",
+                  },
+              },
+              "official.clock.web": {
+                  "categories": [
+                      {"name": "显示", "column": "left"},
+                      {"name": "时间与标题", "column": "right"},
+                      {"name": "启动", "column": "right"},
+                  ],
+                  "assign": {
+                      "showSeconds": "显示", "showDate": "显示", "showDayProgress": "显示",
+                      "showWeekday": "显示", "showWeekNumber": "显示", "clockScale": "显示",
+                      "hourCycle": "时间与标题", "dateFormat": "时间与标题",
+                      "timeZone": "时间与标题", "titleMode": "时间与标题",
+                      "customTitle": "时间与标题", "autoStartCapsule": "启动",
+                  },
+                  "first": ["showSeconds", "showDate", "showDayProgress"],
+                  "extra": {"miniMaxSize": {"width": 360, "height": 240}},
+              },
+              "sample.review-archive.native": {
+                  "categories": [
+                      {"name": "记录", "column": "left"},
+                      {"name": "导出", "column": "left"},
+                      {"name": "显示", "column": "right"},
+                  ],
+                  "assign": {
+                      "keepDeleted": "记录", "trackCreated": "记录",
+                      "showReminderChanges": "记录", "initialImport": "记录",
+                      "retentionDays": "记录", "maxRecords": "记录",
+                      "exportEncoding": "导出", "exportDateFormat": "导出",
+                      "includePaperTitle": "导出", "confirmClear": "导出",
+                      "showOpenItems": "显示", "showInsights": "显示",
+                      "highlightUpcomingReminders": "显示", "defaultFilter": "显示",
+                      "showDeletedBadge": "显示", "titleMode": "显示", "fixedTitle": "显示",
+                  },
+              },
+              "sample.topbar.web": {
+                  "primarySettings": 1,
+              },
+          }
+
+          manifests = sorted(Path("plugin-samples").glob("*/plugin.json"))
+          if not manifests:
+              raise RuntimeError("No sample plugin manifests found")
+          for manifest_path in manifests:
+              data = json.loads(manifest_path.read_text(encoding="utf-8"))
+              data["apiVersion"] = "2.0"
+              settings = data.get("settings", [])
+              for setting in settings:
+                  setting.pop("quick", None)
+                  setting.pop("category", None)
+
+              layout = category_layouts.get(data.get("id"), {})
+              assign = layout.get("assign", {})
+              for setting in settings:
+                  category = assign.get(setting.get("id"))
+                  if category:
+                      setting["category"] = category
+
+              first = layout.get("first", [])
+              if first:
+                  by_id = {setting["id"]: setting for setting in settings}
+                  settings = [by_id[item] for item in first] + [
+                      setting for setting in settings if setting["id"] not in first
+                  ]
+
+              for key, value in layout.get("extra", {}).items():
+                  data[key] = value
+
+              data.pop("primarySettings", None)
+              data.pop("settingCategories", None)
+              data.pop("settings", None)
+              if "primarySettings" in layout:
+                  data["primarySettings"] = layout["primarySettings"]
+              if layout.get("categories"):
+                  data["settingCategories"] = layout["categories"]
+              if settings:
+                  data["settings"] = settings
+
+              manifest_path.write_text(
+                  json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                  encoding="utf-8",
+                  newline="\n")
+
+          # Developer docs describe the zero-config default first, then the optional 2.0 metadata.
+          path = "plugin-samples/README.md"
+          text = read(path)
+          text = replace_once(
+              text,
+              '| `settings` | 可选；由宿主绘制和保存的全局设置 |',
+              '| `primarySettings` | 可选，2.0；插件卡片直接显示前 1～3 个设置，省略时默认 3 |\n| `settingCategories` | 可选，2.0；完整设置页的分类及可选 `left` / `right` 列位置 |\n| `settings` | 可选；由宿主绘制和保存的全局设置；2.0 设置项可写 `category` |',
+              "manifest fields docs")
+          text = replace_once(
+              text,
+              '宿主支持：`boolean`、`string`、`number`、`select`。最多三个 `quick: true` 设置。可用约束包括：`default`、`min/max/step`、`maxLength`、`suffix`、`placeholder`、`options`、`description`。',
+              '''宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置按 `settings` 数组顺序显示；插件什么都不额外声明时，卡片自动直接显示前 3 个，超过 3 个自动出现“更多设置”，点击后打开独立的完整设置页。`primarySettings` 可选设为 1～3，只覆盖卡片直接显示的数量，不改变设置存储和读取。
+
+协议 2.0 的设置项还可以写 `category`。同名分类会在完整设置页自动归组；插件可用顶层 `settingCategories` 为分类声明 `column: "left"` 或 `"right"`，不写 `column` 就交给宿主自动安排。宿主会先尝试单列，实际高度放不下时自动改为左右两列；没有分类的设置也能直接使用，不要求插件为布局补元数据。可用约束包括：`default`、`min/max/step`、`maxLength`、`suffix`、`placeholder`、`options`、`description`。
+
+```json
+{
+  "primarySettings": 2,
+  "settingCategories": [
+    { "name": "常规", "column": "left" },
+    { "name": "网络", "column": "right" },
+    { "name": "调试" }
+  ],
+  "settings": [
+    { "id": "enabled", "type": "boolean", "name": "启用", "category": "常规" },
+    { "id": "mode", "type": "select", "name": "模式", "category": "常规", "options": [
+      { "value": "auto", "name": "自动" },
+      { "value": "manual", "name": "手动" }
+    ] },
+    { "id": "timeout", "type": "number", "name": "超时", "category": "网络" },
+    { "id": "debug", "type": "boolean", "name": "调试日志", "category": "调试" }
+  ]
+}
+```''',
+              "global settings docs")
+          write(path, text)
+
+          path = "plugin-samples/PROTOCOL-2.0-SHORTCUTS.md"
+          text = read(path)
+          text = replace_once(
+              text,
+              '      "shortcutAction": "paper.toggle",\n      "quick": true\n',
+              '      "shortcutAction": "paper.toggle"\n',
+              "shortcut quick example")
+          text = replace_once(
+              text,
+              '用户在 **插件自己的设置卡片** 中录制或修改快捷键。它不会作为第三方动作塞进 PaperTodo 的全局快捷键设置页。',
+              '用户在**插件自己的设置卡片或“更多设置”页**中录制或修改快捷键。它不会作为第三方动作塞进 PaperTodo 的全局快捷键设置页。',
+              "shortcut settings page docs")
+          write(path, text)
+          '@ | python -
+
+      - name: Build host and policy checks
+        shell: pwsh
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+
+      - name: Rebuild installed native samples
+        shell: pwsh
+        run: |
+          $projects = @(
+            '.\plugin-samples\PaperTodo.Plugin.CloudGenshin\PaperTodo.Plugin.CloudGenshin.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.FocusTimer\PaperTodo.Plugin.FocusTimer.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.ReviewArchive\PaperTodo.Plugin.ReviewArchive.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.SampleClock\PaperTodo.Plugin.SampleClock.csproj'
+          )
+          foreach ($project in $projects) {
+            .\plugin-samples\Build-And-Install-NativePlugin.ps1 -ProjectPath $project
+          }
+
+          Copy-Item .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\plugin.json .\plugins\official.clock.web\plugin.json -Force
+          if (Test-Path .\plugins\official.clock.web\web) {
+            Remove-Item .\plugins\official.clock.web\web -Recurse -Force
+          }
+          Copy-Item .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\web .\plugins\official.clock.web\web -Recurse -Force
+
+      - name: Verify and commit
+        shell: pwsh
+        run: |
+          $sampleManifests = Get-ChildItem .\plugin-samples -Recurse -Filter plugin.json
+          foreach ($manifest in $sampleManifests) {
+            $json = Get-Content $manifest.FullName -Raw -Encoding UTF8 | ConvertFrom-Json -Depth 100
+            if ($json.apiVersion -ne '2.0') {
+              throw "Sample did not migrate to 2.0: $($manifest.FullName)"
+            }
+            if ((Get-Content $manifest.FullName -Raw -Encoding UTF8) -match '"quick"\s*:') {
+              throw "Legacy quick metadata remains: $($manifest.FullName)"
+            }
+          }
+          git diff --check
+          Remove-Item .\.github\workflows\plugin-settings-layout-one-shot.yml -Force
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(plugin): add adaptive advanced settings page"
+          git push origin HEAD:feature/plugin-settings-layout-20260824
