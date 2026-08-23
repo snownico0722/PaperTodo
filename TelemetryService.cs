@@ -5,9 +5,12 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
@@ -19,7 +22,14 @@ internal static class TelemetryService
     private const int WmHotkey = 0x0312;
     private const string Endpoint = "https://1251449999-60pjzyd4uu.ap-beijing.tencentscf.com";
     private const int MaxPendingReports = 31;
+
+    private static readonly TimeSpan TimerInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ActiveInputWindow = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan ActiveSnapshotInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan IdleSnapshotInterval = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan PersistInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan MouseTransitionThrottle = TimeSpan.FromMilliseconds(250);
+
     private static readonly object Gate = new();
     private static readonly HttpClient Http = new()
     {
@@ -34,8 +44,11 @@ internal static class TelemetryService
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
-    private static readonly ConditionalWeakTable<MarkdownTextBox, PreviewFocusState> PreviewFocusStates = new();
 
+    private static readonly ConditionalWeakTable<TodoTextBox, TodoInputState> TodoInputStates = new();
+    private static readonly ConditionalWeakTable<MarkdownTextBox, PreviewFocusState> PreviewFocusStates = new();
+    private static readonly HashSet<string> DirectTodoCreatedItemIds = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> DirectTodoCompletedItemIds = new(StringComparer.Ordinal);
     private static readonly string StatePath = Path.Combine(AppContext.BaseDirectory, "telemetry.json");
     private static readonly string CrashPath = Path.Combine(AppContext.BaseDirectory, "telemetry-crash.json");
 
@@ -43,10 +56,23 @@ internal static class TelemetryService
     private static AppController? _controller;
     private static DispatcherTimer? _timer;
     private static UsageSnapshot? _previousSnapshot;
+    private static readonly Dictionary<string, bool> PaperCollapsedStates = new(StringComparer.Ordinal);
+
     private static DateTimeOffset _lastInputUtc = DateTimeOffset.MinValue;
-    private static int _ticks;
+    private static DateTimeOffset _lastTickUtc = DateTimeOffset.MinValue;
+    private static DateTimeOffset _lastSnapshotUtc = DateTimeOffset.MinValue;
+    private static DateTimeOffset _lastSaveUtc = DateTimeOffset.MinValue;
+    private static DateTimeOffset _lastMouseTransitionQueueUtc = DateTimeOffset.MinValue;
+
+    private static WeakReference<TodoTextBox>? _pendingTodoBox;
+    private static WeakReference<CheckBox>? _pendingCheckBox;
+    private static bool _pendingCheckWasChecked;
+    private static bool _pendingCheckReleaseObserved;
+    private static WeakReference<MarkdownTextBox>? _pendingMarkdownEditor;
+    private static int _postInputCaptureQueued;
+
     private static bool _attached;
-    private static bool _runtimeHooksRegistered;
+    private static bool _runtimeActive;
     private static bool _uploading;
 
     public static bool Enabled
@@ -69,8 +95,8 @@ internal static class TelemetryService
 
         _attached = true;
         _controller = controller;
-        RegisterRuntimeHooksOnce();
 
+        var shouldStartRuntime = false;
         lock (Gate)
         {
             NormalizePersistedState(_persisted);
@@ -80,27 +106,21 @@ internal static class TelemetryService
             }
             else
             {
-                // Merge crash markers before and after rollover so a crash around local midnight
-                // lands on the correct local day before that day is finalized.
                 MergeCrashMarkersLocked();
                 EnsureCurrentDayLocked(controller.State, countLaunch: true);
                 MergeCrashMarkersLocked();
+                QueueFirstReportIfNeededLocked();
+                shouldStartRuntime = true;
             }
             SaveLocked();
         }
 
-        _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
-        InputManager.Current.PreProcessInput += OnPreProcessInput;
-        ComponentDispatcher.ThreadPreprocessMessage += OnThreadPreprocessMessage;
-
-        _timer = new DispatcherTimer(DispatcherPriority.Background)
+        if (!shouldStartRuntime)
         {
-            Interval = TimeSpan.FromSeconds(1)
-        };
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
+            return;
+        }
 
-        // Only completed previous-day reports are queued. Send the whole backlog in one request.
+        StartRuntime(controller);
         _ = UploadPendingBatchAsync();
     }
 
@@ -111,24 +131,7 @@ internal static class TelemetryService
             return;
         }
 
-        _timer?.Stop();
-        if (_timer != null)
-        {
-            _timer.Tick -= OnTimerTick;
-            _timer = null;
-        }
-
-        InputManager.Current.PreProcessInput -= OnPreProcessInput;
-        ComponentDispatcher.ThreadPreprocessMessage -= OnThreadPreprocessMessage;
-
-        try
-        {
-            CaptureTransitionsAndSnapshot();
-        }
-        catch
-        {
-            // Anonymous statistics must never affect shutdown.
-        }
+        StopRuntime(captureFinalSnapshot: true);
 
         lock (Gate)
         {
@@ -137,13 +140,11 @@ internal static class TelemetryService
 
         _attached = false;
         _controller = null;
-        _previousSnapshot = null;
-        _lastInputUtc = DateTimeOffset.MinValue;
-        _ticks = 0;
     }
 
     public static void SetEnabled(bool enabled)
     {
+        AppController? controller;
         lock (Gate)
         {
             if (_persisted.Enabled == enabled)
@@ -152,20 +153,31 @@ internal static class TelemetryService
             }
 
             _persisted.Enabled = enabled;
+            controller = _controller;
+
             if (!enabled)
             {
                 ClearQueuedDataLocked();
             }
-            else if (_controller != null)
+            else if (controller != null)
             {
-                EnsureCurrentDayLocked(_controller.State, countLaunch: false, resetCurrentDay: true);
+                EnsureCurrentDayLocked(controller.State, countLaunch: false, resetCurrentDay: true);
+                QueueFirstReportIfNeededLocked();
             }
+
             SaveLocked();
         }
 
-        if (_controller != null)
+        if (!enabled)
         {
-            _previousSnapshot = CaptureSnapshot(_controller.State, previous: null);
+            StopRuntime(captureFinalSnapshot: false);
+            return;
+        }
+
+        if (controller != null && _attached)
+        {
+            StartRuntime(controller);
+            _ = UploadPendingBatchAsync();
         }
     }
 
@@ -208,6 +220,83 @@ internal static class TelemetryService
         }
     }
 
+    private static void StartRuntime(AppController controller)
+    {
+        if (_runtimeActive || !Enabled)
+        {
+            return;
+        }
+
+        _runtimeActive = true;
+        _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
+        ResetPaperTransitionBaseline(controller.State);
+
+        var now = DateTimeOffset.UtcNow;
+        _lastInputUtc = DateTimeOffset.MinValue;
+        _lastTickUtc = now;
+        _lastSnapshotUtc = now;
+        _lastSaveUtc = now;
+        _lastMouseTransitionQueueUtc = DateTimeOffset.MinValue;
+
+        InputManager.Current.PreProcessInput += OnPreProcessInput;
+        ComponentDispatcher.ThreadPreprocessMessage += OnThreadPreprocessMessage;
+
+        _timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimerInterval
+        };
+        _timer.Tick += OnTimerTick;
+        _timer.Start();
+    }
+
+    private static void StopRuntime(bool captureFinalSnapshot)
+    {
+        if (!_runtimeActive)
+        {
+            return;
+        }
+
+        _timer?.Stop();
+        if (_timer != null)
+        {
+            _timer.Tick -= OnTimerTick;
+            _timer = null;
+        }
+
+        InputManager.Current.PreProcessInput -= OnPreProcessInput;
+        ComponentDispatcher.ThreadPreprocessMessage -= OnThreadPreprocessMessage;
+
+        if (captureFinalSnapshot && Enabled)
+        {
+            try
+            {
+                CaptureLightweightPaperTransitions();
+                CaptureUsageTransitionsAndSnapshot();
+            }
+            catch
+            {
+                // Anonymous statistics must never affect shutdown.
+            }
+        }
+
+        _runtimeActive = false;
+        _previousSnapshot = null;
+        PaperCollapsedStates.Clear();
+        DirectTodoCreatedItemIds.Clear();
+        DirectTodoCompletedItemIds.Clear();
+        _lastInputUtc = DateTimeOffset.MinValue;
+        _lastTickUtc = DateTimeOffset.MinValue;
+        _lastSnapshotUtc = DateTimeOffset.MinValue;
+        _lastSaveUtc = DateTimeOffset.MinValue;
+        _lastMouseTransitionQueueUtc = DateTimeOffset.MinValue;
+        _pendingTodoBox = null;
+        _pendingCheckBox = null;
+        _pendingMarkdownEditor = null;
+        _pendingCheckWasChecked = false;
+        _pendingCheckReleaseObserved = false;
+        Interlocked.Exchange(ref _postInputCaptureQueued, 0);
+    }
+
     private static void ClearQueuedDataLocked()
     {
         _persisted.PendingReports.Clear();
@@ -215,87 +304,259 @@ internal static class TelemetryService
         TryDeleteCrashMarker();
     }
 
-    private static void RegisterRuntimeHooksOnce()
+    private static void OnPreProcessInput(object sender, PreProcessInputEventArgs e)
     {
-        if (_runtimeHooksRegistered)
+        if (!_runtimeActive || !Enabled)
         {
             return;
         }
 
-        _runtimeHooksRegistered = true;
-        EventManager.RegisterClassHandler(
-            typeof(MarkdownTextBox),
-            Keyboard.GotKeyboardFocusEvent,
-            new KeyboardFocusChangedEventHandler(OnMarkdownGotKeyboardFocus),
-            true);
-        EventManager.RegisterClassHandler(
-            typeof(MarkdownTextBox),
-            Keyboard.LostKeyboardFocusEvent,
-            new KeyboardFocusChangedEventHandler(OnMarkdownLostKeyboardFocus),
-            true);
+        var input = e.StagingItem.Input;
+        if (input is not (MouseEventArgs or KeyboardEventArgs))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        _lastInputUtc = now;
+
+        if (Keyboard.FocusedElement is TodoTextBox todoBox)
+        {
+            var todoState = TodoInputStates.GetValue(todoBox, static _ => new TodoInputState());
+            if (!todoState.Initialized)
+            {
+                todoState.Initialized = true;
+                todoState.HasText = !string.IsNullOrWhiteSpace(todoBox.Text);
+            }
+            _pendingTodoBox = new WeakReference<TodoTextBox>(todoBox);
+        }
+
+        var markdownBox = FindAncestor<MarkdownTextBox>(Keyboard.FocusedElement as DependencyObject);
+        if (markdownBox != null)
+        {
+            var previewState = PreviewFocusStates.GetValue(markdownBox, static _ => new PreviewFocusState());
+            previewState.WasEditing = true;
+            _pendingMarkdownEditor = new WeakReference<MarkdownTextBox>(markdownBox);
+        }
+
+        if (input is MouseButtonEventArgs mouseButton &&
+            mouseButton.ChangedButton == MouseButton.Left)
+        {
+            var check = FindAncestor<CheckBox>(mouseButton.OriginalSource as DependencyObject);
+            if (mouseButton.ButtonState == MouseButtonState.Pressed &&
+                check != null &&
+                check.IsLoaded &&
+                Window.GetWindow(check) is PaperWindow)
+            {
+                _pendingCheckBox = new WeakReference<CheckBox>(check);
+                _pendingCheckWasChecked = check.IsChecked == true;
+                _pendingCheckReleaseObserved = false;
+            }
+            else if (mouseButton.ButtonState == MouseButtonState.Released &&
+                _pendingCheckBox != null)
+            {
+                _pendingCheckReleaseObserved = true;
+            }
+        }
+
+        var forcePostCapture = input is KeyboardEventArgs or MouseButtonEventArgs;
+        if (forcePostCapture || now - _lastMouseTransitionQueueUtc >= MouseTransitionThrottle)
+        {
+            _lastMouseTransitionQueueUtc = now;
+            QueuePostInputCapture();
+        }
     }
 
-    private static PreviewFocusState PreviewStateFor(MarkdownTextBox box)
+    private static void QueuePostInputCapture()
     {
-        return PreviewFocusStates.GetValue(box, static _ => new PreviewFocusState());
-    }
-
-    private static void OnMarkdownGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is not MarkdownTextBox box)
+        var controller = _controller;
+        if (controller == null ||
+            Interlocked.Exchange(ref _postInputCaptureQueued, 1) != 0)
         {
             return;
         }
 
-        var state = PreviewStateFor(box);
-        state.Generation++;
-        state.WasEditing = true;
-    }
-
-    private static void OnMarkdownLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is not MarkdownTextBox box || !Enabled || !_attached)
-        {
-            return;
-        }
-
-        var state = PreviewStateFor(box);
-        if (!state.WasEditing)
-        {
-            return;
-        }
-
-        var generation = ++state.Generation;
-        box.Dispatcher.BeginInvoke(
+        Application.Current.Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                if (!Enabled || !_attached || state.Generation != generation || !box.IsPreviewMode)
+                Interlocked.Exchange(ref _postInputCaptureQueued, 0);
+                if (!_runtimeActive || !Enabled || _controller == null)
                 {
                     return;
                 }
 
-                state.WasEditing = false;
-                RecordCounter(day => day.MarkdownPreview = AddBounded(day.MarkdownPreview, 1, 100000));
+                CapturePendingTodoTextTransition();
+                CapturePendingTodoCompletion();
+                CapturePendingMarkdownPreview();
+                CaptureLightweightPaperTransitions();
             }),
             DispatcherPriority.ContextIdle);
     }
 
-    private static void OnPreProcessInput(object sender, PreProcessInputEventArgs e)
+    private static void CapturePendingTodoTextTransition()
     {
-        if (!Enabled)
+        var pending = _pendingTodoBox;
+        _pendingTodoBox = null;
+        if (pending == null || !pending.TryGetTarget(out var todoBox))
         {
             return;
         }
 
-        if (e.StagingItem.Input is MouseEventArgs or KeyboardEventArgs)
+        var state = TodoInputStates.GetValue(todoBox, static _ => new TodoInputState());
+        var hasText = !string.IsNullOrWhiteSpace(todoBox.Text);
+        if (!state.Initialized)
         {
-            _lastInputUtc = DateTimeOffset.UtcNow;
+            state.Initialized = true;
+            state.HasText = hasText;
+            return;
         }
+
+        if (!state.HasText && hasText)
+        {
+            RecordCounter(day => day.TodoCreated = AddBounded(day.TodoCreated, 1, 100000));
+            var itemId = TodoItemIdForElement(todoBox);
+            if (!string.IsNullOrWhiteSpace(itemId))
+            {
+                DirectTodoCreatedItemIds.Add(itemId);
+            }
+        }
+        state.HasText = hasText;
+    }
+
+    private static void CapturePendingTodoCompletion()
+    {
+        var pending = _pendingCheckBox;
+        if (pending == null || !pending.TryGetTarget(out var check))
+        {
+            _pendingCheckBox = null;
+            _pendingCheckReleaseObserved = false;
+            return;
+        }
+
+        var changedToChecked =
+            !_pendingCheckWasChecked &&
+            check.IsChecked == true &&
+            check.IsLoaded &&
+            Window.GetWindow(check) is PaperWindow;
+
+        if (changedToChecked)
+        {
+            var editor = TodoEditorForCheckBox(check);
+            if (editor != null && !string.IsNullOrWhiteSpace(editor.Text))
+            {
+                RecordCounter(day => day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000));
+                var itemId = TodoItemIdForElement(check);
+                if (!string.IsNullOrWhiteSpace(itemId))
+                {
+                    DirectTodoCompletedItemIds.Add(itemId);
+                }
+            }
+        }
+
+        if (changedToChecked || _pendingCheckReleaseObserved)
+        {
+            _pendingCheckBox = null;
+            _pendingCheckWasChecked = false;
+            _pendingCheckReleaseObserved = false;
+        }
+    }
+
+    private static void CapturePendingMarkdownPreview()
+    {
+        var pending = _pendingMarkdownEditor;
+        _pendingMarkdownEditor = null;
+        if (pending == null || !pending.TryGetTarget(out var box))
+        {
+            return;
+        }
+
+        var state = PreviewFocusStates.GetValue(box, static _ => new PreviewFocusState());
+        if (state.WasEditing && !box.IsKeyboardFocusWithin && box.IsPreviewMode)
+        {
+            state.WasEditing = false;
+            RecordCounter(day => day.MarkdownPreview = AddBounded(day.MarkdownPreview, 1, 100000));
+        }
+    }
+
+    private static string? TodoItemIdForElement(DependencyObject source)
+    {
+        DependencyObject? current = source;
+        while (current != null)
+        {
+            if (current is FrameworkElement { Tag: string itemId } &&
+                !string.IsNullOrWhiteSpace(itemId))
+            {
+                return itemId;
+            }
+
+            try
+            {
+                current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+            }
+            catch
+            {
+                current = LogicalTreeHelper.GetParent(current);
+            }
+        }
+
+        return null;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? source)
+        where T : DependencyObject
+    {
+        var current = source;
+        while (current != null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            try
+            {
+                current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+            }
+            catch
+            {
+                current = LogicalTreeHelper.GetParent(current);
+            }
+        }
+
+        return null;
+    }
+
+    private static TodoTextBox? TodoEditorForCheckBox(CheckBox check)
+    {
+        DependencyObject? parent;
+        try
+        {
+            parent = VisualTreeHelper.GetParent(check);
+        }
+        catch
+        {
+            parent = null;
+        }
+
+        if (parent is not Grid grid)
+        {
+            return null;
+        }
+
+        foreach (UIElement child in grid.Children)
+        {
+            if (child is TodoTextBox editor)
+            {
+                return editor;
+            }
+        }
+
+        return null;
     }
 
     private static void OnThreadPreprocessMessage(ref MSG msg, ref bool handled)
     {
-        if (!Enabled || !_attached || msg.message != WmHotkey)
+        if (!_runtimeActive || !Enabled || msg.message != WmHotkey)
         {
             return;
         }
@@ -312,50 +573,94 @@ internal static class TelemetryService
             return;
         }
 
+        var rolledOver = false;
         lock (Gate)
         {
-            EnsureCurrentDayLocked(controller.State, countLaunch: false);
+            rolledOver = EnsureCurrentDayLocked(controller.State, countLaunch: false);
             if (_persisted.CurrentDay != null)
             {
                 update(_persisted.CurrentDay);
             }
+            if (rolledOver)
+            {
+                SaveLocked();
+            }
+        }
+
+        if (rolledOver)
+        {
+            _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
+            ResetPaperTransitionBaseline(controller.State);
+            _lastSnapshotUtc = DateTimeOffset.UtcNow;
+            _ = UploadPendingBatchAsync();
         }
     }
 
     private static void OnTimerTick(object? sender, EventArgs e)
     {
         var controller = _controller;
-        if (controller == null || !_attached || !Enabled)
+        if (controller == null || !_runtimeActive || !Enabled)
         {
             return;
         }
 
         try
         {
-            var recentlyActive = DateTimeOffset.UtcNow - _lastInputUtc <= ActiveInputWindow;
+            var now = DateTimeOffset.UtcNow;
+            var elapsedSeconds = _lastTickUtc == DateTimeOffset.MinValue
+                ? (int)TimerInterval.TotalSeconds
+                : (int)Math.Clamp(
+                    Math.Round((now - _lastTickUtc).TotalSeconds),
+                    1,
+                    30);
+            _lastTickUtc = now;
+
+            var recentlyActive = now - _lastInputUtc <= ActiveInputWindow;
+            var rolledOver = false;
             lock (Gate)
             {
-                EnsureCurrentDayLocked(controller.State, countLaunch: false);
+                rolledOver = EnsureCurrentDayLocked(controller.State, countLaunch: false);
                 if (_persisted.CurrentDay != null && recentlyActive)
                 {
                     _persisted.CurrentDay.ActiveSeconds = AddBounded(
                         _persisted.CurrentDay.ActiveSeconds,
-                        1,
+                        elapsedSeconds,
                         86400);
                 }
             }
 
-            _ticks++;
-            if ((_ticks % 2 == 0 && recentlyActive) || _ticks % 30 == 0)
+            if (rolledOver)
             {
-                CaptureTransitionsAndSnapshot();
+                _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
+                ResetPaperTransitionBaseline(controller.State);
+                _lastSnapshotUtc = now;
             }
-            if (_ticks % 30 == 0)
+            else
+            {
+                rolledOver = CaptureLightweightPaperTransitions();
+            }
+
+            var snapshotInterval = recentlyActive
+                ? ActiveSnapshotInterval
+                : IdleSnapshotInterval;
+            if (now - _lastSnapshotUtc >= snapshotInterval)
+            {
+                rolledOver |= CaptureUsageTransitionsAndSnapshot();
+                _lastSnapshotUtc = now;
+            }
+
+            if (rolledOver || now - _lastSaveUtc >= PersistInterval)
             {
                 lock (Gate)
                 {
                     SaveLocked();
                 }
+                _lastSaveUtc = now;
+            }
+
+            if (rolledOver)
+            {
+                _ = UploadPendingBatchAsync();
             }
         }
         catch
@@ -364,51 +669,115 @@ internal static class TelemetryService
         }
     }
 
-    private static void CaptureTransitionsAndSnapshot()
+    private static void ResetPaperTransitionBaseline(AppState state)
+    {
+        PaperCollapsedStates.Clear();
+        foreach (var paper in state.Papers)
+        {
+            PaperCollapsedStates[paper.Id] = paper.IsCollapsed;
+        }
+    }
+
+    private static bool CaptureLightweightPaperTransitions()
     {
         var controller = _controller;
         if (controller == null || !Enabled)
         {
-            return;
+            return false;
+        }
+
+        var currentIds = new HashSet<string>(StringComparer.Ordinal);
+        var rolledOver = false;
+
+        lock (Gate)
+        {
+            rolledOver = EnsureCurrentDayLocked(controller.State, countLaunch: false);
+            var day = _persisted.CurrentDay;
+            if (day == null)
+            {
+                return rolledOver;
+            }
+
+            foreach (var paper in controller.State.Papers)
+            {
+                currentIds.Add(paper.Id);
+                if (!PaperCollapsedStates.TryGetValue(paper.Id, out var wasCollapsed))
+                {
+                    PaperCollapsedStates[paper.Id] = paper.IsCollapsed;
+                    day.PaperCreated = AddBounded(day.PaperCreated, 1, 10000);
+                    continue;
+                }
+
+                if (wasCollapsed == paper.IsCollapsed)
+                {
+                    continue;
+                }
+
+                PaperCollapsedStates[paper.Id] = paper.IsCollapsed;
+                if (paper.IsCollapsed)
+                {
+                    day.PillCollapse = AddBounded(day.PillCollapse, 1, 100000);
+                }
+                else
+                {
+                    day.PillExpand = AddBounded(day.PillExpand, 1, 100000);
+                }
+            }
+
+            var removedIds = PaperCollapsedStates.Keys
+                .Where(id => !currentIds.Contains(id))
+                .ToList();
+            if (removedIds.Count > 0)
+            {
+                day.PaperDeleted = AddBounded(day.PaperDeleted, removedIds.Count, 10000);
+                foreach (var id in removedIds)
+                {
+                    PaperCollapsedStates.Remove(id);
+                }
+            }
+        }
+
+        return rolledOver;
+    }
+
+    private static bool CaptureUsageTransitionsAndSnapshot()
+    {
+        var controller = _controller;
+        if (controller == null || !Enabled)
+        {
+            return false;
         }
 
         var previous = _previousSnapshot;
         var current = CaptureSnapshot(controller.State, previous);
         _previousSnapshot = current;
 
+        var rolledOver = false;
         lock (Gate)
         {
-            EnsureCurrentDayLocked(controller.State, countLaunch: false);
+            rolledOver = EnsureCurrentDayLocked(controller.State, countLaunch: false);
             var day = _persisted.CurrentDay;
             if (day == null)
             {
-                return;
+                DirectTodoCreatedItemIds.Clear();
+                DirectTodoCompletedItemIds.Clear();
+                return rolledOver;
             }
 
             ApplySnapshotMetrics(day, current);
-            if (previous == null)
+            if (rolledOver || previous == null)
             {
-                return;
+                DirectTodoCreatedItemIds.Clear();
+                DirectTodoCompletedItemIds.Clear();
+                return rolledOver;
             }
 
             foreach (var (paperId, currentPaper) in current.Papers)
             {
                 if (!previous.Papers.TryGetValue(paperId, out var previousPaper))
                 {
-                    day.PaperCreated = AddBounded(day.PaperCreated, 1, 10000);
+                    CountInitialPaperContent(day, currentPaper);
                     continue;
-                }
-
-                if (previousPaper.IsCollapsed != currentPaper.IsCollapsed)
-                {
-                    if (currentPaper.IsCollapsed)
-                    {
-                        day.PillCollapse = AddBounded(day.PillCollapse, 1, 100000);
-                    }
-                    else
-                    {
-                        day.PillExpand = AddBounded(day.PillExpand, 1, 100000);
-                    }
                 }
 
                 if (currentPaper.Type == PaperTypes.Todo && previousPaper.Type == PaperTypes.Todo)
@@ -417,22 +786,32 @@ internal static class TelemetryService
                     {
                         if (!previousPaper.TodoItems.TryGetValue(itemId, out var previousItem))
                         {
-                            if (currentItem.HasText)
+                            if (currentItem.HasText &&
+                                !DirectTodoCreatedItemIds.Remove(itemId))
                             {
                                 day.TodoCreated = AddBounded(day.TodoCreated, 1, 100000);
                             }
-                            if (currentItem.Done && currentItem.HasText)
+                            if (currentItem.Done &&
+                                currentItem.HasText &&
+                                !DirectTodoCompletedItemIds.Remove(itemId))
                             {
                                 day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000);
                             }
                             continue;
                         }
 
-                        if (!previousItem.HasText && currentItem.HasText)
+                        // The focused empty -> non-empty transition is counted directly from input.
+                        // Snapshot fallback catches paste/import/programmatic changes that bypass it.
+                        if (!previousItem.HasText &&
+                            currentItem.HasText &&
+                            !DirectTodoCreatedItemIds.Remove(itemId))
                         {
                             day.TodoCreated = AddBounded(day.TodoCreated, 1, 100000);
                         }
-                        if (!previousItem.Done && currentItem.Done && currentItem.HasText)
+                        if (!previousItem.Done &&
+                            currentItem.Done &&
+                            currentItem.HasText &&
+                            !DirectTodoCompletedItemIds.Remove(itemId))
                         {
                             day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000);
                         }
@@ -448,12 +827,34 @@ internal static class TelemetryService
                     }
                 }
             }
+        }
 
-            var deleted = previous.Papers.Keys.Count(id => !current.Papers.ContainsKey(id));
-            if (deleted > 0)
+        DirectTodoCreatedItemIds.Clear();
+        DirectTodoCompletedItemIds.Clear();
+        return rolledOver;
+    }
+
+    private static void CountInitialPaperContent(TelemetryDayState day, PaperUsageSnapshot paper)
+    {
+        if (paper.Type == PaperTypes.Todo)
+        {
+            foreach (var (itemId, item) in paper.TodoItems)
             {
-                day.PaperDeleted = AddBounded(day.PaperDeleted, deleted, 10000);
+                if (item.HasText && !DirectTodoCreatedItemIds.Remove(itemId))
+                {
+                    day.TodoCreated = AddBounded(day.TodoCreated, 1, 100000);
+                }
+                if (item.Done &&
+                    item.HasText &&
+                    !DirectTodoCompletedItemIds.Remove(itemId))
+                {
+                    day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000);
+                }
             }
+        }
+        else if (paper.Type == PaperTypes.Note && paper.ImageCount > 0)
+        {
+            day.ImageInserted = AddBounded(day.ImageInserted, paper.ImageCount, 10000);
         }
     }
 
@@ -505,7 +906,6 @@ internal static class TelemetryService
 
             snapshot.Papers[paper.Id] = new PaperUsageSnapshot(
                 paper.Type,
-                paper.IsCollapsed,
                 itemStates,
                 contentIdentity,
                 content.Length,
@@ -538,12 +938,14 @@ internal static class TelemetryService
         day.PillEnabled = state.UseCapsuleMode;
     }
 
-    private static void EnsureCurrentDayLocked(
+    private static bool EnsureCurrentDayLocked(
         AppState state,
         bool countLaunch,
         bool resetCurrentDay = false)
     {
         var today = LocalDateString();
+        var rolledOver = false;
+
         if (resetCurrentDay || _persisted.CurrentDay == null)
         {
             _persisted.CurrentDay = CreateDay(today, state);
@@ -552,11 +954,7 @@ internal static class TelemetryService
         {
             FinalizeCurrentDayLocked();
             _persisted.CurrentDay = CreateDay(today, state);
-        }
-        else
-        {
-            RefreshEnvironment(_persisted.CurrentDay);
-            ApplyStateMetrics(_persisted.CurrentDay, state);
+            rolledOver = true;
         }
 
         if (countLaunch && _persisted.CurrentDay != null)
@@ -566,6 +964,8 @@ internal static class TelemetryService
                 1,
                 1000);
         }
+
+        return rolledOver;
     }
 
     private static TelemetryDayState CreateDay(string date, AppState state)
@@ -595,6 +995,22 @@ internal static class TelemetryService
         }
     }
 
+    private static void QueueFirstReportIfNeededLocked()
+    {
+        if (_persisted.FirstReportCreated ||
+            _persisted.CurrentDay == null ||
+            _persisted.PendingReports.Count > 0 ||
+            !string.Equals(_persisted.FirstSeenDate, _persisted.CurrentDay.Date, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var report = CreateReport(_persisted.CurrentDay, "first_seen");
+        _persisted.PendingReports.Add(report);
+        _persisted.FirstReportCreated = true;
+        TrimPendingReportsLocked();
+    }
+
     private static void FinalizeCurrentDayLocked()
     {
         var day = _persisted.CurrentDay;
@@ -603,20 +1019,25 @@ internal static class TelemetryService
             return;
         }
 
-        var report = CreateReport(day);
+        var report = CreateReport(day, "complete");
         _persisted.PendingReports.RemoveAll(existing =>
             string.Equals(existing.ReportId, report.ReportId, StringComparison.Ordinal));
         _persisted.PendingReports.Add(report);
         TrimPendingReportsLocked();
     }
 
-    private static TelemetryReport CreateReport(TelemetryDayState day)
+    private static TelemetryReport CreateReport(TelemetryDayState day, string stage)
     {
+        var reportId = stage == "first_seen"
+            ? $"{_persisted.InstallId}_{day.Date}_first_v{SchemaVersion}"
+            : $"{_persisted.InstallId}_{day.Date}_v{SchemaVersion}";
+
         return new TelemetryReport
         {
             Kind = "daily_usage",
+            ReportStage = stage,
             SchemaVersion = SchemaVersion,
-            ReportId = $"{_persisted.InstallId}_{day.Date}_v{SchemaVersion}",
+            ReportId = reportId,
             InstallId = _persisted.InstallId,
             Date = day.Date,
             TelemetryFirstSeenDate = _persisted.FirstSeenDate,
@@ -627,22 +1048,22 @@ internal static class TelemetryService
             TimezoneOffset = day.TimezoneOffset,
             MonitorCount = day.MonitorCount,
             LaunchCount = day.LaunchCount,
-            ActiveSeconds = day.ActiveSeconds,
+            ActiveSeconds = stage == "complete" ? day.ActiveSeconds : 0,
             PaperCount = day.PaperCount,
             TodoPaperCount = day.TodoPaperCount,
             NotePaperCount = day.NotePaperCount,
-            PaperCreated = day.PaperCreated,
-            PaperDeleted = day.PaperDeleted,
-            TodoCreated = day.TodoCreated,
-            TodoCompleted = day.TodoCompleted,
+            PaperCreated = stage == "complete" ? day.PaperCreated : 0,
+            PaperDeleted = stage == "complete" ? day.PaperDeleted : 0,
+            TodoCreated = stage == "complete" ? day.TodoCreated : 0,
+            TodoCompleted = stage == "complete" ? day.TodoCompleted : 0,
             PillEnabled = day.PillEnabled,
             PillCount = day.PillCount,
-            PillExpand = day.PillExpand,
-            PillCollapse = day.PillCollapse,
-            MarkdownPreview = day.MarkdownPreview,
-            ImageInserted = day.ImageInserted,
-            HotkeyTriggered = day.HotkeyTriggered,
-            CrashCount = day.CrashCount
+            PillExpand = stage == "complete" ? day.PillExpand : 0,
+            PillCollapse = stage == "complete" ? day.PillCollapse : 0,
+            MarkdownPreview = stage == "complete" ? day.MarkdownPreview : 0,
+            ImageInserted = stage == "complete" ? day.ImageInserted : 0,
+            HotkeyTriggered = stage == "complete" ? day.HotkeyTriggered : 0,
+            CrashCount = stage == "complete" ? day.CrashCount : 0
         };
     }
 
@@ -689,7 +1110,7 @@ internal static class TelemetryService
         }
         catch
         {
-            // Keep the whole batch for the next application launch.
+            // Keep the whole batch for a later launch or the next day rollover.
         }
         finally
         {
@@ -741,6 +1162,7 @@ internal static class TelemetryService
             }
 
             var report = _persisted.PendingReports.FirstOrDefault(item =>
+                item.ReportStage == "complete" &&
                 string.Equals(item.Date, date, StringComparison.Ordinal));
             if (report != null)
             {
@@ -814,8 +1236,23 @@ internal static class TelemetryService
         {
             state.FirstSeenDate = LocalDateString();
         }
+
         state.PendingReports ??= new List<TelemetryReport>();
         state.PendingReports.RemoveAll(report => report.Kind != "daily_usage");
+        foreach (var report in state.PendingReports)
+        {
+            if (string.IsNullOrWhiteSpace(report.ReportStage))
+            {
+                report.ReportStage = "complete";
+            }
+        }
+
+        if (!state.FirstReportCreated &&
+            (!string.Equals(state.FirstSeenDate, LocalDateString(), StringComparison.Ordinal) ||
+             state.PendingReports.Count > 0))
+        {
+            state.FirstReportCreated = true;
+        }
     }
 
     private static void TrimPendingReportsLocked()
@@ -908,6 +1345,7 @@ internal static class TelemetryService
         public bool Enabled { get; set; } = true;
         public string InstallId { get; set; } = Guid.NewGuid().ToString("N");
         public string FirstSeenDate { get; set; } = LocalDateString();
+        public bool FirstReportCreated { get; set; }
         public TelemetryDayState? CurrentDay { get; set; }
         public List<TelemetryReport> PendingReports { get; set; } = new();
     }
@@ -956,6 +1394,7 @@ internal static class TelemetryService
     private sealed class TelemetryReport
     {
         public string Kind { get; set; } = "daily_usage";
+        public string ReportStage { get; set; } = "complete";
         public int SchemaVersion { get; set; }
         public string ReportId { get; set; } = "";
         public string InstallId { get; set; } = "";
@@ -998,7 +1437,6 @@ internal static class TelemetryService
 
     private sealed record PaperUsageSnapshot(
         string Type,
-        bool IsCollapsed,
         Dictionary<string, TodoItemSnapshot> TodoItems,
         int ContentIdentity,
         int ContentLength,
@@ -1006,9 +1444,14 @@ internal static class TelemetryService
 
     private sealed record TodoItemSnapshot(bool Done, bool HasText);
 
+    private sealed class TodoInputState
+    {
+        public bool Initialized { get; set; }
+        public bool HasText { get; set; }
+    }
+
     private sealed class PreviewFocusState
     {
-        public int Generation { get; set; }
         public bool WasEditing { get; set; }
     }
 }
