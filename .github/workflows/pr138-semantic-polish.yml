@@ -11,7 +11,7 @@ jobs:
   polish:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'feature/plugin-settings-layout-20260824' &&
+      github.event.pull_request.head.ref == 'feature/plugin-settings-layout-final-20260824' &&
       github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     timeout-minutes: 20
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/plugin-settings-layout-20260824
+          ref: feature/plugin-settings-layout-final-20260824
           fetch-depth: 0
           submodules: recursive
 
@@ -50,4 +50,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(plugin): finalize advanced settings semantics"
-          git push origin HEAD:feature/plugin-settings-layout-20260824
+          git push origin HEAD:feature/plugin-settings-layout-final-20260824
