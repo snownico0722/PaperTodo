@@ -158,7 +158,7 @@ internal static class TelemetryService
             }
             else if (_controller != null)
             {
-                EnsureCurrentDayLocked(_controller.State, countLaunch: true, resetCurrentDay: true);
+                EnsureCurrentDayLocked(_controller.State, countLaunch: false, resetCurrentDay: true);
             }
             SaveLocked();
         }
