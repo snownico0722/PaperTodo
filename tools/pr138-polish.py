@@ -10,13 +10,6 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def replace_once(text: str, old: str, new: str, label: str) -> str:
-    count = text.count(old)
-    if count != 1:
-        raise RuntimeError(f"{label}: expected one match, found {count}")
-    return text.replace(old, new, 1)
-
-
 for base in (Path("plugin-samples"), Path("plugins")):
     if not base.exists():
         continue
@@ -57,7 +50,10 @@ new = '''        if (!string.IsNullOrWhiteSpace(manifest.MiniEntry))
         {
             if (kind != PaperBodyPluginKind.Web)
 '''
-text = replace_once(text, old, new, "remove 1.8 miniEntry gate")
+if old in text:
+    text = text.replace(old, new, 1)
+elif "miniEntry requires apiVersion 1.8 or newer." in text:
+    raise RuntimeError("unexpected residual 1.8 miniEntry gate")
 write(registry, text)
 
 replacements = {
