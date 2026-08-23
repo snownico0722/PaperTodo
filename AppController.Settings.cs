@@ -1024,7 +1024,7 @@ public sealed partial class AppController
         var advanced = State.AdvancedSettingsMode;
 
         // Left: everyday desktop / window behavior. Right: paper features, capsule first.
-        leftColumn.Children.Add(CreateGeneralSettingsSectionLabel());
+        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
         leftColumn.Children.Add(CreateUiLanguageSettingsRow());
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));

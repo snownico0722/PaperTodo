@@ -5,25 +5,25 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private UIElement CreateGeneralSettingsSectionLabel()
+    private UIElement CreateAnonymousUsageStatisticsSettingsRow()
     {
-        var grid = new Grid
-        {
-            Margin = new Thickness(0, 10, 0, 2)
-        };
+        var toggle = SettingsToggle(
+            TelemetryStrings.Get("HelpImprove"),
+            State.TelemetryEnabled,
+            ToggleAnonymousUsageStatistics);
+        return WrapWithCustomHint(toggle, TelemetryStrings.Get("Description"));
+    }
+
+    private UIElement WrapWithCustomHint(FrameworkElement option, string tipText)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var label = new TextBlock
-        {
-            Text = Strings.Get("SettingsGeneral"),
-            Foreground = TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(12),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(label, 0);
-        grid.Children.Add(label);
+        option.Margin = new Thickness(0);
+        option.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(option, 0);
+        grid.Children.Add(option);
 
         var hintGlyph = new TextBlock
         {
@@ -34,6 +34,7 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };
+
         var hint = new Border
         {
             Width = 18,
@@ -43,7 +44,7 @@ public sealed partial class AppController
             Cursor = System.Windows.Input.Cursors.Help,
             VerticalAlignment = VerticalAlignment.Center,
             Child = hintGlyph,
-            ToolTip = BuildSettingsHintTooltip(TelemetryStrings.Get("Description"))
+            ToolTip = BuildSettingsHintTooltip(tipText)
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
         ToolTipService.SetInitialShowDelay(hint, 200);
@@ -57,17 +58,11 @@ public sealed partial class AppController
         return grid;
     }
 
-    private UIElement CreateAnonymousUsageStatisticsSettingsRow()
-    {
-        return SettingsToggle(
-            TelemetryStrings.Get("HelpImprove"),
-            TelemetryService.Enabled,
-            ToggleAnonymousUsageStatistics);
-    }
-
     private void ToggleAnonymousUsageStatistics()
     {
-        TelemetryService.SetEnabled(!TelemetryService.Enabled);
+        State.TelemetryEnabled = !State.TelemetryEnabled;
+        SaveNow();
+        TelemetryService.SetEnabled(State.TelemetryEnabled);
         RefreshSettingsWindowContent();
     }
 }
