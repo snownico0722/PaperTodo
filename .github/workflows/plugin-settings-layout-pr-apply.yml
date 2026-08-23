@@ -1,0 +1,81 @@
+name: Plugin settings layout PR apply
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Apply embedded patch
+        shell: pwsh
+        run: |
+          $workflow = Get-Content .\.github\workflows\plugin-settings-layout-one-shot.yml -Raw -Encoding UTF8
+          $startMarker = "          @'`n"
+          $endMarker = "          '@ | python -"
+          $start = $workflow.IndexOf($startMarker)
+          if ($start -lt 0) { throw 'Patch start marker not found.' }
+          $start += $startMarker.Length
+          $end = $workflow.IndexOf($endMarker, $start)
+          if ($end -lt 0) { throw 'Patch end marker not found.' }
+          $script = $workflow.Substring($start, $end - $start)
+          $script = (($script -split "`n") | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          $script | python -
+
+      - name: Build host and policy checks
+        shell: pwsh
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+
+      - name: Rebuild installed samples
+        shell: pwsh
+        run: |
+          $projects = @(
+            '.\plugin-samples\PaperTodo.Plugin.CloudGenshin\PaperTodo.Plugin.CloudGenshin.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.FocusTimer\PaperTodo.Plugin.FocusTimer.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.ReviewArchive\PaperTodo.Plugin.ReviewArchive.csproj',
+            '.\plugin-samples\PaperTodo.Plugin.SampleClock\PaperTodo.Plugin.SampleClock.csproj'
+          )
+          foreach ($project in $projects) {
+            .\plugin-samples\Build-And-Install-NativePlugin.ps1 -ProjectPath $project
+          }
+          Copy-Item .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\plugin.json .\plugins\official.clock.web\plugin.json -Force
+          if (Test-Path .\plugins\official.clock.web\web) {
+            Remove-Item .\plugins\official.clock.web\web -Recurse -Force
+          }
+          Copy-Item .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\web .\plugins\official.clock.web\web -Recurse -Force
+
+      - name: Commit final tree
+        shell: pwsh
+        run: |
+          git diff --check
+          Remove-Item .\.github\workflows\plugin-settings-layout-one-shot.yml -Force
+          Remove-Item .\.github\workflows\plugin-settings-layout-pr-apply.yml -Force
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(plugin): add adaptive advanced settings page"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
