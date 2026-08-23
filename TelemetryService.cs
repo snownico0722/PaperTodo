@@ -66,6 +66,8 @@ internal static class TelemetryService
     private static WeakReference<TodoTextBox>? _pendingTodoBox;
     private static WeakReference<CheckBox>? _pendingCheckBox;
     private static bool _pendingCheckWasChecked;
+    private static bool _pendingCheckHasText;
+    private static string? _pendingCheckItemId;
     private static bool _pendingCheckReleaseObserved;
     private static WeakReference<MarkdownTextBox>? _pendingMarkdownEditor;
     private static bool _captureOnPostProcess;
@@ -108,7 +110,7 @@ internal static class TelemetryService
                 MergeCrashMarkersLocked();
                 EnsureCurrentDayLocked(controller.State, countLaunch: true);
                 MergeCrashMarkersLocked();
-                QueueFirstReportIfNeededLocked();
+                QueueInitialReportIfNeededLocked();
                 shouldStartRuntime = true;
             }
             SaveLocked();
@@ -161,7 +163,7 @@ internal static class TelemetryService
             else if (controller != null)
             {
                 EnsureCurrentDayLocked(controller.State, countLaunch: false, resetCurrentDay: true);
-                QueueFirstReportIfNeededLocked();
+                QueueInitialReportIfNeededLocked();
             }
 
             SaveLocked();
@@ -292,9 +294,11 @@ internal static class TelemetryService
         _lastMouseTransitionQueueUtc = DateTimeOffset.MinValue;
         _pendingTodoBox = null;
         _pendingCheckBox = null;
-        _pendingMarkdownEditor = null;
         _pendingCheckWasChecked = false;
+        _pendingCheckHasText = false;
+        _pendingCheckItemId = null;
         _pendingCheckReleaseObserved = false;
+        _pendingMarkdownEditor = null;
         _captureOnPostProcess = false;
     }
 
@@ -355,8 +359,11 @@ internal static class TelemetryService
                     check.IsLoaded &&
                     Window.GetWindow(check) is PaperWindow)
                 {
+                    var editor = TodoEditorForCheckBox(check);
                     _pendingCheckBox = new WeakReference<CheckBox>(check);
                     _pendingCheckWasChecked = check.IsChecked == true;
+                    _pendingCheckHasText = editor != null && !string.IsNullOrWhiteSpace(editor.Text);
+                    _pendingCheckItemId = TodoItemIdForElement(check);
                     _pendingCheckReleaseObserved = false;
                 }
                 else if (mouseButton.ButtonState == MouseButtonState.Released &&
@@ -428,8 +435,7 @@ internal static class TelemetryService
         var pending = _pendingCheckBox;
         if (pending == null || !pending.TryGetTarget(out var check))
         {
-            _pendingCheckBox = null;
-            _pendingCheckReleaseObserved = false;
+            ClearPendingTodoCompletion();
             return;
         }
 
@@ -437,26 +443,28 @@ internal static class TelemetryService
             !_pendingCheckWasChecked &&
             check.IsChecked == true;
 
-        if (changedToChecked)
+        if (changedToChecked && _pendingCheckHasText)
         {
-            var editor = TodoEditorForCheckBox(check);
-            if (editor != null && !string.IsNullOrWhiteSpace(editor.Text))
+            RecordCounter(day => day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000));
+            if (!string.IsNullOrWhiteSpace(_pendingCheckItemId))
             {
-                RecordCounter(day => day.TodoCompleted = AddBounded(day.TodoCompleted, 1, 100000));
-                var itemId = TodoItemIdForElement(check);
-                if (!string.IsNullOrWhiteSpace(itemId))
-                {
-                    DirectTodoCompletedItemIds.Add(itemId);
-                }
+                DirectTodoCompletedItemIds.Add(_pendingCheckItemId);
             }
         }
 
         if (changedToChecked || _pendingCheckReleaseObserved)
         {
-            _pendingCheckBox = null;
-            _pendingCheckWasChecked = false;
-            _pendingCheckReleaseObserved = false;
+            ClearPendingTodoCompletion();
         }
+    }
+
+    private static void ClearPendingTodoCompletion()
+    {
+        _pendingCheckBox = null;
+        _pendingCheckWasChecked = false;
+        _pendingCheckHasText = false;
+        _pendingCheckItemId = null;
+        _pendingCheckReleaseObserved = false;
     }
 
     private static void CapturePendingMarkdownPreview()
@@ -566,7 +574,7 @@ internal static class TelemetryService
     private static void RecordCounter(Action<TelemetryDayState> update)
     {
         var controller = _controller;
-        if (controller == null || !Enabled)
+        if (controller == null || !_runtimeActive)
         {
             return;
         }
@@ -597,7 +605,7 @@ internal static class TelemetryService
     private static void OnTimerTick(object? sender, EventArgs e)
     {
         var controller = _controller;
-        if (controller == null || !_runtimeActive || !Enabled)
+        if (controller == null || !_runtimeActive)
         {
             return;
         }
@@ -679,7 +687,7 @@ internal static class TelemetryService
     private static bool CaptureLightweightPaperTransitions()
     {
         var controller = _controller;
-        if (controller == null || !Enabled)
+        if (controller == null || !_runtimeActive)
         {
             return false;
         }
@@ -741,7 +749,7 @@ internal static class TelemetryService
     private static bool CaptureUsageTransitionsAndSnapshot()
     {
         var controller = _controller;
-        if (controller == null || !Enabled)
+        if (controller == null || !_runtimeActive)
         {
             return false;
         }
@@ -993,7 +1001,7 @@ internal static class TelemetryService
         }
     }
 
-    private static void QueueFirstReportIfNeededLocked()
+    private static void QueueInitialReportIfNeededLocked()
     {
         if (_persisted.FirstReportCreated ||
             _persisted.CurrentDay == null ||
@@ -1003,8 +1011,11 @@ internal static class TelemetryService
             return;
         }
 
-        var report = CreateReport(_persisted.CurrentDay, "first_seen");
-        _persisted.PendingReports.Add(report);
+        // A brand-new install has no yesterday report yet. Send one provisional current-day row
+        // immediately using the same report_id as the eventual completed-day row. If the user
+        // never returns, the install still exists in new-user/DAU views. If they do return, the
+        // completed row naturally wins when analytics deduplicates by report_id + received_at_ms.
+        _persisted.PendingReports.Add(CreateReport(_persisted.CurrentDay));
         _persisted.FirstReportCreated = true;
         TrimPendingReportsLocked();
     }
@@ -1017,25 +1028,20 @@ internal static class TelemetryService
             return;
         }
 
-        var report = CreateReport(day, "complete");
+        var report = CreateReport(day);
         _persisted.PendingReports.RemoveAll(existing =>
             string.Equals(existing.ReportId, report.ReportId, StringComparison.Ordinal));
         _persisted.PendingReports.Add(report);
         TrimPendingReportsLocked();
     }
 
-    private static TelemetryReport CreateReport(TelemetryDayState day, string stage)
+    private static TelemetryReport CreateReport(TelemetryDayState day)
     {
-        var reportId = stage == "first_seen"
-            ? $"{_persisted.InstallId}_{day.Date}_first_v{SchemaVersion}"
-            : $"{_persisted.InstallId}_{day.Date}_v{SchemaVersion}";
-
         return new TelemetryReport
         {
             Kind = "daily_usage",
-            ReportStage = stage,
             SchemaVersion = SchemaVersion,
-            ReportId = reportId,
+            ReportId = $"{_persisted.InstallId}_{day.Date}_v{SchemaVersion}",
             InstallId = _persisted.InstallId,
             Date = day.Date,
             TelemetryFirstSeenDate = _persisted.FirstSeenDate,
@@ -1046,22 +1052,22 @@ internal static class TelemetryService
             TimezoneOffset = day.TimezoneOffset,
             MonitorCount = day.MonitorCount,
             LaunchCount = day.LaunchCount,
-            ActiveSeconds = stage == "complete" ? day.ActiveSeconds : 0,
+            ActiveSeconds = day.ActiveSeconds,
             PaperCount = day.PaperCount,
             TodoPaperCount = day.TodoPaperCount,
             NotePaperCount = day.NotePaperCount,
-            PaperCreated = stage == "complete" ? day.PaperCreated : 0,
-            PaperDeleted = stage == "complete" ? day.PaperDeleted : 0,
-            TodoCreated = stage == "complete" ? day.TodoCreated : 0,
-            TodoCompleted = stage == "complete" ? day.TodoCompleted : 0,
+            PaperCreated = day.PaperCreated,
+            PaperDeleted = day.PaperDeleted,
+            TodoCreated = day.TodoCreated,
+            TodoCompleted = day.TodoCompleted,
             PillEnabled = day.PillEnabled,
             PillCount = day.PillCount,
-            PillExpand = stage == "complete" ? day.PillExpand : 0,
-            PillCollapse = stage == "complete" ? day.PillCollapse : 0,
-            MarkdownPreview = stage == "complete" ? day.MarkdownPreview : 0,
-            ImageInserted = stage == "complete" ? day.ImageInserted : 0,
-            HotkeyTriggered = stage == "complete" ? day.HotkeyTriggered : 0,
-            CrashCount = stage == "complete" ? day.CrashCount : 0
+            PillExpand = day.PillExpand,
+            PillCollapse = day.PillCollapse,
+            MarkdownPreview = day.MarkdownPreview,
+            ImageInserted = day.ImageInserted,
+            HotkeyTriggered = day.HotkeyTriggered,
+            CrashCount = day.CrashCount
         };
     }
 
@@ -1160,7 +1166,6 @@ internal static class TelemetryService
             }
 
             var report = _persisted.PendingReports.FirstOrDefault(item =>
-                item.ReportStage == "complete" &&
                 string.Equals(item.Date, date, StringComparison.Ordinal));
             if (report != null)
             {
@@ -1236,14 +1241,13 @@ internal static class TelemetryService
         }
 
         state.PendingReports ??= new List<TelemetryReport>();
-        state.PendingReports.RemoveAll(report => report.Kind != "daily_usage");
-        foreach (var report in state.PendingReports)
-        {
-            if (string.IsNullOrWhiteSpace(report.ReportStage))
-            {
-                report.ReportStage = "complete";
-            }
-        }
+        state.PendingReports.RemoveAll(report =>
+            report.Kind != "daily_usage" ||
+            string.IsNullOrWhiteSpace(report.Date) ||
+            !string.Equals(
+                report.ReportId,
+                $"{state.InstallId}_{report.Date}_v{SchemaVersion}",
+                StringComparison.Ordinal));
 
         if (!state.FirstReportCreated &&
             (!string.Equals(state.FirstSeenDate, LocalDateString(), StringComparison.Ordinal) ||
@@ -1392,7 +1396,6 @@ internal static class TelemetryService
     private sealed class TelemetryReport
     {
         public string Kind { get; set; } = "daily_usage";
-        public string ReportStage { get; set; } = "complete";
         public int SchemaVersion { get; set; }
         public string ReportId { get; set; } = "";
         public string InstallId { get; set; } = "";
