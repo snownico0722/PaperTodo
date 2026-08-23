@@ -1,0 +1,54 @@
+name: PR138 settings finalizer
+
+on:
+  push:
+    branches:
+      - feature/plugin-settings-layout-20260824
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/plugin-settings-layout-20260824
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Apply final fixes
+        shell: pwsh
+        run: python .\tools\pr138-finalize.py
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+          git diff --check
+
+      - name: Commit clean tree
+        shell: pwsh
+        run: |
+          Remove-Item .\tools\pr138-finalize.py -Force
+          Remove-Item .\.github\workflows\pr138-finalize.yml -Force
+          if (Test-Path .\.github\pr138-finalize.trigger) {
+            Remove-Item .\.github\pr138-finalize.trigger -Force
+          }
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(plugin): make advanced settings opt-in"
+          git push origin HEAD:feature/plugin-settings-layout-20260824
