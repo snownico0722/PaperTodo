@@ -32,8 +32,9 @@ jobs:
         shell: pwsh
         run: |
           $workflow = Get-Content .\.github\workflows\plugin-settings-layout-one-shot.yml -Raw -Encoding UTF8
-          $startMarker = "          @'`n"
-          $endMarker = "          '@ | python -"
+          $workflow = $workflow -replace "`r`n", "`n"
+          $startMarker = "@'`n"
+          $endMarker = "'@ | python -"
           $start = $workflow.IndexOf($startMarker)
           if ($start -lt 0) { throw 'Patch start marker not found.' }
           $start += $startMarker.Length
