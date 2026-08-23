@@ -22,30 +22,30 @@ internal sealed partial class PaperBodyPluginRegistry
         manifest.SettingCategories ??= [];
         if (manifest.PrimarySettings is < 1 or > 3)
         {
-  throw new InvalidDataException("primarySettings must be between 1 and 3.");
+            throw new InvalidDataException("primarySettings must be between 1 and 3.");
         }
         if (!ApiAtLeast(manifest.ApiVersion, 2, 0) &&
   (manifest.PrimarySettings.HasValue || manifest.SettingCategories.Length > 0))
         {
-  throw new InvalidDataException(
-      "primarySettings and settingCategories require apiVersion 2.0 or newer.");
+            throw new InvalidDataException(
+                "primarySettings and settingCategories require apiVersion 2.0 or newer.");
         }
 
         var categoryNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var category in manifest.SettingCategories)
         {
-  category.Name = category.Name?.Trim() ?? "";
-  category.Column = category.Column?.Trim().ToLowerInvariant() ?? "";
-  if (category.Name.Length == 0 || !categoryNames.Add(category.Name))
-  {
-      throw new InvalidDataException(
-          "Plugin setting categories must have unique non-empty names.");
-  }
-  if (category.Column is not ("" or "left" or "right"))
-  {
-      throw new InvalidDataException(
-          $"Plugin setting category '{category.Name}' has unsupported column '{category.Column}'.");
-  }
+            category.Name = category.Name?.Trim() ?? "";
+            category.Column = category.Column?.Trim().ToLowerInvariant() ?? "";
+            if (category.Name.Length == 0 || !categoryNames.Add(category.Name))
+            {
+                throw new InvalidDataException(
+                    "Plugin setting categories must have unique non-empty names.");
+            }
+            if (category.Column is not ("" or "left" or "right"))
+            {
+                throw new InvalidDataException(
+                    $"Plugin setting category '{category.Name}' has unsupported column '{category.Column}'.");
+            }
         }
         // Settings may depend on provider-level capabilities (for example custom shortcut actions
         // require appRuntime). Normalize and validate the capability list before reading it here so
@@ -69,13 +69,13 @@ internal sealed partial class PaperBodyPluginRegistry
                 : PluginShortcutActions.Normalize(setting.ShortcutAction);
             setting.Options ??= [];
 
-  if (setting.Category.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 2, 0))
-  {
-      throw new InvalidDataException(
-          $"Plugin setting '{setting.Id}' category requires apiVersion 2.0 or newer.");
-  }
+            if (setting.Category.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 2, 0))
+            {
+                throw new InvalidDataException(
+                    $"Plugin setting '{setting.Id}' category requires apiVersion 2.0 or newer.");
+            }
 
-  if (!SettingIdPattern.IsMatch(setting.Id) || !ids.Add(setting.Id))
+            if (!SettingIdPattern.IsMatch(setting.Id) || !ids.Add(setting.Id))
             {
                 throw new InvalidDataException(
                     $"Plugin setting id '{setting.Id}' is invalid or duplicated.");
@@ -179,13 +179,13 @@ internal sealed partial class PaperBodyPluginRegistry
 
     private static JsonElement DefaultSettingValueWithoutDeclaredDefault(
         PaperBodyPluginSettingManifest setting) => setting.Type switch
-    {
-        "boolean" => JsonSerializer.SerializeToElement(false),
-        "number" => JsonSerializer.SerializeToElement(NormalizeNumber(setting, 0d)),
-        "select" => JsonSerializer.SerializeToElement(setting.Options[0].Value),
-        "shortcut" => JsonSerializer.SerializeToElement(""),
-        _ => JsonSerializer.SerializeToElement(NormalizeString(setting, ""))
-    };
+        {
+            "boolean" => JsonSerializer.SerializeToElement(false),
+            "number" => JsonSerializer.SerializeToElement(NormalizeNumber(setting, 0d)),
+            "select" => JsonSerializer.SerializeToElement(setting.Options[0].Value),
+            "shortcut" => JsonSerializer.SerializeToElement(""),
+            _ => JsonSerializer.SerializeToElement(NormalizeString(setting, ""))
+        };
 
     private static string NormalizeString(
         PaperBodyPluginSettingManifest setting,

@@ -252,24 +252,24 @@ public sealed partial class AppController
     {
         var root = new StackPanel
         {
-  Margin = new Thickness(12, 0, 0, 0)
+            Margin = new Thickness(12, 0, 0, 0)
         };
         var primaryCount = Math.Min(
   settings.Count,
   descriptor.Manifest?.PrimarySettings ?? 3);
         for (var index = 0; index < primaryCount; index++)
         {
-  root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
+            root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
         }
 
         if (settings.Count > primaryCount)
         {
-  var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-  more.MinWidth = 0;
-  more.Margin = new Thickness(0, 8, 0, 0);
-  more.HorizontalAlignment = HorizontalAlignment.Left;
-  more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
-  root.Children.Add(more);
+            var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
+            more.MinWidth = 0;
+            more.Margin = new Thickness(0, 8, 0, 0);
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
+            root.Children.Add(more);
         }
 
         return root;
@@ -284,44 +284,44 @@ public sealed partial class AppController
   Math.Max(420, SystemParameters.WorkArea.Height - 120));
         var window = new Window
         {
-  Title = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
-  Width = 720,
-  Height = height,
-  SizeToContent = SizeToContent.Manual,
-  WindowStyle = WindowStyle.None,
-  ResizeMode = ResizeMode.NoResize,
-  AllowsTransparency = true,
-  Background = Brushes.Transparent,
-  ShowInTaskbar = false,
-  Topmost = false,
-  WindowStartupLocation = _settingsWindow != null
+            Title = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
+            Width = 720,
+            Height = height,
+            SizeToContent = SizeToContent.Manual,
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            ShowInTaskbar = false,
+            Topmost = false,
+            WindowStartupLocation = _settingsWindow != null
       ? WindowStartupLocation.CenterOwner
       : WindowStartupLocation.CenterScreen,
-  FontFamily = AppTypography.UiFontFamily,
-  FontSize = AppTypography.Scale(12),
-  Language = AppTypography.Language,
-  SnapsToDevicePixels = true,
-  UseLayoutRounding = true
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(12),
+            Language = AppTypography.Language,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
         if (_settingsWindow != null)
         {
-  window.Owner = _settingsWindow;
+            window.Owner = _settingsWindow;
         }
         AppTypography.ApplyTextRendering(window);
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
         window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
         window.Closed += (_, _) =>
         {
-  if (_pluginShortcutRecordingCommandId == null)
-  {
-      return;
-  }
+            if (_pluginShortcutRecordingCommandId == null)
+            {
+                return;
+            }
 
-  _pluginShortcutRecordingCommandId = null;
-  if (!IsExiting)
-  {
-      RestoreAllHotkeysAfterPluginRecording();
-  }
+            _pluginShortcutRecordingCommandId = null;
+            if (!IsExiting)
+            {
+                RestoreAllHotkeysAfterPluginRecording();
+            }
         };
         window.Content = BuildPluginSettingsWindowContent(window, descriptor, settings);
         ApplyToolTipSetting(window);
@@ -335,64 +335,64 @@ public sealed partial class AppController
     {
         var frame = new Border
         {
-  Background = TrayPaperBrush,
-  BorderBrush = TrayBorderBrush,
-  BorderThickness = new Thickness(1),
-  CornerRadius = new CornerRadius(10),
-  Padding = new Thickness(14),
-  Effect = new DropShadowEffect
-  {
-      BlurRadius = 20,
-      ShadowDepth = 2,
-      Opacity = 0.22
-  }
+            Background = TrayPaperBrush,
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14),
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 20,
+                ShadowDepth = 2,
+                Opacity = 0.22
+            }
         };
         var root = new DockPanel();
         var titleRow = new Grid
         {
-  Margin = new Thickness(0, 0, 0, 10),
-  Background = Brushes.Transparent,
-  Cursor = Cursors.SizeAll
+            Margin = new Thickness(0, 0, 0, 10),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.SizeAll
         };
         titleRow.ColumnDefinitions.Add(new ColumnDefinition
         {
-  Width = new GridLength(1, GridUnitType.Star)
+            Width = new GridLength(1, GridUnitType.Star)
         });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.MouseLeftButtonDown += (_, e) =>
         {
-  if (e.ChangedButton != MouseButton.Left)
-  {
-      return;
-  }
-  try { window.DragMove(); } catch { }
+            if (e.ChangedButton != MouseButton.Left)
+            {
+                return;
+            }
+            try { window.DragMove(); } catch { }
         };
 
         var title = new TextBlock
         {
-  Text = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
-  Foreground = TrayTextBrush,
-  FontSize = AppTypography.Scale(15),
-  FontWeight = FontWeights.SemiBold,
-  VerticalAlignment = VerticalAlignment.Center
+            Text = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
+            Foreground = TrayTextBrush,
+            FontSize = AppTypography.Scale(15),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(title, 0);
         titleRow.Children.Add(title);
 
         var closeButton = new Button
         {
-  Content = "×",
-  Width = 28,
-  Height = 24,
-  Padding = new Thickness(0),
-  BorderThickness = new Thickness(1),
-  Background = Brushes.Transparent,
-  Foreground = TrayWeakTextBrush,
-  FontFamily = AppTypography.SymbolFontFamily,
-  FontSize = AppTypography.Scale(16),
-  Cursor = Cursors.Hand,
-  Focusable = false,
-  Style = BuildSettingsCloseButtonStyle()
+            Content = "×",
+            Width = 28,
+            Height = 24,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.Transparent,
+            Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(16),
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            Style = BuildSettingsCloseButtonStyle()
         };
         closeButton.Click += (_, _) => window.Close();
         Grid.SetColumn(closeButton, 1);
@@ -409,10 +409,10 @@ public sealed partial class AppController
   availableHeight);
         var scroll = new ScrollViewer
         {
-  Content = layout,
-  VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-  HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-  Margin = new Thickness(0, 2, 0, 0)
+            Content = layout,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 2, 0, 0)
         };
         root.Children.Add(scroll);
         frame.Child = root;
@@ -438,37 +438,37 @@ public sealed partial class AppController
 
         foreach (var setting in settings)
         {
-  if (string.IsNullOrWhiteSpace(setting.Category))
-  {
-      units.Add(("", "", new[] { setting }));
-      continue;
-  }
-  if (!groupedCategories.Add(setting.Category))
-  {
-      continue;
-  }
+            if (string.IsNullOrWhiteSpace(setting.Category))
+            {
+                units.Add(("", "", new[] { setting }));
+                continue;
+            }
+            if (!groupedCategories.Add(setting.Category))
+            {
+                continue;
+            }
 
-  categoryColumns.TryGetValue(setting.Category, out var column);
-  units.Add((
-      setting.Category,
-      column ?? "",
-      settings.Where(item => string.Equals(
-          item.Category,
-          setting.Category,
-          StringComparison.Ordinal)).ToArray()));
+            categoryColumns.TryGetValue(setting.Category, out var column);
+            units.Add((
+                setting.Category,
+                column ?? "",
+                settings.Where(item => string.Equals(
+                    item.Category,
+                    setting.Category,
+                    StringComparison.Ordinal)).ToArray()));
         }
 
         var elements = new List<(FrameworkElement Element, string Column)>();
         var naturalHeight = 0d;
         foreach (var unit in units)
         {
-  var element = BuildPluginSettingCategory(
-      descriptor,
-      unit.Category,
-      unit.Settings);
-  element.Measure(new Size(availableWidth, double.PositiveInfinity));
-  naturalHeight += element.DesiredSize.Height + 8;
-  elements.Add((element, unit.Column));
+            var element = BuildPluginSettingCategory(
+                descriptor,
+                unit.Category,
+                unit.Settings);
+            element.Measure(new Size(availableWidth, double.PositiveInfinity));
+            naturalHeight += element.DesiredSize.Height + 8;
+            elements.Add((element, unit.Column));
         }
 
         var useColumns = elements.Any(item =>
@@ -476,24 +476,24 @@ public sealed partial class AppController
   naturalHeight > availableHeight;
         if (!useColumns)
         {
-  var single = new StackPanel();
-  foreach (var item in elements)
-  {
-      item.Element.Margin = new Thickness(0, 0, 0, 8);
-      single.Children.Add(item.Element);
-  }
-  return single;
+            var single = new StackPanel();
+            foreach (var item in elements)
+            {
+                item.Element.Margin = new Thickness(0, 0, 0, 8);
+                single.Children.Add(item.Element);
+            }
+            return single;
         }
 
         var columns = new Grid();
         columns.ColumnDefinitions.Add(new ColumnDefinition
         {
-  Width = new GridLength(1, GridUnitType.Star)
+            Width = new GridLength(1, GridUnitType.Star)
         });
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(25) });
         columns.ColumnDefinitions.Add(new ColumnDefinition
         {
-  Width = new GridLength(1, GridUnitType.Star)
+            Width = new GridLength(1, GridUnitType.Star)
         });
         var left = new StackPanel();
         var right = new StackPanel();
@@ -503,30 +503,30 @@ public sealed partial class AppController
 
         foreach (var item in elements)
         {
-  item.Element.Measure(new Size(halfWidth, double.PositiveInfinity));
-  var measuredHeight = item.Element.DesiredSize.Height + 8;
-  var placeRight = string.Equals(item.Column, "right", StringComparison.Ordinal) ||
-      (!string.Equals(item.Column, "left", StringComparison.Ordinal) &&
-       rightHeight < leftHeight);
-  item.Element.Margin = new Thickness(0, 0, 0, 8);
-  if (placeRight)
-  {
-      right.Children.Add(item.Element);
-      rightHeight += measuredHeight;
-  }
-  else
-  {
-      left.Children.Add(item.Element);
-      leftHeight += measuredHeight;
-  }
+            item.Element.Measure(new Size(halfWidth, double.PositiveInfinity));
+            var measuredHeight = item.Element.DesiredSize.Height + 8;
+            var placeRight = string.Equals(item.Column, "right", StringComparison.Ordinal) ||
+                (!string.Equals(item.Column, "left", StringComparison.Ordinal) &&
+                 rightHeight < leftHeight);
+            item.Element.Margin = new Thickness(0, 0, 0, 8);
+            if (placeRight)
+            {
+                right.Children.Add(item.Element);
+                rightHeight += measuredHeight;
+            }
+            else
+            {
+                left.Children.Add(item.Element);
+                leftHeight += measuredHeight;
+            }
         }
 
         var separator = new Border
         {
-  Width = 1,
-  Background = TrayBorderBrush,
-  Opacity = 0.65,
-  HorizontalAlignment = HorizontalAlignment.Center
+            Width = 1,
+            Background = TrayBorderBrush,
+            Opacity = 0.65,
+            HorizontalAlignment = HorizontalAlignment.Center
         };
         Grid.SetColumn(left, 0);
         Grid.SetColumn(separator, 1);
@@ -545,11 +545,11 @@ public sealed partial class AppController
         var root = new StackPanel();
         if (!string.IsNullOrWhiteSpace(category))
         {
-  root.Children.Add(SettingsSectionLabel(category));
+            root.Children.Add(SettingsSectionLabel(category));
         }
         foreach (var setting in settings)
         {
-  root.Children.Add(BuildPluginSettingControl(descriptor, setting));
+            root.Children.Add(BuildPluginSettingControl(descriptor, setting));
         }
         return root;
     }
