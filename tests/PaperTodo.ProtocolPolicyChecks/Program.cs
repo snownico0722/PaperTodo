@@ -258,21 +258,21 @@ internal static class Program
         var categoryType = RequireType(host, "PaperTodo.PaperBodyPluginSettingCategoryManifest");
 
         Assert(
-  manifestType.GetProperty("PrimarySettings")?.PropertyType == typeof(int?),
-  "Plugin manifest must expose optional primarySettings metadata.");
+            manifestType.GetProperty("PrimarySettings")?.PropertyType == typeof(int?),
+            "Plugin manifest must expose optional primarySettings metadata.");
         Assert(
-  manifestType.GetProperty("SettingCategories")?.PropertyType == categoryType.MakeArrayType(),
-  "Plugin manifest must expose settingCategories metadata.");
+            manifestType.GetProperty("SettingCategories")?.PropertyType == categoryType.MakeArrayType(),
+            "Plugin manifest must expose settingCategories metadata.");
         Assert(
-  settingType.GetProperty("Category")?.PropertyType == typeof(string),
-  "Plugin settings must expose an optional category name.");
+            settingType.GetProperty("Category")?.PropertyType == typeof(string),
+            "Plugin settings must expose an optional category name.");
         Assert(
-  settingType.GetProperty("Quick") == null,
-  "Per-setting quick metadata must not remain in the 2.0 settings contract.");
+            settingType.GetProperty("Quick") == null,
+            "Per-setting quick metadata must not remain in the 2.0 settings contract.");
         Assert(
-  categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
-  categoryType.GetProperty("Column")?.PropertyType == typeof(string),
-  "Setting categories must carry their display name and optional column placement.");
+            categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
+            categoryType.GetProperty("Column")?.PropertyType == typeof(string),
+            "Setting categories must carry their display name and optional column placement.");
     }
 
     private static void CheckProtocolBoundaries(Assembly host)

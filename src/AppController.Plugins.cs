@@ -255,8 +255,8 @@ public sealed partial class AppController
             Margin = new Thickness(12, 0, 0, 0)
         };
         var primaryCount = Math.Min(
-  settings.Count,
-  descriptor.Manifest?.PrimarySettings ?? 3);
+            settings.Count,
+            descriptor.Manifest?.PrimarySettings ?? 3);
         for (var index = 0; index < primaryCount; index++)
         {
             root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
@@ -280,8 +280,8 @@ public sealed partial class AppController
         IReadOnlyList<PaperBodyPluginSettingManifest> settings)
     {
         var height = Math.Min(
-  680,
-  Math.Max(420, SystemParameters.WorkArea.Height - 120));
+            680,
+            Math.Max(420, SystemParameters.WorkArea.Height - 120));
         var window = new Window
         {
             Title = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
@@ -295,8 +295,8 @@ public sealed partial class AppController
             ShowInTaskbar = false,
             Topmost = false,
             WindowStartupLocation = _settingsWindow != null
-      ? WindowStartupLocation.CenterOwner
-      : WindowStartupLocation.CenterScreen,
+                ? WindowStartupLocation.CenterOwner
+                : WindowStartupLocation.CenterScreen,
             FontFamily = AppTypography.UiFontFamily,
             FontSize = AppTypography.Scale(12),
             Language = AppTypography.Language,
@@ -403,10 +403,10 @@ public sealed partial class AppController
         var availableWidth = Math.Max(480, window.Width - 56);
         var availableHeight = Math.Max(260, window.Height - 92);
         var layout = BuildPluginFullSettingsLayout(
-  descriptor,
-  settings,
-  availableWidth,
-  availableHeight);
+            descriptor,
+            settings,
+            availableWidth,
+            availableHeight);
         var scroll = new ScrollViewer
         {
             Content = layout,
@@ -426,15 +426,15 @@ public sealed partial class AppController
         double availableHeight)
     {
         var categoryColumns = (descriptor.Manifest?.SettingCategories ?? [])
-  .ToDictionary(
-      item => item.Name,
-      item => item.Column,
-      StringComparer.Ordinal);
+            .ToDictionary(
+                item => item.Name,
+                item => item.Column,
+                StringComparer.Ordinal);
         var groupedCategories = new HashSet<string>(StringComparer.Ordinal);
         var units = new List<(
-  string Category,
-  string Column,
-  PaperBodyPluginSettingManifest[] Settings)>();
+            string Category,
+            string Column,
+            PaperBodyPluginSettingManifest[] Settings)>();
 
         foreach (var setting in settings)
         {
@@ -472,8 +472,8 @@ public sealed partial class AppController
         }
 
         var useColumns = elements.Any(item =>
-      item.Column is "left" or "right") ||
-  naturalHeight > availableHeight;
+                item.Column is "left" or "right") ||
+            naturalHeight > availableHeight;
         if (!useColumns)
         {
             var single = new StackPanel();

@@ -25,7 +25,7 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException("primarySettings must be between 1 and 3.");
         }
         if (!ApiAtLeast(manifest.ApiVersion, 2, 0) &&
-  (manifest.PrimarySettings.HasValue || manifest.SettingCategories.Length > 0))
+            (manifest.PrimarySettings.HasValue || manifest.SettingCategories.Length > 0))
         {
             throw new InvalidDataException(
                 "primarySettings and settingCategories require apiVersion 2.0 or newer.");
@@ -179,13 +179,13 @@ internal sealed partial class PaperBodyPluginRegistry
 
     private static JsonElement DefaultSettingValueWithoutDeclaredDefault(
         PaperBodyPluginSettingManifest setting) => setting.Type switch
-        {
-            "boolean" => JsonSerializer.SerializeToElement(false),
-            "number" => JsonSerializer.SerializeToElement(NormalizeNumber(setting, 0d)),
-            "select" => JsonSerializer.SerializeToElement(setting.Options[0].Value),
-            "shortcut" => JsonSerializer.SerializeToElement(""),
-            _ => JsonSerializer.SerializeToElement(NormalizeString(setting, ""))
-        };
+    {
+        "boolean" => JsonSerializer.SerializeToElement(false),
+        "number" => JsonSerializer.SerializeToElement(NormalizeNumber(setting, 0d)),
+        "select" => JsonSerializer.SerializeToElement(setting.Options[0].Value),
+        "shortcut" => JsonSerializer.SerializeToElement(""),
+        _ => JsonSerializer.SerializeToElement(NormalizeString(setting, ""))
+    };
 
     private static string NormalizeString(
         PaperBodyPluginSettingManifest setting,
