@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -69,7 +68,7 @@ internal static class TelemetryService
     private static bool _pendingCheckWasChecked;
     private static bool _pendingCheckReleaseObserved;
     private static WeakReference<MarkdownTextBox>? _pendingMarkdownEditor;
-    private static int _postInputCaptureQueued;
+    private static bool _captureOnPostProcess;
 
     private static bool _attached;
     private static bool _runtimeActive;
@@ -239,6 +238,7 @@ internal static class TelemetryService
         _lastMouseTransitionQueueUtc = DateTimeOffset.MinValue;
 
         InputManager.Current.PreProcessInput += OnPreProcessInput;
+        InputManager.Current.PostProcessInput += OnPostProcessInput;
         ComponentDispatcher.ThreadPreprocessMessage += OnThreadPreprocessMessage;
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
@@ -264,6 +264,7 @@ internal static class TelemetryService
         }
 
         InputManager.Current.PreProcessInput -= OnPreProcessInput;
+        InputManager.Current.PostProcessInput -= OnPostProcessInput;
         ComponentDispatcher.ThreadPreprocessMessage -= OnThreadPreprocessMessage;
 
         if (captureFinalSnapshot && Enabled)
@@ -294,7 +295,7 @@ internal static class TelemetryService
         _pendingMarkdownEditor = null;
         _pendingCheckWasChecked = false;
         _pendingCheckReleaseObserved = false;
-        Interlocked.Exchange(ref _postInputCaptureQueued, 0);
+        _captureOnPostProcess = false;
     }
 
     private static void ClearQueuedDataLocked()
@@ -363,34 +364,27 @@ internal static class TelemetryService
         if (forcePostCapture || now - _lastMouseTransitionQueueUtc >= MouseTransitionThrottle)
         {
             _lastMouseTransitionQueueUtc = now;
-            QueuePostInputCapture();
+            _captureOnPostProcess = true;
         }
     }
 
-    private static void QueuePostInputCapture()
+    private static void OnPostProcessInput(object sender, ProcessInputEventArgs e)
     {
-        var controller = _controller;
-        if (controller == null ||
-            Interlocked.Exchange(ref _postInputCaptureQueued, 1) != 0)
+        if (!_captureOnPostProcess)
         {
             return;
         }
 
-        Application.Current.Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                Interlocked.Exchange(ref _postInputCaptureQueued, 0);
-                if (!_runtimeActive || !Enabled || _controller == null)
-                {
-                    return;
-                }
+        _captureOnPostProcess = false;
+        if (!_runtimeActive || !Enabled || _controller == null)
+        {
+            return;
+        }
 
-                CapturePendingTodoTextTransition();
-                CapturePendingTodoCompletion();
-                CapturePendingMarkdownPreview();
-                CaptureLightweightPaperTransitions();
-            }),
-            DispatcherPriority.ContextIdle);
+        CapturePendingTodoTextTransition();
+        CapturePendingTodoCompletion();
+        CapturePendingMarkdownPreview();
+        CaptureLightweightPaperTransitions();
     }
 
     private static void CapturePendingTodoTextTransition()
