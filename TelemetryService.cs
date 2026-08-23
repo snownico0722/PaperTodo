@@ -435,9 +435,7 @@ internal static class TelemetryService
 
         var changedToChecked =
             !_pendingCheckWasChecked &&
-            check.IsChecked == true &&
-            check.IsLoaded &&
-            Window.GetWindow(check) is PaperWindow;
+            check.IsChecked == true;
 
         if (changedToChecked)
         {
