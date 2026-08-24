@@ -282,6 +282,7 @@ public sealed class AppState
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
     public string TextRenderingProfile { get; set; } = TextRenderingProfiles.Standard;
     public bool AdvancedSettingsMode { get; set; }
+    public bool TelemetryEnabled { get; set; } = true;
     /// <summary>
     /// When a custom papertodo font is present, bold styles load papertodo_bold / PaperTodo_Bold instead of synthetic SemiBold.
     /// </summary>

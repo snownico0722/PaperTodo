@@ -12,6 +12,10 @@ data.backup.json
 data.crash_recovery.json
 note-assets.lmdb
 PaperTodo.crash.log
+telemetry.json
+telemetry.json.tmp
+telemetry-crash.json
+telemetry-crash.json.tmp
 对比_StickyMD/
 .codex_decompile_debug/
 extract_code.py

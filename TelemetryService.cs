@@ -48,8 +48,14 @@ internal static class TelemetryService
     private static readonly ConditionalWeakTable<MarkdownTextBox, PreviewFocusState> PreviewFocusStates = new();
     private static readonly HashSet<string> DirectTodoCreatedItemIds = new(StringComparer.Ordinal);
     private static readonly HashSet<string> DirectTodoCompletedItemIds = new(StringComparer.Ordinal);
-    private static readonly string StatePath = Path.Combine(AppContext.BaseDirectory, "telemetry.json");
-    private static readonly string CrashPath = Path.Combine(AppContext.BaseDirectory, "telemetry-crash.json");
+    private static readonly string StatePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PaperTodo",
+        "telemetry.json");
+    private static readonly string CrashPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PaperTodo",
+        "telemetry-crash.json");
 
     private static TelemetryPersistedState _persisted = LoadPersistedState();
     private static AppController? _controller;
@@ -82,7 +88,7 @@ internal static class TelemetryService
         {
             lock (Gate)
             {
-                return _persisted.Enabled;
+                return _controller?.State.TelemetryEnabled ?? _persisted.Enabled;
             }
         }
     }
@@ -100,6 +106,7 @@ internal static class TelemetryService
         var shouldStartRuntime = false;
         lock (Gate)
         {
+            _persisted.Enabled = controller.State.TelemetryEnabled;
             NormalizePersistedState(_persisted);
             if (!_persisted.Enabled)
             {
@@ -148,13 +155,17 @@ internal static class TelemetryService
         AppController? controller;
         lock (Gate)
         {
-            if (_persisted.Enabled == enabled)
+            if (_persisted.Enabled == enabled && _controller?.State.TelemetryEnabled == enabled)
             {
                 return;
             }
 
             _persisted.Enabled = enabled;
             controller = _controller;
+            if (controller != null)
+            {
+                controller.State.TelemetryEnabled = enabled;
+            }
 
             if (!enabled)
             {
@@ -1284,6 +1295,12 @@ internal static class TelemetryService
 
     private static void WriteAtomic(string path, string content)
     {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, content);
         File.Move(tempPath, path, overwrite: true);

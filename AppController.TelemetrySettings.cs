@@ -14,7 +14,7 @@ public sealed partial class AppController
         content.Children.Add(SettingsSectionLabel(TelemetryStrings.Get("SectionTitle")));
         content.Children.Add(SettingsToggle(
             TelemetryStrings.Get("HelpImprove"),
-            TelemetryService.Enabled,
+            State.TelemetryEnabled,
             ToggleAnonymousUsageStatistics));
         content.Children.Add(new TextBlock
         {
@@ -30,7 +30,9 @@ public sealed partial class AppController
 
     private void ToggleAnonymousUsageStatistics()
     {
-        TelemetryService.SetEnabled(!TelemetryService.Enabled);
+        State.TelemetryEnabled = !State.TelemetryEnabled;
+        SaveNow();
+        TelemetryService.SetEnabled(State.TelemetryEnabled);
         RefreshSettingsWindowContent();
     }
 }
