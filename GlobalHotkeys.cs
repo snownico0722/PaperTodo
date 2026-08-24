@@ -422,7 +422,15 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
             return true;
         }
 
-        return Enum.TryParse(text, ignoreCase: true, out key);
+        if (!Enum.TryParse(text, ignoreCase: true, out key) ||
+            !Enum.IsDefined(key) ||
+            key is Key.System or Key.ImeProcessed or Key.DeadCharProcessed ||
+            KeyInterop.VirtualKeyFromKey(key) == 0)
+        {
+            key = Key.None;
+            return false;
+        }
+        return true;
     }
 
     private static string StorageKeyName(Key key)
