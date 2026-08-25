@@ -26,102 +26,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    // A dedicated, non-activating runtime surface is used only for Web plugins that explicitly
-    // require background updates and have never been presented. The real PaperWindow is never
-    // moved or shown for prewarming.
-    private static class BackgroundWebViewHost
-    {
-        private static Window? _window;
-        private static Grid? _root;
-
-        public static bool TryAttach(WebView2CompositionControl webView)
-        {
-            try
-            {
-                Application.Current.Dispatcher.VerifyAccess();
-                if (webView.Parent is Panel parent)
-                {
-                    parent.Children.Remove(webView);
-                }
-                else if (webView.Parent != null)
-                {
-                    return false;
-                }
-
-                EnsureWindow();
-                _root!.Children.Add(webView);
-                webView.Width = 1;
-                webView.Height = 1;
-                webView.HorizontalAlignment = HorizontalAlignment.Stretch;
-                webView.VerticalAlignment = VerticalAlignment.Stretch;
-                if (_window!.IsVisible == false)
-                {
-                    _window.Show();
-                }
-                return true;
-            }
-            catch
-            {
-                if (_root?.Children.Contains(webView) == true)
-                {
-                    _root.Children.Remove(webView);
-                }
-                return false;
-            }
-        }
-
-        public static void Detach(WebView2CompositionControl webView)
-        {
-            if (_root?.Children.Contains(webView) == true)
-            {
-                _root.Children.Remove(webView);
-            }
-            if (_root?.Children.Count == 0 && _window?.IsVisible == true)
-            {
-                _window.Hide();
-            }
-        }
-
-        public static bool Contains(WebView2CompositionControl webView) =>
-            _root?.Children.Contains(webView) == true;
-
-        private static void EnsureWindow()
-        {
-            if (_window != null)
-            {
-                return;
-            }
-
-            _root = new Grid
-            {
-                Width = 1,
-                Height = 1,
-                Background = Brushes.Transparent,
-                ClipToBounds = true
-            };
-            _window = new Window
-            {
-                Content = _root,
-                Width = 1,
-                Height = 1,
-                Left = -32000,
-                Top = -32000,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-                WindowStyle = WindowStyle.None,
-                ResizeMode = ResizeMode.NoResize,
-                AllowsTransparency = true,
-                Background = Brushes.Transparent,
-                Opacity = 0.01,
-                ShowActivated = false,
-                ShowInTaskbar = false,
-                Focusable = false,
-                IsHitTestVisible = false
-            };
-        }
-    }
-
     private readonly PaperBodyContext _context;
     private readonly PaperBodyPluginManifest _manifest;
+    private readonly Action<JsonElement>? _postRuntimeMessage;
     private readonly Grid _root;
     private WebView2CompositionControl _webView;
     private readonly CancellationTokenSource _lifetime = new();
@@ -142,7 +49,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     private bool _disposed;
     private bool _runtimeVisible;
     private bool _presentationVisible;
-    private bool _everPresented;
     private bool _webViewFailed;
     private int _documentGeneration;
     private readonly Dictionary<string, IDisposable> _hostSubscriptions =
@@ -150,10 +56,12 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     public WebPaperBodySession(
         PaperBodyContext context,
-        PaperBodyPluginManifest manifest)
+        PaperBodyPluginManifest manifest,
+        Action<JsonElement>? postRuntimeMessage = null)
     {
         _context = context;
         _manifest = manifest;
+        _postRuntimeMessage = postRuntimeMessage;
         _theme = context.Theme;
         _stateJson = context.StateJson;
         _settingsJson = context.SettingsJson;
@@ -196,7 +104,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         var generation = _webViewGeneration;
         if (_initializationStarted ||
             _webViewFailed ||
-            !_runtimeVisible ||
+            !_presentationVisible ||
             _disposed ||
             !webView.IsLoaded ||
             webView.ActualWidth <= 0 ||
@@ -372,11 +280,15 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 openExternal(url) { post('openExternal', String(url ?? '')); }
               });
               const workspace = Object.freeze({ request });
+              const runtime = Object.freeze({
+                post(message) { post('runtimeMessage', message ?? null); }
+              });
               window.papertodo = Object.freeze({
                 surface: 'body',
                 paper,
                 body,
                 workspace,
+                runtime,
                 post,
                 request,
                 saveState,
@@ -586,14 +498,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     private void ShowWebView()
     {
-        // A cold background runtime has no visual content in the paper body yet. Keep its
-        // loading placeholder until first presentation replaces the background controller.
-        if (!ReferenceEquals(_webView.Parent, _root))
-        {
-            UpdateWebViewPresentation();
-            return;
-        }
-
         for (var index = _root.Children.Count - 1; index >= 0; index--)
         {
             if (!ReferenceEquals(_root.Children[index], _webView))
@@ -602,73 +506,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             }
         }
         UpdateWebViewPresentation();
-    }
-
-    private void AttachWebViewToRoot()
-    {
-        BackgroundWebViewHost.Detach(_webView);
-        if (_webView.Parent is Panel current &&
-            !ReferenceEquals(current, _root))
-        {
-            current.Children.Remove(_webView);
-        }
-
-        _webView.Width = double.NaN;
-        _webView.Height = double.NaN;
-        _webView.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _webView.VerticalAlignment = VerticalAlignment.Stretch;
-        if (!_root.Children.Contains(_webView))
-        {
-            _root.Children.Add(_webView);
-        }
-        Panel.SetZIndex(_webView, 1);
-    }
-
-    private void PromoteBackgroundWebView()
-    {
-        if (!BackgroundWebViewHost.Contains(_webView))
-        {
-            AttachWebViewToRoot();
-            return;
-        }
-
-        // An uninitialized control can move safely. Once a CoreWebView2 controller exists (or is
-        // being created), replace it instead of reparenting it across HWNDs.
-        if (!_initializationStarted && !_initialized)
-        {
-            AttachWebViewToRoot();
-            return;
-        }
-
-        var previous = _webView;
-        _webViewGeneration++;
-        _hasDocumentNavigation = false;
-        BackgroundWebViewHost.Detach(previous);
-        DisposeWebView(previous);
-        _context.SetInputClaims(PaperBodyInputClaims.None);
-
-        _webView = CreateWebView();
-        _initializationStarted = false;
-        _initialized = false;
-        _documentReady = false;
-        _pluginDocumentReady = false;
-        _webViewFailed = false;
-        EnsureLoadingView();
-        AttachWebViewToRoot();
-    }
-
-    private void EnsureLoadingView()
-    {
-        for (var index = _root.Children.Count - 1; index >= 0; index--)
-        {
-            if (!ReferenceEquals(_root.Children[index], _webView))
-            {
-                _root.Children.RemoveAt(index);
-            }
-        }
-        _root.Children.Insert(
-            0,
-            BuildStatusView(Strings.Get("PluginsWebLoading")));
     }
 
     private void UpdateWebViewHost()
@@ -678,37 +515,17 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
-        if (_presentationVisible)
-        {
-            _everPresented = true;
-            PromoteBackgroundWebView();
-        }
-        else if (_runtimeVisible &&
-                 !_everPresented &&
-                 !_initializationStarted &&
-                 !_initialized &&
-                 !BackgroundWebViewHost.Contains(_webView))
-        {
-            // Cold folded sessions that opted into background updates use the dedicated host.
-            // After the first real presentation the WebView remains in the paper visual tree.
-            _ = BackgroundWebViewHost.TryAttach(_webView);
-        }
-
         UpdateWebViewPresentation();
         TryStartInitialization();
     }
 
     private void UpdateWebViewPresentation()
     {
-        var inBackgroundHost = BackgroundWebViewHost.Contains(_webView);
-        var inPaperBody = ReferenceEquals(_webView.Parent, _root);
         var show = _presentationVisible &&
             _documentReady &&
             !_disposed &&
-            inPaperBody;
-        _webView.SetValue(
-            UIElement.OpacityProperty,
-            show || (inBackgroundHost && !_webViewFailed) ? 1.0 : 0.0);
+            ReferenceEquals(_webView.Parent, _root);
+        _webView.SetValue(UIElement.OpacityProperty, show ? 1.0 : 0.0);
         _webView.IsHitTestVisible = show;
     }
 
@@ -724,7 +541,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         }
         webView.Loaded -= OnWebViewLoaded;
         webView.SizeChanged -= OnWebViewSizeChanged;
-        BackgroundWebViewHost.Detach(webView);
         if (webView.Parent is Panel parent)
         {
             parent.Children.Remove(webView);
@@ -830,6 +646,12 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                     break;
                 case "openExternal":
                     _context.OpenExternal(ReadPayloadString(payload));
+                    break;
+                case "runtimeMessage":
+                    _postRuntimeMessage?.Invoke(
+                        payload.ValueKind == JsonValueKind.Undefined
+                            ? JsonSerializer.SerializeToElement<object?>(null)
+                            : payload.Clone());
                     break;
                 case "hostRequest":
                     HandleHostRequest(payload);
@@ -1362,6 +1184,27 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             safe = "plugin";
         }
         return $"{safe}.papertodo.local";
+    }
+
+    internal void ApplyExternalState(string stateJson)
+    {
+        var normalized = string.IsNullOrWhiteSpace(stateJson) ? "{}" : stateJson;
+        if (string.Equals(_stateJson, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+        _stateJson = normalized;
+        SendStateChanged();
+        _miniViewHost?.SendStateChanged();
+    }
+
+    internal void ReceiveRuntimeMessage(JsonElement payload)
+    {
+        Send(new
+        {
+            type = "runtimeMessage",
+            payload
+        });
     }
 
     public void RefreshFromModel()

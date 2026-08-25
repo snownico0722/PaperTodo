@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PaperTodo Clock Runtime</title>
+</head>
+<body>
+<script>
+  const defaults = Object.freeze({
+    showDayProgress: true,
+    hourCycle: '24',
+    dateFormat: 'long',
+    timeZone: 'local',
+    titleMode: 'time',
+    customTitle: ''
+  });
+
+  const zoneMap = Object.freeze({
+    local: undefined,
+    utc: 'UTC',
+    beijing: 'Asia/Shanghai',
+    tokyo: 'Asia/Tokyo',
+    london: 'Europe/London',
+    newYork: 'America/New_York',
+    losAngeles: 'America/Los_Angeles'
+  });
+  const zoneLabels = Object.freeze({
+    local: '本地时间',
+    utc: 'UTC',
+    beijing: '北京时间',
+    tokyo: '东京时间',
+    london: '伦敦时间',
+    newYork: '纽约时间',
+    losAngeles: '洛杉矶时间'
+  });
+
+  let settings = { ...defaults };
+  let timer = 0;
+  let lastHeaderText = '';
+  let lastCapsuleSignature = '';
+
+  function applySettings(value) {
+    settings = { ...defaults, ...(value || {}) };
+  }
+
+  function zonedParts(date) {
+    const timeZone = zoneMap[settings.timeZone];
+    const parts = new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      weekday: 'long',
+      hour12: settings.hourCycle === '12'
+    }).formatToParts(date);
+    return Object.fromEntries(parts.map(part => [part.type, part.value]));
+  }
+
+  function formatDate(parts) {
+    const y = parts.year;
+    const m = parts.month;
+    const d = parts.day;
+    return settings.dateFormat === 'short' ? `${y}-${m}-${d}`
+      : settings.dateFormat === 'slash' ? `${y}/${m}/${d}`
+      : settings.dateFormat === 'us' ? `${m}/${d}/${y}`
+      : settings.dateFormat === 'eu' ? `${d}/${m}/${y}`
+      : `${y}年${Number(m)}月${Number(d)}日`;
+  }
+
+  function zonedClockParts(date) {
+    const timeZone = zoneMap[settings.timeZone];
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date);
+    return Object.fromEntries(parts.map(part => [part.type, part.value]));
+  }
+
+  function titleText(timeText, dateText) {
+    if (settings.titleMode === 'date') return dateText || timeText;
+    if (settings.titleMode === 'zone') {
+      return `${zoneLabels[settings.timeZone] || '本地时间'} · ${timeText}`;
+    }
+    if (settings.titleMode === 'fixed') return '时钟';
+    if (settings.titleMode === 'custom' && String(settings.customTitle || '').trim()) {
+      return String(settings.customTitle).trim();
+    }
+    return timeText;
+  }
+
+  function publish() {
+    const now = new Date();
+    const parts = zonedParts(now);
+    const timeText = `${parts.hour}:${parts.minute}`;
+    const title = titleText(timeText, formatDate(parts));
+    const paper = window.papertodo?.paper;
+    if (!paper) return;
+
+    if (title !== lastHeaderText) {
+      paper.setHeaderText(title);
+      lastHeaderText = title;
+    }
+
+    const clock = zonedClockParts(now);
+    const elapsed = Number(clock.hour) * 3600 + Number(clock.minute) * 60 + Number(clock.second);
+    const percent = Math.min(100, Math.max(0, elapsed / 864));
+    const progressStep = Math.round(percent * 10);
+    const signature = `${title}\u001f${progressStep}\u001f${settings.showDayProgress ? 1 : 0}`;
+    if (signature !== lastCapsuleSignature) {
+      paper.setCapsulePresentation({
+        preferredWidth: 0,
+        plainText: title,
+        toolTip: title,
+        components: settings.showDayProgress
+          ? [
+              { kind: 'progressRing', value: percent / 100, tone: 'accent' },
+              { kind: 'text', text: title, fill: true }
+            ]
+          : [{ kind: 'text', text: title, fill: true }]
+      });
+      lastCapsuleSignature = signature;
+    }
+  }
+
+  function restartTimer() {
+    clearInterval(timer);
+    timer = setInterval(publish, 1000);
+    publish();
+  }
+
+  window.addEventListener('papertodo', event => {
+    const message = event.detail || {};
+    if (message.type === 'initialize') {
+      applySettings(message.settings);
+      restartTimer();
+    } else if (message.type === 'settingsChanged') {
+      applySettings(message.settings);
+      lastHeaderText = '';
+      lastCapsuleSignature = '';
+      restartTimer();
+    }
+  });
+</script>
+</body>
+</html>

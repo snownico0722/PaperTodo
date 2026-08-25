@@ -3,10 +3,11 @@
   "id": "official.clock.web",
   "name": "Web 时钟",
   "description": "完整的 Web 插件示例：主题、时区、日期格式、标题和日进度均可配置。",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "apiVersion": "2.0",
   "stateVersion": 1,
   "entry": "web/index.html",
+  "paperRuntime": "web/paper-runtime.html",
   "miniEntry": "web/mini.html",
   "miniSize": {
     "width": 300,

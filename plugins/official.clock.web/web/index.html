@@ -151,8 +151,6 @@
     let settings = { ...defaults };
     let visible = true;
     let timer = 0;
-    let lastHeaderText = '';
-    let lastCapsuleSignature = '';
 
     const $ = id => document.getElementById(id);
     const hoursElement = $('hours');
@@ -260,16 +258,6 @@
       return Math.ceil((((value - yearStart) / 86400000) + 1) / 7);
     }
 
-    function titleText(timeText, dateText) {
-      if (settings.titleMode === 'date') return dateText.split(' · ')[0] || timeText;
-      if (settings.titleMode === 'zone') return `${zoneLabels[settings.timeZone] || '本地时间'} · ${timeText}`;
-      if (settings.titleMode === 'fixed') return '时钟';
-      if (settings.titleMode === 'custom' && String(settings.customTitle || '').trim()) {
-        return String(settings.customTitle).trim();
-      }
-      return timeText;
-    }
-
     function render() {
       const now = new Date();
       const parts = zonedParts(now);
@@ -290,35 +278,6 @@
       dayPercentElement.textContent = `今日 ${percent.toFixed(1)}%`;
       weekElement.textContent = `第 ${isoWeek(parts.year, parts.month, parts.day)} 周`;
 
-      const timeText = `${parts.hour}:${parts.minute}`;
-      const title = titleText(timeText, dateText);
-      const paperApi = window.papertodo?.paper;
-      if (paperApi && title !== lastHeaderText) {
-        paperApi.setHeaderText(title);
-        lastHeaderText = title;
-      }
-
-      // The body may render at 4 Hz for a stable second boundary, but host capsule templates do
-      // not need to be rebuilt at that cadence. Update on title changes or each 0.1% of the day.
-      const capsuleProgressStep = Math.round(percent * 10);
-      const capsuleSignature =
-        `${title}\u001f${capsuleProgressStep}\u001f${settings.showDayProgress ? 1 : 0}`;
-      if (paperApi && capsuleSignature !== lastCapsuleSignature) {
-        paperApi.setCapsulePresentation({
-          preferredWidth: 0,
-          plainText: title,
-          toolTip: title,
-          components: settings.showDayProgress
-            ? [
-                { kind: 'progressRing', value: percent / 100, tone: 'accent' },
-                { kind: 'text', text: title, fill: true }
-              ]
-            : [
-                { kind: 'text', text: title, fill: true }
-              ]
-        });
-        lastCapsuleSignature = capsuleSignature;
-      }
     }
 
     function updateTimer() {
