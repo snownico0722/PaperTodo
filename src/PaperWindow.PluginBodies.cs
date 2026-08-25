@@ -270,7 +270,12 @@ public sealed partial class PaperWindow
                     payload => _controller.PostBodyMessageToWebPaperRuntime(
                         _paper.Id,
                         descriptor.Id,
-                        payload));
+                        payload),
+                    paperRuntimeOwnsPresentation:
+                        (descriptor.RuntimeRequirements &
+                         PaperBodyRuntimeRequirements.BackgroundUpdates) != 0 &&
+                        !string.IsNullOrWhiteSpace(
+                            descriptor.Manifest.PaperRuntimePath));
             }
 
             throw new InvalidOperationException("Plugin descriptor has no usable body factory.");

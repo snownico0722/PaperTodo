@@ -29,6 +29,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     private readonly PaperBodyContext _context;
     private readonly PaperBodyPluginManifest _manifest;
     private readonly Action<JsonElement>? _postRuntimeMessage;
+    private readonly bool _paperRuntimeOwnsPresentation;
     private readonly Grid _root;
     private WebView2CompositionControl _webView;
     private readonly CancellationTokenSource _lifetime = new();
@@ -57,11 +58,13 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     public WebPaperBodySession(
         PaperBodyContext context,
         PaperBodyPluginManifest manifest,
-        Action<JsonElement>? postRuntimeMessage = null)
+        Action<JsonElement>? postRuntimeMessage = null,
+        bool paperRuntimeOwnsPresentation = false)
     {
         _context = context;
         _manifest = manifest;
         _postRuntimeMessage = postRuntimeMessage;
+        _paperRuntimeOwnsPresentation = paperRuntimeOwnsPresentation;
         _theme = context.Theme;
         _stateJson = context.StateJson;
         _settingsJson = context.SettingsJson;
@@ -1054,8 +1057,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _pluginDocumentReady = false;
         _webViewFailed = true;
         UpdateWebViewPresentation();
-        _context.Paper.SetHeaderText("");
-        _context.Paper.SetCapsulePresentation(null);
+        if (!_paperRuntimeOwnsPresentation)
+        {
+            _context.Paper.SetHeaderText("");
+            _context.Paper.SetCapsulePresentation(null);
+        }
         _context.SetInputClaims(PaperBodyInputClaims.None);
         for (var index = _root.Children.Count - 1; index >= 0; index--)
         {
