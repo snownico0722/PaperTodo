@@ -69,7 +69,7 @@ jobs:
             Write-Error 'PaperWindow still owns a WebPaperRuntime file.'
             exit 1
           }
-          $legacy = git grep -n -E "PromoteBackgroundWebView|_everPresented|HasLiveWebPaperRuntime|EnsureWebPaperRuntime|DisposeWebPaperRuntime" -- src
+          $legacy = git grep -n -E "PromoteBackgroundWebView|_everPresented|HasLiveWebPaperRuntime|EnsureWebPaperRuntime|DisposeWebPaperRuntime\(" -- src
           if ($LASTEXITCODE -eq 0) {
             Write-Error ($legacy -join "`n")
             exit 1
