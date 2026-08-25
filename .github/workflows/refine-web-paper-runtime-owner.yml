@@ -42,6 +42,10 @@ jobs:
         shell: pwsh
         run: python .\tools\refine_web_paper_runtime_owner.py
 
+      - name: Apply compile fix
+        shell: pwsh
+        run: python .\tools\fix_refine_compile.py
+
       - name: Diff check
         shell: pwsh
         run: git diff --check
@@ -78,6 +82,7 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item .\tools\refine_web_paper_runtime_owner.py
+          Remove-Item .\tools\fix_refine_compile.py
           Remove-Item .\.github\workflows\refine-web-paper-runtime-owner.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
