@@ -25,6 +25,7 @@ public sealed partial class AppController
     {
         if (hasDataIssue ||
             HasPluginAppRuntimeFailure(descriptor.Id) ||
+            HasWebPaperRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
                  PluginIssueMatchesDescriptor(issue, descriptor))) ||
@@ -35,6 +36,7 @@ public sealed partial class AppController
         }
 
         return IsPluginAppRuntimeRunning(descriptor.Id) ||
+               HasRunningWebPaperRuntime(descriptor.Id) ||
                _windows.Values.Any(window =>
                    window.HasRunningPluginBody(descriptor.Id))
             ? PluginPageStatus.Running
@@ -113,6 +115,7 @@ public sealed partial class AppController
         // entity plugin paper may have appeared or disappeared. Reconciliation itself is gated
         // until startupPaper handling has completed.
         ReconcilePluginAppRuntimes();
+        ReconcileWebPaperRuntimes();
         QueuePluginStatusUiRefresh();
     }
 

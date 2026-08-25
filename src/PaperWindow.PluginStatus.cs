@@ -14,16 +14,13 @@ public sealed partial class PaperWindow
 
     internal bool HasRunningPluginBody(string providerId)
     {
-        if (_paper.Type != PaperTypes.Note ||
-            !string.Equals(
+        return _paper.Type == PaperTypes.Note &&
+            !_bodyFailed &&
+            _paperBodyHost.HasCurrent &&
+            _bodyRuntimeVisible &&
+            string.Equals(
                 NormalizeBodyProviderId(_paper.BodyProviderId),
                 providerId,
-                StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return HasLiveWebPaperRuntime(providerId) ||
-            (!_bodyFailed && _paperBodyHost.HasCurrent && _bodyRuntimeVisible);
+                StringComparison.Ordinal);
     }
 }

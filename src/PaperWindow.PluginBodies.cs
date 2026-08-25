@@ -156,8 +156,7 @@ public sealed partial class PaperWindow
             ? _pluginDisplayTitle
             : _paper.BodyHeaderText;
         return !IsCurrentBodyProviderMarkdown &&
-            (!_bodyFailed || HasLiveWebPaperRuntime(
-                NormalizeBodyProviderId(_paper.BodyProviderId))) &&
+            (!_bodyFailed || HasWebPaperRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
 
@@ -165,8 +164,7 @@ public sealed partial class PaperWindow
     {
         title = _paper.BodyCapsuleText;
         return !IsCurrentBodyProviderMarkdown &&
-            (!_bodyFailed || HasLiveWebPaperRuntime(
-                NormalizeBodyProviderId(_paper.BodyProviderId))) &&
+            (!_bodyFailed || HasWebPaperRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
 
@@ -202,7 +200,6 @@ public sealed partial class PaperWindow
         _paper.BodyProviderId = providerId;
         if (string.Equals(providerId, PaperBodyProviderIds.Markdown, StringComparison.Ordinal))
         {
-            DisposeWebPaperRuntime();
             _controller.PaperBodyPlugins.TryGet(providerId, out var markdownDescriptor);
             _bodyDescriptor = markdownDescriptor;
             return new MarkdownPaperBodySession(
@@ -213,7 +210,6 @@ public sealed partial class PaperWindow
 
         if (!_controller.PaperBodyPlugins.TryGet(providerId, out var descriptor))
         {
-            DisposeWebPaperRuntime();
             _bodyDescriptor = null;
             _bodyFailed = true;
             return new FailedPaperBodySession(
@@ -227,7 +223,6 @@ public sealed partial class PaperWindow
         {
             if (descriptor.Kind == PaperBodyPluginKind.Native)
             {
-                DisposeWebPaperRuntime();
                 var stored = ReadPluginState(descriptor.Id);
                 var activation =
                     _controller.PaperBodyPlugins.CreateNativePlugin(descriptor);
@@ -262,7 +257,6 @@ public sealed partial class PaperWindow
 
             if (descriptor.Kind == PaperBodyPluginKind.Web && descriptor.Manifest != null)
             {
-                EnsureWebPaperRuntime(descriptor);
                 var stored = ReadPluginState(descriptor.Id);
                 if (stored.Version > descriptor.StateVersion)
                 {
@@ -273,7 +267,8 @@ public sealed partial class PaperWindow
                 return new WebPaperBodySession(
                     context,
                     descriptor.Manifest,
-                    payload => PostBodyMessageToWebPaperRuntime(
+                    payload => _controller.PostBodyMessageToWebPaperRuntime(
+                        _paper.Id,
                         descriptor.Id,
                         payload));
             }
@@ -766,10 +761,13 @@ public sealed partial class PaperWindow
             _paper.Id,
             stateVersion,
             normalized);
-        NotifyWebPaperRuntimeStateChanged(providerId, normalized);
+        _controller.NotifyWebPaperRuntimeStateChanged(
+            _paper.Id,
+            providerId,
+            normalized);
     }
 
-    private static string NormalizePluginDisplayText(string? text)
+    internal static string NormalizePluginDisplayText(string? text)
     {
         var normalized = string.Join(
             " ",
@@ -807,8 +805,7 @@ public sealed partial class PaperWindow
 
     private void ResetPluginRuntimeState(bool refreshTitle)
     {
-        var preservePaperPresentation = HasLiveWebPaperRuntime(
-            NormalizeBodyProviderId(_paper.BodyProviderId));
+        var preservePaperPresentation = HasWebPaperRuntimePresentationOwner;
         var hadDisplayTitle =
             !preservePaperPresentation &&
             !string.IsNullOrEmpty(_pluginDisplayTitle);
@@ -877,9 +874,11 @@ public sealed partial class PaperWindow
         }
 
         CommitPendingEditsForSave();
-        DisposeWebPaperRuntime();
+        var previousProviderId = NormalizeBodyProviderId(_paper.BodyProviderId);
+        ClearWebPaperRuntimePresentation(previousProviderId);
         RemoveCurrentPaperBody();
         _paper.BodyProviderId = normalized;
+        _controller.ReconcileWebPaperRuntimes();
         _paper.BodyHeaderText = "";
         _paper.BodyCapsuleText = "";
         AttachCurrentPaperBody();
@@ -1020,7 +1019,7 @@ public sealed partial class PaperWindow
 
     private void ClearPluginPresentationOnFailure()
     {
-        if (HasLiveWebPaperRuntime(NormalizeBodyProviderId(_paper.BodyProviderId)))
+        if (HasWebPaperRuntimePresentationOwner)
         {
             return;
         }
@@ -1129,7 +1128,6 @@ public sealed partial class PaperWindow
             return;
         }
 
-        NotifyWebPaperRuntimeSettingsChanged(providerId, settingsJson);
         InvokeBodySession(item => item.OnSettingsChanged(settingsJson));
     }
 
@@ -1141,7 +1139,6 @@ public sealed partial class PaperWindow
     internal void DisposeCurrentPaperBody()
     {
         CommitDisposeAndInvalidateCurrentBody(cancelInteractions: true);
-        DisposeWebPaperRuntime();
         _bodyDescriptor = null;
         _bodyElement = null;
         _pluginBodyClipHost = null;

@@ -34,7 +34,10 @@ internal sealed class WebPaperRuntime : IDisposable
 
     private string _expectedOrigin = string.Empty;
     private string _stateJson;
+    private readonly int _stateVersion;
+    private readonly int _targetStateVersion;
     private string _settingsJson;
+    private readonly Queue<JsonElement> _pendingBodyMessages = new();
     private bool _documentReady;
     private bool _startupCompleted;
     private bool _reloadRecoveryPending;
@@ -47,6 +50,8 @@ internal sealed class WebPaperRuntime : IDisposable
         PaperBodyPluginDescriptor descriptor,
         string paperId,
         string stateJson,
+        int stateVersion,
+        int targetStateVersion,
         string settingsJson,
         PaperBodyPluginHostApi workspace,
         Func<bool> isActive,
@@ -60,6 +65,8 @@ internal sealed class WebPaperRuntime : IDisposable
         _descriptor = descriptor;
         _paperId = paperId;
         _stateJson = string.IsNullOrWhiteSpace(stateJson) ? "{}" : stateJson;
+        _stateVersion = Math.Max(1, stateVersion);
+        _targetStateVersion = Math.Max(_stateVersion, targetStateVersion);
         _settingsJson = string.IsNullOrWhiteSpace(settingsJson) ? "{}" : settingsJson;
         _workspace = workspace;
         _isActive = isActive;
@@ -307,6 +314,7 @@ internal sealed class WebPaperRuntime : IDisposable
         _reloadRecoveryPending = false;
         _documentReady = true;
         SendInitialize();
+        FlushPendingBodyMessages();
         _startupReady.TrySetResult(true);
     }
 
@@ -320,7 +328,8 @@ internal sealed class WebPaperRuntime : IDisposable
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
             state = ParseState(_stateJson),
-            stateVersion = _descriptor.StateVersion,
+            stateVersion = _stateVersion,
+            targetStateVersion = _targetStateVersion,
             settings = ParseState(_settingsJson),
             permissions = _workspace.GrantedPermissions.OrderBy(value => value).ToArray()
         });
@@ -667,6 +676,32 @@ internal sealed class WebPaperRuntime : IDisposable
 
     public void PostBodyMessage(JsonElement payload)
     {
+        if (_disposed)
+        {
+            return;
+        }
+        if (!_documentReady)
+        {
+            while (_pendingBodyMessages.Count >= 32)
+            {
+                _pendingBodyMessages.Dequeue();
+            }
+            _pendingBodyMessages.Enqueue(payload.Clone());
+            return;
+        }
+        SendBodyMessage(payload);
+    }
+
+    private void FlushPendingBodyMessages()
+    {
+        while (_documentReady && _pendingBodyMessages.Count > 0)
+        {
+            SendBodyMessage(_pendingBodyMessages.Dequeue());
+        }
+    }
+
+    private void SendBodyMessage(JsonElement payload)
+    {
         Send(new
         {
             type = "bodyMessage",
@@ -801,6 +836,7 @@ internal sealed class WebPaperRuntime : IDisposable
         _startupReady.TrySetCanceled();
         _lifetime.Cancel();
         ClearHostSubscriptions();
+        _pendingBodyMessages.Clear();
         if (_webView.CoreWebView2 is { } core)
         {
             core.WebMessageReceived -= OnWebMessageReceived;

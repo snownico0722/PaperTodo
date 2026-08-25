@@ -105,7 +105,7 @@ public sealed partial class PaperWindow
     {
         if (_pluginCapsulePresentation != null &&
             !IsCurrentBodyProviderMarkdown &&
-            !_bodyFailed)
+            (!_bodyFailed || HasWebPaperRuntimePresentationOwner))
         {
             return CapsulePresentationFallbackText(
                 _pluginCapsulePresentation);

@@ -110,6 +110,7 @@ public sealed partial class AppController
     internal void RollbackMcpCreatedPaper(PaperData paper)
     {
         State.Papers.Remove(paper);
+        ReconcileWebPaperRuntimes();
         if (_windows.TryGetValue(paper.Id, out var window))
         {
             TryExitCleanup(() => window.CloseForReal(saveBeforeClose: false));
@@ -124,6 +125,7 @@ public sealed partial class AppController
     internal void FinalizeMcpPaperCreated(PaperData paper, bool show)
     {
         paper.IsVisible = show;
+        ReconcileWebPaperRuntimes();
         RefreshTrayMenu();
         if (show) ShowPaper(paper);
         else ArrangeDeepCapsules(animate: false);
@@ -163,6 +165,7 @@ public sealed partial class AppController
             _windows.Remove(deleted.Id);
         }
         _visibilityAnimationVersions.Remove(deleted.Id);
+        ReconcileWebPaperRuntimes();
         NotifyTodoReminderCollectionChanged();
 
         if (refreshLinkedTodos)

@@ -2049,6 +2049,7 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
+        ReconcileWebPaperRuntimes();
         QueuePluginPaperStateDeletion(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();

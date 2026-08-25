@@ -55,7 +55,9 @@ public sealed partial class PaperWindow
 
     private double? PluginCapsuleRequestedContentWidth(double? pixelsPerDip = null)
     {
-        if (_pluginCapsulePresentation == null || IsCurrentBodyProviderMarkdown || _bodyFailed)
+        if (_pluginCapsulePresentation == null ||
+            IsCurrentBodyProviderMarkdown ||
+            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
         {
             return null;
         }
@@ -96,7 +98,7 @@ public sealed partial class PaperWindow
         }
     }
 
-    private static PaperCapsulePresentation? NormalizePluginCapsulePresentation(
+    internal static PaperCapsulePresentation? NormalizePluginCapsulePresentation(
         PaperCapsulePresentation? presentation)
     {
         if (presentation == null)
@@ -152,7 +154,7 @@ public sealed partial class PaperWindow
         return value.Length <= 16 ? value : string.Empty;
     }
 
-    private static string CapsulePresentationFallbackText(PaperCapsulePresentation presentation)
+    internal static string CapsulePresentationFallbackText(PaperCapsulePresentation presentation)
     {
         if (!string.IsNullOrWhiteSpace(presentation.PlainText))
         {
@@ -179,7 +181,9 @@ public sealed partial class PaperWindow
         }
 
         var presentation = _pluginCapsulePresentation;
-        if (presentation == null || IsCurrentBodyProviderMarkdown || _bodyFailed)
+        if (presentation == null ||
+            IsCurrentBodyProviderMarkdown ||
+            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
         {
             _pluginCapsuleRegularLayer.Child = null;
             _pluginCapsuleRegularLayer.Visibility = Visibility.Collapsed;
@@ -206,7 +210,9 @@ public sealed partial class PaperWindow
         }
 
         var presentation = _pluginCapsulePresentation;
-        if (presentation == null || IsCurrentBodyProviderMarkdown || _bodyFailed)
+        if (presentation == null ||
+            IsCurrentBodyProviderMarkdown ||
+            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
         {
             _edgeCapsuleHost.SetPluginContent(null, null);
             return;

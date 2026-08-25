@@ -808,3 +808,27 @@ V3 Lite 收敛后，`EdgeCapsuleQueueCompositionProxy.PrewarmLightweight` 仍会
 - `src/EdgeCapsuleQueueCompositionProxy.LightPrewarm.cs`：Lightweight Prewarm 本体。
 - D-007～D-010：bounded live host、WPF owns shape、DComp translation-only 与 handoff authority 的长期架构边界。
 - PR #137：4.0 slim-down review 再次暴露了该实测结论此前没有进入长期知识 owner。
+
+
+---
+
+## D-024 — Web `backgroundUpdates` 使用 per-Paper Runtime，不借 Body WebView 保活
+
+**Status:** Accepted
+
+### Decision
+
+Web provider 声明 `backgroundUpdates` 时必须同时声明 `paperRuntime` 入口。宿主由 `AppController` 按真实 `PaperData.Id` 持有一份独立后台 WebView；它从创建起固定挂在后台 runtime host，不进入 `PaperWindow`，也不因 Paper 隐藏、折叠、Body reload/失败/重建或当前没有 Window 而结束。
+
+`WebPaperBodySession` 只负责完整正文 UI；provider 级 `appRuntime` 继续保持每 provider 0/1 的全局生命周期。Native `backgroundUpdates` 保持现有 body-session 语义，因为它没有 WebView 跨 HWND 的 controller 搬运问题。
+
+### Why
+
+旧实现让同一个 WebView 同时承担前台 UI 和后台 JS runtime。未展示的 WebView 先挂在隐藏 HWND，第一次进入真实 PaperWindow 时又必须 Dispose/Recreate，导致 timer、Promise、WebSocket、closure 和内存状态被 UI 宿主切换误杀。把 runtime 仅移到 `PaperWindow` 仍不完整，因为启动时本来就隐藏的 Paper 可以没有 Window。
+
+### Rejected / Do not reintroduce
+
+- 不把已初始化的 Body WebView 在隐藏 HWND 与 PaperWindow HWND 之间搬运。
+- 不用 provider 级 `appRuntime` 模拟多 Paper 实例；每张 Paper 的后台实例必须独立。
+- 不让 PaperRuntime lifetime 依赖 `PaperWindow` 是否已经构造。
+- 不用保存 JSON 假装能恢复 WebSocket、Promise、timer 或 JS 闭包的连续 runtime。

@@ -356,4 +356,4 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 ## Web Paper Runtime 生命周期
 
-Web 插件把三种生命周期分开：`appRuntime` 是 Provider 级单例；`paperRuntime` 是声明 `backgroundUpdates` 时每张 Paper 独立的后台 WebView；`WebPaperBodySession` 只负责完整纸片 UI。PaperRuntime 从创建起固定挂在后台宿主，不跨 HWND；Body 的折叠、失败、reload 或重建都不会销毁对应 PaperRuntime。删除 Paper、切换 Provider 或 PaperWindow 最终销毁时才结束 PaperRuntime。
+Web 插件把三种生命周期分开：`appRuntime` 是 Provider 级单例；`paperRuntime` 是声明 `backgroundUpdates` 时每张 Paper 独立的后台 WebView；`WebPaperBodySession` 只负责完整纸片 UI。`AppController` 以真实 `PaperData` / `paperId` 为 PaperRuntime authority，因此隐藏纸片即使没有 `PaperWindow` 也继续拥有自己的后台实例。PaperRuntime 从创建起固定挂在后台宿主，不跨 HWND；Body 的折叠、失败、reload、重建以及 Window 是否存在都不会销毁它。删除 Paper、切换 Provider 或应用退出才结束对应 PaperRuntime。

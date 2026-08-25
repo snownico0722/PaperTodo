@@ -769,6 +769,7 @@ public sealed partial class PaperWindow : Window
         Dispatcher.VerifyAccess();
         BuildShell();
         _isShellBuilt = true;
+        _controller.ApplyWebPaperRuntimePresentationToWindow(this);
         UpdateToolTipSetting();
         RefreshExperimentalOpacity(animate: false);
         UpdateExperimentalFocusPresentationSettings();
