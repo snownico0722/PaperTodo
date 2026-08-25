@@ -104,7 +104,7 @@ public sealed partial class AppController
                 return;
             }
 
-            ExecuteStartupCommand(new StartupCommand(definition.StartupCommandKind));
+            ExecuteGlobalShortcutCommand(definition);
         }, DispatcherPriority.Input);
     }
 
@@ -384,6 +384,9 @@ public sealed partial class AppController
             }
 
             State.OpenEdgeCapsuleShortcutAtCursor = true;
+            State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
+            State.SmartShowHideVisibilityShortcuts = true;
+            ClearVisibilityShortcutRestoreSnapshot();
             _shortcutRecordingCommandId = null;
             ApplyShortcutDraft();
         };
@@ -400,6 +403,21 @@ public sealed partial class AppController
         foreach (var definition in GlobalShortcutCatalog.DefinitionsInGroup(GlobalShortcutGroup.General))
         {
             rows.Children.Add(BuildShortcutRow(definition));
+            if (definition.Id == GlobalShortcutCatalog.Hide)
+            {
+                if (State.AdvancedSettingsMode)
+                {
+                    rows.Children.Add(SettingsToggle(
+                        Strings.Get("ShortcutPreserveLinkedPaperHiddenState"),
+                        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts,
+                        TogglePreserveLinkedPaperHiddenStateInVisibilityShortcuts));
+                }
+
+                rows.Children.Add(SettingsToggle(
+                    Strings.Get("ShortcutSmartShowHideVisibilityToggle"),
+                    State.SmartShowHideVisibilityShortcuts,
+                    ToggleSmartShowHideVisibilityShortcuts));
+            }
         }
         var distinguishNumpadToggle = SettingsToggle(
             Strings.Get("SettingsDistinguishNumpadShortcutDigits"),

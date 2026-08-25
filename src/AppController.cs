@@ -1301,6 +1301,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        InvalidateVisibilityShortcutSnapshotForExternalCommand();
         if (!_suppressDirty)
         {
             RefreshTopmostForForegroundWindow();
@@ -1900,6 +1901,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _windows.TryGetValue(paper.Id, out var window);
         if (window != null)
         {
@@ -1959,6 +1961,12 @@ public sealed partial class AppController : IDisposable
 
     public void ShowAllPapers()
     {
+        InvalidateVisibilityShortcutSnapshotForExternalCommand();
+        ShowPapersBatch(State.Papers.ToList());
+    }
+
+    private void ShowPapersBatch(IReadOnlyList<PaperData> papersToShow)
+    {
         if (IsExiting)
         {
             return;
@@ -1970,10 +1978,8 @@ public sealed partial class AppController : IDisposable
         _isPreparingStartupEdgeCapsules = false;
         EnsurePapersOnScreen();
 
-        // Runtime show-all must follow the normal per-paper restore path so remembered expanded
-        // geometry wins before edge placement. Batch-only work is deferred until every paper has
-        // restored, avoiding one full queue arrange and one shell-prewarm task per paper.
-        var papersToShow = State.Papers.ToList();
+        // Runtime show-all and shortcut restore deliberately share this path so remembered expanded
+        // geometry wins before edge placement. Shortcut restore only filters which papers enter it.
         var wasSuppressingDirty = _suppressDirty;
         var wasRestoringRuntimePaperBatch = _isRestoringRuntimePaperBatch;
         _suppressDirty = true;
@@ -2015,6 +2021,7 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
+        InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _paperSurfaceRestoreGeneration++;
         _isPreparingStartupEdgeCapsules = false;
 

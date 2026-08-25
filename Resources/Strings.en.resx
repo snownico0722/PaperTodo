@@ -1413,4 +1413,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>Plugin is running</value>
   </data>
+  <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
+    <value>Preserve hidden state of linked papers</value>
+  </data>
+  <data name="ShortcutSmartShowHideVisibilityToggle" xml:space="preserve">
+    <value>Smart toggle for Show / Hide shortcuts</value>
+  </data>
 </root>
