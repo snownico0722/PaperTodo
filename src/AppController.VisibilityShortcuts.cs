@@ -78,7 +78,7 @@ public sealed partial class AppController
         _visibilityShortcutVisibleLinkedPaperIds = State.Papers
             .Where(paper =>
                 IsLinkedPaperProtectedFromVisibilityShortcutRestore(paper) &&
-                paper.IsVisible)
+                IsPaperShown(paper))
             .Select(paper => paper.Id)
             .ToHashSet(StringComparer.Ordinal);
     }
