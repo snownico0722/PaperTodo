@@ -1386,7 +1386,4 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>연결된 종이의 숨김 상태 유지</value>
   </data>
-  <data name="ShortcutSmartShowHideVisibilityToggle" xml:space="preserve">
-    <value>표시 / 숨기기 단축키 스마트 전환</value>
-  </data>
 </root>
