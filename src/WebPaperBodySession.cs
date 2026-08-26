@@ -30,6 +30,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     private readonly PaperBodyPluginManifest _manifest;
     private readonly Action<JsonElement>? _postRuntimeMessage;
     private readonly bool _paperRuntimeOwnsPresentation;
+    private readonly Queue<JsonElement> _pendingRuntimeMessages = new();
     private readonly Grid _root;
     private WebView2CompositionControl _webView;
     private readonly CancellationTokenSource _lifetime = new();
@@ -429,6 +430,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _activeDocumentToken = Guid.NewGuid().ToString("N");
             _departingDocumentToken = null;
             SendInitialize();
+            FlushPendingRuntimeMessages();
         }
         else
         {
@@ -1206,6 +1208,32 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     internal void ReceiveRuntimeMessage(JsonElement payload)
     {
+        if (_disposed || _webViewFailed)
+        {
+            return;
+        }
+        if (!_documentReady || !_pluginDocumentReady)
+        {
+            while (_pendingRuntimeMessages.Count >= 32)
+            {
+                _pendingRuntimeMessages.Dequeue();
+            }
+            _pendingRuntimeMessages.Enqueue(payload.Clone());
+            return;
+        }
+        SendRuntimeMessage(payload);
+    }
+
+    private void FlushPendingRuntimeMessages()
+    {
+        while (_documentReady && _pluginDocumentReady && _pendingRuntimeMessages.Count > 0)
+        {
+            SendRuntimeMessage(_pendingRuntimeMessages.Dequeue());
+        }
+    }
+
+    private void SendRuntimeMessage(JsonElement payload)
+    {
         Send(new
         {
             type = "runtimeMessage",
@@ -1286,6 +1314,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _departingDocumentToken = null;
         _documentGeneration++;
         ClearHostSubscriptions();
+        _pendingRuntimeMessages.Clear();
         _lifetime.Cancel();
         _webViewGeneration++;
         DisposeWebView(_webView);

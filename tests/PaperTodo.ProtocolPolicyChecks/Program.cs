@@ -331,6 +331,18 @@ internal static class Program
         Assert(
             runtime.GetField("_pendingBodyMessages", BindingFlags.Instance | BindingFlags.NonPublic) != null,
             "Body-to-paper-runtime startup messages need a bounded pre-ready queue.");
+        Assert(
+            runtime.GetField("_activeDocumentToken", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+            runtime.GetField("_departingDocumentToken", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+            runtime.GetField("_documentGeneration", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Web paper runtime must reject stale documents across reload/recovery.");
+        var stateVersion = runtime.GetField("_stateVersion", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert(stateVersion != null && !stateVersion.IsInitOnly,
+            "Web paper runtime must advance its in-memory state version after a successful save.");
+        var body = RequireType(host, "PaperTodo.WebPaperBodySession");
+        Assert(
+            body.GetField("_pendingRuntimeMessages", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Paper-runtime-to-body startup messages need a bounded pre-ready queue.");
         Assert(manifest.GetProperty("PaperRuntime") != null,
             "Web per-paper runtime entry is not represented in the parsed manifest.");
         Assert(manifest.GetProperty("PaperRuntimePath") != null,

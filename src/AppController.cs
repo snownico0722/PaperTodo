@@ -287,6 +287,10 @@ public sealed partial class AppController : IDisposable
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         var rescuedPapers = EnsurePapersOnScreen();
 
+        // Establish entity-paper background ownership before any visible Web body can initialize
+        // and emit Body -> PaperRuntime messages during restore.
+        EnableWebPaperRuntimeReconciliation();
+
         // Respect persisted IsVisible: hide closes the paper surface, delete removes it.
         // Tray/show-all (and second-instance show) still restore everything intentionally.
         var papersToRestore = State.Papers.Where(paper => paper.IsVisible).ToList();

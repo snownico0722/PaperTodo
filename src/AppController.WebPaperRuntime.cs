@@ -28,6 +28,7 @@ public sealed partial class AppController
         public PaperBodyPluginHostApi? HostApi { get; set; }
         public int FailureCount { get; set; }
         public int RetryGeneration { get; set; }
+        public DateTimeOffset RunningSinceUtc { get; set; }
         public bool HasHeaderValue { get; set; }
         public string HeaderText { get; set; } = string.Empty;
         public bool HasCapsuleValue { get; set; }
@@ -251,6 +252,7 @@ public sealed partial class AppController
             }
 
             slot.State = WebPaperRuntimeState.Running;
+            slot.RunningSinceUtc = DateTimeOffset.UtcNow;
             ApplyWebPaperRuntimePresentationToWindowForSlot(slot);
             QueuePluginStatusUiRefresh();
         }
@@ -285,6 +287,12 @@ public sealed partial class AppController
                 {
                     return;
                 }
+                if (slot.RunningSinceUtc != default &&
+                    DateTimeOffset.UtcNow - slot.RunningSinceUtc >=
+                    PluginAppRuntimeStableFailureResetAfter)
+                {
+                    slot.FailureCount = 0;
+                }
                 HandleWebPaperRuntimeFailure(
                     slot,
                     runtimeId,
@@ -316,6 +324,7 @@ public sealed partial class AppController
             exception.GetBaseException());
 
         DisposeWebPaperRuntimeLease(slot);
+        slot.RunningSinceUtc = default;
         slot.FailureCount++;
         if (slot.FailureCount <= PluginAppRuntimeRetryDelays.Length &&
             TryGetDesiredWebPaperRuntime(slot.Paper, out var descriptor) &&
@@ -381,6 +390,7 @@ public sealed partial class AppController
         {
             slot.RetryGeneration++;
             slot.FailureCount = 0;
+            slot.RunningSinceUtc = default;
             StartWebPaperRuntimeSlot(slot);
         }
     }

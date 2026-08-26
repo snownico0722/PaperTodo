@@ -34,7 +34,7 @@ internal sealed class WebPaperRuntime : IDisposable
 
     private string _expectedOrigin = string.Empty;
     private string _stateJson;
-    private readonly int _stateVersion;
+    private int _stateVersion;
     private readonly int _targetStateVersion;
     private string _settingsJson;
     private readonly Queue<JsonElement> _pendingBodyMessages = new();
@@ -45,6 +45,9 @@ internal sealed class WebPaperRuntime : IDisposable
     private bool _disposed;
     private ulong _documentNavigationId;
     private bool _hasDocumentNavigation;
+    private string? _activeDocumentToken;
+    private string? _departingDocumentToken;
+    private int _documentGeneration;
 
     public WebPaperRuntime(
         PaperBodyPluginDescriptor descriptor,
@@ -154,21 +157,37 @@ internal sealed class WebPaperRuntime : IDisposable
               const listeners = new Set();
               const hostEventListeners = new Map();
               const pending = new Map();
-              const queuedRequests = [];
               let sequence = 0;
-              let hostReady = false;
               let stateProvider = null;
-              const post = (type, payload = null) => window.chrome.webview.postMessage({ type, payload });
-              const request = (method, params = {}) => {
+              let documentToken = null;
+              let pendingState = null;
+              let hasPendingState = false;
+              let markHostReady;
+              const hostReady = new Promise(resolve => { markHostReady = resolve; });
+              const rawPost = (type, payload = null) => {
+                window.chrome.webview.postMessage({ type, payload, documentToken });
+              };
+              const post = (type, payload = null) => {
+                void hostReady.then(() => rawPost(type, payload));
+              };
+              const request = async (method, params = {}) => {
+                await hostReady;
                 const requestId = `p${++sequence}`;
                 const payload = { requestId, method: String(method ?? ''), params: params ?? {} };
                 return new Promise((resolve, reject) => {
                   pending.set(requestId, { resolve, reject });
-                  if (hostReady) post('hostRequest', payload);
-                  else queuedRequests.push(payload);
+                  rawPost('hostRequest', payload);
                 });
               };
-              const saveState = state => post('saveState', state ?? {});
+              const saveState = state => {
+                const nextState = state ?? {};
+                if (documentToken) {
+                  rawPost('saveState', nextState);
+                  return;
+                }
+                pendingState = nextState;
+                hasPendingState = true;
+              };
               const flushState = () => {
                 if (typeof stateProvider !== 'function') return;
                 try { saveState(stateProvider()); } catch { }
@@ -232,9 +251,16 @@ internal sealed class WebPaperRuntime : IDisposable
               });
               window.chrome.webview.addEventListener('message', event => {
                 const message = event.data;
-                if (message?.type === 'initialize' && !hostReady) {
-                  hostReady = true;
-                  for (const payload of queuedRequests.splice(0)) post('hostRequest', payload);
+                if (message?.type === 'initialize') {
+                  documentToken = typeof message.documentToken === 'string'
+                    ? message.documentToken
+                    : null;
+                  if (documentToken && hasPendingState) {
+                    rawPost('saveState', pendingState);
+                  }
+                  pendingState = null;
+                  hasPendingState = false;
+                  markHostReady();
                 }
                 if (message?.type === 'commitRequested') flushState();
                 if (message?.type === 'hostResponse') {
@@ -283,6 +309,12 @@ internal sealed class WebPaperRuntime : IDisposable
 
         _documentNavigationId = e.NavigationId;
         _hasDocumentNavigation = true;
+        if (!string.IsNullOrWhiteSpace(_activeDocumentToken))
+        {
+            _departingDocumentToken = _activeDocumentToken;
+            _activeDocumentToken = null;
+        }
+        _documentGeneration++;
         _documentReady = false;
         ClearHostSubscriptions();
     }
@@ -306,6 +338,8 @@ internal sealed class WebPaperRuntime : IDisposable
         {
             _reloadRecoveryPending = false;
             _documentReady = false;
+            _activeDocumentToken = null;
+            _departingDocumentToken = null;
             FailStartupOrRestart(
                 $"Web paper runtime navigation failed ({e.WebErrorStatus}).");
             return;
@@ -313,6 +347,8 @@ internal sealed class WebPaperRuntime : IDisposable
 
         _reloadRecoveryPending = false;
         _documentReady = true;
+        _activeDocumentToken = Guid.NewGuid().ToString("N");
+        _departingDocumentToken = null;
         SendInitialize();
         FlushPendingBodyMessages();
         _startupReady.TrySetResult(true);
@@ -324,6 +360,7 @@ internal sealed class WebPaperRuntime : IDisposable
         {
             type = "initialize",
             surface = "paperRuntime",
+            documentToken = _activeDocumentToken,
             paperId = _paperId,
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
@@ -340,7 +377,6 @@ internal sealed class WebPaperRuntime : IDisposable
         CoreWebView2WebMessageReceivedEventArgs e)
     {
         if (!ReferenceEquals(sender, _webView.CoreWebView2) ||
-            !_documentReady ||
             !WebPluginRuntimeInfrastructure.IsSameOrigin(e.Source, _expectedOrigin))
         {
             return;
@@ -357,15 +393,27 @@ internal sealed class WebPaperRuntime : IDisposable
                 return;
             }
 
+            var type = typeValue.GetString() ?? string.Empty;
+            if (!CanAcceptDocumentMessage(type, _documentReady))
+            {
+                return;
+            }
+            var documentToken = root.TryGetProperty("documentToken", out var tokenValue) &&
+                                tokenValue.ValueKind == JsonValueKind.String
+                ? tokenValue.GetString()
+                : null;
+            if (!HasDocumentAuthority(type, documentToken))
+            {
+                return;
+            }
+
             var payload = root.TryGetProperty("payload", out var payloadValue)
                 ? payloadValue
                 : default;
-            switch (typeValue.GetString())
+            switch (type)
             {
                 case "saveState":
-                    _saveState(payload.ValueKind == JsonValueKind.Undefined
-                        ? "{}"
-                        : payload.GetRawText());
+                    SaveStateFromRuntime(payload);
                     break;
                 case "setTitle":
                     _setTitle(ReadPayloadString(payload));
@@ -403,9 +451,38 @@ internal sealed class WebPaperRuntime : IDisposable
         }
     }
 
+    private static bool CanAcceptDocumentMessage(string type, bool documentReady) =>
+        string.Equals(type, "saveState", StringComparison.Ordinal) || documentReady;
+
+    private bool HasDocumentAuthority(string type, string? documentToken)
+    {
+        if (string.IsNullOrWhiteSpace(documentToken))
+        {
+            return false;
+        }
+        if (_documentReady &&
+            string.Equals(documentToken, _activeDocumentToken, StringComparison.Ordinal))
+        {
+            return true;
+        }
+        return string.Equals(type, "saveState", StringComparison.Ordinal) &&
+            !_documentReady &&
+            string.Equals(documentToken, _departingDocumentToken, StringComparison.Ordinal);
+    }
+
+    private void SaveStateFromRuntime(JsonElement payload)
+    {
+        var normalized = PaperBodyPluginDataStore.NormalizeStateJson(
+            payload.ValueKind == JsonValueKind.Undefined ? "{}" : payload.GetRawText());
+        _stateJson = normalized;
+        _stateVersion = _targetStateVersion;
+        _saveState(normalized);
+    }
+
     private void HandleHostRequest(JsonElement payload)
     {
         var requestId = WebPluginRuntimeInfrastructure.RequiredString(payload, "requestId");
+        var documentGeneration = _documentGeneration;
         try
         {
             var method = WebPluginRuntimeInfrastructure.RequiredString(payload, "method");
@@ -426,10 +503,12 @@ internal sealed class WebPaperRuntime : IDisposable
                     method,
                     parameters);
             }
+            if (documentGeneration != _documentGeneration) return;
             Send(new { type = "hostResponse", requestId, ok = true, result });
         }
         catch (PaperTodoPluginException ex)
         {
+            if (documentGeneration != _documentGeneration) return;
             Send(new
             {
                 type = "hostResponse",
@@ -440,6 +519,7 @@ internal sealed class WebPaperRuntime : IDisposable
         }
         catch
         {
+            if (documentGeneration != _documentGeneration) return;
             Send(new
             {
                 type = "hostResponse",
@@ -495,6 +575,7 @@ internal sealed class WebPaperRuntime : IDisposable
         var subscriptionId = WebPluginRuntimeInfrastructure.RequiredString(
             payload,
             "subscriptionId");
+        var documentGeneration = _documentGeneration;
         try
         {
             if (_hostSubscriptions.Remove(subscriptionId, out var existing))
@@ -512,6 +593,7 @@ internal sealed class WebPaperRuntime : IDisposable
                 },
                 value =>
                 {
+                    if (documentGeneration != _documentGeneration) return;
                     var eventJson = JsonSerializer.SerializeToElement(
                         value,
                         value.GetType(),
@@ -651,6 +733,7 @@ internal sealed class WebPaperRuntime : IDisposable
             return;
         }
         _stateJson = normalized;
+        _stateVersion = _targetStateVersion;
         Send(new
         {
             type = "stateChanged",
@@ -779,6 +862,9 @@ internal sealed class WebPaperRuntime : IDisposable
         _hasDocumentNavigation = false;
         _reloadRecoveryPending = false;
         _documentReady = false;
+        _activeDocumentToken = null;
+        _departingDocumentToken = null;
+        _documentGeneration++;
         ClearHostSubscriptions();
         if (!_startupCompleted &&
             _startupReady.TrySetException(new InvalidOperationException(message)))
@@ -832,6 +918,9 @@ internal sealed class WebPaperRuntime : IDisposable
         }
         Send(new { type = "commitRequested" });
         _documentReady = false;
+        _activeDocumentToken = null;
+        _departingDocumentToken = null;
+        _documentGeneration++;
         _disposed = true;
         _startupReady.TrySetCanceled();
         _lifetime.Cancel();

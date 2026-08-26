@@ -213,7 +213,8 @@ plugins/
    ├─ web/
    │  ├─ index.html
    │  ├─ mini.html
-   │  └─ runtime.html       # appRuntime 默认入口；manifest runtime 可改名
+   │  ├─ runtime.html       # appRuntime 默认入口；manifest runtime 可改名
+   │  └─ paper-runtime.html # Web backgroundUpdates 的 per-Paper 后台入口
    ├─ WeatherPlugin.dll
    ├─ WeatherPlugin.deps.json
    ├─ 插件私有依赖 / 原生库
@@ -242,6 +243,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `miniSize` | 可选，仅与 `miniEntry` 一起使用；Mini 首选尺寸 |
 | `miniMaxSize` | 可选，2.0；插件承诺的 Mini 最大容量，用于宿主 bounded capacity 规划 |
 | `runtime` | 可选，仅 Web `appRuntime`；省略时默认 `entry` 同目录 `runtime.html` |
+| `paperRuntime` | Web 声明 `backgroundUpdates` 时必填；每张 Paper 独立的后台运行入口，必须位于 Web `entry` 静态目录内 |
 | `capabilities` | 可选：`textZoom`、`noteLinks`；2.0 还支持生命周期能力 `appRuntime` |
 | `requires` | 可选；当前支持 `backgroundUpdates` |
 | `permissions` | 可选；Paper/Todo/Note Workspace 权限 |
@@ -283,6 +285,8 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 ```
 
 只有当插件在完整正文没有呈现时仍需要保持业务运行，才声明它。不要把它当成普通能力标记；长期计时、后台状态同步等场景才需要。
+
+Web 插件声明 `backgroundUpdates` 时必须同时声明 `paperRuntime`，例如 `"paperRuntime": "web/paper-runtime.html"`。宿主会为每张真实 Paper 创建一份独立后台 WebView；它与可见 `entry` Body 分离，折叠、隐藏、Body reload/失败以及当前没有 `PaperWindow` 都不会结束它。Native `backgroundUpdates` 仍沿用 per-paper Body Session 运行语义，不需要 `paperRuntime`。
 
 ### 3.3 `startupPaper`
 
@@ -349,6 +353,8 @@ PaperTodo process
     │   ├─ Settings（只读、按需读取当前值）
     │   ├─ Global Top Bar
     │   └─ Global Shortcuts
+    ├─ paper runtime[paperId] (Web backgroundUpdates 时每 Paper 1 个)
+    │   └─ 独立后台 JS / state / timer / network；不拥有可见 UI
     └─ paper body session[paperId] (0..N live)
         ├─ Paper / Body
         ├─ Paper Top Bar
