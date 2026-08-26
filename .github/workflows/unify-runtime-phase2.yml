@@ -6,6 +6,7 @@ on:
       - refactor/unified-plugin-runtime
     paths:
       - tools/unify_runtime_phase2.py
+      - tools/unify_runtime_phase2_fix.py
       - .github/workflows/unify-runtime-phase2.yml
 
 permissions:
@@ -26,6 +27,7 @@ jobs:
         shell: pwsh
         run: |
           python tools/unify_runtime_phase2.py
+          python tools/unify_runtime_phase2_fix.py
           git diff --check
           Write-Host '--- residual legacy runtime references ---'
           Get-ChildItem src,PaperTodo.Plugin.Abstractions,plugin-samples,plugins -Recurse -File |
