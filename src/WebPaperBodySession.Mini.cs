@@ -68,11 +68,6 @@ internal sealed partial class WebPaperBodySession
         JsonElement payload,
         WebPluginMiniViewHost? sourceMini)
     {
-        if (_paperRuntimeOwnsState)
-        {
-            return;
-        }
-
         var nextStateJson = payload.ValueKind == JsonValueKind.Undefined
             ? "{}"
             : payload.GetRawText();
@@ -472,7 +467,7 @@ internal sealed partial class WebPaperBodySession
                 await core.AddScriptToExecuteOnDocumentCreatedAsync(
                     BuildMiniBridgeScript(
                         _expectedOrigin,
-                        persistentStateWritable: !_owner._paperRuntimeOwnsState));
+                        persistentStateWritable: true));
                 token.ThrowIfCancellationRequested();
                 if (_disposed)
                 {
@@ -590,7 +585,7 @@ internal sealed partial class WebPaperBodySession
 
                   const saveState = state => {
                     if (!persistentStateWritable) {
-                      throw new Error('Persistent paper state is owned by paperRuntime; send a runtime command instead.');
+                      throw new Error('Persistent frontend state is unavailable.');
                     }
                     post('saveState', state ?? {});
                   };
@@ -631,7 +626,7 @@ internal sealed partial class WebPaperBodySession
                     post, request, saveState, flushState,
                     registerStateProvider(provider) {
                       if (!persistentStateWritable) {
-                        throw new Error('Persistent paper state providers belong to paperRuntime for this plugin.');
+                        throw new Error('Persistent frontend state providers are unavailable.');
                       }
                       stateProvider = typeof provider === 'function' ? provider : null;
                       return () => { if (stateProvider === provider) stateProvider = null; };
@@ -849,24 +844,30 @@ internal sealed partial class WebPaperBodySession
                         UpdateInteractiveRegions(payload);
                         break;
                     case "saveState":
-                        if (!_owner._paperRuntimeOwnsState)
-                        {
-                            _owner.UpdateStateFromWebSurface(payload, this);
-                        }
+                        _owner.UpdateStateFromWebSurface(payload, this);
                         break;
                     case "setTitle":
-                        _owner._context.SetTitle(ReadPayloadString(payload));
+                        if (!_owner._runtimeOwnsPresentation)
+                        {
+                            _owner._context.SetTitle(ReadPayloadString(payload));
+                        }
                         break;
                     case "setHeaderText":
-                        _owner._context.Paper.SetHeaderText(ReadPayloadString(payload));
+                        if (!_owner._runtimeOwnsPresentation)
+                        {
+                            _owner._context.Paper.SetHeaderText(ReadPayloadString(payload));
+                        }
                         break;
                     case "setCapsulePresentation":
-                        _owner._context.Paper.SetCapsulePresentation(
-                            payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                                ? null
-                                : JsonSerializer.Deserialize<PaperCapsulePresentation>(
-                                    payload.GetRawText(),
-                                    BridgeJsonOptions));
+                        if (!_owner._runtimeOwnsPresentation)
+                        {
+                            _owner._context.Paper.SetCapsulePresentation(
+                                payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                                    ? null
+                                    : JsonSerializer.Deserialize<PaperCapsulePresentation>(
+                                        payload.GetRawText(),
+                                        BridgeJsonOptions));
+                        }
                         break;
                     case "markDirty":
                         _owner._context.MarkDirty();

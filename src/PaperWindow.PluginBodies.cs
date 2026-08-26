@@ -156,7 +156,7 @@ public sealed partial class PaperWindow
             ? _pluginDisplayTitle
             : _paper.BodyHeaderText;
         return !IsCurrentBodyProviderMarkdown &&
-            (!_bodyFailed || HasWebPaperRuntimePresentationOwner) &&
+            (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
 
@@ -164,7 +164,7 @@ public sealed partial class PaperWindow
     {
         title = _paper.BodyCapsuleText;
         return !IsCurrentBodyProviderMarkdown &&
-            (!_bodyFailed || HasWebPaperRuntimePresentationOwner) &&
+            (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
 
@@ -264,20 +264,14 @@ public sealed partial class PaperWindow
                         $"Saved plugin state version {stored.Version} is newer than supported version {descriptor.StateVersion}.");
                 }
                 var context = CreatePluginContext(descriptor, generation, stored);
-                var hasPaperRuntime =
-                    (descriptor.RuntimeRequirements &
-                     PaperBodyRuntimeRequirements.BackgroundUpdates) != 0 &&
-                    !string.IsNullOrWhiteSpace(
-                        descriptor.Manifest.PaperRuntimePath);
+                var runtimeOwnsPresentation =
+                    descriptor.Manifest.Capabilities.Contains(
+                        "appRuntime",
+                        StringComparer.Ordinal);
                 return new WebPaperBodySession(
                     context,
                     descriptor.Manifest,
-                    payload => _controller.PostBodyMessageToWebPaperRuntime(
-                        _paper.Id,
-                        descriptor.Id,
-                        payload),
-                    paperRuntimeOwnsPresentation: hasPaperRuntime,
-                    paperRuntimeOwnsState: hasPaperRuntime);
+                    runtimeOwnsPresentation);
             }
 
             throw new InvalidOperationException("Plugin descriptor has no usable body factory.");
@@ -779,10 +773,6 @@ public sealed partial class PaperWindow
             _paper.Id,
             stateVersion,
             normalized);
-        _controller.NotifyWebPaperRuntimeStateChanged(
-            _paper.Id,
-            providerId,
-            normalized);
     }
 
     internal static string NormalizePluginDisplayText(string? text)
@@ -823,7 +813,7 @@ public sealed partial class PaperWindow
 
     private void ResetPluginRuntimeState(bool refreshTitle)
     {
-        var preservePaperPresentation = HasWebPaperRuntimePresentationOwner;
+        var preservePaperPresentation = HasPluginRuntimePresentationOwner;
         var hadDisplayTitle =
             !preservePaperPresentation &&
             !string.IsNullOrEmpty(_pluginDisplayTitle);
@@ -908,10 +898,8 @@ public sealed partial class PaperWindow
 
         CommitPendingEditsForSave();
         var previousProviderId = NormalizeBodyProviderId(_paper.BodyProviderId);
-        ClearWebPaperRuntimePresentation(previousProviderId);
         RemoveCurrentPaperBody();
         _paper.BodyProviderId = normalized;
-        _controller.ReconcileWebPaperRuntimes();
         _paper.BodyHeaderText = "";
         _paper.BodyCapsuleText = "";
         AttachCurrentPaperBody();
@@ -1033,7 +1021,7 @@ public sealed partial class PaperWindow
 
     private void ClearPluginPresentationOnFailure()
     {
-        if (HasWebPaperRuntimePresentationOwner)
+        if (HasPluginRuntimePresentationOwner)
         {
             return;
         }

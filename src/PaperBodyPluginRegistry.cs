@@ -61,7 +61,6 @@ internal sealed class PaperBodyPluginManifest
     public string Entry { get; set; } = "index.html";
     public string MiniEntry { get; set; } = "";
     public string Runtime { get; set; } = "";
-    public string PaperRuntime { get; set; } = "";
     public PaperBodyPluginMiniSizeManifest? MiniSize { get; set; }
     public PaperBodyPluginMiniSizeManifest? MiniMaxSize { get; set; }
     public string[] Capabilities { get; set; } = [];
@@ -75,7 +74,6 @@ internal sealed class PaperBodyPluginManifest
     public string EntryPath { get; internal set; } = "";
     public string MiniEntryPath { get; internal set; } = "";
     public string RuntimePath { get; internal set; } = "";
-    public string PaperRuntimePath { get; internal set; } = "";
 }
 
 internal sealed class PaperBodyPluginMiniSizeManifest
@@ -363,37 +361,11 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         var requiresBackgroundUpdates =
             (ParseRuntimeRequirements(manifest.Requires) &
              PaperBodyRuntimeRequirements.BackgroundUpdates) != 0;
-        if (!string.IsNullOrWhiteSpace(manifest.PaperRuntime) &&
-            kind != PaperBodyPluginKind.Web)
-        {
-            throw new InvalidDataException(
-                "paperRuntime is only valid for Web plugins.");
-        }
         if (kind == PaperBodyPluginKind.Web && requiresBackgroundUpdates)
         {
-            if (string.IsNullOrWhiteSpace(manifest.PaperRuntime))
-            {
-                throw new InvalidDataException(
-                    "Web plugins that require backgroundUpdates must declare paperRuntime.");
-            }
-            manifest.PaperRuntimePath = ResolveContainedPath(
-                directory,
-                manifest.PaperRuntime);
-            EnsurePathInsideDirectory(
-                webRoot!,
-                manifest.PaperRuntimePath,
-                "paperRuntime");
-            if (!File.Exists(manifest.PaperRuntimePath))
-            {
-                throw new FileNotFoundException(
-                    "Plugin paper runtime entry was not found.",
-                    manifest.PaperRuntimePath);
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(manifest.PaperRuntime))
-        {
             throw new InvalidDataException(
-                "paperRuntime requires the backgroundUpdates runtime requirement.");
+                "Web plugins use the single provider appRuntime/runtime backend; " +
+                "requires: backgroundUpdates is not supported.");
         }
 
         return manifest;
@@ -448,8 +420,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             manifestPath,
             manifest.EntryPath,
             manifest.MiniEntryPath,
-            manifest.RuntimePath,
-            manifest.PaperRuntimePath);
+            manifest.RuntimePath);
         return new PaperBodyPluginDescriptor(
             manifest.Id.Trim(),
             string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Id.Trim() : manifest.Name.Trim(),
@@ -720,8 +691,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         string manifestPath,
         string entryPath,
         string? miniEntryPath = null,
-        string? runtimePath = null,
-        string? paperRuntimePath = null)
+        string? runtimePath = null)
     {
         var manifest = new FileInfo(manifestPath);
         var entry = new FileInfo(entryPath);
@@ -736,11 +706,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         {
             var runtime = new FileInfo(runtimePath);
             value += $":{runtime.Length}:{runtime.LastWriteTimeUtc.Ticks}";
-        }
-        if (!string.IsNullOrWhiteSpace(paperRuntimePath))
-        {
-            var paperRuntime = new FileInfo(paperRuntimePath);
-            value += $":{paperRuntime.Length}:{paperRuntime.LastWriteTimeUtc.Ticks}";
         }
         return value;
     }

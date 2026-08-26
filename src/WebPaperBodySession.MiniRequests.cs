@@ -13,15 +13,14 @@ internal sealed partial class WebPaperBodySession
                           parameters.TryGetProperty("message", out var messageValue)
                 ? messageValue
                 : default;
-            if (_postRuntimeMessage == null ||
-                !_postRuntimeMessage(
+            if (!_context.Runtime.Post(
                     message.ValueKind == JsonValueKind.Undefined
                         ? JsonSerializer.SerializeToElement<object?>(null)
                         : message.Clone()))
             {
                 throw new PaperTodoPluginException(
                     "runtime_unavailable",
-                    "The paper runtime is not ready to accept this message.");
+                    "The plugin Runtime is not ready to accept this message.");
             }
             return null;
         }

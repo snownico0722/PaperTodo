@@ -288,8 +288,7 @@ public sealed partial class AppController : IDisposable
         var rescuedPapers = EnsurePapersOnScreen();
 
         // Establish entity-paper background ownership before any visible Web body can initialize
-        // and emit Body -> PaperRuntime messages during restore.
-        EnableWebPaperRuntimeReconciliation();
+        // and emit Body -> provider Runtime messages during restore.
 
         // Respect persisted IsVisible: hide closes the paper surface, delete removes it.
         // Tray/show-all (and second-instance show) still restore everything intentionally.
@@ -2053,7 +2052,6 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        ReconcileWebPaperRuntimes();
         QueuePluginPaperStateDeletion(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();

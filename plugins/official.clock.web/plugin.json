@@ -8,17 +8,14 @@
   "stateVersion": 1,
   "maxPaperInstances": 1,
   "entry": "web/index.html",
-  "paperRuntime": "web/paper-runtime.html",
   "miniEntry": "web/mini.html",
   "miniSize": {
     "width": 300,
     "height": 190
   },
   "capabilities": [
-    "textZoom"
-  ],
-  "requires": [
-    "backgroundUpdates"
+    "textZoom",
+    "appRuntime"
   ],
   "startupPaper": {
     "enabledSetting": "autoStartCapsule",
@@ -222,5 +219,6 @@
       "category": "显示"
     }
   ],
-  "advancedSettings": true
+  "advancedSettings": true,
+  "runtime": "web/runtime.html"
 }

@@ -57,7 +57,7 @@ public sealed partial class PaperWindow
     {
         if (_pluginCapsulePresentation == null ||
             IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
+            (_bodyFailed && !HasPluginRuntimePresentationOwner))
         {
             return null;
         }
@@ -183,7 +183,7 @@ public sealed partial class PaperWindow
         var presentation = _pluginCapsulePresentation;
         if (presentation == null ||
             IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
+            (_bodyFailed && !HasPluginRuntimePresentationOwner))
         {
             _pluginCapsuleRegularLayer.Child = null;
             _pluginCapsuleRegularLayer.Visibility = Visibility.Collapsed;
@@ -212,7 +212,7 @@ public sealed partial class PaperWindow
         var presentation = _pluginCapsulePresentation;
         if (presentation == null ||
             IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasWebPaperRuntimePresentationOwner))
+            (_bodyFailed && !HasPluginRuntimePresentationOwner))
         {
             _edgeCapsuleHost.SetPluginContent(null, null);
             return;

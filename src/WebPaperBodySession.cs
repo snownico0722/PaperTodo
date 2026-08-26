@@ -30,9 +30,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     private readonly PaperBodyContext _context;
     private readonly PaperBodyPluginManifest _manifest;
-    private readonly Func<JsonElement, bool>? _postRuntimeMessage;
-    private readonly bool _paperRuntimeOwnsPresentation;
-    private readonly bool _paperRuntimeOwnsState;
+    private readonly bool _runtimeOwnsPresentation;
     private readonly Queue<JsonElement> _pendingRuntimeMessages = new();
     private readonly Grid _root;
     private WebView2CompositionControl _webView;
@@ -62,15 +60,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     public WebPaperBodySession(
         PaperBodyContext context,
         PaperBodyPluginManifest manifest,
-        Func<JsonElement, bool>? postRuntimeMessage = null,
-        bool paperRuntimeOwnsPresentation = false,
-        bool paperRuntimeOwnsState = false)
+        bool runtimeOwnsPresentation = false)
     {
         _context = context;
         _manifest = manifest;
-        _postRuntimeMessage = postRuntimeMessage;
-        _paperRuntimeOwnsPresentation = paperRuntimeOwnsPresentation;
-        _paperRuntimeOwnsState = paperRuntimeOwnsState;
+        _runtimeOwnsPresentation = runtimeOwnsPresentation;
         _theme = context.Theme;
         _stateJson = context.StateJson;
         _settingsJson = context.SettingsJson;
@@ -180,7 +174,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             await core.AddScriptToExecuteOnDocumentCreatedAsync(
                 BuildBridgeScript(
                     _expectedOrigin,
-                    persistentStateWritable: !_paperRuntimeOwnsState));
+                    persistentStateWritable: true));
             token.ThrowIfCancellationRequested();
             if (!IsCurrentWebView(webView, generation))
             {
@@ -249,7 +243,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
               };
               const saveState = state => {
                 if (!persistentStateWritable) {
-                  throw new Error('Persistent paper state is owned by paperRuntime; send a runtime command instead.');
+                  throw new Error('Persistent frontend state is unavailable.');
                 }
                 const nextState = state ?? {};
                 if (documentToken) {
@@ -315,7 +309,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 flushState,
                 registerStateProvider(provider) {
                   if (!persistentStateWritable) {
-                    throw new Error('Persistent paper state providers belong to paperRuntime for this plugin.');
+                    throw new Error('Persistent frontend state providers are unavailable.');
                   }
                   stateProvider = typeof provider === 'function' ? provider : null;
                   return () => { if (stateProvider === provider) stateProvider = null; };
@@ -646,24 +640,30 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             switch (type)
             {
                 case "saveState":
-                    if (!_paperRuntimeOwnsState)
-                    {
-                        UpdateStateFromWebSurface(payload, sourceMini: null);
-                    }
+                    UpdateStateFromWebSurface(payload, sourceMini: null);
                     break;
                 case "setTitle":
-                    _context.SetTitle(ReadPayloadString(payload));
+                    if (!_runtimeOwnsPresentation)
+                    {
+                        _context.SetTitle(ReadPayloadString(payload));
+                    }
                     break;
                 case "setHeaderText":
-                    _context.Paper.SetHeaderText(ReadPayloadString(payload));
+                    if (!_runtimeOwnsPresentation)
+                    {
+                        _context.Paper.SetHeaderText(ReadPayloadString(payload));
+                    }
                     break;
                 case "setCapsulePresentation":
-                    _context.Paper.SetCapsulePresentation(
-                        payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                            ? null
-                            : JsonSerializer.Deserialize<PaperCapsulePresentation>(
-                                payload.GetRawText(),
-                                BridgeJsonOptions));
+                    if (!_runtimeOwnsPresentation)
+                    {
+                        _context.Paper.SetCapsulePresentation(
+                            payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                                ? null
+                                : JsonSerializer.Deserialize<PaperCapsulePresentation>(
+                                    payload.GetRawText(),
+                                    BridgeJsonOptions));
+                    }
                     break;
                 case "setInputClaims":
                     _context.SetInputClaims(ReadInputClaims(payload));
@@ -768,15 +768,14 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                           parameters.TryGetProperty("message", out var messageValue)
                 ? messageValue
                 : default;
-            if (_postRuntimeMessage == null ||
-                !_postRuntimeMessage(
+            if (!_context.Runtime.Post(
                     message.ValueKind == JsonValueKind.Undefined
                         ? JsonSerializer.SerializeToElement<object?>(null)
                         : message.Clone()))
             {
                 throw new PaperTodoPluginException(
                     "runtime_unavailable",
-                    "The paper runtime is not ready to accept this message.");
+                    "The plugin Runtime is not ready to accept this message.");
             }
             return null;
         }
@@ -1100,7 +1099,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _pluginDocumentReady = false;
         _webViewFailed = true;
         UpdateWebViewPresentation();
-        if (!_paperRuntimeOwnsPresentation)
+        if (!_runtimeOwnsPresentation)
         {
             _context.Paper.SetHeaderText("");
             _context.Paper.SetCapsulePresentation(null);

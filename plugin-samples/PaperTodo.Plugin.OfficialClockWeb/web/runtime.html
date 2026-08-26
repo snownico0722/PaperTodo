@@ -14,7 +14,6 @@
     titleMode: 'time',
     customTitle: ''
   });
-
   const zoneMap = Object.freeze({
     local: undefined,
     utc: 'UTC',
@@ -35,26 +34,29 @@
   });
 
   let settings = { ...defaults };
+  const paperIds = new Set();
   let timer = 0;
-  let lastHeaderText = '';
-  let lastCapsuleSignature = '';
+  let lastSignature = '';
 
   function applySettings(value) {
     settings = { ...defaults, ...(value || {}) };
+  }
+
+  function replacePapers(values) {
+    paperIds.clear();
+    for (const value of Array.isArray(values) ? values : []) {
+      const id = String(value?.paperId || '').trim();
+      if (id) paperIds.add(id);
+    }
   }
 
   function zonedParts(date) {
     const timeZone = zoneMap[settings.timeZone];
     const parts = new Intl.DateTimeFormat(undefined, {
       timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      weekday: 'long',
-      hour12: settings.hourCycle === '12'
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      weekday: 'long', hour12: settings.hourCycle === '12'
     }).formatToParts(date);
     return Object.fromEntries(parts.map(part => [part.type, part.value]));
   }
@@ -71,13 +73,9 @@
   }
 
   function zonedClockParts(date) {
-    const timeZone = zoneMap[settings.timeZone];
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23'
+      timeZone: zoneMap[settings.timeZone],
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
     }).formatToParts(date);
     return Object.fromEntries(parts.map(part => [part.type, part.value]));
   }
@@ -94,56 +92,65 @@
     return timeText;
   }
 
-  function publish() {
+  function publish(force = false) {
+    const api = window.papertodo?.papers;
+    if (!api || paperIds.size === 0) return;
     const now = new Date();
     const parts = zonedParts(now);
     const timeText = `${parts.hour}:${parts.minute}`;
     const title = titleText(timeText, formatDate(parts));
-    const paper = window.papertodo?.paper;
-    if (!paper) return;
-
-    if (title !== lastHeaderText) {
-      paper.setHeaderText(title);
-      lastHeaderText = title;
-    }
-
     const clock = zonedClockParts(now);
     const elapsed = Number(clock.hour) * 3600 + Number(clock.minute) * 60 + Number(clock.second);
     const percent = Math.min(100, Math.max(0, elapsed / 864));
     const progressStep = Math.round(percent * 10);
     const signature = `${title}\u001f${progressStep}\u001f${settings.showDayProgress ? 1 : 0}`;
-    if (signature !== lastCapsuleSignature) {
-      paper.setCapsulePresentation({
-        preferredWidth: 0,
-        plainText: title,
-        toolTip: title,
-        components: settings.showDayProgress
-          ? [
-              { kind: 'progressRing', value: percent / 100, tone: 'accent' },
-              { kind: 'text', text: title, fill: true }
-            ]
-          : [{ kind: 'text', text: title, fill: true }]
-      });
-      lastCapsuleSignature = signature;
+    if (!force && signature === lastSignature) return;
+    lastSignature = signature;
+
+    const presentation = {
+      preferredWidth: 0,
+      plainText: title,
+      toolTip: title,
+      components: settings.showDayProgress
+        ? [
+            { kind: 'progressRing', value: percent / 100, tone: 'accent' },
+            { kind: 'text', text: title, fill: true }
+          ]
+        : [{ kind: 'text', text: title, fill: true }]
+    };
+    for (const paperId of paperIds) {
+      void api.setHeaderText(paperId, title);
+      void api.setCapsulePresentation(paperId, presentation);
     }
   }
 
   function restartTimer() {
     clearInterval(timer);
-    timer = setInterval(publish, 1000);
-    publish();
+    timer = setInterval(() => publish(false), 1000);
+    publish(true);
   }
 
   window.addEventListener('papertodo', event => {
     const message = event.detail || {};
     if (message.type === 'initialize') {
       applySettings(message.settings);
+      replacePapers(message.papers);
       restartTimer();
-    } else if (message.type === 'settingsChanged') {
+      return;
+    }
+    if (message.type === 'settingsChanged') {
       applySettings(message.settings);
-      lastHeaderText = '';
-      lastCapsuleSignature = '';
+      lastSignature = '';
       restartTimer();
+      return;
+    }
+    if (message.type === 'paperEvent') {
+      const item = message.event || {};
+      const paperId = String(item.paperId || '').trim();
+      if (!paperId) return;
+      if (item.kind === 'paperAdded') paperIds.add(paperId);
+      if (item.kind === 'paperRemoved') paperIds.delete(paperId);
+      publish(true);
     }
   });
 </script>
