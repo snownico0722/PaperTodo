@@ -1,0 +1,65 @@
+name: PR153 review fixes
+
+on:
+  push:
+    branches:
+      - cleanup/runtime-and-todo-convergence
+    paths:
+      - .github/workflows/pr153-review-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply fixes
+        shell: pwsh
+        run: python tools/apply_pr153_review_fixes.py
+      - name: Diff check
+        shell: pwsh
+        run: git diff --check
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore .\PaperTodo.csproj
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+      - name: Protocol checks
+        shell: pwsh
+        run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+      - name: Structural review checks
+        shell: pwsh
+        run: |
+          $todoRules = Get-Content .\src\TodoRules.cs -Raw
+          $todoWindow = Get-Content .\src\PaperWindow.TodoLinksAndSelection.cs -Raw
+          $commands = Get-Content .\src\PaperCommandService.cs -Raw
+          $mcp = Get-Content .\src\McpCommandService.cs -Raw
+          if ($todoRules -notmatch 'ApplyDoneTransitionOrdering') { throw 'transition ordering helper missing' }
+          if ($todoWindow -notmatch 'ApplyDoneTransitionOrdering') { throw 'UI transition ordering not restored' }
+          if ($commands -notmatch 'var wasDone = item.Done;') { throw 'transition-sensitive external update missing' }
+          if ($commands -notmatch 'doneChanged && item.Done && _controller.State.AutoClearCompletedTodos') { throw 'auto-clear transition guard missing' }
+          if ($mcp -notmatch 'deleted = true') { throw 'MCP auto-clear success result missing' }
+          if ((Get-Content .\src\AppController.cs -Raw) -match 'if \(changed\)\s*\{\s*\}') { throw 'empty AppController block remains' }
+          if ((Get-Content .\src\StateStore.cs -Raw) -match 'if \(!state.UseCapsuleCollapseAll\)\s*\{\s*\}') { throw 'empty StateStore block remains' }
+      - name: Commit validated fixes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/TodoRules.cs src/PaperWindow.TodoLinksAndSelection.cs src/PaperCommandService.cs src/McpCommandService.cs src/AppController.cs src/StateStore.cs
+          git commit -m "fix: preserve Todo completion semantics"
+          git rm tools/apply_pr153_review_fixes.py .github/workflows/pr153-review-fixes.yml
+          git commit -m "chore: remove PR 153 review validation"
+          git push
