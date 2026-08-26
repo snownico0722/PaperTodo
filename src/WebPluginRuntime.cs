@@ -79,6 +79,12 @@ internal sealed class WebPluginRuntime : IDisposable
         _papersSubscription = _papers.Subscribe(OnPaperEvent);
     }
 
+    internal bool CanAcceptPaperMessages =>
+        !_disposed &&
+        !_restartRequested &&
+        _documentReady &&
+        _isActive();
+
     public async Task StartAsync()
     {
         ThrowIfInactive();

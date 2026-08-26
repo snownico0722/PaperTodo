@@ -23,6 +23,7 @@ internal static class Program
             CheckManifestRuntimeAndMiniContracts(host);
             CheckGlobalTopBarPriority(host, abstractions);
             CheckPluginRuntimeSettings(host, abstractions);
+            CheckPluginRuntimePersistenceGuards(host);
             Console.WriteLine("PaperTodo protocol policy checks passed.");
             return 0;
         }
@@ -418,6 +419,43 @@ internal static class Program
         Assert(
             window.GetField("_pluginTopBarActionElements", BindingFlags.Instance | BindingFlags.NonPublic) != null,
             "Top Bar must retain action scope per button so Global actions can be fitted individually.");
+    }
+
+    private static void CheckPluginRuntimePersistenceGuards(Assembly host)
+    {
+        var dataStore = RequireType(host, "PaperTodo.PaperBodyPluginDataStore");
+        var paperLimit = dataStore.GetField(
+            "MaximumPaperStateBytes",
+            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue();
+        var runtimeLimit = dataStore.GetField(
+            "MaximumPluginRuntimeStateBytes",
+            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue();
+        Assert(
+            paperLimit is int paperBytes && paperBytes == 10 * 1024 * 1024,
+            "Each Paper frontend state must allow exactly 10 MiB.");
+        Assert(
+            runtimeLimit is int runtimeBytes && runtimeBytes == 20 * 1024 * 1024,
+            "Each provider PluginRuntime state must allow exactly 20 MiB.");
+
+        var controller = RequireType(host, "PaperTodo.AppController");
+        var versionGuard = controller.GetMethod(
+            "PluginRuntimeStateVersionIsSupported",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "PluginRuntime state downgrade guard was not found.");
+        Assert((bool)(versionGuard.Invoke(null, new object[] { 2, 2 }) ?? false),
+            "Equal PluginRuntime state versions must be accepted.");
+        Assert((bool)(versionGuard.Invoke(null, new object[] { 1, 2 }) ?? false),
+            "Older PluginRuntime state must remain readable for plugin-owned migration.");
+        Assert(!(bool)(versionGuard.Invoke(null, new object[] { 3, 2 }) ?? true),
+            "Newer PluginRuntime state must be rejected instead of being downgraded.");
+
+        var webRuntime = RequireType(host, "PaperTodo.WebPluginRuntime");
+        Assert(
+            webRuntime.GetProperty(
+                "CanAcceptPaperMessages",
+                BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Web PluginRuntime must expose document readiness to prevent false-success message loss.");
     }
 
     private static void CheckPluginRuntimeSettings(Assembly host, Assembly abstractions)

@@ -72,6 +72,9 @@ public sealed partial class AppController
     private sealed class PluginRuntimeOwnershipCanceledException(string message)
         : Exception(message);
 
+    private sealed class PluginRuntimeStateVersionException(string message)
+        : Exception(message);
+
     private sealed class PluginRuntimeSlot
     {
         public required string ProviderId { get; init; }
@@ -307,6 +310,23 @@ public sealed partial class AppController
             slot.RetryGeneration++;
             QueuePluginStatusUiRefresh();
         }
+        catch (PluginRuntimeStateVersionException ex)
+        {
+            ClearPluginRuntimeLifetime(slot, lifetime);
+            lifetime.TryDeactivate();
+            lease?.Dispose();
+            if (!IsCurrentPluginRuntimeSlot(slot, runtimeId))
+            {
+                return;
+            }
+
+            HandlePluginRuntimeFailure(
+                slot,
+                descriptor,
+                ex,
+                "state-version",
+                retry: false);
+        }
         catch (PluginRuntimeOwnershipCanceledException)
         {
             ClearPluginRuntimeLifetime(slot, lifetime);
@@ -348,6 +368,15 @@ public sealed partial class AppController
         {
             throw new PluginRuntimeOwnershipCanceledException(
                 "The plugin runtime no longer has an entity-paper owner.");
+        }
+
+        var storedRuntimeState = PaperBodyPlugins.DataStore.ReadRuntimeState(descriptor.Id);
+        if (!PluginRuntimeStateVersionIsSupported(
+                storedRuntimeState.Version,
+                descriptor.StateVersion))
+        {
+            throw new PluginRuntimeStateVersionException(
+                $"Saved plugin Runtime state version {storedRuntimeState.Version} is newer than supported version {descriptor.StateVersion}.");
         }
 
         bool IsActive() => lifetime.IsActive;
@@ -473,7 +502,8 @@ public sealed partial class AppController
         PluginRuntimeSlot slot,
         PaperBodyPluginDescriptor descriptor,
         Exception exception,
-        string phase)
+        string phase,
+        bool retry = true)
     {
         slot.Lease = null;
         slot.Lifetime?.TryDeactivate();
@@ -490,9 +520,11 @@ public sealed partial class AppController
             attempt,
             exception.GetBaseException());
 
-        var nextState = PluginRuntimeTransitions.StartFailed(
-            attempt,
-            PluginRuntimeRetryDelays.Length);
+        var nextState = retry
+            ? PluginRuntimeTransitions.StartFailed(
+                attempt,
+                PluginRuntimeRetryDelays.Length)
+            : PluginRuntimeState.Failed;
         if (nextState == PluginRuntimeState.Backoff &&
             IsPluginRuntimeDesired(descriptor.Id))
         {
@@ -504,6 +536,7 @@ public sealed partial class AppController
         else
         {
             slot.State = PluginRuntimeState.Failed;
+            ClearPluginRuntimePresentation(descriptor.Id);
         }
 
         QueuePluginStatusUiRefresh();
@@ -686,6 +719,10 @@ public sealed partial class AppController
             return;
         }
 
+        // Reconcile while the Runtime lifetime is still valid so deleting the final Paper emits
+        // PaperRemoved and the plugin may persist its final provider-scoped state before teardown.
+        try { slot.Lease?.Papers.Reconcile(); } catch { }
+
         slot.RetryGeneration++;
         slot.RestartRequested = false;
         slot.State = PluginRuntimeState.Disposing;
@@ -695,6 +732,11 @@ public sealed partial class AppController
         slot.Lease = null;
         lease?.Dispose();
     }
+
+    private static bool PluginRuntimeStateVersionIsSupported(
+        int storedVersion,
+        int targetVersion) =>
+        storedVersion <= targetVersion;
 
     private static bool DeclaresPluginRuntime(PaperBodyPluginDescriptor descriptor) =>
         descriptor.Manifest?.Capabilities?.Contains(

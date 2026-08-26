@@ -23,7 +23,8 @@ internal sealed class PaperBodyStoredState
 /// </summary>
 internal sealed class PaperBodyPluginDataStore : IDisposable
 {
-    internal const int MaximumPaperStateBytes = 1024 * 1024;
+    internal const int MaximumPaperStateBytes = 10 * 1024 * 1024;
+    internal const int MaximumPluginRuntimeStateBytes = 20 * 1024 * 1024;
     private const int StorageVersion = 1;
     private const int SaveDebounceMilliseconds = 750;
     private const int ForceSaveMilliseconds = 10_000;
@@ -115,7 +116,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         int stateVersion,
         string? json)
     {
-        var normalized = NormalizeStateJson(json);
+        var normalized = NormalizePluginRuntimeStateJson(json);
         using var parsed = JsonDocument.Parse(normalized);
         var value = parsed.RootElement.Clone();
 
@@ -319,14 +320,29 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         }
     }
 
-    public static string NormalizeStateJson(string? json)
+    public static string NormalizeStateJson(string? json) =>
+        NormalizeStateJson(
+            json,
+            MaximumPaperStateBytes,
+            "Plugin paper state");
+
+    internal static string NormalizePluginRuntimeStateJson(string? json) =>
+        NormalizeStateJson(
+            json,
+            MaximumPluginRuntimeStateBytes,
+            "Plugin Runtime state");
+
+    private static string NormalizeStateJson(
+        string? json,
+        int maximumBytes,
+        string stateName)
     {
         var normalized = string.IsNullOrWhiteSpace(json) ? "{}" : json.Trim();
         var byteCount = Encoding.UTF8.GetByteCount(normalized);
-        if (byteCount > MaximumPaperStateBytes)
+        if (byteCount > maximumBytes)
         {
             throw new InvalidOperationException(
-                $"Plugin paper state cannot exceed {MaximumPaperStateBytes} UTF-8 bytes.");
+                $"{stateName} cannot exceed {maximumBytes} UTF-8 bytes.");
         }
 
         using (JsonDocument.Parse(normalized))

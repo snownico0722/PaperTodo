@@ -33,6 +33,7 @@ public sealed partial class AppController
         _pluginRuntimeSlots.TryGetValue(providerId, out var slot) &&
         slot.State == PluginRuntimeState.Running &&
         slot.Lease?.Papers != null &&
+        CanPluginRuntimeAcceptMessages(slot) &&
         FindPluginRuntimePaper(providerId, paperId) != null;
 
     internal bool PostBodyMessageToPluginRuntime(
@@ -43,12 +44,17 @@ public sealed partial class AppController
         if (!_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
             slot.State != PluginRuntimeState.Running ||
             slot.Lease?.Papers == null ||
+            !CanPluginRuntimeAcceptMessages(slot) ||
             FindPluginRuntimePaper(providerId, paperId) == null)
         {
             return false;
         }
         return slot.Lease.Papers.PublishMessage(paperId, payload);
     }
+
+    private static bool CanPluginRuntimeAcceptMessages(PluginRuntimeSlot slot) =>
+        slot.Lease?.Runtime is not WebPluginRuntime webRuntime ||
+        webRuntime.CanAcceptPaperMessages;
 
     internal bool PostPluginRuntimeMessageToBody(
         string providerId,
@@ -116,6 +122,37 @@ public sealed partial class AppController
         if (_windows.TryGetValue(paperId, out var window) && !window.IsClosed)
         {
             window.ApplyPluginRuntimeCapsule(providerId, normalized);
+        }
+    }
+
+    internal void ClearPluginRuntimePresentation(string providerId)
+    {
+        var changed = false;
+        foreach (var paper in State.Papers.Where(paper =>
+                     paper.Type == PaperTypes.Note &&
+                     string.Equals(
+                         PluginRuntimeProviderId(paper.BodyProviderId),
+                         providerId,
+                         StringComparison.Ordinal)))
+        {
+            var hadHeader = !string.IsNullOrEmpty(paper.BodyHeaderText);
+            var hadCapsule = !string.IsNullOrEmpty(paper.BodyCapsuleText);
+            changed |= hadHeader || hadCapsule;
+
+            if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
+            {
+                window.ClearPluginRuntimePresentation(providerId);
+            }
+            else
+            {
+                paper.BodyHeaderText = string.Empty;
+                paper.BodyCapsuleText = string.Empty;
+            }
+        }
+
+        if (changed)
+        {
+            MarkDirty();
         }
     }
 

@@ -183,6 +183,8 @@ public sealed partial class AppController
                 paper.IsCollapsed = collapsed;
                 changed = true;
             }
+            // A startup Paper becomes a Runtime owner before its visible Body is attached.
+            EnablePluginRuntimeReconciliation();
             ShowPaper(paper, activate: false);
         }
 

@@ -61,6 +61,38 @@ public sealed partial class PaperWindow
         SetPluginCapsulePresentation(presentation);
     }
 
+    internal void ClearPluginRuntimePresentation(string providerId)
+    {
+        if (!string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var hadDisplayTitle =
+            !string.IsNullOrEmpty(_pluginDisplayTitle) ||
+            !string.IsNullOrEmpty(_paper.BodyHeaderText);
+        _pluginDisplayTitle = string.Empty;
+        _paper.BodyHeaderText = string.Empty;
+
+        if (_isShellBuilt)
+        {
+            SetPluginCapsulePresentation(null);
+            if (hadDisplayTitle)
+            {
+                RefreshPaperTitle();
+                _controller.NotifyPaperDisplayTitleChanged(_paper.Id);
+            }
+        }
+        else
+        {
+            _pluginCapsulePresentation = null;
+            _paper.BodyCapsuleText = string.Empty;
+        }
+    }
+
     internal bool ReceivePluginRuntimeMessage(
         string providerId,
         JsonElement payload)
