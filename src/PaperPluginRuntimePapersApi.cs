@@ -11,7 +11,7 @@ namespace PaperTodo;
 /// capsule presentation is cached only as volatile presentation state so a rebuilt PaperWindow can
 /// replay the Runtime's last published value without creating a second backend authority.
 /// </summary>
-internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDisposable
+internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, IDisposable
 {
     private readonly AppController _controller;
     private readonly Dispatcher _dispatcher;
@@ -25,7 +25,7 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
     private long _nextHandlerId;
     private bool _disposed;
 
-    public PaperAppRuntimePapersApi(
+    public PaperPluginRuntimePapersApi(
         AppController controller,
         string providerId,
         Func<bool> isActive)
@@ -285,9 +285,9 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
         }
     }
 
-    private sealed class Subscription(PaperAppRuntimePapersApi owner, long id) : IDisposable
+    private sealed class Subscription(PaperPluginRuntimePapersApi owner, long id) : IDisposable
     {
-        private PaperAppRuntimePapersApi? _owner = owner;
+        private PaperPluginRuntimePapersApi? _owner = owner;
 
         public void Dispose()
         {

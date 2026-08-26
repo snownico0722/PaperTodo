@@ -2,23 +2,23 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo.Plugin.ReviewArchive;
 
-public sealed class ReviewArchivePlugin : IPaperBodyPlugin, IPaperAppRuntimeProvider
+public sealed class ReviewArchivePlugin : IPaperBodyPlugin, IPaperPluginRuntimeProvider
 {
     public IPaperBodySession Create(PaperBodyContext context) =>
         new ReviewArchiveSession(context);
 
-    public IPaperAppRuntime CreateAppRuntime(PaperAppRuntimeContext context) =>
+    public IPaperPluginRuntime CreatePluginRuntime(PaperPluginRuntimeContext context) =>
         new Runtime(context);
 
-    private sealed class Runtime : IPaperAppRuntime
+    private sealed class Runtime : IPaperPluginRuntime
     {
-        private readonly PaperAppRuntimeContext _context;
+        private readonly PaperPluginRuntimeContext _context;
         private readonly IDisposable _workspaceSubscription;
         private readonly IDisposable _settingsSubscription;
         private readonly IDisposable _papersSubscription;
         private bool _disposed;
 
-        public Runtime(PaperAppRuntimeContext context)
+        public Runtime(PaperPluginRuntimeContext context)
         {
             _context = context;
             ReviewArchiveStore.EnsureLoaded();

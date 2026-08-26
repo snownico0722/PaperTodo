@@ -16,7 +16,7 @@ public interface IPaperGlobalTopBarApi
 /// Host-managed settings for one provider Runtime. Json is read on demand and Subscribe reports
 /// later normalized setting changes without borrowing lifecycle from any Body/Mini frontend.
 /// </summary>
-public interface IPaperAppRuntimeSettings
+public interface IPaperPluginRuntimeSettings
 {
     string Json { get; }
     IDisposable Subscribe(Action<string> handler);
@@ -54,13 +54,13 @@ public interface IPaperGlobalShortcutApi
 /// its UI dispatcher when required. Dispose must not synchronously join a worker that can itself be
 /// blocked in a host call.
 /// </summary>
-public sealed class PaperAppRuntimeContext
+public sealed class PaperPluginRuntimeContext
 {
     public required string ProviderId { get; init; }
     public required string ApiVersion { get; init; }
     public required IReadOnlySet<string> GrantedPermissions { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
-    public required IPaperAppRuntimeSettings Settings { get; init; }
+    public required IPaperPluginRuntimeSettings Settings { get; init; }
     public required IPaperPluginRuntimeState State { get; init; }
     public required IPaperPluginRuntimePapers Papers { get; init; }
     public required IPaperGlobalTopBarApi GlobalTopBar { get; init; }
@@ -68,20 +68,20 @@ public sealed class PaperAppRuntimeContext
 }
 
 /// <summary>
-/// Optional protocol-2.0 Native capability. A plugin declaring manifest capability "appRuntime"
+/// Optional protocol-2.0 Native capability. A plugin declaring manifest capability "runtime"
 /// implements this interface. PaperTodo starts exactly one provider Runtime when the first real
 /// Paper uses the provider and disposes it when the last such Paper disappears. If a plugin needs
 /// multiple workers, processes or isolation domains, it owns those internally behind this Runtime.
 /// </summary>
-public interface IPaperAppRuntimeProvider
+public interface IPaperPluginRuntimeProvider
 {
-    IPaperAppRuntime CreateAppRuntime(PaperAppRuntimeContext context);
+    IPaperPluginRuntime CreatePluginRuntime(PaperPluginRuntimeContext context);
 }
 
 /// <summary>
 /// The single provider-level backend Runtime. It is not a hidden Paper session and has no visible
 /// View. Dispose ends the provider backend and revokes its provider-level contributions.
 /// </summary>
-public interface IPaperAppRuntime : IDisposable
+public interface IPaperPluginRuntime : IDisposable
 {
 }

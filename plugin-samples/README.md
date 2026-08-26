@@ -938,7 +938,7 @@ papertodo.onEvent(listener);
 
 Mini 没有正文的 `setInputClaims`，也不能注册 Top Bar。键盘焦点始终不属于 Edge Mini；pointer 默认归宿主，只有 `data-papertodo-interactive` 局部区域交给网页。Mini 的 host-request 路由只接受当前列出的 Workspace 数据方法，不按方法名前缀自动继承未来宿主能力。
 
-### 10.4 App runtime bridge
+### 10.4 Plugin runtime bridge
 
 声明 `appRuntime` 的 Web 插件在 provider 至少有一张实体插件 paper 时创建独立 app surface。manifest 的 `runtime` 可自定义入口；省略时默认 `entry` 同目录 `runtime.html`：
 

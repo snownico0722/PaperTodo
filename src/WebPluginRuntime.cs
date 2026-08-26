@@ -12,17 +12,17 @@ namespace PaperTodo;
 /// The one hidden Web backend Runtime for a provider. Paper instances are logical ids routed through
 /// IPaperPluginRuntimePapers; PaperTodo never creates one hidden WebView per Paper.
 /// </summary>
-internal sealed class WebPluginAppRuntime : IDisposable
+internal sealed class WebPluginRuntime : IDisposable
 {
     private const int MaximumGlobalTopBarActions = 256;
 
     private readonly PaperBodyPluginDescriptor _descriptor;
     private readonly IPaperTodoHostApi _workspace;
-    private readonly IPaperAppRuntimeSettings _settings;
+    private readonly IPaperPluginRuntimeSettings _settings;
     private readonly IPaperPluginRuntimeState _state;
     private readonly IPaperPluginRuntimePapers _papers;
-    private readonly PaperAppRuntimeGlobalTopBarApi _globalTopBar;
-    private readonly PaperAppRuntimeGlobalShortcutApi _globalShortcuts;
+    private readonly PaperPluginRuntimeGlobalTopBarApi _globalTopBar;
+    private readonly PaperPluginRuntimeGlobalShortcutApi _globalShortcuts;
     private readonly Func<bool> _isActive;
     private readonly Action _requestRestart;
     private readonly WebView2CompositionControl _webView;
@@ -40,14 +40,14 @@ internal sealed class WebPluginAppRuntime : IDisposable
     private bool _startupCompleted;
     private bool _disposed;
 
-    public WebPluginAppRuntime(
+    public WebPluginRuntime(
         PaperBodyPluginDescriptor descriptor,
         IPaperTodoHostApi workspace,
-        IPaperAppRuntimeSettings settings,
+        IPaperPluginRuntimeSettings settings,
         IPaperPluginRuntimeState state,
         IPaperPluginRuntimePapers papers,
-        PaperAppRuntimeGlobalTopBarApi globalTopBar,
-        PaperAppRuntimeGlobalShortcutApi globalShortcuts,
+        PaperPluginRuntimeGlobalTopBarApi globalTopBar,
+        PaperPluginRuntimeGlobalShortcutApi globalShortcuts,
         Func<bool> isActive,
         Action requestRestart)
     {

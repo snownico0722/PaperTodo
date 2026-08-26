@@ -4,7 +4,7 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed class PaperAppRuntimeGlobalShortcutApi : IPaperGlobalShortcutApi, IDisposable
+internal sealed class PaperPluginRuntimeGlobalShortcutApi : IPaperGlobalShortcutApi, IDisposable
 {
     private readonly AppController _controller;
     private readonly Dispatcher _dispatcher;
@@ -14,7 +14,7 @@ internal sealed class PaperAppRuntimeGlobalShortcutApi : IPaperGlobalShortcutApi
     private Action<PaperShortcutActionInvocation>? _handler;
     private bool _disposed;
 
-    public PaperAppRuntimeGlobalShortcutApi(
+    public PaperPluginRuntimeGlobalShortcutApi(
         AppController controller,
         Guid runtimeId,
         string providerId,
@@ -68,7 +68,7 @@ internal sealed class PaperAppRuntimeGlobalShortcutApi : IPaperGlobalShortcutApi
         {
             throw new PaperTodoPluginException(
                 "runtime_closed",
-                "The plugin app runtime is no longer active.");
+                "The plugin runtime is no longer active.");
         }
     }
 

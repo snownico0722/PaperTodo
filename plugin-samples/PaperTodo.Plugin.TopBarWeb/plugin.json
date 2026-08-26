@@ -8,7 +8,7 @@
   "stateVersion": 1,
   "entry": "web/index.html",
   "capabilities": [
-    "appRuntime"
+    "runtime"
   ],
   "permissions": [
     "papers.read"
@@ -26,8 +26,8 @@
     {
       "id": "runtimePingShortcut",
       "type": "shortcut",
-      "name": "App Runtime 示例动作",
-      "description": "自定义 action 会投递到 app runtime，而不是 body session。",
+      "name": "Plugin Runtime 示例动作",
+      "description": "自定义 action 会投递到 plugin runtime，而不是 body session。",
       "default": "",
       "shortcutAction": "runtime.ping"
     }

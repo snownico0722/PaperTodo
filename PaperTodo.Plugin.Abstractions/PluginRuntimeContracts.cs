@@ -57,7 +57,7 @@ public interface IPaperPluginRuntimePapers
 
 /// <summary>
 /// Body/Mini-to-Runtime command endpoint for the Paper carrying this frontend. IsAvailable is false
-/// when the provider does not declare appRuntime or its Runtime is not currently able to accept a
+/// when the provider does not declare runtime or its Runtime is not currently able to accept a
 /// command. Post returns false rather than inventing a second fallback backend.
 /// </summary>
 public interface IPaperPluginRuntimeClient

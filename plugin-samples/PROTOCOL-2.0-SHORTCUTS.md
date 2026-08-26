@@ -58,7 +58,7 @@ paper.activate
 paper.toggle
 ```
 
-这些动作由 PaperTodo 直接执行，不要求 body session 当前展开，也不需要插件 app runtime 接收回调。
+这些动作由 PaperTodo 直接执行，不要求 body session 当前展开，也不需要插件 plugin runtime 接收回调。
 
 同一个 provider 有多张纸片时，宿主按这个顺序找目标：
 
@@ -94,11 +94,11 @@ paper.toggle
 - 协议版本为 `2.0`；
 - 插件声明 `appRuntime`；
 - action id 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
-- app runtime 注册快捷键 action handler。
+- plugin runtime 注册快捷键 action handler。
 
 自定义 action 是 **provider/appRuntime 全局动作**。宿主不会替它选择某张纸片，也不会在回调中偷偷附加“当前纸片”语义；如果插件业务需要目标纸片，应通过 Workspace 数据自行决定。
 
-### Native app runtime
+### Native plugin runtime
 
 ```csharp
 public IPaperAppRuntime CreateAppRuntime(PaperAppRuntimeContext context)
@@ -123,7 +123,7 @@ public sealed record PaperShortcutActionInvocation(
     string ActionId);
 ```
 
-### Web app runtime
+### Web plugin runtime
 
 `runtime.html`：
 
@@ -136,7 +136,7 @@ papertodo.onEvent(message => {
 });
 ```
 
-自定义 action 的 Windows 热键只在对应 app runtime 有**有效 handler**时注册。Web runtime 导航、进程失败或销毁时，PaperTodo 会立即释放这些自定义热键；页面重新 ready 后再恢复。这样 runtime 坏掉时不会继续抢占一个“按了没反应”的系统快捷键。
+自定义 action 的 Windows 热键只在对应 plugin runtime 有**有效 handler**时注册。Web runtime 导航、进程失败或销毁时，PaperTodo 会立即释放这些自定义热键；页面重新 ready 后再恢复。这样 runtime 坏掉时不会继续抢占一个“按了没反应”的系统快捷键。
 
 ## 3. Native：控制承载自己的纸片
 
@@ -229,4 +229,4 @@ plugin-samples/PaperTodo.Plugin.TopBarWeb/
 
 - `plugin.json`：`paper.toggle` + 自定义 `runtime.ping`；
 - `web/index.html`：Web body 自身纸片折叠 / 隐藏；
-- `web/runtime.html`：app runtime 接收 `shortcutInvoked`。
+- `web/runtime.html`：plugin runtime 接收 `shortcutInvoked`。

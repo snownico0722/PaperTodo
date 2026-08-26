@@ -15,7 +15,7 @@
   },
   "capabilities": [
     "textZoom",
-    "appRuntime"
+    "runtime"
   ],
   "startupPaper": {
     "enabledSetting": "autoStartCapsule",

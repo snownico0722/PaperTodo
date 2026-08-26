@@ -112,7 +112,7 @@ public sealed partial class AppController
     {
         // The app-runtime manager validates protocol 2.0 before creating this capability. Once a
         // runtime is alive, it owns its process-lifetime lease even if the user rescans plugin
-        // manifests; ordinary plugin Reload does not silently replace a running app runtime.
+        // manifests; ordinary plugin Reload does not silently replace a running plugin runtime.
         // The protocol accepts a broad descriptor set, while the window still materializes only
         // the fitting prefix after current-paper actions have taken first claim on plugin space.
         var normalized = NormalizePluginTopBarActions(

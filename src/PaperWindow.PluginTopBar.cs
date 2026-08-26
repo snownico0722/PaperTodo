@@ -58,7 +58,7 @@ public sealed partial class PaperWindow
         }
 
         // Keep descriptors cheap. WPF controls are materialized only for the currently fitting
-        // prefix, so an app runtime cannot multiply thousands of hidden Buttons across papers.
+        // prefix, so an plugin runtime cannot multiply thousands of hidden Buttons across papers.
         _pluginTopBarDesiredActions = state.Actions
             .Where(binding => binding.Action.Visible)
             .ToArray();

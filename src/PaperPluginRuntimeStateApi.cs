@@ -6,13 +6,13 @@ namespace PaperTodo;
 /// Provider-scoped backend state. This is deliberately separate from per-Paper Body state: one
 /// Runtime owns one document and may keep N logical Paper instances inside it.
 /// </summary>
-internal sealed class PaperAppRuntimeStateApi : IPaperPluginRuntimeState, IDisposable
+internal sealed class PaperPluginRuntimeStateApi : IPaperPluginRuntimeState, IDisposable
 {
     private readonly PaperBodyPluginDataStore _dataStore;
     private readonly PaperBodyPluginDescriptor _descriptor;
     private readonly Func<bool> _isActive;
 
-    public PaperAppRuntimeStateApi(
+    public PaperPluginRuntimeStateApi(
         PaperBodyPluginDataStore dataStore,
         PaperBodyPluginDescriptor descriptor,
         Func<bool> isActive)

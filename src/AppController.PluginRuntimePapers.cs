@@ -27,11 +27,11 @@ public sealed partial class AppController
     internal bool HasPluginRuntimeOwnership(string paperId, string providerId) =>
         FindPluginRuntimePaper(providerId, paperId) != null &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
-        DeclaresPluginAppRuntime(descriptor);
+        DeclaresPluginRuntime(descriptor);
 
     internal bool CanPostBodyMessageToPluginRuntime(string paperId, string providerId) =>
-        _pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) &&
-        slot.State == PluginAppRuntimeState.Running &&
+        _pluginRuntimeSlots.TryGetValue(providerId, out var slot) &&
+        slot.State == PluginRuntimeState.Running &&
         slot.Lease?.Papers != null &&
         FindPluginRuntimePaper(providerId, paperId) != null;
 
@@ -40,8 +40,8 @@ public sealed partial class AppController
         string providerId,
         JsonElement payload)
     {
-        if (!_pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) ||
-            slot.State != PluginAppRuntimeState.Running ||
+        if (!_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
+            slot.State != PluginRuntimeState.Running ||
             slot.Lease?.Papers == null ||
             FindPluginRuntimePaper(providerId, paperId) == null)
         {
@@ -66,8 +66,8 @@ public sealed partial class AppController
         string paperId,
         string providerId)
     {
-        if (!_pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) ||
-            slot.State != PluginAppRuntimeState.Running ||
+        if (!_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
+            slot.State != PluginRuntimeState.Running ||
             slot.Lease?.Papers == null ||
             FindPluginRuntimePaper(providerId, paperId) == null)
         {

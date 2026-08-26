@@ -48,10 +48,10 @@ internal sealed partial class PaperBodyPluginRegistry
             }
         }
         // Settings may depend on provider-level capabilities (for example custom shortcut actions
-        // require appRuntime). Normalize and validate the capability list before reading it here so
+        // require runtime). Normalize and validate the capability list before reading it here so
         // every feature consumes one canonical manifest representation.
         NormalizeProtocolFeatures(manifest);
-        var hasAppRuntime = manifest.Capabilities.Contains("appRuntime", StringComparer.Ordinal);
+        var hasPluginRuntime = manifest.Capabilities.Contains("runtime", StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var quickCount = 0;
         foreach (var setting in manifest.Settings)
@@ -98,10 +98,10 @@ internal sealed partial class PaperBodyPluginRegistry
             }
             if (setting.Type == "shortcut" &&
                 PluginShortcutActions.IsCustomAction(setting.ShortcutAction) &&
-                !hasAppRuntime)
+                !hasPluginRuntime)
             {
                 throw new InvalidDataException(
-                    $"Plugin shortcut setting '{setting.Id}' uses custom action '{setting.ShortcutAction}' but the plugin does not declare the appRuntime capability.");
+                    $"Plugin shortcut setting '{setting.Id}' uses custom action '{setting.ShortcutAction}' but the plugin does not declare the runtime capability.");
             }
             if (!manifest.AdvancedSettings && setting.Quick && ++quickCount > 3)
             {

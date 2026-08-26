@@ -50,7 +50,7 @@ internal sealed partial class PaperBodyPluginRegistry
             {
                 "textzoom" => "textZoom",
                 "notelinks" => "noteLinks",
-                "appruntime" => "appRuntime",
+                "runtime" => "runtime",
                 _ => throw new InvalidDataException(
                     $"Unknown plugin capability '{value}'.")
             };
@@ -77,11 +77,11 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "Plugin permissions require apiVersion 1.3 or newer.");
         }
-        if (manifest.Capabilities.Contains("appRuntime", StringComparer.Ordinal) &&
+        if (manifest.Capabilities.Contains("runtime", StringComparer.Ordinal) &&
             !ApiAtLeast(manifest.ApiVersion, 2, 0))
         {
             throw new InvalidDataException(
-                "The appRuntime capability requires apiVersion 2.0 or newer.");
+                "The runtime capability requires apiVersion 2.0 or newer.");
         }
     }
 

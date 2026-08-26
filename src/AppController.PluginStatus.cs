@@ -24,7 +24,7 @@ public sealed partial class AppController
         bool hasDataIssue)
     {
         if (hasDataIssue ||
-            HasPluginAppRuntimeFailure(descriptor.Id) ||
+            HasPluginRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
                  PluginIssueMatchesDescriptor(issue, descriptor))) ||
@@ -34,7 +34,7 @@ public sealed partial class AppController
             return PluginPageStatus.Issue;
         }
 
-        return IsPluginAppRuntimeRunning(descriptor.Id) ||
+        return IsPluginRuntimeRunning(descriptor.Id) ||
                _windows.Values.Any(window =>
                    window.HasRunningPluginBody(descriptor.Id))
             ? PluginPageStatus.Running
@@ -112,7 +112,7 @@ public sealed partial class AppController
         // Body attach/remove/provider switch is also the existing low-frequency signal that an
         // entity plugin paper may have appeared or disappeared. Reconciliation itself is gated
         // until startupPaper handling has completed.
-        ReconcilePluginAppRuntimes();
+        ReconcilePluginRuntimes();
         QueuePluginStatusUiRefresh();
     }
 

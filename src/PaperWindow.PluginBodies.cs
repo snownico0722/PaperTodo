@@ -262,7 +262,7 @@ public sealed partial class PaperWindow
                 var context = CreatePluginContext(descriptor, generation, stored);
                 var runtimeOwnsPresentation =
                     descriptor.Manifest.Capabilities.Contains(
-                        "appRuntime",
+                        "runtime",
                         StringComparer.Ordinal);
                 return new WebPaperBodySession(
                     context,
@@ -509,7 +509,7 @@ public sealed partial class PaperWindow
         var theme = CurrentPaperBodyTheme();
         var runtimeOwnsPresentation =
             descriptor.Manifest?.Capabilities.Contains(
-                "appRuntime",
+                "runtime",
                 StringComparer.Ordinal) == true;
         Action<string> setTitle = runtimeOwnsPresentation
             ? _ => { }

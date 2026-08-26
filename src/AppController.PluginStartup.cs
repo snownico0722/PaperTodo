@@ -31,7 +31,7 @@ public sealed partial class AppController
         // entity plugin papers already persisted in State still own their provider-level runtime.
         if (visibilityCommand == StartupCommandKind.Hide)
         {
-            EnablePluginAppRuntimeReconciliation();
+            EnablePluginRuntimeReconciliation();
             return;
         }
 
@@ -47,14 +47,14 @@ public sealed partial class AppController
             .ToArray();
         if (candidates.Length == 0)
         {
-            EnablePluginAppRuntimeReconciliation();
+            EnablePluginRuntimeReconciliation();
             return;
         }
 
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher == null)
         {
-            EnablePluginAppRuntimeReconciliation();
+            EnablePluginRuntimeReconciliation();
             return;
         }
 
@@ -85,8 +85,8 @@ public sealed partial class AppController
             StopPluginStartupPaperTimer(timer);
             EnsurePluginStartupPapers(candidates);
             // startupPaper has now had first chance to create/restore its real plugin paper. Only
-            // after that do we derive process-level app runtime ownership from final State.Papers.
-            EnablePluginAppRuntimeReconciliation();
+            // after that do we derive process-level plugin runtime ownership from final State.Papers.
+            EnablePluginRuntimeReconciliation();
         };
         _pluginStartupPaperTimer = timer;
         timer.Start();

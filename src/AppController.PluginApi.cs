@@ -162,12 +162,12 @@ public sealed partial class AppController
 
         // Deletion is committed before this cleanup pass. Reconcile from the final entity-paper
         // set so the provider Runtime loses deleted logical Paper instances promptly.
-        ReconcilePluginAppRuntimes();
+        ReconcilePluginRuntimes();
     }
 
     internal void DisposePaperPluginHostRuntime()
     {
-        DisposePluginAppRuntimes();
+        DisposePluginRuntimes();
         _paperBodyPluginEvents?.Dispose();
         _paperBodyPluginEvents = null;
         _paperCommands = null;

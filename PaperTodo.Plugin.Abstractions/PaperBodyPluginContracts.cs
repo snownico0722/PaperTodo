@@ -122,7 +122,7 @@ public sealed record PaperTopBarAction
 
 /// <summary>
 /// Describes a top-bar click. Global actions can be rendered on any paper while their owning plugin
-/// app runtime is alive, so TargetPaperId/Type/BodyProviderId identify the paper whose button was
+/// plugin runtime is alive, so TargetPaperId/Type/BodyProviderId identify the paper whose button was
 /// clicked rather than any plugin-owned paper. TargetBodyProviderId is empty for non-Note papers.
 /// </summary>
 public sealed record PaperTopBarActionInvocation(
@@ -134,7 +134,7 @@ public sealed record PaperTopBarActionInvocation(
 
 /// <summary>
 /// Paper-session-scoped Top Bar capability. It can contribute actions only to the paper carrying
-/// this body session. Process-level Global actions belong to PaperAppRuntimeContext.GlobalTopBar.
+/// this body session. Process-level Global actions belong to PaperPluginRuntimeContext.GlobalTopBar.
 /// PaperTodo owns rendering and automatically removes these Paper actions when the session ends.
 /// </summary>
 public interface IPaperTopBarApi

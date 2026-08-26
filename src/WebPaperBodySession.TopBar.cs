@@ -42,7 +42,7 @@ internal sealed partial class WebPaperBodySession
     private static object SetGlobalTopBarActionsFromWeb(JsonElement parameters) =>
         throw new PaperTodoPluginException(
             "global_topbar_app_runtime_only",
-            "Global top-bar actions must be registered by the plugin app runtime.");
+            "Global top-bar actions must be registered by the plugin runtime.");
 
     private int RequireCurrentBodyTopBarDocument()
     {

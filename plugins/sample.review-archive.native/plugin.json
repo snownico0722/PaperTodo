@@ -9,7 +9,7 @@
   "entry": "PaperTodo.Plugin.ReviewArchive.dll",
   "capabilities": [
     "textZoom",
-    "appRuntime"
+    "runtime"
   ],
   "permissions": [
     "papers.read",

@@ -42,4 +42,4 @@ plugins\sample.review-archive.native\
 
 ## 后台生命周期
 
-复盘记录由 provider 级 App Runtime 持续监听；只要仍存在一张复盘插件 Paper，即使该纸片隐藏、折叠或当前没有窗口，记录器仍保持工作。正文 Session 只负责读取和展示记录。
+复盘记录由 provider 级 Plugin Runtime 持续监听；只要仍存在一张复盘插件 Paper，即使该纸片隐藏、折叠或当前没有窗口，记录器仍保持工作。正文 Session 只负责读取和展示记录。

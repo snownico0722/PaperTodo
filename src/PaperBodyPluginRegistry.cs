@@ -327,8 +327,8 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             }
         }
 
-        var hasAppRuntime = manifest.Capabilities.Contains(
-            "appRuntime",
+        var hasPluginRuntime = manifest.Capabilities.Contains(
+            "runtime",
             StringComparer.Ordinal);
         if (!string.IsNullOrWhiteSpace(manifest.Runtime) &&
             kind != PaperBodyPluginKind.Web)
@@ -336,12 +336,12 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             throw new InvalidDataException(
                 "runtime is only valid for Web plugins.");
         }
-        if (!string.IsNullOrWhiteSpace(manifest.Runtime) && !hasAppRuntime)
+        if (!string.IsNullOrWhiteSpace(manifest.Runtime) && !hasPluginRuntime)
         {
             throw new InvalidDataException(
-                "runtime requires the appRuntime capability.");
+                "runtime requires the runtime capability.");
         }
-        if (kind == PaperBodyPluginKind.Web && hasAppRuntime)
+        if (kind == PaperBodyPluginKind.Web && hasPluginRuntime)
         {
             manifest.RuntimePath = string.IsNullOrWhiteSpace(manifest.Runtime)
                 ? Path.Combine(webRoot!, "runtime.html")
@@ -350,7 +350,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             if (!File.Exists(manifest.RuntimePath))
             {
                 throw new FileNotFoundException(
-                    "Plugin app runtime entry was not found.",
+                    "Plugin runtime entry was not found.",
                     manifest.RuntimePath);
             }
         }
