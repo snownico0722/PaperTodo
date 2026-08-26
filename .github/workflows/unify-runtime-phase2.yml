@@ -28,7 +28,8 @@ jobs:
           python tools/unify_runtime_phase2.py
           git diff --check
           Write-Host '--- residual legacy runtime references ---'
-          rg -n "WebPaperRuntime|paperRuntime|PaperRuntimePath|PostBodyMessageToWebPaperRuntime|ReconcileWebPaperRuntimes|NotifyWebPaperRuntime|RetryFailedWebPaper" src PaperTodo.Plugin.Abstractions plugin-samples plugins || $true
+          Get-ChildItem src,PaperTodo.Plugin.Abstractions,plugin-samples,plugins -Recurse -File |
+            Select-String -Pattern 'WebPaperRuntime|paperRuntime|PaperRuntimePath|PostBodyMessageToWebPaperRuntime|ReconcileWebPaperRuntimes|NotifyWebPaperRuntime|RetryFailedWebPaper'
       - name: Build
         shell: pwsh
         run: dotnet build .\PaperTodo.csproj -c Release
