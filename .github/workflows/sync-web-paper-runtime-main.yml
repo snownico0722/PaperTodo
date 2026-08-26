@@ -1,0 +1,58 @@
+name: Sync Web Paper Runtime Main
+
+on:
+  push:
+    branches:
+      - feature/web-paper-runtime-lifecycle
+    paths:
+      - .github/workflows/sync-web-paper-runtime-main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/web-paper-runtime-lifecycle
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Merge latest main without committing
+        shell: pwsh
+        run: |
+          git fetch origin main
+          git merge --no-commit --no-ff origin/main
+
+      - name: Diff check
+        shell: pwsh
+        run: git diff --check
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore .\PaperTodo.csproj
+
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+
+      - name: Protocol policy checks
+        shell: pwsh
+        run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+
+      - name: Commit validated merge
+        shell: pwsh
+        run: |
+          Remove-Item .\.github\workflows\sync-web-paper-runtime-main.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "merge: sync Web paper runtime with latest main"
+          git push origin HEAD:feature/web-paper-runtime-lifecycle
