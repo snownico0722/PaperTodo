@@ -615,6 +615,9 @@ internal sealed partial class WebPaperBodySession
                     markDirty() { post('markDirty'); },
                     openExternal(url) { post('openExternal', String(url ?? '')); }
                   });
+                  const runtime = Object.freeze({
+                    post(message) { return request('runtime.post', { message: message ?? null }); }
+                  });
                   let miniReady = false;
                   const mini = Object.freeze({
                     ready() {
@@ -623,7 +626,7 @@ internal sealed partial class WebPaperBodySession
                     }
                   });
                   window.papertodo = Object.freeze({
-                    surface: 'mini', paper, body, mini,
+                    surface: 'mini', paper, body, mini, runtime,
                     workspace: Object.freeze({ request }),
                     post, request, saveState, flushState,
                     registerStateProvider(provider) {
