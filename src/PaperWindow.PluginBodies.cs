@@ -511,21 +511,31 @@ public sealed partial class PaperWindow
         _bodyHostApi = hostApi;
         var controls = _bodyControls ??= new PaperBodyControls(this);
         var theme = CurrentPaperBodyTheme();
-        Action<string> setTitle = title => InvokePluginContext(
-            generation,
-            providerId,
-            () => _controller.UpdatePaperTitleFromPlugin(
-                _paper,
-                title,
-                providerId));
-        Action<string> setHeaderText = text => InvokePluginContext(
-            generation,
-            providerId,
-            () => SetPluginHeaderText(text));
-        Action<PaperCapsulePresentation?> setCapsulePresentation = presentation => InvokePluginContext(
-            generation,
-            providerId,
-            () => SetPluginCapsulePresentation(presentation));
+        var runtimeOwnsPresentation =
+            descriptor.Manifest?.Capabilities.Contains(
+                "appRuntime",
+                StringComparer.Ordinal) == true;
+        Action<string> setTitle = runtimeOwnsPresentation
+            ? _ => { }
+            : title => InvokePluginContext(
+                generation,
+                providerId,
+                () => _controller.UpdatePaperTitleFromPlugin(
+                    _paper,
+                    title,
+                    providerId));
+        Action<string> setHeaderText = runtimeOwnsPresentation
+            ? _ => { }
+            : text => InvokePluginContext(
+                generation,
+                providerId,
+                () => SetPluginHeaderText(text));
+        Action<PaperCapsulePresentation?> setCapsulePresentation = runtimeOwnsPresentation
+            ? _ => { }
+            : presentation => InvokePluginContext(
+                generation,
+                providerId,
+                () => SetPluginCapsulePresentation(presentation));
         Action<PaperBodyInputClaims> setInputClaims = claims => InvokePluginContext(
             generation,
             providerId,

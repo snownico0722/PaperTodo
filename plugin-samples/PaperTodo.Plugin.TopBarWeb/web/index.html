@@ -64,16 +64,6 @@
       const message = event.detail || {};
       if (message.type !== 'initialize') return;
 
-      papertodo.paper.setHeaderText('Top Bar 2.0');
-      papertodo.paper.setCapsulePresentation({
-        preferredWidth: 0,
-        plainText: 'Top Bar 2.0',
-        toolTip: 'Protocol 2.0 Top Bar 示例',
-        components: [
-          { kind: 'glyph', text: 'T' },
-          { kind: 'text', text: 'Top Bar 2.0', fill: true }
-        ]
-      });
 
       registerPaperTopBar()
         .then(() => {

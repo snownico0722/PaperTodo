@@ -2,10 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>PaperTodo Top Bar App Runtime</title>
+  <title>PaperTodo Top Bar Runtime</title>
 </head>
 <body>
 <script>
+  const paperIds = new Set();
+
   async function registerGlobalTopBar() {
     await papertodo.globalTopBar.setActions([
       {
@@ -21,10 +23,46 @@
     ]);
   }
 
+  function publishPaper(paperId) {
+    if (!paperId) return;
+    void papertodo.papers.setHeaderText(paperId, 'Top Bar 2.0');
+    void papertodo.papers.setCapsulePresentation(paperId, {
+      preferredWidth: 0,
+      plainText: 'Top Bar 2.0',
+      toolTip: 'Protocol 2.0 Top Bar 示例',
+      components: [
+        { kind: 'glyph', text: 'T' },
+        { kind: 'text', text: 'Top Bar 2.0', fill: true }
+      ]
+    });
+  }
+
+  function replacePapers(values) {
+    paperIds.clear();
+    for (const value of Array.isArray(values) ? values : []) {
+      const paperId = String(value?.paperId || '').trim();
+      if (!paperId) continue;
+      paperIds.add(paperId);
+      publishPaper(paperId);
+    }
+  }
+
   papertodo.onEvent(async message => {
     if (message.type === 'shortcutInvoked' &&
         message.actionId === 'runtime.ping') {
       console.log('PaperTodo custom shortcut', message.settingId, message.actionId);
+      return;
+    }
+
+    if (message.type === 'paperEvent') {
+      const item = message.event || {};
+      const paperId = String(item.paperId || '').trim();
+      if (item.kind === 'paperAdded' && paperId) {
+        paperIds.add(paperId);
+        publishPaper(paperId);
+      } else if (item.kind === 'paperRemoved' && paperId) {
+        paperIds.delete(paperId);
+      }
       return;
     }
 
@@ -44,7 +82,9 @@
   });
 
   window.addEventListener('papertodo', event => {
-    if (event.detail?.type !== 'initialize') return;
+    const message = event.detail || {};
+    if (message.type !== 'initialize') return;
+    replacePapers(message.papers);
     registerGlobalTopBar().catch(error => {
       console.error('PaperTodo Global Top Bar registration failed', error);
     });
