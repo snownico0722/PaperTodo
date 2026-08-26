@@ -358,7 +358,7 @@ replace(path,
 
     private void EnsureActive()
     {
-        if (!_isActive()''')
+        if (!_isActive())''')
 
 # 6) Controller/frontend route helpers.
 path = 'src/AppController.PluginRuntimePapers.cs'
