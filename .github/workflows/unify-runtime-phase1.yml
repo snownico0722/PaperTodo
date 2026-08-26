@@ -6,6 +6,10 @@ on:
       - refactor/unified-plugin-runtime
     paths:
       - tools/unify_runtime_phase1.py
+      - src/WebPluginAppRuntime.cs
+      - src/AppController.PluginRuntimePapers.cs
+      - src/PaperAppRuntimeStateApi.cs
+      - PaperTodo.Plugin.Abstractions/**
       - .github/workflows/unify-runtime-phase1.yml
 
 permissions:
