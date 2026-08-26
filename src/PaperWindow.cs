@@ -773,6 +773,7 @@ public sealed partial class PaperWindow : Window
         RefreshExperimentalOpacity(animate: false);
         UpdateExperimentalFocusPresentationSettings();
         UpdateAdvancedInteractionLockVisuals();
+        ReplayPluginRuntimePresentation();
     }
 
     private void HandleWindowGeometryChanged()
