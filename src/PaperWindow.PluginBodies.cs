@@ -264,6 +264,11 @@ public sealed partial class PaperWindow
                         $"Saved plugin state version {stored.Version} is newer than supported version {descriptor.StateVersion}.");
                 }
                 var context = CreatePluginContext(descriptor, generation, stored);
+                var hasPaperRuntime =
+                    (descriptor.RuntimeRequirements &
+                     PaperBodyRuntimeRequirements.BackgroundUpdates) != 0 &&
+                    !string.IsNullOrWhiteSpace(
+                        descriptor.Manifest.PaperRuntimePath);
                 return new WebPaperBodySession(
                     context,
                     descriptor.Manifest,
@@ -271,11 +276,8 @@ public sealed partial class PaperWindow
                         _paper.Id,
                         descriptor.Id,
                         payload),
-                    paperRuntimeOwnsPresentation:
-                        (descriptor.RuntimeRequirements &
-                         PaperBodyRuntimeRequirements.BackgroundUpdates) != 0 &&
-                        !string.IsNullOrWhiteSpace(
-                            descriptor.Manifest.PaperRuntimePath));
+                    paperRuntimeOwnsPresentation: hasPaperRuntime,
+                    paperRuntimeOwnsState: hasPaperRuntime);
             }
 
             throw new InvalidOperationException("Plugin descriptor has no usable body factory.");

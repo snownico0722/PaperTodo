@@ -90,7 +90,7 @@ public sealed partial class PaperWindow
         }
     }
 
-    internal void ReceiveWebPaperRuntimeMessage(
+    internal bool ReceiveWebPaperRuntimeMessage(
         string providerId,
         JsonElement payload)
     {
@@ -99,12 +99,10 @@ public sealed partial class PaperWindow
                 providerId,
                 StringComparison.Ordinal))
         {
-            return;
+            return false;
         }
-        if (_paperBodyHost.Current is WebPaperBodySession body)
-        {
+        return _paperBodyHost.Current is WebPaperBodySession body &&
             body.ReceiveRuntimeMessage(payload);
-        }
     }
 
     internal void ClearWebPaperRuntimePresentation(string providerId)

@@ -18,7 +18,9 @@ namespace PaperTodo;
 internal sealed partial class WebPaperBodySession : IPaperBodySession
 {
     private static readonly object EnvironmentGate = new();
-    private static readonly Dictionary<string, Task<CoreWebView2Environment>> EnvironmentTasks =
+    private static readonly Dictionary<string, Task<CoreWebView2Environment>> VisibleEnvironmentTasks =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Task<CoreWebView2Environment>> RuntimeEnvironmentTasks =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly JsonSerializerOptions BridgeJsonOptions = new()
     {
@@ -28,8 +30,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     private readonly PaperBodyContext _context;
     private readonly PaperBodyPluginManifest _manifest;
-    private readonly Action<JsonElement>? _postRuntimeMessage;
+    private readonly Func<JsonElement, bool>? _postRuntimeMessage;
     private readonly bool _paperRuntimeOwnsPresentation;
+    private readonly bool _paperRuntimeOwnsState;
     private readonly Queue<JsonElement> _pendingRuntimeMessages = new();
     private readonly Grid _root;
     private WebView2CompositionControl _webView;
@@ -59,13 +62,15 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     public WebPaperBodySession(
         PaperBodyContext context,
         PaperBodyPluginManifest manifest,
-        Action<JsonElement>? postRuntimeMessage = null,
-        bool paperRuntimeOwnsPresentation = false)
+        Func<JsonElement, bool>? postRuntimeMessage = null,
+        bool paperRuntimeOwnsPresentation = false,
+        bool paperRuntimeOwnsState = false)
     {
         _context = context;
         _manifest = manifest;
         _postRuntimeMessage = postRuntimeMessage;
         _paperRuntimeOwnsPresentation = paperRuntimeOwnsPresentation;
+        _paperRuntimeOwnsState = paperRuntimeOwnsState;
         _theme = context.Theme;
         _stateJson = context.StateJson;
         _settingsJson = context.SettingsJson;
@@ -171,7 +176,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             core.NewWindowRequested += OnNewWindowRequested;
             core.DownloadStarting += OnDownloadStarting;
             await core.AddScriptToExecuteOnDocumentCreatedAsync(
-                BuildBridgeScript(_expectedOrigin));
+                BuildBridgeScript(
+                    _expectedOrigin,
+                    persistentStateWritable: !_paperRuntimeOwnsState));
             token.ThrowIfCancellationRequested();
             if (!IsCurrentWebView(webView, generation))
             {
@@ -211,12 +218,16 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         generation == _webViewGeneration &&
         ReferenceEquals(webView, _webView);
 
-    private static string BuildBridgeScript(string expectedOrigin)
+    private static string BuildBridgeScript(
+        string expectedOrigin,
+        bool persistentStateWritable)
     {
         var originJson = JsonSerializer.Serialize(expectedOrigin);
+        var stateWritableJson = persistentStateWritable ? "true" : "false";
         return $$"""
             (() => {
               const expectedOrigin = {{originJson}};
+              const persistentStateWritable = {{stateWritableJson}};
               if (window !== window.top || location.origin !== expectedOrigin || window.papertodo) return;
               const listeners = new Set();
               const hostEventListeners = new Map();
@@ -235,6 +246,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 void hostReady.then(() => rawPost(type, payload));
               };
               const saveState = state => {
+                if (!persistentStateWritable) {
+                  throw new Error('Persistent paper state is owned by paperRuntime; send a runtime command instead.');
+                }
                 const nextState = state ?? {};
                 if (documentToken) {
                   rawPost('saveState', nextState);
@@ -285,7 +299,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
               });
               const workspace = Object.freeze({ request });
               const runtime = Object.freeze({
-                post(message) { post('runtimeMessage', message ?? null); }
+                post(message) { return request('runtime.post', { message: message ?? null }); }
               });
               window.papertodo = Object.freeze({
                 surface: 'body',
@@ -298,6 +312,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 saveState,
                 flushState,
                 registerStateProvider(provider) {
+                  if (!persistentStateWritable) {
+                    throw new Error('Persistent paper state providers belong to paperRuntime for this plugin.');
+                  }
                   stateProvider = typeof provider === 'function' ? provider : null;
                   return () => { if (stateProvider === provider) stateProvider = null; };
                 },
@@ -627,7 +644,10 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             switch (type)
             {
                 case "saveState":
-                    UpdateStateFromWebSurface(payload, sourceMini: null);
+                    if (!_paperRuntimeOwnsState)
+                    {
+                        UpdateStateFromWebSurface(payload, sourceMini: null);
+                    }
                     break;
                 case "setTitle":
                     _context.SetTitle(ReadPayloadString(payload));
@@ -651,12 +671,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                     break;
                 case "openExternal":
                     _context.OpenExternal(ReadPayloadString(payload));
-                    break;
-                case "runtimeMessage":
-                    _postRuntimeMessage?.Invoke(
-                        payload.ValueKind == JsonValueKind.Undefined
-                            ? JsonSerializer.SerializeToElement<object?>(null)
-                            : payload.Clone());
                     break;
                 case "hostRequest":
                     HandleHostRequest(payload);
@@ -744,8 +758,29 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         }
     }
 
-    private object? ExecuteHostRequest(string method, JsonElement parameters) => method switch
+    private object? ExecuteHostRequest(string method, JsonElement parameters)
     {
+        if (string.Equals(method, "runtime.post", StringComparison.Ordinal))
+        {
+            var message = parameters.ValueKind == JsonValueKind.Object &&
+                          parameters.TryGetProperty("message", out var messageValue)
+                ? messageValue
+                : default;
+            if (_postRuntimeMessage == null ||
+                !_postRuntimeMessage(
+                    message.ValueKind == JsonValueKind.Undefined
+                        ? JsonSerializer.SerializeToElement<object?>(null)
+                        : message.Clone()))
+            {
+                throw new PaperTodoPluginException(
+                    "runtime_unavailable",
+                    "The paper runtime is not ready to accept this message.");
+            }
+            return null;
+        }
+
+        return method switch
+        {
         "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
         "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
         "todos.list" => _context.Host.ListTodos(
@@ -775,10 +810,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         "paper.activate" => ExecutePaperPresentationHostRequest(method, parameters),
         "topbar.paper.set" => SetPaperTopBarActionsFromWeb(parameters),
         "topbar.global.set" => SetGlobalTopBarActionsFromWeb(parameters),
-        _ => throw new PaperTodoPluginException(
-            "method_not_found",
-            $"Unknown PaperTodo plugin host method: {method}")
-    };
+            _ => throw new PaperTodoPluginException(
+                "method_not_found",
+                $"Unknown PaperTodo plugin host method: {method}")
+        };
+    }
 
     private void HandleSubscribeHostEvents(JsonElement payload)
     {
@@ -1023,7 +1059,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         fontScale = theme.FontScale
     };
 
-    private void Send(object value)
+    private bool Send(object value)
     {
         if (!_initialized ||
             !_documentReady ||
@@ -1031,15 +1067,18 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _disposed ||
             _webView.CoreWebView2 == null)
         {
-            return;
+            return false;
         }
         try
         {
-            _webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value, BridgeJsonOptions));
+            _webView.CoreWebView2.PostWebMessageAsJson(
+                JsonSerializer.Serialize(value, BridgeJsonOptions));
+            return true;
         }
         catch
         {
             // Renderer teardown can race with paper close.
+            return false;
         }
     }
 
@@ -1128,17 +1167,21 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         };
     }
 
-    private static async Task<CoreWebView2Environment> GetPluginEnvironmentAsync(
-        string pluginDirectory)
+    internal static async Task<CoreWebView2Environment> GetPluginEnvironmentAsync(
+        string pluginDirectory,
+        bool backgroundRuntime = false)
     {
         var key = Path.GetFullPath(pluginDirectory);
+        var environmentTasks = backgroundRuntime
+            ? RuntimeEnvironmentTasks
+            : VisibleEnvironmentTasks;
         Task<CoreWebView2Environment> task;
         lock (EnvironmentGate)
         {
-            if (!EnvironmentTasks.TryGetValue(key, out task!))
+            if (!environmentTasks.TryGetValue(key, out task!))
             {
-                task = CreateEnvironmentAsync(key);
-                EnvironmentTasks.Add(key, task);
+                task = CreateEnvironmentAsync(key, backgroundRuntime);
+                environmentTasks.Add(key, task);
             }
         }
 
@@ -1150,27 +1193,31 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         {
             lock (EnvironmentGate)
             {
-                if (EnvironmentTasks.TryGetValue(key, out var current) &&
+                if (environmentTasks.TryGetValue(key, out var current) &&
                     ReferenceEquals(current, task))
                 {
-                    EnvironmentTasks.Remove(key);
+                    environmentTasks.Remove(key);
                 }
             }
             throw;
         }
     }
 
-    private static Task<CoreWebView2Environment> CreateEnvironmentAsync(string pluginDirectory)
+    private static Task<CoreWebView2Environment> CreateEnvironmentAsync(
+        string pluginDirectory,
+        bool backgroundRuntime)
     {
         var userDataFolder = Path.Combine(
             pluginDirectory,
             ".runtime",
-            "webview2");
+            backgroundRuntime ? "webview2-runtime" : "webview2");
         Directory.CreateDirectory(userDataFolder);
-        var options = new CoreWebView2EnvironmentOptions(
-            "--disable-background-timer-throttling " +
-            "--disable-renderer-backgrounding " +
-            "--disable-backgrounding-occluded-windows");
+        var options = backgroundRuntime
+            ? new CoreWebView2EnvironmentOptions(
+                "--disable-background-timer-throttling " +
+                "--disable-renderer-backgrounding " +
+                "--disable-backgrounding-occluded-windows")
+            : new CoreWebView2EnvironmentOptions();
         return CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
             userDataFolder: userDataFolder,
@@ -1206,40 +1253,42 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _miniViewHost?.SendStateChanged();
     }
 
-    internal void ReceiveRuntimeMessage(JsonElement payload)
+    internal bool ReceiveRuntimeMessage(JsonElement payload)
     {
         if (_disposed || _webViewFailed)
         {
-            return;
+            return false;
         }
         if (!_documentReady || !_pluginDocumentReady)
         {
-            while (_pendingRuntimeMessages.Count >= 32)
+            if (_pendingRuntimeMessages.Count >= 32)
             {
-                _pendingRuntimeMessages.Dequeue();
+                return false;
             }
             _pendingRuntimeMessages.Enqueue(payload.Clone());
-            return;
+            return true;
         }
-        SendRuntimeMessage(payload);
+        return SendRuntimeMessage(payload);
     }
 
     private void FlushPendingRuntimeMessages()
     {
         while (_documentReady && _pluginDocumentReady && _pendingRuntimeMessages.Count > 0)
         {
-            SendRuntimeMessage(_pendingRuntimeMessages.Dequeue());
+            if (!SendRuntimeMessage(_pendingRuntimeMessages.Peek()))
+            {
+                break;
+            }
+            _pendingRuntimeMessages.Dequeue();
         }
     }
 
-    private void SendRuntimeMessage(JsonElement payload)
-    {
+    private bool SendRuntimeMessage(JsonElement payload) =>
         Send(new
         {
             type = "runtimeMessage",
             payload
         });
-    }
 
     public void RefreshFromModel()
     {
@@ -1291,8 +1340,8 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     public void Commit()
     {
-        // Web state persistence is immediate by contract. This message only asks a registered
-        // state provider to flush a final snapshot while the renderer is still alive.
+        // Best-effort lifecycle notification only. Persistent state must be saved at the
+        // moment it changes; Dispose does not wait for a JavaScript acknowledgement.
         Send(new { type = "commitRequested" });
     }
 

@@ -104,6 +104,17 @@ Web 插件使用 WebView2 runtime；脚本胶囊可以启动 PowerShell 子进�
 
 `appRuntime` **不会因为插件仅被安装就启动**。启动流程先处理已启用的 `startupPaper`，让它有机会创建或恢复真实插件 paper；该阶段完成后，宿主以最终 `State.Papers` 为 authority，只有至少存在一张 `Note` paper 且其 `BodyProviderId` 指向该 provider 时，才启动这个 provider 的 app runtime。运行中同样按实体 paper 集合 reconcile：0→1 启动，1→0 释放；隐藏、折叠、没有展开正文或没有 live body session 都不改变 runtime lifetime。Native provider 只有声明 `appRuntime` 且满足实体 paper 条件时才会因此加载 DLL；未声明的 Native provider 继续保持按 paper 使用时懒加载。Web app runtime 使用与 body 同一插件 origin 下的 `runtime.html`，但获得独立 app-scope bridge，不获得 Paper/Body/Mini presentation API。
 
+
+### Web 生命周期边界
+
+**PaperTodo 管 Web Surface，不管 Web App。** 宿主负责 WebView 的创建/销毁、Body/Mini/后台 Runtime surface 是否存在、local origin 与 bridge、renderer 失败后的 surface 恢复以及粗粒度资源预算；插件自己负责 timer、网络连接、任务生命周期、业务重试、Body ↔ PaperRuntime 消息内容和业务状态结构。宿主不提供消息总线、exactly-once、业务事务或状态冲突合并。
+
+可见 Body/Mini 使用浏览器正常的后台调度策略；AppRuntime/PaperRuntime 使用独立的后台 runtime 环境。两个环境不承诺共享 localStorage/cookie 等浏览器存储，跨 surface 协作必须走宿主 bridge。PaperRuntime 冷启动只做有限并发，Web Mini 在离开预览一段时间后可被宿主回收并于下次使用时重建。
+
+声明 `paperRuntime` 后，**PaperRuntime 是该 Paper 插件持久 state 的唯一 writer**。Body/Mini 可以消费宿主广播的 state snapshot，并通过 `runtime.post(...)` 向 PaperRuntime 发送业务消息，但不能直接 `saveState()` 覆盖持久状态。反向 `body.post(...)` 同样只是薄的有序消息发送边界：目标尚未 ready 时宿主可短暂排队，无法接受或队列达到上限时调用明确失败；如何重试、去重或解释消息由插件自己决定。
+
+`commitRequested` 只是 best-effort 生命周期通知，Dispose 不等待 JavaScript ACK。需要可靠保存的业务状态必须在状态变化时立即调用 `saveState()`，不能依赖退出前最后一次 flush。
+
 PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini/runtime 等文件的安装、删除或修改统一在下次启动 PaperTodo 时重新发现并生效，避免同时维护 Web 热替换和 Native CLR 已加载版本两套运行规则。
 
 ## 4. 状态与持久化架构

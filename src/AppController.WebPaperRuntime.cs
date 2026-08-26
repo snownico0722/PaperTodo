@@ -486,31 +486,28 @@ public sealed partial class AppController
         }
     }
 
-    internal void PostBodyMessageToWebPaperRuntime(
+    internal bool PostBodyMessageToWebPaperRuntime(
         string paperId,
         string providerId,
         JsonElement payload)
     {
-        if (_webPaperRuntimeSlots.TryGetValue(paperId, out var slot) &&
-            string.Equals(slot.ProviderId, providerId, StringComparison.Ordinal))
-        {
-            slot.Runtime?.PostBodyMessage(payload);
-        }
+        return _webPaperRuntimeSlots.TryGetValue(paperId, out var slot) &&
+            string.Equals(slot.ProviderId, providerId, StringComparison.Ordinal) &&
+            slot.Runtime?.PostBodyMessage(payload) == true;
     }
 
-    private void PostWebPaperRuntimeMessageToBody(
+    private bool PostWebPaperRuntimeMessageToBody(
         WebPaperRuntimeSlot slot,
         Guid runtimeId,
         JsonElement payload)
     {
         if (!IsCurrentWebPaperRuntimeSlot(slot, runtimeId))
         {
-            return;
+            return false;
         }
-        if (_windows.TryGetValue(slot.PaperId, out var window) && !window.IsClosed)
-        {
+        return _windows.TryGetValue(slot.PaperId, out var window) &&
+            !window.IsClosed &&
             window.ReceiveWebPaperRuntimeMessage(slot.ProviderId, payload);
-        }
     }
 
     internal void ApplyWebPaperRuntimePresentationToWindow(PaperWindow window)

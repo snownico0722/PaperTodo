@@ -16,6 +16,16 @@ internal sealed partial class WebPaperBodySession
 {
     private WebPluginMiniViewHost? _miniViewHost;
 
+    private void ReleaseIdleMiniView(WebPluginMiniViewHost host)
+    {
+        if (!ReferenceEquals(_miniViewHost, host) || host.IsPreviewVisible)
+        {
+            return;
+        }
+        _miniViewHost = null;
+        host.Dispose();
+    }
+
     internal bool HasMiniEntry =>
         !_disposed &&
         !string.IsNullOrWhiteSpace(_manifest.MiniEntryPath);
@@ -58,6 +68,11 @@ internal sealed partial class WebPaperBodySession
         JsonElement payload,
         WebPluginMiniViewHost? sourceMini)
     {
+        if (_paperRuntimeOwnsState)
+        {
+            return;
+        }
+
         var nextStateJson = payload.ValueKind == JsonValueKind.Undefined
             ? "{}"
             : payload.GetRawText();
@@ -104,11 +119,13 @@ internal sealed partial class WebPaperBodySession
         private const int ColdInitializationDeferralMilliseconds =
             EdgeCapsuleLayout.SlotMoveMilliseconds + 20;
         private const int MaximumInteractiveRegions = 128;
+        private static readonly TimeSpan IdleReleaseDelay = TimeSpan.FromSeconds(45);
 
         private readonly WebPaperBodySession _owner;
         private readonly EdgeCapsulePreviewSize _size;
         private readonly WebView2CompositionControl _webView;
         private readonly CancellationTokenSource _lifetime = new();
+        private DispatcherTimer? _idleReleaseTimer;
         private FrameworkElement _fallback;
         private InteractiveRegion[] _interactiveRegions = Array.Empty<InteractiveRegion>();
         private string _expectedOrigin = "";
@@ -172,6 +189,8 @@ internal sealed partial class WebPaperBodySession
             _webView.MouseLeave += OnWebViewMouseLeave;
         }
 
+        public bool IsPreviewVisible => _visible;
+
         public bool Matches(EdgeCapsulePreviewSize size) =>
             Math.Abs(_size.WidthDip - size.WidthDip) <= 0.001 &&
             Math.Abs(_size.HeightDip - size.HeightDip) <= 0.001;
@@ -212,6 +231,7 @@ internal sealed partial class WebPaperBodySession
 
             if (visible)
             {
+                StopIdleReleaseTimer();
                 QueueInitialization();
             }
             else
@@ -225,6 +245,7 @@ internal sealed partial class WebPaperBodySession
                 _initializationQueued = false;
                 _initializationDeferralGeneration++;
                 Send(new { type = "commitRequested" });
+                RestartIdleReleaseTimer();
             }
 
             // Deliver the public lifecycle event before a host-private surface probe. A plugin that
@@ -236,6 +257,36 @@ internal sealed partial class WebPaperBodySession
                 QueuePluginPresentation(presentationGeneration);
             }
             UpdatePresentation();
+        }
+
+        private void RestartIdleReleaseTimer()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            _idleReleaseTimer ??= new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = IdleReleaseDelay
+            };
+            _idleReleaseTimer.Tick -= OnIdleReleaseTimerTick;
+            _idleReleaseTimer.Tick += OnIdleReleaseTimerTick;
+            _idleReleaseTimer.Stop();
+            _idleReleaseTimer.Start();
+        }
+
+        private void StopIdleReleaseTimer()
+        {
+            _idleReleaseTimer?.Stop();
+        }
+
+        private void OnIdleReleaseTimerTick(object? sender, EventArgs e)
+        {
+            StopIdleReleaseTimer();
+            if (!_disposed && !_visible)
+            {
+                _owner.ReleaseIdleMiniView(this);
+            }
         }
 
         public void SendStateChanged() => Send(new
@@ -419,7 +470,9 @@ internal sealed partial class WebPaperBodySession
                 core.ProcessFailed += OnProcessFailed;
                 core.DownloadStarting += WebPaperBodySession.OnDownloadStarting;
                 await core.AddScriptToExecuteOnDocumentCreatedAsync(
-                    BuildMiniBridgeScript(_expectedOrigin));
+                    BuildMiniBridgeScript(
+                        _expectedOrigin,
+                        persistentStateWritable: !_owner._paperRuntimeOwnsState));
                 token.ThrowIfCancellationRequested();
                 if (_disposed)
                 {
@@ -441,12 +494,16 @@ internal sealed partial class WebPaperBodySession
             }
         }
 
-        private static string BuildMiniBridgeScript(string expectedOrigin)
+        private static string BuildMiniBridgeScript(
+            string expectedOrigin,
+            bool persistentStateWritable)
         {
             var originJson = JsonSerializer.Serialize(expectedOrigin);
+            var stateWritableJson = persistentStateWritable ? "true" : "false";
             return $$"""
                 (() => {
                   const expectedOrigin = {{originJson}};
+                  const persistentStateWritable = {{stateWritableJson}};
                   if (window !== window.top || location.origin !== expectedOrigin || window.papertodo) return;
                   const listeners = new Set();
                   const pending = new Map();
@@ -531,7 +588,12 @@ internal sealed partial class WebPaperBodySession
                   window.addEventListener('resize', queueInteractiveRegions);
                   window.addEventListener('load', queueInteractiveRegions);
 
-                  const saveState = state => post('saveState', state ?? {});
+                  const saveState = state => {
+                    if (!persistentStateWritable) {
+                      throw new Error('Persistent paper state is owned by paperRuntime; send a runtime command instead.');
+                    }
+                    post('saveState', state ?? {});
+                  };
                   const flushState = () => {
                     if (typeof stateProvider !== 'function') return;
                     try { saveState(stateProvider()); } catch { }
@@ -565,6 +627,9 @@ internal sealed partial class WebPaperBodySession
                     workspace: Object.freeze({ request }),
                     post, request, saveState, flushState,
                     registerStateProvider(provider) {
+                      if (!persistentStateWritable) {
+                        throw new Error('Persistent paper state providers belong to paperRuntime for this plugin.');
+                      }
                       stateProvider = typeof provider === 'function' ? provider : null;
                       return () => { if (stateProvider === provider) stateProvider = null; };
                     },
@@ -781,7 +846,10 @@ internal sealed partial class WebPaperBodySession
                         UpdateInteractiveRegions(payload);
                         break;
                     case "saveState":
-                        _owner.UpdateStateFromWebSurface(payload, this);
+                        if (!_owner._paperRuntimeOwnsState)
+                        {
+                            _owner.UpdateStateFromWebSurface(payload, this);
+                        }
                         break;
                     case "setTitle":
                         _owner._context.SetTitle(ReadPayloadString(payload));
@@ -1332,7 +1400,14 @@ internal sealed partial class WebPaperBodySession
             {
                 return;
             }
+            // Best effort only; reliable durability is saveState-at-mutation time.
             Send(new { type = "commitRequested" });
+            StopIdleReleaseTimer();
+            if (_idleReleaseTimer != null)
+            {
+                _idleReleaseTimer.Tick -= OnIdleReleaseTimerTick;
+                _idleReleaseTimer = null;
+            }
             AdvancePresentationGeneration();
             CancelSurfaceRecovery(restorePreviousSurface: false);
             _disposed = true;

@@ -15,6 +15,11 @@ namespace PaperTodo;
 /// </summary>
 internal sealed class WebPaperRuntime : IDisposable
 {
+    private const int MaximumConcurrentColdStarts = 3;
+    private static readonly SemaphoreSlim StartupGate = new(
+        MaximumConcurrentColdStarts,
+        MaximumConcurrentColdStarts);
+
     private readonly PaperBodyPluginDescriptor _descriptor;
     private readonly string _paperId;
     private readonly PaperBodyPluginHostApi _workspace;
@@ -22,7 +27,7 @@ internal sealed class WebPaperRuntime : IDisposable
     private readonly Action<string> _setHeaderText;
     private readonly Action<PaperCapsulePresentation?> _setCapsulePresentation;
     private readonly Action<string> _saveState;
-    private readonly Action<JsonElement> _postBodyMessage;
+    private readonly Func<JsonElement, bool> _postBodyMessage;
     private readonly Action _requestRestart;
     private readonly Func<bool> _isActive;
     private readonly WebView2CompositionControl _webView;
@@ -62,7 +67,7 @@ internal sealed class WebPaperRuntime : IDisposable
         Action<string> setHeaderText,
         Action<PaperCapsulePresentation?> setCapsulePresentation,
         Action<string> saveState,
-        Action<JsonElement> postBodyMessage,
+        Func<JsonElement, bool> postBodyMessage,
         Action requestRestart)
     {
         _descriptor = descriptor;
@@ -97,6 +102,19 @@ internal sealed class WebPaperRuntime : IDisposable
     }
 
     public async Task StartAsync()
+    {
+        await StartupGate.WaitAsync(_lifetime.Token);
+        try
+        {
+            await StartCoreAsync();
+        }
+        finally
+        {
+            StartupGate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync()
     {
         ThrowIfInactive();
         var manifest = _descriptor.Manifest
@@ -207,7 +225,7 @@ internal sealed class WebPaperRuntime : IDisposable
                 activate() { return request('paper.activate'); }
               });
               const body = Object.freeze({
-                post(message) { post('bodyMessage', message ?? null); }
+                post(message) { return request('body.post', { message: message ?? null }); }
               });
               const workspace = Object.freeze({ request });
               window.papertodo = Object.freeze({
@@ -428,12 +446,6 @@ internal sealed class WebPaperRuntime : IDisposable
                             : payload.Deserialize<PaperCapsulePresentation>(
                                 WebPluginRuntimeInfrastructure.JsonOptions));
                     break;
-                case "bodyMessage":
-                    _postBodyMessage(
-                        payload.ValueKind == JsonValueKind.Undefined
-                            ? JsonSerializer.SerializeToElement<object?>(null)
-                            : payload.Clone());
-                    break;
                 case "hostRequest":
                     HandleHostRequest(payload);
                     break;
@@ -491,6 +503,23 @@ internal sealed class WebPaperRuntime : IDisposable
             if (string.Equals(method, "settings.get", StringComparison.Ordinal))
             {
                 result = ParseState(_settingsJson);
+            }
+            else if (string.Equals(method, "body.post", StringComparison.Ordinal))
+            {
+                var message = parameters.ValueKind == JsonValueKind.Object &&
+                              parameters.TryGetProperty("message", out var messageValue)
+                    ? messageValue
+                    : default;
+                if (!_postBodyMessage(
+                        message.ValueKind == JsonValueKind.Undefined
+                            ? JsonSerializer.SerializeToElement<object?>(null)
+                            : message.Clone()))
+                {
+                    throw new PaperTodoPluginException(
+                        "body_unavailable",
+                        "The paper body is not ready to accept this message.");
+                }
+                result = null;
             }
             else if (method.StartsWith("paper.", StringComparison.Ordinal))
             {
@@ -757,40 +786,42 @@ internal sealed class WebPaperRuntime : IDisposable
         });
     }
 
-    public void PostBodyMessage(JsonElement payload)
+    public bool PostBodyMessage(JsonElement payload)
     {
         if (_disposed)
         {
-            return;
+            return false;
         }
         if (!_documentReady)
         {
-            while (_pendingBodyMessages.Count >= 32)
+            if (_pendingBodyMessages.Count >= 32)
             {
-                _pendingBodyMessages.Dequeue();
+                return false;
             }
             _pendingBodyMessages.Enqueue(payload.Clone());
-            return;
+            return true;
         }
-        SendBodyMessage(payload);
+        return SendBodyMessage(payload);
     }
 
     private void FlushPendingBodyMessages()
     {
         while (_documentReady && _pendingBodyMessages.Count > 0)
         {
-            SendBodyMessage(_pendingBodyMessages.Dequeue());
+            if (!SendBodyMessage(_pendingBodyMessages.Peek()))
+            {
+                break;
+            }
+            _pendingBodyMessages.Dequeue();
         }
     }
 
-    private void SendBodyMessage(JsonElement payload)
-    {
+    private bool SendBodyMessage(JsonElement payload) =>
         Send(new
         {
             type = "bodyMessage",
             payload
         });
-    }
 
     private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {
@@ -884,11 +915,11 @@ internal sealed class WebPaperRuntime : IDisposable
         try { _requestRestart(); } catch { }
     }
 
-    private void Send(object value)
+    private bool Send(object value)
     {
         if (!_documentReady || _disposed || !_isActive() || _webView.CoreWebView2 == null)
         {
-            return;
+            return false;
         }
         try
         {
@@ -896,9 +927,11 @@ internal sealed class WebPaperRuntime : IDisposable
                 JsonSerializer.Serialize(
                     value,
                     WebPluginRuntimeInfrastructure.JsonOptions));
+            return true;
         }
         catch
         {
+            return false;
         }
     }
 
@@ -916,6 +949,7 @@ internal sealed class WebPaperRuntime : IDisposable
         {
             return;
         }
+        // Best effort only; reliable durability is saveState-at-mutation time.
         Send(new { type = "commitRequested" });
         _documentReady = false;
         _activeDocumentToken = null;
