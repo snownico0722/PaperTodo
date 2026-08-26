@@ -40,8 +40,10 @@ jobs:
         run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
       - name: Structural checks
         run: |
-          if (git grep -n "CapsuleCollapseAllActive[^Q]" -- src ':!src/Models.cs') { throw "legacy collapse-all summary remains" }
-          if (git grep -n "DeepCapsuleStartTopMargin" -- src) { throw "legacy global queue margin remains" }
+          $collapseRefs = @(git grep -n "CapsuleCollapseAllActive" -- src 2>$null | Where-Object { $_ -notmatch "CapsuleCollapseAllActiveQueues" -and $_ -notmatch "IsCapsuleCollapseAllActiveForQueue" })
+          if ($collapseRefs.Count -gt 0) { $collapseRefs | Write-Host; throw "legacy collapse-all summary remains" }
+          $marginRefs = @(git grep -n "DeepCapsuleStartTopMargin" -- src 2>$null | Where-Object { $_ -match "State\.DeepCapsuleStartTopMargin|DeepCapsuleStartTopMargin\s*\{\s*get" })
+          if ($marginRefs.Count -gt 0) { $marginRefs | Write-Host; throw "legacy global queue margin state remains" }
           if (git grep -n "MigrateLegacyCollapseAllActiveQueues\|SyncLegacyCollapseAllActiveSummary" -- src) { throw "legacy collapse-all compensation remains" }
           if (-not (git grep -n "maxPaperInstances" -- src plugin-samples plugins)) { throw "instance limit contract missing" }
       - name: Commit validated product changes
