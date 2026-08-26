@@ -7,7 +7,9 @@ namespace PaperTodo;
 
 /// <summary>
 /// The one provider Runtime addresses its logical Paper instances through PaperId. The API owns no
-/// per-Paper backend objects; it only routes lifecycle, presentation and frontend messages.
+/// per-Paper backend objects; it only routes lifecycle, presentation and frontend messages. Rich
+/// capsule presentation is cached only as volatile presentation state so a rebuilt PaperWindow can
+/// replay the Runtime's last published value without creating a second backend authority.
 /// </summary>
 internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDisposable
 {
@@ -17,6 +19,8 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
     private readonly Func<bool> _isActive;
     private readonly object _gate = new();
     private readonly HashSet<string> _knownPaperIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PaperCapsulePresentation> _capsulePresentations =
+        new(StringComparer.Ordinal);
     private readonly Dictionary<long, Action<PaperPluginRuntimeEvent>> _handlers = [];
     private long _nextHandlerId;
     private bool _disposed;
@@ -74,11 +78,45 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
         PaperCapsulePresentation? presentation)
     {
         EnsureUsable();
-        var normalized = NormalizePaperId(paperId);
+        var paperIdNormalized = NormalizePaperId(paperId);
+        var presentationNormalized = PaperWindow.NormalizePluginCapsulePresentation(presentation);
+        lock (_gate)
+        {
+            EnsureUsableLocked();
+            if (presentationNormalized == null)
+            {
+                _capsulePresentations.Remove(paperIdNormalized);
+            }
+            else
+            {
+                _capsulePresentations[paperIdNormalized] = presentationNormalized;
+            }
+        }
         OnUi(() => _controller.SetPluginRuntimePaperCapsule(
             _providerId,
-            normalized,
-            presentation));
+            paperIdNormalized,
+            presentationNormalized));
+    }
+
+    internal bool TryGetCapsulePresentation(
+        string paperId,
+        out PaperCapsulePresentation? presentation)
+    {
+        lock (_gate)
+        {
+            if (_disposed || !_isActive())
+            {
+                presentation = null;
+                return false;
+            }
+            if (_capsulePresentations.TryGetValue(paperId, out var value))
+            {
+                presentation = value;
+                return true;
+            }
+            presentation = null;
+            return false;
+        }
     }
 
     public bool PostToBody(string paperId, JsonElement message)
@@ -125,6 +163,10 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
             }
             added = current.Except(_knownPaperIds, StringComparer.Ordinal).ToArray();
             removed = _knownPaperIds.Except(current, StringComparer.Ordinal).ToArray();
+            foreach (var paperId in removed)
+            {
+                _capsulePresentations.Remove(paperId);
+            }
             _knownPaperIds.Clear();
             _knownPaperIds.UnionWith(current);
         }
@@ -239,6 +281,7 @@ internal sealed class PaperAppRuntimePapersApi : IPaperPluginRuntimePapers, IDis
             _disposed = true;
             _handlers.Clear();
             _knownPaperIds.Clear();
+            _capsulePresentations.Clear();
         }
     }
 
