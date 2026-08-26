@@ -10,7 +10,7 @@ public sealed partial class AppController
             .Where(paper =>
                 paper.Type == PaperTypes.Note &&
                 string.Equals(
-                    NormalizeBodyProviderId(paper.BodyProviderId),
+                    PluginRuntimeProviderId(paper.BodyProviderId),
                     providerId,
                     StringComparison.Ordinal))
             .Select(paper => new PaperPluginRuntimePaper(paper.Id))
@@ -100,9 +100,12 @@ public sealed partial class AppController
             paper.Type == PaperTypes.Note &&
             string.Equals(paper.Id, paperId, StringComparison.Ordinal) &&
             string.Equals(
-                NormalizeBodyProviderId(paper.BodyProviderId),
+                PluginRuntimeProviderId(paper.BodyProviderId),
                 providerId,
                 StringComparison.Ordinal));
+
+    private static string PluginRuntimeProviderId(string? providerId) =>
+        providerId?.Trim() ?? string.Empty;
 
     private PaperData RequirePluginRuntimePaper(string providerId, string paperId) =>
         FindPluginRuntimePaper(providerId, paperId)
