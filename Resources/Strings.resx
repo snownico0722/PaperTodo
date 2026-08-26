@@ -1415,7 +1415,7 @@
     <value>插件有问题</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>插件未启动</value>
+    <value>当前未使用</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>插件运行中</value>

@@ -1366,7 +1366,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>플러그인에 문제가 있음</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>플러그인이 시작되지 않음</value>
+    <value>현재 사용하지 않음</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>플러그인 실행 중</value>

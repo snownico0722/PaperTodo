@@ -1366,7 +1366,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Plugin has an issue</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>Plugin is not running</value>
+    <value>Not in use</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>Plugin is running</value>

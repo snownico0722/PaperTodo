@@ -1366,7 +1366,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>プラグインに問題があります</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>プラグインは未起動です</value>
+    <value>現在未使用</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>プラグインは実行中です</value>
