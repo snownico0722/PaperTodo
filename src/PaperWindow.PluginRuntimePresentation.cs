@@ -10,6 +10,19 @@ public sealed partial class PaperWindow
             _paper.Id,
             NormalizeBodyProviderId(_paper.BodyProviderId));
 
+    private void ReplayPluginRuntimePresentation()
+    {
+        var providerId = NormalizeBodyProviderId(_paper.BodyProviderId);
+        if (providerId.Length == 0)
+        {
+            return;
+        }
+        _controller.ApplyPluginRuntimePresentationToWindow(
+            this,
+            _paper.Id,
+            providerId);
+    }
+
     internal void ApplyPluginRuntimeHeader(string providerId, string headerText)
     {
         if (!string.Equals(
