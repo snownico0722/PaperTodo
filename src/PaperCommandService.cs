@@ -581,6 +581,24 @@ internal sealed class PaperCommandService
             paper.Items.Add(item);
             added.Add(item);
         }
+        if (_controller.State.AutoClearCompletedTodos)
+        {
+            var completedIds = added
+                .Where(item => item.Done)
+                .Select(item => item.Id)
+                .ToArray();
+            if (completedIds.Length > 0)
+            {
+                TodoRules.ApplyCompletionPolicy(
+                    paper.Items,
+                    completedIds,
+                    done: true,
+                    autoClearCompleted: true,
+                    autoMoveCompletedToBottom:
+                        _controller.State.AutoMoveCompletedTodosToBottom);
+                added.RemoveAll(item => item.Done);
+            }
+        }
         TodoRules.ApplyCompletedOrdering(
             paper.Items,
             _controller.State.AutoMoveCompletedTodosToBottom);
