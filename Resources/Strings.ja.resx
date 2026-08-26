@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -13,10 +13,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>起動に失敗しました: データファイルを読み込めません。ファイルが使用中、または破損している可能性があります。
-既存データの上書きを避けるため、アプリは起動を停止しました。
-
-エラー: {0}</value>
+    <value>起動に失敗しました: データファイルを読み込めません。ファイルが使用中、または破損している可能性があります。&#x0A;既存データの上書きを避けるため、アプリは起動を停止しました。&#x0A;&#x0A;エラー: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -25,11 +22,7 @@
     <value>PaperTodo - 起動失敗</value>
   </data>
   <data name="AppUnhandledExceptionMessage" xml:space="preserve">
-    <value>未処理のエラーが発生しました。クラッシュログを PaperTodo.crash.log に書き込みました。
-
-アプリを再起動してください。直近の変更は自動保存と data.backup.json に依存します。
-
-エラー: {0}</value>
+    <value>未処理のエラーが発生しました。クラッシュログを PaperTodo.crash.log に書き込みました。&#x0A;&#x0A;アプリを再起動してください。直近の変更は自動保存と data.backup.json に依存します。&#x0A;&#x0A;エラー: {0}</value>
   </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - 異常終了</value>
@@ -117,8 +110,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>*プレビューに失敗しました。原文は保持されました。エラー: {0}*</value>
   </data>
   <data name="OpenMarkdownFailureMessage" xml:space="preserve">
-    <value>既定の {0} エディターを起動できませんでした:
-{1}</value>
+    <value>既定の {0} エディターを起動できませんでした:&#x0A;{1}</value>
   </data>
   <data name="OpenMarkdownFailureTitle" xml:space="preserve">
     <value>外部で開けません</value>
@@ -130,8 +122,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>スクリプトカプセルを編集</value>
   </data>
   <data name="ScriptCapsuleExitFailureMessage" xml:space="preserve">
-    <value>スクリプトが終了コード {0} で失敗しました。
-{1}</value>
+    <value>スクリプトが終了コード {0} で失敗しました。&#x0A;{1}</value>
   </data>
   <data name="ScriptCapsuleFailureTitle" xml:space="preserve">
     <value>スクリプト実行に失敗</value>
@@ -197,8 +188,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>画像の挿入に失敗</value>
   </data>
   <data name="ImageImportFailureMessage" xml:space="preserve">
-    <value>画像を挿入できませんでした:
-{0}</value>
+    <value>画像を挿入できませんでした:&#x0A;{0}</value>
   </data>
   <data name="NotePasteRejectedTitle" xml:space="preserve">
     <value>貼り付けできません</value>
@@ -327,8 +317,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>紙片の数が上限の 100 枚に達しました。
-不要な紙片を削除してから新規作成してください。</value>
+    <value>紙片の数が上限の 100 枚に達しました。&#x0A;不要な紙片を削除してから新規作成してください。</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
     <value>紙片数が上限です</value>
@@ -343,9 +332,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>PaperTodo は保存に失敗したため終了します。未保存の変更は失われる可能性があります。</value>
   </data>
   <data name="SaveFailureMessage" xml:space="preserve">
-    <value>データの保存に失敗しました:
-{0}
-ディスク容量または権限を確認してください。</value>
+    <value>データの保存に失敗しました:&#x0A;{0}&#x0A;ディスク容量または権限を確認してください。</value>
   </data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>保存失敗</value>
@@ -1229,51 +1216,21 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="ShortcutExit" xml:space="preserve">
     <value>終了</value>
   </data>
-  <data name="LabsMcp" xml:space="preserve">
-    <value>ローカル MCP インターフェース</value>
-  </data>
-  <data name="LabsMcpEnable" xml:space="preserve">
-    <value>MCP を有効化（読み取りは常に許可）</value>
-  </data>
-  <data name="TipLabsMcpEnable" xml:space="preserve">
-    <value>同じ PaperTodo.exe の --mcp モードから、ローカル AI クライアントによる紙片の読み取りを許可します。無効にすると名前付きパイプを直ちに停止します。</value>
-  </data>
-  <data name="LabsMcpBlankWrites" xml:space="preserve">
-    <value>空欄・追加書き込みを許可</value>
-  </data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve">
-    <value>紙片の新規作成、既存の ToDo 紙への項目追加、空欄への入力、ノートへの追記を許可します。既存の文字は上書きしません。</value>
-  </data>
-  <data name="LabsMcpFullWrites" xml:space="preserve">
-    <value>完全な書き込みを許可</value>
-  </data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve">
-    <value>既存 ToDo の文字、ノート本文、完了状態、リマインダーの変更を許可します。空欄・追加書き込み権限も含みます。</value>
-  </data>
-  <data name="LabsMcpDeletes" xml:space="preserve">
-    <value>MCP による直接削除を許可</value>
-  </data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve">
-    <value>有効にすると、AI が紙片や ToDo を確認ダイアログなしで直接削除することを事前承認します。自動的には元に戻せないため、注意して有効にしてください。</value>
-  </data>
-  <data name="LabsMcpStatusReady" xml:space="preserve">
-    <value>ローカル MCP は準備完了</value>
-  </data>
-  <data name="LabsMcpStatusDisabled" xml:space="preserve">
-    <value>ローカル MCP は無効</value>
-  </data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve">
-    <value>Codex 設定をコピー</value>
-  </data>
-  <data name="LabsMcpCopyJson" xml:space="preserve">
-    <value>JSON 設定をコピー</value>
-  </data>
-  <data name="LabsMcpCopied" xml:space="preserve">
-    <value>コピーしました</value>
-  </data>
-  <data name="LabsMcpCopyFailed" xml:space="preserve">
-    <value>コピーに失敗しました</value>
-  </data>
+  <data name="LabsMcp" xml:space="preserve"><value>ローカル MCP インターフェース</value></data>
+  <data name="LabsMcpEnable" xml:space="preserve"><value>MCP を有効化（読み取りは常に許可）</value></data>
+  <data name="TipLabsMcpEnable" xml:space="preserve"><value>同じ PaperTodo.exe の --mcp モードから、ローカル AI クライアントによる紙片の読み取りを許可します。無効にすると名前付きパイプを直ちに停止します。</value></data>
+  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>空欄・追加書き込みを許可</value></data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>紙片の新規作成、既存の ToDo 紙への項目追加、空欄への入力、ノートへの追記を許可します。既存の文字は上書きしません。</value></data>
+  <data name="LabsMcpFullWrites" xml:space="preserve"><value>完全な書き込みを許可</value></data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>既存 ToDo の文字、ノート本文、完了状態、リマインダーの変更を許可します。空欄・追加書き込み権限も含みます。</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>MCP による直接削除を許可</value></data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>有効にすると、AI が紙片や ToDo を確認ダイアログなしで直接削除することを事前承認します。自動的には元に戻せないため、注意して有効にしてください。</value></data>
+  <data name="LabsMcpStatusReady" xml:space="preserve"><value>ローカル MCP は準備完了</value></data>
+  <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>ローカル MCP は無効</value></data>
+  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Codex 設定をコピー</value></data>
+  <data name="LabsMcpCopyJson" xml:space="preserve"><value>JSON 設定をコピー</value></data>
+  <data name="LabsMcpCopied" xml:space="preserve"><value>コピーしました</value></data>
+  <data name="LabsMcpCopyFailed" xml:space="preserve"><value>コピーに失敗しました</value></data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>プラグイン</value>
   </data>
@@ -1363,63 +1320,24 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginBodyUseMarkdown" xml:space="preserve">
     <value>Markdown に戻す</value>
   </data>
-  <data name="MenuSelectedTodoCount" xml:space="preserve">
-    <value>{0} 件を選択中</value>
-  </data>
-  <data name="MenuCopySelectedTodos" xml:space="preserve">
-    <value>選択項目をコピー</value>
-  </data>
-  <data name="MenuCompleteSelectedTodos" xml:space="preserve">
-    <value>すべて完了</value>
-  </data>
-  <data name="MenuUncompleteSelectedTodos" xml:space="preserve">
-    <value>すべて未完了に戻す</value>
-  </data>
-  <data name="MenuDeleteSelectedTodos" xml:space="preserve">
-    <value>選択した {0} 件を削除</value>
-  </data>
-  <data name="TodoDragSelectedCount" xml:space="preserve">
-    <value>{0} 件を選択中</value>
-  </data>
-  <data name="TodoMultiSelectToolTip" xml:space="preserve">
-    <value>上下にドラッグして複数のタスクを選択</value>
-  </data>
-  <data name="MenuOpenLinkedPath" xml:space="preserve">
-    <value>関連パスを開く：{0}</value>
-  </data>
-  <data name="MenuOpenLinkedPathLocation" xml:space="preserve">
-    <value>保存場所を開く</value>
-  </data>
-  <data name="MenuUnlinkPath" xml:space="preserve">
-    <value>パスの関連付けを解除</value>
-  </data>
-  <data name="ToolTipOpenLinkedPath" xml:space="preserve">
-    <value>関連パスを開く：{0}</value>
-  </data>
-  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
-    <value>関連パスが見つかりません：{0}</value>
-  </data>
-  <data name="LinkedPathSingleDropMessage" xml:space="preserve">
-    <value>1 件のタスクに関連付けられるファイルまたはフォルダーは 1 つだけです。</value>
-  </data>
-  <data name="LinkedPathDropFailureTitle" xml:space="preserve">
-    <value>パスを関連付けできません</value>
-  </data>
-  <data name="LinkedPathDropFailureMessage" xml:space="preserve">
-    <value>このファイルまたはフォルダーを関連付けできません：
-{0}</value>
-  </data>
-  <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
-    <value>関連パスを開けません</value>
-  </data>
-  <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
-    <value>システムでこのパスを開けません：
-{0}</value>
-  </data>
-  <data name="LinkedPathMissingMessage" xml:space="preserve">
-    <value>関連付けたファイルまたはフォルダーは移動または削除されています：
-{0}</value>
-  </data>
+  <data name="MenuSelectedTodoCount" xml:space="preserve"><value>{0} 件を選択中</value></data>
+  <data name="MenuCopySelectedTodos" xml:space="preserve"><value>選択項目をコピー</value></data>
+  <data name="MenuCompleteSelectedTodos" xml:space="preserve"><value>すべて完了</value></data>
+  <data name="MenuUncompleteSelectedTodos" xml:space="preserve"><value>すべて未完了に戻す</value></data>
+  <data name="MenuDeleteSelectedTodos" xml:space="preserve"><value>選択した {0} 件を削除</value></data>
+  <data name="TodoDragSelectedCount" xml:space="preserve"><value>{0} 件を選択中</value></data>
+  <data name="TodoMultiSelectToolTip" xml:space="preserve"><value>上下にドラッグして複数のタスクを選択</value></data>
+  <data name="MenuOpenLinkedPath" xml:space="preserve"><value>関連パスを開く：{0}</value></data>
+  <data name="MenuOpenLinkedPathLocation" xml:space="preserve"><value>保存場所を開く</value></data>
+  <data name="MenuUnlinkPath" xml:space="preserve"><value>パスの関連付けを解除</value></data>
+  <data name="ToolTipOpenLinkedPath" xml:space="preserve"><value>関連パスを開く：{0}</value></data>
+  <data name="ToolTipLinkedPathMissing" xml:space="preserve"><value>関連パスが見つかりません：{0}</value></data>
+  <data name="LinkedPathSingleDropMessage" xml:space="preserve"><value>1 件のタスクに関連付けられるファイルまたはフォルダーは 1 つだけです。</value></data>
+  <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>パスを関連付けできません</value></data>
+  <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>このファイルまたはフォルダーを関連付けできません：&#xA;{0}</value></data>
+  <data name="LinkedPathOpenFailureTitle" xml:space="preserve"><value>関連パスを開けません</value></data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>システムでこのパスを開けません：&#xA;{0}</value></data>
+  <data name="LinkedPathMissingMessage" xml:space="preserve"><value>関連付けたファイルまたはフォルダーは移動または削除されています：&#xA;{0}</value></data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
     <value>長いタイトルがオフのとき拡張子のみ表示</value>
   </data>

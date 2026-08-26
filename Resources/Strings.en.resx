@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -13,10 +13,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.
-To avoid overwriting existing data, the app has stopped.
-
-Error: {0}</value>
+    <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.&#x0A;To avoid overwriting existing data, the app has stopped.&#x0A;&#x0A;Error: {0}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -25,11 +22,7 @@ Error: {0}</value>
     <value>PaperTodo - Startup Failed</value>
   </data>
   <data name="AppUnhandledExceptionMessage" xml:space="preserve">
-    <value>The app hit an unhandled error. A crash log was written to PaperTodo.crash.log.
-
-Restart the app. Recent changes rely on autosave and data.backup.json.
-
-Error: {0}</value>
+    <value>The app hit an unhandled error. A crash log was written to PaperTodo.crash.log.&#x0A;&#x0A;Restart the app. Recent changes rely on autosave and data.backup.json.&#x0A;&#x0A;Error: {0}</value>
   </data>
   <data name="AppUnhandledExceptionTitle" xml:space="preserve">
     <value>PaperTodo - Unexpected Exit</value>
@@ -117,8 +110,7 @@ Error: {0}</value>
     <value>*Preview failed. The original text was kept. Error: {0}*</value>
   </data>
   <data name="OpenMarkdownFailureMessage" xml:space="preserve">
-    <value>Could not open the default {0} editor:
-{1}</value>
+    <value>Could not open the default {0} editor:&#x0A;{1}</value>
   </data>
   <data name="OpenMarkdownFailureTitle" xml:space="preserve">
     <value>Open externally failed</value>
@@ -130,8 +122,7 @@ Error: {0}</value>
     <value>Edit script capsule</value>
   </data>
   <data name="ScriptCapsuleExitFailureMessage" xml:space="preserve">
-    <value>Script failed with exit code {0}.
-{1}</value>
+    <value>Script failed with exit code {0}.&#x0A;{1}</value>
   </data>
   <data name="ScriptCapsuleFailureTitle" xml:space="preserve">
     <value>Script failed</value>
@@ -197,8 +188,7 @@ Error: {0}</value>
     <value>Image insert failed</value>
   </data>
   <data name="ImageImportFailureMessage" xml:space="preserve">
-    <value>Could not insert the image:
-{0}</value>
+    <value>Could not insert the image:&#x0A;{0}</value>
   </data>
   <data name="NotePasteRejectedTitle" xml:space="preserve">
     <value>Cannot paste</value>
@@ -327,8 +317,7 @@ Error: {0}</value>
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>You have reached the 100-paper limit.
-Delete papers you no longer need before creating more.</value>
+    <value>You have reached the 100-paper limit.&#x0A;Delete papers you no longer need before creating more.</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
     <value>Paper limit reached</value>
@@ -343,9 +332,7 @@ Delete papers you no longer need before creating more.</value>
     <value>PaperTodo failed to save and will now exit. Unsaved changes may be lost.</value>
   </data>
   <data name="SaveFailureMessage" xml:space="preserve">
-    <value>Failed to save data:
-{0}
-Please check disk space or permissions.</value>
+    <value>Failed to save data:&#x0A;{0}&#x0A;Please check disk space or permissions.</value>
   </data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>Save Failed</value>
@@ -1229,51 +1216,21 @@ When off, open at the docked edge or remembered position.</value>
   <data name="ShortcutExit" xml:space="preserve">
     <value>Exit</value>
   </data>
-  <data name="LabsMcp" xml:space="preserve">
-    <value>Local MCP interface</value>
-  </data>
-  <data name="LabsMcpEnable" xml:space="preserve">
-    <value>Enable MCP (read access is always allowed)</value>
-  </data>
-  <data name="TipLabsMcpEnable" xml:space="preserve">
-    <value>Lets local AI clients read papers through the same PaperTodo.exe in --mcp mode. Turning this off stops the named-pipe interface immediately.</value>
-  </data>
-  <data name="LabsMcpBlankWrites" xml:space="preserve">
-    <value>Allow blank and additive writes</value>
-  </data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve">
-    <value>Allows creating papers, adding todos to an existing paper, filling blank content, and appending notes without overwriting existing text.</value>
-  </data>
-  <data name="LabsMcpFullWrites" xml:space="preserve">
-    <value>Allow full writes</value>
-  </data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve">
-    <value>Allows changing existing todo text, replacing notes, and changing completion or reminder state. This also grants blank and additive writes.</value>
-  </data>
-  <data name="LabsMcpDeletes" xml:space="preserve">
-    <value>Allow direct MCP deletion</value>
-  </data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve">
-    <value>Enabling this pre-authorizes AI to delete papers or todos without per-operation prompts. Deletion cannot be undone automatically; enable with care.</value>
-  </data>
-  <data name="LabsMcpStatusReady" xml:space="preserve">
-    <value>Local MCP interface is ready</value>
-  </data>
-  <data name="LabsMcpStatusDisabled" xml:space="preserve">
-    <value>Local MCP interface is off</value>
-  </data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve">
-    <value>Copy Codex config</value>
-  </data>
-  <data name="LabsMcpCopyJson" xml:space="preserve">
-    <value>Copy JSON config</value>
-  </data>
-  <data name="LabsMcpCopied" xml:space="preserve">
-    <value>Copied</value>
-  </data>
-  <data name="LabsMcpCopyFailed" xml:space="preserve">
-    <value>Copy failed</value>
-  </data>
+  <data name="LabsMcp" xml:space="preserve"><value>Local MCP interface</value></data>
+  <data name="LabsMcpEnable" xml:space="preserve"><value>Enable MCP (read access is always allowed)</value></data>
+  <data name="TipLabsMcpEnable" xml:space="preserve"><value>Lets local AI clients read papers through the same PaperTodo.exe in --mcp mode. Turning this off stops the named-pipe interface immediately.</value></data>
+  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>Allow blank and additive writes</value></data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>Allows creating papers, adding todos to an existing paper, filling blank content, and appending notes without overwriting existing text.</value></data>
+  <data name="LabsMcpFullWrites" xml:space="preserve"><value>Allow full writes</value></data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>Allows changing existing todo text, replacing notes, and changing completion or reminder state. This also grants blank and additive writes.</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>Allow direct MCP deletion</value></data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Enabling this pre-authorizes AI to delete papers or todos without per-operation prompts. Deletion cannot be undone automatically; enable with care.</value></data>
+  <data name="LabsMcpStatusReady" xml:space="preserve"><value>Local MCP interface is ready</value></data>
+  <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>Local MCP interface is off</value></data>
+  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Copy Codex config</value></data>
+  <data name="LabsMcpCopyJson" xml:space="preserve"><value>Copy JSON config</value></data>
+  <data name="LabsMcpCopied" xml:space="preserve"><value>Copied</value></data>
+  <data name="LabsMcpCopyFailed" xml:space="preserve"><value>Copy failed</value></data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>Plugins</value>
   </data>
@@ -1363,63 +1320,24 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginBodyUseMarkdown" xml:space="preserve">
     <value>Use Markdown</value>
   </data>
-  <data name="MenuSelectedTodoCount" xml:space="preserve">
-    <value>{0} items selected</value>
-  </data>
-  <data name="MenuCopySelectedTodos" xml:space="preserve">
-    <value>Copy selected items</value>
-  </data>
-  <data name="MenuCompleteSelectedTodos" xml:space="preserve">
-    <value>Complete all</value>
-  </data>
-  <data name="MenuUncompleteSelectedTodos" xml:space="preserve">
-    <value>Mark all incomplete</value>
-  </data>
-  <data name="MenuDeleteSelectedTodos" xml:space="preserve">
-    <value>Delete {0} selected items</value>
-  </data>
-  <data name="TodoDragSelectedCount" xml:space="preserve">
-    <value>{0} items selected</value>
-  </data>
-  <data name="TodoMultiSelectToolTip" xml:space="preserve">
-    <value>Drag up or down to select multiple todos</value>
-  </data>
-  <data name="MenuOpenLinkedPath" xml:space="preserve">
-    <value>Open linked path: {0}</value>
-  </data>
-  <data name="MenuOpenLinkedPathLocation" xml:space="preserve">
-    <value>Open containing location</value>
-  </data>
-  <data name="MenuUnlinkPath" xml:space="preserve">
-    <value>Remove path link</value>
-  </data>
-  <data name="ToolTipOpenLinkedPath" xml:space="preserve">
-    <value>Open linked path: {0}</value>
-  </data>
-  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
-    <value>Linked path is unavailable: {0}</value>
-  </data>
-  <data name="LinkedPathSingleDropMessage" xml:space="preserve">
-    <value>A todo can link to only one file or folder at a time.</value>
-  </data>
-  <data name="LinkedPathDropFailureTitle" xml:space="preserve">
-    <value>Cannot link path</value>
-  </data>
-  <data name="LinkedPathDropFailureMessage" xml:space="preserve">
-    <value>Could not link this file or folder:
-{0}</value>
-  </data>
-  <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
-    <value>Cannot open linked path</value>
-  </data>
-  <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
-    <value>Windows could not open this path:
-{0}</value>
-  </data>
-  <data name="LinkedPathMissingMessage" xml:space="preserve">
-    <value>The linked file or folder was moved or deleted:
-{0}</value>
-  </data>
+  <data name="MenuSelectedTodoCount" xml:space="preserve"><value>{0} items selected</value></data>
+  <data name="MenuCopySelectedTodos" xml:space="preserve"><value>Copy selected items</value></data>
+  <data name="MenuCompleteSelectedTodos" xml:space="preserve"><value>Complete all</value></data>
+  <data name="MenuUncompleteSelectedTodos" xml:space="preserve"><value>Mark all incomplete</value></data>
+  <data name="MenuDeleteSelectedTodos" xml:space="preserve"><value>Delete {0} selected items</value></data>
+  <data name="TodoDragSelectedCount" xml:space="preserve"><value>{0} items selected</value></data>
+  <data name="TodoMultiSelectToolTip" xml:space="preserve"><value>Drag up or down to select multiple todos</value></data>
+  <data name="MenuOpenLinkedPath" xml:space="preserve"><value>Open linked path: {0}</value></data>
+  <data name="MenuOpenLinkedPathLocation" xml:space="preserve"><value>Open containing location</value></data>
+  <data name="MenuUnlinkPath" xml:space="preserve"><value>Remove path link</value></data>
+  <data name="ToolTipOpenLinkedPath" xml:space="preserve"><value>Open linked path: {0}</value></data>
+  <data name="ToolTipLinkedPathMissing" xml:space="preserve"><value>Linked path is unavailable: {0}</value></data>
+  <data name="LinkedPathSingleDropMessage" xml:space="preserve"><value>A todo can link to only one file or folder at a time.</value></data>
+  <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>Cannot link path</value></data>
+  <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>Could not link this file or folder:&#xA;{0}</value></data>
+  <data name="LinkedPathOpenFailureTitle" xml:space="preserve"><value>Cannot open linked path</value></data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>Windows could not open this path:&#xA;{0}</value></data>
+  <data name="LinkedPathMissingMessage" xml:space="preserve"><value>The linked file or folder was moved or deleted:&#xA;{0}</value></data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
     <value>Show only file extension when long titles are off</value>
   </data>
