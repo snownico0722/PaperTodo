@@ -13,13 +13,13 @@ public interface IPaperGlobalTopBarApi
 }
 
 /// <summary>
-/// Read-only view of the current host-managed settings for one provider runtime. Json is read on
-/// demand, so a long-lived runtime sees the latest normalized values without borrowing state from
-/// any paper/body session.
+/// Host-managed settings for one provider Runtime. Json is read on demand and Subscribe reports
+/// later normalized setting changes without borrowing lifecycle from any Body/Mini frontend.
 /// </summary>
 public interface IPaperAppRuntimeSettings
 {
     string Json { get; }
+    IDisposable Subscribe(Action<string> handler);
 }
 
 /// <summary>
