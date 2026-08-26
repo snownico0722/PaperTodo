@@ -250,6 +250,19 @@ internal sealed class McpCommandService
                 LinkedPaperId = linkedPaperId
             },
             PaperOperationContext.Mcp());
+
+        if (done == true &&
+            !before.Done &&
+            _controller.State.AutoClearCompletedTodos)
+        {
+            return new
+            {
+                paper_id = paperId,
+                todo_id = todoId,
+                deleted = true
+            };
+        }
+
         return TodoDetails(RequireTodo(paperId, todoId));
     }
 

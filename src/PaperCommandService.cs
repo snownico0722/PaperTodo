@@ -231,6 +231,7 @@ internal sealed class PaperCommandService
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
+        var wasDone = item.Done;
         var text = request.Text == null
             ? null
             : RequiredText(
@@ -269,7 +270,8 @@ internal sealed class PaperCommandService
             {
                 MoveTodo(paper, item, request.Order.Value);
             }
-            if (request.Done == true && _controller.State.AutoClearCompletedTodos)
+            var doneChanged = request.Done.HasValue && item.Done != wasDone;
+            if (doneChanged && item.Done && _controller.State.AutoClearCompletedTodos)
             {
                 TodoRules.ApplyCompletionPolicy(
                     paper.Items,
@@ -278,6 +280,14 @@ internal sealed class PaperCommandService
                     autoClearCompleted: true,
                     autoMoveCompletedToBottom:
                         _controller.State.AutoMoveCompletedTodosToBottom);
+            }
+            else if (doneChanged)
+            {
+                TodoRules.ApplyDoneTransitionOrdering(
+                    paper.Items,
+                    [item.Id],
+                    item.Done,
+                    _controller.State.AutoMoveCompletedTodosToBottom);
             }
             else
             {

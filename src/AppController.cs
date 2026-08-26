@@ -2613,7 +2613,6 @@ public sealed partial class AppController : IDisposable
         }
 
         var live = liveQueueKeys.ToHashSet(StringComparer.Ordinal);
-        var changed = false;
         foreach (var staleKey in State.CapsuleCollapseAllActiveQueues.Keys.Where(key => !live.Contains(key)).ToList())
         {
             if (TryGetDisconnectedQueueFallbackKey(staleKey, out var fallbackKey) &&
@@ -2622,16 +2621,11 @@ public sealed partial class AppController : IDisposable
                 active)
             {
                 State.CapsuleCollapseAllActiveQueues[fallbackKey] = true;
-                changed = true;
                 continue;
             }
 
             State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
-            changed = true;
         }
-        if (changed)
-        {
-            }
     }
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)

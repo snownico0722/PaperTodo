@@ -522,9 +522,6 @@ public sealed class StateStore
             state.UseCapsuleCollapseAll = false;
         }
 
-        if (!state.UseCapsuleCollapseAll)
-        {
-        }
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.CapsuleCollapseAllActiveQueues = NormalizeCollapseAllActiveQueues(state.CapsuleCollapseAllActiveQueues);
         if (!state.UseCapsuleCollapseAll)

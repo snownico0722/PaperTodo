@@ -694,10 +694,10 @@ public sealed partial class PaperWindow
         IReadOnlyCollection<PaperItem> changedItems,
         bool done)
     {
-        _ = changedItems;
-        _ = done;
-        return TodoRules.ApplyCompletedOrdering(
+        return TodoRules.ApplyDoneTransitionOrdering(
             _paper.Items,
+            changedItems.Select(item => item.Id).ToArray(),
+            done,
             _controller.State.AutoMoveCompletedTodosToBottom);
     }
 

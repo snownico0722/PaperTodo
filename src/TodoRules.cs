@@ -74,6 +74,51 @@ internal static class TodoRules
         return true;
     }
 
+    public static bool ApplyDoneTransitionOrdering(
+        List<PaperItem> items,
+        IReadOnlyCollection<string> changedItemIds,
+        bool done,
+        bool enabled)
+    {
+        if (!enabled || changedItemIds.Count == 0)
+        {
+            return false;
+        }
+
+        var changed = changedItemIds.ToHashSet(StringComparer.Ordinal);
+        var before = items.OrderBy(item => item.Order).ToList();
+        var moved = before
+            .Where(item => changed.Contains(item.Id))
+            .ToList();
+        if (moved.Count == 0)
+        {
+            return false;
+        }
+
+        var remaining = before
+            .Where(item => !changed.Contains(item.Id))
+            .ToList();
+        var insertIndex = done
+            ? remaining.Count
+            : remaining.FindIndex(item => item.Done);
+        if (insertIndex < 0)
+        {
+            insertIndex = remaining.Count;
+        }
+        remaining.InsertRange(insertIndex, moved);
+
+        if (before.Select(item => item.Id)
+            .SequenceEqual(remaining.Select(item => item.Id)))
+        {
+            return false;
+        }
+
+        items.Clear();
+        items.AddRange(remaining);
+        NormalizeOrders(items);
+        return true;
+    }
+
     public static bool ApplyCompletionPolicy(
         List<PaperItem> items,
         IReadOnlyCollection<string> changedItemIds,
@@ -98,7 +143,11 @@ internal static class TodoRules
             return true;
         }
 
-        return ApplyCompletedOrdering(items, autoMoveCompletedToBottom);
+        return ApplyDoneTransitionOrdering(
+            items,
+            changedItemIds,
+            done,
+            autoMoveCompletedToBottom);
     }
 
 }
