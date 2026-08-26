@@ -39,7 +39,7 @@ replace_once(
     '''        _commands.UpdateTodo(\n            new UpdateTodoRequest\n            {\n                PaperId = paperId,\n                TodoId = todoId,\n                Text = hasText ? text : null,\n                Done = done,\n                Order = order,\n                UpdateLinkedPaper = hasLinkedPaper,\n                LinkedPaperId = linkedPaperId\n            },\n            PaperOperationContext.Mcp());\n        return TodoDetails(RequireTodo(paperId, todoId));\n''',
     '''        _commands.UpdateTodo(\n            new UpdateTodoRequest\n            {\n                PaperId = paperId,\n                TodoId = todoId,\n                Text = hasText ? text : null,\n                Done = done,\n                Order = order,\n                UpdateLinkedPaper = hasLinkedPaper,\n                LinkedPaperId = linkedPaperId\n            },\n            PaperOperationContext.Mcp());\n\n        if (done == true &&\n            !before.Done &&\n            _controller.State.AutoClearCompletedTodos)\n        {\n            return new\n            {\n                paper_id = paperId,\n                todo_id = todoId,\n                deleted = true\n            };\n        }\n\n        return TodoDetails(RequireTodo(paperId, todoId));\n''')
 
-# Remove two mechanical empty blocks left by legacy-state deletion.
+# Remove mechanical empty blocks left by legacy-state deletion.
 replace_once(
     "src/AppController.cs",
     '''        var changed = false;\n        foreach (var staleKey in State.CapsuleCollapseAllActiveQueues.Keys.Where(key => !live.Contains(key)).ToList())\n''',
@@ -52,10 +52,6 @@ replace_once(
     "src/AppController.cs",
     '''            State.CapsuleCollapseAllActiveQueues.Remove(staleKey);\n            changed = true;\n        }\n        if (changed)\n        {\n            }\n''',
     '''            State.CapsuleCollapseAllActiveQueues.Remove(staleKey);\n        }\n''')
-replace_once(
-    "src/AppController.cs",
-    '''    // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the\n    // per-queue dictionary. Callers use this when the feature is disabled/reset (and then\n    // persist them to data.json). Single chokepoint so no reset path forgets the dict again.\n''',
-    '''    // Reset all per-queue deep-capsule start heights to the built-in default by removing\n    // overrides. Single chokepoint so no reset path forgets the dictionary.\n''')
 replace_once(
     "src/StateStore.cs",
     '''        if (!state.UseCapsuleCollapseAll)\n        {\n        }\n        state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();\n''',
