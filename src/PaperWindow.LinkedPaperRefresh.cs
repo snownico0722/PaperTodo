@@ -12,10 +12,7 @@ public sealed partial class PaperWindow
         }
 
         var affectedItemIds = _paper.Items
-            .Where(item => string.Equals(
-                item.LinkedPaperId,
-                paperId,
-                StringComparison.Ordinal))
+            .Where(item => item.LinkedPaperIdsInternal.Any(id => string.Equals(id, paperId, StringComparison.Ordinal)))
             .Select(item => item.Id)
             .ToArray();
         if (affectedItemIds.Length == 0)

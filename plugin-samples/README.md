@@ -594,7 +594,7 @@ notes.write
 几个容易遗漏的权限组合：
 
 - 创建带正文的 Note：除了 `papers.create` 还需要 `notes.append`；
-- 创建/追加带完成状态、提醒或 `linkedPaperId` 的 Todo：还需要 `todos.update`；
+- 创建/追加带完成状态、提醒或 `linkedPaperId`/`linkedNoteIds`（一条 Todo 可关联多篇笔记）的 Todo：还需要 `todos.update`；
 - `todos.setReminder` 使用 `todos.update`；
 - `notes.write` 的 append/fill-blank 使用 `notes.append`，replace 使用 `notes.replace`；
 - paper session 插件不能删除承载当前 active session 的 paper；app runtime 没有 host paper，因此不受这条单纸片自删除限制。

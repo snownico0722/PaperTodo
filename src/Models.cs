@@ -602,6 +602,14 @@ public sealed class PaperData
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
+
+    /// <summary>
+    /// 创建时间。仅对笔记纸片有意义（待办条目不设置）。
+    /// 旧数据没有该字段时为 null，界面据此隐藏日期条。
+    /// </summary>
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? CreatedAt { get; set; }
 }
 
 public sealed class PaperItem
@@ -611,10 +619,48 @@ public sealed class PaperItem
     public bool Done { get; set; }
     public int Order { get; set; }
 
+    /// <summary>
+    /// 关联的笔记纸片 id 列表（一个待办可关联多篇笔记）。唯一权威存储；
+    /// <see cref="LinkedPaperId"/> 只是历史标量字段的兼容镜像。
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName("linkedNoteIds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? LinkedPaperIds { get; private set; }
+
+    /// <summary>
+    /// 兼容镜像：返回第一篇关联笔记的 id（无关联时为 null）。
+    /// 仅用于旧版单关联语义；多关联请遍历 <see cref="LinkedPaperIdsInternal"/>。
+    /// 反序列化旧数据（linkedNoteId 标量）时并入列表，供加载期归一化。
+    /// </summary>
     [JsonInclude]
     [JsonPropertyName("linkedNoteId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LinkedPaperId { get; private set; }
+    public string? LinkedPaperId
+    {
+        get => LinkedPaperIds is { Count: > 0 } ? LinkedPaperIds[0] : null;
+        private set
+        {
+            var normalized = NormalizeQuickLaunchValue(value);
+            if (normalized == null)
+            {
+                return;
+            }
+
+            var list = LinkedPaperIds ??= new List<string>();
+            if (!list.Contains(normalized))
+            {
+                list.Insert(0, normalized);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 关联 id 的只读视图（永不返回 null，便于遍历）。
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> LinkedPaperIdsInternal =>
+        LinkedPaperIds ?? (IReadOnlyList<string>)Array.Empty<string>();
 
     [JsonInclude]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -674,23 +720,77 @@ public sealed class PaperItem
         BacklogSourcePaperId = null;
     }
 
+    /// <summary>
+    /// 替换式关联：用单个笔记 id 重置整个关联列表（兼容旧版单关联调用方）。
+    /// </summary>
     public void LinkPaper(string? paperId)
     {
-        LinkedPaperId = NormalizeQuickLaunchValue(paperId);
+        var normalized = NormalizeQuickLaunchValue(paperId);
+        LinkedPaperIds = normalized == null ? null : [normalized];
         LinkedPath = null;
         LinkedPathIsDirectory = null;
+    }
+
+    /// <summary>
+    /// 追加式关联：把一篇笔记加入关联列表（用于待办行「+」添加）。返回是否新增成功。
+    /// </summary>
+    public bool AddLinkedPaper(string? paperId)
+    {
+        var normalized = NormalizeQuickLaunchValue(paperId);
+        if (normalized == null)
+        {
+            return false;
+        }
+
+        var list = LinkedPaperIds ??= new List<string>();
+        if (list.Contains(normalized))
+        {
+            return false;
+        }
+
+        list.Add(normalized);
+        LinkedPath = null;
+        LinkedPathIsDirectory = null;
+        return true;
+    }
+
+    /// <summary>
+    /// 移除一篇关联笔记。列表清空时同时清理互斥的路径关联。
+    /// </summary>
+    public bool RemoveLinkedPaper(string? paperId)
+    {
+        var normalized = NormalizeQuickLaunchValue(paperId);
+        if (normalized == null || LinkedPaperIds == null)
+        {
+            return false;
+        }
+
+        var removed = LinkedPaperIds.RemoveAll(id =>
+            string.Equals(id, normalized, StringComparison.Ordinal)) > 0;
+        if (removed)
+        {
+            if (LinkedPaperIds.Count == 0)
+            {
+                LinkedPaperIds = null;
+            }
+
+            LinkedPath = null;
+            LinkedPathIsDirectory = null;
+        }
+
+        return removed;
     }
 
     public void LinkPath(string? path, bool? isDirectory = null)
     {
         LinkedPath = NormalizeQuickLaunchValue(path);
         LinkedPathIsDirectory = LinkedPath == null ? null : isDirectory;
-        LinkedPaperId = null;
+        LinkedPaperIds = null;
     }
 
     public void ClearQuickLaunch()
     {
-        LinkedPaperId = null;
+        LinkedPaperIds = null;
         LinkedPath = null;
         LinkedPathIsDirectory = null;
     }
@@ -700,15 +800,47 @@ public sealed class PaperItem
         var normalizedPaperId = NormalizeQuickLaunchValue(paperId);
         if (normalizedPaperId != null)
         {
-            LinkedPaperId = normalizedPaperId;
+            LinkedPaperIds = [normalizedPaperId];
             LinkedPath = null;
             LinkedPathIsDirectory = null;
             return;
         }
 
-        LinkedPaperId = null;
+        LinkedPaperIds = null;
         LinkedPath = NormalizeQuickLaunchValue(path);
         LinkedPathIsDirectory = LinkedPath == null ? null : pathIsDirectory;
+    }
+
+    internal void RestoreQuickLaunch(IEnumerable<string>? paperIds, string? path, bool? pathIsDirectory = null)
+    {
+        var normalizedIds = paperIds?
+            .Select(NormalizeQuickLaunchValue)
+            .Where(id => id != null)
+            .Select(id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        LinkedPaperIds = normalizedIds is { Count: > 0 } ? normalizedIds : null;
+
+        if (LinkedPaperIds != null)
+        {
+            LinkedPath = null;
+            LinkedPathIsDirectory = null;
+            return;
+        }
+
+        LinkedPath = NormalizeQuickLaunchValue(path);
+        LinkedPathIsDirectory = LinkedPath == null ? null : pathIsDirectory;
+    }
+
+    /// <summary>
+    /// 归一化整体写入：用清理后的列表替换关联；清空或置位时都解除互斥的路径关联。
+    /// 用于加载期迁移与外部 Todo 更新的整体替换语义（镜像 <see cref="LinkPaper"/>）。
+    /// </summary>
+    internal void ApplyNormalizedLinkedPaperIds(IReadOnlyList<string> ids)
+    {
+        LinkedPaperIds = ids is { Count: > 0 } ? new List<string>(ids) : null;
+        LinkedPath = null;
+        LinkedPathIsDirectory = null;
     }
 
     private static string? NormalizeQuickLaunchValue(string? value)

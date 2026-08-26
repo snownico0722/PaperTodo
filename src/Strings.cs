@@ -76,7 +76,10 @@ public static class Strings
             ["TodoBacklogExtractToolTip"] = ["提取这条到所选待办纸的列表末尾。", "Extract this item to the end of the chosen todo paper.", "選択したToDo紙の末尾へ戻します。", "선택한 할 일 메모의 끝으로 되돌립니다."],
             ["TodoBacklogDelete"] = ["删除", "Delete", "削除", "삭제"],
             ["TodoBacklogDeleteToolTip"] = ["彻底从篮子删除这条。", "Permanently remove this item from the basket.", "この項目をかごから完全に削除します。", "이 항목을 보류함에서 영구 삭제합니다."],
-            ["TodoBacklogNoTarget"] = ["没有可提取的待办纸", "No todo paper available", "対象のToDo紙がありません", "추출할 할 일 메모가 없습니다"]
+            ["TodoBacklogNoTarget"] = ["没有可提取的待办纸", "No todo paper available", "対象のToDo紙がありません", "추출할 할 일 메모가 없습니다"],
+            ["TodoLinkedPapersCount"] = ["关联 {0} 篇", "Linked {0} notes", "関連 {0} 件", "연결 {0}개"],
+            ["MenuUnlinkAllPapers"] = ["取消关联全部笔记", "Unlink all notes", "すべての関連を解除", "모든 연결 해제"],
+            ["ToolTipUnlinkLinkedPaper"] = ["解除关联", "Unlink", "関連を解除", "연결 해제"]
         };
 
     public static string Get(string key)

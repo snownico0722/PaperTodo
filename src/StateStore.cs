@@ -701,20 +701,12 @@ public sealed class StateStore
 
         foreach (var paper in state.Papers)
         {
-            foreach (var item in paper.Items)
-            {
-                var linkedPaperId = item.LinkedPaperId;
-                if (string.IsNullOrWhiteSpace(linkedPaperId) ||
-                    !paperIds.Contains(linkedPaperId) ||
-                    string.Equals(linkedPaperId, paper.Id, StringComparison.Ordinal))
-                {
-                    item.LinkPath(item.LinkedPath, item.LinkedPathIsDirectory);
-                }
-                else
-                {
-                    item.LinkPaper(linkedPaperId);
-                }
-            }
+            NormalizeItemLinks(paper.Items, paperIds, paper.Id);
+        }
+
+        if (state.BacklogItems != null)
+        {
+            NormalizeItemLinks(state.BacklogItems, paperIds, selfPaperId: null);
         }
 
         if (state.EnableTodoPaperLinks && state.HideLinkedPapersFromCapsules)
@@ -722,13 +714,64 @@ public sealed class StateStore
             var linkedPaperIds = state.Papers
                 .Where(p => p.Type == PaperTypes.Todo)
                 .SelectMany(p => p.Items)
-                .Select(item => item.LinkedPaperId)
+                .SelectMany(item => item.LinkedPaperIds ?? [])
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToHashSet(StringComparer.Ordinal);
+            if (state.BacklogItems != null)
+            {
+                foreach (var id in state.BacklogItems
+                    .SelectMany(item => item.LinkedPaperIds ?? [])
+                    .Where(id => !string.IsNullOrWhiteSpace(id)))
+                {
+                    linkedPaperIds.Add(id);
+                }
+            }
 
             foreach (var linkedPaper in state.Papers.Where(p => linkedPaperIds.Contains(p.Id)))
             {
                 linkedPaper.IsCollapsed = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 归一化一个条目上的笔记关联列表：合并历史标量与列表、去重、丢弃失效 id 与自引用，
+    /// 并保持与路径关联的互斥（有有效笔记关联时清路径，否则保留路径）。
+    /// </summary>
+    private static void NormalizeItemLinks(
+        IList<PaperItem> items,
+        HashSet<string> paperIds,
+        string? selfPaperId)
+    {
+        foreach (var item in items)
+        {
+            var merged = new List<string>();
+            foreach (var id in item.LinkedPaperIds ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(id) ||
+                    !paperIds.Contains(id) ||
+                    (selfPaperId != null &&
+                     string.Equals(id, selfPaperId, StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                if (!merged.Contains(id))
+                {
+                    merged.Add(id);
+                }
+            }
+
+            if (merged.Count > 0)
+            {
+                item.RestoreQuickLaunch(merged, path: null, pathIsDirectory: null);
+            }
+            else
+            {
+                item.RestoreQuickLaunch(
+                    paperIds: null,
+                    item.LinkedPath,
+                    item.LinkedPathIsDirectory);
             }
         }
     }

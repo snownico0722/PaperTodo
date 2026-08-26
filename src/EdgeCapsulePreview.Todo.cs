@@ -348,7 +348,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         }
 
         string? linkedMarker = null;
-        if (!string.IsNullOrWhiteSpace(item.LinkedPaperId))
+        if (item.LinkedPaperIds is { Count: > 0 })
         {
             linkedMarker = "↗";
         }

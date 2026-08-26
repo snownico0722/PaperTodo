@@ -238,7 +238,7 @@ internal sealed class PaperCommandService
                 PaperWindow.TodoTextMaxLength,
                 allowEmpty: true,
                 "text");
-        var linkedPaperId = NormalizeLinkedPaperUpdate(request);
+        var linkedPaperIds = NormalizeLinkedPaperUpdate(request);
         var snapshot = TodoPaperSnapshot.Capture(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
@@ -263,7 +263,7 @@ internal sealed class PaperCommandService
             }
             if (request.UpdateLinkedPaper)
             {
-                item.LinkPaper(linkedPaperId);
+                item.ApplyNormalizedLinkedPaperIds(linkedPaperIds ?? []);
             }
             if (request.Order.HasValue)
             {
@@ -448,20 +448,22 @@ internal sealed class PaperCommandService
         var affectedLinks = papers
             .Where(candidate => candidate.Type == PaperTypes.Todo)
             .SelectMany(candidate => candidate.Items)
-            .Where(item => string.Equals(
-                item.LinkedPaperId,
-                paper.Id,
-                StringComparison.Ordinal))
-            .Select(item => (Item: item, Link: item.LinkedPaperId))
+            .Where(item => item.LinkedPaperIds is { Count: > 0 } &&
+                item.LinkedPaperIds.Contains(paper.Id, StringComparer.Ordinal))
+            .Select(item => (
+                Item: item,
+                LinkedIds: (IReadOnlyList<string>)item.LinkedPaperIdsInternal.ToArray(),
+                Path: item.LinkedPath,
+                PathIsDirectory: item.LinkedPathIsDirectory))
             .ToList();
         PaperData? replacement = null;
 
         using (_controller.SuppressPaperPluginEventScans())
         {
             papers.RemoveAt(originalIndex);
-            foreach (var (item, _) in affectedLinks)
+            foreach (var link in affectedLinks)
             {
-                item.ClearQuickLaunch();
+                link.Item.RemoveLinkedPaper(paper.Id);
             }
 
             if (papers.Count == 0)
@@ -529,16 +531,16 @@ internal sealed class PaperCommandService
         IList<PaperData> papers,
         int originalIndex,
         PaperData paper,
-        IEnumerable<(PaperItem Item, string? Link)> affectedLinks,
+        IEnumerable<(PaperItem Item, IReadOnlyList<string> LinkedIds, string? Path, bool? PathIsDirectory)> affectedLinks,
         PaperData? replacement)
     {
         if (!papers.Contains(paper))
         {
             papers.Insert(Math.Clamp(originalIndex, 0, papers.Count), paper);
         }
-        foreach (var (item, link) in affectedLinks)
+        foreach (var link in affectedLinks)
         {
-            item.LinkPaper(link);
+            link.Item.RestoreQuickLaunch(link.LinkedIds, link.Path, link.PathIsDirectory);
         }
         if (replacement != null)
         {
@@ -553,7 +555,6 @@ internal sealed class PaperCommandService
         var added = new List<PaperItem>(inputs.Count);
         foreach (var input in inputs)
         {
-            var linkedPaperId = NormalizeLinkedPaper(input.LinkedPaperId, paper.Id);
             var item = new PaperItem
             {
                 Text = input.Text,
@@ -561,7 +562,15 @@ internal sealed class PaperCommandService
                 Order = paper.Items.Count,
                 ReminderAt = input.Done ? null : input.ReminderAt
             };
-            item.LinkPaper(linkedPaperId);
+            if (input.LinkedPaperIds != null)
+            {
+                item.ApplyNormalizedLinkedPaperIds(
+                    NormalizeLinkedPapers(input.LinkedPaperIds, paper.Id) ?? []);
+            }
+            else
+            {
+                item.LinkPaper(NormalizeLinkedPaper(input.LinkedPaperId, paper.Id));
+            }
             paper.Items.Add(item);
             added.Add(item);
         }
@@ -598,14 +607,75 @@ internal sealed class PaperCommandService
                     "A completed todo cannot start with a reminder.");
             }
             ValidateReminder(input.ReminderAt);
-            _ = NormalizeLinkedPaper(input.LinkedPaperId);
+            if (input.LinkedPaperIds != null)
+            {
+                _ = NormalizeLinkedPapers(input.LinkedPaperIds, sourcePaperId: null);
+            }
+            else
+            {
+                _ = NormalizeLinkedPaper(input.LinkedPaperId);
+            }
         }
     }
 
-    private string? NormalizeLinkedPaperUpdate(UpdateTodoRequest request) =>
-        request.UpdateLinkedPaper
-            ? NormalizeLinkedPaper(request.LinkedPaperId, request.PaperId)
-            : null;
+    /// <summary>
+    /// 更新请求的关联归一化：`linkedNoteIds` 列表优先；列表未提供时回退到单值
+    /// `linkedNoteId` 兼容镜像。返回 null 表示清除全部关联。
+    /// </summary>
+    private IReadOnlyList<string>? NormalizeLinkedPaperUpdate(UpdateTodoRequest request)
+    {
+        if (!request.UpdateLinkedPaper)
+        {
+            return null;
+        }
+
+        if (request.LinkedPaperIds != null)
+        {
+            return NormalizeLinkedPapers(request.LinkedPaperIds, request.PaperId);
+        }
+
+        var single = NormalizeLinkedPaper(request.LinkedPaperId, request.PaperId);
+        return single == null ? null : [single];
+    }
+
+    private IReadOnlyList<string>? NormalizeLinkedPapers(
+        IReadOnlyList<string>? values,
+        string? sourcePaperId = null)
+    {
+        if (values == null || values.Count == 0)
+        {
+            return null;
+        }
+        if (!_controller.State.EnableTodoPaperLinks)
+        {
+            throw Error(
+                "paper_links_disabled",
+                "Todo-paper links are disabled in PaperTodo Settings.");
+        }
+
+        var ids = new List<string>(values.Count);
+        foreach (var raw in values)
+        {
+            var id = RequiredId(raw, "linkedPaperId");
+            if (!string.IsNullOrWhiteSpace(sourcePaperId) &&
+                string.Equals(id, sourcePaperId.Trim(), StringComparison.Ordinal))
+            {
+                throw Error(
+                    "self_link_not_allowed",
+                    "A todo item cannot link to its own paper.");
+            }
+            if (_controller.State.Papers.All(paper =>
+                    !string.Equals(paper.Id, id, StringComparison.Ordinal)))
+            {
+                throw Error("paper_not_found", "The linked paper does not exist.");
+            }
+            if (!ids.Contains(id, StringComparer.Ordinal))
+            {
+                ids.Add(id);
+            }
+        }
+        return ids;
+    }
 
     private string? NormalizeLinkedPaper(
         string? value,
@@ -808,7 +878,7 @@ internal sealed class PaperCommandService
         string Text,
         bool Done,
         int Order,
-        string? LinkedPaperId,
+        IReadOnlyList<string>? LinkedPaperIds,
         string? LinkedPath,
         DateTimeOffset? ReminderAt,
         bool ReminderTriggered)
@@ -819,7 +889,9 @@ internal sealed class PaperCommandService
                 item.Text,
                 item.Done,
                 item.Order,
-                item.LinkedPaperId,
+                item.LinkedPaperIdsInternal.Count > 0
+                    ? item.LinkedPaperIdsInternal.ToList()
+                    : null,
                 item.LinkedPath,
                 item.ReminderAt,
                 item.ReminderTriggered);
@@ -829,7 +901,7 @@ internal sealed class PaperCommandService
             Item.Text = Text;
             Item.Done = Done;
             Item.Order = Order;
-            Item.RestoreQuickLaunch(LinkedPaperId, LinkedPath);
+            Item.RestoreQuickLaunch(LinkedPaperIds, LinkedPath);
             Item.ReminderAt = ReminderAt;
             Item.ReminderTriggered = ReminderTriggered;
         }

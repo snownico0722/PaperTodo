@@ -546,6 +546,11 @@ public sealed partial class AppController : IDisposable
             IsVisible = show,
             AlwaysOnTop = sourcePaper?.AlwaysOnTop ?? false
         };
+        if (paper.Type == PaperTypes.Note)
+        {
+            paper.CreatedAt = DateTimeOffset.Now;
+        }
+
         InitializeNewPaperCapsuleQueue(paper, sourcePaper, cursorMonitor?.DeviceName);
 
         if (cursorMonitor is { } targetMonitor)
@@ -866,6 +871,12 @@ public sealed partial class AppController : IDisposable
         return true;
     }
 
+    public DateTimeOffset? GetPaperCreatedAt(string? paperId)
+    {
+        var paper = FindPaper(paperId);
+        return paper?.CreatedAt;
+    }
+
     public bool IsLinkedPaperShown(string? paperId)
     {
         var paper = FindPaper(paperId);
@@ -952,7 +963,20 @@ public sealed partial class AppController : IDisposable
 
             foreach (var item in sourcePaper.Items)
             {
-                if (string.Equals(item.LinkedPaperId, paperId, StringComparison.Ordinal))
+                if (item.LinkedPaperIds is { Count: > 0 } &&
+                    item.LinkedPaperIds.Contains(paperId))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (State.BacklogItems != null)
+        {
+            foreach (var item in State.BacklogItems)
+            {
+                if (item.LinkedPaperIds is { Count: > 0 } &&
+                    item.LinkedPaperIds.Contains(paperId))
                 {
                     return true;
                 }
@@ -2082,13 +2106,18 @@ public sealed partial class AppController : IDisposable
         {
             foreach (var item in paper.Items)
             {
-                if (!string.Equals(item.LinkedPaperId, linkedPaperId, StringComparison.Ordinal))
+                if (item.RemoveLinkedPaper(linkedPaperId))
                 {
-                    continue;
+                    affectedPaperIds.Add(paper.Id);
                 }
+            }
+        }
 
-                item.ClearQuickLaunch();
-                affectedPaperIds.Add(paper.Id);
+        if (State.BacklogItems != null)
+        {
+            foreach (var item in State.BacklogItems)
+            {
+                item.RemoveLinkedPaper(linkedPaperId);
             }
         }
 

@@ -339,6 +339,199 @@ public sealed partial class PaperWindow
         // 简单恢复：重建内容区会刷新背景；这里不做额外操作，留给重建路径。
     }
 
+    /// <summary>
+    /// 多关联（一条待办关联 >=2 篇笔记）时的可折叠区块：「关联 N 篇」+ 每篇笔记的
+    /// 标题/日期行（点击打开、✕ 解除单篇关联）。镜像 <see cref="BuildBacklogSection"/> 结构。
+    /// </summary>
+    private Border BuildTodoLinkedPapersSection(
+        PaperItem item,
+        IReadOnlyList<string> linkedPaperIds,
+        TodoVisualMetrics metrics)
+    {
+        var expanded = _linkedPapersSectionExpanded.TryGetValue(item.Id, out var current) && current;
+
+        var section = new Border
+        {
+            Margin = new Thickness(metrics.CheckColumnWidth + AppTypography.Scale(4), 4, 0, 0),
+            Padding = new Thickness(6, 4, 6, 4),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            BorderThickness = new Thickness(1),
+            BorderBrush = AppendBorderBrush,
+            Background = AppendBgBrush,
+            MinHeight = AppTypography.Scale(22)
+        };
+        _todoLinkedPapersSections[item.Id] = section;
+
+        var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var badge = new Border
+        {
+            Margin = new Thickness(0, 0, 5, 0),
+            Padding = new Thickness(5, 1, 5, 1),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var countText = new TextBlock
+        {
+            Text = Strings.Format("TodoLinkedPapersCount", linkedPaperIds.Count),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.SemiBold
+        };
+        badge.Child = countText;
+        headerRow.Children.Add(badge);
+
+        var caret = new TextBlock
+        {
+            Text = expanded ? "▾" : "▸",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(9),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        headerRow.Children.Add(caret);
+
+        var contentHost = new Border
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = expanded ? Visibility.Visible : Visibility.Collapsed
+        };
+        var content = new StackPanel();
+        contentHost.Child = content;
+
+        var root = new StackPanel();
+        var headerButton = new Border
+        {
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = headerRow
+        };
+        headerButton.MouseLeftButtonUp += (_, _) =>
+        {
+            var nextExpanded = !(_linkedPapersSectionExpanded.TryGetValue(item.Id, out var e) && e);
+            _linkedPapersSectionExpanded[item.Id] = nextExpanded;
+            caret.Text = nextExpanded ? "▾" : "▸";
+            contentHost.Visibility = nextExpanded
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        };
+        root.Children.Add(headerButton);
+        root.Children.Add(contentHost);
+        section.Child = root;
+
+        // 标题变化时整块重建（重取标题与日期），并注册到按 paperId 分组的刷新器。
+        void RebuildContent()
+        {
+            content.Children.Clear();
+            foreach (var paperId in item.LinkedPaperIdsInternal)
+            {
+                content.Children.Add(BuildLinkedPaperEntryRow(item, paperId));
+            }
+        }
+
+        _linkedPapersSectionRebuilders[item.Id] = RebuildContent;
+        foreach (var paperId in linkedPaperIds)
+        {
+            RegisterLinkedPaperTitleRefresher(item.Id, paperId, RebuildContent);
+        }
+        RebuildContent();
+        return section;
+    }
+
+    /// <summary>
+    /// 「关联 N 篇」区块里的单行：笔记标题 + 创建日期（如有），点击整行打开，
+    /// 右侧 ✕ 解除这一篇的关联。
+    /// </summary>
+    private Border BuildLinkedPaperEntryRow(PaperItem item, string paperId)
+    {
+        var title = _controller.TryGetLinkedPaperTitle(paperId, out var resolvedTitle)
+            ? resolvedTitle
+            : paperId;
+        var createdAt = _controller.GetPaperCreatedAt(paperId);
+
+        var textColumn = new StackPanel();
+        var titleText = new TextBlock
+        {
+            Text = title,
+            Foreground = TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: true, bold: false),
+            FontSize = AppTypography.Scale(12),
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = AppTypography.Scale(48)
+        };
+        textColumn.Children.Add(titleText);
+        if (createdAt.HasValue)
+        {
+            var dateText = new TextBlock
+            {
+                Text = createdAt.Value.LocalDateTime.ToString("yyyy-MM-dd"),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(9.5),
+                Margin = new Thickness(0, 1, 0, 0)
+            };
+            textColumn.Children.Add(dateText);
+        }
+
+        var unlinkButton = new Border
+        {
+            Margin = new Thickness(4, 0, 0, 0),
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("ToolTipUnlinkLinkedPaper")
+        };
+        var unlinkLabel = new TextBlock
+        {
+            Text = "✕",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        unlinkButton.Child = unlinkLabel;
+        unlinkButton.MouseLeftButtonUp += (_, e) =>
+        {
+            UnlinkPaperFromTodoItem(item, paperId);
+            e.Handled = true;
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(textColumn, 0);
+        Grid.SetColumn(unlinkButton, 1);
+        grid.Children.Add(textColumn);
+        grid.Children.Add(unlinkButton);
+
+        var row = new Border
+        {
+            Margin = new Thickness(0, 2, 0, 2),
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            ToolTip = Strings.Format("ToolTipOpenLinkedPaper", title),
+            Child = grid
+        };
+        row.MouseLeftButtonUp += (_, e) =>
+        {
+            if (e.Handled)
+            {
+                return;
+            }
+
+            _controller.OpenLinkedPaper(paperId, this);
+            e.Handled = true;
+        };
+        return row;
+    }
+
 
     public void RefreshTodoRowsForExternalChange()
     {
@@ -384,6 +577,8 @@ public sealed partial class PaperWindow
         _todoReminderCountdowns.Clear();
         _todoRows.Clear();
         _linkedPaperTitleRefreshers.Clear();
+        _todoLinkedPapersSections.Clear();
+        _linkedPapersSectionRebuilders.Clear();
         _linkedPaperDropRow = null;
 
         foreach (var item in OrderedItems())
@@ -529,6 +724,8 @@ public sealed partial class PaperWindow
 
         _todoEditors.Remove(itemId);
         _todoReminderCountdowns.Remove(itemId);
+        _todoLinkedPapersSections.Remove(itemId);
+        _linkedPapersSectionRebuilders.Remove(itemId);
         foreach (var paperId in _linkedPaperTitleRefreshers.Keys.ToList())
         {
             var refreshers = _linkedPaperTitleRefreshers[paperId];
@@ -766,10 +963,14 @@ public sealed partial class PaperWindow
         var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
         var linkedPaperTitle = "";
         var hasLinkedPath = !string.IsNullOrWhiteSpace(item.LinkedPath);
-        var hasLinkedPaper = _controller.State.EnableTodoPaperLinks &&
-            _controller.TryGetLinkedPaperTitle(item.LinkedPaperId, out linkedPaperTitle);
+        var linkedPaperIds = _controller.State.EnableTodoPaperLinks
+            ? item.LinkedPaperIdsInternal.ToList()
+            : [];
+        var hasLinkedPaper = linkedPaperIds.Count > 0 &&
+            _controller.TryGetLinkedPaperTitle(linkedPaperIds[0], out linkedPaperTitle);
+        var isMultiLink = linkedPaperIds.Count >= 2;
         var runLinkedScriptOnClick = hasLinkedPaper &&
-            _controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId);
+            _controller.ShouldRunLinkedScriptCapsule(linkedPaperIds[0]);
         var todoRemindersEnabled =
             _controller.State.ExperimentalTodoReminders;
         var showTodoReminderButton = todoRemindersEnabled &&
@@ -1010,8 +1211,12 @@ public sealed partial class PaperWindow
                 var openMenuText = runLinkedScriptOnClick
                     ? Strings.Format("MenuEditLinkedScriptCapsule", linkedPaperTitle)
                     : Strings.Format("MenuOpenLinkedPaper", linkedPaperTitle);
-                itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedPaper(item.LinkedPaperId, this)));
-                itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkPaper"), (_, _) => UnlinkPaperFromTodoItem(item)));
+                itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedPaper(linkedPaperIds[0], this)));
+                itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkPaper"), (_, _) => UnlinkPaperFromTodoItem(item, linkedPaperIds[0])));
+                if (linkedPaperIds.Count > 1)
+                {
+                    itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkAllPapers"), (_, _) => UnlinkAllPapersFromTodoItem(item)));
+                }
                 itemMenu.Items.Add(MenuSeparator());
             }
             else if (hasLinkedPath)
@@ -1088,11 +1293,11 @@ public sealed partial class PaperWindow
             Grid.SetColumn(pathLinkButton, 2);
             grid.Children.Add(pathLinkButton);
         }
-        else if (hasLinkedPaper)
+        else if (hasLinkedPaper && linkedPaperIds.Count == 1)
         {
             var showLinkedPaperName = _controller.State.ShowLinkedPaperName;
             var allowLongLinkedPaperTitle = showLinkedPaperName && _controller.State.AllowLongLinkedPaperTitles;
-            var linkedPaperActive = _controller.IsLinkedPaperShown(item.LinkedPaperId);
+            var linkedPaperActive = _controller.IsLinkedPaperShown(linkedPaperIds[0]);
 
             string LinkedPaperButtonLabel(bool isTodoMultiline)
             {
@@ -1247,7 +1452,7 @@ public sealed partial class PaperWindow
             void RefreshLinkedPaperPresentation()
             {
                 if (!_controller.TryGetLinkedPaperTitle(
-                        item.LinkedPaperId,
+                        linkedPaperIds[0],
                         out var refreshedTitle))
                 {
                     return;
@@ -1275,7 +1480,7 @@ public sealed partial class PaperWindow
 
             RegisterLinkedPaperTitleRefresher(
                 item.Id,
-                item.LinkedPaperId,
+                linkedPaperIds[0],
                 RefreshLinkedPaperPresentation);
 
             linkButton.MouseEnter += (_, _) =>
@@ -1299,10 +1504,10 @@ public sealed partial class PaperWindow
             linkButton.MouseLeftButtonUp += (_, e) =>
             {
                 linkButton.Opacity = 1.0;
-                if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId) ||
-                    !_controller.RunLinkedScriptCapsule(item.LinkedPaperId))
+                if (!_controller.ShouldRunLinkedScriptCapsule(linkedPaperIds[0]) ||
+                    !_controller.RunLinkedScriptCapsule(linkedPaperIds[0]))
                 {
-                    _controller.OpenLinkedPaper(item.LinkedPaperId, this);
+                    _controller.OpenLinkedPaper(linkedPaperIds[0], this);
                 }
                 e.Handled = true;
             };
@@ -1398,7 +1603,18 @@ public sealed partial class PaperWindow
         Grid.SetColumn(handle, showTodoReminderControl ? 5 : 4);
         grid.Children.Add(handle);
 
-        row.Child = grid;
+        if (isMultiLink)
+        {
+            // 多关联（>=2）：在按钮行下方追加一个可折叠的「关联 N 篇」区块。
+            var verticalRoot = new StackPanel();
+            verticalRoot.Children.Add(grid);
+            verticalRoot.Children.Add(BuildTodoLinkedPapersSection(item, linkedPaperIds, metrics));
+            row.Child = verticalRoot;
+        }
+        else
+        {
+            row.Child = grid;
+        }
         ConfigureTodoPathDrop(row, item);
         ConfigureTodoMultiSelection(row, item, check, text);
 
@@ -1655,7 +1871,8 @@ public sealed partial class PaperWindow
         var itemId = item.Id;
         var removedLinkedPaperIds = _paper.Items
             .Where(i => i.Id == itemId)
-            .Select(i => i.LinkedPaperId)
+            .SelectMany(i => i.LinkedPaperIds ?? [])
+            .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .ToList();
 
         // 删除动画
@@ -1763,7 +1980,8 @@ public sealed partial class PaperWindow
 
         var completedItemIds = new HashSet<string>(completedItems.Select(i => i.Id), StringComparer.Ordinal);
         var removedLinkedPaperIds = completedItems
-            .Select(i => i.LinkedPaperId)
+            .SelectMany(i => i.LinkedPaperIds ?? [])
+            .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .ToList();
         var clearDoneGeneration = ++_clearDoneGeneration;
 
@@ -1873,12 +2091,12 @@ public sealed partial class PaperWindow
     private void RefreshCapsuleEligibilityForLinkedPaperChanges(IEnumerable<PaperItem> previousItems)
     {
         var changedPaperIds = previousItems
-            .Select(item => item.LinkedPaperId)
+            .SelectMany(item => item.LinkedPaperIds ?? [])
             .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .Select(paperId => paperId!)
             .ToHashSet(StringComparer.Ordinal);
         changedPaperIds.SymmetricExceptWith(_paper.Items
-            .Select(item => item.LinkedPaperId)
+            .SelectMany(item => item.LinkedPaperIds ?? [])
             .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .Select(paperId => paperId!));
 
@@ -1957,7 +2175,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        if (string.Equals(item.LinkedPaperId, paperId, StringComparison.Ordinal) &&
+        if (item.LinkedPaperIdsInternal.Any(id => string.Equals(id, paperId, StringComparison.Ordinal)) &&
             string.IsNullOrWhiteSpace(item.LinkedPath))
         {
             return true;
@@ -1966,16 +2184,33 @@ public sealed partial class PaperWindow
         var focusedId = CurrentFocusedTodoItemId();
         var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
-        item.LinkPaper(paperId);
+        item.AddLinkedPaper(paperId);
         _controller.MarkDirty();
         ReconcileTodoRows([item.Id], focusedId);
         RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
         return true;
     }
 
-    private void UnlinkPaperFromTodoItem(PaperItem item)
+    private void UnlinkPaperFromTodoItem(PaperItem item, string? paperId)
     {
-        if (string.IsNullOrWhiteSpace(item.LinkedPaperId))
+        if (string.IsNullOrWhiteSpace(paperId) ||
+            !item.LinkedPaperIdsInternal.Any(id => string.Equals(id, paperId, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
+        var previousItems = CloneItems(_paper.Items);
+        PushUndoSnapshot();
+        item.RemoveLinkedPaper(paperId);
+        _controller.MarkDirty();
+        ReconcileTodoRows([item.Id], focusedId);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+    }
+
+    private void UnlinkAllPapersFromTodoItem(PaperItem item)
+    {
+        if (item.LinkedPaperIds is not { Count: > 0 })
         {
             return;
         }

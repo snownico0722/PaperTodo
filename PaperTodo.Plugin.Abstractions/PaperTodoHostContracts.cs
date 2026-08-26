@@ -109,7 +109,8 @@ public sealed record TodoSnapshot(
     int Order,
     string? LinkedPaperId,
     string? LinkedPath,
-    DateTimeOffset? ReminderAt);
+    DateTimeOffset? ReminderAt,
+    IReadOnlyList<string>? LinkedPaperIds);
 
 public sealed record NoteSnapshot(
     string PaperId,
@@ -177,6 +178,7 @@ public sealed record TodoCreateItem
     public bool Done { get; init; }
     public string? LinkedPaperId { get; init; }
     public DateTimeOffset? ReminderAt { get; init; }
+    public IReadOnlyList<string>? LinkedPaperIds { get; init; }
 }
 
 public sealed record CreatePaperRequest
@@ -203,6 +205,7 @@ public sealed record UpdateTodoRequest
     public int? Order { get; init; }
     public bool UpdateLinkedPaper { get; init; }
     public string? LinkedPaperId { get; init; }
+    public IReadOnlyList<string>? LinkedPaperIds { get; init; }
 }
 
 public sealed record SetTodoReminderRequest

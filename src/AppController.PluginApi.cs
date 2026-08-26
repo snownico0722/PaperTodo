@@ -49,7 +49,8 @@ public sealed partial class AppController
             item.Order,
             item.LinkedPaperId,
             item.LinkedPath,
-            item.ReminderAt);
+            item.ReminderAt,
+            item.LinkedPaperIdsInternal.Count > 0 ? item.LinkedPaperIdsInternal.ToList() : null);
 
     internal NoteSnapshot CaptureNoteSnapshot(PaperData paper)
     {
