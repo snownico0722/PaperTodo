@@ -8,6 +8,10 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
+/// <summary>
+/// The one hidden Web backend Runtime for a provider. Paper instances are logical ids routed through
+/// IPaperPluginRuntimePapers; PaperTodo never creates one hidden WebView per Paper.
+/// </summary>
 internal sealed class WebPluginAppRuntime : IDisposable
 {
     private const int MaximumGlobalTopBarActions = 256;
@@ -15,6 +19,8 @@ internal sealed class WebPluginAppRuntime : IDisposable
     private readonly PaperBodyPluginDescriptor _descriptor;
     private readonly IPaperTodoHostApi _workspace;
     private readonly IPaperAppRuntimeSettings _settings;
+    private readonly IPaperPluginRuntimeState _state;
+    private readonly IPaperPluginRuntimePapers _papers;
     private readonly PaperAppRuntimeGlobalTopBarApi _globalTopBar;
     private readonly PaperAppRuntimeGlobalShortcutApi _globalShortcuts;
     private readonly Func<bool> _isActive;
@@ -23,6 +29,8 @@ internal sealed class WebPluginAppRuntime : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly TaskCompletionSource<bool> _startupReady =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly IDisposable _settingsSubscription;
+    private readonly IDisposable _papersSubscription;
     private string _expectedOrigin = string.Empty;
     private bool _documentReady;
     private ulong _documentNavigationId;
@@ -36,6 +44,8 @@ internal sealed class WebPluginAppRuntime : IDisposable
         PaperBodyPluginDescriptor descriptor,
         IPaperTodoHostApi workspace,
         IPaperAppRuntimeSettings settings,
+        IPaperPluginRuntimeState state,
+        IPaperPluginRuntimePapers papers,
         PaperAppRuntimeGlobalTopBarApi globalTopBar,
         PaperAppRuntimeGlobalShortcutApi globalShortcuts,
         Func<bool> isActive,
@@ -44,6 +54,8 @@ internal sealed class WebPluginAppRuntime : IDisposable
         _descriptor = descriptor;
         _workspace = workspace;
         _settings = settings;
+        _state = state;
+        _papers = papers;
         _globalTopBar = globalTopBar;
         _globalShortcuts = globalShortcuts;
         _isActive = isActive;
@@ -60,22 +72,25 @@ internal sealed class WebPluginAppRuntime : IDisposable
         if (!WebPluginRuntimeInfrastructure.AttachBackground(_webView))
         {
             throw new InvalidOperationException(
-                "PaperTodo could not attach the Web plugin app runtime to its background host.");
+                "PaperTodo could not attach the Web plugin Runtime to its background host.");
         }
+
+        _settingsSubscription = _settings.Subscribe(OnSettingsChanged);
+        _papersSubscription = _papers.Subscribe(OnPaperEvent);
     }
 
     public async Task StartAsync()
     {
         ThrowIfInactive();
         var manifest = _descriptor.Manifest
-            ?? throw new InvalidOperationException("Web app runtime manifest is unavailable.");
+            ?? throw new InvalidOperationException("Web Runtime manifest is unavailable.");
         var webRoot = Path.GetDirectoryName(manifest.EntryPath)
             ?? throw new InvalidOperationException("Web plugin entry has no containing directory.");
         var runtimePath = manifest.RuntimePath;
         if (string.IsNullOrWhiteSpace(runtimePath))
         {
             throw new InvalidOperationException(
-                "The Web app runtime entry was not resolved during plugin discovery.");
+                "The Web Runtime entry was not resolved during plugin discovery.");
         }
 
         var environment = await WebPluginRuntimeInfrastructure.EnvironmentAsync(
@@ -112,9 +127,6 @@ internal sealed class WebPluginAppRuntime : IDisposable
             CoreWebView2HostResourceAccessKind.DenyCors);
         _webView.Source = runtimeUri;
 
-        // A runtime is not Running merely because Source was assigned. Wait until the matching
-        // local document has completed and the host has sent initialize, so bridge requests cannot
-        // disappear into the pre-navigation gap.
         await _startupReady.Task.WaitAsync(_lifetime.Token);
         _startupCompleted = true;
         ThrowIfInactive();
@@ -138,7 +150,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
                 else queuedRequests.push(payload);
               };
               const request = (method, params = {}) => {
-                const requestId = `a${++sequence}`;
+                const requestId = `r${++sequence}`;
                 return new Promise((resolve, reject) => {
                   pending.set(requestId, { resolve, reject });
                   postRequest({ requestId, method: String(method ?? ''), params: params ?? {} });
@@ -148,6 +160,37 @@ internal sealed class WebPluginAppRuntime : IDisposable
               const settings = Object.freeze({
                 get() { return request('settings.get'); }
               });
+              const state = Object.freeze({
+                get() { return request('state.get'); },
+                save(value) { return request('state.save', { state: value ?? {} }); }
+              });
+              const papers = Object.freeze({
+                list() { return request('papers.list'); },
+                setTitle(paperId, title) {
+                  return request('papers.setTitle', {
+                    paperId: String(paperId ?? ''),
+                    title: String(title ?? '')
+                  });
+                },
+                setHeaderText(paperId, text) {
+                  return request('papers.setHeaderText', {
+                    paperId: String(paperId ?? ''),
+                    text: String(text ?? '')
+                  });
+                },
+                setCapsulePresentation(paperId, presentation) {
+                  return request('papers.setCapsulePresentation', {
+                    paperId: String(paperId ?? ''),
+                    presentation: presentation ?? null
+                  });
+                },
+                postBody(paperId, message) {
+                  return request('papers.postBody', {
+                    paperId: String(paperId ?? ''),
+                    message: message ?? null
+                  });
+                }
+              });
               const globalTopBar = Object.freeze({
                 setActions(actions) {
                   return request('topbar.global.set', {
@@ -156,9 +199,11 @@ internal sealed class WebPluginAppRuntime : IDisposable
                 }
               });
               window.papertodo = Object.freeze({
-                surface: 'app',
+                surface: 'runtime',
                 workspace,
                 settings,
+                state,
+                papers,
                 globalTopBar,
                 request,
                 onEvent(listener) {
@@ -230,8 +275,6 @@ internal sealed class WebPluginAppRuntime : IDisposable
             !_hasDocumentNavigation ||
             e.NavigationId != _documentNavigationId)
         {
-            // A host-cancelled external navigation still raises NavigationCompleted. It never
-            // became the committed app-runtime navigation and must not tear down the healthy page.
             return;
         }
 
@@ -243,21 +286,26 @@ internal sealed class WebPluginAppRuntime : IDisposable
             TryClearGlobalTopBar();
             TryClearGlobalShortcuts();
             FailStartupOrRestart(
-                $"Web app runtime navigation failed ({e.WebErrorStatus}).");
+                $"Web Runtime navigation failed ({e.WebErrorStatus}).");
             return;
         }
 
         _reloadRecoveryPending = false;
         _documentReady = true;
         RegisterGlobalShortcutHandler();
+        var runtimeState = ReadRuntimeState();
         Send(new
         {
             type = "initialize",
-            surface = "app",
+            surface = "runtime",
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
             permissions = _workspace.GrantedPermissions.OrderBy(value => value).ToArray(),
-            settings = ReadSettings()
+            settings = ReadSettings(),
+            state = runtimeState.State,
+            stateVersion = runtimeState.Version,
+            targetStateVersion = _state.TargetStateVersion,
+            papers = _papers.List()
         });
         _startupReady.TrySetResult(true);
     }
@@ -272,19 +320,13 @@ internal sealed class WebPluginAppRuntime : IDisposable
         switch (e.ProcessFailedKind)
         {
             case CoreWebView2ProcessFailedKind.BrowserProcessExited:
-                // The control is closed after a browser-process exit and cannot be recovered with
-                // Reload. Let the app-runtime owner dispose this instance and create a fresh view.
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
-
             case CoreWebView2ProcessFailedKind.RenderProcessExited:
             case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
                 RecoverRendererByReload();
                 return;
-
             default:
-                // Utility/GPU/sandbox/subframe process failures are non-fatal to the top-level app
-                // runtime. WebView2 recreates those processes or leaves the main document usable.
                 return;
         }
     }
@@ -304,12 +346,10 @@ internal sealed class WebPluginAppRuntime : IDisposable
         var dispatcher = _webView.Dispatcher;
         if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
         {
-            FailStartupOrRestart("The Web app runtime dispatcher is shutting down.");
+            FailStartupOrRestart("The Web Runtime dispatcher is shutting down.");
             return;
         }
 
-        // Leave the ProcessFailed callback before calling back into WebView2. A repeated
-        // RenderProcessUnresponsive event is ignored while this one recovery navigation is pending.
         _ = dispatcher.BeginInvoke(
             (Action)(() =>
             {
@@ -322,7 +362,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
                     var core = _webView.CoreWebView2;
                     if (core == null)
                     {
-                        FailStartupOrRestart("The Web app runtime renderer could not be reloaded.");
+                        FailStartupOrRestart("The Web Runtime renderer could not be reloaded.");
                         return;
                     }
                     core.Reload();
@@ -330,7 +370,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
                 catch (Exception ex)
                 {
                     FailStartupOrRestart(
-                        $"The Web app runtime renderer reload failed: {ex.GetBaseException().Message}");
+                        $"The Web Runtime renderer reload failed: {ex.GetBaseException().Message}");
                 }
             }),
             DispatcherPriority.Background);
@@ -366,14 +406,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
-        try
-        {
-            _requestRestart();
-        }
-        catch
-        {
-            // Runtime ownership still tears this instance down during normal host shutdown.
-        }
+        try { _requestRestart(); } catch { }
     }
 
     private void OnWebMessageReceived(
@@ -404,7 +437,6 @@ internal sealed class WebPluginAppRuntime : IDisposable
         }
         catch
         {
-            // Malformed app-runtime messages stay isolated to that runtime.
         }
     }
 
@@ -415,22 +447,19 @@ internal sealed class WebPluginAppRuntime : IDisposable
         {
             var method = WebPluginRuntimeInfrastructure.RequiredString(payload, "method");
             var parameters = WebPluginRuntimeInfrastructure.ParametersOrEmpty(payload);
-            object? result;
-            if (string.Equals(method, "settings.get", StringComparison.Ordinal))
+            object? result = method switch
             {
-                result = ReadSettings();
-            }
-            else if (string.Equals(method, "topbar.global.set", StringComparison.Ordinal))
-            {
-                result = SetGlobalActions(parameters);
-            }
-            else
-            {
-                result = WebPluginWorkspaceRequests.Execute(
-                    _workspace,
-                    method,
-                    parameters);
-            }
+                "settings.get" => ReadSettings(),
+                "state.get" => ReadRuntimeState().State,
+                "state.save" => SaveRuntimeState(parameters),
+                "papers.list" => _papers.List(),
+                "papers.setTitle" => SetPaperTitle(parameters),
+                "papers.setHeaderText" => SetPaperHeader(parameters),
+                "papers.setCapsulePresentation" => SetPaperCapsule(parameters),
+                "papers.postBody" => PostPaperBody(parameters),
+                "topbar.global.set" => SetGlobalActions(parameters),
+                _ => WebPluginWorkspaceRequests.Execute(_workspace, method, parameters)
+            };
             Send(new { type = "hostResponse", requestId, ok = true, result });
         }
         catch (PaperTodoPluginException ex)
@@ -453,7 +482,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
                 error = new
                 {
                     code = "host_error",
-                    message = "PaperTodo could not complete the plugin app-runtime request."
+                    message = "PaperTodo could not complete the plugin Runtime request."
                 }
             });
         }
@@ -464,6 +493,73 @@ internal sealed class WebPluginAppRuntime : IDisposable
         using var document = JsonDocument.Parse(_settings.Json);
         return document.RootElement.Clone();
     }
+
+    private (JsonElement State, int Version) ReadRuntimeState()
+    {
+        using var document = JsonDocument.Parse(_state.Json);
+        return (document.RootElement.Clone(), _state.StateVersion);
+    }
+
+    private object SaveRuntimeState(JsonElement parameters)
+    {
+        var value = RequiredProperty(parameters, "state");
+        _state.Save(value.GetRawText());
+        return new { saved = true };
+    }
+
+    private object SetPaperTitle(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var title = OptionalString(parameters, "title");
+        _papers.SetTitle(paperId, title);
+        return new { updated = true };
+    }
+
+    private object SetPaperHeader(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var text = OptionalString(parameters, "text");
+        _papers.SetHeaderText(paperId, text);
+        return new { updated = true };
+    }
+
+    private object SetPaperCapsule(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var value = RequiredProperty(parameters, "presentation");
+        var presentation = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? null
+            : value.Deserialize<PaperCapsulePresentation>(
+                WebPluginRuntimeInfrastructure.JsonOptions);
+        _papers.SetCapsulePresentation(paperId, presentation);
+        return new { updated = true };
+    }
+
+    private object PostPaperBody(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var message = RequiredProperty(parameters, "message");
+        return new { delivered = _papers.PostToBody(paperId, message) };
+    }
+
+    private static JsonElement RequiredProperty(JsonElement value, string name)
+    {
+        if (value.ValueKind != JsonValueKind.Object ||
+            !value.TryGetProperty(name, out var property))
+        {
+            throw new PaperTodoPluginException(
+                "invalid_params",
+                $"{name} is required.");
+        }
+        return property;
+    }
+
+    private static string OptionalString(JsonElement value, string name) =>
+        value.ValueKind == JsonValueKind.Object &&
+        value.TryGetProperty(name, out var property) &&
+        property.ValueKind == JsonValueKind.String
+            ? property.GetString() ?? string.Empty
+            : string.Empty;
 
     private object SetGlobalActions(JsonElement parameters)
     {
@@ -514,6 +610,52 @@ internal sealed class WebPluginAppRuntime : IDisposable
             }));
     }
 
+    private void OnSettingsChanged(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            Send(new
+            {
+                type = "settingsChanged",
+                settings = document.RootElement.Clone()
+            });
+        }
+        catch
+        {
+        }
+    }
+
+    private void OnPaperEvent(PaperPluginRuntimeEvent value)
+    {
+        if (value.Kind == PaperPluginRuntimeEventKind.Message)
+        {
+            Send(new
+            {
+                type = "paperEvent",
+                @event = new
+                {
+                    kind = "message",
+                    paperId = value.PaperId,
+                    message = value.Message
+                }
+            });
+            return;
+        }
+
+        Send(new
+        {
+            type = "paperEvent",
+            @event = new
+            {
+                kind = value.Kind == PaperPluginRuntimeEventKind.PaperAdded
+                    ? "paperAdded"
+                    : "paperRemoved",
+                paperId = value.PaperId
+            }
+        });
+    }
+
     private bool IsAllowedSource(string? value) =>
         WebPluginRuntimeInfrastructure.IsSameOrigin(value, _expectedOrigin);
 
@@ -549,7 +691,7 @@ internal sealed class WebPluginAppRuntime : IDisposable
     {
         if (_disposed || !_isActive())
         {
-            throw new InvalidOperationException("The plugin app runtime is no longer active.");
+            throw new InvalidOperationException("The plugin Runtime is no longer active.");
         }
     }
 
@@ -563,6 +705,8 @@ internal sealed class WebPluginAppRuntime : IDisposable
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
         _disposed = true;
+        try { _papersSubscription.Dispose(); } catch { }
+        try { _settingsSubscription.Dispose(); } catch { }
         _startupReady.TrySetCanceled();
         _lifetime.Cancel();
         if (_webView.CoreWebView2 is { } core)
