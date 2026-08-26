@@ -1,0 +1,59 @@
+name: Tweak plugin status copy
+
+on:
+  push:
+    branches:
+      - cleanup/plugin-contract-and-samples
+    paths:
+      - .github/workflows/tweak-plugin-status-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tweak:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Update localized tooltip copy
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import re
+
+          replacements = {
+              'Resources/Strings.resx': '当前未使用',
+              'Resources/Strings.en.resx': 'Not in use',
+              'Resources/Strings.ja.resx': '現在未使用',
+              'Resources/Strings.ko.resx': '현재 사용하지 않음',
+          }
+
+          for path, value in replacements.items():
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              pattern = r'(<data name="PluginsStatusStopped"[^>]*>\s*<value>)(.*?)(</value>)'
+              text2, count = re.subn(pattern, lambda m: m.group(1) + value + m.group(3), text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'{path}: PluginsStatusStopped not found exactly once')
+              p.write_text(text2, encoding='utf-8')
+          '@ | python -
+          git diff --check
+      - name: Build
+        shell: pwsh
+        run: dotnet build .\PaperTodo.csproj -c Release
+      - name: Commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Resources
+          git commit -m "fix: clarify idle plugin status"
+          git rm .github/workflows/tweak-plugin-status-copy.yml
+          git commit -m "chore: remove plugin status copy validation"
+          git push
