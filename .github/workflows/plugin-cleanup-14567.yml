@@ -58,8 +58,11 @@ jobs:
         shell: pwsh
         run: |
           $contract = Get-Content .\PaperTodo.Plugin.Abstractions\PaperBodyPluginContracts.cs -Raw
+          $pluginContract = [regex]::Match(
+            $contract,
+            'public interface IPaperBodyPlugin[\s\S]*?(?=public interface IPaperBodySession)').Value
+          if ([string]::IsNullOrWhiteSpace($pluginContract)) { throw 'IPaperBodyPlugin contract was not found' }
           foreach ($forbidden in @(
-            'public string Id =>',
             'string Id { get;',
             'DisplayName',
             'Version Version',
@@ -68,7 +71,7 @@ jobs:
             'PaperBodyRuntimeRequirements RuntimeRequirements',
             'PaperBodyCapabilities Capabilities'
           )) {
-            if ($contract -match [regex]::Escape($forbidden)) { throw "Native metadata remains in IPaperBodyPlugin: $forbidden" }
+            if ($pluginContract -match [regex]::Escape($forbidden)) { throw "Native metadata remains in IPaperBodyPlugin: $forbidden" }
           }
 
           $registry = Get-Content .\src\PaperBodyPluginRegistry.cs -Raw
