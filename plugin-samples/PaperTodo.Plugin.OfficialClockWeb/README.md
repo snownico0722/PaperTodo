@@ -22,6 +22,6 @@ plugins\official.clock.web\
 
 ## Plugin Runtime
 
-时钟声明 `appRuntime`，整个 provider 只运行一个 `web/runtime.html` 后台。Runtime 收到当前逻辑 Paper 列表后维护一个定时器，并通过 `papertodo.papers.setHeaderText(...)` / `setCapsulePresentation(...)` 按 `paperId` 发布长期 presentation。
+时钟声明 `runtime`，整个 provider 只运行一个 `web/runtime.html` 后台。Runtime 收到当前逻辑 Paper 列表后维护一个定时器，并通过 `papertodo.papers.setHeaderText(...)` / `setCapsulePresentation(...)` 按 `paperId` 发布长期 presentation。
 
 `web/index.html` 与 `web/mini.html` 都只是前端：它们可以重建或回收，不决定后台计时生命周期。即使未来允许多开时钟，也仍然只有一个 provider Runtime；不同 Paper 只是 Runtime 内按 `paperId` 区分的逻辑实例。需要额外 Worker/隔离时由插件自己创建，不由 PaperTodo 为每张 Paper 再生成隐藏 WebView。

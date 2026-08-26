@@ -12,6 +12,11 @@ public interface IPaperPluginRuntimeState
     string Json { get; }
     int StateVersion { get; }
     int TargetStateVersion { get; }
+
+    /// <summary>
+    /// Persists the provider-scoped Runtime document. PaperTodo accepts up to 20 MiB UTF-8 per
+    /// provider Runtime; existing larger on-disk data remains readable and is never truncated.
+    /// </summary>
     void Save(string json);
 }
 
@@ -52,6 +57,12 @@ public interface IPaperPluginRuntimePapers
     void SetCapsulePresentation(string paperId, PaperCapsulePresentation? presentation);
 
     bool PostToBody(string paperId, JsonElement message);
+
+    /// <summary>
+    /// Reports PaperAdded/PaperRemoved/Message events that happen after subscription. It does not
+    /// replay PaperAdded for Papers that already existed when the Runtime started; call List() once
+    /// for the startup snapshot, then Subscribe() for increments.
+    /// </summary>
     IDisposable Subscribe(Action<PaperPluginRuntimeEvent> handler);
 }
 

@@ -877,3 +877,12 @@ Runtime 使用 provider-scoped state；Body/Mini 继续使用 per-paper frontend
 - `src/WebPluginAppRuntime.cs`。
 - `PaperTodo.Plugin.Abstractions/PluginRuntimeContracts.cs`。
 - 删除的 `src/WebPaperRuntime.cs` / `src/AppController.WebPaperRuntime.cs`。
+## 2026-08-27 — Plugin Runtime 2.0 最终生命周期与容量契约
+
+- 协议统一使用 `PluginRuntime` / manifest capability `runtime`；不再保留 `AppRuntime` 作为第二套名字。
+- 一个 provider 只有一个后台 Runtime，N 个 Paper 只是以 `paperId` 管理的逻辑实例。插件内部如果需要 worker、线程、子进程或实例级后台，由插件自己创建和管理。
+- 每张 Paper frontend/body state 最大 10 MiB；整个 PluginRuntime state 最大 20 MiB，独立计额。写限制不反向破坏既有磁盘数据。
+- Runtime state 禁止高版本向低版本插件降级覆盖。删除 provider 的最后一张 Paper 时，最终 `PaperRemoved` 必须在 lifetime 撤销前送达。
+- Web Runtime renderer 恢复期间不缓存业务消息；不能真实投递就返回 `runtime_unavailable`。宿主不提供 exactly-once 或延迟业务命令队列。
+- Backoff 保留最后展示；最终 Failed 清 Runtime 动态 Header/Capsule 并回退静态 Paper 展示。
+- Runtime 启动读取 `Papers.List()` 全量，之后 `Subscribe()` 只接增量。

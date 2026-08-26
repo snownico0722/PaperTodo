@@ -76,7 +76,7 @@ paper.toggle
 
 ```json
 {
-  "capabilities": ["appRuntime"],
+  "capabilities": ["runtime"],
   "settings": [
     {
       "id": "refreshShortcut",
@@ -92,16 +92,16 @@ paper.toggle
 自定义 action 必须满足：
 
 - 协议版本为 `2.0`；
-- 插件声明 `appRuntime`；
+- 插件声明 `runtime`；
 - action id 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
 - plugin runtime 注册快捷键 action handler。
 
-自定义 action 是 **provider/appRuntime 全局动作**。宿主不会替它选择某张纸片，也不会在回调中偷偷附加“当前纸片”语义；如果插件业务需要目标纸片，应通过 Workspace 数据自行决定。
+自定义 action 是 **provider/runtime 全局动作**。宿主不会替它选择某张纸片，也不会在回调中偷偷附加“当前纸片”语义；如果插件业务需要目标纸片，应通过 Workspace 数据自行决定。
 
 ### Native plugin runtime
 
 ```csharp
-public IPaperAppRuntime CreateAppRuntime(PaperAppRuntimeContext context)
+public IPaperPluginRuntime CreatePluginRuntime(PaperPluginRuntimeContext context)
 {
     context.GlobalShortcuts.SetActionHandler(invocation =>
     {

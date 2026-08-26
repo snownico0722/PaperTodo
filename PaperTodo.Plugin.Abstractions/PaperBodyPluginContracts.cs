@@ -339,6 +339,7 @@ public sealed class PaperBodyContext
     public IPaperPresentationApi Presentation => Workspace as IPaperPresentationApi
         ?? throw new InvalidOperationException(
             "This PaperTodo host does not expose own-paper presentation controls.");
+    // Per-Paper frontend/body state is independently limited to 10 MiB UTF-8.
     public required Action<string> SaveStateJson { get; init; }
 
     // Convenience views for non-ambiguous values. Presentation writes stay in Paper / Body /
