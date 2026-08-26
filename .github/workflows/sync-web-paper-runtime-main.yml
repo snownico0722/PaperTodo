@@ -28,6 +28,8 @@ jobs:
       - name: Merge latest main without committing
         shell: pwsh
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git merge --no-commit --no-ff origin/main
 
@@ -51,8 +53,6 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item .\.github\workflows\sync-web-paper-runtime-main.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "merge: sync Web paper runtime with latest main"
           git push origin HEAD:feature/web-paper-runtime-lifecycle
