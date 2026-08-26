@@ -61,6 +61,24 @@ public sealed partial class AppController
             window.ReceivePluginRuntimeMessage(providerId, payload);
     }
 
+    internal void ApplyPluginRuntimePresentationToWindow(
+        PaperWindow window,
+        string paperId,
+        string providerId)
+    {
+        if (!_pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) ||
+            slot.State != PluginAppRuntimeState.Running ||
+            slot.Lease?.Papers == null ||
+            FindPluginRuntimePaper(providerId, paperId) == null)
+        {
+            return;
+        }
+        if (slot.Lease.Papers.TryGetCapsulePresentation(paperId, out var presentation))
+        {
+            window.ApplyPluginRuntimeCapsule(providerId, presentation);
+        }
+    }
+
     internal void SetPluginRuntimePaperTitle(
         string providerId,
         string paperId,
