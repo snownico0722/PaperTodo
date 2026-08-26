@@ -172,10 +172,6 @@ public sealed partial class PaperWindow
         !IsCurrentBodyProviderMarkdown &&
         (_bodyInputClaims & claim) == claim;
 
-    private bool BodyRequires(PaperBodyRuntimeRequirements requirement) =>
-        _bodyDescriptor != null &&
-        (_bodyDescriptor.RuntimeRequirements & requirement) == requirement;
-
     private UIElement CreateAndAttachInitialPaperBody()
     {
         _bodyFailed = false;
@@ -1076,11 +1072,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var keepNativeBodyRuntimeAlive =
-            _bodyDescriptor?.Kind == PaperBodyPluginKind.Native &&
-            BodyRequires(PaperBodyRuntimeRequirements.BackgroundUpdates);
-        var runtimeVisible = _paper.IsVisible &&
-            (visible || keepNativeBodyRuntimeAlive);
+        var runtimeVisible = _paper.IsVisible && visible;
         if (visible)
         {
             // Expansion can come from a hotkey, tray action or another paper. Settle any active

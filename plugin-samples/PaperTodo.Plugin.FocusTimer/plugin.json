@@ -10,9 +10,6 @@
   "capabilities": [
     "textZoom"
   ],
-  "requires": [
-    "backgroundUpdates"
-  ],
   "permissions": [
     "papers.read",
     "papers.observe",

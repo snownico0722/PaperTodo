@@ -7,9 +7,9 @@
 - 多种日期格式、标题模式和显示缩放；
 - `initialize`、`settingsChanged`、`themeChanged`、`visibilityChanged` 生命周期；
 - `miniEntry` 提供独立轻量时钟，收到初始化后完成首帧再调用 `papertodo.mini.ready()`；
-- Web Mini 默认把点击和拖拽交给 PaperTodo；网页需要自己处理指针的局部区域使用 `data-papertodo-interactive` 显式声明，本示例的“暂停 / 继续”按钮即为示例；
+- Web Mini 默认把点击和拖拽交给 PaperTodo；网页需要自己处理指针的局部区域使用 `data-papertodo-interactive` 显式声明；
 - Mini 加载期间使用透明内容占位；只有当前文档通过 ready challenge 并跨过真实 Rendering publication boundary 后才显示 Web surface；
-- `paper.setHeaderText` 与 `paper.setCapsulePresentation` 分别同步纸片顶栏和标准胶囊 presentation，胶囊按当前标题和日进度组件自动适配宽度；
+- provider Runtime 通过 `papertodo.papers` 按 `paperId` 同步纸片顶栏和标准胶囊 presentation，胶囊按当前标题和日进度组件自动适配宽度；
 - 正文可用较高频率对齐秒边界，但对宿主胶囊写入做去重，避免无意义地重复重建同一模板。
 
 Web 插件不需要编译，部署产物是 `plugin.json` 和 `web/` 的原样副本。自定义 WPF 胶囊只属于 Native 插件；本示例的紧凑胶囊使用宿主标准 presentation，边缘快速浏览使用 Web `miniEntry`。仓库中的可加载副本位于：
@@ -20,8 +20,8 @@ plugins\official.clock.web\
 
 修改源码后，将本目录的 `plugin.json` 和 `web/` 同步到上述目录即可重载。PaperTodo 的本地发布和 GitHub Release 不携带该插件。
 
-## Paper Runtime
+## Plugin Runtime
 
-`requires: ["backgroundUpdates"]` 的 Web 插件通过 `paperRuntime` 声明每张 Paper 独立的后台入口。时钟的定时器、标题与胶囊更新运行在 `web/paper-runtime.html`；`web/index.html` 只负责展开后的可见 UI，因此 Body 重建不会重启后台计时。
+时钟声明 `appRuntime`，整个 provider 只运行一个 `web/runtime.html` 后台。Runtime 收到当前逻辑 Paper 列表后维护一个定时器，并通过 `papertodo.papers.setHeaderText(...)` / `setCapsulePresentation(...)` 按 `paperId` 发布长期 presentation。
 
-Paper Runtime 的文档实例有独立 authority：宿主在初始化后发放 document token，renderer reload 时旧文档只能提交最后一次 state，不能继续写入新的 runtime 文档；成功保存的 state/version 同时更新 runtime 内存快照，因此恢复不会退回启动时的旧状态。
+`web/index.html` 与 `web/mini.html` 都只是前端：它们可以重建或回收，不决定后台计时生命周期。即使未来允许多开时钟，也仍然只有一个 provider Runtime；不同 Paper 只是 Runtime 内按 `paperId` 区分的逻辑实例。需要额外 Worker/隔离时由插件自己创建，不由 PaperTodo 为每张 Paper 再生成隐藏 WebView。

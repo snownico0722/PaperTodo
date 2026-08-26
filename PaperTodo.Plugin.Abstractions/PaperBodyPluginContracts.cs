@@ -20,12 +20,6 @@ public enum PaperBodyInputClaims
     ContextMenu = 1 << 1
 }
 
-[Flags]
-public enum PaperBodyRuntimeRequirements
-{
-    None = 0,
-    BackgroundUpdates = 1 << 0
-}
 
 public sealed record PaperBodyTheme(
     bool IsDark,

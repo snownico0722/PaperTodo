@@ -42,7 +42,7 @@ PaperTodo.exe
         ├─ NoteImageStore (LMDB)
         ├─ PaperBodyPluginRegistry / PaperBodyPluginDataStore
         ├─ PaperCommandService
-        ├─ plugin app runtime[providerId] → Global Top Bar
+        ├─ plugin Runtime[providerId] → logical Paper instances / Global Top Bar
         ├─ paper Top Bar session registry
         ├─ PaperWindow[paperId]
         │   ├─ paper shell / Todo / built-in Note
@@ -64,13 +64,13 @@ PaperTodo.exe
 | 应用级业务协调 | `AppController` | `AppState`、窗口集合、保存调度、托盘、全局 runtime、跨纸片协调 |
 | 核心持久化 | `StateStore` | `data.json` / backup 的加载、恢复和版本化写入 |
 | 图片资产 | `NoteImageStore` | LMDB 生命周期、串行访问、图片编号、缓存和回收 |
-| 插件状态 | `PaperBodyPluginDataStore` | provider settings 与 per-paper plugin state 的独立保存/恢复 |
+| 插件状态 | `PaperBodyPluginDataStore` | provider settings、provider Runtime state 与 per-paper frontend state 的独立保存/恢复 |
 | 外部 Paper/Todo/Note 命令 | `PaperCommandService` | 插件/MCP 共用的验证、mutation、同步提交/回滚和事件发布 |
 | 单纸片 UI | `PaperWindow` | paper WPF shell、普通交互、provider 选择、子系统适配 |
 | paper-body session | `PaperBodyHost` | 当前 `IPaperBodySession` 的 attach / invoke / commit / dispose |
-| plugin app runtime | `AppController.PluginAppRuntime` | `startupPaper` 处理后按最终实体插件 paper 集合 reconcile；provider 0→1 时启动、1→0 时释放，持有 Global Top Bar 与 app-runtime Workspace facade |
+| plugin Runtime | `AppController.PluginAppRuntime` | 每 provider 最多一个后端 Runtime；0→1 张实体插件 Paper 时启动、1→0 时释放，按 `paperId` 管理逻辑实例、后端 state、长期 presentation、Global Top Bar/Shortcuts 与 Workspace |
 | 插件发现与合同 | `PaperBodyPluginRegistry` | builtin / Native / Web provider 发现、校验、激活 |
-| 插件 Top Bar 注册 | `AppController.PluginTopBar` | Paper session action 与 app-runtime Global action 的分域注册、输入校验 |
+| 插件 Top Bar 注册 | `AppController.PluginTopBar` | Paper session action 与 Runtime Global action 的分域注册、输入校验 |
 | 插件 Top Bar 绘制 | `PaperWindow.PluginTopBar` | 宿主按钮、字符/SVG 图标、主题/字体/响应式与 suppression reconcile |
 | Edge 单纸片业务状态 | `EdgeCapsuleReducer` + `EdgeCapsuleModel` | 单纸片 typed intent 到完整 model 的原子变化 |
 | Edge 单纸片呈现 | `EdgeCapsulePresenter` | desired model、target plan、transition、applied frame、reconcile |
@@ -96,26 +96,29 @@ PaperTodo.exe
 
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
 
-### 3.3 辅助进程与插件 app runtime
+### 3.3 辅助进程与插件 Runtime
 
-Web 插件使用 WebView2 runtime；脚本胶囊可以启动 PowerShell 子进程。这些进程/运行时只提供对应能力，不成为核心 `AppState` authority。
+Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前只接受 **2.0**；旧 1.8 兼容路径已经删除。2.0 把 Top Bar 明确拆成两个生命周期：Paper action 属于 paper-body session；Global action 属于显式声明 `appRuntime` 的 provider 级 app runtime。
+插件协议当前只接受 **2.0**。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `appRuntime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
-`appRuntime` **不会因为插件仅被安装就启动**。启动流程先处理已启用的 `startupPaper`，让它有机会创建或恢复真实插件 paper；该阶段完成后，宿主以最终 `State.Papers` 为 authority，只有至少存在一张 `Note` paper 且其 `BodyProviderId` 指向该 provider 时，才启动这个 provider 的 app runtime。运行中同样按实体 paper 集合 reconcile：0→1 启动，1→0 释放；隐藏、折叠、没有展开正文或没有 live body session 都不改变 runtime lifetime。Native provider 只有声明 `appRuntime` 且满足实体 paper 条件时才会因此加载 DLL；未声明的 Native provider 继续保持按 paper 使用时懒加载。Web app runtime 使用与 body 同一插件 origin 下的 `runtime.html`，但获得独立 app-scope bridge，不获得 Paper/Body/Mini presentation API。
+一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
+Native 与 Web 使用同一生命周期语义：Native Runtime 是一个长期 C# 对象；Web Runtime 是一个隐藏 WebView/JS 页面。实现载体不同，但 `Settings`、provider `State`、`Papers`、Workspace、Global Top Bar/Shortcuts 和失败重启边界保持一致。
+
+Runtime 的 provider `State` 与 Body/Mini 的 per-paper frontend state 分开保存。Runtime 可以在一份后端 JSON 中按 `paperId` 保存自己的业务实例；Body/Mini 的 `StateJson` 只保存前端/纸片 UI 状态。这样后台和前端不会争抢同一个持久化 writer。
+
+当 provider 声明 Runtime 时，**长期 Paper presentation 由 Runtime 唯一负责**：标题、Header、胶囊通过 `Papers` 按 `paperId` 发布。Body/Mini 负责可见 UI，并通过 `Runtime.Post(...)` 发送用户操作；Runtime 可以通过 `Papers.PostToBody(...)` 向当前存在的 Body 前端推送消息。宿主只保证薄路由和明确失败，不提供业务消息总线、ACK、exactly-once、自动 retry 或状态冲突合并。
 
 ### Web 生命周期边界
 
-**PaperTodo 管 Web Surface，不管 Web App。** 宿主负责 WebView 的创建/销毁、Body/Mini/后台 Runtime surface 是否存在、local origin 与 bridge、renderer 失败后的 surface 恢复以及粗粒度资源预算；插件自己负责 timer、网络连接、任务生命周期、业务重试、Body ↔ PaperRuntime 消息内容和业务状态结构。宿主不提供消息总线、exactly-once、业务事务或状态冲突合并。
+**PaperTodo 管 Web Surface，不管 Web App。** 宿主负责单个 provider Runtime WebView、Body/Mini WebView 的创建/销毁、local origin 与 bridge、renderer 失败后的 surface 恢复以及粗粒度资源预算；插件负责 timer、网络连接、业务任务、内部并发和重试。
 
-可见 Body/Mini 使用浏览器正常的后台调度策略；AppRuntime/PaperRuntime 使用独立的后台 runtime 环境。两个环境不承诺共享 localStorage/cookie 等浏览器存储，跨 surface 协作必须走宿主 bridge。PaperRuntime 冷启动只做有限并发，Web Mini 在离开预览一段时间后可被宿主回收并于下次使用时重建。
+Body/Mini 是 Paper 的前端 surface，可以被隐藏、重建或回收；Web Mini 在离开预览一段时间后可由宿主释放并在下次使用时重建。Web Runtime 是 provider 的唯一后台 surface，不随某张 Paper 的 UI 生命周期创建第二份后台 WebView。
 
-声明 `paperRuntime` 后，**PaperRuntime 是该 Paper 插件持久 state 的唯一 writer**。Body/Mini 可以消费宿主广播的 state snapshot，并通过 `runtime.post(...)` 向 PaperRuntime 发送业务消息，但不能直接 `saveState()` 覆盖持久状态。反向 `body.post(...)` 同样只是薄的有序消息发送边界：目标尚未 ready 时宿主可短暂排队，无法接受或队列达到上限时调用明确失败；如何重试、去重或解释消息由插件自己决定。
+可见前端与后台 Runtime 不依赖共享 localStorage/cookie 作为业务协议；跨 surface 协作走 Runtime/Papers bridge。`commitRequested` 仍只是前端 best-effort 生命周期通知，可靠状态应在业务变化时及时保存。
 
-`commitRequested` 只是 best-effort 生命周期通知，Dispose 不等待 JavaScript ACK。需要可靠保存的业务状态必须在状态变化时立即调用 `saveState()`，不能依赖退出前最后一次 flush。
-
-PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini/runtime 等文件的安装、删除或修改统一在下次启动 PaperTodo 时重新发现并生效，避免同时维护 Web 热替换和 Native CLR 已加载版本两套运行规则。
+PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini/runtime 等文件的安装、删除或修改统一在下次启动 PaperTodo 时重新发现并生效。
 
 ## 4. 状态与持久化架构
 
@@ -127,7 +130,7 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 | --- | --- | --- | --- |
 | 核心应用与纸片状态 | `data.json` + `data.backup.json` | `StateStore` | 保持可迁移、可恢复的结构化业务状态 |
 | Note 图片二进制 | `note-assets.lmdb` | `NoteImageStore` / `LmdbImageDatabase` | 大体积二进制与 JSON 分离，独立做引用/容量管理 |
-| 插件 settings / per-paper state | `plugins/data/*.json` | `PaperBodyPluginDataStore` | 插件生命周期与核心状态解耦，独立迁移和恢复 |
+| 插件 settings / Runtime state / per-paper frontend state | `plugins/data/*.json` | `PaperBodyPluginDataStore` | 插件后端、前端与核心状态解耦，独立迁移和恢复 |
 
 这三类数据不能因为“都属于一张纸”就合并成一个写入协议。核心状态保存、图片回收和插件状态恢复具有不同失败语义，因此保持各自 authority。
 
@@ -198,23 +201,23 @@ transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MC
 Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API，而且 **Paper 与 Global 有不同 owner**：
 
 - **Paper scope**：属于当前 `PaperBodyContext.TopBar` / paper-body session，只作用于承载该 session 的纸片。
-- **Global scope**：属于 `PaperAppRuntimeContext.GlobalTopBar` / provider app runtime。该 runtime 只在 provider 当前至少有一张实体插件 paper 时存在；它不属于其中任意一张具体 paper，也不依赖 paper 的可见性、展开状态或 body session。
+- **Global scope**：属于 `PaperAppRuntimeContext.GlobalTopBar` / provider Runtime。该 runtime 只在 provider 当前至少有一张实体插件 paper 时存在；它不属于其中任意一张具体 paper，也不依赖 paper 的可见性、展开状态或 body session。
 
 当前稳定边界：
 
-- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global app runtime。
-- 运行中 provider 从 0→1 张实体插件 paper 时启动 app runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
+- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。
+- 运行中 provider 从 0→1 张实体插件 paper 时启动 Runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
 - `PaperWindow` 始终拥有顶栏 WPF tree、按钮尺寸/位置、主题、Hover、DPI、字体缩放和 responsive layout；插件只提交 action descriptor。
 - 图标只接受短字符或受限 SVG/WPF Path Data；Path 可以按宿主前景色 Fill 或 Stroke，不接受完整 SVG document、WebView 或任意 WPF tree。
 - Paper scope 只作用于承载当前 session 的纸片；插件只能请求隐藏 `NewTodoPaper` / `NewNotePaper`，关闭、置顶、标题拖动和窗口生命周期不属于插件可删减区域。
-- Global scope 每 provider 只有一个 app-runtime owner；仅安装插件、但没有实体插件 paper 时不产生 Global UI。
-- Global 点击带目标 `PaperId` / `Type` / `BodyProviderId`；需要读取或修改目标正文时仍走 app-runtime Workspace → `PaperCommandService`，Top Bar 不复制业务 mutation。
-- app-runtime Workspace / GlobalTopBar facade 会把 Native 后台线程调用 marshal 回宿主 UI Dispatcher；paper session presentation 仍沿用自己的 WPF Dispatcher 生命周期。
+- Global scope 每 provider 只有一个 Runtime owner；仅安装插件、但没有实体插件 paper 时不产生 Global UI。
+- Global 点击带目标 `PaperId` / `Type` / `BodyProviderId`；需要读取或修改目标正文时仍走 Runtime Workspace → `PaperCommandService`，Top Bar 不复制业务 mutation。
+- Runtime Workspace / GlobalTopBar facade 会把 Native 后台线程调用 marshal 回宿主 UI Dispatcher；paper session presentation 仍沿用自己的 WPF Dispatcher 生命周期。
 - 用户设置决定宿主按钮 base visibility，插件 suppression 是最终 paper-local reconcile 层。
 - Paper session Dispose 自动回收 Paper contribution。Web body 的 Paper contribution 进一步绑定当前 body document generation；导航、renderer failure 或 body document replacement 会撤销旧 Paper contribution。
-- Web Global action 由独立 `runtime.html` app surface 注册。runtime document 导航、renderer failure、最后一张实体插件 paper 消失或 app-runtime Dispose 都会撤销 Global contribution；Web Mini 不拥有 Top Bar 注册权。
+- Web Global action 由独立 `runtime.html` app surface 注册。runtime document 导航、renderer failure、最后一张实体插件 paper 消失或 Runtime Dispose 都会撤销 Global contribution；Web Mini 不拥有 Top Bar 注册权。
 
-为什么选择 host-rendered descriptor、Paper/session 与 Global/app-runtime 分域，而不是插件直接拥有顶栏控件或把 Top Bar 塞进 Workspace，见 D-022。
+为什么选择 host-rendered descriptor、Paper/session 与 Global/Runtime 分域，而不是插件直接拥有顶栏控件或把 Top Bar 塞进 Workspace，见 D-022。
 
 ### 5.5 Edge mini
 
@@ -364,7 +367,3 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 - `.github/workflows/`：CI / Release。
 
 根目录保留项目入口和仓库级知识入口：`README`、`CHANGELOG`、`AGENTS.md`、`ARCHITECTURE.md`、`DECISIONS.md`。
-
-## Web Paper Runtime 生命周期
-
-Web 插件把三种生命周期分开：`appRuntime` 是 Provider 级单例；`paperRuntime` 是声明 `backgroundUpdates` 时每张 Paper 独立的后台 WebView；`WebPaperBodySession` 只负责完整纸片 UI。`AppController` 以真实 `PaperData` / `paperId` 为 PaperRuntime authority，因此隐藏纸片即使没有 `PaperWindow` 也继续拥有自己的后台实例。PaperRuntime 从创建起固定挂在后台宿主，不跨 HWND；Body 的折叠、失败、reload、重建以及 Window 是否存在都不会销毁它。删除 Paper、切换 Provider 或应用退出才结束对应 PaperRuntime。

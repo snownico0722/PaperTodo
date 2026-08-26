@@ -52,7 +52,6 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
         private readonly DispatcherTimer _timer;
         private ClockSettings _settings;
         private PaperBodyTheme _theme;
-        private bool _runtimeVisible;
         private string _lastDisplayTitle = "";
         private string _lastCapsuleSignature = "";
         private string _capsuleTitle = "时钟";
@@ -384,7 +383,7 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
                 ? TimeSpan.FromMilliseconds(250)
                 : TimeSpan.FromSeconds(1);
             ApplyTheme(_theme);
-            if (_runtimeVisible && !_timer.IsEnabled)
+            if (!_timer.IsEnabled)
             {
                 _timer.Start();
             }
@@ -669,16 +668,8 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
 
         public void OnVisibilityChanged(bool visible)
         {
-            _runtimeVisible = visible;
-            if (visible)
-            {
-                if (!_timer.IsEnabled) _timer.Start();
-                Refresh();
-            }
-            else
-            {
-                _timer.Stop();
-            }
+            if (!_timer.IsEnabled) _timer.Start();
+            if (visible) Refresh();
         }
 
         public void OnPresentationChanged(bool visible) =>

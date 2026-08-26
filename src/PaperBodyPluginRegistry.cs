@@ -31,7 +31,6 @@ internal sealed record PaperBodyPluginDescriptor(
     PaperBodyPluginKind Kind,
     PaperBodyCapabilities Capabilities,
     IReadOnlySet<string> Permissions,
-    PaperBodyRuntimeRequirements RuntimeRequirements,
     string PluginDirectory,
     string SourcePath,
     string Fingerprint,
@@ -56,7 +55,6 @@ internal sealed class PaperBodyPluginManifest
     public string ApiVersion { get; set; } = "";
     public int StateVersion { get; set; } = 1;
     public int MaxPaperInstances { get; set; } = 1;
-    public string[] Requires { get; set; } = [];
     public string[] Permissions { get; set; } = [];
     public string Entry { get; set; } = "index.html";
     public string MiniEntry { get; set; } = "";
@@ -191,7 +189,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             PaperBodyPluginKind.BuiltIn,
             PaperBodyCapabilities.TextZoom | PaperBodyCapabilities.NoteLinks,
             PaperTodoPermissionNames.None,
-            PaperBodyRuntimeRequirements.None,
             AppContext.BaseDirectory,
             typeof(PaperWindow).Assembly.Location,
             "builtin");
@@ -358,15 +355,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             }
         }
 
-        var requiresBackgroundUpdates =
-            (ParseRuntimeRequirements(manifest.Requires) &
-             PaperBodyRuntimeRequirements.BackgroundUpdates) != 0;
-        if (kind == PaperBodyPluginKind.Web && requiresBackgroundUpdates)
-        {
-            throw new InvalidDataException(
-                "Web plugins use the single provider appRuntime/runtime backend; " +
-                "requires: backgroundUpdates is not supported.");
-        }
 
         return manifest;
     }
@@ -431,7 +419,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             PaperBodyPluginKind.Web,
             ParseCapabilities(manifest.Capabilities),
             ParsePermissions(manifest.Permissions),
-            ParseRuntimeRequirements(manifest.Requires),
             manifest.DirectoryPath,
             manifestPath,
             fingerprint,
@@ -463,7 +450,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             PaperBodyPluginKind.Native,
             ParseCapabilities(manifest.Capabilities),
             ParsePermissions(manifest.Permissions),
-            ParseRuntimeRequirements(manifest.Requires),
             directory,
             manifestPath,
             DiscoveryFingerprint(manifestPath, manifest.EntryPath),
@@ -606,23 +592,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         return result;
     }
 
-    private static PaperBodyRuntimeRequirements ParseRuntimeRequirements(
-        IEnumerable<string>? values)
-    {
-        var result = PaperBodyRuntimeRequirements.None;
-        foreach (var value in values ?? [])
-        {
-            result |= value?.Trim() switch
-            {
-                "backgroundUpdates" =>
-                    PaperBodyRuntimeRequirements.BackgroundUpdates,
-                null or "" => PaperBodyRuntimeRequirements.None,
-                _ => throw new InvalidDataException(
-                    $"Unknown required plugin feature '{value}'.")
-            };
-        }
-        return result;
-    }
 
     private static string NormalizeApiVersion(string? value)
     {

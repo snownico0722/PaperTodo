@@ -114,7 +114,6 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
         private PaperBodyTheme _theme;
         private IReadOnlyList<TodoOption> _todoOptions = [];
         private bool _suppressTodoSelection;
-        private bool _runtimeVisible;
         private bool _disposed;
         private bool _compactLayout;
         private string _lastDisplayTitle = "";
@@ -333,6 +332,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                     SaveState();
                 }
             }
+            StartTimer();
         }
 
         public FrameworkElement View => _root;
@@ -1304,7 +1304,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
 
         private void StartTimer()
         {
-            if (_runtimeVisible && _state.IsRunning && !_timer.IsEnabled)
+            if (_state.IsRunning && !_timer.IsEnabled)
             {
                 _timer.Start();
             }
@@ -1336,11 +1336,10 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
 
         public void OnVisibilityChanged(bool visible)
         {
-            _runtimeVisible = visible;
             if (!visible)
             {
-                _timer.Stop();
                 _hostRefreshTimer.Stop();
+                StartTimer();
                 return;
             }
 

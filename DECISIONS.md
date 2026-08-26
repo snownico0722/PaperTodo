@@ -36,6 +36,7 @@
 | D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/app-runtime 分域 | Accepted | 插件 / UI ownership |
 | D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
+| D-024 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 
 ## 维护规则
 
@@ -832,3 +833,47 @@ Web provider 声明 `backgroundUpdates` 时必须同时声明 `paperRuntime` 入
 - 不用 provider 级 `appRuntime` 模拟多 Paper 实例；每张 Paper 的后台实例必须独立。
 - 不让 PaperRuntime lifetime 依赖 `PaperWindow` 是否已经构造。
 - 不用保存 JSON 假装能恢复 WebSocket、Promise、timer 或 JS 闭包的连续 runtime。
+
+
+---
+
+## D-024 — 插件后台统一为 provider 单 Runtime
+
+**Status:** Accepted
+
+### Context
+
+协议 2.0 一度同时存在 provider `appRuntime` 与 Web `paperRuntime`：前者一插件一个，后者一张 Paper 一个隐藏 WebView。随着后台状态、消息、失败重试和 presentation ownership 都开始在两层重复，插件作者需要先选择“哪个后台”，宿主也需要维护两套生命周期。
+
+### Decision
+
+PaperTodo 只提供 **一个 provider Runtime 后端**。一个插件无论有一张还是多张 Paper，宿主最多创建一个 Runtime；多张 Paper 是 Runtime 中以 `paperId` 区分的逻辑实例。Body 和 Mini 是前端 surface，不承担后台保活职责。
+
+Web 与 Native 使用相同语义：Web Runtime 是一个隐藏 WebView/JS 页面，Native Runtime 是一个长期 C# 对象。插件如果需要多个 Worker、线程、子进程、浏览器实例或隔离域，由插件在自己的 Runtime 内创建和管理，宿主不提供第二种 per-Paper backend 协议。
+
+Runtime 使用 provider-scoped state；Body/Mini 继续使用 per-paper frontend state。声明 Runtime 后，长期 Paper 标题/Header/胶囊由 Runtime 按 `paperId` 唯一发布，避免后台与前端双写。
+
+### Why
+
+- 常见插件后台天然是一插件一个；多实例通常是同一后台管理多个业务对象。
+- 旧 Web per-Paper Runtime 并没有提供独立浏览器 Profile/Cookie 隔离，却为每张 Paper 额外创建 WebView、重试状态和消息桥。
+- 插件数据文件本来就是“一 provider + 多 Paper”的结构，单 Runtime 与持久化模型更一致。
+- 删除宿主的 per-Paper backend 后，Web/Native 的概念和生命周期一致，第三方插件不再需要理解两套后台。
+
+### Rejected / Do not reintroduce
+
+- 不恢复 manifest `paperRuntime` 或宿主管理的 `WebPaperRuntime[paperId]`。
+- 不用 Body/Mini 的可见性作为长期业务后台生命周期。
+- 不为“可能需要隔离”预建第二套后台协议；真实插件需要隔离时自己管理内部 Worker/进程。
+- 不让 Runtime 与 Body/Mini 同时成为同一长期 presentation 的 authority。
+
+### Consequences
+
+一个 provider Runtime 故障会暂时影响该 provider 的所有逻辑 Paper，这是用更小、更明确的宿主模型换取的故障域扩大。需要更细隔离的插件自行在 Runtime 内拆 Worker/进程。PaperTodo 仍负责 Runtime 的 provider 生命周期、薄路由和粗粒度恢复，不升级成通用消息总线或进程编排器。
+
+### Evidence
+
+- `src/AppController.PluginAppRuntime.cs` / `src/PaperAppRuntimePapersApi.cs`。
+- `src/WebPluginAppRuntime.cs`。
+- `PaperTodo.Plugin.Abstractions/PluginRuntimeContracts.cs`。
+- 删除的 `src/WebPaperRuntime.cs` / `src/AppController.WebPaperRuntime.cs`。

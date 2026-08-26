@@ -7,8 +7,5 @@
   "apiVersion": "2.0",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.CloudGenshin.dll",
-  "requires": [
-    "backgroundUpdates"
-  ],
   "capabilities": []
 }
