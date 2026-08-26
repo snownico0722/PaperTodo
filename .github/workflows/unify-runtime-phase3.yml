@@ -1,0 +1,43 @@
+name: Unified runtime phase 3
+
+on:
+  push:
+    branches:
+      - refactor/unified-plugin-runtime
+    paths:
+      - tools/unify_runtime_phase3.py
+      - .github/workflows/unify-runtime-phase3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply phase 3
+        shell: pwsh
+        run: |
+          python tools/unify_runtime_phase3.py
+          git diff --check
+      - name: Build host
+        shell: pwsh
+        run: dotnet build .\PaperTodo.csproj -c Release
+      - name: Build ReviewArchive sample
+        shell: pwsh
+        run: dotnet build .\plugin-samples\PaperTodo.Plugin.ReviewArchive\PaperTodo.Plugin.ReviewArchive.csproj -c Release
+      - name: Commit product changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src PaperTodo.Plugin.Abstractions plugin-samples
+          git commit -m "refactor: make plugin runtimes presentation authority"
+          git push
