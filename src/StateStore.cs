@@ -357,10 +357,6 @@ public sealed class StateStore
         {
             state.Zoom = 1.0;
         }
-        if (!IsFinite(state.DeepCapsuleStartTopMargin))
-        {
-            state.DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
-        }
 
         foreach (var paper in state.Papers)
         {
@@ -528,7 +524,6 @@ public sealed class StateStore
 
         if (!state.UseCapsuleCollapseAll)
         {
-            state.CapsuleCollapseAllActive = false;
         }
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.CapsuleCollapseAllActiveQueues = NormalizeCollapseAllActiveQueues(state.CapsuleCollapseAllActiveQueues);
@@ -545,23 +540,13 @@ public sealed class StateStore
                     state.CapsuleCollapseAllActiveQueues.Remove(key);
                 }
             }
-            if (state.CapsuleCollapseAllActiveQueues.Count > 0)
-            {
-                state.CapsuleCollapseAllActive = true;
-            }
         }
 
         var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
-        state.DeepCapsuleStartTopMargin = keepDeepCapsuleStartTopMargins
-            ? NormalizeDeepCapsuleStartTopMargin(
-                state.DeepCapsuleStartTopMargin,
-                state.DeepCapsuleMonitorDeviceName,
-                DeepCapsuleGapSizes.Value(state.DeepCapsuleGapSize))
-            : EdgeCapsuleLayout.StartTopMargin;
 
         // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
         // done at layout time (monitor set can change between sessions, so we don't over-normalize
-        // here). A null dict (older config) becomes empty => every queue falls back to the global.
+        // here). Missing entries use the built-in layout default.
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
         if (!keepDeepCapsuleStartTopMargins)

@@ -3992,7 +3992,6 @@ public sealed partial class AppController
             State.UseDeepCapsuleMode = false;
             // Preserve the user's "show master capsule" preference. Disabling capsule mode only
             // clears live collapse state; the dependent setting remains checked and disabled.
-            State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();
         }
@@ -4147,7 +4146,6 @@ public sealed partial class AppController
         else if (!State.UseDeepCapsuleMode)
         {
             // Keep the stored master-capsule preference while the docked mode is unavailable.
-            State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();
         }

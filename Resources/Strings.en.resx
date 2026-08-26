@@ -1386,4 +1386,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>Preserve hidden state of linked papers</value>
   </data>
+  <data name="PluginInstanceLimitTitle" xml:space="preserve">
+    <value>Plugin instance limit reached</value>
+  </data>
+  <data name="PluginInstanceLimitMessage" xml:space="preserve">
+    <value>“{0}” allows at most {1} paper instance(s). Delete an existing instance before creating another.</value>
+  </data>
 </root>

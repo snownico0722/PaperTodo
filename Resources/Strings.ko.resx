@@ -1386,4 +1386,10 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>연결된 종이의 숨김 상태 유지</value>
   </data>
+  <data name="PluginInstanceLimitTitle" xml:space="preserve">
+    <value>플러그인 인스턴스 한도</value>
+  </data>
+  <data name="PluginInstanceLimitMessage" xml:space="preserve">
+    <value>“{0}”은(는) 최대 {1}개의 Paper 인스턴스만 허용합니다. 기존 인스턴스를 삭제한 뒤 다시 만드세요.</value>
+  </data>
 </root>

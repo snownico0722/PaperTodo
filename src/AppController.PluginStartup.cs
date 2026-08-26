@@ -156,6 +156,10 @@ public sealed partial class AppController
 
             if (paper == null)
             {
+                if (!CanCreatePluginPaper(descriptor))
+                {
+                    continue;
+                }
                 paper = CreatePaper(PaperTypes.Note, show: false);
                 if (paper == null)
                 {

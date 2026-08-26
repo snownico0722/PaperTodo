@@ -67,6 +67,11 @@ internal sealed partial class PaperBodyPluginRegistry
     {
         manifest.Permissions ??= [];
         NormalizeProtocolFeatures(manifest);
+        if (manifest.MaxPaperInstances < 0)
+        {
+            throw new InvalidDataException(
+                "maxPaperInstances must be 0 (unlimited) or a positive integer.");
+        }
         if (manifest.Permissions.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 1, 3))
         {
             throw new InvalidDataException(

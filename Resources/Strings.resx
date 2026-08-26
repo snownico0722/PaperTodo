@@ -1435,4 +1435,10 @@
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>保留关联纸片的隐藏状态</value>
   </data>
+  <data name="PluginInstanceLimitTitle" xml:space="preserve">
+    <value>插件实例已达上限</value>
+  </data>
+  <data name="PluginInstanceLimitMessage" xml:space="preserve">
+    <value>“{0}”最多允许存在 {1} 张纸片。请先删除已有实例后再创建。</value>
+  </data>
 </root>

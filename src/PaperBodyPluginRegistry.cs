@@ -56,6 +56,7 @@ internal sealed class PaperBodyPluginManifest
     public string Version { get; set; } = "1.0.0";
     public string ApiVersion { get; set; } = "";
     public int StateVersion { get; set; } = 1;
+    public int MaxPaperInstances { get; set; } = 1;
     public string[] Requires { get; set; } = [];
     public string[] Permissions { get; set; } = [];
     public string Entry { get; set; } = "index.html";

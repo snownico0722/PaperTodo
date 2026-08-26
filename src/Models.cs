@@ -446,7 +446,6 @@ public sealed class AppState
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; } = true;
-    public bool CapsuleCollapseAllActive { get; set; }
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();
     public bool ShowDeepCapsuleWhileExpanded { get; set; } = true;
     public bool HideEdgeCapsuleCloseButtonOnHover { get; set; }
@@ -512,11 +511,8 @@ public sealed class AppState
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
     // instead of the docked edge / remembered expanded geometry.
     public bool OpenEdgeCapsuleShortcutAtCursor { get; set; } = true;
-    public double DeepCapsuleStartTopMargin { get; set; } = EdgeCapsuleLayout.StartTopMargin;
-
-    // Per-queue vertical start margin, keyed by "monitorDevice|side". A missing key falls back to
-    // the legacy global DeepCapsuleStartTopMargin, so dragging one queue's master only slides that
-    // queue. Old configs (no per-queue entries) keep behaving exactly as the single global margin.
+    // Per-queue vertical start margin, keyed by "monitorDevice|side". Missing entries use
+    // EdgeCapsuleLayout.StartTopMargin directly; there is no second persisted global authority.
     public Dictionary<string, double> DeepCapsuleQueueStartTopMargins { get; set; } = new();
     public bool RememberDeepCapsuleExpandedPosition { get; set; } = true;
 

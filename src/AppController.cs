@@ -2604,21 +2604,6 @@ public sealed partial class AppController : IDisposable
         return State.CapsuleCollapseAllActiveQueues.TryGetValue(queueKey, out var active) && active;
     }
 
-    private void MigrateLegacyCollapseAllActiveQueues(IEnumerable<string> liveQueueKeys)
-    {
-        var liveKeys = liveQueueKeys.ToList();
-        if (!State.CapsuleCollapseAllActive ||
-            liveKeys.Any(key => State.CapsuleCollapseAllActiveQueues.ContainsKey(key)))
-        {
-            return;
-        }
-
-        foreach (var key in liveKeys)
-        {
-            State.CapsuleCollapseAllActiveQueues[key] = true;
-        }
-        SyncLegacyCollapseAllActiveSummary();
-    }
 
     private void RemoveStaleCollapseAllActiveQueues(IEnumerable<string> liveQueueKeys)
     {
@@ -2646,8 +2631,7 @@ public sealed partial class AppController : IDisposable
         }
         if (changed)
         {
-            SyncLegacyCollapseAllActiveSummary();
-        }
+            }
     }
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
@@ -2679,10 +2663,6 @@ public sealed partial class AppController : IDisposable
         return true;
     }
 
-    private void SyncLegacyCollapseAllActiveSummary()
-    {
-        State.CapsuleCollapseAllActive = State.CapsuleCollapseAllActiveQueues.Count > 0;
-    }
 
     public void ArrangeDeepCapsules(
         bool animate = false,
@@ -2715,7 +2695,6 @@ public sealed partial class AppController : IDisposable
         plan = ApplyEdgeCapsulePreviewLayout(plan);
         var queueKeys = plan.Queues.Select(queue => queue.Key).ToList();
         RemoveStaleCollapseAllActiveQueues(queueKeys);
-        MigrateLegacyCollapseAllActiveQueues(queueKeys);
 
         if (flushInitialPresentations)
         {
@@ -2842,15 +2821,13 @@ public sealed partial class AppController : IDisposable
             _masterCapsules[staleKey].CloseForReal();
             _masterCapsules.Remove(staleKey);
         }
-        SyncLegacyCollapseAllActiveSummary();
     }
 
     private void DestroyAllMasterCapsules()
     {
         // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
-        if (State.CapsuleCollapseAllActive || State.CapsuleCollapseAllActiveQueues.Count > 0)
+        if (State.CapsuleCollapseAllActiveQueues.Count > 0)
         {
-            State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
         }
 
@@ -2885,7 +2862,6 @@ public sealed partial class AppController : IDisposable
         {
             State.CapsuleCollapseAllActiveQueues.Remove(key);
         }
-        SyncLegacyCollapseAllActiveSummary();
         ArrangeDeepCapsules(animate: true);
         SaveNow();
     }
@@ -2896,7 +2872,6 @@ public sealed partial class AppController : IDisposable
 
         if (!State.UseCapsuleCollapseAll)
         {
-            State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
             ResetDeepCapsuleStartTopMargins();
         }
@@ -3586,7 +3561,7 @@ public sealed partial class AppController : IDisposable
         var key = QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
         return State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m)
             ? m
-            : State.DeepCapsuleStartTopMargin;
+            : EdgeCapsuleLayout.StartTopMargin;
     }
 
     // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the
@@ -3595,7 +3570,6 @@ public sealed partial class AppController : IDisposable
     // persist them to data.json). Single chokepoint so no reset path forgets the dict again.
     private void ResetDeepCapsuleStartTopMargins()
     {
-        State.DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
         State.DeepCapsuleQueueStartTopMargins.Clear();
     }
 
@@ -3622,7 +3596,7 @@ public sealed partial class AppController : IDisposable
             slotCount,
             DeepCapsuleGap);
 
-        var current = State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m) ? m : State.DeepCapsuleStartTopMargin;
+        var current = State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m) ? m : EdgeCapsuleLayout.StartTopMargin;
         if (Math.Abs(current - normalized) < 0.01)
         {
             if (commit)

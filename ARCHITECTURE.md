@@ -51,7 +51,7 @@ PaperTodo.exe
         │   └─ EdgeCapsulePresenter + EdgeCapsuleHost
         ├─ MasterCapsuleWindow[queue]
         ├─ EdgeCapsuleDragWindow (process-global pooled host)
-        ├─ tray / hotkeys / reminders / fullscreen / virtual desktop runtime
+        ├─ tray / hotkeys / reminders / fullscreen runtime
         └─ edge queue coordination / preview session / visual transaction /
            DirectComposition proxy lifecycle
 ```
@@ -100,7 +100,7 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 Web 插件使用 WebView2 runtime；脚本胶囊可以启动 PowerShell 子进程。这些进程/运行时只提供对应能力，不成为核心 `AppState` authority。
 
-插件协议以 **2.0** 为新开发目标，同时兼容加载既有 **1.8** 插件。2.0 把 Top Bar 明确拆成两个生命周期：Paper action 属于 paper-body session；Global action 属于显式声明 `appRuntime` 的 provider 级 app runtime。兼容 1.8 不意味着向旧协议开放 2.0 Top Bar。
+插件协议当前只接受 **2.0**；旧 1.8 兼容路径已经删除。2.0 把 Top Bar 明确拆成两个生命周期：Paper action 属于 paper-body session；Global action 属于显式声明 `appRuntime` 的 provider 级 app runtime。
 
 `appRuntime` **不会因为插件仅被安装就启动**。启动流程先处理已启用的 `startupPaper`，让它有机会创建或恢复真实插件 paper；该阶段完成后，宿主以最终 `State.Papers` 为 authority，只有至少存在一张 `Note` paper 且其 `BodyProviderId` 指向该 provider 时，才启动这个 provider 的 app runtime。运行中同样按实体 paper 集合 reconcile：0→1 启动，1→0 释放；隐藏、折叠、没有展开正文或没有 live body session 都不改变 runtime lifetime。Native provider 只有声明 `appRuntime` 且满足实体 paper 条件时才会因此加载 DLL；未声明的 Native provider 继续保持按 paper 使用时懒加载。Web app runtime 使用与 body 同一插件 origin 下的 `runtime.html`，但获得独立 app-scope bridge，不获得 Paper/Body/Mini presentation API。
 

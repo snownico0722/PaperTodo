@@ -694,41 +694,11 @@ public sealed partial class PaperWindow
         IReadOnlyCollection<PaperItem> changedItems,
         bool done)
     {
-        if (!_controller.State.AutoMoveCompletedTodosToBottom ||
-            changedItems.Count == 0)
-        {
-            return false;
-        }
-
-        var changedIds = changedItems
-            .Select(item => item.Id)
-            .ToHashSet(StringComparer.Ordinal);
-        var before = OrderedItems().ToList();
-        var moved = before
-            .Where(item => changedIds.Contains(item.Id))
-            .ToList();
-        var remaining = before
-            .Where(item => !changedIds.Contains(item.Id))
-            .ToList();
-
-        var insertIndex = done
-            ? remaining.Count
-            : remaining.FindIndex(item => item.Done);
-        if (insertIndex < 0)
-        {
-            insertIndex = remaining.Count;
-        }
-        remaining.InsertRange(insertIndex, moved);
-
-        if (before.Select(item => item.Id)
-            .SequenceEqual(remaining.Select(item => item.Id)))
-        {
-            return false;
-        }
-
-        _paper.Items = remaining;
-        TodoRules.NormalizeOrders(_paper.Items);
-        return true;
+        _ = changedItems;
+        _ = done;
+        return TodoRules.ApplyCompletedOrdering(
+            _paper.Items,
+            _controller.State.AutoMoveCompletedTodosToBottom);
     }
 
     private void ApplyDoneToSelectedTodos(bool done)

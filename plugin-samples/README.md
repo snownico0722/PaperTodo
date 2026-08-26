@@ -238,6 +238,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `version` | 插件版本，必须能解析为 `Version` |
 | `apiVersion` | 必须为 `"2.0"` |
 | `stateVersion` | per-paper state 版本，至少为 1 |
+| `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
 | `miniEntry` | 可选，仅 Web；专属 Edge Mini 页面 |
 | `miniSize` | 可选，仅与 `miniEntry` 一起使用；Mini 首选尺寸 |
@@ -252,6 +253,8 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `settingCategories` | 可选；仅 `advancedSettings: true` 时有效，声明完整设置页分类及可选 `left` / `right` 列位置 |
 | `settings` | 可选；由宿主绘制和保存的全局设置；高级模式下设置项可写 `category` |
 | `startupPaper` | 可选；按用户设置自动创建/恢复一张插件纸片 |
+
+`maxPaperInstances` 是 Paper/provider 级产品约束，对 Native 与 Web 一致生效；插件更新后如果已有实例超过新上限，宿主不会删除现有 Paper，只会阻止继续新增。
 
 未知 `requires` 或 `permissions` 会拒绝加载。`appRuntime` 是 provider 生命周期声明，不会变成 `PaperBodyCapabilities` 的 body flag。
 
