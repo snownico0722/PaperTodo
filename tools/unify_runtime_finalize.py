@@ -57,8 +57,7 @@ if needle not in text:
 text = text.replace(needle, addition, 1)
 policy.write_text(text, encoding='utf-8')
 
-# Clean a few remaining current-doc terms that would suggest two backend kinds. Historical D-024 is
-# intentionally allowed to name the retired API while explaining why it must not return.
+# Clean current documentation so it teaches one backend model only.
 for path in [
     Path('ARCHITECTURE.md'),
     Path('plugin-samples/README.md'),
@@ -68,6 +67,10 @@ for path in [
     text = text.replace('app runtime', 'Runtime')
     text = text.replace('App Runtime', 'Runtime')
     text = text.replace('app-runtime', 'Runtime')
+    text = text.replace('不需要后台运行却声明 `backgroundUpdates`；',
+                        '不需要后台运行却声明 `appRuntime`；')
+    text = text.replace('只声明实际需要的 permissions / `backgroundUpdates` / `appRuntime`；',
+                        '只声明实际需要的 permissions / `appRuntime`；')
     path.write_text(text, encoding='utf-8')
 
 print('unified runtime final convergence complete')
