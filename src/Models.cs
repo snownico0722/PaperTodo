@@ -509,7 +509,6 @@ public sealed class AppState
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
     public bool DistinguishNumpadShortcutDigits { get; set; }
     public bool PreserveLinkedPaperHiddenStateInVisibilityShortcuts { get; set; } = true;
-    public bool SmartShowHideVisibilityShortcuts { get; set; } = true;
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
     // instead of the docked edge / remembered expanded geometry.
     public bool OpenEdgeCapsuleShortcutAtCursor { get; set; } = true;

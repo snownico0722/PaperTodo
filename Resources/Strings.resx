@@ -1435,7 +1435,4 @@
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>保留关联纸片的隐藏状态</value>
   </data>
-  <data name="ShortcutSmartShowHideVisibilityToggle" xml:space="preserve">
-    <value>显示 / 隐藏快捷键智能切换</value>
-  </data>
 </root>

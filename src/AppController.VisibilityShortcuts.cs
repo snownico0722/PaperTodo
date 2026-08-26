@@ -26,14 +26,12 @@ public sealed partial class AppController
 
     private void ExecuteVisibilityShortcut(StartupCommandKind commandKind)
     {
-        var anyShown = State.Papers.Any(IsPaperShown);
         var effectiveKind = commandKind;
-
-        if (commandKind == StartupCommandKind.Toggle ||
-            (State.SmartShowHideVisibilityShortcuts &&
-             commandKind is StartupCommandKind.Show or StartupCommandKind.Hide))
+        if (commandKind == StartupCommandKind.Toggle)
         {
-            effectiveKind = anyShown ? StartupCommandKind.Hide : StartupCommandKind.Show;
+            effectiveKind = State.Papers.Any(IsPaperShown)
+                ? StartupCommandKind.Hide
+                : StartupCommandKind.Show;
         }
 
         _executingVisibilityShortcutCommand = true;
@@ -87,7 +85,8 @@ public sealed partial class AppController
     {
         if (!State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts ||
             !State.EnableTodoPaperLinks ||
-            !State.HideLinkedPapersFromCapsules)
+            !State.HideLinkedPapersFromCapsules ||
+            _visibilityShortcutVisibleLinkedPaperIds == null)
         {
             ShowAllPapers();
             return;
@@ -95,8 +94,7 @@ public sealed partial class AppController
 
         // A shortcut hide records only the linked papers that were actually visible. Papers that
         // were already hidden stay hidden, while ordinary papers retain Show All's existing semantics.
-        var linkedPapersToRestore = _visibilityShortcutVisibleLinkedPaperIds ??
-            new HashSet<string>(StringComparer.Ordinal);
+        var linkedPapersToRestore = _visibilityShortcutVisibleLinkedPaperIds;
         var papersToShow = State.Papers
             .Where(paper =>
                 !IsLinkedPaperProtectedFromVisibilityShortcutRestore(paper) ||
@@ -130,10 +128,4 @@ public sealed partial class AppController
         MarkDirty();
     }
 
-    private void ToggleSmartShowHideVisibilityShortcuts()
-    {
-        State.SmartShowHideVisibilityShortcuts =
-            !State.SmartShowHideVisibilityShortcuts;
-        MarkDirty();
-    }
 }

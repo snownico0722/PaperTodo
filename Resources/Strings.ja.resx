@@ -1386,7 +1386,4 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="ShortcutPreserveLinkedPaperHiddenState" xml:space="preserve">
     <value>関連付けた紙片の非表示状態を保持</value>
   </data>
-  <data name="ShortcutSmartShowHideVisibilityToggle" xml:space="preserve">
-    <value>表示 / 非表示ショートカットをスマート切替</value>
-  </data>
 </root>
