@@ -6,6 +6,7 @@ on:
       - cleanup/plugin-contract-and-samples
     paths:
       - tools/apply_plugin_cleanup_14567.py
+      - tools/fix_plugin_cleanup_14567.py
       - .github/workflows/plugin-cleanup-14567.yml
 
 permissions:
@@ -28,7 +29,9 @@ jobs:
 
       - name: Apply scoped cleanup
         shell: pwsh
-        run: python tools/apply_plugin_cleanup_14567.py
+        run: |
+          python tools/apply_plugin_cleanup_14567.py
+          python tools/fix_plugin_cleanup_14567.py
 
       - name: Diff check
         shell: pwsh
@@ -69,7 +72,7 @@ jobs:
           }
 
           $registry = Get-Content .\src\PaperBodyPluginRegistry.cs -Raw
-          foreach ($forbidden in @('public void Reload(', 'LastChangedProviderIds', 'ChangedProviderIds(', 'PluginsNativeChangedRestart', 'PluginsNativeRemovedRestart', 'RestartRequired')) {
+          foreach ($forbidden in @('public void Reload(', 'LastChangedProviderIds', 'ChangedProviderIds(', 'PluginsNativeChangedRestart', 'PluginsNativeRemovedRestart', 'RestartRequired', '_lastChangedProviderIds')) {
             if ($registry -match [regex]::Escape($forbidden)) { throw "Retired plugin reload path remains: $forbidden" }
           }
           if ((Get-Content .\src\PaperWindow.PluginBodies.cs -Raw) -match 'RefreshPaperBodyProviderAvailability') {
@@ -106,6 +109,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add PaperTodo.Plugin.Abstractions plugin-samples plugins src Resources
           git commit -m "refactor: simplify plugin ownership and native contract"
-          git rm tools/apply_plugin_cleanup_14567.py .github/workflows/plugin-cleanup-14567.yml
+          git rm tools/apply_plugin_cleanup_14567.py tools/fix_plugin_cleanup_14567.py .github/workflows/plugin-cleanup-14567.yml
           git commit -m "chore: remove plugin cleanup validation"
           git push
