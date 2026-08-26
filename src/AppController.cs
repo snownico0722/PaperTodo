@@ -2054,6 +2054,7 @@ public sealed partial class AppController : IDisposable
         NotifyTodoReminderCollectionChanged();
 
         ClearTodoLinksToPaper(paper.Id);
+        ClearBacklogSourcesToPaper(paper.Id);
 
         if (State.Papers.Count == 0)
         {
@@ -2100,6 +2101,166 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshCapsuleEligibilityForLinkedPapers();
+    }
+
+    /// <summary>
+    /// 纸片被删除时，清理全局「待办篮子」里指向该纸的条目来源引用：
+    /// 来源纸片已不存在，提取时不再默认回到它（由调用方决定退回哪张纸）。
+    /// </summary>
+    internal void ClearBacklogSourcesToPaper(string paperId)
+    {
+        if (State.BacklogItems == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < State.BacklogItems.Count; i++)
+        {
+            var item = State.BacklogItems[i];
+            if (item.BacklogSourcePaperId is null)
+            {
+                continue;
+            }
+
+            // 还原为可空来源；RestoreFromBacklog 会顺带清 BacklogAt，这里只清来源引用。
+            if (string.Equals(item.BacklogSourcePaperId, paperId, StringComparison.Ordinal))
+            {
+                item.ClearBacklogSource();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 把一条待办从来源纸片移入全局「待办篮子」。调用方负责先从 <see cref="PaperData.Items"/>
+    /// 移除并重建 UI；这里负责加入篮子、记录来源和时间，并立即保存。
+    /// </summary>
+    internal void MoveTodoItemToBacklog(string sourcePaperId, PaperItem item)
+    {
+        State.BacklogItems ??= new List<PaperItem>();
+        item.MoveToBacklog(sourcePaperId, DateTimeOffset.Now);
+        State.BacklogItems.Add(item);
+        MarkDirty();
+        NotifyTodoReminderCollectionChanged();
+        SaveNow();
+        RefreshAllTodoBacklogSections();
+    }
+
+    /// <summary>
+    /// 从全局「待办篮子」移除条目（彻底删除）。
+    /// </summary>
+    internal void DeleteBacklogItem(string backlogItemId)
+    {
+        State.BacklogItems ??= new List<PaperItem>();
+        State.BacklogItems.RemoveAll(i => i.Id == backlogItemId);
+        MarkDirty();
+        SaveNow();
+        RefreshAllTodoBacklogSections();
+    }
+
+    /// <summary>
+    /// 把一条篮子条目提取到某张目标待办纸的列表末尾。
+    /// </summary>
+    internal void ExtractBacklogItemToPaper(string backlogItemId, string targetPaperId)
+    {
+        State.BacklogItems ??= new List<PaperItem>();
+        var item = State.BacklogItems.FirstOrDefault(i => i.Id == backlogItemId);
+        if (item == null)
+        {
+            return;
+        }
+
+        var target = State.Papers.FirstOrDefault(p => p.Id == targetPaperId && p.Type == PaperTypes.Todo);
+        if (target == null)
+        {
+            return;
+        }
+
+        State.BacklogItems.Remove(item);
+        item.RestoreFromBacklog();
+        target.Items ??= new List<PaperItem>();
+        target.Items.Add(item);
+        NormalizeTodoOrders(target);
+
+        MarkDirty();
+        NotifyTodoReminderCollectionChanged();
+        SaveNow();
+
+        if (_windows.TryGetValue(targetPaperId, out var window))
+        {
+            window.RefreshTodoRowsForExternalChange();
+        }
+
+        RefreshAllTodoBacklogSections();
+    }
+
+    private static void NormalizeTodoOrders(PaperData paper)
+    {
+        if (paper.Items == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < paper.Items.Count; i++)
+        {
+            paper.Items[i].Order = i;
+        }
+    }
+
+    /// <summary>
+    /// 全局「待办篮子」内容变化后，刷新所有待办纸底部的篮子折叠区。
+    /// </summary>
+    internal void RefreshAllTodoBacklogSections()
+    {
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshTodoBacklogSection();
+        }
+
+        RefreshTrayMenu();
+    }
+
+    /// <summary>
+    /// 篮子内的条目（最新进的在最前），供各 UI 区域读取。
+    /// </summary>
+    internal IReadOnlyList<PaperItem> OrderedBacklogItems()
+    {
+        if (State.BacklogItems == null || State.BacklogItems.Count == 0)
+        {
+            return Array.Empty<PaperItem>();
+        }
+
+        return State.BacklogItems
+            .OrderByDescending(i => i.BacklogAt ?? DateTimeOffset.MinValue)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 篮子内条目的来源纸片标题（不存在或已删除时返回空字符串）。
+    /// </summary>
+    internal string BacklogSourcePaperTitle(string? sourcePaperId)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePaperId))
+        {
+            return "";
+        }
+
+        var source = State.Papers.FirstOrDefault(p => p.Id == sourcePaperId);
+        return source == null ? "" : PaperDisplayTitle(source);
+    }
+
+    /// <summary>
+    /// 供「篮子 → 回到列表」菜单使用：列出所有待办纸（id + 显示标题）。
+    /// 没有可用目标纸片时返回 false。
+    /// </summary>
+    internal bool TryGetTodoTargets(out List<(string PaperId, string Title)> targets)
+    {
+        targets = [];
+        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+        {
+            targets.Add((paper.Id, PaperDisplayTitle(paper)));
+        }
+
+        return targets.Count > 0;
     }
 
     public void RefreshCapsuleEligibilityForLinkedPapers()

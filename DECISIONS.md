@@ -808,3 +808,42 @@ V3 Lite 收敛后，`EdgeCapsuleQueueCompositionProxy.PrewarmLightweight` 仍会
 - `src/EdgeCapsuleQueueCompositionProxy.LightPrewarm.cs`：Lightweight Prewarm 本体。
 - D-007～D-010：bounded live host、WPF owns shape、DComp translation-only 与 handoff authority 的长期架构边界。
 - PR #137：4.0 slim-down review 再次暴露了该实测结论此前没有进入长期知识 owner。
+
+---
+
+## D-024 — 全局「待办篮子」：晚点说暂存跨纸片共用
+
+**Status:** Accepted
+
+### Context
+
+用户希望在待办之外有一个「暂存区」：某些事项暂时不想处理、也不该出现在当前列表里，但还不值得删除。DSH 侧一个独立插件的同名功能（`dsh-daily-sticky` 的「待办篮子 / 晚点说」）被要求迁移到 PaperTodo 这个独立 Windows 应用。这引入了「跨纸片共享的暂存数据」这一此前不存在的概念，与 D-001 的「桌面纸片」交互边界有张力：数据不挂在哪一张纸上，而是挂在应用级。
+
+### Decision
+
+新增 **全局待办篮子**，数据挂在 `AppState.BacklogItems`（`data.json` 顶层数组），由 `StateStore` 统一版本化持久化：
+
+- 每条仍是 `PaperItem`，复用同一数据模型；用 `BacklogSourcePaperId` 记录来源纸片（可空）、`BacklogAt` 记录进篮子时间（用于排序，最新靠上）。
+- 「晚点说」把一条未完成任务从某张待办纸的 `Items` 移入全局篮子（来源纸片被删除时，篮子里条目的来源引用被清空，条目本身保留）。
+- 每张待办纸底部有可折叠的「篮子 (N)」区，显示同一个全局篮子；可从任意待办纸把篮子条目「回到列表」到任意目标待办纸，或彻底删除。
+- 提取、删除、晚点说都通过 `AppController` 的统一业务入口（保存 + 全窗口刷新），不复制第二套写入路径。
+
+### Why
+
+用户明确选择了全局单篮子而非每张纸各自的篮子。纸片是交互边界，但跨纸片的「暂存」语义天然属于应用级：它不依赖某张具体纸的存活，来源纸被删后仍然可提取到别的纸。挂在 `AppState` 而不是某张 `PaperData` 上，避免篮子随纸片生命周期（删除/折叠/隐藏）来回迁移。这与 D-001 不相矛盾——D-001 约束的是「交互与对象边界默认以 paper 组合」，而本决策是明确的新产品能力，按 D-001 的规则用新 decision 更新边界。
+
+### Consequences / Boundaries
+
+- `data.json` 是核心数据协议的语义不变：`BacklogItems` 作为顶层可选数组，旧数据文件无该字段时自动为空，不做迁移重写。
+- 篮子条目不参与任何纸片的撤销/重做栈；「回到列表」和「晚点说」是显式的移动动作，不进入 undo。
+- 已完成条目不能「晚点说」（只有未完成能进篮子）；篮子内条目进入时不携带完成状态（进篮子即按未完成处理）。
+- 「回到列表」的目标是任意待办纸的列表末尾；不引入按日、顺延或统计语义（PaperTodo 无日期概念）。
+- 插件/MCP 的外部写入边界（D-021）目前不扩展本轮需求：篮子操作先只作为宿主 GUI 能力，后续如需要可经 `PaperCommandService` 暴露。
+
+### Evidence
+
+- `src/Models.cs`：`AppState.BacklogItems` + `PaperItem.BacklogSourcePaperId/BacklogAt` 与 `MoveToBacklog/RestoreFromBacklog/ClearBacklogSource`。
+- `src/StateStore.cs`：`PrepareForSave` / `NormalizeAfterLoad` 对 `BacklogItems` 的 null 修复与条目清理。
+- `src/AppController.cs`：`MoveTodoItemToBacklog` / `ExtractBacklogItemToPaper` / `DeleteBacklogItem` / `RefreshAllTodoBacklogSections` / `ClearBacklogSourcesToPaper`。
+- `src/PaperWindow.Todo.cs`：行尾「晚点说」按钮、右键菜单项、底部「篮子 (N)」折叠区与提取菜单。
+- `src/Strings.cs`：多语言文案键。

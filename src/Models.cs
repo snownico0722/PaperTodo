@@ -400,6 +400,14 @@ public sealed class AppState
 {
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
+
+    /// <summary>
+    /// 全局「待办篮子」：被「晚点说」从某张待办纸暂存到这里的条目，跨纸片共用。
+    /// 条目仍是 <see cref="PaperItem"/>，用 <see cref="PaperItem.BacklogSourcePaperId"/>
+    /// 记住来源纸片，用 <see cref="PaperItem.BacklogAt"/> 记录进篮子时间（最新靠上）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public List<PaperItem> BacklogItems { get; set; } = new();
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
@@ -621,6 +629,50 @@ public sealed class PaperItem
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool ReminderTriggered { get; set; }
+
+    /// <summary>
+    /// 仅当条目在全局「待办篮子」时有效：记录它从哪张纸片被「晚点说」暂存。
+    /// 提取回列表时用它确定默认目标纸片。
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName("backlogSourcePaperId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BacklogSourcePaperId { get; private set; }
+
+    /// <summary>
+    /// 仅当条目在全局「待办篮子」时有效：进入篮子的时间，用于篮子内排序（最新靠上）。
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName("backlogAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? BacklogAt { get; private set; }
+
+    /// <summary>
+    /// 把条目放入全局「待办篮子」，记录来源纸片和进入时间。
+    /// </summary>
+    public void MoveToBacklog(string sourcePaperId, DateTimeOffset at)
+    {
+        Done = false;
+        BacklogSourcePaperId = NormalizeQuickLaunchValue(sourcePaperId);
+        BacklogAt = at;
+    }
+
+    /// <summary>
+    /// 从篮子提取回列表时清理篮子专用字段。
+    /// </summary>
+    public void RestoreFromBacklog()
+    {
+        BacklogSourcePaperId = null;
+        BacklogAt = null;
+    }
+
+    /// <summary>
+    /// 来源纸片被删除时，仅清除来源引用（条目仍留在篮子里）。
+    /// </summary>
+    public void ClearBacklogSource()
+    {
+        BacklogSourcePaperId = null;
+    }
 
     public void LinkPaper(string? paperId)
     {

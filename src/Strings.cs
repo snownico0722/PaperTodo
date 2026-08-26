@@ -65,7 +65,19 @@ public static class Strings
             ["TodoReminderSoundBeep"] = ["蜂鸣", "Beep", "ビープ", "비프"],
             ["TodoReminderSoundExclamation"] = ["感叹", "Exclamation", "警告", "경고"],
             ["TodoReminderSoundHand"] = ["严重警告", "Critical stop", "重大な警告", "심각한 경고"],
-            ["TodoReminderSoundQuestion"] = ["询问", "Question", "質問", "질문"]
+            ["TodoReminderSoundQuestion"] = ["询问", "Question", "質問", "질문"],
+            ["TodoBacklogButton"] = ["晚点说", "Later", "あとで", "나중에"],
+            ["TodoBacklogToolTip"] = ["晚点说：把这条待办暂存进全局待办篮子，不删除，随时可提取回列表。", "Say it later: park this todo in the global backlog basket without deleting it. You can pull it back anytime.", "あとで：このToDoを削除せずにグローバル保留ボックスへ退避します。いつでもリストへ戻せます。", "나중에: 이 할 일을 삭제하지 않고 전역 보류함에 보관합니다. 언제든 목록으로 되돌릴 수 있습니다."],
+            ["MenuTodoItemToBacklog"] = ["晚点说（进待办篮子）", "Say it later (backlog)", "あとで（保留ボックスへ）", "나중에 하기(보류함으로)"],
+            ["TodoBacklogCount"] = ["篮子 ({0})", "Basket ({0})", "かご ({0})", "바구니 ({0})"],
+            ["TodoBacklogHeader"] = ["待办篮子", "Backlog basket", "保留ボックス", "보류함"],
+            ["TodoBacklogEmpty"] = ["没有晚点说的任务。", "Nothing parked here yet.", "保留した項目はありません。", "보관한 항목이 없습니다."],
+            ["TodoBacklogSource"] = ["来自：{0}", "From: {0}", "元：{0}", "출처: {0}"],
+            ["TodoBacklogExtract"] = ["回到列表", "Back to list", "リストへ戻す", "목록으로"],
+            ["TodoBacklogExtractToolTip"] = ["提取这条到所选待办纸的列表末尾。", "Extract this item to the end of the chosen todo paper.", "選択したToDo紙の末尾へ戻します。", "선택한 할 일 메모의 끝으로 되돌립니다."],
+            ["TodoBacklogDelete"] = ["删除", "Delete", "削除", "삭제"],
+            ["TodoBacklogDeleteToolTip"] = ["彻底从篮子删除这条。", "Permanently remove this item from the basket.", "この項目をかごから完全に削除します。", "이 항목을 보류함에서 영구 삭제합니다."],
+            ["TodoBacklogNoTarget"] = ["没有可提取的待办纸", "No todo paper available", "対象のToDo紙がありません", "추출할 할 일 메모가 없습니다"]
         };
 
     public static string Get(string key)

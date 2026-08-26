@@ -40,6 +40,316 @@ public sealed partial class PaperWindow
         };
     }
 
+    /// <summary>
+    /// 「晚点说」行尾悬停按钮：把未完成任务暂存进全局待办篮子（不删除）。
+    /// </summary>
+    private Border BuildTodoBacklogButton(PaperItem item)
+    {
+        var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
+        var label = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogButton"),
+            Foreground = WeakTextBrush,
+            Opacity = 0.55,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = Math.Max(
+                AppTypography.Scale(9.5),
+                metrics.TextFontSize - AppTypography.Scale(3)),
+            FontWeight = FontWeights.Normal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap
+        };
+        var button = new Border
+        {
+            MinWidth = Math.Max(AppTypography.Scale(34), metrics.CheckColumnWidth * 1.9),
+            MinHeight = metrics.RowMinHeight,
+            Margin = new Thickness(1, 0, 1, 0),
+            Padding = new Thickness(4, 0, 4, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            CornerRadius = new CornerRadius(RadiusControl),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = label,
+            ToolTip = Strings.Get("TodoBacklogToolTip")
+        };
+
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = HoverBrush;
+            label.Opacity = 1.0;
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            label.Opacity = 0.55;
+        };
+        button.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            label.Opacity = 0.66;
+            e.Handled = true;
+        };
+        button.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            label.Opacity = 1.0;
+            MoveToBacklog(item);
+            e.Handled = true;
+        };
+        return button;
+    }
+
+    /// <summary>
+    /// 重建本纸片底部的「待办篮子（N）」折叠区内容。任意纸片的篮子内容变化都会触发所有
+    /// 待办纸刷新，保持全局篮子一致。
+    /// </summary>
+    internal void RefreshTodoBacklogSection()
+    {
+        if (_paper.Type != PaperTypes.Todo || _backlogSection == null || _backlogSectionContent == null)
+        {
+            return;
+        }
+
+        var items = _controller.OrderedBacklogItems();
+        if (_backlogSectionCountText != null)
+        {
+            _backlogSectionCountText.Text = Strings.Format("TodoBacklogCount", items.Count);
+        }
+        _backlogSectionContent.Children.Clear();
+
+        if (items.Count == 0)
+        {
+            var empty = new TextBlock
+            {
+                Text = Strings.Get("TodoBacklogEmpty"),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(11),
+                Margin = new Thickness(2, 4, 2, 4),
+                TextWrapping = TextWrapping.Wrap
+            };
+            _backlogSectionContent.Children.Add(empty);
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            var row = BuildBacklogItemRow(item);
+            _backlogSectionContent.Children.Add(row);
+        }
+    }
+
+    private Border BuildBacklogSection()
+    {
+        var section = new Border
+        {
+            Margin = new Thickness(0, 8, 0, 2),
+            Padding = new Thickness(6, 4, 6, 4),
+            CornerRadius = new CornerRadius(RadiusControl),
+            BorderThickness = new Thickness(1),
+            BorderBrush = AppendBorderBrush,
+            Background = AppendBgBrush,
+            MinHeight = AppTypography.Scale(24)
+        };
+        _backlogSection = section;
+
+        var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var badge = new Border
+        {
+            Margin = new Thickness(0, 0, 5, 0),
+            Padding = new Thickness(5, 1, 5, 1),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _backlogSectionCountText = new TextBlock
+        {
+            Text = Strings.Format("TodoBacklogCount", 0),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.SemiBold
+        };
+        badge.Child = _backlogSectionCountText;
+        headerRow.Children.Add(badge);
+
+        var headerLabel = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogHeader"),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(11),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        headerRow.Children.Add(headerLabel);
+
+        var caret = new TextBlock
+        {
+            Text = _backlogSectionExpanded ? "▾" : "▸",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(9),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        headerRow.Children.Add(caret);
+
+        var contentHost = new Border
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = _backlogSectionExpanded ? Visibility.Visible : Visibility.Collapsed
+        };
+        _backlogSectionContent = new StackPanel();
+        contentHost.Child = _backlogSectionContent;
+
+        var root = new StackPanel();
+        var headerButton = new Border
+        {
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = headerRow
+        };
+        headerButton.MouseLeftButtonUp += (_, _) =>
+        {
+            _backlogSectionExpanded = !_backlogSectionExpanded;
+            caret.Text = _backlogSectionExpanded ? "▾" : "▸";
+            contentHost.Visibility = _backlogSectionExpanded
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        };
+        root.Children.Add(headerButton);
+        root.Children.Add(contentHost);
+
+        section.Child = root;
+        RefreshTodoBacklogSection();
+        return section;
+    }
+
+    private Border BuildBacklogItemRow(PaperItem item)
+    {
+        var sourceTitle = _controller.BacklogSourcePaperTitle(item.BacklogSourcePaperId);
+        var row = new Border
+        {
+            Margin = new Thickness(0, 2, 0, 2),
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent
+        };
+
+        var textColumn = new StackPanel();
+        var text = new TextBlock
+        {
+            Text = item.Text,
+            Foreground = TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: true, bold: false),
+            FontSize = AppTypography.Scale(12),
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = AppTypography.Scale(48)
+        };
+        textColumn.Children.Add(text);
+        if (!string.IsNullOrWhiteSpace(sourceTitle))
+        {
+            var source = new TextBlock
+            {
+                Text = Strings.Format("TodoBacklogSource", sourceTitle),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(9.5),
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            textColumn.Children.Add(source);
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var backButton = new Border
+        {
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("TodoBacklogExtractToolTip")
+        };
+        var backLabel = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogExtract"),
+            Foreground = TextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        backButton.Child = backLabel;
+        backButton.MouseLeftButtonUp += (_, _) => OpenBacklogExtractMenu(item, backButton);
+        buttons.Children.Add(backButton);
+
+        var deleteButton = new Border
+        {
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("TodoBacklogDeleteToolTip")
+        };
+        var deleteLabel = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogDelete"),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        deleteButton.Child = deleteLabel;
+        deleteButton.MouseLeftButtonUp += (_, _) => _controller.DeleteBacklogItem(item.Id);
+        buttons.Children.Add(deleteButton);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(textColumn, 0);
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(textColumn);
+        grid.Children.Add(buttons);
+        row.Child = grid;
+        return row;
+    }
+
+    private void OpenBacklogExtractMenu(PaperItem item, FrameworkElement anchor)
+    {
+        var menu = CreateContextMenu();
+        if (_controller.TryGetTodoTargets(out var targets) && targets.Count > 0)
+        {
+            foreach (var (paperId, title) in targets)
+            {
+                var itemTarget = MenuItem(
+                    title,
+                    (_, _) => _controller.ExtractBacklogItemToPaper(item.Id, paperId));
+                menu.Items.Add(itemTarget);
+            }
+        }
+        else
+        {
+            var disabled = MenuItem(Strings.Get("TodoBacklogNoTarget"), (_, _) => { });
+            disabled.IsEnabled = false;
+            menu.Items.Add(disabled);
+        }
+
+        menu.Closed += (_, _) => UpdateBacklogRowBackgrounds();
+        menu.PlacementTarget = anchor;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void UpdateBacklogRowBackgrounds()
+    {
+        // 简单恢复：重建内容区会刷新背景；这里不做额外操作，留给重建路径。
+    }
+
 
     public void RefreshTodoRowsForExternalChange()
     {
@@ -95,6 +405,7 @@ public sealed partial class PaperWindow
         }
 
         _todoPanel.Children.Add(BuildTodoAppendArea());
+        _todoPanel.Children.Add(BuildBacklogSection());
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -187,9 +498,36 @@ public sealed partial class PaperWindow
             }
         }
 
+        // 篮子折叠区始终保持在添加区之后、面板末尾。
+        EnsureBacklogSectionAtEnd();
+
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
             FocusTodoItem(targetFocus, focusPlacement);
+        }
+    }
+
+    private void EnsureBacklogSectionAtEnd()
+    {
+        var section = _backlogSection;
+        var panel = _todoPanel;
+        if (panel == null)
+        {
+            return;
+        }
+
+        if (section == null || !panel.Children.Contains(section))
+        {
+            panel.Children.Add(BuildBacklogSection());
+            return;
+        }
+
+        var last = panel.Children.Count - 1;
+        var index = panel.Children.IndexOf(section);
+        if (index != last)
+        {
+            panel.Children.RemoveAt(index);
+            panel.Children.Add(section);
         }
     }
 
@@ -494,6 +832,8 @@ public sealed partial class PaperWindow
         });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // 「晚点说」悬停按钮列：只对未完成条目显示，把它暂存到全局待办篮子。
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (showTodoReminderControl)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -703,6 +1043,13 @@ public sealed partial class PaperWindow
                 reminderMenu = BuildTodoReminderContextMenuItem(item.Id);
                 reminderMenu.IsEnabled = !item.Done;
                 itemMenu.Items.Add(reminderMenu);
+                itemMenu.Items.Add(MenuSeparator());
+            }
+            if (!item.Done)
+            {
+                var backlogMenu = MenuItem(Strings.Get("MenuTodoItemToBacklog"), (_, _) => MoveToBacklog(item));
+                backlogMenu.IsEnabled = !item.Done;
+                itemMenu.Items.Add(backlogMenu);
                 itemMenu.Items.Add(MenuSeparator());
             }
             itemMenu.Items.Add(MenuItem(Strings.Get("MenuDeleteItem"), (_, _) => RemoveItem(item)));
@@ -976,6 +1323,16 @@ public sealed partial class PaperWindow
             grid.Children.Add(linkButton);
         }
 
+        // 「晚点说」悬停按钮：把未完成任务暂存进全局待办篮子（不删除，可随时提取回来）。
+        var showBacklogButton = !item.Done;
+        if (showBacklogButton)
+        {
+            var backlogButton = BuildTodoBacklogButton(item);
+            AttachItemContextMenu(backlogButton);
+            Grid.SetColumn(backlogButton, 3);
+            grid.Children.Add(backlogButton);
+        }
+
         if (showTodoReminderControl)
         {
             var reminderHost = new Grid();
@@ -996,7 +1353,7 @@ public sealed partial class PaperWindow
                 reminderHost.Children.Add(reminderCountdown);
             }
 
-            Grid.SetColumn(reminderHost, 3);
+            Grid.SetColumn(reminderHost, 4);
             grid.Children.Add(reminderHost);
         }
 
@@ -1049,7 +1406,7 @@ public sealed partial class PaperWindow
         };
         AttachItemContextMenu(handle);
 
-        Grid.SetColumn(handle, showTodoReminderControl ? 4 : 3);
+        Grid.SetColumn(handle, showTodoReminderControl ? 5 : 4);
         grid.Children.Add(handle);
 
         row.Child = grid;
@@ -1376,6 +1733,29 @@ public sealed partial class PaperWindow
         {
             ReconcileTodoRows(focusItemId: fallbackFocus);
         }
+    }
+
+    private void MoveToBacklog(PaperItem item)
+    {
+        if (_paper.Type != PaperTypes.Todo || item.Done)
+        {
+            return;
+        }
+
+        // 晚点说 = 暂存到全局篮子（不是删除），不参与本纸片的撤销栈：
+        // 需要时用篮子里的「回到列表」提取回任意待办纸即可。
+        _paper.Items.RemoveAll(i => i.Id == item.Id);
+        if (_paper.Items.Count == 0)
+        {
+            _paper.Items.Add(new PaperItem());
+        }
+
+        _controller.MoveTodoItemToBacklog(_paper.Id, item);
+
+        NormalizeTodoItems();
+        NormalizeOrders();
+        ReconcileTodoRows();
+        _controller.NotifyTodoReminderCollectionChanged();
     }
 
     private void ClearDoneItems()

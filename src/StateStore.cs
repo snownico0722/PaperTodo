@@ -347,6 +347,9 @@ public sealed class StateStore
         state.Papers ??= new List<PaperData>();
         RemoveNullEntriesInPlace(state.Papers);
 
+        state.BacklogItems ??= new List<PaperItem>();
+        RemoveNullEntriesInPlace(state.BacklogItems);
+
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.GlobalHotkeys ??= new Dictionary<string, string>();
         state.GlobalHotkeyEnabled ??= new Dictionary<string, bool>();
@@ -436,6 +439,9 @@ public sealed class StateStore
         }
 
         RemoveNullEntriesInPlace(state.Papers);
+
+        state.BacklogItems ??= new List<PaperItem>();
+        RemoveNullEntriesInPlace(state.BacklogItems);
 
         NormalizeGlobalState(state);
         NormalizePapers(state);
