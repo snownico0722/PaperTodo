@@ -1,0 +1,47 @@
+name: Convergence Todo final
+
+on:
+  push:
+    branches:
+      - cleanup/runtime-and-todo-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Apply Todo completion fix
+        run: python .\tools\fix_external_todo_completion_policy.py
+      - name: Diff check
+        run: git diff --check
+      - name: Restore
+        run: dotnet restore .\PaperTodo.csproj
+      - name: Build Release
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+      - name: Protocol checks
+        run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+      - name: Commit validated fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          Remove-Item .\tools\fix_external_todo_completion_policy.py
+          Remove-Item .\.github\workflows\convergence-todo-final.yml
+          git add -A
+          git commit -m "fix: apply Todo completion policy to external inserts"
+          git push
