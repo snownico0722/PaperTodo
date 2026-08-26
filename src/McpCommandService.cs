@@ -184,11 +184,14 @@ internal sealed class McpCommandService
         var hasLinkedPaper = parameters.TryGetProperty(
             "linked_paper_id",
             out var linkedPaperValue);
-        if (!hasText && !hasDone && !hasOrder && !hasLinkedPaper)
+        var hasLinkedPaperIds = parameters.TryGetProperty(
+            "linked_note_ids",
+            out var linkedNoteIdsValue);
+        if (!hasText && !hasDone && !hasOrder && !hasLinkedPaper && !hasLinkedPaperIds)
         {
             throw new McpApiException(
                 "invalid_params",
-                "Provide text, done, order and/or linked_paper_id.");
+                "Provide text, done, order, linked_paper_id and/or linked_note_ids.");
         }
 
         string? text = null;
@@ -238,6 +241,21 @@ internal sealed class McpCommandService
                 : RequiredStringValue(linkedPaperValue, "linked_paper_id", 64);
         }
 
+        IReadOnlyList<string>? linkedPaperIds = null;
+        if (hasLinkedPaperIds)
+        {
+            RequireFullWrites();
+            if (linkedNoteIdsValue.ValueKind != JsonValueKind.Array)
+            {
+                throw new McpApiException(
+                    "invalid_params",
+                    "linked_note_ids must be an array.");
+            }
+            linkedPaperIds = linkedNoteIdsValue.EnumerateArray()
+                .Select(element => RequiredStringValue(element, "linked_note_ids", 64))
+                .ToList();
+        }
+
         _commands.UpdateTodo(
             new UpdateTodoRequest
             {
@@ -246,8 +264,9 @@ internal sealed class McpCommandService
                 Text = hasText ? text : null,
                 Done = done,
                 Order = order,
-                UpdateLinkedPaper = hasLinkedPaper,
-                LinkedPaperId = linkedPaperId
+                UpdateLinkedPaper = hasLinkedPaper || hasLinkedPaperIds,
+                LinkedPaperId = linkedPaperId,
+                LinkedPaperIds = linkedPaperIds
             },
             PaperOperationContext.Mcp());
         return TodoDetails(RequireTodo(paperId, todoId));
@@ -407,6 +426,7 @@ internal sealed class McpCommandService
         done = item.Done,
         order = item.Order,
         linked_paper_id = item.LinkedPaperId,
+        linked_note_ids = item.LinkedPaperIds,
         linked_path = item.LinkedPath,
         reminder_at = item.ReminderAt?.ToString("O", CultureInfo.InvariantCulture)
     };
@@ -478,6 +498,19 @@ internal sealed class McpCommandService
                 PaperWindow.TodoTextMaxLength);
             var done = OptionalBoolean(value, "done") ?? false;
             var linkedPaperId = OptionalString(value, "linked_paper_id", 64);
+            IReadOnlyList<string>? linkedPaperIds = null;
+            if (value.TryGetProperty("linked_note_ids", out var linkedNoteIdsValue))
+            {
+                if (linkedNoteIdsValue.ValueKind != JsonValueKind.Array)
+                {
+                    throw new McpApiException(
+                        "invalid_params",
+                        "linked_note_ids must be an array.");
+                }
+                linkedPaperIds = linkedNoteIdsValue.EnumerateArray()
+                    .Select(element => RequiredStringValue(element, "linked_note_ids", 64))
+                    .ToList();
+            }
             DateTimeOffset? reminderAt = null;
             if (value.TryGetProperty("reminder_at", out var reminderValue) &&
                 reminderValue.ValueKind != JsonValueKind.Null)
@@ -492,6 +525,7 @@ internal sealed class McpCommandService
                 Text = text,
                 Done = done,
                 LinkedPaperId = linkedPaperId,
+                LinkedPaperIds = linkedPaperIds,
                 ReminderAt = reminderAt
             });
         }
@@ -504,6 +538,7 @@ internal sealed class McpCommandService
         if (inputs.Any(input =>
                 input.Done ||
                 input.ReminderAt.HasValue ||
+                input.LinkedPaperIds is { Count: > 0 } ||
                 !string.IsNullOrWhiteSpace(input.LinkedPaperId)))
         {
             RequireFullWrites();

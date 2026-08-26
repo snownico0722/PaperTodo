@@ -77,6 +77,14 @@ public sealed partial class PaperWindow : Window
     private Border? _dropIndicatorLine;
     private Border? _appendArea;
     private Border? _linkedPaperDropRow;
+    private bool _backlogSectionExpanded;
+    private Border? _backlogSection;
+    private StackPanel? _backlogSectionContent;
+    private TextBlock? _backlogSectionCountText;
+    // 多关联折叠区：每个待办条目一个，按 itemId 索引。
+    private readonly Dictionary<string, bool> _linkedPapersSectionExpanded = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Border> _todoLinkedPapersSections = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Action> _linkedPapersSectionRebuilders = new(StringComparer.Ordinal);
     private bool _closeForReal;
     // Tracks only the hidden owner that PaperTodo applies for window-switcher hiding.
     private bool _windowSwitcherHiddenOwnerApplied;

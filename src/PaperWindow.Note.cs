@@ -228,6 +228,30 @@ public sealed partial class PaperWindow
         var presenterGeneration = BeginNotePresenterSession();
         var host = new Grid();
 
+        // 创建时间条：仅在笔记带 CreatedAt（本功能起新建的笔记）时显示；旧笔记不补造。
+        var createdAt = _paper.CreatedAt;
+        if (createdAt.HasValue)
+        {
+            host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var dateStrip = new TextBlock
+            {
+                Text = createdAt.Value.LocalDateTime.ToString("yyyy-MM-dd"),
+                Foreground = WeakTextBrush,
+                Opacity = 0.72,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(9.5),
+                Margin = new Thickness(
+                    NoteTypography.ContentPadding.Left,
+                    Math.Max(NoteTypography.ContentPadding.Top - 2, 2),
+                    NoteTypography.ContentPadding.Right,
+                    0),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            Grid.SetRow(dateStrip, 0);
+            host.Children.Add(dateStrip);
+        }
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
         _noteBox = new MarkdownTextBox
         {
             MaxLength = NoteTextMaxLength,
@@ -262,6 +286,7 @@ public sealed partial class PaperWindow
         // New MarkdownTextBox defaults to rendering images; re-apply hide/collapse/minimize policy.
         SyncNoteImagePresentationState();
 
+        Grid.SetRow(box, createdAt.HasValue ? 1 : 0);
         host.Children.Add(box);
         var isPreviewing = false;
         var isEnteringEditorFromPreview = false;

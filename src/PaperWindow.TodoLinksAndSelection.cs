@@ -1061,7 +1061,7 @@ public sealed partial class PaperWindow
     private void LinkPathToTodo(PaperItem item, string path, bool isDirectory)
     {
         if (string.Equals(item.LinkedPath, path, StringComparison.OrdinalIgnoreCase) &&
-            string.IsNullOrWhiteSpace(item.LinkedPaperId) &&
+            item.LinkedPaperIds is not { Count: > 0 } &&
             item.LinkedPathIsDirectory == isDirectory)
         {
             return;

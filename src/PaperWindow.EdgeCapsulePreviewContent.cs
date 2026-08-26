@@ -81,13 +81,14 @@ public sealed partial class PaperWindow
             return false;
         }
 
+        var firstLinkedPaperId = item.LinkedPaperIdsInternal.FirstOrDefault();
         if (_controller.State.EnableTodoPaperLinks &&
-            _controller.TryGetLinkedPaperTitle(item.LinkedPaperId, out _))
+            _controller.TryGetLinkedPaperTitle(firstLinkedPaperId, out _))
         {
-            if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId) ||
-                !_controller.RunLinkedScriptCapsule(item.LinkedPaperId))
+            if (!_controller.ShouldRunLinkedScriptCapsule(firstLinkedPaperId) ||
+                !_controller.RunLinkedScriptCapsule(firstLinkedPaperId))
             {
-                _controller.OpenLinkedPaper(item.LinkedPaperId, this);
+                _controller.OpenLinkedPaper(firstLinkedPaperId, this);
             }
             return true;
         }

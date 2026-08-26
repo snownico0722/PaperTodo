@@ -40,6 +40,498 @@ public sealed partial class PaperWindow
         };
     }
 
+    /// <summary>
+    /// 「晚点说」行尾悬停按钮：把未完成任务暂存进全局待办篮子（不删除）。
+    /// </summary>
+    private Border BuildTodoBacklogButton(PaperItem item)
+    {
+        var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
+        var label = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogButton"),
+            Foreground = WeakTextBrush,
+            Opacity = 0.55,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = Math.Max(
+                AppTypography.Scale(9.5),
+                metrics.TextFontSize - AppTypography.Scale(3)),
+            FontWeight = FontWeights.Normal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap
+        };
+        var button = new Border
+        {
+            MinWidth = Math.Max(AppTypography.Scale(34), metrics.CheckColumnWidth * 1.9),
+            MinHeight = metrics.RowMinHeight,
+            Margin = new Thickness(1, 0, 1, 0),
+            Padding = new Thickness(4, 0, 4, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            CornerRadius = new CornerRadius(RadiusControl),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = label,
+            ToolTip = Strings.Get("TodoBacklogToolTip")
+        };
+
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = HoverBrush;
+            label.Opacity = 1.0;
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            label.Opacity = 0.55;
+        };
+        button.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            label.Opacity = 0.66;
+            e.Handled = true;
+        };
+        button.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            label.Opacity = 1.0;
+            MoveToBacklog(item);
+            e.Handled = true;
+        };
+        return button;
+    }
+
+    /// <summary>
+    /// 重建本纸片底部的「待办篮子（N）」折叠区内容。任意纸片的篮子内容变化都会触发所有
+    /// 待办纸刷新，保持全局篮子一致。
+    /// </summary>
+    internal void RefreshTodoBacklogSection()
+    {
+        if (_paper.Type != PaperTypes.Todo || _backlogSection == null || _backlogSectionContent == null)
+        {
+            return;
+        }
+
+        var items = _controller.OrderedBacklogItems();
+        if (_backlogSectionCountText != null)
+        {
+            _backlogSectionCountText.Text = Strings.Format("TodoBacklogCount", items.Count);
+        }
+        _backlogSectionContent.Children.Clear();
+
+        if (items.Count == 0)
+        {
+            var empty = new TextBlock
+            {
+                Text = Strings.Get("TodoBacklogEmpty"),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(11),
+                Margin = new Thickness(2, 4, 2, 4),
+                TextWrapping = TextWrapping.Wrap
+            };
+            _backlogSectionContent.Children.Add(empty);
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            var row = BuildBacklogItemRow(item);
+            _backlogSectionContent.Children.Add(row);
+        }
+    }
+
+    private Border BuildBacklogSection()
+    {
+        var section = new Border
+        {
+            Margin = new Thickness(0, 8, 0, 2),
+            Padding = new Thickness(6, 4, 6, 4),
+            CornerRadius = new CornerRadius(RadiusControl),
+            BorderThickness = new Thickness(1),
+            BorderBrush = AppendBorderBrush,
+            Background = AppendBgBrush,
+            MinHeight = AppTypography.Scale(24)
+        };
+        _backlogSection = section;
+
+        var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var badge = new Border
+        {
+            Margin = new Thickness(0, 0, 5, 0),
+            Padding = new Thickness(5, 1, 5, 1),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _backlogSectionCountText = new TextBlock
+        {
+            Text = Strings.Format("TodoBacklogCount", 0),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.SemiBold
+        };
+        badge.Child = _backlogSectionCountText;
+        headerRow.Children.Add(badge);
+
+        var caret = new TextBlock
+        {
+            Text = _backlogSectionExpanded ? "▾" : "▸",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(9),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        headerRow.Children.Add(caret);
+
+        var contentHost = new Border
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = _backlogSectionExpanded ? Visibility.Visible : Visibility.Collapsed
+        };
+        _backlogSectionContent = new StackPanel();
+        contentHost.Child = _backlogSectionContent;
+
+        var root = new StackPanel();
+        var headerButton = new Border
+        {
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = headerRow
+        };
+        headerButton.MouseLeftButtonUp += (_, _) =>
+        {
+            _backlogSectionExpanded = !_backlogSectionExpanded;
+            caret.Text = _backlogSectionExpanded ? "▾" : "▸";
+            contentHost.Visibility = _backlogSectionExpanded
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        };
+        root.Children.Add(headerButton);
+        root.Children.Add(contentHost);
+
+        section.Child = root;
+        RefreshTodoBacklogSection();
+        return section;
+    }
+
+    private Border BuildBacklogItemRow(PaperItem item)
+    {
+        var sourceTitle = _controller.BacklogSourcePaperTitle(item.BacklogSourcePaperId);
+        var row = new Border
+        {
+            Margin = new Thickness(0, 2, 0, 2),
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent
+        };
+
+        var textColumn = new StackPanel();
+        var text = new TextBlock
+        {
+            Text = item.Text,
+            Foreground = TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: true, bold: false),
+            FontSize = AppTypography.Scale(12),
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = AppTypography.Scale(48)
+        };
+        textColumn.Children.Add(text);
+        if (!string.IsNullOrWhiteSpace(sourceTitle))
+        {
+            var source = new TextBlock
+            {
+                Text = Strings.Format("TodoBacklogSource", sourceTitle),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(9.5),
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            textColumn.Children.Add(source);
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var backButton = new Border
+        {
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("TodoBacklogExtractToolTip")
+        };
+        var backLabel = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogExtract"),
+            Foreground = TextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        backButton.Child = backLabel;
+        backButton.MouseLeftButtonUp += (_, _) => OpenBacklogExtractMenu(item, backButton);
+        buttons.Children.Add(backButton);
+
+        var deleteButton = new Border
+        {
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("TodoBacklogDeleteToolTip")
+        };
+        var deleteLabel = new TextBlock
+        {
+            Text = Strings.Get("TodoBacklogDelete"),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        deleteButton.Child = deleteLabel;
+        deleteButton.MouseLeftButtonUp += (_, _) => _controller.DeleteBacklogItem(item.Id);
+        buttons.Children.Add(deleteButton);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(textColumn, 0);
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(textColumn);
+        grid.Children.Add(buttons);
+        row.Child = grid;
+        return row;
+    }
+
+    private void OpenBacklogExtractMenu(PaperItem item, FrameworkElement anchor)
+    {
+        var menu = CreateContextMenu();
+        if (_controller.TryGetTodoTargets(out var targets) && targets.Count > 0)
+        {
+            foreach (var (paperId, title) in targets)
+            {
+                var itemTarget = MenuItem(
+                    title,
+                    (_, _) => _controller.ExtractBacklogItemToPaper(item.Id, paperId));
+                menu.Items.Add(itemTarget);
+            }
+        }
+        else
+        {
+            var disabled = MenuItem(Strings.Get("TodoBacklogNoTarget"), (_, _) => { });
+            disabled.IsEnabled = false;
+            menu.Items.Add(disabled);
+        }
+
+        menu.Closed += (_, _) => UpdateBacklogRowBackgrounds();
+        menu.PlacementTarget = anchor;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void UpdateBacklogRowBackgrounds()
+    {
+        // 简单恢复：重建内容区会刷新背景；这里不做额外操作，留给重建路径。
+    }
+
+    /// <summary>
+    /// 多关联（一条待办关联 >=2 篇笔记）时的可折叠区块：「关联 N 篇」+ 每篇笔记的
+    /// 标题/日期行（点击打开、✕ 解除单篇关联）。镜像 <see cref="BuildBacklogSection"/> 结构。
+    /// </summary>
+    private Border BuildTodoLinkedPapersSection(
+        PaperItem item,
+        IReadOnlyList<string> linkedPaperIds,
+        TodoVisualMetrics metrics)
+    {
+        var expanded = _linkedPapersSectionExpanded.TryGetValue(item.Id, out var current) && current;
+
+        var section = new Border
+        {
+            Margin = new Thickness(metrics.CheckColumnWidth + AppTypography.Scale(4), 4, 0, 0),
+            Padding = new Thickness(6, 4, 6, 4),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            BorderThickness = new Thickness(1),
+            BorderBrush = AppendBorderBrush,
+            Background = AppendBgBrush,
+            MinHeight = AppTypography.Scale(22)
+        };
+        _todoLinkedPapersSections[item.Id] = section;
+
+        var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var badge = new Border
+        {
+            Margin = new Thickness(0, 0, 5, 0),
+            Padding = new Thickness(5, 1, 5, 1),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = HoverBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var countText = new TextBlock
+        {
+            Text = Strings.Format("TodoLinkedPapersCount", linkedPaperIds.Count),
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.SemiBold
+        };
+        badge.Child = countText;
+        headerRow.Children.Add(badge);
+
+        var caret = new TextBlock
+        {
+            Text = expanded ? "▾" : "▸",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(9),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        headerRow.Children.Add(caret);
+
+        var contentHost = new Border
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = expanded ? Visibility.Visible : Visibility.Collapsed
+        };
+        var content = new StackPanel();
+        contentHost.Child = content;
+
+        var root = new StackPanel();
+        var headerButton = new Border
+        {
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = headerRow
+        };
+        headerButton.MouseLeftButtonUp += (_, _) =>
+        {
+            var nextExpanded = !(_linkedPapersSectionExpanded.TryGetValue(item.Id, out var e) && e);
+            _linkedPapersSectionExpanded[item.Id] = nextExpanded;
+            caret.Text = nextExpanded ? "▾" : "▸";
+            contentHost.Visibility = nextExpanded
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        };
+        root.Children.Add(headerButton);
+        root.Children.Add(contentHost);
+        section.Child = root;
+
+        // 标题变化时整块重建（重取标题与日期），并注册到按 paperId 分组的刷新器。
+        void RebuildContent()
+        {
+            content.Children.Clear();
+            foreach (var paperId in item.LinkedPaperIdsInternal)
+            {
+                content.Children.Add(BuildLinkedPaperEntryRow(item, paperId));
+            }
+        }
+
+        _linkedPapersSectionRebuilders[item.Id] = RebuildContent;
+        foreach (var paperId in linkedPaperIds)
+        {
+            RegisterLinkedPaperTitleRefresher(item.Id, paperId, RebuildContent);
+        }
+        RebuildContent();
+        return section;
+    }
+
+    /// <summary>
+    /// 「关联 N 篇」区块里的单行：笔记标题 + 创建日期（如有），点击整行打开，
+    /// 右侧 ✕ 解除这一篇的关联。
+    /// </summary>
+    private Border BuildLinkedPaperEntryRow(PaperItem item, string paperId)
+    {
+        var title = _controller.TryGetLinkedPaperTitle(paperId, out var resolvedTitle)
+            ? resolvedTitle
+            : paperId;
+        var createdAt = _controller.GetPaperCreatedAt(paperId);
+
+        var textColumn = new StackPanel();
+        var titleText = new TextBlock
+        {
+            Text = title,
+            Foreground = TextBrush,
+            FontFamily = AppTypography.FontFamilyFor(content: true, bold: false),
+            FontSize = AppTypography.Scale(12),
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = AppTypography.Scale(48)
+        };
+        textColumn.Children.Add(titleText);
+        if (createdAt.HasValue)
+        {
+            var dateText = new TextBlock
+            {
+                Text = createdAt.Value.LocalDateTime.ToString("yyyy-MM-dd"),
+                Foreground = WeakTextBrush,
+                Opacity = 0.7,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(9.5),
+                Margin = new Thickness(0, 1, 0, 0)
+            };
+            textColumn.Children.Add(dateText);
+        }
+
+        var unlinkButton = new Border
+        {
+            Margin = new Thickness(4, 0, 0, 0),
+            Padding = new Thickness(6, 2, 6, 2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Strings.Get("ToolTipUnlinkLinkedPaper")
+        };
+        var unlinkLabel = new TextBlock
+        {
+            Text = "✕",
+            Foreground = WeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(10.5)
+        };
+        unlinkButton.Child = unlinkLabel;
+        unlinkButton.MouseLeftButtonUp += (_, e) =>
+        {
+            UnlinkPaperFromTodoItem(item, paperId);
+            e.Handled = true;
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(textColumn, 0);
+        Grid.SetColumn(unlinkButton, 1);
+        grid.Children.Add(textColumn);
+        grid.Children.Add(unlinkButton);
+
+        var row = new Border
+        {
+            Margin = new Thickness(0, 2, 0, 2),
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(RadiusSmall),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            ToolTip = Strings.Format("ToolTipOpenLinkedPaper", title),
+            Child = grid
+        };
+        row.MouseLeftButtonUp += (_, e) =>
+        {
+            if (e.Handled)
+            {
+                return;
+            }
+
+            _controller.OpenLinkedPaper(paperId, this);
+            e.Handled = true;
+        };
+        return row;
+    }
+
 
     public void RefreshTodoRowsForExternalChange()
     {
@@ -85,6 +577,8 @@ public sealed partial class PaperWindow
         _todoReminderCountdowns.Clear();
         _todoRows.Clear();
         _linkedPaperTitleRefreshers.Clear();
+        _todoLinkedPapersSections.Clear();
+        _linkedPapersSectionRebuilders.Clear();
         _linkedPaperDropRow = null;
 
         foreach (var item in OrderedItems())
@@ -95,6 +589,7 @@ public sealed partial class PaperWindow
         }
 
         _todoPanel.Children.Add(BuildTodoAppendArea());
+        _todoPanel.Children.Add(BuildBacklogSection());
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -187,9 +682,36 @@ public sealed partial class PaperWindow
             }
         }
 
+        // 篮子折叠区始终保持在添加区之后、面板末尾。
+        EnsureBacklogSectionAtEnd();
+
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
             FocusTodoItem(targetFocus, focusPlacement);
+        }
+    }
+
+    private void EnsureBacklogSectionAtEnd()
+    {
+        var section = _backlogSection;
+        var panel = _todoPanel;
+        if (panel == null)
+        {
+            return;
+        }
+
+        if (section == null || !panel.Children.Contains(section))
+        {
+            panel.Children.Add(BuildBacklogSection());
+            return;
+        }
+
+        var last = panel.Children.Count - 1;
+        var index = panel.Children.IndexOf(section);
+        if (index != last)
+        {
+            panel.Children.RemoveAt(index);
+            panel.Children.Add(section);
         }
     }
 
@@ -202,6 +724,8 @@ public sealed partial class PaperWindow
 
         _todoEditors.Remove(itemId);
         _todoReminderCountdowns.Remove(itemId);
+        _todoLinkedPapersSections.Remove(itemId);
+        _linkedPapersSectionRebuilders.Remove(itemId);
         foreach (var paperId in _linkedPaperTitleRefreshers.Keys.ToList())
         {
             var refreshers = _linkedPaperTitleRefreshers[paperId];
@@ -439,10 +963,14 @@ public sealed partial class PaperWindow
         var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
         var linkedPaperTitle = "";
         var hasLinkedPath = !string.IsNullOrWhiteSpace(item.LinkedPath);
-        var hasLinkedPaper = _controller.State.EnableTodoPaperLinks &&
-            _controller.TryGetLinkedPaperTitle(item.LinkedPaperId, out linkedPaperTitle);
+        var linkedPaperIds = _controller.State.EnableTodoPaperLinks
+            ? item.LinkedPaperIdsInternal.ToList()
+            : [];
+        var hasLinkedPaper = linkedPaperIds.Count > 0 &&
+            _controller.TryGetLinkedPaperTitle(linkedPaperIds[0], out linkedPaperTitle);
+        var isMultiLink = linkedPaperIds.Count >= 2;
         var runLinkedScriptOnClick = hasLinkedPaper &&
-            _controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId);
+            _controller.ShouldRunLinkedScriptCapsule(linkedPaperIds[0]);
         var todoRemindersEnabled =
             _controller.State.ExperimentalTodoReminders;
         var showTodoReminderButton = todoRemindersEnabled &&
@@ -493,6 +1021,8 @@ public sealed partial class PaperWindow
             Width = new GridLength(metrics.CheckColumnWidth)
         });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // 「晚点说」悬停按钮列：只对未完成条目显示，把它暂存到全局待办篮子。
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (showTodoReminderControl)
         {
@@ -681,8 +1211,12 @@ public sealed partial class PaperWindow
                 var openMenuText = runLinkedScriptOnClick
                     ? Strings.Format("MenuEditLinkedScriptCapsule", linkedPaperTitle)
                     : Strings.Format("MenuOpenLinkedPaper", linkedPaperTitle);
-                itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedPaper(item.LinkedPaperId, this)));
-                itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkPaper"), (_, _) => UnlinkPaperFromTodoItem(item)));
+                itemMenu.Items.Add(MenuItem(openMenuText, (_, _) => _controller.OpenLinkedPaper(linkedPaperIds[0], this)));
+                itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkPaper"), (_, _) => UnlinkPaperFromTodoItem(item, linkedPaperIds[0])));
+                if (linkedPaperIds.Count > 1)
+                {
+                    itemMenu.Items.Add(MenuItem(Strings.Get("MenuUnlinkAllPapers"), (_, _) => UnlinkAllPapersFromTodoItem(item)));
+                }
                 itemMenu.Items.Add(MenuSeparator());
             }
             else if (hasLinkedPath)
@@ -703,6 +1237,13 @@ public sealed partial class PaperWindow
                 reminderMenu = BuildTodoReminderContextMenuItem(item.Id);
                 reminderMenu.IsEnabled = !item.Done;
                 itemMenu.Items.Add(reminderMenu);
+                itemMenu.Items.Add(MenuSeparator());
+            }
+            if (!item.Done)
+            {
+                var backlogMenu = MenuItem(Strings.Get("MenuTodoItemToBacklog"), (_, _) => MoveToBacklog(item));
+                backlogMenu.IsEnabled = !item.Done;
+                itemMenu.Items.Add(backlogMenu);
                 itemMenu.Items.Add(MenuSeparator());
             }
             itemMenu.Items.Add(MenuItem(Strings.Get("MenuDeleteItem"), (_, _) => RemoveItem(item)));
@@ -752,11 +1293,11 @@ public sealed partial class PaperWindow
             Grid.SetColumn(pathLinkButton, 2);
             grid.Children.Add(pathLinkButton);
         }
-        else if (hasLinkedPaper)
+        else if (hasLinkedPaper && linkedPaperIds.Count == 1)
         {
             var showLinkedPaperName = _controller.State.ShowLinkedPaperName;
             var allowLongLinkedPaperTitle = showLinkedPaperName && _controller.State.AllowLongLinkedPaperTitles;
-            var linkedPaperActive = _controller.IsLinkedPaperShown(item.LinkedPaperId);
+            var linkedPaperActive = _controller.IsLinkedPaperShown(linkedPaperIds[0]);
 
             string LinkedPaperButtonLabel(bool isTodoMultiline)
             {
@@ -911,7 +1452,7 @@ public sealed partial class PaperWindow
             void RefreshLinkedPaperPresentation()
             {
                 if (!_controller.TryGetLinkedPaperTitle(
-                        item.LinkedPaperId,
+                        linkedPaperIds[0],
                         out var refreshedTitle))
                 {
                     return;
@@ -939,7 +1480,7 @@ public sealed partial class PaperWindow
 
             RegisterLinkedPaperTitleRefresher(
                 item.Id,
-                item.LinkedPaperId,
+                linkedPaperIds[0],
                 RefreshLinkedPaperPresentation);
 
             linkButton.MouseEnter += (_, _) =>
@@ -963,10 +1504,10 @@ public sealed partial class PaperWindow
             linkButton.MouseLeftButtonUp += (_, e) =>
             {
                 linkButton.Opacity = 1.0;
-                if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId) ||
-                    !_controller.RunLinkedScriptCapsule(item.LinkedPaperId))
+                if (!_controller.ShouldRunLinkedScriptCapsule(linkedPaperIds[0]) ||
+                    !_controller.RunLinkedScriptCapsule(linkedPaperIds[0]))
                 {
-                    _controller.OpenLinkedPaper(item.LinkedPaperId, this);
+                    _controller.OpenLinkedPaper(linkedPaperIds[0], this);
                 }
                 e.Handled = true;
             };
@@ -974,6 +1515,16 @@ public sealed partial class PaperWindow
 
             Grid.SetColumn(linkButton, 2);
             grid.Children.Add(linkButton);
+        }
+
+        // 「晚点说」悬停按钮：把未完成任务暂存进全局待办篮子（不删除，可随时提取回来）。
+        var showBacklogButton = !item.Done;
+        if (showBacklogButton)
+        {
+            var backlogButton = BuildTodoBacklogButton(item);
+            AttachItemContextMenu(backlogButton);
+            Grid.SetColumn(backlogButton, 3);
+            grid.Children.Add(backlogButton);
         }
 
         if (showTodoReminderControl)
@@ -996,7 +1547,7 @@ public sealed partial class PaperWindow
                 reminderHost.Children.Add(reminderCountdown);
             }
 
-            Grid.SetColumn(reminderHost, 3);
+            Grid.SetColumn(reminderHost, 4);
             grid.Children.Add(reminderHost);
         }
 
@@ -1049,10 +1600,21 @@ public sealed partial class PaperWindow
         };
         AttachItemContextMenu(handle);
 
-        Grid.SetColumn(handle, showTodoReminderControl ? 4 : 3);
+        Grid.SetColumn(handle, showTodoReminderControl ? 5 : 4);
         grid.Children.Add(handle);
 
-        row.Child = grid;
+        if (isMultiLink)
+        {
+            // 多关联（>=2）：在按钮行下方追加一个可折叠的「关联 N 篇」区块。
+            var verticalRoot = new StackPanel();
+            verticalRoot.Children.Add(grid);
+            verticalRoot.Children.Add(BuildTodoLinkedPapersSection(item, linkedPaperIds, metrics));
+            row.Child = verticalRoot;
+        }
+        else
+        {
+            row.Child = grid;
+        }
         ConfigureTodoPathDrop(row, item);
         ConfigureTodoMultiSelection(row, item, check, text);
 
@@ -1309,7 +1871,8 @@ public sealed partial class PaperWindow
         var itemId = item.Id;
         var removedLinkedPaperIds = _paper.Items
             .Where(i => i.Id == itemId)
-            .Select(i => i.LinkedPaperId)
+            .SelectMany(i => i.LinkedPaperIds ?? [])
+            .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .ToList();
 
         // 删除动画
@@ -1378,6 +1941,29 @@ public sealed partial class PaperWindow
         }
     }
 
+    private void MoveToBacklog(PaperItem item)
+    {
+        if (_paper.Type != PaperTypes.Todo || item.Done)
+        {
+            return;
+        }
+
+        // 晚点说 = 暂存到全局篮子（不是删除），不参与本纸片的撤销栈：
+        // 需要时用篮子里的「回到列表」提取回任意待办纸即可。
+        _paper.Items.RemoveAll(i => i.Id == item.Id);
+        if (_paper.Items.Count == 0)
+        {
+            _paper.Items.Add(new PaperItem());
+        }
+
+        _controller.MoveTodoItemToBacklog(_paper.Id, item);
+
+        NormalizeTodoItems();
+        NormalizeOrders();
+        ReconcileTodoRows();
+        _controller.NotifyTodoReminderCollectionChanged();
+    }
+
     private void ClearDoneItems()
     {
         if (_paper.Type != PaperTypes.Todo)
@@ -1394,7 +1980,8 @@ public sealed partial class PaperWindow
 
         var completedItemIds = new HashSet<string>(completedItems.Select(i => i.Id), StringComparer.Ordinal);
         var removedLinkedPaperIds = completedItems
-            .Select(i => i.LinkedPaperId)
+            .SelectMany(i => i.LinkedPaperIds ?? [])
+            .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .ToList();
         var clearDoneGeneration = ++_clearDoneGeneration;
 
@@ -1504,12 +2091,12 @@ public sealed partial class PaperWindow
     private void RefreshCapsuleEligibilityForLinkedPaperChanges(IEnumerable<PaperItem> previousItems)
     {
         var changedPaperIds = previousItems
-            .Select(item => item.LinkedPaperId)
+            .SelectMany(item => item.LinkedPaperIds ?? [])
             .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .Select(paperId => paperId!)
             .ToHashSet(StringComparer.Ordinal);
         changedPaperIds.SymmetricExceptWith(_paper.Items
-            .Select(item => item.LinkedPaperId)
+            .SelectMany(item => item.LinkedPaperIds ?? [])
             .Where(paperId => !string.IsNullOrWhiteSpace(paperId))
             .Select(paperId => paperId!));
 
@@ -1588,7 +2175,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        if (string.Equals(item.LinkedPaperId, paperId, StringComparison.Ordinal) &&
+        if (item.LinkedPaperIdsInternal.Any(id => string.Equals(id, paperId, StringComparison.Ordinal)) &&
             string.IsNullOrWhiteSpace(item.LinkedPath))
         {
             return true;
@@ -1597,16 +2184,33 @@ public sealed partial class PaperWindow
         var focusedId = CurrentFocusedTodoItemId();
         var previousItems = CloneItems(_paper.Items);
         PushUndoSnapshot();
-        item.LinkPaper(paperId);
+        item.AddLinkedPaper(paperId);
         _controller.MarkDirty();
         ReconcileTodoRows([item.Id], focusedId);
         RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
         return true;
     }
 
-    private void UnlinkPaperFromTodoItem(PaperItem item)
+    private void UnlinkPaperFromTodoItem(PaperItem item, string? paperId)
     {
-        if (string.IsNullOrWhiteSpace(item.LinkedPaperId))
+        if (string.IsNullOrWhiteSpace(paperId) ||
+            !item.LinkedPaperIdsInternal.Any(id => string.Equals(id, paperId, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
+        var previousItems = CloneItems(_paper.Items);
+        PushUndoSnapshot();
+        item.RemoveLinkedPaper(paperId);
+        _controller.MarkDirty();
+        ReconcileTodoRows([item.Id], focusedId);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+    }
+
+    private void UnlinkAllPapersFromTodoItem(PaperItem item)
+    {
+        if (item.LinkedPaperIds is not { Count: > 0 })
         {
             return;
         }
