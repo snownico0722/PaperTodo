@@ -32,7 +32,6 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
     private readonly Button _exportButton;
     private readonly Button _clearButton;
     private readonly List<Button> _buttons;
-    private readonly IDisposable _subscription;
     private readonly DispatcherTimer _refreshTimer;
 
     private ReviewArchiveSettings _settings;
@@ -195,22 +194,8 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             }
         };
 
-        _subscription = context.Workspace.Subscribe(
-            new PaperTodoEventFilter
-            {
-                Kinds = new HashSet<PaperTodoEventKind>
-                {
-                    PaperTodoEventKind.PaperChanged,
-                    PaperTodoEventKind.PaperDeleted,
-                    PaperTodoEventKind.TodoCreated,
-                    PaperTodoEventKind.TodoChanged,
-                    PaperTodoEventKind.TodoDeleted
-                }
-            },
-            value => ReviewArchiveStore.Apply(value, _settings));
         ReviewArchiveStore.Changed += OnArchiveChanged;
 
-        _ = ReviewArchiveStore.ImportCurrent(context.Workspace, _settings, manual: false);
         ReviewArchiveStore.ApplyRetention(_settings);
         ApplyTheme(context.Body.Theme);
         Refresh();
@@ -886,7 +871,6 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         _disposed = true;
         _refreshTimer.Stop();
         ReviewArchiveStore.Changed -= OnArchiveChanged;
-        _subscription.Dispose();
         ReviewArchiveStore.Flush();
     }
 }

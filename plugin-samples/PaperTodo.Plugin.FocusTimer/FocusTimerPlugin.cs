@@ -13,15 +13,6 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
-    public string Id => "sample.focus-timer.native";
-    public string DisplayName => "专注计时器";
-    public string Description => "可关联 PaperTodo 待办的 WPF 番茄钟，支持完成联动、自动选择下一项和折叠后台计时。";
-    public Version Version => new(1, 4, 0);
-    public string ApiVersion => "2.0";
-    public int StateVersion => 3;
-    public PaperBodyCapabilities Capabilities => PaperBodyCapabilities.TextZoom;
-    public PaperBodyRuntimeRequirements RuntimeRequirements =>
-        PaperBodyRuntimeRequirements.BackgroundUpdates;
 
     public string MigrateState(string stateJson, int fromVersion)
     {

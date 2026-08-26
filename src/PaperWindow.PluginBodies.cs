@@ -923,25 +923,6 @@ public sealed partial class PaperWindow
         RefreshPaperTitle();
     }
 
-    internal void RefreshPaperBodyProviderAvailability(IReadOnlySet<string> changedProviderIds)
-    {
-        if (_paper.Type != PaperTypes.Note || IsClosed)
-        {
-            return;
-        }
-
-        var currentId = NormalizeBodyProviderId(_paper.BodyProviderId);
-        if (!IsCurrentBodyProviderMarkdown &&
-            (changedProviderIds.Contains(currentId) ||
-             !_controller.PaperBodyPlugins.TryGet(currentId, out _)))
-        {
-            ReloadCurrentPaperBody();
-            return;
-        }
-
-        RefreshPaperContextMenus();
-    }
-
     private void AttachCurrentPaperBody()
     {
         _bodyFailed = false;

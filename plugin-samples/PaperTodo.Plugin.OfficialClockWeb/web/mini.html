@@ -47,25 +47,6 @@
       border-radius: 50%;
       background: var(--accent);
     }
-    .mini-action {
-      appearance: none;
-      border: 1px solid color-mix(in srgb, var(--border) 48%, transparent);
-      border-radius: 999px;
-      padding: 2px 8px;
-      background: color-mix(in srgb, var(--text) 5%, transparent);
-      color: var(--weak);
-      font: inherit;
-      font-size: .72em;
-      line-height: 1.35;
-      cursor: pointer;
-    }
-    .mini-action:hover,
-    .mini-action:focus-visible,
-    .mini-action[aria-pressed="true"] {
-      color: var(--accent);
-      border-color: var(--accent);
-      outline: none;
-    }
     #time {
       margin-top: 7px;
       font-size: clamp(38px, 19vw, 58px);
@@ -92,8 +73,6 @@
   <main>
     <div class="meta">
       <div id="zone" class="zone"></div>
-      <button id="pause" class="mini-action" type="button"
-              data-papertodo-interactive aria-pressed="false" title="Web Mini 交互热区示例">暂停</button>
     </div>
     <div id="time"><span id="hours"></span>:<span id="minutes"></span><span id="seconds"></span></div>
     <div id="date"></div>
@@ -123,7 +102,6 @@
     });
     let settings = { ...defaults };
     let visible = false;
-    let paused = false;
     let timer = 0;
     let announcedReady = false;
     const $ = id => document.getElementById(id);
@@ -172,13 +150,8 @@
 
     function updateTimer() {
       clearInterval(timer);
-      if (visible && !paused) timer = setInterval(render, settings.showSeconds ? 250 : 1000);
-      if (!paused) render();
-    }
-
-    function updatePauseButton() {
-      $('pause').textContent = paused ? '继续' : '暂停';
-      $('pause').setAttribute('aria-pressed', String(paused));
+      if (visible) timer = setInterval(render, settings.showSeconds ? 250 : 1000);
+      render();
     }
 
     function readyAfterPaint() {
@@ -187,11 +160,6 @@
       requestAnimationFrame(() => requestAnimationFrame(() => window.papertodo?.mini?.ready()));
     }
 
-    $('pause').addEventListener('click', () => {
-      paused = !paused;
-      updatePauseButton();
-      updateTimer();
-    });
 
     window.addEventListener('papertodo', event => {
       const message = event.detail || {};
@@ -211,7 +179,6 @@
         updateTimer();
       }
     });
-    updatePauseButton();
     render();
   </script>
 </body>

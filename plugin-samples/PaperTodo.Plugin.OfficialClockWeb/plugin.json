@@ -6,7 +6,7 @@
   "version": "1.5.0",
   "apiVersion": "2.0",
   "stateVersion": 1,
-  "maxPaperInstances": 0,
+  "maxPaperInstances": 1,
   "entry": "web/index.html",
   "paperRuntime": "web/paper-runtime.html",
   "miniEntry": "web/mini.html",

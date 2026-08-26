@@ -8,10 +8,8 @@
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.ReviewArchive.dll",
   "capabilities": [
-    "textZoom"
-  ],
-  "requires": [
-    "backgroundUpdates"
+    "textZoom",
+    "appRuntime"
   ],
   "permissions": [
     "papers.read",

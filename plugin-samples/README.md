@@ -112,16 +112,6 @@ using PaperTodo.Plugin;
 
 public sealed class HelloPlugin : IPaperBodyPlugin
 {
-    public string Id => "com.example.hello-native";
-    public string DisplayName => "Hello Native";
-    public Version Version => new(1, 0, 0);
-    public string ApiVersion => "2.0";
-    public int StateVersion => 1;
-    public PaperBodyRuntimeRequirements RuntimeRequirements =>
-        PaperBodyRuntimeRequirements.None;
-    public PaperBodyCapabilities Capabilities =>
-        PaperBodyCapabilities.None;
-
     public IPaperBodySession Create(PaperBodyContext context) =>
         new Session(context);
 
@@ -170,7 +160,7 @@ Native `plugin.json`：
 }
 ```
 
-`id`、`version`、`apiVersion`、`stateVersion` 和 `requires` 对应的 runtime requirements 必须与入口 DLL 实现一致，否则宿主拒绝激活。
+`plugin.json` 是 Native 插件元数据的唯一来源；入口 DLL 不再重复声明 ID、名称、版本、协议版本、状态版本、能力或后台需求，只实现插件行为。
 
 ### 1.3 构建并安装 Native 插件
 

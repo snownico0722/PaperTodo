@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -1229,21 +1229,51 @@
   <data name="ShortcutExit" xml:space="preserve">
     <value>退出</value>
   </data>
-  <data name="LabsMcp" xml:space="preserve"><value>MCP 本地接口</value></data>
-  <data name="LabsMcpEnable" xml:space="preserve"><value>启用 MCP（读取默认允许）</value></data>
-  <data name="TipLabsMcpEnable" xml:space="preserve"><value>允许本机 AI 客户端通过同一个 PaperTodo.exe 的 --mcp 模式读取纸片。关闭后命名管道立即停止。</value></data>
-  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>允许空白与追加写入</value></data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>允许新建纸片、向已有待办纸添加新待办、填写空白内容以及追加笔记；不会覆盖已有文字。</value></data>
-  <data name="LabsMcpFullWrites" xml:space="preserve"><value>允许完整写入</value></data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>允许修改已有待办文字、替换笔记、修改完成状态和提醒；同时包含空白与追加写入权限。</value></data>
-  <data name="LabsMcpDeletes" xml:space="preserve"><value>允许 MCP 直接删除</value></data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>开启即预授权 AI 直接删除纸片或待办，不再逐次弹窗确认；操作无法自动撤销，请谨慎启用。</value></data>
-  <data name="LabsMcpStatusReady" xml:space="preserve"><value>本地 MCP 接口已就绪</value></data>
-  <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>本地 MCP 接口已关闭</value></data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>复制 Codex 配置</value></data>
-  <data name="LabsMcpCopyJson" xml:space="preserve"><value>复制 JSON 配置</value></data>
-  <data name="LabsMcpCopied" xml:space="preserve"><value>已复制</value></data>
-  <data name="LabsMcpCopyFailed" xml:space="preserve"><value>复制失败</value></data>
+  <data name="LabsMcp" xml:space="preserve">
+    <value>MCP 本地接口</value>
+  </data>
+  <data name="LabsMcpEnable" xml:space="preserve">
+    <value>启用 MCP（读取默认允许）</value>
+  </data>
+  <data name="TipLabsMcpEnable" xml:space="preserve">
+    <value>允许本机 AI 客户端通过同一个 PaperTodo.exe 的 --mcp 模式读取纸片。关闭后命名管道立即停止。</value>
+  </data>
+  <data name="LabsMcpBlankWrites" xml:space="preserve">
+    <value>允许空白与追加写入</value>
+  </data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve">
+    <value>允许新建纸片、向已有待办纸添加新待办、填写空白内容以及追加笔记；不会覆盖已有文字。</value>
+  </data>
+  <data name="LabsMcpFullWrites" xml:space="preserve">
+    <value>允许完整写入</value>
+  </data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve">
+    <value>允许修改已有待办文字、替换笔记、修改完成状态和提醒；同时包含空白与追加写入权限。</value>
+  </data>
+  <data name="LabsMcpDeletes" xml:space="preserve">
+    <value>允许 MCP 直接删除</value>
+  </data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve">
+    <value>开启即预授权 AI 直接删除纸片或待办，不再逐次弹窗确认；操作无法自动撤销，请谨慎启用。</value>
+  </data>
+  <data name="LabsMcpStatusReady" xml:space="preserve">
+    <value>本地 MCP 接口已就绪</value>
+  </data>
+  <data name="LabsMcpStatusDisabled" xml:space="preserve">
+    <value>本地 MCP 接口已关闭</value>
+  </data>
+  <data name="LabsMcpCopyCodex" xml:space="preserve">
+    <value>复制 Codex 配置</value>
+  </data>
+  <data name="LabsMcpCopyJson" xml:space="preserve">
+    <value>复制 JSON 配置</value>
+  </data>
+  <data name="LabsMcpCopied" xml:space="preserve">
+    <value>已复制</value>
+  </data>
+  <data name="LabsMcpCopyFailed" xml:space="preserve">
+    <value>复制失败</value>
+  </data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>插件</value>
   </data>
@@ -1283,9 +1313,6 @@
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>打开目录</value>
   </data>
-  <data name="PluginsReload" xml:space="preserve">
-    <value>重新扫描</value>
-  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
     <value>发现 {0} 个正文插件</value>
   </data>
@@ -1300,15 +1327,6 @@
   </data>
   <data name="PluginsBuiltIn" xml:space="preserve">
     <value>内置</value>
-  </data>
-  <data name="PluginsRestartRequired" xml:space="preserve">
-    <value>重启后生效</value>
-  </data>
-  <data name="PluginsNativeChangedRestart" xml:space="preserve">
-    <value>该原生插件已在本次运行中加载，目录内容变化需要重启 PaperTodo。</value>
-  </data>
-  <data name="PluginsNativeRemovedRestart" xml:space="preserve">
-    <value>该原生插件目录已删除；本次运行仍使用内存中已加载版本，重启 PaperTodo 后将不可用。</value>
   </data>
   <data name="PluginsWebLoading" xml:space="preserve">
     <value>正在加载 Web 插件…</value>
@@ -1388,16 +1406,19 @@
     <value>无法关联路径</value>
   </data>
   <data name="LinkedPathDropFailureMessage" xml:space="preserve">
-    <value>无法关联该文件或文件夹：&#xA;{0}</value>
+    <value>无法关联该文件或文件夹：
+{0}</value>
   </data>
   <data name="LinkedPathOpenFailureTitle" xml:space="preserve">
     <value>无法打开关联路径</value>
   </data>
   <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
-    <value>无法调用系统打开该路径：&#xA;{0}</value>
+    <value>无法调用系统打开该路径：
+{0}</value>
   </data>
   <data name="LinkedPathMissingMessage" xml:space="preserve">
-    <value>关联的文件或文件夹已移动或删除：&#xA;{0}</value>
+    <value>关联的文件或文件夹已移动或删除：
+{0}</value>
   </data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
     <value>不开长标题时仅显示文件扩展名</value>

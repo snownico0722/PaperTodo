@@ -360,24 +360,16 @@ public sealed class PaperBodyContext
 
 /// <summary>
 /// A fully trusted, unsandboxed native plugin loaded from one self-contained
-/// plugins/&lt;plugin-id&gt;/ folder with the current user's permissions. Implementations must provide a
-/// public parameterless constructor and act as stateless factories. PaperTodo creates a fresh plugin
-/// object for every body session.
+/// plugins/&lt;plugin-id&gt;/ folder with the current user's permissions. plugin.json is the single
+/// authority for id/name/version/protocol/state/capability/runtime metadata. Implementations provide
+/// only behavior, must have a public parameterless constructor and act as stateless factories.
+/// PaperTodo creates a fresh plugin object for every body session or app-runtime activation.
 /// </summary>
 public interface IPaperBodyPlugin
 {
-    string Id { get; }
-    string DisplayName { get; }
-    string Description => string.Empty;
-    Version Version => new(1, 0);
-    string ApiVersion { get; }
-    int StateVersion => 1;
-    PaperBodyRuntimeRequirements RuntimeRequirements { get; }
-    PaperBodyCapabilities Capabilities { get; }
-
     /// <summary>
-    /// Migrate persisted JSON before Create is called. Return valid JSON for StateVersion. The
-    /// default implementation keeps the old JSON unchanged.
+    /// Migrate persisted JSON before Create is called. The target version comes from plugin.json.
+    /// The default implementation keeps the old JSON unchanged.
     /// </summary>
     string MigrateState(string stateJson, int fromVersion) => stateJson;
 
