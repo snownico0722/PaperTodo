@@ -27,7 +27,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Apply phase 1
-        run: python .\tools\apply_convergence_phase1.py
+        run: |
+          python .\tools\apply_convergence_phase1.py
+          python .\tools\apply_convergence_phase1_fix.py
       - name: Diff check
         run: git diff --check
       - name: Restore
@@ -47,6 +49,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           Remove-Item .\tools\apply_convergence_phase1.py
+          Remove-Item .\tools\apply_convergence_phase1_fix.py
           Remove-Item .\.github\workflows\convergence-phase1.yml
           git add -A
           git commit -m "refactor: converge todo and plugin paper rules"
