@@ -175,17 +175,6 @@ public sealed partial class PaperWindow
         badge.Child = _backlogSectionCountText;
         headerRow.Children.Add(badge);
 
-        var headerLabel = new TextBlock
-        {
-            Text = Strings.Get("TodoBacklogHeader"),
-            Foreground = WeakTextBrush,
-            FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(11),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        headerRow.Children.Add(headerLabel);
-
         var caret = new TextBlock
         {
             Text = _backlogSectionExpanded ? "▾" : "▸",
