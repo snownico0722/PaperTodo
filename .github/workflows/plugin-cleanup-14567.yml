@@ -1,0 +1,111 @@
+name: Plugin cleanup 14567
+
+on:
+  push:
+    branches:
+      - cleanup/plugin-contract-and-samples
+    paths:
+      - tools/apply_plugin_cleanup_14567.py
+      - .github/workflows/plugin-cleanup-14567.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Apply scoped cleanup
+        shell: pwsh
+        run: python tools/apply_plugin_cleanup_14567.py
+
+      - name: Diff check
+        shell: pwsh
+        run: git diff --check
+
+      - name: Build host
+        shell: pwsh
+        run: dotnet build .\PaperTodo.csproj -c Release
+
+      - name: Protocol checks
+        shell: pwsh
+        run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+
+      - name: Rebuild native samples
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj | Sort-Object FullName
+          foreach ($project in $projects) {
+            & .\plugin-samples\Build-And-Install-NativePlugin.ps1 -ProjectPath $project.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Structural scope checks
+        shell: pwsh
+        run: |
+          $contract = Get-Content .\PaperTodo.Plugin.Abstractions\PaperBodyPluginContracts.cs -Raw
+          foreach ($forbidden in @(
+            'public string Id =>',
+            'string Id { get;',
+            'DisplayName',
+            'Version Version',
+            'string ApiVersion',
+            'int StateVersion',
+            'PaperBodyRuntimeRequirements RuntimeRequirements',
+            'PaperBodyCapabilities Capabilities'
+          )) {
+            if ($contract -match [regex]::Escape($forbidden)) { throw "Native metadata remains in IPaperBodyPlugin: $forbidden" }
+          }
+
+          $registry = Get-Content .\src\PaperBodyPluginRegistry.cs -Raw
+          foreach ($forbidden in @('public void Reload(', 'LastChangedProviderIds', 'ChangedProviderIds(', 'PluginsNativeChangedRestart', 'PluginsNativeRemovedRestart', 'RestartRequired')) {
+            if ($registry -match [regex]::Escape($forbidden)) { throw "Retired plugin reload path remains: $forbidden" }
+          }
+          if ((Get-Content .\src\PaperWindow.PluginBodies.cs -Raw) -match 'RefreshPaperBodyProviderAvailability') {
+            throw 'Unused runtime provider refresh hook remains'
+          }
+
+          $reviewManifest = Get-Content .\plugin-samples\PaperTodo.Plugin.ReviewArchive\plugin.json -Raw | ConvertFrom-Json -Depth 100
+          if ($reviewManifest.capabilities -notcontains 'appRuntime') { throw 'ReviewArchive must use appRuntime' }
+          if ($reviewManifest.requires -contains 'backgroundUpdates') { throw 'ReviewArchive must not use body backgroundUpdates' }
+          $reviewPlugin = Get-Content .\plugin-samples\PaperTodo.Plugin.ReviewArchive\ReviewArchivePlugin.cs -Raw
+          if ($reviewPlugin -notmatch 'IPaperAppRuntimeProvider' -or $reviewPlugin -notmatch 'context\.Workspace\.Subscribe') {
+            throw 'ReviewArchive provider runtime subscription missing'
+          }
+          if ((Get-Content .\plugin-samples\PaperTodo.Plugin.ReviewArchive\ReviewArchiveSession.cs -Raw) -match 'Workspace\.Subscribe') {
+            throw 'ReviewArchive body still owns the background subscription'
+          }
+
+          $clockManifest = Get-Content .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\plugin.json -Raw | ConvertFrom-Json -Depth 100
+          if ($clockManifest.maxPaperInstances -ne 1) { throw 'Official Web Clock must be single-instance' }
+          $clockMini = Get-Content .\plugin-samples\PaperTodo.Plugin.OfficialClockWeb\web\mini.html -Raw
+          if ($clockMini -match 'id="pause"' -or $clockMini -match 'paused') { throw 'Demo-only Mini pause remains' }
+
+          $nativeSources = Get-ChildItem .\plugin-samples -Recurse -Filter *.cs | ForEach-Object { Get-Content $_.FullName -Raw } | Out-String
+          foreach ($forbidden in @('public string Id => "sample.', 'public string ApiVersion => "2.0"', 'public PaperBodyRuntimeRequirements RuntimeRequirements =>', 'public PaperBodyCapabilities Capabilities =>')) {
+            if ($nativeSources -match [regex]::Escape($forbidden)) { throw "Native sample repeats manifest metadata: $forbidden" }
+          }
+
+          git diff --check
+
+      - name: Commit validated cleanup
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PaperTodo.Plugin.Abstractions plugin-samples plugins src Resources
+          git commit -m "refactor: simplify plugin ownership and native contract"
+          git rm tools/apply_plugin_cleanup_14567.py .github/workflows/plugin-cleanup-14567.yml
+          git commit -m "chore: remove plugin cleanup validation"
+          git push
