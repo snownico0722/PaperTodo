@@ -18,6 +18,18 @@ def run_script_prefix(path, stop_marker=None):
 run_script_prefix(
     'tools/unify_runtime_phase5.py',
     '# Policy check: the deleted host feature must stay deleted.')
+
+# The old helper can survive phase5's conservative regex because surrounding whitespace changed in
+# earlier runtime work. Delete it explicitly: Body has no host-level background-runtime requirement.
+body_file = Path('src/PaperWindow.PluginBodies.cs')
+text = body_file.read_text(encoding='utf-8')
+text = re.sub(
+    r'\n\s*private bool BodyRequires\(PaperBodyRuntimeRequirements requirement\) =>\n\s*_bodyDescriptor != null &&\n\s*\(_bodyDescriptor\.RuntimeRequirements & requirement\) == requirement;\n',
+    '\n',
+    text,
+    count=1)
+body_file.write_text(text, encoding='utf-8')
+
 run_script_prefix('tools/unify_runtime_phase4.py')
 
 # The old architecture appendix duplicated the now-deleted Web per-Paper backend model. Remove it
