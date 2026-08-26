@@ -89,11 +89,15 @@ internal sealed class PaperAppRuntimeWorkspaceApi : IPaperTodoHostApi, IDisposab
 /// so worker-thread reads do not need an extra UI-dispatch hop. The active-runtime predicate keeps
 /// a retained facade from becoming an accidental post-Dispose settings handle.
 /// </summary>
-internal sealed class PaperAppRuntimeSettingsApi : IPaperAppRuntimeSettings
+internal sealed class PaperAppRuntimeSettingsApi : IPaperAppRuntimeSettings, IDisposable
 {
     private readonly PaperBodyPluginDataStore _dataStore;
     private readonly PaperBodyPluginDescriptor _descriptor;
     private readonly Func<bool> _isActive;
+    private readonly object _gate = new();
+    private readonly Dictionary<long, Action<string>> _handlers = [];
+    private long _nextHandlerId;
+    private bool _disposed;
 
     public PaperAppRuntimeSettingsApi(
         PaperBodyPluginDataStore dataStore,
@@ -109,14 +113,79 @@ internal sealed class PaperAppRuntimeSettingsApi : IPaperAppRuntimeSettings
     {
         get
         {
-            if (!_isActive())
-            {
-                throw new PaperTodoPluginException(
-                    "runtime_closed",
-                    "The plugin app runtime is no longer active.");
-            }
+            EnsureUsable();
             return _dataStore.GetSettingsJson(_descriptor);
         }
+    }
+
+    public IDisposable Subscribe(Action<string> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        lock (_gate)
+        {
+            EnsureUsableLocked();
+            var id = ++_nextHandlerId;
+            _handlers.Add(id, handler);
+            return new Subscription(this, id);
+        }
+    }
+
+    internal void PublishChanged(string json)
+    {
+        Action<string>[] handlers;
+        lock (_gate)
+        {
+            if (_disposed || !_isActive())
+            {
+                return;
+            }
+            handlers = _handlers.Values.ToArray();
+        }
+        foreach (var handler in handlers)
+        {
+            try { handler(json); } catch { }
+        }
+    }
+
+    private void EnsureUsable()
+    {
+        lock (_gate)
+        {
+            EnsureUsableLocked();
+        }
+    }
+
+    private void EnsureUsableLocked()
+    {
+        if (_disposed || !_isActive())
+        {
+            throw new PaperTodoPluginException(
+                "runtime_closed",
+                "The plugin Runtime is no longer active.");
+        }
+    }
+
+    private void Unsubscribe(long id)
+    {
+        lock (_gate)
+        {
+            _handlers.Remove(id);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _disposed = true;
+            _handlers.Clear();
+        }
+    }
+
+    private sealed class Subscription(PaperAppRuntimeSettingsApi owner, long id) : IDisposable
+    {
+        private PaperAppRuntimeSettingsApi? _owner = owner;
+        public void Dispose() => Interlocked.Exchange(ref _owner, null)?.Unsubscribe(id);
     }
 }
 

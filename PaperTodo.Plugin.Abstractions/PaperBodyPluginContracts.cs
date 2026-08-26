@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -337,6 +338,7 @@ public sealed class PaperBodyContext
     public required PaperBodyPaperContext Paper { get; init; }
     public required PaperBodySurfaceContext Body { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
+    public required IPaperPluginRuntimeClient Runtime { get; init; }
     public IPaperTopBarApi TopBar => Workspace as IPaperTopBarApi
         ?? throw new InvalidOperationException(
             "This PaperTodo host does not expose the protocol 2.0 paper top-bar capability.");
@@ -399,6 +401,9 @@ public interface IPaperBodySession : IDisposable
     void OnThemeChanged(PaperBodyTheme theme) { }
     void OnTypographyChanged(PaperBodyTheme theme) { }
     void OnDpiChanged() { }
+
+    // Message sent by the one provider Runtime to this Paper frontend.
+    bool OnRuntimeMessage(JsonElement message) => false;
 
     // Host-rendered global settings changed for this plugin.
     void OnSettingsChanged(string settingsJson) { }

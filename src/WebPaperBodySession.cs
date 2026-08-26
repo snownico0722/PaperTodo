@@ -87,6 +87,8 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     public FrameworkElement View => _root;
 
+    public bool OnRuntimeMessage(JsonElement message) => ReceiveRuntimeMessage(message);
+
     private WebView2CompositionControl CreateWebView()
     {
         var webView = new WebView2CompositionControl

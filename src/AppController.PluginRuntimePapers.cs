@@ -29,6 +29,12 @@ public sealed partial class AppController
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
         DeclaresPluginAppRuntime(descriptor);
 
+    internal bool CanPostBodyMessageToPluginRuntime(string paperId, string providerId) =>
+        _pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) &&
+        slot.State == PluginAppRuntimeState.Running &&
+        slot.Lease?.Papers != null &&
+        FindPluginRuntimePaper(providerId, paperId) != null;
+
     internal bool PostBodyMessageToPluginRuntime(
         string paperId,
         string providerId,

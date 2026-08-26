@@ -42,6 +42,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         public int StorageVersion { get; set; } = PaperBodyPluginDataStore.StorageVersion;
         public Dictionary<string, JsonElement> Settings { get; set; } =
             new(StringComparer.Ordinal);
+        public PaperDataState? Runtime { get; set; }
         public Dictionary<string, PaperDataState> Papers { get; set; } =
             new(StringComparer.Ordinal);
     }
@@ -80,6 +81,63 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     }
 
     public string DataRoot { get; }
+
+    public PaperBodyStoredState ReadRuntimeState(string providerId) =>
+        TryReadRuntimeState(providerId, out var state)
+            ? state
+            : new PaperBodyStoredState();
+
+    public bool TryReadRuntimeState(
+        string providerId,
+        out PaperBodyStoredState state)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var document = Load(providerId);
+            var stored = document.Runtime;
+            if (stored == null || stored.Data.ValueKind == JsonValueKind.Undefined)
+            {
+                state = new PaperBodyStoredState();
+                return false;
+            }
+            state = new PaperBodyStoredState
+            {
+                Version = Math.Max(1, stored.StateVersion),
+                Json = stored.Data.GetRawText()
+            };
+            return true;
+        }
+    }
+
+    public void SaveRuntimeState(
+        string providerId,
+        int stateVersion,
+        string? json)
+    {
+        var normalized = NormalizeStateJson(json);
+        using var parsed = JsonDocument.Parse(normalized);
+        var value = parsed.RootElement.Clone();
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var document = Load(providerId);
+            stateVersion = Math.Max(1, stateVersion);
+            if (document.Runtime is { } existing &&
+                existing.StateVersion == stateVersion &&
+                JsonElementEquals(existing.Data, value))
+            {
+                return;
+            }
+            document.Runtime = new PaperDataState
+            {
+                StateVersion = stateVersion,
+                Data = value
+            };
+            ScheduleSave(providerId);
+        }
+    }
 
     public PaperBodyStoredState ReadPaperState(string providerId, string paperId) =>
         TryReadPaperState(providerId, paperId, out var state)

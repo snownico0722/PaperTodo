@@ -94,6 +94,9 @@ public sealed partial class AppController
         public required string ProviderId { get; init; }
         public required PluginAppRuntimeLifetime Lifetime { get; init; }
         public required PaperAppRuntimeWorkspaceApi Workspace { get; init; }
+        public required PaperAppRuntimeSettingsApi Settings { get; init; }
+        public required PaperAppRuntimeStateApi State { get; init; }
+        public required PaperAppRuntimePapersApi Papers { get; init; }
         public required PaperAppRuntimeGlobalTopBarApi GlobalTopBar { get; init; }
         public required PaperAppRuntimeGlobalShortcutApi GlobalShortcuts { get; init; }
         public IDisposable? Runtime { get; init; }
@@ -108,6 +111,9 @@ public sealed partial class AppController
 
             Lifetime.TryDeactivate();
             try { Runtime?.Dispose(); } catch { }
+            try { Papers.Dispose(); } catch { }
+            try { State.Dispose(); } catch { }
+            try { Settings.Dispose(); } catch { }
             try { GlobalShortcuts.Dispose(); } catch { }
             try { GlobalTopBar.Dispose(); } catch { }
             try { Workspace.Dispose(); } catch { }
@@ -195,6 +201,11 @@ public sealed partial class AppController
                 StartPluginAppRuntimeSlot(slot, descriptor);
                 statusChanged = true;
             }
+        }
+
+        foreach (var slot in _pluginAppRuntimeSlots.Values)
+        {
+            slot.Lease?.Papers.Reconcile();
         }
 
         if (statusChanged)
@@ -350,6 +361,14 @@ public sealed partial class AppController
             PaperBodyPlugins.DataStore,
             descriptor,
             IsActive);
+        var state = new PaperAppRuntimeStateApi(
+            PaperBodyPlugins.DataStore,
+            descriptor,
+            IsActive);
+        var papers = new PaperAppRuntimePapersApi(
+            this,
+            descriptor.Id,
+            IsActive);
         var globalTopBar = new PaperAppRuntimeGlobalTopBarApi(
             this,
             runtimeId,
@@ -382,6 +401,8 @@ public sealed partial class AppController
                     GrantedPermissions = descriptor.Permissions,
                     Workspace = workspace,
                     Settings = settings,
+                    State = state,
+                    Papers = papers,
                     GlobalTopBar = globalTopBar,
                     GlobalShortcuts = globalShortcuts
                 }) ?? throw new InvalidOperationException(
@@ -393,6 +414,8 @@ public sealed partial class AppController
                     descriptor,
                     workspace,
                     settings,
+                    state,
+                    papers,
                     globalTopBar,
                     globalShortcuts,
                     IsActive,
@@ -418,6 +441,9 @@ public sealed partial class AppController
                 ProviderId = descriptor.Id,
                 Lifetime = lifetime,
                 Workspace = workspace,
+                Settings = settings,
+                State = state,
+                Papers = papers,
                 GlobalTopBar = globalTopBar,
                 GlobalShortcuts = globalShortcuts,
                 Runtime = runtime,
@@ -428,6 +454,9 @@ public sealed partial class AppController
         {
             lifetime.TryDeactivate();
             try { runtime?.Dispose(); } catch { }
+            try { papers.Dispose(); } catch { }
+            try { state.Dispose(); } catch { }
+            try { settings.Dispose(); } catch { }
             try { globalShortcuts.Dispose(); } catch { }
             try { globalTopBar.Dispose(); } catch { }
             try { workspace.Dispose(); } catch { }
@@ -609,6 +638,16 @@ public sealed partial class AppController
                     "running");
             }),
             DispatcherPriority.Background);
+    }
+
+    private void NotifyPluginAppRuntimeSettingsChanged(string providerId, string settingsJson)
+    {
+        if (_pluginAppRuntimeSlots.TryGetValue(providerId, out var slot) &&
+            slot.State == PluginAppRuntimeState.Running &&
+            slot.Lease != null)
+        {
+            slot.Lease.Settings.PublishChanged(settingsJson);
+        }
     }
 
     private void RetryFailedPluginAppRuntimeAfterSettingsChanged(string providerId)

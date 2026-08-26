@@ -576,6 +576,17 @@ public sealed partial class PaperWindow
                 RequestReload = requestReload
             },
             Workspace = hostApi,
+            Runtime = new PaperPluginRuntimeClient(
+                _controller,
+                _paper.Id,
+                providerId,
+                () => _windowLifecycle == PaperWindowLifecycleState.Alive &&
+                      !_bodyFailed &&
+                      generation == _bodySessionGeneration &&
+                      string.Equals(
+                          NormalizeBodyProviderId(_paper.BodyProviderId),
+                          providerId,
+                          StringComparison.Ordinal)),
             SaveStateJson = json => QueuePluginStateSave(
                 generation,
                 providerId,
