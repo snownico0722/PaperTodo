@@ -1,0 +1,53 @@
+name: Convergence phase 1
+
+on:
+  push:
+    branches:
+      - cleanup/runtime-and-todo-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Apply phase 1
+        run: python .\tools\apply_convergence_phase1.py
+      - name: Diff check
+        run: git diff --check
+      - name: Restore
+        run: dotnet restore .\PaperTodo.csproj
+      - name: Build Release
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+      - name: Protocol checks
+        run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+      - name: Structural checks
+        run: |
+          if (git grep -n "CapsuleCollapseAllActive[^Q]" -- src ':!src/Models.cs') { throw "legacy collapse-all summary remains" }
+          if (git grep -n "DeepCapsuleStartTopMargin" -- src) { throw "legacy global queue margin remains" }
+          if (git grep -n "MigrateLegacyCollapseAllActiveQueues\|SyncLegacyCollapseAllActiveSummary" -- src) { throw "legacy collapse-all compensation remains" }
+          if (-not (git grep -n "maxPaperInstances" -- src plugin-samples plugins)) { throw "instance limit contract missing" }
+      - name: Commit validated product changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          Remove-Item .\tools\apply_convergence_phase1.py
+          Remove-Item .\.github\workflows\convergence-phase1.yml
+          git add -A
+          git commit -m "refactor: converge todo and plugin paper rules"
+          git push
