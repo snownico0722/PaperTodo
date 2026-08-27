@@ -51,6 +51,7 @@ internal sealed class TelemetryBootstrap
                 return;
             }
 
+            TelemetryCrashMarkerMigration.MigrateIfNeeded();
             TelemetryService.Attach(controller);
             StopAttachTimer();
         }
@@ -80,22 +81,22 @@ internal sealed class TelemetryBootstrap
         object sender,
         System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
-        RecordCrashOnce();
+        RecordCrashOnce(e.Exception, "dispatcher");
     }
 
     private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
     {
-        RecordCrashOnce();
+        RecordCrashOnce(e.ExceptionObject as Exception, "appdomain");
     }
 
-    private void RecordCrashOnce()
+    private void RecordCrashOnce(Exception? exception, string source)
     {
         if (Interlocked.Exchange(ref _crashRecorded, 1) != 0)
         {
             return;
         }
 
-        TelemetryService.RecordEmergencyCrash();
+        TelemetryService.RecordEmergencyCrash(exception, source);
     }
 
     private void StopAttachTimer()

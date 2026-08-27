@@ -18,4 +18,30 @@ internal static class TodoRules
         !string.IsNullOrWhiteSpace(item.LinkedPath);
 
     public static bool IsPlaceholder(PaperItem item) => !HasMeaningfulContent(item);
+    public static bool ApplyCompletedOrdering(List<PaperItem> items, bool enabled)
+    {
+        if (!enabled || items.Count < 2)
+        {
+            return false;
+        }
+
+        var reordered = items
+            .OrderBy(item => item.Order)
+            .Where(item => !item.Done)
+            .Concat(items.OrderBy(item => item.Order).Where(item => item.Done))
+            .ToList();
+        if (items.Select(item => item.Id).SequenceEqual(reordered.Select(item => item.Id)))
+        {
+            return false;
+        }
+
+        items.Clear();
+        items.AddRange(reordered);
+        for (var index = 0; index < items.Count; index++)
+        {
+            items[index].Order = index;
+        }
+        return true;
+    }
+
 }

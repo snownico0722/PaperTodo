@@ -941,6 +941,9 @@ public sealed partial class PaperWindow
         _paper.Items = ordered;
         NormalizeTodoItems();
         NormalizeOrders();
+        TodoRules.ApplyCompletedOrdering(
+            _paper.Items,
+            _controller.State.AutoMoveCompletedTodosToBottom);
         _controller.MarkDirty();
 
         var focusItem = newItems.LastOrDefault() ?? item;
@@ -1039,6 +1042,9 @@ public sealed partial class PaperWindow
         _paper.Items = ordered;
         NormalizeTodoItems();
         NormalizeOrders();
+        TodoRules.ApplyCompletedOrdering(
+            _paper.Items,
+            _controller.State.AutoMoveCompletedTodosToBottom);
         _controller.MarkDirty();
 
         return newItem;

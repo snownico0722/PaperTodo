@@ -15,6 +15,9 @@ Enable key-value indexes and statistics for fields used by the queries, especial
 - `date`
 - `telemetry_first_seen_date`
 - `received_at_ms`
+- `crash_exception_type`
+- `crash_stack_hash`
+- `crash_module`
 - every numeric metric that will be aggregated
 
 ## New telemetry users per day
@@ -97,6 +100,36 @@ ORDER BY date
 LIMIT 1000
 ```
 
+## Crash families
+
+A daily report stores the total `crash_count` for that install/day but only the most recently observed anonymous crash signature. Do not sum `crash_count` by signature: doing so would incorrectly attribute earlier crashes on the same day to the last signature. Use the daily usage query above for total crash volume; use this query to rank signatures by affected install-days and installs.
+
+```sql
+* |
+SELECT
+    app_version,
+    crash_exception_type,
+    crash_stack_hash,
+    crash_module,
+    COUNT(*) AS affected_install_days,
+    COUNT(DISTINCT install_id) AS affected_installs
+FROM (
+    SELECT
+        report_id,
+        MAX_BY(install_id, received_at_ms) AS install_id,
+        MAX_BY(app_version, received_at_ms) AS app_version,
+        MAX_BY(crash_count, received_at_ms) AS crash_count,
+        MAX_BY(crash_exception_type, received_at_ms) AS crash_exception_type,
+        MAX_BY(crash_stack_hash, received_at_ms) AS crash_stack_hash,
+        MAX_BY(crash_module, received_at_ms) AS crash_module
+    GROUP BY report_id
+)
+WHERE crash_count > 0 AND crash_stack_hash <> ''
+GROUP BY app_version, crash_exception_type, crash_stack_hash, crash_module
+ORDER BY affected_installs DESC, affected_install_days DESC
+LIMIT 1000
+```
+
 ## Latest logical row per report
 
 Use this while debugging a dashboard or suspicious retry. It exposes one logical row for each deterministic install/day report.
@@ -112,7 +145,11 @@ SELECT
     MAX_BY(app_version, received_at_ms) AS app_version,
     MAX_BY(active_seconds, received_at_ms) AS active_seconds,
     MAX_BY(todo_created, received_at_ms) AS todo_created,
-    MAX_BY(todo_completed, received_at_ms) AS todo_completed
+    MAX_BY(todo_completed, received_at_ms) AS todo_completed,
+    MAX_BY(crash_count, received_at_ms) AS crash_count,
+    MAX_BY(crash_exception_type, received_at_ms) AS crash_exception_type,
+    MAX_BY(crash_stack_hash, received_at_ms) AS crash_stack_hash,
+    MAX_BY(crash_module, received_at_ms) AS crash_module
 GROUP BY report_id
 LIMIT 10000
 ```
