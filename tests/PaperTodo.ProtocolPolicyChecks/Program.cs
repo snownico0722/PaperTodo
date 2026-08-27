@@ -23,6 +23,7 @@ internal static class Program
             CheckManifestRuntimeAndMiniContracts(host);
             CheckGlobalTopBarPriority(host, abstractions);
             CheckPluginRuntimeSettings(host, abstractions);
+            CheckProtocol21Contributions(host, abstractions);
             CheckPluginRuntimePersistenceGuards(host);
             Console.WriteLine("PaperTodo protocol policy checks passed.");
             return 0;
@@ -286,8 +287,8 @@ internal static class Program
         var minimum = registryType.GetField(
             "MinimumPluginApiVersion",
             BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        Assert(supported == "2.0" && minimum == "2.0",
-            "The plugin host must be 2.0-only; 1.8 compatibility must not remain enabled.");
+        Assert(supported == "2.1" && minimum == "2.0",
+            "The plugin host must advertise Protocol 2.1 while retaining Protocol 2.0 compatibility.");
     }
 
     private static void CheckProtocolBoundaries(Assembly host)
@@ -477,6 +478,40 @@ internal static class Program
                 "RetryFailedPluginRuntimeAfterSettingsChanged",
                 BindingFlags.Instance | BindingFlags.NonPublic) != null,
             "A Failed/Backoff app runtime must have a settings-change recovery path.");
+    }
+
+    private static void CheckProtocol21Contributions(Assembly host, Assembly abstractions)
+    {
+        var todoSnapshot = RequireType(abstractions, "PaperTodo.Plugin.TodoSnapshot");
+        Assert(
+            todoSnapshot.GetConstructors().Any(ctor => ctor.GetParameters().Length == 9),
+            "Protocol 2.1 must preserve the Protocol 2.0 nine-parameter TodoSnapshot constructor.");
+        Assert(
+            todoSnapshot.GetProperty("LinkedPathIsDirectory")?.PropertyType == typeof(bool?),
+            "Protocol 2.1 must add LinkedPathIsDirectory without changing TodoSnapshot's positional ABI.");
+
+        var context = RequireType(abstractions, "PaperTodo.Plugin.PaperPluginRuntimeContext");
+        var todoActions = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimeTodoActions");
+        var topBarLabels = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimeTopBarLabels");
+        Assert(context.GetProperty("TodoActions")?.PropertyType == todoActions,
+            "Protocol 2.1 Runtime context must expose host-rendered Todo actions.");
+        Assert(context.GetProperty("TopBarLabels")?.PropertyType == topBarLabels,
+            "Protocol 2.1 Runtime context must expose host-rendered top-bar labels.");
+
+        var controller = RequireType(host, "PaperTodo.AppController");
+        Assert(
+            controller.GetMethod("SetPluginTodoActions", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+            controller.GetMethod("InvokePluginTodoAction", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Protocol 2.1 Todo action registration/dispatch is incomplete.");
+        Assert(
+            controller.GetMethod("SetPluginTopBarLabels", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Protocol 2.1 top-bar label registration is incomplete.");
+
+        var webRuntime = RequireType(host, "PaperTodo.WebPluginRuntime");
+        Assert(
+            webRuntime.GetMethod("SetTodoActions", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+            webRuntime.GetMethod("SetTopBarLabels", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Web Runtime must expose the same Protocol 2.1 contribution surfaces as Native.");
     }
 
     private static Type RequireType(Assembly assembly, string name) =>
