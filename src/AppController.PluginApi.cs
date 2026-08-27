@@ -148,6 +148,14 @@ public sealed partial class AppController
                 continue;
             }
 
+            // Runtime Backoff has no live lease to reconcile. Remove any retained rich
+            // presentation for the now-deleted Paper here as part of the independent post-commit
+            // plugin cleanup, so a provider with zero Papers cannot keep stale volatile snapshots.
+            foreach (var providerId in _pluginRuntimePresentationCache.Keys.ToArray())
+            {
+                RemovePluginRuntimePresentationCache(providerId, paperId);
+            }
+
             try
             {
                 _paperBodyPlugins.DataStore.RemovePaperStateEverywhere(paperId);
