@@ -1,0 +1,35 @@
+{
+  "kind": "web",
+  "id": "sample.protocol21.web",
+  "name": "Protocol 2.1 示例",
+  "description": "演示 Runtime 向普通 Todo 发布宿主原生行内/右键动作，以及向任意 Paper 发布静态顶栏标签。",
+  "version": "1.0.0",
+  "apiVersion": "2.1",
+  "stateVersion": 1,
+  "entry": "web/index.html",
+  "runtime": "web/runtime.html",
+  "capabilities": [
+    "runtime"
+  ],
+  "permissions": [
+    "papers.read",
+    "todos.read"
+  ],
+  "maxPaperInstances": 1,
+  "startupPaper": {
+    "enabledSetting": "autoStart",
+    "instanceKey": "main",
+    "presentation": "expanded",
+    "title": "Protocol 2.1"
+  },
+  "settings": [
+    {
+      "id": "autoStart",
+      "type": "boolean",
+      "name": "自动启动示例",
+      "description": "保持一张示例 Paper，使 provider Runtime 可以持续发布 2.1 contribution。",
+      "default": true,
+      "quick": true
+    }
+  ]
+}

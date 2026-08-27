@@ -85,6 +85,18 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady &&
         _isActive();
 
+    private IPaperPluginRuntimeTodoActions TodoActions =>
+        _workspace as IPaperPluginRuntimeTodoActions
+        ?? throw new PaperTodoPluginException(
+            "todo_actions_unavailable",
+            "This PaperTodo host does not expose Runtime Todo actions.");
+
+    private IPaperPluginRuntimeTopBarLabels TopBarLabels =>
+        _workspace as IPaperPluginRuntimeTopBarLabels
+        ?? throw new PaperTodoPluginException(
+            "topbar_labels_unavailable",
+            "This PaperTodo host does not expose Runtime top-bar labels.");
+
     public async Task StartAsync()
     {
         ThrowIfInactive();
@@ -204,6 +216,36 @@ internal sealed class WebPluginRuntime : IDisposable
                   });
                 }
               });
+              const todoActions = Object.freeze({
+                set(paperId, todoId, actions) {
+                  return request('todoActions.set', {
+                    paperId: String(paperId ?? ''),
+                    todoId: String(todoId ?? ''),
+                    actions: Array.isArray(actions) ? actions : []
+                  });
+                },
+                clear(paperId, todoId) {
+                  return request('todoActions.clear', {
+                    paperId: String(paperId ?? ''),
+                    todoId: String(todoId ?? '')
+                  });
+                },
+                clearAll() { return request('todoActions.clearAll'); }
+              });
+              const topBarLabels = Object.freeze({
+                set(paperId, labels) {
+                  return request('topbar.labels.set', {
+                    paperId: String(paperId ?? ''),
+                    labels: Array.isArray(labels) ? labels : []
+                  });
+                },
+                clear(paperId) {
+                  return request('topbar.labels.clear', {
+                    paperId: String(paperId ?? '')
+                  });
+                },
+                clearAll() { return request('topbar.labels.clearAll'); }
+              });
               window.papertodo = Object.freeze({
                 surface: 'runtime',
                 workspace,
@@ -211,6 +253,8 @@ internal sealed class WebPluginRuntime : IDisposable
                 state,
                 papers,
                 globalTopBar,
+                todoActions,
+                topBarLabels,
                 request,
                 onEvent(listener) {
                   if (typeof listener !== 'function') return () => {};
@@ -271,6 +315,8 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
+        TryClearTodoActions();
+        TryClearTopBarLabels();
     }
 
     private void OnNavigationCompleted(
@@ -291,6 +337,8 @@ internal sealed class WebPluginRuntime : IDisposable
             _documentReady = false;
             TryClearGlobalTopBar();
             TryClearGlobalShortcuts();
+            TryClearTodoActions();
+            TryClearTopBarLabels();
             FailStartupOrRestart(
                 $"Web Runtime navigation failed ({e.WebErrorStatus}).");
             return;
@@ -348,6 +396,8 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
+        TryClearTodoActions();
+        TryClearTopBarLabels();
 
         var dispatcher = _webView.Dispatcher;
         if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
@@ -389,6 +439,8 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
+        TryClearTodoActions();
+        TryClearTopBarLabels();
 
         if (!_startupCompleted &&
             _startupReady.TrySetException(new InvalidOperationException(message)))
@@ -412,6 +464,8 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
+        TryClearTodoActions();
+        TryClearTopBarLabels();
         try { _requestRestart(); } catch { }
     }
 
@@ -464,6 +518,12 @@ internal sealed class WebPluginRuntime : IDisposable
                 "papers.setCapsulePresentation" => SetPaperCapsule(parameters),
                 "papers.postBody" => PostPaperBody(parameters),
                 "topbar.global.set" => SetGlobalActions(parameters),
+                "todoActions.set" => SetTodoActions(parameters),
+                "todoActions.clear" => ClearTodoActions(parameters),
+                "todoActions.clearAll" => ClearTodoActions(),
+                "topbar.labels.set" => SetTopBarLabels(parameters),
+                "topbar.labels.clear" => ClearTopBarLabels(parameters),
+                "topbar.labels.clearAll" => ClearTopBarLabels(),
                 _ => WebPluginWorkspaceRequests.Execute(_workspace, method, parameters)
             };
             Send(new { type = "hostResponse", requestId, ok = true, result });
@@ -546,6 +606,84 @@ internal sealed class WebPluginRuntime : IDisposable
         var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
         var message = RequiredProperty(parameters, "message");
         return new { delivered = _papers.PostToBody(paperId, message) };
+    }
+
+    private object SetTodoActions(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var todoId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "todoId");
+        var actionsValue = RequiredProperty(parameters, "actions");
+        if (actionsValue.ValueKind != JsonValueKind.Array)
+        {
+            throw new PaperTodoPluginException("invalid_params", "actions must be an array.");
+        }
+
+        PaperTodoAction[] actions;
+        try
+        {
+            actions = actionsValue.Deserialize<PaperTodoAction[]>(
+                WebPluginRuntimeInfrastructure.JsonOptions) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw new PaperTodoPluginException("invalid_params", ex.GetBaseException().Message);
+        }
+
+        TodoActions.SetActionHandler(invocation =>
+            Send(new { type = "todoActionInvoked", action = invocation }));
+        TodoActions.SetActions(paperId, todoId, actions);
+        return new { updated = actions.Length };
+    }
+
+    private object ClearTodoActions(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var todoId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "todoId");
+        TodoActions.Clear(paperId, todoId);
+        return new { updated = 0 };
+    }
+
+    private object ClearTodoActions()
+    {
+        TodoActions.Clear();
+        return new { updated = 0 };
+    }
+
+    private object SetTopBarLabels(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        var labelsValue = RequiredProperty(parameters, "labels");
+        if (labelsValue.ValueKind != JsonValueKind.Array)
+        {
+            throw new PaperTodoPluginException("invalid_params", "labels must be an array.");
+        }
+
+        PaperTopBarLabel[] labels;
+        try
+        {
+            labels = labelsValue.Deserialize<PaperTopBarLabel[]>(
+                WebPluginRuntimeInfrastructure.JsonOptions) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw new PaperTodoPluginException("invalid_params", ex.GetBaseException().Message);
+        }
+
+        TopBarLabels.SetLabels(paperId, labels);
+        return new { updated = labels.Length };
+    }
+
+    private object ClearTopBarLabels(JsonElement parameters)
+    {
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        TopBarLabels.Clear(paperId);
+        return new { updated = 0 };
+    }
+
+    private object ClearTopBarLabels()
+    {
+        TopBarLabels.Clear();
+        return new { updated = 0 };
     }
 
     private static JsonElement RequiredProperty(JsonElement value, string name)
@@ -693,6 +831,21 @@ internal sealed class WebPluginRuntime : IDisposable
         try { _globalShortcuts.Clear(); } catch { }
     }
 
+    private void TryClearTodoActions()
+    {
+        try
+        {
+            TodoActions.Clear();
+            TodoActions.SetActionHandler(null);
+        }
+        catch { }
+    }
+
+    private void TryClearTopBarLabels()
+    {
+        try { TopBarLabels.Clear(); } catch { }
+    }
+
     private void ThrowIfInactive()
     {
         if (_disposed || !_isActive())
@@ -710,6 +863,8 @@ internal sealed class WebPluginRuntime : IDisposable
         _documentReady = false;
         TryClearGlobalTopBar();
         TryClearGlobalShortcuts();
+        TryClearTodoActions();
+        TryClearTopBarLabels();
         _disposed = true;
         try { _papersSubscription.Dispose(); } catch { }
         try { _settingsSubscription.Dispose(); } catch { }

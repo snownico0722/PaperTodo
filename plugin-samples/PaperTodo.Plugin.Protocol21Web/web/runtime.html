@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PaperTodo Protocol 2.1 Runtime</title>
+</head>
+<body>
+<script>
+  const todoKeys = new Set();
+  const labeledPapers = new Set();
+
+  const inspectIcon = {
+    kind: 'svgPath',
+    value: 'M3,3 L13,3 13,13 3,13 Z M6,8 L10,8',
+    renderMode: 'stroke',
+    strokeWidth: 1.5
+  };
+
+  async function clearPublished() {
+    for (const key of [...todoKeys]) {
+      const split = key.indexOf('\n');
+      const paperId = key.slice(0, split);
+      const todoId = key.slice(split + 1);
+      try { await papertodo.todoActions.clear(paperId, todoId); } catch { }
+    }
+    todoKeys.clear();
+
+    for (const paperId of [...labeledPapers]) {
+      try { await papertodo.topBarLabels.clear(paperId); } catch { }
+    }
+    labeledPapers.clear();
+  }
+
+  async function publishCurrentWorkspace() {
+    await clearPublished();
+
+    const todos = await papertodo.workspace.request('todos.list', {
+      includeBlank: false
+    });
+    for (const todo of Array.isArray(todos) ? todos : []) {
+      const paperId = String(todo?.paperId || '').trim();
+      const todoId = String(todo?.id || '').trim();
+      if (!paperId || !todoId) continue;
+
+      await papertodo.todoActions.set(paperId, todoId, [
+        {
+          id: 'inspect-binding',
+          icon: inspectIcon,
+          text: '绑定',
+          toolTip: '查看插件收到的当前 Todo 与绑定信息',
+          priority: 100
+        }
+      ]);
+      todoKeys.add(`${paperId}\n${todoId}`);
+    }
+
+    const papers = await papertodo.workspace.request('papers.list', {});
+    for (const paper of Array.isArray(papers) ? papers : []) {
+      const paperId = String(paper?.id || '').trim();
+      if (!paperId) continue;
+
+      await papertodo.topBarLabels.set(paperId, [
+        {
+          text: 'P2.1',
+          toolTip: 'Protocol 2.1 Runtime 发布的宿主原生静态标签',
+          priority: 10
+        }
+      ]);
+      labeledPapers.add(paperId);
+    }
+  }
+
+  async function registerGlobalTopBar() {
+    await papertodo.globalTopBar.setActions([
+      {
+        id: 'refresh-protocol21',
+        icon: {
+          kind: 'svgPath',
+          value: 'M12.5,5 A5,5 0 1 0 13,9 M13,3 L13,7 9,7',
+          renderMode: 'stroke',
+          strokeWidth: 1.5
+        },
+        toolTip: '重新发布 Protocol 2.1 Todo 动作与顶栏标签',
+        priority: 100
+      }
+    ]);
+  }
+
+  papertodo.onEvent(message => {
+    if (message.type === 'todoActionInvoked' &&
+        message.action?.actionId === 'inspect-binding') {
+      const todo = message.action.todo || {};
+      console.log('Protocol 2.1 Todo action', {
+        paperId: message.action.paperId,
+        todoId: message.action.todoId,
+        text: todo.text,
+        linkedPaperId: todo.linkedPaperId,
+        linkedPath: todo.linkedPath,
+        linkedPathIsDirectory: todo.linkedPathIsDirectory
+      });
+      return;
+    }
+
+    if (message.type === 'topBarActionInvoked' &&
+        message.action?.actionId === 'refresh-protocol21') {
+      publishCurrentWorkspace().catch(error => {
+        console.error('Protocol 2.1 refresh failed', error);
+      });
+    }
+  });
+
+  window.addEventListener('papertodo', event => {
+    const message = event.detail || {};
+    if (message.type !== 'initialize') return;
+
+    registerGlobalTopBar()
+      .then(publishCurrentWorkspace)
+      .catch(error => {
+        console.error('Protocol 2.1 initialization failed', error);
+      });
+  });
+</script>
+</body>
+</html>

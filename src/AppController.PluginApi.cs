@@ -49,7 +49,10 @@ public sealed partial class AppController
             item.Order,
             item.LinkedPaperId,
             item.LinkedPath,
-            item.ReminderAt);
+            item.ReminderAt)
+        {
+            LinkedPathIsDirectory = item.LinkedPathIsDirectory
+        };
 
     internal NoteSnapshot CaptureNoteSnapshot(PaperData paper)
     {

@@ -109,7 +109,14 @@ public sealed record TodoSnapshot(
     int Order,
     string? LinkedPaperId,
     string? LinkedPath,
-    DateTimeOffset? ReminderAt);
+    DateTimeOffset? ReminderAt)
+{
+    /// <summary>
+    /// Protocol 2.1 additive metadata for LinkedPath. Null means there is no linked path or the
+    /// host cannot classify it; true means directory and false means file.
+    /// </summary>
+    public bool? LinkedPathIsDirectory { get; init; }
+}
 
 public sealed record NoteSnapshot(
     string PaperId,

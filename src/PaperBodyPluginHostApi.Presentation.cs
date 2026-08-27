@@ -57,17 +57,14 @@ internal sealed partial class PaperBodyPluginHostApi
     private void EnsurePresentationProtocol()
     {
         if (_controller.PaperBodyPlugins.TryGet(_providerId, out var descriptor) &&
-            string.Equals(
-                descriptor.ApiVersion,
-                PaperBodyPluginRegistry.SupportedPluginApiVersion,
-                StringComparison.Ordinal))
+            PluginContributionPolicy.ApiAtLeast(descriptor.ApiVersion, 2, 0))
         {
             return;
         }
 
         throw Error(
             "presentation_requires_api_2_0",
-            "Own-paper presentation controls require plugin apiVersion 2.0.");
+            "Own-paper presentation controls require plugin apiVersion 2.0 or newer.");
     }
 
     private void QueuePresentation(Func<string, bool> action)

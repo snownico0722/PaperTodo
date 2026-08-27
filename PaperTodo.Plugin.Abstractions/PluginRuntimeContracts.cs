@@ -43,6 +43,20 @@ public sealed record PaperPluginRuntimeEvent(
     JsonElement? Message = null);
 
 /// <summary>
+/// Protocol 2.1 non-interactive top-bar metadata. PaperTodo owns rendering, truncation, theme, DPI
+/// and responsive layout. Icon is optional and uses the same restricted host-rendered icon contract
+/// as top-bar actions.
+/// </summary>
+public sealed record PaperTopBarLabel
+{
+    public string Text { get; init; } = string.Empty;
+    public PaperTopBarIcon? Icon { get; init; }
+    public string ToolTip { get; init; } = string.Empty;
+    public int Priority { get; init; }
+    public bool Visible { get; init; } = true;
+}
+
+/// <summary>
 /// Provider-scoped view of the plugin's own Paper instances. It deliberately does not create one
 /// runtime per Paper: presentation is addressed by PaperId while one plugin Runtime owns the
 /// backend. Plugins needing extra workers/processes create and manage those internally.

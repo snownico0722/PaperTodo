@@ -110,11 +110,9 @@ public sealed partial class AppController
         Func<bool> isActive,
         Action<PaperTopBarActionInvocation> invoke)
     {
-        // The app-runtime manager validates protocol 2.0 before creating this capability. Once a
-        // runtime is alive, it owns its process-lifetime lease even if the user rescans plugin
-        // manifests; ordinary plugin Reload does not silently replace a running plugin runtime.
-        // The protocol accepts a broad descriptor set, while the window still materializes only
-        // the fitting prefix after current-paper actions have taken first claim on plugin space.
+        // Runtime creation already validated an accepted protocol version. The protocol accepts a
+        // broad descriptor set, while the window still materializes only the fitting prefix after
+        // current-paper actions have taken first claim on plugin space.
         var normalized = NormalizePluginTopBarActions(
             actions,
             MaximumGlobalTopBarActions,
@@ -157,17 +155,14 @@ public sealed partial class AppController
     private void EnsurePluginTopBarProtocol(string providerId)
     {
         if (PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
-            string.Equals(
-                descriptor.ApiVersion,
-                PaperBodyPluginRegistry.SupportedPluginApiVersion,
-                StringComparison.Ordinal))
+            PluginContributionPolicy.ApiAtLeast(descriptor.ApiVersion, 2, 0))
         {
             return;
         }
 
         throw new PaperTodoPluginException(
             "topbar_requires_api_2_0",
-            "Plugin top-bar extensions require apiVersion 2.0.");
+            "Plugin top-bar extensions require apiVersion 2.0 or newer.");
     }
 
     internal void RemovePluginPaperTopBarSession(Guid sessionId)

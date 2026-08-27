@@ -82,13 +82,13 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 
 /// <summary>
 /// Discovers one fully trusted, unsandboxed native or local Web plugin from each self-contained
-/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.0 has no plugin hot-reload contract: code,
+/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.x has no plugin hot-reload contract: code,
 /// manifest and Web file changes are discovered on the next app start. Loaded native assemblies
 /// remain loaded for the process lifetime.
 /// </summary>
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
-    internal const string SupportedPluginApiVersion = "2.0";
+    internal const string SupportedPluginApiVersion = "2.1";
     internal const string MinimumPluginApiVersion = "2.0";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
@@ -355,7 +355,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             }
         }
 
-
         return manifest;
     }
 
@@ -592,7 +591,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         return result;
     }
 
-
     private static string NormalizeApiVersion(string? value)
     {
         value = value?.Trim();
@@ -604,7 +602,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             minor < 0)
         {
             throw new InvalidDataException(
-                "apiVersion must be a quoted major.minor string such as \"2.0\".");
+                "apiVersion must be a quoted major.minor string such as \"2.1\".");
         }
 
         return $"{major}.{minor}";
@@ -612,16 +610,14 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private static void ValidateManifestApiVersion(string pluginApiVersion)
     {
-        if (string.Equals(
-                pluginApiVersion,
-                SupportedPluginApiVersion,
-                StringComparison.Ordinal))
+        if (string.Equals(pluginApiVersion, "2.0", StringComparison.Ordinal) ||
+            string.Equals(pluginApiVersion, "2.1", StringComparison.Ordinal))
         {
             return;
         }
 
         throw new InvalidDataException(
-            $"Unsupported plugin API version {pluginApiVersion}; host requires {SupportedPluginApiVersion}.");
+            $"Unsupported plugin API version {pluginApiVersion}; host supports 2.0 through {SupportedPluginApiVersion}.");
     }
 
     private static Version ParseVersion(string? value)
