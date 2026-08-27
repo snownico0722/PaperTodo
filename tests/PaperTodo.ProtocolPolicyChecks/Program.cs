@@ -311,9 +311,17 @@ internal static class Program
     private static void CheckProtocolBoundaries(Assembly host)
     {
         var hostApi = RequireType(host, "PaperTodo.PaperBodyPluginHostApi");
+        var controller = RequireType(host, "PaperTodo.AppController");
+        var registry = RequireType(host, "PaperTodo.PaperBodyPluginRegistry");
         Assert(
-            hostApi.GetMethod("EnsurePresentationProtocol", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Own-paper presentation lacks an explicit protocol-version gate.");
+            hostApi.GetMethod("EnsurePresentationProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
+            "Single-baseline Protocol 2.1 must not retain the old presentation version gate.");
+        Assert(
+            controller.GetMethod("EnsurePluginTopBarProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
+            "Single-baseline Protocol 2.1 must not retain the old top-bar version gate.");
+        Assert(
+            registry.GetMethod("ApiAtLeast", BindingFlags.Static | BindingFlags.NonPublic) == null,
+            "Single-baseline Protocol 2.1 must not retain registry compatibility comparisons.");
     }
 
     private static void CheckSharedWebInfrastructure(Assembly host)

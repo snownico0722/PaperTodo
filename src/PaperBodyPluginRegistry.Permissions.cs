@@ -72,24 +72,6 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "maxPaperInstances must be 0 (unlimited) or a positive integer.");
         }
-        if (manifest.Permissions.Length > 0 && !ApiAtLeast(manifest.ApiVersion, 1, 3))
-        {
-            throw new InvalidDataException(
-                "Plugin permissions require apiVersion 1.3 or newer.");
-        }
-        if (manifest.Capabilities.Contains("runtime", StringComparer.Ordinal) &&
-            !ApiAtLeast(manifest.ApiVersion, 2, 0))
-        {
-            throw new InvalidDataException(
-                "The runtime capability requires apiVersion 2.0 or newer.");
-        }
-    }
-
-    private static bool ApiAtLeast(string apiVersion, int major, int minor)
-    {
-        var parts = apiVersion.Split('.');
-        return int.Parse(parts[0]) > major ||
-            (int.Parse(parts[0]) == major && int.Parse(parts[1]) >= minor);
     }
 
     private static void ValidateDeclaredDefault(

@@ -61,7 +61,6 @@ public sealed partial class AppController
         Func<bool> isActive,
         Action<PaperTopBarActionInvocation> invoke)
     {
-        EnsurePluginTopBarProtocol(providerId);
         var normalized = NormalizePluginTopBarActions(
             actions,
             MaximumPaperTopBarActions,
@@ -150,19 +149,6 @@ public sealed partial class AppController
             PaperWindow.EnsurePluginTopBarLoadedHandler();
         }
         RefreshAllPluginTopBars();
-    }
-
-    private void EnsurePluginTopBarProtocol(string providerId)
-    {
-        if (PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
-            PluginContributionPolicy.ApiAtLeast(descriptor.ApiVersion, 2, 0))
-        {
-            return;
-        }
-
-        throw new PaperTodoPluginException(
-            "topbar_requires_api_2_0",
-            "Plugin top-bar extensions require apiVersion 2.0 or newer.");
     }
 
     internal void RemovePluginPaperTopBarSession(Guid sessionId)

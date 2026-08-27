@@ -86,11 +86,6 @@ internal sealed partial class PaperBodyPluginRegistry
                 throw new InvalidDataException(
                     $"Plugin setting '{setting.Id}' has unsupported type '{setting.Type}'.");
             }
-            if (setting.Type == "shortcut" && !ApiAtLeast(manifest.ApiVersion, 2, 0))
-            {
-                throw new InvalidDataException(
-                    $"Plugin shortcut setting '{setting.Id}' requires apiVersion 2.0 or newer.");
-            }
             if (setting.Type == "shortcut" && setting.ShortcutAction.Length == 0)
             {
                 throw new InvalidDataException(
