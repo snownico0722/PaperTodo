@@ -5,6 +5,13 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
+    // Volatile presentation fallback that outlives one Runtime lease. A Web Runtime can enter
+    // Backoff and dispose its lease while the owning Papers still exist; keeping the last rich
+    // capsule snapshot here lets a rebuilt PaperWindow replay the previous presentation until the
+    // Runtime recovers. Final Failed clears this cache together with the persisted fallback text.
+    private readonly Dictionary<string, Dictionary<string, PaperCapsulePresentation>>
+        _pluginRuntimePresentationCache = new(StringComparer.Ordinal);
+
     internal IReadOnlyList<PaperPluginRuntimePaper> GetPluginRuntimePapers(string providerId) =>
         State.Papers
             .Where(paper =>
@@ -73,15 +80,32 @@ public sealed partial class AppController
         string providerId)
     {
         if (!_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
-            slot.State != PluginRuntimeState.Running ||
-            slot.Lease?.Papers == null ||
+            slot.State is PluginRuntimeState.Failed or PluginRuntimeState.Disposing ||
             FindPluginRuntimePaper(providerId, paperId) == null)
         {
             return;
         }
-        if (slot.Lease.Papers.TryGetCapsulePresentation(paperId, out var presentation))
+
+        if (slot.State == PluginRuntimeState.Running &&
+            slot.Lease?.Papers != null &&
+            slot.Lease.Papers.TryGetCapsulePresentation(paperId, out var livePresentation))
         {
-            window.ApplyPluginRuntimeCapsule(providerId, presentation);
+            window.ApplyPluginRuntimeCapsule(providerId, livePresentation);
+            return;
+        }
+
+        // A failed Web Runtime disposes its lease before entering Backoff. Keep replaying the last
+        // published rich capsule while the replacement Runtime starts so a PaperWindow rebuild does
+        // not temporarily collapse to BodyCapsuleText-only presentation.
+        if (slot.State is PluginRuntimeState.Starting or
+            PluginRuntimeState.Backoff or
+            PluginRuntimeState.Running &&
+            TryGetPluginRuntimePresentationCache(
+                providerId,
+                paperId,
+                out var retainedPresentation))
+        {
+            window.ApplyPluginRuntimeCapsule(providerId, retainedPresentation);
         }
     }
 
@@ -116,6 +140,7 @@ public sealed partial class AppController
     {
         var paper = RequirePluginRuntimePaper(providerId, paperId);
         var normalized = PaperWindow.NormalizePluginCapsulePresentation(presentation);
+        CachePluginRuntimePaperCapsule(providerId, paperId, normalized);
         paper.BodyCapsuleText = normalized == null
             ? string.Empty
             : PaperWindow.CapsulePresentationFallbackText(normalized);
@@ -125,8 +150,26 @@ public sealed partial class AppController
         }
     }
 
+    internal void RemovePluginRuntimePresentationCache(
+        string providerId,
+        string paperId)
+    {
+        if (!_pluginRuntimePresentationCache.TryGetValue(providerId, out var papers))
+        {
+            return;
+        }
+
+        papers.Remove(paperId);
+        if (papers.Count == 0)
+        {
+            _pluginRuntimePresentationCache.Remove(providerId);
+        }
+    }
+
     internal void ClearPluginRuntimePresentation(string providerId)
     {
+        _pluginRuntimePresentationCache.Remove(providerId);
+
         var changed = false;
         foreach (var paper in State.Papers.Where(paper =>
                      paper.Type == PaperTypes.Note &&
@@ -154,6 +197,41 @@ public sealed partial class AppController
         {
             MarkDirty();
         }
+    }
+
+    private void CachePluginRuntimePaperCapsule(
+        string providerId,
+        string paperId,
+        PaperCapsulePresentation? presentation)
+    {
+        if (presentation == null)
+        {
+            RemovePluginRuntimePresentationCache(providerId, paperId);
+            return;
+        }
+
+        if (!_pluginRuntimePresentationCache.TryGetValue(providerId, out var papers))
+        {
+            papers = new Dictionary<string, PaperCapsulePresentation>(StringComparer.Ordinal);
+            _pluginRuntimePresentationCache.Add(providerId, papers);
+        }
+        papers[paperId] = presentation;
+    }
+
+    private bool TryGetPluginRuntimePresentationCache(
+        string providerId,
+        string paperId,
+        out PaperCapsulePresentation? presentation)
+    {
+        if (_pluginRuntimePresentationCache.TryGetValue(providerId, out var papers) &&
+            papers.TryGetValue(paperId, out var value))
+        {
+            presentation = value;
+            return true;
+        }
+
+        presentation = null;
+        return false;
     }
 
     private PaperData? FindPluginRuntimePaper(string providerId, string paperId) =>

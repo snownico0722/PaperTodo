@@ -179,6 +179,10 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         }
         foreach (var paperId in removed)
         {
+            // The controller owns a short-lived retained copy across Runtime Backoff. Once the
+            // Paper itself leaves the provider, both the live lease cache and retained fallback
+            // must forget it before PaperRemoved is delivered.
+            _controller.RemovePluginRuntimePresentationCache(_providerId, paperId);
             Publish(new PaperPluginRuntimeEvent(
                 PaperPluginRuntimeEventKind.PaperRemoved,
                 paperId));
