@@ -1113,6 +1113,8 @@ internal static class TelemetryService
     private static async Task UploadPendingBatchAsync(bool allowRetry = true)
     {
         List<TelemetryReport> batch;
+        List<(string ReportId, string Payload)> sentPayloads;
+        string json;
         lock (Gate)
         {
             if (_uploading || !_persisted.Enabled || _persisted.PendingReports.Count == 0)
@@ -1122,28 +1124,39 @@ internal static class TelemetryService
 
             _uploading = true;
             batch = _persisted.PendingReports.ToList();
+            sentPayloads = batch
+                .Select(report => (
+                    report.ReportId,
+                    JsonSerializer.Serialize(report, WireJsonOptions)))
+                .ToList();
+            json = JsonSerializer.Serialize(
+                new TelemetryBatch
+                {
+                    SchemaVersion = SchemaVersion,
+                    Reports = batch
+                },
+                WireJsonOptions);
         }
 
         var succeeded = false;
         try
         {
-            var envelope = new TelemetryBatch
-            {
-                SchemaVersion = SchemaVersion,
-                Reports = batch
-            };
-            var json = JsonSerializer.Serialize(envelope, WireJsonOptions);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = await Http.PostAsync(Endpoint, content).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
                 succeeded = true;
-                var sentIds = batch.Select(report => report.ReportId).ToHashSet(StringComparer.Ordinal);
                 lock (Gate)
                 {
                     if (_persisted.Enabled)
                     {
-                        _persisted.PendingReports.RemoveAll(report => sentIds.Contains(report.ReportId));
+                        _persisted.PendingReports.RemoveAll(report =>
+                        {
+                            var currentPayload = JsonSerializer.Serialize(report, WireJsonOptions);
+                            return sentPayloads.Any(sent =>
+                                string.Equals(sent.ReportId, report.ReportId, StringComparison.Ordinal) &&
+                                string.Equals(sent.Payload, currentPayload, StringComparison.Ordinal));
+                        });
                         SaveLocked();
                     }
                 }
