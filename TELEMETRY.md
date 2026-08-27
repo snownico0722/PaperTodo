@@ -11,7 +11,7 @@ The setting is enabled by default and can be disabled in Advanced Settings under
 - On a brand-new telemetry install, if there is no completed previous-day/backlog report waiting to send, PaperTodo sends one provisional row for the current local day immediately. This prevents a user who tries PaperTodo once and never launches it again from disappearing from the new-user denominator.
 - The provisional row uses exactly the same deterministic `report_id` as that day's eventual completed row: `<install_id>_<date>_v1`.
 - If a completed previous-day/backlog report exists, PaperTodo sends that backlog instead of creating a provisional current-day row.
-- The current local day otherwise remains local while it is in progress. When the date rolls over, the completed day is finalized and its upload is deterministically spread across the first 10 minutes after local midnight using the random-install ID. If PaperTodo was not running at rollover, the day is finalized on the next launch and that backlog is sent immediately.
+- The current local day otherwise remains local while it is in progress. When the date rolls over, the completed day is finalized and assigned a deterministic upload slot in the first 10 minutes after local midnight using the random-install ID. If rollover is first noticed after that slot, such as after sleep/resume, the report is sent immediately. If PaperTodo was not running at rollover, the day is finalized on the next launch and that backlog is sent immediately.
 - If the provisional row was already accepted, the later completed row is another raw CLS row with the same `report_id`. Retry deduplication therefore also upgrades the provisional row to the final row automatically.
 - If several reports are queued, one HTTP POST contains the whole backlog; the receiver writes one JSON row per report to CLS.
 - If a POST fails or times out, PaperTodo makes one lightweight retry after a deterministic 30–120 second delay. If that retry also fails, the batch remains local and is retried on a later application launch or day rollover. There is no periodic retry loop.
@@ -31,8 +31,9 @@ The setting is enabled by default and can be disabled in Advanced Settings under
 
 - `crash_count` remains the daily crash counter.
 - For the most recently observed crash signature on that local day, PaperTodo also stores the exception type, a short SHA-256 hash made from normalized managed stack method names, and the first PaperTodo type on the stack (falling back to the crash source label).
+- The signature is a latest-crash sample for grouping affected install-days; it does not attribute every event in that day's `crash_count` to that signature. Total crash volume must be aggregated from `crash_count` separately.
 - PaperTodo never uploads the complete stack trace, exception message, source-file path, line number, method arguments, or user content. The stack hash is only a grouping key for identifying repeated crash families.
-- Crash markers are written locally on the emergency path and merged into the normal daily report on a later startup/rollover, so crash reporting does not depend on the network being available while the process is failing.
+- Crash count and latest signature are written together into one local emergency marker and merged into the normal daily report on a later startup/rollover, so crash reporting does not depend on the network being available while the process is failing.
 
 ## Retry deduplication
 

@@ -61,10 +61,6 @@ internal static class TelemetryService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PaperTodo",
         "telemetry-crash.json");
-    private static readonly string CrashDetailsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PaperTodo",
-        "telemetry-crash-details.json");
 
     private static TelemetryPersistedState _persisted = LoadPersistedState();
     private static AppController? _controller;
@@ -213,44 +209,35 @@ internal static class TelemetryService
         {
             lock (Gate)
             {
-                Dictionary<string, int> counts;
+                Dictionary<string, CrashMarker> markers;
                 try
                 {
-                    counts = File.Exists(CrashPath)
-                        ? JsonSerializer.Deserialize<Dictionary<string, int>>(
+                    markers = File.Exists(CrashPath)
+                        ? JsonSerializer.Deserialize<Dictionary<string, CrashMarker>>(
                                 File.ReadAllText(CrashPath),
                                 DiskJsonOptions)
-                            ?? new Dictionary<string, int>(StringComparer.Ordinal)
-                        : new Dictionary<string, int>(StringComparer.Ordinal);
+                            ?? new Dictionary<string, CrashMarker>(StringComparer.Ordinal)
+                        : new Dictionary<string, CrashMarker>(StringComparer.Ordinal);
                 }
                 catch
                 {
-                    counts = new Dictionary<string, int>(StringComparer.Ordinal);
+                    markers = new Dictionary<string, CrashMarker>(StringComparer.Ordinal);
                 }
 
                 var date = LocalDateString();
-                counts[date] = counts.TryGetValue(date, out var current)
-                    ? AddBounded(current, 1, 1000)
-                    : 1;
-                WriteAtomic(CrashPath, JsonSerializer.Serialize(counts, DiskJsonOptions));
-
-                Dictionary<string, CrashSignature> details;
-                try
+                if (!markers.TryGetValue(date, out var marker) || marker == null)
                 {
-                    details = File.Exists(CrashDetailsPath)
-                        ? JsonSerializer.Deserialize<Dictionary<string, CrashSignature>>(
-                                File.ReadAllText(CrashDetailsPath),
-                                DiskJsonOptions)
-                            ?? new Dictionary<string, CrashSignature>(StringComparer.Ordinal)
-                        : new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
-                }
-                catch
-                {
-                    details = new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
+                    marker = new CrashMarker();
                 }
 
-                details[date] = CreateCrashSignature(exception, source);
-                WriteAtomic(CrashDetailsPath, JsonSerializer.Serialize(details, DiskJsonOptions));
+                marker.Count = AddBounded(marker.Count, 1, 1000);
+                var signature = CreateCrashSignature(exception, source);
+                marker.ExceptionType = signature.ExceptionType;
+                marker.StackHash = signature.StackHash;
+                marker.Module = signature.Module;
+                markers[date] = marker;
+
+                WriteAtomic(CrashPath, JsonSerializer.Serialize(markers, DiskJsonOptions));
             }
         }
         catch
@@ -345,7 +332,6 @@ internal static class TelemetryService
         _persisted.PendingReports.Clear();
         _persisted.CurrentDay = null;
         TryDeleteFile(CrashPath);
-        TryDeleteFile(CrashDetailsPath);
     }
 
     private static void OnPreProcessInput(object sender, PreProcessInputEventArgs e)
@@ -428,7 +414,8 @@ internal static class TelemetryService
         }
 
         _captureOnPostProcess = false;
-        if (!_runtimeActive || _controller == null)
+        var controller = _controller;
+        if (!_runtimeActive || controller == null)
         {
             return;
         }
@@ -436,7 +423,10 @@ internal static class TelemetryService
         CapturePendingTodoTextTransition();
         CapturePendingTodoCompletion();
         CapturePendingMarkdownPreview();
-        CaptureLightweightPaperTransitions();
+        if (CaptureLightweightPaperTransitions())
+        {
+            HandleDayRolledOver(controller, DateTimeOffset.UtcNow);
+        }
     }
 
     private static void CapturePendingTodoTextTransition()
@@ -447,7 +437,6 @@ internal static class TelemetryService
         {
             return;
         }
-
         var state = TodoInputStates.GetValue(todoBox, static _ => new TodoInputState());
         var hasText = !string.IsNullOrWhiteSpace(todoBox.Text);
         if (!state.Initialized)
@@ -626,19 +615,26 @@ internal static class TelemetryService
             {
                 update(_persisted.CurrentDay);
             }
-            if (rolledOver)
-            {
-                SaveLocked();
-            }
         }
 
         if (rolledOver)
         {
-            _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
-            ResetPaperTransitionBaseline(controller.State);
-            _lastSnapshotUtc = DateTimeOffset.UtcNow;
-            _ = UploadPendingBatchAfterDelayAsync(MidnightUploadDelay(), allowRetry: true);
+            HandleDayRolledOver(controller, DateTimeOffset.UtcNow);
         }
+    }
+
+    private static void HandleDayRolledOver(AppController controller, DateTimeOffset now)
+    {
+        lock (Gate)
+        {
+            SaveLocked();
+        }
+
+        _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
+        ResetPaperTransitionBaseline(controller.State);
+        _lastSnapshotUtc = now;
+        _lastSaveUtc = now;
+        _ = UploadPendingBatchAfterDelayAsync(MidnightUploadDelay(), allowRetry: true);
     }
 
     private static void OnTimerTick(object? sender, EventArgs e)
@@ -676,13 +672,14 @@ internal static class TelemetryService
 
             if (rolledOver)
             {
-                _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
-                ResetPaperTransitionBaseline(controller.State);
-                _lastSnapshotUtc = now;
+                HandleDayRolledOver(controller, now);
+                return;
             }
-            else
+
+            if (CaptureLightweightPaperTransitions())
             {
-                rolledOver = CaptureLightweightPaperTransitions();
+                HandleDayRolledOver(controller, now);
+                return;
             }
 
             var snapshotInterval = recentlyActive
@@ -690,22 +687,22 @@ internal static class TelemetryService
                 : IdleSnapshotInterval;
             if (now - _lastSnapshotUtc >= snapshotInterval)
             {
-                rolledOver |= CaptureUsageTransitionsAndSnapshot();
+                rolledOver = CaptureUsageTransitionsAndSnapshot();
                 _lastSnapshotUtc = now;
+                if (rolledOver)
+                {
+                    HandleDayRolledOver(controller, now);
+                    return;
+                }
             }
 
-            if (rolledOver || now - _lastSaveUtc >= PersistInterval)
+            if (now - _lastSaveUtc >= PersistInterval)
             {
                 lock (Gate)
                 {
                     SaveLocked();
                 }
                 _lastSaveUtc = now;
-            }
-
-            if (rolledOver)
-            {
-                _ = UploadPendingBatchAfterDelayAsync(MidnightUploadDelay(), allowRetry: true);
             }
         }
         catch
@@ -1189,17 +1186,11 @@ internal static class TelemetryService
 
     private static void MergeCrashMarkersLocked()
     {
-        MergeCrashCountsLocked();
-        MergeCrashDetailsLocked();
-    }
-
-    private static void MergeCrashCountsLocked()
-    {
-        Dictionary<string, int>? counts;
+        Dictionary<string, CrashMarker>? markers;
         try
         {
-            counts = File.Exists(CrashPath)
-                ? JsonSerializer.Deserialize<Dictionary<string, int>>(
+            markers = File.Exists(CrashPath)
+                ? JsonSerializer.Deserialize<Dictionary<string, CrashMarker>>(
                     File.ReadAllText(CrashPath),
                     DiskJsonOptions)
                 : null;
@@ -1209,16 +1200,16 @@ internal static class TelemetryService
             return;
         }
 
-        if (counts == null || counts.Count == 0)
+        if (markers == null || markers.Count == 0)
         {
             TryDeleteFile(CrashPath);
             return;
         }
 
-        var unmatched = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var (date, count) in counts)
+        var unmatched = new Dictionary<string, CrashMarker>(StringComparer.Ordinal);
+        foreach (var (date, marker) in markers)
         {
-            if (count <= 0)
+            if (marker == null || marker.Count <= 0)
             {
                 continue;
             }
@@ -1226,10 +1217,7 @@ internal static class TelemetryService
             if (_persisted.CurrentDay != null &&
                 string.Equals(_persisted.CurrentDay.Date, date, StringComparison.Ordinal))
             {
-                _persisted.CurrentDay.CrashCount = AddBounded(
-                    _persisted.CurrentDay.CrashCount,
-                    count,
-                    1000);
+                ApplyCrashMarker(_persisted.CurrentDay, marker);
                 continue;
             }
 
@@ -1237,11 +1225,11 @@ internal static class TelemetryService
                 string.Equals(item.Date, date, StringComparison.Ordinal));
             if (report != null)
             {
-                report.CrashCount = AddBounded(report.CrashCount, count, 1000);
+                ApplyCrashMarker(report, marker);
                 continue;
             }
 
-            unmatched[date] = count;
+            unmatched[date] = marker;
         }
 
         try
@@ -1261,83 +1249,20 @@ internal static class TelemetryService
         }
     }
 
-    private static void MergeCrashDetailsLocked()
+    private static void ApplyCrashMarker(TelemetryDayState day, CrashMarker marker)
     {
-        Dictionary<string, CrashSignature>? details;
-        try
-        {
-            details = File.Exists(CrashDetailsPath)
-                ? JsonSerializer.Deserialize<Dictionary<string, CrashSignature>>(
-                    File.ReadAllText(CrashDetailsPath),
-                    DiskJsonOptions)
-                : null;
-        }
-        catch
-        {
-            return;
-        }
-
-        if (details == null || details.Count == 0)
-        {
-            TryDeleteFile(CrashDetailsPath);
-            return;
-        }
-
-        var unmatched = new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
-        foreach (var (date, signature) in details)
-        {
-            if (signature == null)
-            {
-                continue;
-            }
-
-            if (_persisted.CurrentDay != null &&
-                string.Equals(_persisted.CurrentDay.Date, date, StringComparison.Ordinal))
-            {
-                ApplyCrashSignature(_persisted.CurrentDay, signature);
-                continue;
-            }
-
-            var report = _persisted.PendingReports.FirstOrDefault(item =>
-                string.Equals(item.Date, date, StringComparison.Ordinal));
-            if (report != null)
-            {
-                ApplyCrashSignature(report, signature);
-                continue;
-            }
-
-            unmatched[date] = signature;
-        }
-
-        try
-        {
-            if (unmatched.Count == 0)
-            {
-                TryDeleteFile(CrashDetailsPath);
-            }
-            else
-            {
-                WriteAtomic(CrashDetailsPath, JsonSerializer.Serialize(unmatched, DiskJsonOptions));
-            }
-        }
-        catch
-        {
-            // Best effort.
-        }
+        day.CrashCount = AddBounded(day.CrashCount, marker.Count, 1000);
+        day.CrashExceptionType = LimitText(marker.ExceptionType, 128);
+        day.CrashStackHash = LimitText(marker.StackHash, 32);
+        day.CrashModule = LimitText(marker.Module, 64);
     }
 
-    private static void ApplyCrashSignature(TelemetryDayState day, CrashSignature signature)
+    private static void ApplyCrashMarker(TelemetryReport report, CrashMarker marker)
     {
-        day.CrashExceptionType = LimitText(signature.ExceptionType, 128);
-        day.CrashStackHash = LimitText(signature.StackHash, 32);
-        day.CrashModule = LimitText(signature.Module, 64);
-    }
-
-    private static void ApplyCrashSignature(TelemetryReport report, CrashSignature signature)
-    {
-        report.CrashExceptionType = LimitText(signature.ExceptionType, 128);
-        report.CrashStackHash = LimitText(signature.StackHash, 32);
-        report.CrashModule = LimitText(signature.Module, 64);
+        report.CrashCount = AddBounded(report.CrashCount, marker.Count, 1000);
+        report.CrashExceptionType = LimitText(marker.ExceptionType, 128);
+        report.CrashStackHash = LimitText(marker.StackHash, 32);
+        report.CrashModule = LimitText(marker.Module, 64);
     }
 
     private static void TryDeleteFile(string path)
@@ -1444,7 +1369,19 @@ internal static class TelemetryService
 
     private static TimeSpan MidnightUploadDelay()
     {
-        return StableUploadDelay("midnight", 0, MidnightUploadMaxDelaySeconds);
+        try
+        {
+            var target = DateTime.Today + StableUploadDelay(
+                "midnight",
+                0,
+                MidnightUploadMaxDelaySeconds);
+            var remaining = target - DateTime.Now;
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+        }
+        catch
+        {
+            return TimeSpan.Zero;
+        }
     }
 
     private static TimeSpan RetryUploadDelay()
@@ -1702,6 +1639,14 @@ internal static class TelemetryService
         public string CrashExceptionType { get; set; } = "";
         public string CrashStackHash { get; set; } = "";
         public string CrashModule { get; set; } = "";
+    }
+
+    private sealed class CrashMarker
+    {
+        public int Count { get; set; }
+        public string ExceptionType { get; set; } = "";
+        public string StackHash { get; set; } = "";
+        public string Module { get; set; } = "";
     }
 
     private sealed class CrashSignature

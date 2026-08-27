@@ -102,7 +102,7 @@ LIMIT 1000
 
 ## Crash families
 
-This groups completed logical rows by the anonymous crash signature. `crash_stack_hash` is the main family key; the exception type and module make the result readable without storing a raw stack trace.
+A daily report stores the total `crash_count` for that install/day but only the most recently observed anonymous crash signature. Do not sum `crash_count` by signature: doing so would incorrectly attribute earlier crashes on the same day to the last signature. Use the daily usage query above for total crash volume; use this query to rank signatures by affected install-days and installs.
 
 ```sql
 * |
@@ -111,7 +111,7 @@ SELECT
     crash_exception_type,
     crash_stack_hash,
     crash_module,
-    SUM(crash_count) AS crashes,
+    COUNT(*) AS affected_install_days,
     COUNT(DISTINCT install_id) AS affected_installs
 FROM (
     SELECT
@@ -124,9 +124,9 @@ FROM (
         MAX_BY(crash_module, received_at_ms) AS crash_module
     GROUP BY report_id
 )
-WHERE crash_count > 0
+WHERE crash_count > 0 AND crash_stack_hash <> ''
 GROUP BY app_version, crash_exception_type, crash_stack_hash, crash_module
-ORDER BY crashes DESC
+ORDER BY affected_installs DESC, affected_install_days DESC
 LIMIT 1000
 ```
 
