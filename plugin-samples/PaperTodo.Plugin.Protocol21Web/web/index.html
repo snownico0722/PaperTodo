@@ -15,7 +15,17 @@
 <body>
   <h1>Protocol 2.1</h1>
   <p>这个 Paper 只负责让 provider Runtime 保持存在。</p>
-  <p>Runtime 会向当前 Todo 发布 <code>SVG + 文字</code> 的行内/右键动作，并向当前 Paper 发布静态顶栏标签。</p>
+  <p>Runtime 会向当前 Todo 发布 <code>SVG + 文字</code> 的行内/右键动作，并向任意 Workspace Paper 发布静态顶栏标签。</p>
   <p>可用任意 Paper 顶栏的“刷新 2.1”动作重新扫描当前 Workspace。</p>
+  <script>
+    papertodo.paper.setHeaderText('Protocol 2.1');
+    papertodo.paper.setCapsulePresentation({
+      preferredWidth: 0,
+      plainText: 'P2.1',
+      components: [
+        { kind: 'text', text: 'P2.1', fill: true }
+      ]
+    });
+  </script>
 </body>
 </html>
