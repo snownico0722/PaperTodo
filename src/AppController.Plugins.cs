@@ -341,20 +341,42 @@ public sealed partial class AppController
         var primaryCount = Math.Min(
             settings.Count,
             descriptor.Manifest?.PrimarySettings ?? 3);
-        for (var index = 0; index < primaryCount; index++)
+        if (settings.Count <= primaryCount)
+        {
+            for (var index = 0; index < primaryCount; index++)
+            {
+                root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
+            }
+            return root;
+        }
+
+        for (var index = 0; index < primaryCount - 1; index++)
         {
             root.Children.Add(BuildPluginSettingControl(descriptor, settings[index]));
         }
 
-        if (settings.Count > primaryCount)
+        var tail = new Grid();
+        tail.ColumnDefinitions.Add(new ColumnDefinition
         {
-            var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-            more.MinWidth = 0;
-            more.Margin = new Thickness(0, 8, 0, 0);
-            more.HorizontalAlignment = HorizontalAlignment.Left;
-            more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
-            root.Children.Add(more);
-        }
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        tail.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var finalPrimary = BuildPluginSettingControl(
+            descriptor,
+            settings[primaryCount - 1]);
+        finalPrimary.Margin = new Thickness(0, 4, 8, 0);
+        Grid.SetColumn(finalPrimary, 0);
+        tail.Children.Add(finalPrimary);
+
+        var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
+        more.MinWidth = 0;
+        more.Margin = new Thickness(8, 4, 0, 0);
+        more.HorizontalAlignment = HorizontalAlignment.Right;
+        more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
+        Grid.SetColumn(more, 1);
+        tail.Children.Add(more);
+        root.Children.Add(tail);
 
         return root;
     }
@@ -363,15 +385,19 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         IReadOnlyList<PaperBodyPluginSettingManifest> settings)
     {
-        var height = Math.Min(
-            680,
-            Math.Max(420, SystemParameters.WorkArea.Height - 120));
+        var workArea = SystemParameters.WorkArea;
+        var maxWidth = Math.Max(360, Math.Min(900, workArea.Width - 120));
+        var maxHeight = Math.Max(280, Math.Min(720, workArea.Height - 120));
+        var minWidth = Math.Min(560, maxWidth);
+        var minHeight = Math.Min(340, maxHeight);
         var window = new Window
         {
             Title = $"{descriptor.DisplayName} · {Strings.Get("PluginsMoreSettings")}",
-            Width = 720,
-            Height = height,
-            SizeToContent = SizeToContent.Manual,
+            MinWidth = minWidth,
+            MinHeight = minHeight,
+            MaxWidth = maxWidth,
+            MaxHeight = maxHeight,
+            SizeToContent = SizeToContent.WidthAndHeight,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.NoResize,
             AllowsTransparency = true,
@@ -488,16 +514,24 @@ public sealed partial class AppController
         DockPanel.SetDock(titleRow, Dock.Top);
         root.Children.Add(titleRow);
 
-        var availableWidth = Math.Max(480, window.Width - 56);
-        var availableHeight = Math.Max(260, window.Height - 92);
+        var minimumContentWidth = Math.Max(480, window.MinWidth - 56);
+        var maximumContentWidth = Math.Max(
+            minimumContentWidth,
+            window.MaxWidth - 56);
+        var maximumContentHeight = Math.Max(260, window.MaxHeight - 92);
         var layout = BuildPluginFullSettingsLayout(
             descriptor,
             settings,
-            availableWidth,
-            availableHeight);
+            minimumContentWidth,
+            maximumContentWidth,
+            maximumContentHeight);
+        layout.MinWidth = minimumContentWidth;
+        layout.MaxWidth = maximumContentWidth;
         var scroll = new ScrollViewer
         {
             Content = layout,
+            MaxWidth = maximumContentWidth,
+            MaxHeight = maximumContentHeight,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Margin = new Thickness(0, 2, 0, 0)
@@ -510,6 +544,7 @@ public sealed partial class AppController
     private FrameworkElement BuildPluginFullSettingsLayout(
         PaperBodyPluginDescriptor descriptor,
         IReadOnlyList<PaperBodyPluginSettingManifest> settings,
+        double singleColumnWidth,
         double availableWidth,
         double availableHeight)
     {
@@ -554,7 +589,7 @@ public sealed partial class AppController
                 descriptor,
                 unit.Category,
                 unit.Settings);
-            element.Measure(new Size(availableWidth, double.PositiveInfinity));
+            element.Measure(new Size(singleColumnWidth, double.PositiveInfinity));
             naturalHeight += element.DesiredSize.Height + 8;
             elements.Add((element, unit.Column));
         }
@@ -622,6 +657,15 @@ public sealed partial class AppController
         columns.Children.Add(left);
         columns.Children.Add(separator);
         columns.Children.Add(right);
+
+        left.Measure(new Size(halfWidth, double.PositiveInfinity));
+        right.Measure(new Size(halfWidth, double.PositiveInfinity));
+        var naturalColumnWidth = Math.Max(
+            left.DesiredSize.Width,
+            right.DesiredSize.Width);
+        columns.Width = Math.Min(
+            availableWidth,
+            Math.Max(singleColumnWidth, naturalColumnWidth * 2 + 25));
         return columns;
     }
 
