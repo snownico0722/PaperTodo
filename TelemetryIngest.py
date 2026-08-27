@@ -116,6 +116,9 @@ def sanitize_report(data, received_at, received_at_ms):
         "image_inserted": bounded_int(data.get("image_inserted"), 10000),
         "hotkey_triggered": bounded_int(data.get("hotkey_triggered"), 100000),
         "crash_count": bounded_int(data.get("crash_count"), 1000),
+        "crash_exception_type": clean_text(data.get("crash_exception_type"), 128),
+        "crash_stack_hash": clean_text(data.get("crash_stack_hash"), 32),
+        "crash_module": clean_text(data.get("crash_module"), 64),
 
         # Raw CLS ingestion is intentionally at-least-once. This integer is the stable ordering
         # key used to keep the latest row for each deterministic report_id.

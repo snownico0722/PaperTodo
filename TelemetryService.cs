@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -21,6 +23,9 @@ internal static class TelemetryService
     private const int WmHotkey = 0x0312;
     private const string Endpoint = "https://1251449999-60pjzyd4uu.ap-beijing.tencentscf.com";
     private const int MaxPendingReports = 31;
+    private const int MidnightUploadMaxDelaySeconds = 10 * 60;
+    private const int RetryUploadMinDelaySeconds = 30;
+    private const int RetryUploadMaxDelaySeconds = 120;
 
     private static readonly TimeSpan TimerInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ActiveInputWindow = TimeSpan.FromSeconds(15);
@@ -56,6 +61,10 @@ internal static class TelemetryService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PaperTodo",
         "telemetry-crash.json");
+    private static readonly string CrashDetailsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PaperTodo",
+        "telemetry-crash-details.json");
 
     private static TelemetryPersistedState _persisted = LoadPersistedState();
     private static AppController? _controller;
@@ -193,7 +202,7 @@ internal static class TelemetryService
         }
     }
 
-    public static void RecordEmergencyCrash()
+    public static void RecordEmergencyCrash(Exception? exception, string source)
     {
         if (!Enabled)
         {
@@ -224,6 +233,24 @@ internal static class TelemetryService
                     ? AddBounded(current, 1, 1000)
                     : 1;
                 WriteAtomic(CrashPath, JsonSerializer.Serialize(counts, DiskJsonOptions));
+
+                Dictionary<string, CrashSignature> details;
+                try
+                {
+                    details = File.Exists(CrashDetailsPath)
+                        ? JsonSerializer.Deserialize<Dictionary<string, CrashSignature>>(
+                                File.ReadAllText(CrashDetailsPath),
+                                DiskJsonOptions)
+                            ?? new Dictionary<string, CrashSignature>(StringComparer.Ordinal)
+                        : new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
+                }
+                catch
+                {
+                    details = new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
+                }
+
+                details[date] = CreateCrashSignature(exception, source);
+                WriteAtomic(CrashDetailsPath, JsonSerializer.Serialize(details, DiskJsonOptions));
             }
         }
         catch
@@ -317,7 +344,8 @@ internal static class TelemetryService
     {
         _persisted.PendingReports.Clear();
         _persisted.CurrentDay = null;
-        TryDeleteCrashMarker();
+        TryDeleteFile(CrashPath);
+        TryDeleteFile(CrashDetailsPath);
     }
 
     private static void OnPreProcessInput(object sender, PreProcessInputEventArgs e)
@@ -609,7 +637,7 @@ internal static class TelemetryService
             _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
             ResetPaperTransitionBaseline(controller.State);
             _lastSnapshotUtc = DateTimeOffset.UtcNow;
-            _ = UploadPendingBatchAsync();
+            _ = UploadPendingBatchAfterDelayAsync(MidnightUploadDelay(), allowRetry: true);
         }
     }
 
@@ -677,7 +705,7 @@ internal static class TelemetryService
 
             if (rolledOver)
             {
-                _ = UploadPendingBatchAsync();
+                _ = UploadPendingBatchAfterDelayAsync(MidnightUploadDelay(), allowRetry: true);
             }
         }
         catch
@@ -1078,11 +1106,14 @@ internal static class TelemetryService
             MarkdownPreview = day.MarkdownPreview,
             ImageInserted = day.ImageInserted,
             HotkeyTriggered = day.HotkeyTriggered,
-            CrashCount = day.CrashCount
+            CrashCount = day.CrashCount,
+            CrashExceptionType = day.CrashExceptionType,
+            CrashStackHash = day.CrashStackHash,
+            CrashModule = day.CrashModule
         };
     }
 
-    private static async Task UploadPendingBatchAsync()
+    private static async Task UploadPendingBatchAsync(bool allowRetry = true)
     {
         List<TelemetryReport> batch;
         lock (Gate)
@@ -1096,6 +1127,7 @@ internal static class TelemetryService
             batch = _persisted.PendingReports.ToList();
         }
 
+        var succeeded = false;
         try
         {
             var envelope = new TelemetryBatch
@@ -1106,26 +1138,23 @@ internal static class TelemetryService
             var json = JsonSerializer.Serialize(envelope, WireJsonOptions);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = await Http.PostAsync(Endpoint, content).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
             {
-                return;
-            }
-
-            var sentIds = batch.Select(report => report.ReportId).ToHashSet(StringComparer.Ordinal);
-            lock (Gate)
-            {
-                if (!_persisted.Enabled)
+                succeeded = true;
+                var sentIds = batch.Select(report => report.ReportId).ToHashSet(StringComparer.Ordinal);
+                lock (Gate)
                 {
-                    return;
+                    if (_persisted.Enabled)
+                    {
+                        _persisted.PendingReports.RemoveAll(report => sentIds.Contains(report.ReportId));
+                        SaveLocked();
+                    }
                 }
-
-                _persisted.PendingReports.RemoveAll(report => sentIds.Contains(report.ReportId));
-                SaveLocked();
             }
         }
         catch
         {
-            // Keep the whole batch for a later launch or the next day rollover.
+            // Keep the whole batch. One lightweight retry is scheduled below.
         }
         finally
         {
@@ -1134,9 +1163,37 @@ internal static class TelemetryService
                 _uploading = false;
             }
         }
+
+        if (!succeeded && allowRetry)
+        {
+            _ = UploadPendingBatchAfterDelayAsync(RetryUploadDelay(), allowRetry: false);
+        }
+    }
+
+    private static async Task UploadPendingBatchAfterDelayAsync(TimeSpan delay, bool allowRetry)
+    {
+        try
+        {
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay).ConfigureAwait(false);
+            }
+
+            await UploadPendingBatchAsync(allowRetry).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best effort only. The batch remains on disk for a later launch or rollover.
+        }
     }
 
     private static void MergeCrashMarkersLocked()
+    {
+        MergeCrashCountsLocked();
+        MergeCrashDetailsLocked();
+    }
+
+    private static void MergeCrashCountsLocked()
     {
         Dictionary<string, int>? counts;
         try
@@ -1154,7 +1211,7 @@ internal static class TelemetryService
 
         if (counts == null || counts.Count == 0)
         {
-            TryDeleteCrashMarker();
+            TryDeleteFile(CrashPath);
             return;
         }
 
@@ -1191,7 +1248,7 @@ internal static class TelemetryService
         {
             if (unmatched.Count == 0)
             {
-                TryDeleteCrashMarker();
+                TryDeleteFile(CrashPath);
             }
             else
             {
@@ -1204,13 +1261,92 @@ internal static class TelemetryService
         }
     }
 
-    private static void TryDeleteCrashMarker()
+    private static void MergeCrashDetailsLocked()
+    {
+        Dictionary<string, CrashSignature>? details;
+        try
+        {
+            details = File.Exists(CrashDetailsPath)
+                ? JsonSerializer.Deserialize<Dictionary<string, CrashSignature>>(
+                    File.ReadAllText(CrashDetailsPath),
+                    DiskJsonOptions)
+                : null;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (details == null || details.Count == 0)
+        {
+            TryDeleteFile(CrashDetailsPath);
+            return;
+        }
+
+        var unmatched = new Dictionary<string, CrashSignature>(StringComparer.Ordinal);
+        foreach (var (date, signature) in details)
+        {
+            if (signature == null)
+            {
+                continue;
+            }
+
+            if (_persisted.CurrentDay != null &&
+                string.Equals(_persisted.CurrentDay.Date, date, StringComparison.Ordinal))
+            {
+                ApplyCrashSignature(_persisted.CurrentDay, signature);
+                continue;
+            }
+
+            var report = _persisted.PendingReports.FirstOrDefault(item =>
+                string.Equals(item.Date, date, StringComparison.Ordinal));
+            if (report != null)
+            {
+                ApplyCrashSignature(report, signature);
+                continue;
+            }
+
+            unmatched[date] = signature;
+        }
+
+        try
+        {
+            if (unmatched.Count == 0)
+            {
+                TryDeleteFile(CrashDetailsPath);
+            }
+            else
+            {
+                WriteAtomic(CrashDetailsPath, JsonSerializer.Serialize(unmatched, DiskJsonOptions));
+            }
+        }
+        catch
+        {
+            // Best effort.
+        }
+    }
+
+    private static void ApplyCrashSignature(TelemetryDayState day, CrashSignature signature)
+    {
+        day.CrashExceptionType = LimitText(signature.ExceptionType, 128);
+        day.CrashStackHash = LimitText(signature.StackHash, 32);
+        day.CrashModule = LimitText(signature.Module, 64);
+    }
+
+    private static void ApplyCrashSignature(TelemetryReport report, CrashSignature signature)
+    {
+        report.CrashExceptionType = LimitText(signature.ExceptionType, 128);
+        report.CrashStackHash = LimitText(signature.StackHash, 32);
+        report.CrashModule = LimitText(signature.Module, 64);
+    }
+
+    private static void TryDeleteFile(string path)
     {
         try
         {
-            if (File.Exists(CrashPath))
+            if (File.Exists(path))
             {
-                File.Delete(CrashPath);
+                File.Delete(path);
             }
         }
         catch
@@ -1306,6 +1442,125 @@ internal static class TelemetryService
         File.Move(tempPath, path, overwrite: true);
     }
 
+    private static TimeSpan MidnightUploadDelay()
+    {
+        return StableUploadDelay("midnight", 0, MidnightUploadMaxDelaySeconds);
+    }
+
+    private static TimeSpan RetryUploadDelay()
+    {
+        return StableUploadDelay("retry", RetryUploadMinDelaySeconds, RetryUploadMaxDelaySeconds);
+    }
+
+    private static TimeSpan StableUploadDelay(string purpose, int minimumSeconds, int maximumSeconds)
+    {
+        try
+        {
+            string installId;
+            lock (Gate)
+            {
+                installId = _persisted.InstallId;
+            }
+
+            var material = $"{installId}:{LocalDateString()}:{purpose}";
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(material));
+            var value = BitConverter.ToUInt32(hash, 0);
+            var width = (uint)Math.Max(1, maximumSeconds - minimumSeconds + 1);
+            return TimeSpan.FromSeconds(minimumSeconds + value % width);
+        }
+        catch
+        {
+            return TimeSpan.FromSeconds(minimumSeconds);
+        }
+    }
+
+    private static CrashSignature CreateCrashSignature(Exception? exception, string source)
+    {
+        return new CrashSignature
+        {
+            ExceptionType = LimitText(exception?.GetType().FullName ?? "", 128),
+            StackHash = exception == null ? "" : CrashStackHash(exception),
+            Module = CrashModule(exception, source)
+        };
+    }
+
+    private static string CrashStackHash(Exception exception)
+    {
+        try
+        {
+            var builder = new StringBuilder();
+            Exception? current = exception;
+            var exceptionDepth = 0;
+            while (current != null && exceptionDepth < 3)
+            {
+                builder.Append(current.GetType().FullName).Append('|');
+                var frames = new StackTrace(current, fNeedFileInfo: false).GetFrames();
+                if (frames != null)
+                {
+                    var frameCount = Math.Min(frames.Length, 12);
+                    for (var i = 0; i < frameCount; i++)
+                    {
+                        var method = frames[i].GetMethod();
+                        builder
+                            .Append(method?.DeclaringType?.FullName)
+                            .Append('.')
+                            .Append(method?.Name)
+                            .Append(';');
+                    }
+                }
+
+                builder.Append("->");
+                current = current.InnerException;
+                exceptionDepth++;
+            }
+
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
+            return Convert.ToHexString(hash).Substring(0, 16).ToLowerInvariant();
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string CrashModule(Exception? exception, string source)
+    {
+        if (exception != null)
+        {
+            try
+            {
+                var frames = new StackTrace(exception, fNeedFileInfo: false).GetFrames();
+                if (frames != null)
+                {
+                    foreach (var frame in frames)
+                    {
+                        var type = frame.GetMethod()?.DeclaringType;
+                        if (type?.Assembly == typeof(App).Assembly)
+                        {
+                            return LimitText(type.Name, 64);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fall back to the crash source label below.
+            }
+        }
+
+        return LimitText(source, 64);
+    }
+
+    private static string LimitText(string? value, int maximumLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
+        return value.Length <= maximumLength ? value : value[..maximumLength];
+    }
+
     private static int AddBounded(int current, int delta, int maximum)
     {
         return (int)Math.Clamp((long)current + Math.Max(0, delta), 0, maximum);
@@ -1395,6 +1650,9 @@ internal static class TelemetryService
         public int ImageInserted { get; set; }
         public int HotkeyTriggered { get; set; }
         public int CrashCount { get; set; }
+        public string CrashExceptionType { get; set; } = "";
+        public string CrashStackHash { get; set; } = "";
+        public string CrashModule { get; set; } = "";
 
         public bool HasUsage()
         {
@@ -1441,6 +1699,16 @@ internal static class TelemetryService
         public int ImageInserted { get; set; }
         public int HotkeyTriggered { get; set; }
         public int CrashCount { get; set; }
+        public string CrashExceptionType { get; set; } = "";
+        public string CrashStackHash { get; set; } = "";
+        public string CrashModule { get; set; } = "";
+    }
+
+    private sealed class CrashSignature
+    {
+        public string ExceptionType { get; set; } = "";
+        public string StackHash { get; set; } = "";
+        public string Module { get; set; } = "";
     }
 
     private sealed class UsageSnapshot
