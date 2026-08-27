@@ -116,9 +116,11 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         int stateVersion,
         string? json)
     {
-        var normalized = NormalizePluginRuntimeStateJson(json);
-        using var parsed = JsonDocument.Parse(normalized);
-        var value = parsed.RootElement.Clone();
+        _ = NormalizeStateJson(
+            json,
+            MaximumPluginRuntimeStateBytes,
+            "Plugin Runtime state",
+            out var value);
 
         lock (_gate)
         {
@@ -179,9 +181,11 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         int stateVersion,
         string? json)
     {
-        var normalized = NormalizeStateJson(json);
-        using var parsed = JsonDocument.Parse(normalized);
-        var value = parsed.RootElement.Clone();
+        _ = NormalizeStateJson(
+            json,
+            MaximumPaperStateBytes,
+            "Plugin paper state",
+            out var value);
 
         lock (_gate)
         {
@@ -324,18 +328,21 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         NormalizeStateJson(
             json,
             MaximumPaperStateBytes,
-            "Plugin paper state");
+            "Plugin paper state",
+            out _);
 
     internal static string NormalizePluginRuntimeStateJson(string? json) =>
         NormalizeStateJson(
             json,
             MaximumPluginRuntimeStateBytes,
-            "Plugin Runtime state");
+            "Plugin Runtime state",
+            out _);
 
     private static string NormalizeStateJson(
         string? json,
         int maximumBytes,
-        string stateName)
+        string stateName,
+        out JsonElement value)
     {
         var normalized = string.IsNullOrWhiteSpace(json) ? "{}" : json.Trim();
         var byteCount = Encoding.UTF8.GetByteCount(normalized);
@@ -345,9 +352,8 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                 $"{stateName} cannot exceed {maximumBytes} UTF-8 bytes.");
         }
 
-        using (JsonDocument.Parse(normalized))
-        {
-        }
+        using var parsed = JsonDocument.Parse(normalized);
+        value = parsed.RootElement.Clone();
         return normalized;
     }
 

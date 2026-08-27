@@ -1,6 +1,6 @@
-# PaperTodo 2.0：插件快捷键与自身纸片控制
+# PaperTodo 2.1：插件快捷键与自身纸片控制
 
-这页只说明协议 2.0 新增的两类能力：
+这页说明 Protocol 2.1 中的两类能力：
 
 - 插件在自己的设置中声明全局快捷键；
 - paper body session 请求显示、隐藏、展开、折叠或激活承载自己的纸片。
@@ -91,7 +91,7 @@ paper.toggle
 
 自定义 action 必须满足：
 
-- 协议版本为 `2.0`；
+- 协议版本为 `2.1`；
 - 插件声明 `runtime`；
 - action id 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
 - plugin runtime 注册快捷键 action handler。

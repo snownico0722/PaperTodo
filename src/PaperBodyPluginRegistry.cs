@@ -82,14 +82,13 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 
 /// <summary>
 /// Discovers one fully trusted, unsandboxed native or local Web plugin from each self-contained
-/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.x has no plugin hot-reload contract: code,
+/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.1 has no plugin hot-reload contract: code,
 /// manifest and Web file changes are discovered on the next app start. Loaded native assemblies
 /// remain loaded for the process lifetime.
 /// </summary>
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string SupportedPluginApiVersion = "2.1";
-    internal const string MinimumPluginApiVersion = "2.0";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -308,10 +307,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
         if (manifest.MiniMaxSize is { } miniMaximum)
         {
-            if (!ApiAtLeast(manifest.ApiVersion, 2, 0))
-            {
-                throw new InvalidDataException("miniMaxSize requires apiVersion 2.0.");
-            }
             if (kind == PaperBodyPluginKind.Web &&
                 string.IsNullOrWhiteSpace(manifest.MiniEntry))
             {
@@ -610,14 +605,16 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private static void ValidateManifestApiVersion(string pluginApiVersion)
     {
-        if (string.Equals(pluginApiVersion, "2.0", StringComparison.Ordinal) ||
-            string.Equals(pluginApiVersion, "2.1", StringComparison.Ordinal))
+        if (string.Equals(
+                pluginApiVersion,
+                SupportedPluginApiVersion,
+                StringComparison.Ordinal))
         {
             return;
         }
 
         throw new InvalidDataException(
-            $"Unsupported plugin API version {pluginApiVersion}; host supports 2.0 through {SupportedPluginApiVersion}.");
+            $"Unsupported plugin API version {pluginApiVersion}; host requires {SupportedPluginApiVersion}.");
     }
 
     private static Version ParseVersion(string? value)

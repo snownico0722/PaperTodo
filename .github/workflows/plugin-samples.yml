@@ -73,8 +73,11 @@ jobs:
           }
           foreach ($manifest in $manifests) {
             Write-Host "Validating $($manifest.FullName)"
-            $null = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
+            $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
               ConvertFrom-Json -Depth 100
+            if ($document.apiVersion -ne "2.1") {
+              throw "$($manifest.FullName) must target apiVersion 2.1."
+            }
           }
 
       - name: Validate capsule sample coverage
@@ -106,7 +109,7 @@ jobs:
             throw "SampleClock must exercise native custom capsule views."
           }
 
-      - name: Validate protocol 2.0 top bar sample
+      - name: Validate protocol 2.1 top bar sample
         shell: pwsh
         run: |
           $root = "plugin-samples/PaperTodo.Plugin.TopBarWeb"
@@ -114,8 +117,8 @@ jobs:
           $bodySource = Get-Content (Join-Path $root "web/index.html") -Raw -Encoding UTF8
           $runtimeSource = Get-Content (Join-Path $root "web/runtime.html") -Raw -Encoding UTF8
 
-          if ($manifest.apiVersion -ne "2.0") {
-            throw "TopBarWeb must target apiVersion 2.0."
+          if ($manifest.apiVersion -ne "2.1") {
+            throw "TopBarWeb must target apiVersion 2.1."
           }
           if ($manifest.capabilities -notcontains "runtime") {
             throw "TopBarWeb must declare the runtime capability."
@@ -136,7 +139,7 @@ jobs:
           )
           foreach ($pattern in $runtimePatterns) {
             if ($runtimeSource -notmatch $pattern) {
-              throw "TopBarWeb Runtime is missing required protocol 2.0 coverage: $pattern"
+              throw "TopBarWeb Runtime is missing required protocol 2.1 coverage: $pattern"
             }
           }
 
@@ -169,7 +172,7 @@ jobs:
               $runtimeContract -notmatch 'interface\s+IPaperGlobalTopBarApi' -or
               $runtimeContract -notmatch 'interface\s+IPaperGlobalShortcutApi' -or
               $runtimeContract -notmatch 'interface\s+IPaperPluginRuntimeProvider') {
-            throw "Protocol 2.0 top-bar/Runtime/shortcut/presentation contracts are incomplete."
+            throw "Protocol 2.1 top-bar/Runtime/shortcut/presentation contracts are incomplete."
           }
 
       - name: Validate Web source and runtime copies

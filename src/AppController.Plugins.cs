@@ -514,7 +514,9 @@ public sealed partial class AppController
         DockPanel.SetDock(titleRow, Dock.Top);
         root.Children.Add(titleRow);
 
-        var minimumContentWidth = Math.Max(480, window.MinWidth - 56);
+        var minimumContentWidth = Math.Max(
+            0,
+            Math.Min(480, window.MinWidth - 56));
         var maximumContentWidth = Math.Max(
             minimumContentWidth,
             window.MaxWidth - 56);
@@ -533,7 +535,7 @@ public sealed partial class AppController
             MaxWidth = maximumContentWidth,
             MaxHeight = maximumContentHeight,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Margin = new Thickness(0, 2, 0, 0)
         };
         root.Children.Add(scroll);

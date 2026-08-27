@@ -204,10 +204,11 @@ internal static class Program
             "The failure after all bounded retries must enter Failed.");
         Assert(InvokeState("RetryElapsed", State("Backoff")) == "Stopped",
             "Expired backoff must return to Stopped so reconcile can restart.");
-        Assert(InvokeState("DescriptorChanged", State("Failed")) == "Stopped",
-            "A changed plugin descriptor must reopen an explicit recovery path from Failed.");
-        Assert(InvokeState("DescriptorChanged", State("Running")) == "Running",
-            "A descriptor recovery signal must not disturb a healthy running runtime.");
+        Assert(
+            transitions.GetMethod(
+                "DescriptorChanged",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) == null,
+            "Runtime transitions must not retain a descriptor-change hot-reload recovery path.");
 
         var runtimeMatches = transitions.GetMethod(
             "RuntimeMatches",
@@ -284,11 +285,27 @@ internal static class Program
         var supported = registryType.GetField(
             "SupportedPluginApiVersion",
             BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        var minimum = registryType.GetField(
-            "MinimumPluginApiVersion",
-            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        Assert(supported == "2.1" && minimum == "2.0",
-            "The plugin host must advertise Protocol 2.1 while retaining Protocol 2.0 compatibility.");
+        Assert(supported == "2.1",
+            "The plugin host must expose Protocol 2.1 as its single supported baseline.");
+        Assert(
+            registryType.GetField(
+                "MinimumPluginApiVersion",
+                BindingFlags.Static | BindingFlags.NonPublic) == null,
+            "The host must not retain a minimum-version compatibility range after Protocol 2.0 removal.");
+
+        var validateApi = registryType.GetMethod(
+            "ValidateManifestApiVersion",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ValidateManifestApiVersion was not found.");
+        validateApi.Invoke(null, new object[] { "2.1" });
+        try
+        {
+            validateApi.Invoke(null, new object[] { "2.0" });
+            throw new InvalidOperationException("Protocol 2.0 manifest compatibility is still active.");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+        {
+        }
     }
 
     private static void CheckProtocolBoundaries(Assembly host)
@@ -485,10 +502,10 @@ internal static class Program
         var todoSnapshot = RequireType(abstractions, "PaperTodo.Plugin.TodoSnapshot");
         Assert(
             todoSnapshot.GetConstructors().Any(ctor => ctor.GetParameters().Length == 9),
-            "Protocol 2.1 must preserve the Protocol 2.0 nine-parameter TodoSnapshot constructor.");
+            "Protocol 2.1 must preserve the existing nine-parameter TodoSnapshot constructor.");
         Assert(
             todoSnapshot.GetProperty("LinkedPathIsDirectory")?.PropertyType == typeof(bool?),
-            "Protocol 2.1 must add LinkedPathIsDirectory without changing TodoSnapshot's positional ABI.");
+            "Protocol 2.1 must expose LinkedPathIsDirectory without changing TodoSnapshot's positional constructor.");
 
         var context = RequireType(abstractions, "PaperTodo.Plugin.PaperPluginRuntimeContext");
         var todoActions = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimeTodoActions");

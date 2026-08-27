@@ -1,10 +1,10 @@
 {
   "kind": "web",
   "id": "sample.topbar.web",
-  "name": "Top Bar 2.0 示例",
-  "description": "演示 app-runtime Global 顶栏、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
+  "name": "Top Bar 2.1 示例",
+  "description": "演示 Plugin Runtime Global 顶栏、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
   "version": "1.0.0",
-  "apiVersion": "2.0",
+  "apiVersion": "2.1",
   "stateVersion": 1,
   "entry": "web/index.html",
   "capabilities": [

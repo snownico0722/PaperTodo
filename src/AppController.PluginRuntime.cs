@@ -50,11 +50,6 @@ public sealed partial class AppController
                 ? PluginRuntimeState.Stopped
                 : state;
 
-        public static PluginRuntimeState DescriptorChanged(PluginRuntimeState state) =>
-            state == PluginRuntimeState.Failed
-                ? PluginRuntimeState.Stopped
-                : state;
-
         public static bool RuntimeMatches(Guid currentRuntimeId, Guid callbackRuntimeId) =>
             currentRuntimeId == callbackRuntimeId;
     }
@@ -183,20 +178,7 @@ public sealed partial class AppController
             }
             else
             {
-                var descriptorChanged = slot.Descriptor != null &&
-                    !string.Equals(
-                        slot.Descriptor.Fingerprint,
-                        descriptor.Fingerprint,
-                        StringComparison.Ordinal);
                 slot.Descriptor = descriptor;
-                if (descriptorChanged && slot.State == PluginRuntimeState.Failed)
-                {
-                    slot.State = PluginRuntimeTransitions.DescriptorChanged(slot.State);
-                    slot.FailureCount = 0;
-                    slot.RetryGeneration++;
-                    slot.RestartRequested = false;
-                    statusChanged = true;
-                }
             }
 
             if (slot.State == PluginRuntimeState.Stopped)

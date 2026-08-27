@@ -4,7 +4,7 @@
   "name": "原生时钟",
   "description": "完整的 WPF 时钟示例：时区、日期格式、标题和日进度均可配置。",
   "version": "1.5.0",
-  "apiVersion": "2.0",
+  "apiVersion": "2.1",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.SampleClock.dll",
   "capabilities": [

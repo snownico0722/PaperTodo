@@ -405,7 +405,11 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         if (before.Order != after.Order) fields |= TodoChangedFields.Order;
         if (before.ReminderAt != after.ReminderAt) fields |= TodoChangedFields.Reminder;
         if (!string.Equals(before.LinkedPaperId, after.LinkedPaperId, StringComparison.Ordinal)) fields |= TodoChangedFields.LinkedPaper;
-        if (!string.Equals(before.LinkedPath, after.LinkedPath, StringComparison.Ordinal)) fields |= TodoChangedFields.LinkedPath;
+        if (!string.Equals(before.LinkedPath, after.LinkedPath, StringComparison.Ordinal) ||
+            before.LinkedPathIsDirectory != after.LinkedPathIsDirectory)
+        {
+            fields |= TodoChangedFields.LinkedPath;
+        }
         return fields;
     }
 
