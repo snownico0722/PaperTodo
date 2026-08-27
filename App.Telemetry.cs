@@ -51,6 +51,7 @@ internal sealed class TelemetryBootstrap
                 return;
             }
 
+            TelemetryCrashMarkerMigration.MigrateIfNeeded();
             TelemetryService.Attach(controller);
             StopAttachTimer();
         }
