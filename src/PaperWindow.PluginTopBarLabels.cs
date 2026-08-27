@@ -8,6 +8,7 @@ public sealed partial class PaperWindow
 {
     private static bool _pluginTopBarLabelsLoadedHandlerRegistered;
     private StackPanel? _pluginTopBarLabelsHost;
+    private bool _pluginTopBarLabelCapacityHookInstalled;
 
     internal static void EnsurePluginTopBarLabelsLoadedHandler()
     {
@@ -46,6 +47,7 @@ public sealed partial class PaperWindow
         }
 
         _pluginTopBarLabelsHost.Children.Clear();
+        var measuredWidth = 0.0;
         foreach (var binding in _controller.GetPluginTopBarLabels(_paper.Id))
         {
             var label = binding.Label;
@@ -79,7 +81,7 @@ public sealed partial class PaperWindow
                 IsHitTestVisible = false
             });
 
-            _pluginTopBarLabelsHost.Children.Add(new Border
+            var element = new Border
             {
                 Padding = new Thickness(4, 1, 4, 1),
                 Margin = new Thickness(1, 0, 1, 0),
@@ -87,14 +89,54 @@ public sealed partial class PaperWindow
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = string.IsNullOrWhiteSpace(label.ToolTip) ? null : label.ToolTip,
                 Child = content
-            });
+            };
+            element.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            measuredWidth += element.DesiredSize.Width;
+            _pluginTopBarLabelsHost.Children.Add(element);
         }
 
-        _pluginTopBarLabelsHost.Visibility =
-            _pluginTopBarLabelsHost.Children.Count > 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        UpdateTopBarResponsiveLayout();
+        _pluginTopBarLabelsHost.Width = Math.Ceiling(measuredWidth);
+        _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
+
+        // Interactive controls settle first; labels only occupy width that remains afterwards.
         RefreshPluginTopBarActions();
+        EnsurePluginTopBarLabelCapacityHook();
+        ReconcilePluginTopBarLabelCapacity();
+    }
+
+    private void EnsurePluginTopBarLabelCapacityHook()
+    {
+        if (_pluginTopBarLabelCapacityHookInstalled || _topBar == null)
+        {
+            return;
+        }
+
+        _pluginTopBarLabelCapacityHookInstalled = true;
+        _topBar.SizeChanged += (_, _) => ReconcilePluginTopBarLabelCapacity();
+    }
+
+    private void ReconcilePluginTopBarLabelCapacity()
+    {
+        if (_pluginTopBarLabelsHost == null || _topBarActionButtonsHost == null)
+        {
+            return;
+        }
+
+        if (_paper.IsCollapsed || _pluginTopBarLabelsHost.Children.Count == 0)
+        {
+            _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
+            UpdateTopBarResponsiveLayout();
+            return;
+        }
+
+        _pluginTopBarLabelsHost.Visibility = Visibility.Visible;
+        UpdateTopBarResponsiveLayout();
+        if (_topBarActionButtonsHost.Visibility == Visibility.Visible)
+        {
+            return;
+        }
+
+        _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
+        UpdateTopBarResponsiveLayout();
     }
 }

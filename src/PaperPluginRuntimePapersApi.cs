@@ -19,10 +19,13 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     private readonly Func<bool> _isActive;
     private readonly object _gate = new();
     private readonly HashSet<string> _knownPaperIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _publishedHeaderPaperIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _publishedCapsulePaperIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PaperCapsulePresentation> _capsulePresentations =
         new(StringComparer.Ordinal);
     private readonly Dictionary<long, Action<PaperPluginRuntimeEvent>> _handlers = [];
     private long _nextHandlerId;
+    private bool _startupSnapshotCaptured;
     private bool _disposed;
 
     public PaperPluginRuntimePapersApi(
@@ -43,7 +46,29 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     public IReadOnlyList<PaperPluginRuntimePaper> List()
     {
         EnsureUsable();
-        return OnUi(() => _controller.GetPluginRuntimePapers(_providerId));
+        var snapshot = OnUi(() => _controller.GetPluginRuntimePapers(_providerId));
+        var completeStartupPresentation = false;
+        lock (_gate)
+        {
+            EnsureUsableLocked();
+            if (!_startupSnapshotCaptured)
+            {
+                _knownPaperIds.Clear();
+                _knownPaperIds.UnionWith(snapshot.Select(paper => paper.PaperId));
+                _startupSnapshotCaptured = true;
+                completeStartupPresentation = true;
+            }
+        }
+
+        if (completeStartupPresentation &&
+            !_dispatcher.HasShutdownStarted &&
+            !_dispatcher.HasShutdownFinished)
+        {
+            _ = _dispatcher.BeginInvoke(
+                (Action)CompleteStartupPresentation,
+                DispatcherPriority.Background);
+        }
+        return snapshot;
     }
 
     public PaperPluginRuntimePaper? Get(string paperId)
@@ -67,6 +92,11 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     {
         EnsureUsable();
         var normalized = NormalizePaperId(paperId);
+        lock (_gate)
+        {
+            EnsureUsableLocked();
+            _publishedHeaderPaperIds.Add(normalized);
+        }
         OnUi(() => _controller.SetPluginRuntimePaperHeader(
             _providerId,
             normalized,
@@ -83,6 +113,7 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         lock (_gate)
         {
             EnsureUsableLocked();
+            _publishedCapsulePaperIds.Add(paperIdNormalized);
             if (presentationNormalized == null)
             {
                 _capsulePresentations.Remove(paperIdNormalized);
@@ -166,6 +197,8 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             foreach (var paperId in removed)
             {
                 _capsulePresentations.Remove(paperId);
+                _publishedHeaderPaperIds.Remove(paperId);
+                _publishedCapsulePaperIds.Remove(paperId);
             }
             _knownPaperIds.Clear();
             _knownPaperIds.UnionWith(current);
@@ -202,6 +235,26 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             paperId,
             message.Clone()));
         return true;
+    }
+
+    private void CompleteStartupPresentation()
+    {
+        string[] publishedHeaders;
+        string[] publishedCapsules;
+        lock (_gate)
+        {
+            if (_disposed || !_isActive())
+            {
+                return;
+            }
+            publishedHeaders = _publishedHeaderPaperIds.ToArray();
+            publishedCapsules = _publishedCapsulePaperIds.ToArray();
+        }
+
+        _controller.CompletePluginRuntimeStartupPresentation(
+            _providerId,
+            publishedHeaders.ToHashSet(StringComparer.Ordinal),
+            publishedCapsules.ToHashSet(StringComparer.Ordinal));
     }
 
     private void Publish(PaperPluginRuntimeEvent value)
@@ -285,6 +338,8 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             _disposed = true;
             _handlers.Clear();
             _knownPaperIds.Clear();
+            _publishedHeaderPaperIds.Clear();
+            _publishedCapsulePaperIds.Clear();
             _capsulePresentations.Clear();
         }
     }

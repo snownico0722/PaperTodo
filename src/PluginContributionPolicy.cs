@@ -128,15 +128,6 @@ internal static class PluginContributionPolicy
             .ToArray();
     }
 
-    internal static bool ApiAtLeast(string? value, int major, int minor)
-    {
-        var parts = value?.Split('.', StringSplitOptions.None);
-        return parts is { Length: 2 } &&
-            int.TryParse(parts[0], out var actualMajor) &&
-            int.TryParse(parts[1], out var actualMinor) &&
-            (actualMajor > major || actualMajor == major && actualMinor >= minor);
-    }
-
     private static string NormalizeIdentifier(
         string? value,
         string code,

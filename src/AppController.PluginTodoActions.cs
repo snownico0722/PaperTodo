@@ -33,7 +33,6 @@ public sealed partial class AppController
         Func<bool> isActive,
         Action<PaperTodoActionInvocation> invoke)
     {
-        EnsurePluginApiAtLeast(providerId, 2, 1, "todo_actions_requires_api_2_1");
         var (paper, item) = RequirePluginTodoTarget(paperId, todoId);
         var normalized = PluginContributionPolicy.NormalizeTodoActions(actions);
 
@@ -113,6 +112,52 @@ public sealed partial class AppController
         foreach (var (paperId, todoId) in affected)
         {
             RefreshPluginTodoActions(paperId, todoId);
+        }
+    }
+
+    internal void PrunePluginTodoActionsForPaper(string paperId)
+    {
+        var normalizedPaperId = paperId?.Trim() ?? string.Empty;
+        if (normalizedPaperId.Length == 0 || _pluginTodoActionRegistrations.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var registration in _pluginTodoActionRegistrations.Values)
+        {
+            foreach (var key in registration.Actions.Keys
+                         .Where(key =>
+                             string.Equals(
+                                 key.PaperId,
+                                 normalizedPaperId,
+                                 StringComparison.Ordinal) &&
+                             !TryGetTodoTarget(key.PaperId, key.TodoId, out _, out _))
+                         .ToArray())
+            {
+                registration.Actions.Remove(key);
+            }
+        }
+    }
+
+    internal void RemovePluginTodoActionsForPaper(string paperId)
+    {
+        var normalizedPaperId = paperId?.Trim() ?? string.Empty;
+        if (normalizedPaperId.Length == 0 || _pluginTodoActionRegistrations.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var registration in _pluginTodoActionRegistrations.Values)
+        {
+            foreach (var key in registration.Actions.Keys
+                         .Where(key => string.Equals(
+                             key.PaperId,
+                             normalizedPaperId,
+                             StringComparison.Ordinal))
+                         .ToArray())
+            {
+                registration.Actions.Remove(key);
+            }
         }
     }
 
@@ -201,23 +246,6 @@ public sealed partial class AppController
                 todoId,
                 ex.GetBaseException());
         }
-    }
-
-    private void EnsurePluginApiAtLeast(
-        string providerId,
-        int major,
-        int minor,
-        string errorCode)
-    {
-        if (PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
-            PluginContributionPolicy.ApiAtLeast(descriptor.ApiVersion, major, minor))
-        {
-            return;
-        }
-
-        throw new PaperTodoPluginException(
-            errorCode,
-            $"This plugin contribution requires apiVersion {major}.{minor} or newer.");
     }
 
     private (PaperData Paper, PaperItem Item) RequirePluginTodoTarget(

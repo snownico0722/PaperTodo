@@ -150,6 +150,53 @@ public sealed partial class AppController
         }
     }
 
+    internal void CompletePluginRuntimeStartupPresentation(
+        string providerId,
+        IReadOnlySet<string> publishedHeaderPaperIds,
+        IReadOnlySet<string> publishedCapsulePaperIds)
+    {
+        var changed = false;
+        foreach (var paper in State.Papers.Where(paper =>
+                     paper.Type == PaperTypes.Note &&
+                     string.Equals(
+                         PluginRuntimeProviderId(paper.BodyProviderId),
+                         providerId,
+                         StringComparison.Ordinal)))
+        {
+            if (!publishedHeaderPaperIds.Contains(paper.Id))
+            {
+                var hadHeader = !string.IsNullOrEmpty(paper.BodyHeaderText);
+                paper.BodyHeaderText = string.Empty;
+                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
+                {
+                    window.ApplyPluginRuntimeHeader(providerId, string.Empty);
+                }
+                if (hadHeader)
+                {
+                    changed = true;
+                    NotifyPaperDisplayTitleChanged(paper.Id);
+                }
+            }
+
+            if (!publishedCapsulePaperIds.Contains(paper.Id))
+            {
+                var hadCapsule = !string.IsNullOrEmpty(paper.BodyCapsuleText);
+                RemovePluginRuntimePresentationCache(providerId, paper.Id);
+                paper.BodyCapsuleText = string.Empty;
+                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
+                {
+                    window.ApplyPluginRuntimeCapsule(providerId, null);
+                }
+                changed |= hadCapsule;
+            }
+        }
+
+        if (changed)
+        {
+            MarkDirty();
+        }
+    }
+
     internal void RemovePluginRuntimePresentationCache(
         string providerId,
         string paperId)

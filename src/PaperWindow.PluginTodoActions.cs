@@ -74,6 +74,7 @@ public sealed partial class PaperWindow
             {
                 return;
             }
+            _controller.PrunePluginTodoActionsForPaper(_paper.Id);
             RefreshPluginTodoActions();
         };
     }

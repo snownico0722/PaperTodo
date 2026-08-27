@@ -30,7 +30,6 @@ public sealed partial class AppController
         IReadOnlyList<PaperTopBarLabel> labels,
         Func<bool> isActive)
     {
-        EnsurePluginApiAtLeast(providerId, 2, 1, "topbar_labels_require_api_2_1");
         var normalizedPaperId = RequirePluginLabelTarget(paperId).Id;
         var normalized = PluginContributionPolicy.NormalizeTopBarLabels(labels);
 
@@ -101,6 +100,20 @@ public sealed partial class AppController
         foreach (var paperId in affectedPaperIds)
         {
             RefreshPluginTopBarLabels(paperId);
+        }
+    }
+
+    internal void RemovePluginTopBarLabelsForPaper(string paperId)
+    {
+        var normalizedPaperId = paperId?.Trim() ?? string.Empty;
+        if (normalizedPaperId.Length == 0 || _pluginTopBarLabelRegistrations.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var registration in _pluginTopBarLabelRegistrations.Values)
+        {
+            registration.Labels.Remove(normalizedPaperId);
         }
     }
 

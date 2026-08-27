@@ -250,7 +250,10 @@ public sealed record AppendTodosResult(
 
 public sealed record TodoMutationResult(
     string PaperId,
-    string TodoId);
+    string TodoId)
+{
+    public bool Deleted { get; init; }
+}
 
 public sealed record NoteMutationResult(
     string PaperId,

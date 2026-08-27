@@ -104,8 +104,11 @@ public sealed partial class AppController
     internal void FinalizeExternalPaperCreated(PaperData paper, bool show) =>
         FinalizeMcpPaperCreated(paper, show);
 
-    internal void RefreshExternalTodoPaper(PaperData paper) =>
+    internal void RefreshExternalTodoPaper(PaperData paper)
+    {
+        PrunePluginTodoActionsForPaper(paper.Id);
         RefreshMcpTodoPaper(paper);
+    }
 
     internal void RefreshExternalNotePaper(PaperData paper) =>
         RefreshMcpNotePaper(paper);
@@ -150,6 +153,9 @@ public sealed partial class AppController
                 _pendingPluginPaperStateDeletes.Remove(paperId);
                 continue;
             }
+
+            RemovePluginTodoActionsForPaper(paperId);
+            RemovePluginTopBarLabelsForPaper(paperId);
 
             // Runtime Backoff has no live lease to reconcile. Remove any retained rich
             // presentation for the now-deleted Paper here as part of the independent post-commit

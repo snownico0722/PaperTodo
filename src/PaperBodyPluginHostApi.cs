@@ -108,9 +108,15 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
     {
         ArgumentNullException.ThrowIfNull(request);
         Require(PaperTodoPermissionNames.TodosUpdate);
-        return Invoke(() => _commands.UpdateTodo(
+        var result = Invoke(() => _commands.UpdateTodo(
             request,
             PaperOperationContext.Plugin(_providerId)));
+        var deleted = !_controller.State.Papers.Any(paper =>
+            paper.Type == PaperTypes.Todo &&
+            string.Equals(paper.Id, result.PaperId, StringComparison.Ordinal) &&
+            paper.Items.Any(item =>
+                string.Equals(item.Id, result.TodoId, StringComparison.Ordinal)));
+        return result with { Deleted = deleted };
     }
 
     public TodoMutationResult SetTodoReminder(SetTodoReminderRequest request)
