@@ -11,7 +11,7 @@ on:
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
-      - "src/PaperAppRuntime*.cs"
+      - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
@@ -30,7 +30,7 @@ on:
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
-      - "src/PaperAppRuntime*.cs"
+      - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
@@ -117,8 +117,8 @@ jobs:
           if ($manifest.apiVersion -ne "2.0") {
             throw "TopBarWeb must target apiVersion 2.0."
           }
-          if ($manifest.capabilities -notcontains "appRuntime") {
-            throw "TopBarWeb must declare the appRuntime capability."
+          if ($manifest.capabilities -notcontains "runtime") {
+            throw "TopBarWeb must declare the runtime capability."
           }
           if ($bodySource -notmatch "topbar\.paper\.set" -or
               $bodySource -match "topbar\.global\.set") {
@@ -136,7 +136,7 @@ jobs:
           )
           foreach ($pattern in $runtimePatterns) {
             if ($runtimeSource -notmatch $pattern) {
-              throw "TopBarWeb app runtime is missing required protocol 2.0 coverage: $pattern"
+              throw "TopBarWeb Runtime is missing required protocol 2.0 coverage: $pattern"
             }
           }
 
@@ -148,7 +148,7 @@ jobs:
             throw "TopBarWeb must cover the host-owned paper.toggle shortcut action."
           }
           if (-not ($shortcutSettings | Where-Object { $_.shortcutAction -eq "runtime.ping" })) {
-            throw "TopBarWeb must cover a custom app-runtime shortcut action."
+            throw "TopBarWeb must cover a custom Runtime shortcut action."
           }
           if ($bodySource -notmatch "papertodo\.paper\.toggleCollapsed" -or
               $bodySource -notmatch "papertodo\.paper\.hide") {
@@ -158,7 +158,7 @@ jobs:
           $workspaceContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperTodoHostContracts.cs" -Raw -Encoding UTF8
           $paperContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperBodyPluginContracts.cs" -Raw -Encoding UTF8
           $presentationContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperPresentationContracts.cs" -Raw -Encoding UTF8
-          $appContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperAppRuntimeContracts.cs" -Raw -Encoding UTF8
+          $runtimeContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperPluginRuntimeContracts.cs" -Raw -Encoding UTF8
           if ($workspaceContract -match 'TopBar') {
             throw "Top Bar must not be exposed through IPaperTodoHostApi/Workspace."
           }
@@ -166,10 +166,10 @@ jobs:
               $paperContract -notmatch 'PaperTopBarSvgRenderMode' -or
               $paperContract -notmatch 'IPaperPresentationApi' -or
               $presentationContract -notmatch 'interface\s+IPaperPresentationApi' -or
-              $appContract -notmatch 'interface\s+IPaperGlobalTopBarApi' -or
-              $appContract -notmatch 'interface\s+IPaperGlobalShortcutApi' -or
-              $appContract -notmatch 'interface\s+IPaperAppRuntimeProvider') {
-            throw "Protocol 2.0 top-bar/app-runtime/shortcut/presentation contracts are incomplete."
+              $runtimeContract -notmatch 'interface\s+IPaperGlobalTopBarApi' -or
+              $runtimeContract -notmatch 'interface\s+IPaperGlobalShortcutApi' -or
+              $runtimeContract -notmatch 'interface\s+IPaperPluginRuntimeProvider') {
+            throw "Protocol 2.0 top-bar/Runtime/shortcut/presentation contracts are incomplete."
           }
 
       - name: Validate Web source and runtime copies
