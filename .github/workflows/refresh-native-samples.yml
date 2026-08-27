@@ -1,0 +1,54 @@
+name: Refresh native samples temporary
+
+on:
+  push:
+    branches:
+      - refactor/unified-plugin-runtime
+    paths:
+      - ".github/workflows/refresh-native-samples.yml"
+      - "PaperTodo.Plugin.Abstractions/**"
+      - "plugin-samples/**"
+      - "plugins/sample.*.native/**"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-native-samples:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Rebuild native plugin outputs
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
+            Sort-Object FullName
+          foreach ($project in $projects) {
+            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+              -ProjectPath $project.FullName
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          }
+      - name: Commit rebuilt DLLs
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- `
+            plugins/sample.clock.native/PaperTodo.Plugin.SampleClock.dll `
+            plugins/sample.focus-timer.native/PaperTodo.Plugin.FocusTimer.dll `
+            plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Native sample outputs already match."
+            exit 0
+          }
+          git commit -m "chore: refresh native runtime sample outputs"
+          git push origin HEAD:refactor/unified-plugin-runtime
