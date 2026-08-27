@@ -221,7 +221,7 @@ jobs:
             }
           }
 
-      - name: Rebuild native runtime outputs
+      - name: Rebuild and verify native runtime outputs
         shell: pwsh
         run: |
           $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
@@ -237,18 +237,6 @@ jobs:
               exit $LASTEXITCODE
             }
           }
-
-      - name: Capture rebuilt native outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: rebuilt-native-plugin-dlls
-          path: plugins/sample.*.native/*.dll
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Verify native runtime outputs
-        shell: pwsh
-        run: |
           git diff --exit-code -- plugins
           if ($LASTEXITCODE -ne 0) {
             throw "Committed native plugin outputs do not match their source projects."
