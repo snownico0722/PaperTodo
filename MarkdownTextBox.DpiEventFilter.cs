@@ -11,6 +11,7 @@ public sealed partial class MarkdownTextBox
         AddHandler(
             Window.DpiChangedEvent,
             new DpiChangedEventHandler(OnDescendantDpiChanged));
+        Loaded += (_, _) => InitializeImageBlockReuse();
     }
 
     private void OnDescendantDpiChanged(object sender, DpiChangedEventArgs e)
