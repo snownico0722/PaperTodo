@@ -28,7 +28,6 @@ public sealed partial class MarkdownTextBox
             _imageResizeSettleTimer?.Stop();
             _isImageResizePreview = false;
             _lastImageViewportWidth = -1;
-            ClearImageResizeLayoutQuantization();
             SetBitmapScalingMode(BitmapScalingMode.HighQuality);
             ClearViewportProtectedBitmaps();
         }
@@ -67,9 +66,8 @@ public sealed partial class MarkdownTextBox
             SetBitmapScalingMode(BitmapScalingMode.LowQuality);
         }
 
-        // The reuse generator updates stable image blocks whenever a quantized VisualLine rebuild
-        // is actually needed. Keep the old per-SizeChanged preview walk only as a fallback when
-        // the reuse generator was not installed.
+        // The reuse generator updates stable image blocks whenever AvalonEdit rebuilds VisualLines.
+        // Keep the old per-SizeChanged preview walk only as a fallback when reuse was not installed.
         if (!_imageBlockReuseInitialized)
         {
             QueueImageViewportPreviewLayout();
@@ -94,7 +92,6 @@ public sealed partial class MarkdownTextBox
         }
 
         _isImageResizePreview = false;
-        ClearImageResizeLayoutQuantization();
         SetBitmapScalingMode(BitmapScalingMode.HighQuality);
 
         // One final redraw re-resolves display width and may up/down-grade the single cached decode.
