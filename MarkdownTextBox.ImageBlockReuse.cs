@@ -57,7 +57,7 @@ public sealed partial class MarkdownTextBox
 
     private void ScheduleImageBlockCachePrune()
     {
-        if (!_imageBlockReuseInitialized)
+        if (!_imageBlockReuseInitialized || _isImageResizePreview)
         {
             return;
         }
@@ -76,7 +76,6 @@ public sealed partial class MarkdownTextBox
 
                 if (_isImageResizePreview)
                 {
-                    _imageBlockCachePruneTimer.Start();
                     return;
                 }
 
