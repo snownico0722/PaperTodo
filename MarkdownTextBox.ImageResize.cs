@@ -29,6 +29,8 @@ public sealed partial class MarkdownTextBox
             _isImageResizePreview = false;
             _lastImageViewportWidth = -1;
             SetBitmapScalingMode(BitmapScalingMode.HighQuality);
+            _imageBlockCachePruneTimer?.Stop();
+            ClearImageBlockCache();
             ClearViewportProtectedBitmaps();
         }
 
@@ -96,6 +98,7 @@ public sealed partial class MarkdownTextBox
 
         // One final redraw re-resolves display width and may up/down-grade the single cached decode.
         QueuePostPasteRefresh();
+        ScheduleImageBlockCachePrune();
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
