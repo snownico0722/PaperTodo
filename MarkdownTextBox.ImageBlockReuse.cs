@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
 
@@ -12,6 +13,7 @@ public sealed partial class MarkdownTextBox
 {
     private readonly List<CachedImageBlock> _cachedImageBlocks = new();
     private ReusingMarkdownImageElementGenerator? _reusingImageElementGenerator;
+    private DispatcherTimer? _imageBlockCachePruneTimer;
     private bool _imageBlockReuseInitialized;
 
     private void InitializeImageBlockReuse()
@@ -32,7 +34,12 @@ public sealed partial class MarkdownTextBox
         generators.RemoveAt(generatorIndex);
         generators.Insert(generatorIndex, _reusingImageElementGenerator);
         Document.Changed += OnImageBlockReuseDocumentChanged;
-        Unloaded += (_, _) => ClearImageBlockCache();
+        TextArea.TextView.VisualLinesChanged += (_, _) => ScheduleImageBlockCachePrune();
+        Unloaded += (_, _) =>
+        {
+            _imageBlockCachePruneTimer?.Stop();
+            ClearImageBlockCache();
+        };
         _imageBlockReuseInitialized = true;
     }
 
@@ -46,6 +53,91 @@ public sealed partial class MarkdownTextBox
     private void ClearImageBlockCache()
     {
         _cachedImageBlocks.Clear();
+    }
+
+    private void ScheduleImageBlockCachePrune()
+    {
+        if (!_imageBlockReuseInitialized)
+        {
+            return;
+        }
+
+        _imageBlockCachePruneTimer ??= new DispatcherTimer(
+            TimeSpan.FromMilliseconds(200),
+            DispatcherPriority.Background,
+            (_, _) =>
+            {
+                _imageBlockCachePruneTimer!.Stop();
+                if (_imageRenderingSuspended || !IsLoaded)
+                {
+                    ClearImageBlockCache();
+                    return;
+                }
+
+                if (_isImageResizePreview)
+                {
+                    _imageBlockCachePruneTimer.Start();
+                    return;
+                }
+
+                PruneImageBlockCacheToCurrentVisualTree();
+            },
+            Dispatcher);
+
+        _imageBlockCachePruneTimer.Stop();
+        _imageBlockCachePruneTimer.Start();
+    }
+
+    private void PruneImageBlockCacheToCurrentVisualTree()
+    {
+        PruneImageBlockCache();
+        if (_cachedImageBlocks.Count == 0)
+        {
+            return;
+        }
+
+        var attachedHosts = new HashSet<Border>();
+        CollectAttachedBorders(TextArea.TextView, attachedHosts);
+        for (var index = _cachedImageBlocks.Count - 1; index >= 0; index--)
+        {
+            if (!attachedHosts.Contains(_cachedImageBlocks[index].Host))
+            {
+                _cachedImageBlocks.RemoveAt(index);
+            }
+        }
+    }
+
+    private static void CollectAttachedBorders(DependencyObject node, ISet<Border> borders)
+    {
+        if (node is Border border)
+        {
+            borders.Add(border);
+        }
+
+        int childCount;
+        try
+        {
+            childCount = VisualTreeHelper.GetChildrenCount(node);
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        for (var index = 0; index < childCount; index++)
+        {
+            DependencyObject child;
+            try
+            {
+                child = VisualTreeHelper.GetChild(node, index);
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            CollectAttachedBorders(child, borders);
+        }
     }
 
     private FrameworkElement GetOrCreateReusableImageBlock(
