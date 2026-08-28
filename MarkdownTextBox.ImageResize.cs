@@ -34,6 +34,7 @@ public sealed partial class MarkdownTextBox
         RefreshTextView();
         if (!suspended)
         {
+            SetBitmapScalingMode(BitmapScalingMode.HighQuality);
             QueueRefreshViewportProtectedBitmaps();
         }
     }
@@ -86,6 +87,15 @@ public sealed partial class MarkdownTextBox
 
         // One final redraw re-resolves display width and may up/down-grade the single cached decode.
         QueuePostPasteRefresh();
+        Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                if (!_imageRenderingSuspended && !_isImageResizePreview)
+                {
+                    SetBitmapScalingMode(BitmapScalingMode.HighQuality);
+                }
+            }),
+            DispatcherPriority.ApplicationIdle);
     }
 
     internal void RefreshImageDecodeForCurrentDpi()
@@ -127,6 +137,16 @@ public sealed partial class MarkdownTextBox
                     {
                         textView.Redraw(DispatcherPriority.Render);
                     }
+
+                    Dispatcher.BeginInvoke(
+                        (Action)(() =>
+                        {
+                            if (!_imageRenderingSuspended && _isImageResizePreview)
+                            {
+                                SetBitmapScalingMode(BitmapScalingMode.LowQuality);
+                            }
+                        }),
+                        DispatcherPriority.Render);
                 }
             }),
             DispatcherPriority.Background);
@@ -161,6 +181,9 @@ public sealed partial class MarkdownTextBox
             switch (host.Child)
             {
                 case System.Windows.Controls.Image image:
+                    System.Windows.Media.RenderOptions.SetBitmapScalingMode(
+                        image,
+                        BitmapScalingMode.LowQuality);
                     image.Width = displayWidth;
                     break;
                 case Border placeholder:
@@ -285,7 +308,40 @@ public sealed partial class MarkdownTextBox
 
     private void SetBitmapScalingMode(BitmapScalingMode mode)
     {
-        System.Windows.Media.RenderOptions.SetBitmapScalingMode(this, mode);
-        System.Windows.Media.RenderOptions.SetBitmapScalingMode(TextArea.TextView, mode);
+        ApplyBitmapScalingMode(TextArea.TextView, mode);
+    }
+
+    private static void ApplyBitmapScalingMode(DependencyObject node, BitmapScalingMode mode)
+    {
+        if (node is System.Windows.Controls.Image image)
+        {
+            System.Windows.Media.RenderOptions.SetBitmapScalingMode(image, mode);
+            return;
+        }
+
+        int childCount;
+        try
+        {
+            childCount = VisualTreeHelper.GetChildrenCount(node);
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        for (var i = 0; i < childCount; i++)
+        {
+            DependencyObject child;
+            try
+            {
+                child = VisualTreeHelper.GetChild(node, i);
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            ApplyBitmapScalingMode(child, mode);
+        }
     }
 }
