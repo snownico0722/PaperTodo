@@ -13,6 +13,7 @@ public sealed partial class MarkdownTextBox
     private bool _isImageViewportPreviewQueued;
     private bool _isViewportProtectedRefreshQueued;
     private double _lastImageViewportWidth = -1;
+    private BitmapScalingMode? _lastAppliedBitmapScalingMode;
 
     public void SetImageRenderingSuspended(bool suspended)
     {
@@ -27,6 +28,7 @@ public sealed partial class MarkdownTextBox
             _imageResizeSettleTimer?.Stop();
             _isImageResizePreview = false;
             _lastImageViewportWidth = -1;
+            ClearImageResizeLayoutQuantization();
             SetBitmapScalingMode(BitmapScalingMode.HighQuality);
             ClearViewportProtectedBitmaps();
         }
@@ -58,11 +60,20 @@ public sealed partial class MarkdownTextBox
         }
 
         _lastImageViewportWidth = currentWidth;
+        var enteringResizePreview = !_isImageResizePreview;
         _isImageResizePreview = true;
-        SetBitmapScalingMode(BitmapScalingMode.LowQuality);
+        if (enteringResizePreview)
+        {
+            SetBitmapScalingMode(BitmapScalingMode.LowQuality);
+        }
 
-        // During drag: keep the current decode and only retarget visible image block widths.
-        QueueImageViewportPreviewLayout();
+        // The reuse generator updates stable image blocks whenever a quantized VisualLine rebuild
+        // is actually needed. Keep the old per-SizeChanged preview walk only as a fallback when
+        // the reuse generator was not installed.
+        if (!_imageBlockReuseInitialized)
+        {
+            QueueImageViewportPreviewLayout();
+        }
 
         _imageResizeSettleTimer ??= new DispatcherTimer(
             TimeSpan.FromMilliseconds(200),
@@ -83,6 +94,7 @@ public sealed partial class MarkdownTextBox
         }
 
         _isImageResizePreview = false;
+        ClearImageResizeLayoutQuantization();
         SetBitmapScalingMode(BitmapScalingMode.HighQuality);
 
         // One final redraw re-resolves display width and may up/down-grade the single cached decode.
@@ -308,6 +320,14 @@ public sealed partial class MarkdownTextBox
 
     private void SetBitmapScalingMode(BitmapScalingMode mode)
     {
+        // Stable reused images receive the current mode when the generator updates them, so there
+        // is no reason to walk the same visual tree on every SizeChanged while a drag is active.
+        if (_imageBlockReuseInitialized && _lastAppliedBitmapScalingMode == mode)
+        {
+            return;
+        }
+
+        _lastAppliedBitmapScalingMode = mode;
         ApplyBitmapScalingMode(TextArea.TextView, mode);
     }
 
