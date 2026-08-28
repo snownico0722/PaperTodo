@@ -66,20 +66,28 @@ public sealed partial class MarkdownTextBox
                 continue;
             }
 
-            UpdateReusableImageBlock(cached.Host, reference, asset);
-            return cached.Host;
+            if (TryUpdateReusableImageBlock(cached, reference, asset, referenceLine))
+            {
+                return cached.Host;
+            }
+
+            _cachedImageBlocks.RemoveAt(index);
+            break;
         }
 
         var created = CreateImageBlock(reference, asset, referenceLine);
-        if (created is Border host && host.Tag is ImageBlockTag tag)
+        if (created is Border host &&
+            host.Child is Image image &&
+            host.Tag is ImageBlockTag tag)
         {
             _cachedImageBlocks.Add(new CachedImageBlock(
                 _noteId,
                 reference.ImageId,
                 tag.ReferenceAnchor,
                 host,
+                image,
                 Theme.IsDark));
-            ApplyCurrentScalingMode(host.Child);
+            ApplyCurrentScalingMode(image);
         }
 
         return created;
@@ -99,116 +107,62 @@ public sealed partial class MarkdownTextBox
         }
     }
 
-    private void UpdateReusableImageBlock(
-        Border host,
+    private bool TryUpdateReusableImageBlock(
+        CachedImageBlock cached,
         MarkdownImageReference reference,
-        NoteImageAsset? asset)
+        NoteImageAsset? asset,
+        DocumentLine referenceLine)
     {
+        if (asset == null || !ReferenceEquals(cached.Host.Child, cached.Image))
+        {
+            return false;
+        }
+
         var targetWidth = ImageTargetWidth();
         var displayWidth = ResolveImageDisplayWidth(reference.DisplayOptions, asset, targetWidth);
         var decodePixelWidth = ImageDecodePixelWidth(Math.Min(targetWidth, displayWidth));
-        var bitmap = asset == null
-            ? null
-            : _imageStore?.GetBitmapSource(
-                asset.Id,
-                decodePixelWidth,
-                allowDecodeUpgrade: !_isImageResizePreview,
-                protectInViewport: true);
-        var isCorrupted = _imageStore?.IsImageCorrupted(reference.ImageId) == true;
-        var isSelected = host.Tag is ImageBlockTag oldTag &&
-            !oldTag.ReferenceAnchor.IsDeleted &&
-            Document != null &&
-            IsImageReferenceSelected(Document.GetLineByOffset(
-                Math.Clamp(oldTag.ReferenceAnchor.Offset, 0, Document.TextLength)));
-
-        host.Width = targetWidth;
-        host.ToolTip = asset?.OriginalName;
-        host.BorderBrush = isSelected ? Theme.CapsuleFocusBorderBrush : Brushes.Transparent;
-
-        if (host.Tag is ImageBlockTag tag)
+        var bitmap = _imageStore?.GetBitmapSource(
+            asset.Id,
+            decodePixelWidth,
+            allowDecodeUpgrade: !_isImageResizePreview,
+            protectInViewport: true);
+        if (bitmap == null)
         {
-            host.Tag = new ImageBlockTag(
+            return false;
+        }
+
+        cached.Host.Width = targetWidth;
+        cached.Host.ToolTip = asset.OriginalName;
+        cached.Host.BorderBrush = IsImageReferenceSelected(referenceLine)
+            ? Theme.CapsuleFocusBorderBrush
+            : Brushes.Transparent;
+
+        if (cached.Host.Tag is ImageBlockTag tag)
+        {
+            cached.Host.Tag = new ImageBlockTag(
                 tag.ReferenceAnchor,
                 tag.CaretAnchor,
                 reference.ImageId,
                 reference.DisplayOptions,
-                Math.Max(1, asset?.Width ?? 180));
+                Math.Max(1, asset.Width));
         }
 
-        if (host.ContextMenu?.Items.Count > 0 && host.ContextMenu.Items[0] is MenuItem copyItem)
+        if (!ReferenceEquals(cached.Image.Source, bitmap))
         {
-            copyItem.IsEnabled = bitmap != null;
+            cached.Image.Source = bitmap;
         }
-
-        if (bitmap == null)
-        {
-            UpdateOrCreateImagePlaceholder(host, targetWidth, displayWidth, isCorrupted);
-            return;
-        }
-
-        if (host.Child is not Image image)
-        {
-            image = new Image
-            {
-                Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                SnapsToDevicePixels = true,
-                UseLayoutRounding = true
-            };
-            host.Child = image;
-        }
-
-        if (!ReferenceEquals(image.Source, bitmap))
-        {
-            image.Source = bitmap;
-        }
-        image.Width = displayWidth;
-        ApplyCurrentScalingMode(image);
+        cached.Image.Width = displayWidth;
+        ApplyCurrentScalingMode(cached.Image);
+        return true;
     }
 
-    private void UpdateOrCreateImagePlaceholder(
-        Border host,
-        double targetWidth,
-        double displayWidth,
-        bool isCorrupted)
+    private void ApplyCurrentScalingMode(Image image)
     {
-        if (host.Child is not Border placeholder || placeholder.Child is not TextBlock label)
-        {
-            label = new TextBlock
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-            placeholder = new Border
-            {
-                Height = 42,
-                CornerRadius = new CornerRadius(5),
-                BorderThickness = new Thickness(1),
-                Child = label
-            };
-            host.Child = placeholder;
-        }
-
-        placeholder.Width = Math.Max(120, Math.Min(targetWidth, displayWidth));
-        placeholder.Background = isCorrupted
-            ? Theme.Danger((byte)(Theme.IsDark ? 30 : 18))
-            : Theme.Tint((byte)(Theme.IsDark ? 30 : 18));
-        placeholder.BorderBrush = isCorrupted ? Theme.Danger(70) : Theme.PaperBorderBrush;
-        label.Text = Strings.Get(isCorrupted ? "ImageCorrupted" : "ImageMissing");
-        label.Foreground = isCorrupted ? Theme.DangerBrush : Theme.WeakTextBrush;
-        label.FontSize = ScaledFontSize(NoteTypography.FontSize);
-    }
-
-    private void ApplyCurrentScalingMode(DependencyObject? element)
-    {
-        if (element is Image image)
-        {
-            System.Windows.Media.RenderOptions.SetBitmapScalingMode(
-                image,
-                _isImageResizePreview
-                    ? BitmapScalingMode.LowQuality
-                    : BitmapScalingMode.HighQuality);
-        }
+        System.Windows.Media.RenderOptions.SetBitmapScalingMode(
+            image,
+            _isImageResizePreview
+                ? BitmapScalingMode.LowQuality
+                : BitmapScalingMode.HighQuality);
     }
 
     private sealed class ReusingMarkdownImageElementGenerator : VisualLineElementGenerator
@@ -272,12 +226,14 @@ public sealed partial class MarkdownTextBox
             string imageId,
             TextAnchor referenceAnchor,
             Border host,
+            Image image,
             bool isDark)
         {
             NoteId = noteId;
             ImageId = imageId;
             ReferenceAnchor = referenceAnchor;
             Host = host;
+            Image = image;
             IsDark = isDark;
         }
 
@@ -285,6 +241,7 @@ public sealed partial class MarkdownTextBox
         public string ImageId { get; }
         public TextAnchor ReferenceAnchor { get; }
         public Border Host { get; }
+        public Image Image { get; }
         public bool IsDark { get; }
     }
 }
