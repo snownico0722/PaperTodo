@@ -58,7 +58,7 @@ public sealed partial class MarkdownTextBox
 
         _lastImageViewportWidth = currentWidth;
         _isImageResizePreview = true;
-        SetBitmapScalingMode(BitmapScalingMode.HighQuality);
+        SetBitmapScalingMode(BitmapScalingMode.LowQuality);
 
         // During drag: keep the current decode and only retarget visible image block widths.
         QueueImageViewportPreviewLayout();
