@@ -1,0 +1,79 @@
+name: Cleanup advanced settings formatting
+
+on:
+  push:
+    branches:
+      - "3.x"
+    paths:
+      - ".github/workflows/cleanup-advanced-settings-format.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-build-commit:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out 3.x
+        uses: actions/checkout@v4
+        with:
+          ref: 3.x
+          fetch-depth: 0
+          submodules: true
+
+      - name: Normalize backported block indentation
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE "AppController.Settings.cs"
+          $text = Get-Content -LiteralPath $path -Raw
+
+          function Indent-Span([string]$name, [string]$pattern) {
+            $matches = [regex]::Matches($script:text, $pattern)
+            if ($matches.Count -ne 1) {
+              throw "Expected exactly one $name span, found $($matches.Count)."
+            }
+            $script:text = [regex]::Replace(
+              $script:text,
+              $pattern,
+              {
+                param($match)
+                return (($match.Value -split "`r?`n") | ForEach-Object { '          ' + $_ }) -join "`r`n"
+              },
+              1)
+          }
+
+          Indent-Span 'general advanced' '(?ms)^  _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting\(.*?^      CreateFullscreenTopmostModeSegmentSelector\(\)\);'
+          Indent-Span 'script advanced' '(?ms)^  // Keep script options on the shorter left column.*?^      WrapWithHint\(MarkAdvancedSetting\(SettingsToggle\(Strings\.Get\("SettingsHideScriptRunWindow"\).*?\)\)\);'
+          Indent-Span 'capsule advanced' '(?ms)^  rightColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsToggle\(\r?\n              Strings\.Get\("SettingsHideEdgeCapsuleCloseButtonOnHover"\).*?^      CreateDeepCapsuleTitleMeasureLimitStepper\(\)\);'
+          Indent-Span 'image advanced' '(?ms)^  rightColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsToggle\(\r?\n              Strings\.Get\("SettingsAutoCompressLargeImages"\).*?^          "TipAutoCompressLargeImages"\)\)\);'
+          Indent-Span 'Markdown image-reference advanced' '(?ms)^  leftColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsFieldLabel\(Strings\.Get\("SettingsImageReferenceText"\).*?^      CreateImageReferenceTextModeSelector\(\)\);'
+
+          Set-Content -LiteralPath $path -Value $text -Encoding utf8 -NoNewline
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore and build
+        run: |
+          dotnet restore .\PaperTodo.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build .\PaperTodo.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Commit formatting cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add AppController.Settings.cs
+          git commit -m "style: align advanced settings backport"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:3.x
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
