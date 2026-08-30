@@ -19,20 +19,20 @@ public sealed partial class AppController
         var content = new StackPanel();
         foreach (var item in items)
         {
-  content.Children.Add(item);
+            content.Children.Add(item);
         }
 
         return new Border
         {
-  Background = Theme.Tint((byte)(Theme.IsDark ? 24 : 14)),
-  BorderBrush = Theme.Tint((byte)(Theme.IsDark ? 42 : 28)),
-  BorderThickness = new Thickness(1),
-  CornerRadius = new CornerRadius(8),
-  // The negative horizontal margin grows only the background. Matching padding keeps
-  // every control aligned with the ordinary settings above and below this block.
-  Padding = new Thickness(8, 5, 8, 8),
-  Margin = new Thickness(-8, 5, -8, 7),
-  Child = content
+            Background = Theme.Tint((byte)(Theme.IsDark ? 24 : 14)),
+            BorderBrush = Theme.Tint((byte)(Theme.IsDark ? 42 : 28)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            // The negative horizontal margin grows only the background. Matching padding keeps
+            // every control aligned with the ordinary settings above and below this block.
+            Padding = new Thickness(8, 5, 8, 8),
+            Margin = new Thickness(-8, 5, -8, 7),
+            Child = content
         };
     }
 }
