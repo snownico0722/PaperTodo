@@ -41,44 +41,6 @@ jobs:
           $text = [regex]::Replace($text, $pattern, $replacement, 1)
           Set-Content -LiteralPath $path -Value $text -Encoding utf8 -NoNewline
 
-      - name: Keep existing release tags aligned with rebuilt assets
-        run: |
-          $path = Join-Path $env:GITHUB_WORKSPACE ".github\workflows\release.yml"
-          $text = Get-Content -LiteralPath $path -Raw
-          $pattern = '(?ms)(      - name: Publish GitHub Release\r?\n.*?        run: \|\r?\n          \$releaseDir = .*?\r?\n          \$tag = .*?\r?\n)'
-          $matches = [regex]::Matches($text, $pattern)
-          if ($matches.Count -ne 1) {
-            throw "Expected exactly one Publish GitHub Release preamble, found $($matches.Count)."
-          }
-
-          $syncLines = @(
-            '          # A rebuilt existing release must keep its tag/source archive on the same commit as the uploaded assets.',
-            '          git fetch --force --tags origin',
-            '          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-            '          git show-ref --verify --quiet "refs/tags/$tag"',
-            '          if ($LASTEXITCODE -eq 0) {',
-            '            $tagCommit = (git rev-list -n 1 $tag).Trim()',
-            '            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tagCommit)) {',
-            '              throw "Could not resolve existing release tag $tag."',
-            '            }',
-            '            if ($tagCommit -ne $env:GITHUB_SHA) {',
-            '              Write-Host "Retargeting existing release tag $tag from $tagCommit to $env:GITHUB_SHA"',
-            '              git tag -f $tag $env:GITHUB_SHA',
-            '              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-            '              git push origin "refs/tags/$tag" --force',
-            '              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-            '            }',
-            '          }',
-            ''
-          ) -join "`r`n"
-
-          $text = [regex]::Replace(
-            $text,
-            $pattern,
-            { param($match) $match.Groups[1].Value + $syncLines },
-            1)
-          Set-Content -LiteralPath $path -Value $text -Encoding utf8 -NoNewline
-
       - name: Update v3.31 notes
         run: |
           $path = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
@@ -108,21 +70,25 @@ jobs:
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Commit fixes and remove one-shot workflow
+      - name: Commit fixes to 3.x
         run: |
-          Remove-Item -LiteralPath ".github\workflows\fix-v3.31-audit-findings.yml" -Force
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MarkdownTextBox.cs CHANGELOG.md .github/workflows/release.yml .github/workflows/fix-v3.31-audit-findings.yml
-          git commit -m "fix: preserve Markdown heading styles and sync release tags"
+          git add MarkdownTextBox.cs CHANGELOG.md
+          git commit -m "fix: preserve Markdown heading inline style size"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin HEAD:3.x
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Republish stable v3.31
+      - name: Allow one-shot workflow cleanup
+        run: Start-Sleep -Seconds 45
+
+      - name: Republish stable v3.31 from clean 3.x head
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          git fetch origin 3.x
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh workflow run release.yml `
             --repo "${{ github.repository }}" `
             --ref 3.x `
