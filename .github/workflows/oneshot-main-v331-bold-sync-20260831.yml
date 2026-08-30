@@ -12,6 +12,8 @@ permissions:
 jobs:
   sync-main:
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
     steps:
       - name: Checkout helper from 3.x
         uses: actions/checkout@v4
