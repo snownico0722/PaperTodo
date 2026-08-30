@@ -30,27 +30,109 @@ jobs:
         run: |
           $path = Join-Path $env:GITHUB_WORKSPACE "AppController.Settings.cs"
           $text = Get-Content -LiteralPath $path -Raw
+          $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
 
-          function Indent-Span([string]$name, [string]$pattern) {
-            $matches = [regex]::Matches($script:text, $pattern)
-            if ($matches.Count -ne 1) {
-              throw "Expected exactly one $name span, found $($matches.Count)."
+          function Replace-Lines([string]$name, [string[]]$oldLines, [string[]]$newLines) {
+            $old = $oldLines -join $script:nl
+            $new = $newLines -join $script:nl
+            $count = ([regex]::Matches($script:text, [regex]::Escape($old))).Count
+            if ($count -ne 1) {
+              throw "Expected exactly one $name block, found $count."
             }
-            $script:text = [regex]::Replace(
-              $script:text,
-              $pattern,
-              {
-                param($match)
-                return (($match.Value -split "`r?`n") | ForEach-Object { '          ' + $_ }) -join "`r`n"
-              },
-              1)
+            $script:text = $script:text.Replace($old, $new)
           }
 
-          Indent-Span 'general advanced' '(?ms)^  _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting\(.*?^      CreateFullscreenTopmostModeSegmentSelector\(\)\);'
-          Indent-Span 'script advanced' '(?ms)^  // Keep script options on the shorter left column.*?^      WrapWithHint\(MarkAdvancedSetting\(SettingsToggle\(Strings\.Get\("SettingsHideScriptRunWindow"\).*?\)\)\);'
-          Indent-Span 'capsule advanced' '(?ms)^  rightColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsToggle\(\r?\n              Strings\.Get\("SettingsHideEdgeCapsuleCloseButtonOnHover"\).*?^      CreateDeepCapsuleTitleMeasureLimitStepper\(\)\);'
-          Indent-Span 'image advanced' '(?ms)^  rightColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsToggle\(\r?\n              Strings\.Get\("SettingsAutoCompressLargeImages"\).*?^          "TipAutoCompressLargeImages"\)\)\);'
-          Indent-Span 'Markdown image-reference advanced' '(?ms)^  leftColumn\.Children\.Add\(AdvancedSettingsBlock\(\r?\n      WrapWithHint\(\r?\n          MarkAdvancedSetting\(SettingsFieldLabel\(Strings\.Get\("SettingsImageReferenceText"\).*?^      CreateImageReferenceTextModeSelector\(\)\);'
+          Replace-Lines 'general advanced' @(
+            '  _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar));',
+            '  _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher));',
+            '  leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '      WrapWithHint(_settingsHidePapersFromTaskbarCheckBox, "TipHidePapersFromTaskbar"),',
+            '      WrapWithHint(_settingsHidePapersFromWindowSwitcherCheckBox, "TipHidePapersFromWindowSwitcher"),',
+            '      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode"), topMargin: 8), "TipFullscreenTopmostMode"),',
+            '      CreateFullscreenTopmostModeSegmentSelector()));'
+          ) @(
+            '            _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar));',
+            '            _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher));',
+            '            leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '                WrapWithHint(_settingsHidePapersFromTaskbarCheckBox, "TipHidePapersFromTaskbar"),',
+            '                WrapWithHint(_settingsHidePapersFromWindowSwitcherCheckBox, "TipHidePapersFromWindowSwitcher"),',
+            '                WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode"), topMargin: 8), "TipFullscreenTopmostMode"),',
+            '                CreateFullscreenTopmostModeSegmentSelector()));'
+          )
+
+          Replace-Lines 'script advanced' @(
+            '  // Keep script options on the shorter left column so they stay visible without scrolling.',
+            '  leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '      SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),',
+            '      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPersistentPowerShellProcess"), State.UsePersistentPowerShellProcess, TogglePersistentPowerShellProcess)), "TipPersistentPowerShellProcess"),',
+            '      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPreferPowerShell7"), State.PreferPowerShell7, TogglePreferPowerShell7)), "TipPreferPowerShell7"),',
+            '      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHideScriptRunWindow"), State.HideScriptRunWindow, ToggleHideScriptRunWindow)), "TipHideScriptRunWindow")));'
+          ) @(
+            '            // Keep script options on the shorter left column so they stay visible without scrolling.',
+            '            leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '                SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),',
+            '                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPersistentPowerShellProcess"), State.UsePersistentPowerShellProcess, TogglePersistentPowerShellProcess)), "TipPersistentPowerShellProcess"),',
+            '                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPreferPowerShell7"), State.PreferPowerShell7, TogglePreferPowerShell7)), "TipPreferPowerShell7"),',
+            '                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHideScriptRunWindow"), State.HideScriptRunWindow, ToggleHideScriptRunWindow)), "TipHideScriptRunWindow")));'
+          )
+
+          Replace-Lines 'capsule advanced' @(
+            '  rightColumn.Children.Add(AdvancedSettingsBlock(',
+            '      WrapWithHint(',
+            '          MarkAdvancedSetting(SettingsToggle(',
+            '              Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),',
+            '              State.HideEdgeCapsuleCloseButtonOnHover,',
+            '              ToggleHideEdgeCapsuleCloseButtonOnHover)),',
+            '          "TipHideEdgeCapsuleCloseButtonOnHover"),',
+            '      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"),',
+            '      CreateMaxTitleLengthStepper(),',
+            '      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"),',
+            '      CreateDeepCapsuleTitleMeasureLimitStepper()));'
+          ) @(
+            '            rightColumn.Children.Add(AdvancedSettingsBlock(',
+            '                WrapWithHint(',
+            '                    MarkAdvancedSetting(SettingsToggle(',
+            '                        Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),',
+            '                        State.HideEdgeCapsuleCloseButtonOnHover,',
+            '                        ToggleHideEdgeCapsuleCloseButtonOnHover)),',
+            '                    "TipHideEdgeCapsuleCloseButtonOnHover"),',
+            '                WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"),',
+            '                CreateMaxTitleLengthStepper(),',
+            '                WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"),',
+            '                CreateDeepCapsuleTitleMeasureLimitStepper()));'
+          )
+
+          Replace-Lines 'image advanced' @(
+            '  rightColumn.Children.Add(AdvancedSettingsBlock(',
+            '      WrapWithHint(',
+            '          MarkAdvancedSetting(SettingsToggle(',
+            '              Strings.Get("SettingsAutoCompressLargeImages"),',
+            '              State.AutoCompressLargeImages,',
+            '              ToggleAutoCompressLargeImages)),',
+            '          "TipAutoCompressLargeImages")));'
+          ) @(
+            '            rightColumn.Children.Add(AdvancedSettingsBlock(',
+            '                WrapWithHint(',
+            '                    MarkAdvancedSetting(SettingsToggle(',
+            '                        Strings.Get("SettingsAutoCompressLargeImages"),',
+            '                        State.AutoCompressLargeImages,',
+            '                        ToggleAutoCompressLargeImages)),',
+            '                    "TipAutoCompressLargeImages")));'
+          )
+
+          Replace-Lines 'Markdown image-reference advanced' @(
+            '  leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '      WrapWithHint(',
+            '          MarkAdvancedSetting(SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8)),',
+            '          "TipImageReferenceText"),',
+            '      CreateImageReferenceTextModeSelector()));'
+          ) @(
+            '            leftColumn.Children.Add(AdvancedSettingsBlock(',
+            '                WrapWithHint(',
+            '                    MarkAdvancedSetting(SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8)),',
+            '                    "TipImageReferenceText"),',
+            '                CreateImageReferenceTextModeSelector()));'
+          )
 
           Set-Content -LiteralPath $path -Value $text -Encoding utf8 -NoNewline
 
