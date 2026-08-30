@@ -2,8 +2,6 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -19,6 +17,11 @@ on:
         type: boolean
       stable_release_confirmed:
         description: "Required for stable releases. Confirms final hand checks are complete."
+        required: false
+        default: false
+        type: boolean
+      retarget_existing_tag:
+        description: "Allow an existing release tag to move to this commit before replacing assets."
         required: false
         default: false
         type: boolean
@@ -42,13 +45,16 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
+          # wpf-notifyicon uses Nerdbank.GitVersioning, which needs history far enough
+          # to calculate version height. A depth-1 parent checkout also shallow-clones
+          # submodules and makes release publishing fail with a missing commit object.
           fetch-depth: 0
-          submodules: true
+          submodules: recursive
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
@@ -99,11 +105,14 @@ jobs:
             /p:IncludeNativeLibrariesForSelfExtract=true `
             /p:EnableCompressionInSingleFile=true `
             /p:PublishTrimmed=false `
-            /p:DebugType=none `
-            /p:DebugSymbols=false `
             /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
           Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:SELF_CONTAINED_EXE)
 
@@ -117,11 +126,14 @@ jobs:
             /p:IncludeNativeLibrariesForSelfExtract=true `
             /p:EnableCompressionInSingleFile=false `
             /p:PublishTrimmed=false `
-            /p:DebugType=none `
-            /p:DebugSymbols=false `
             /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
           Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
 
@@ -154,7 +166,7 @@ jobs:
           Get-ChildItem -LiteralPath $releaseDir -File | Sort-Object Name | Format-Table Name, Length
 
       - name: Upload executable package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PaperTodo-v${{ steps.meta.outputs.version }}-win-x64
           if-no-files-found: error
@@ -195,6 +207,11 @@ jobs:
           }
           if ($isStable -and -not $stableConfirmed) {
             throw "Stable release '$tag' requires stable_release_confirmed=true."
+          }
+
+          $retargetRequested = "${{ inputs.retarget_existing_tag }}" -eq "true"
+          if ($retargetRequested -and "${{ github.event_name }}" -ne "workflow_dispatch") {
+            throw "retarget_existing_tag can only be used with workflow_dispatch."
           }
 
           "tag=$tag" >> $env:GITHUB_OUTPUT
@@ -256,8 +273,10 @@ jobs:
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $tag = "${{ steps.release.outputs.tag }}"
+          $retargetRequested = "${{ inputs.retarget_existing_tag }}" -eq "true"
 
-          # A rebuilt existing release must keep its tag/source archive on the same commit as the uploaded assets.
+          # Existing release tags are immutable by default. Repointing one requires an explicit
+          # workflow_dispatch opt-in so an accidental rebuild cannot silently rewrite a release.
           git fetch --force --tags origin
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git show-ref --verify --quiet "refs/tags/$tag"
@@ -267,6 +286,10 @@ jobs:
               throw "Could not resolve existing release tag $tag."
             }
             if ($tagCommit -ne $env:GITHUB_SHA) {
+              if (-not $retargetRequested) {
+                throw "Release tag $tag already points to $tagCommit, not $env:GITHUB_SHA. Re-run manually with retarget_existing_tag=true only if replacing that published version is intentional."
+              }
+
               Write-Host "Retargeting existing release tag $tag from $tagCommit to $env:GITHUB_SHA"
               git tag -f $tag $env:GITHUB_SHA
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -305,9 +328,12 @@ jobs:
               }
             }
             gh release upload $tag @assets --clobber
-            gh release edit $tag --title "PaperTodo $tag" --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            gh release edit $tag --target $env:GITHUB_SHA --title "PaperTodo $tag" --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if ($isPrerelease) {
               gh release edit $tag --prerelease
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
           } else {
             $createArgs = @(
@@ -323,4 +349,5 @@ jobs:
             }
 
             gh @createArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
