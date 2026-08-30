@@ -1031,12 +1031,13 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
         if (advanced)
         {
-            _settingsHidePapersFromTaskbarCheckBox = SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar);
-            _settingsHidePapersFromWindowSwitcherCheckBox = SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher);
-            leftColumn.Children.Add(WrapWithHint(_settingsHidePapersFromTaskbarCheckBox, "TipHidePapersFromTaskbar"));
-            leftColumn.Children.Add(WrapWithHint(_settingsHidePapersFromWindowSwitcherCheckBox, "TipHidePapersFromWindowSwitcher"));
-            leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode"), topMargin: 8), "TipFullscreenTopmostMode"));
-            leftColumn.Children.Add(CreateFullscreenTopmostModeSegmentSelector());
+  _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar));
+  _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher));
+  leftColumn.Children.Add(AdvancedSettingsBlock(
+      WrapWithHint(_settingsHidePapersFromTaskbarCheckBox, "TipHidePapersFromTaskbar"),
+      WrapWithHint(_settingsHidePapersFromWindowSwitcherCheckBox, "TipHidePapersFromWindowSwitcher"),
+      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsFullscreenTopmostMode"), topMargin: 8), "TipFullscreenTopmostMode"),
+      CreateFullscreenTopmostModeSegmentSelector()));
         }
 
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode"), topMargin: 8), "TipMarkdownRender"));
@@ -1057,11 +1058,12 @@ public sealed partial class AppController
 
         if (advanced)
         {
-            // Keep script options on the shorter left column so they stay visible without scrolling.
-            leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")));
-            leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsPersistentPowerShellProcess"), State.UsePersistentPowerShellProcess, TogglePersistentPowerShellProcess), "TipPersistentPowerShellProcess"));
-            leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsPreferPowerShell7"), State.PreferPowerShell7, TogglePreferPowerShell7), "TipPreferPowerShell7"));
-            leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsHideScriptRunWindow"), State.HideScriptRunWindow, ToggleHideScriptRunWindow), "TipHideScriptRunWindow"));
+  // Keep script options on the shorter left column so they stay visible without scrolling.
+  leftColumn.Children.Add(AdvancedSettingsBlock(
+      SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
+      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPersistentPowerShellProcess"), State.UsePersistentPowerShellProcess, TogglePersistentPowerShellProcess)), "TipPersistentPowerShellProcess"),
+      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPreferPowerShell7"), State.PreferPowerShell7, TogglePreferPowerShell7)), "TipPreferPowerShell7"),
+      WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHideScriptRunWindow"), State.HideScriptRunWindow, ToggleHideScriptRunWindow)), "TipHideScriptRunWindow")));
         }
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
@@ -1081,22 +1083,29 @@ public sealed partial class AppController
         RefreshSettingsCapsuleToggleStates();
         if (advanced)
         {
-            rightColumn.Children.Add(WrapWithHint(
-                SettingsToggle(
-                    Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
-                    State.HideEdgeCapsuleCloseButtonOnHover,
-                    ToggleHideEdgeCapsuleCloseButtonOnHover),
-                "TipHideEdgeCapsuleCloseButtonOnHover"));
-            rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"));
-            rightColumn.Children.Add(CreateMaxTitleLengthStepper());
-            rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"));
-            rightColumn.Children.Add(CreateDeepCapsuleTitleMeasureLimitStepper());
+  rightColumn.Children.Add(AdvancedSettingsBlock(
+      WrapWithHint(
+          MarkAdvancedSetting(SettingsToggle(
+              Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
+              State.HideEdgeCapsuleCloseButtonOnHover,
+              ToggleHideEdgeCapsuleCloseButtonOnHover)),
+          "TipHideEdgeCapsuleCloseButtonOnHover"),
+      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"),
+      CreateMaxTitleLengthStepper(),
+      WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"),
+      CreateDeepCapsuleTitleMeasureLimitStepper()));
         }
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoNote")));
         if (advanced)
         {
-            rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoCompressLargeImages"), State.AutoCompressLargeImages, ToggleAutoCompressLargeImages), "TipAutoCompressLargeImages"));
+  rightColumn.Children.Add(AdvancedSettingsBlock(
+      WrapWithHint(
+          MarkAdvancedSetting(SettingsToggle(
+              Strings.Get("SettingsAutoCompressLargeImages"),
+              State.AutoCompressLargeImages,
+              ToggleAutoCompressLargeImages)),
+          "TipAutoCompressLargeImages")));
         }
 
         rightColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsAutoClearCompletedTodos"), State.AutoClearCompletedTodos, ToggleAutoClearCompletedTodos), "TipAutoClearCompletedTodos"));
@@ -1195,10 +1204,11 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateOverallFontScaleStepper());
         if (State.AdvancedSettingsMode)
         {
-            leftColumn.Children.Add(WrapWithHint(
-                SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
-                "TipImageReferenceText"));
-            leftColumn.Children.Add(CreateImageReferenceTextModeSelector());
+  leftColumn.Children.Add(AdvancedSettingsBlock(
+      WrapWithHint(
+          MarkAdvancedSetting(SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8)),
+          "TipImageReferenceText"),
+      CreateImageReferenceTextModeSelector()));
         }
 
         void AddTextStyleEditor(
