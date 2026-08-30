@@ -15,11 +15,11 @@
     <!-- WPF keeps DPI policy in app.manifest (PerMonitorV2); ignore WinForms-only WFO0003. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>3.3</Version>
-    <AssemblyVersion>3.3.0.0</AssemblyVersion>
-    <FileVersion>3.3.0.0</FileVersion>
-    <InformationalVersion>3.3</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v3.3" free of +commit suffixes from SourceLink. -->
+    <Version>3.31</Version>
+    <AssemblyVersion>3.31.0.0</AssemblyVersion>
+    <FileVersion>3.31.0.0</FileVersion>
+    <InformationalVersion>3.31</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v3.31" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\icons\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
