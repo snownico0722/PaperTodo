@@ -369,7 +369,7 @@ public sealed partial class AppController
             }
 
             State.OpenEdgeCapsuleShortcutAtCursor = true;
-            State.DistinguishNumpadShortcutDigits = true;
+            State.DistinguishNumpadShortcutDigits = false;
             _shortcutRecordingCommandId = null;
             ApplyShortcutDraft();
         };

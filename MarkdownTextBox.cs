@@ -4890,11 +4890,46 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             Change(line, startInLine, length, element =>
             {
-                element.TextRunProperties.SetTypeface(typeface);
-                // Inline styles inherit the block size so styled text inside headings stays at heading size.
+                var current = element.TextRunProperties.Typeface;
+                var style = typeface.Style == FontStyles.Italic
+                    ? FontStyles.Italic
+                    : current.Style;
+                var requestsBold =
+                    typeface.Weight == SemanticBoldFontWeight &&
+                    string.Equals(
+                        typeface.FontFamily.Source,
+                        SemanticBoldFontFamily.Source,
+                        System.StringComparison.OrdinalIgnoreCase);
+                var family = requestsBold && AppTypography.UsesCustomBoldFace(true)
+                    ? SemanticBoldFontFamily
+                    : current.FontFamily;
+                var weight = requestsBold
+                    ? SemanticBoldFontWeight
+                    : current.Weight;
+                element.TextRunProperties.SetTypeface(new Typeface(
+                    family,
+                    style,
+                    weight,
+                    current.Stretch));
+
                 if (decorations != null)
                 {
-                    element.TextRunProperties.SetTextDecorations(decorations);
+                    var merged = new TextDecorationCollection();
+                    if (element.TextRunProperties.TextDecorations is { } existing)
+                    {
+                        foreach (var decoration in existing)
+                        {
+                            merged.Add(decoration);
+                        }
+                    }
+                    foreach (var decoration in decorations)
+                    {
+                        if (!merged.Contains(decoration))
+                        {
+                            merged.Add(decoration);
+                        }
+                    }
+                    element.TextRunProperties.SetTextDecorations(merged);
                 }
                 if (foreground != null)
                 {
