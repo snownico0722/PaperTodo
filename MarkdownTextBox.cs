@@ -4891,9 +4891,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             Change(line, startInLine, length, element =>
             {
                 element.TextRunProperties.SetTypeface(typeface);
-                var fontSize = _owner.ScaledFontSize(NoteTypography.FontSize);
-                element.TextRunProperties.SetFontRenderingEmSize(fontSize);
-                element.TextRunProperties.SetFontHintingEmSize(fontSize);
+                // Inline styles inherit the block size so styled text inside headings stays at heading size.
                 if (decorations != null)
                 {
                     element.TextRunProperties.SetTextDecorations(decorations);
