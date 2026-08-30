@@ -256,6 +256,25 @@ jobs:
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $tag = "${{ steps.release.outputs.tag }}"
+
+          # A rebuilt existing release must keep its tag/source archive on the same commit as the uploaded assets.
+          git fetch --force --tags origin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git show-ref --verify --quiet "refs/tags/$tag"
+          if ($LASTEXITCODE -eq 0) {
+            $tagCommit = (git rev-list -n 1 $tag).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tagCommit)) {
+              throw "Could not resolve existing release tag $tag."
+            }
+            if ($tagCommit -ne $env:GITHUB_SHA) {
+              Write-Host "Retargeting existing release tag $tag from $tagCommit to $env:GITHUB_SHA"
+              git tag -f $tag $env:GITHUB_SHA
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              git push origin "refs/tags/$tag" --force
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+
           $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
           $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
           $assets = @(
