@@ -4287,16 +4287,24 @@ public sealed partial class MarkdownTextBox : TextEditor
             NoteTypography.FontWeight,
             NoteTypography.FontStretch);
 
+        private static FontFamily SemanticBoldFontFamily =>
+            AppTypography.FontFamilyFor(content: true, bold: true);
+
+        private static FontWeight SemanticBoldFontWeight =>
+            AppTypography.UsesCustomBoldFace(true)
+                ? AppTypography.FontWeightFor(true)
+                : NoteTypography.HeadingFontWeight;
+
         private static Typeface HeadingTypeface => new(
-            NoteTypography.FontFamily,
+            SemanticBoldFontFamily,
             NoteTypography.FontStyle,
-            NoteTypography.HeadingFontWeight,
+            SemanticBoldFontWeight,
             NoteTypography.FontStretch);
 
         private static Typeface StrongTypeface => new(
-            NoteTypography.FontFamily,
+            SemanticBoldFontFamily,
             NoteTypography.FontStyle,
-            NoteTypography.HeadingFontWeight,
+            SemanticBoldFontWeight,
             NoteTypography.FontStretch);
 
         private static Typeface EmphasisTypeface => new(
