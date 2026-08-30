@@ -33,40 +33,40 @@ jobs:
           $text = Get-Content -LiteralPath $path -Raw
 
           $old = @'
-        private static Typeface HeadingTypeface => new(
-            NoteTypography.FontFamily,
-            NoteTypography.FontStyle,
-            NoteTypography.HeadingFontWeight,
-            NoteTypography.FontStretch);
+                  private static Typeface HeadingTypeface => new(
+                      NoteTypography.FontFamily,
+                      NoteTypography.FontStyle,
+                      NoteTypography.HeadingFontWeight,
+                      NoteTypography.FontStretch);
 
-        private static Typeface StrongTypeface => new(
-            NoteTypography.FontFamily,
-            NoteTypography.FontStyle,
-            NoteTypography.HeadingFontWeight,
-            NoteTypography.FontStretch);
-'@
+                  private static Typeface StrongTypeface => new(
+                      NoteTypography.FontFamily,
+                      NoteTypography.FontStyle,
+                      NoteTypography.HeadingFontWeight,
+                      NoteTypography.FontStretch);
+          '@
 
           $new = @'
-        private static FontFamily SemanticBoldFontFamily =>
-            AppTypography.FontFamilyFor(content: true, bold: true);
+                  private static FontFamily SemanticBoldFontFamily =>
+                      AppTypography.FontFamilyFor(content: true, bold: true);
 
-        private static FontWeight SemanticBoldFontWeight =>
-            AppTypography.UsesCustomBoldFace(true)
-                ? AppTypography.FontWeightFor(true)
-                : NoteTypography.HeadingFontWeight;
+                  private static FontWeight SemanticBoldFontWeight =>
+                      AppTypography.UsesCustomBoldFace(true)
+                          ? AppTypography.FontWeightFor(true)
+                          : NoteTypography.HeadingFontWeight;
 
-        private static Typeface HeadingTypeface => new(
-            SemanticBoldFontFamily,
-            NoteTypography.FontStyle,
-            SemanticBoldFontWeight,
-            NoteTypography.FontStretch);
+                  private static Typeface HeadingTypeface => new(
+                      SemanticBoldFontFamily,
+                      NoteTypography.FontStyle,
+                      SemanticBoldFontWeight,
+                      NoteTypography.FontStretch);
 
-        private static Typeface StrongTypeface => new(
-            SemanticBoldFontFamily,
-            NoteTypography.FontStyle,
-            SemanticBoldFontWeight,
-            NoteTypography.FontStretch);
-'@
+                  private static Typeface StrongTypeface => new(
+                      SemanticBoldFontFamily,
+                      NoteTypography.FontStyle,
+                      SemanticBoldFontWeight,
+                      NoteTypography.FontStretch);
+          '@
 
           $count = ([regex]::Matches($text, [regex]::Escape($old))).Count
           if ($count -ne 1) {
