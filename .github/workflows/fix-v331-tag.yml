@@ -1,0 +1,28 @@
+name: Repair v3.31 tag
+
+on:
+  push:
+    branches:
+      - "3.x"
+    paths:
+      - ".github/workflows/fix-v331-tag.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: 3.x
+          fetch-depth: 0
+
+      - name: Move v3.31 tag to fixed clean commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f v3.31 4debb1429d3b306d08cf082a28be1322bcc2c888
+          git push origin refs/tags/v3.31 --force
