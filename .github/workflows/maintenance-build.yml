@@ -20,7 +20,7 @@ jobs:
   build:
     name: Build PaperTodo
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -91,3 +91,6 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -PathType Leaf)) {
             throw "Framework-dependent publish did not produce PaperTodo.exe"
           }
+
+      - name: Build Win7 best-effort single-file smoke test
+        run: .\build-win7.ps1 -SelfContained
