@@ -1,4 +1,4 @@
-name: Win7 preview build
+name: Win7 best-effort build
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Win7 preview
+    name: Build Win7 best-effort single file
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -22,6 +22,8 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "true"
+      WIN7_VERSION: "3.31-win7BestEffort"
+      WIN7_EXE: "PaperTodo-v3.31-win7BestEffort-win-x64-self-contained.exe"
 
     steps:
       - name: Check out source
@@ -35,23 +37,28 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build Win7 compatibility package
-        run: .\build-win7.ps1
+      - name: Build Win7 best-effort single file
+        run: .\build-win7.ps1 -SelfContained
 
-      - name: Verify output
+      - name: Verify single-file output
         run: |
-          $output = ".\输出\PaperTodo-v3.31-Win7-Preview"
-          if (-not (Test-Path -LiteralPath $output -PathType Container)) {
-            throw "Win7 preview output directory was not produced."
+          $output = ".\输出\PaperTodo-v$env:WIN7_VERSION"
+          $exe = Join-Path $output $env:WIN7_EXE
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "Win7 best-effort build did not produce $env:WIN7_EXE."
           }
-          if (-not (Test-Path -LiteralPath (Join-Path $output "PaperTodo.exe") -PathType Leaf)) {
-            throw "Win7 preview did not produce PaperTodo.exe."
-          }
-          Get-ChildItem -LiteralPath $output -File | Sort-Object Name | Format-Table Name, Length
 
-      - name: Upload Win7 preview artifact
+          $files = @(Get-ChildItem -LiteralPath $output -File -Recurse)
+          if ($files.Count -ne 1) {
+            $files | Select-Object FullName, Length | Format-Table
+            throw "Win7 best-effort output is not a true single-file package."
+          }
+
+          Get-Item -LiteralPath $exe | Format-Table Name, Length
+
+      - name: Upload Win7 best-effort executable
         uses: actions/upload-artifact@v7
         with:
-          name: PaperTodo-v3.31-Win7-Preview
+          name: PaperTodo-v${{ env.WIN7_VERSION }}-win-x64-self-contained
           if-no-files-found: error
-          path: 输出/PaperTodo-v3.31-Win7-Preview/**
+          path: 输出/PaperTodo-v${{ env.WIN7_VERSION }}/${{ env.WIN7_EXE }}
