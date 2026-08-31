@@ -28,7 +28,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   build:
@@ -161,36 +160,6 @@ jobs:
 
           Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign release executables
-        env:
-          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
-          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
-          WIN7_BEST_EFFORT_EXE: ${{ steps.meta.outputs.win7_best_effort_exe }}
-        run: |
-          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
-          $exeFiles = @(
-            (Join-Path $releaseDir $env:SELF_CONTAINED_EXE),
-            (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE),
-            (Join-Path $releaseDir $env:WIN7_BEST_EFFORT_EXE)
-          )
-
-          foreach ($exe in $exeFiles) {
-            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
-              throw "Release executable not found: $exe"
-            }
-
-            cosign sign-blob `
-              --yes `
-              --output-signature "$exe.sig" `
-              --output-certificate "$exe.crt" `
-              "$exe"
-          }
-
-          Get-ChildItem -LiteralPath $releaseDir -File | Sort-Object Name | Format-Table Name, Length
-
       - name: Upload executable package
         uses: actions/upload-artifact@v7
         with:
@@ -198,14 +167,8 @@ jobs:
           if-no-files-found: error
           path: |
             release/${{ steps.meta.outputs.self_contained_exe }}
-            release/${{ steps.meta.outputs.self_contained_exe }}.sig
-            release/${{ steps.meta.outputs.self_contained_exe }}.crt
             release/${{ steps.meta.outputs.framework_dependent_exe }}
-            release/${{ steps.meta.outputs.framework_dependent_exe }}.sig
-            release/${{ steps.meta.outputs.framework_dependent_exe }}.crt
             release/${{ steps.meta.outputs.win7_best_effort_exe }}
-            release/${{ steps.meta.outputs.win7_best_effort_exe }}.sig
-            release/${{ steps.meta.outputs.win7_best_effort_exe }}.crt
 
       - name: Resolve release tag
         id: release
@@ -334,27 +297,15 @@ jobs:
           $win7BestEffort = "${{ steps.meta.outputs.win7_best_effort_exe }}"
           $assets = @(
             (Join-Path $releaseDir $selfContained),
-            (Join-Path $releaseDir "$selfContained.sig"),
-            (Join-Path $releaseDir "$selfContained.crt"),
             (Join-Path $releaseDir $frameworkDependent),
-            (Join-Path $releaseDir "$frameworkDependent.sig"),
-            (Join-Path $releaseDir "$frameworkDependent.crt"),
-            (Join-Path $releaseDir $win7BestEffort),
-            (Join-Path $releaseDir "$win7BestEffort.sig"),
-            (Join-Path $releaseDir "$win7BestEffort.crt")
+            (Join-Path $releaseDir $win7BestEffort)
           )
           $notes = Join-Path $releaseDir "RELEASE_NOTES.md"
           $isPrerelease = ("${{ inputs.prerelease }}" -eq "true") -or ($tag -match '(?i)(alpha|beta|preview|rc)')
           $expectedAssetNames = @(
             $selfContained,
-            "$selfContained.sig",
-            "$selfContained.crt",
             $frameworkDependent,
-            "$frameworkDependent.sig",
-            "$frameworkDependent.crt",
-            $win7BestEffort,
-            "$win7BestEffort.sig",
-            "$win7BestEffort.crt"
+            $win7BestEffort
           )
 
           gh release view $tag *> $null
