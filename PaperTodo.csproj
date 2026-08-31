@@ -32,6 +32,14 @@
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
+  <!-- Keep the legacy compatibility shim out of normal 3.x assemblies. The Win7 staged build
+       opts it back in explicitly with PaperTodoWin7BestEffort=true. -->
+  <ItemGroup>
+    <Compile Remove="win7.fork\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PaperTodoWin7BestEffort)' == 'true'">
+    <Compile Include="win7.fork\Win7Compatibility.cs" />
+  </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets\icons\PaperTodo.ico" />
     <Content Include="$(PaperTodoLmdbLibrary)">
