@@ -88,6 +88,9 @@ try {
     Write-Host "[Win7] staging source..."
     Copy-SourceTree -Source $repoRoot -Destination $stage
 
+    # Force a Windows 7-safe system-DPI manifest for this package only.
+    Copy-Item -LiteralPath (Join-Path $stage "win7.fork\app.manifest") -Destination (Join-Path $stage "app.manifest") -Force
+
     $workAreaOld = @'
     [DllImport("shcore.dll")]
     private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
