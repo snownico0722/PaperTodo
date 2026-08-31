@@ -34,6 +34,7 @@
        the target framework or Win7 best-effort behavior of the normal portable 3.x build. -->
   <PropertyGroup Condition="'$(PaperTodoStoreBuild)' == 'true'">
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <DefineConstants>$(DefineConstants);PAPERTODO_STORE_BUILD</DefineConstants>
   </PropertyGroup>
 
