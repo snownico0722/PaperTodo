@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$legacyVersion = "3.31-win7BestEffort"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectFile = Join-Path $repoRoot "PaperTodo.csproj"
 $notifyIconProject = Join-Path $repoRoot "vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj"
@@ -19,7 +20,7 @@ if (-not (Test-Path $notifyIconProject)) {
 }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("PaperTodo-win7-" + [Guid]::NewGuid().ToString("N"))
-$publishDir = Join-Path $repoRoot "输出\PaperTodo-v3.31-Win7-Preview"
+$publishDir = Join-Path $repoRoot "输出\PaperTodo-v$legacyVersion"
 $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 
 function Copy-SourceTree {
@@ -141,25 +142,55 @@ try {
     New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 
     $selfContainedValue = if ($SelfContained) { "true" } else { "false" }
+    $compressionValue = if ($SelfContained) { "true" } else { "false" }
+    $packageKind = if ($SelfContained) { "self-contained" } else { "no-runtime" }
+    $releaseExeName = "PaperTodo-v$legacyVersion-$Runtime-$packageKind.exe"
+
     $arguments = @(
         "publish",
         (Join-Path $stage "PaperTodo.csproj"),
         "-c", $Configuration,
         "-r", $Runtime,
         "--self-contained", $selfContainedValue,
+        "-p:Version=$legacyVersion",
+        "-p:InformationalVersion=$legacyVersion",
         "-p:CETCompat=false",
         "-p:IncludeSourceRevisionInInformationalVersion=false",
+        "-p:PublishSingleFile=true",
+        "-p:PublishReadyToRun=false",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:IncludeAllContentForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=$compressionValue",
+        "-p:PublishTrimmed=false",
+        "-p:DebugType=none",
+        "-p:DebugSymbols=false",
+        "-p:EmbedAllSources=false",
+        "-p:EmbedUntrackedSources=false",
         "-o", $publishDir
     )
 
-    Write-Host "[Win7] publishing PaperTodo v3.31 legacy preview..."
+    Write-Host "[Win7] publishing PaperTodo v$legacyVersion..."
     & dotnet @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE"
     }
 
-    Write-Host "[Win7] done: $publishDir"
-    Write-Host "[Win7] This is an unsupported compatibility build. Test on Windows 7 SP1 x64 before release."
+    $defaultExe = Join-Path $publishDir "PaperTodo.exe"
+    if (-not (Test-Path -LiteralPath $defaultExe -PathType Leaf)) {
+        throw "Win7 single-file publish did not produce PaperTodo.exe."
+    }
+
+    $releaseExe = Join-Path $publishDir $releaseExeName
+    Move-Item -LiteralPath $defaultExe -Destination $releaseExe -Force
+
+    $publishedFiles = @(Get-ChildItem -LiteralPath $publishDir -File -Recurse)
+    if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].FullName -ne $releaseExe) {
+        $names = ($publishedFiles | ForEach-Object { $_.FullName.Substring($publishDir.Length).TrimStart([char[]]@('\', '/')) }) -join ", "
+        throw "Win7 package is not a true single-file publish. Files: $names"
+    }
+
+    Write-Host "[Win7] done: $releaseExe"
+    Write-Host "[Win7] This is a best-effort compatibility build. Test on Windows 7 SP1 x64 before release."
 }
 finally {
     if (Test-Path $stage) {
