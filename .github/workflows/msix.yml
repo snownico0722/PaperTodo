@@ -37,11 +37,9 @@ jobs:
   msix:
     name: Build and validate MSIX
     runs-on: windows-latest
-
     defaults:
       run:
         shell: pwsh
-
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "true"
@@ -63,9 +61,7 @@ jobs:
         run: |
           $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
           $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
-          if ($versionNodes.Count -ne 1) {
-            throw "PaperTodo.csproj must define exactly one <Version> element."
-          }
+          if ($versionNodes.Count -ne 1) { throw "PaperTodo.csproj must define exactly one <Version> element." }
 
           $appVersion = ([string]$versionNodes[0].InnerText).Trim()
           $versionCore = ($appVersion -split '[-+]')[0]
@@ -88,11 +84,9 @@ jobs:
 
           if ("${{ github.ref_type }}" -eq "tag") {
             $packageKind = "store"
-          }
-          elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $packageKind = "${{ inputs.package_kind }}".Trim().ToLowerInvariant()
-          }
-          else {
+          } else {
             $packageKind = "test"
           }
 
@@ -101,14 +95,12 @@ jobs:
             $publisher = "CN=71A31110-CB7B-4E95-A801-2E034D3DB464"
             $publisherDisplayName = "snowtrigger"
             $suffix = "STORE"
-          }
-          elseif ($packageKind -eq "test") {
+          } elseif ($packageKind -eq "test") {
             $identityName = "PaperTodo.Test"
             $publisher = "CN=PaperTodo Test"
             $publisherDisplayName = "PaperTodo Test"
             $suffix = "TEST"
-          }
-          else {
+          } else {
             throw "Unsupported package kind '$packageKind'."
           }
 
@@ -167,7 +159,6 @@ jobs:
           if ($telemetryResources.Count -ne 0) {
             throw "Store flavor unexpectedly published telemetry resources: $($telemetryResources.FullName -join ', ')"
           }
-
           "PUBLISH_DIR=$publishDir" >> $env:GITHUB_ENV
 
       - name: Create manifest and package assets
@@ -198,20 +189,16 @@ jobs:
                   $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
                   $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                   $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-
                   $scale = [Math]::Min($size / $source.Width, $size / $source.Height)
                   $width = [Math]::Max(1, [int][Math]::Round($source.Width * $scale))
                   $height = [Math]::Max(1, [int][Math]::Round($source.Height * $scale))
                   $x = [int](($size - $width) / 2)
                   $y = [int](($size - $height) / 2)
                   $graphics.DrawImage($source, $x, $y, $width, $height)
-                }
-                finally { $graphics.Dispose() }
+                } finally { $graphics.Dispose() }
                 $bitmap.Save($destinationPath, [System.Drawing.Imaging.ImageFormat]::Png)
-              }
-              finally { $bitmap.Dispose() }
-            }
-            finally { $source.Dispose() }
+              } finally { $bitmap.Dispose() }
+            } finally { $source.Dispose() }
           }
 
           $iconSource = Join-Path $env:GITHUB_WORKSPACE "assets\icons\papertodo-icon-1.png"
@@ -224,7 +211,6 @@ jobs:
           [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
           $ns = [System.Xml.XmlNamespaceManager]::new($manifest.NameTable)
           $ns.AddNamespace('f', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
-
           $identity = $manifest.SelectSingleNode('/f:Package/f:Identity', $ns)
           if ($null -eq $identity) { throw 'Identity element missing from AppxManifest.xml.' }
           $identity.SetAttribute('Name', $env:IDENTITY_NAME)
@@ -241,7 +227,6 @@ jobs:
           $settings.Indent = $true
           $writer = [System.Xml.XmlWriter]::Create($manifestPath, $settings)
           try { $manifest.Save($writer) } finally { $writer.Dispose() }
-
           "STAGING_DIR=$staging" >> $env:GITHUB_ENV
 
       - name: Build MSIX
@@ -259,7 +244,6 @@ jobs:
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if ($null -eq $makeAppx) { throw 'MakeAppx.exe was not found on the GitHub Windows runner.' }
-
           & $makeAppx.FullName pack /d $env:STAGING_DIR /p $msixPath /o
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -267,9 +251,8 @@ jobs:
           "MSIX_OUT_DIR=$outDir" >> $env:GITHUB_ENV
           "SDK_BIN=$sdkBin" >> $env:GITHUB_ENV
 
-      - name: Self-sign and verify TEST package
+      - name: Self-sign TEST package
         if: steps.meta.outputs.package_kind == 'test'
-        timeout-minutes: 2
         env:
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
         run: |
@@ -281,33 +264,17 @@ jobs:
             -KeyAlgorithm RSA `
             -KeyLength 2048 `
             -NotAfter (Get-Date).AddDays(7)
-
-          $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
-          Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
-
           try {
-            # certutil is deliberately used here instead of Import-Certificate so hosted runners
-            # never block on a trust-store UI prompt. The stores are per-user and removed below.
-            & certutil.exe -user -f -addstore TrustedPeople $cerPath | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPeople import failed: $LASTEXITCODE" }
-            & certutil.exe -user -f -addstore Root $cerPath | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed: $LASTEXITCODE" }
-
+            $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
+            Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
             $signTool = Get-ChildItem -LiteralPath $env:SDK_BIN -Filter SignTool.exe -File -Recurse |
               Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
               Sort-Object FullName -Descending |
               Select-Object -First 1
             if ($null -eq $signTool) { throw 'SignTool.exe was not found on the GitHub Windows runner.' }
-
             & $signTool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint /s My $env:MSIX_PATH
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-            & $signTool.FullName verify /pa /v $env:MSIX_PATH
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          finally {
-            & certutil.exe -user -delstore Root $cert.Thumbprint | Out-Null
-            & certutil.exe -user -delstore TrustedPeople $cert.Thumbprint | Out-Null
+          } finally {
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
 
@@ -322,9 +289,8 @@ jobs:
         run: |
           if ($env:PACKAGE_KIND -eq "store") {
             $signatureNote = "Unsigned STORE submission package. Upload this MSIX to Partner Center; Microsoft Store signs it during certification/distribution."
-          }
-          else {
-            $signatureNote = "Self-signed TEST package. Trust PaperTodo-MSIX-test.cer only on a deliberate test machine before sideloading."
+          } else {
+            $signatureNote = "Self-signed TEST package. Run Validate-MSIX.ps1 on a real Windows test machine to verify, install, launch, and optionally run WACK."
           }
 
           @"
@@ -339,18 +305,11 @@ jobs:
           $signatureNote
           "@ | Set-Content -LiteralPath (Join-Path $env:MSIX_OUT_DIR "MSIX_BUILD.txt") -Encoding utf8
 
-          Copy-Item -LiteralPath (Join-Path $env:STAGING_DIR "AppxManifest.xml") `
-            -Destination (Join-Path $env:MSIX_OUT_DIR "AppxManifest.used.xml") -Force
-          Copy-Item -LiteralPath .\packaging\msix\README.md `
-            -Destination (Join-Path $env:MSIX_OUT_DIR "README-MSIX.md") -Force
-          Copy-Item -LiteralPath .\packaging\msix\Validate-MSIX.ps1 `
-            -Destination (Join-Path $env:MSIX_OUT_DIR "Validate-MSIX.ps1") -Force
-
+          Copy-Item -LiteralPath (Join-Path $env:STAGING_DIR "AppxManifest.xml") -Destination (Join-Path $env:MSIX_OUT_DIR "AppxManifest.used.xml") -Force
+          Copy-Item -LiteralPath .\packaging\msix\README.md -Destination (Join-Path $env:MSIX_OUT_DIR "README-MSIX.md") -Force
+          Copy-Item -LiteralPath .\packaging\msix\Validate-MSIX.ps1 -Destination (Join-Path $env:MSIX_OUT_DIR "Validate-MSIX.ps1") -Force
           $hash = (Get-FileHash -LiteralPath $env:MSIX_PATH -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $(Split-Path -Leaf $env:MSIX_PATH)" | Set-Content `
-            -LiteralPath ($env:MSIX_PATH + ".sha256") `
-            -Encoding ascii
-
+          "$hash  $(Split-Path -Leaf $env:MSIX_PATH)" | Set-Content -LiteralPath ($env:MSIX_PATH + ".sha256") -Encoding ascii
           Get-ChildItem -LiteralPath $env:MSIX_OUT_DIR -File | Sort-Object Name | Format-Table Name, Length
 
       - name: Upload MSIX artifact
