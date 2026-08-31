@@ -286,6 +286,7 @@ jobs:
           $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
           Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
           Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
 
           try {
             $signTool = Get-ChildItem -LiteralPath $env:SDK_BIN -Filter SignTool.exe -File -Recurse |
@@ -320,6 +321,7 @@ jobs:
             }
           }
           finally {
+            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
