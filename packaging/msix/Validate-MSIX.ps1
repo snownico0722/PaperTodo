@@ -25,21 +25,11 @@ if (-not [string]::IsNullOrWhiteSpace($CertificatePath)) {
     $certificatePath = (Resolve-Path -LiteralPath $CertificatePath).Path
 }
 
-$sdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
-$makeAppx = Get-ChildItem -LiteralPath $sdkBin -Filter MakeAppx.exe -File -Recurse |
-    Where-Object { $_.FullName -match '\\x64\\MakeAppx\.exe$' } |
-    Sort-Object FullName -Descending |
-    Select-Object -First 1
-if ($null -eq $makeAppx) {
-    throw "MakeAppx.exe was not found. Install a current Windows SDK."
-}
-
-$signTool = Get-ChildItem -LiteralPath $sdkBin -Filter SignTool.exe -File -Recurse |
-    Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
-    Sort-Object FullName -Descending |
-    Select-Object -First 1
-if ($null -eq $signTool) {
-    throw "SignTool.exe was not found. Install a current Windows SDK."
+$identityObject = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identityObject)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($certificatePath -and -not $isAdmin) {
+    throw "Trusting the TEST signing certificate requires an elevated PowerShell session (Run as administrator)."
 }
 
 $unpackDirectory = Join-Path $env:TEMP ("PaperTodo-msix-validate-" + [Guid]::NewGuid().ToString("N"))
@@ -47,16 +37,19 @@ New-Item -ItemType Directory -Path $unpackDirectory -Force | Out-Null
 
 $trustedThumbprint = $null
 $trustedPeopleBefore = $false
-$trustedRootBefore = $false
 $installedPackage = $null
 
 try {
-    & $makeAppx.FullName unpack /p $packagePath /d $unpackDirectory /o | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "MakeAppx failed to unpack the package (exit $LASTEXITCODE)."
-    }
+    # MSIX is ZIP-based. Using the built-in ZIP reader keeps the basic install/launch smoke test
+    # independent of the Windows SDK; the SDK is only needed when -RunWack is requested.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($packagePath, $unpackDirectory)
 
     $manifestPath = Join-Path $unpackDirectory "AppxManifest.xml"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "AppxManifest.xml was not found in the MSIX package."
+    }
+
     [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
     $ns = [System.Xml.XmlNamespaceManager]::new($manifest.NameTable)
     $ns.AddNamespace('f', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
@@ -74,28 +67,36 @@ try {
     if ($certificatePath) {
         $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certificatePath)
         $trustedThumbprint = $certificate.Thumbprint
-        $trustedPeoplePath = "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint"
-        $trustedRootPath = "Cert:\CurrentUser\Root\$trustedThumbprint"
+        $trustedPeoplePath = "Cert:\LocalMachine\TrustedPeople\$trustedThumbprint"
         $trustedPeopleBefore = Test-Path -LiteralPath $trustedPeoplePath
-        $trustedRootBefore = Test-Path -LiteralPath $trustedRootPath
 
         if (-not $trustedPeopleBefore) {
-            Import-Certificate -FilePath $certificatePath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
-        }
-        if (-not $trustedRootBefore) {
-            Write-Host "Trusting the temporary TEST certificate as a CurrentUser root for signature validation."
-            Import-Certificate -FilePath $certificatePath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
+            # App Installer/MSIX deployment validates package signing trust against the Local
+            # Computer certificate stores. A self-signed development code-signing certificate
+            # belongs in Trusted People, not Trusted Root Certification Authorities.
+            Import-Certificate `
+                -FilePath $certificatePath `
+                -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" | Out-Null
         }
     }
 
-    & $signTool.FullName verify /pa /v $packagePath
-    if ($LASTEXITCODE -ne 0) {
-        if (-not $certificatePath) {
-            throw "Signature verification failed. The STORE package is intentionally unsigned for Partner Center; use a signed TEST package plus -CertificatePath for local installation."
+    # If a Windows SDK is already installed, run an explicit SignTool check as an extra signal.
+    # It is deliberately optional: Add-AppxPackage itself validates the MSIX signature and trust.
+    $sdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    if (Test-Path -LiteralPath $sdkBin -PathType Container) {
+        $signTool = Get-ChildItem -LiteralPath $sdkBin -Filter SignTool.exe -File -Recurse |
+            Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+        if ($null -ne $signTool) {
+            & $signTool.FullName verify /pa /v $packagePath
+            if ($LASTEXITCODE -ne 0) {
+                throw "SignTool verification failed with exit code $LASTEXITCODE."
+            }
+            Write-Host "MSIX signature verification passed."
         }
-        throw "SignTool verification failed with exit code $LASTEXITCODE."
     }
-    Write-Host "MSIX signature verification passed."
 
     foreach ($existing in @(Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue)) {
         Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction Stop
@@ -133,16 +134,13 @@ try {
     }
 
     if ($RunWack) {
-        $identityObject = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $principal = [Security.Principal.WindowsPrincipal]::new($identityObject)
-        $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if (-not $isAdmin) {
             throw "Windows App Certification Kit must be run from an elevated shell. Re-run PowerShell as administrator."
         }
 
         $appCert = Join-Path "${env:ProgramFiles(x86)}" "Windows Kits\10\App Certification Kit\appcert.exe"
         if (-not (Test-Path -LiteralPath $appCert -PathType Leaf)) {
-            throw "appcert.exe was not found. Install the Windows App Certification Kit from the Windows SDK."
+            throw "appcert.exe was not found. Install the Windows App Certification Kit from the Windows SDK, or omit -RunWack for the normal install/launch smoke test."
         }
 
         if ([string]::IsNullOrWhiteSpace($ReportOutputPath)) {
@@ -175,13 +173,11 @@ finally {
         Remove-AppxPackage -Package $installedPackage.PackageFullName -ErrorAction SilentlyContinue
     }
 
-    if ($trustedThumbprint) {
-        if (-not $trustedRootBefore) {
-            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$trustedThumbprint" -Force -ErrorAction SilentlyContinue
-        }
-        if (-not $trustedPeopleBefore) {
-            Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint" -Force -ErrorAction SilentlyContinue
-        }
+    if ($trustedThumbprint -and -not $trustedPeopleBefore) {
+        Remove-Item `
+            -LiteralPath "Cert:\LocalMachine\TrustedPeople\$trustedThumbprint" `
+            -Force `
+            -ErrorAction SilentlyContinue
     }
 
     if (Test-Path -LiteralPath $unpackDirectory) {
