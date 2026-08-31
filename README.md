@@ -257,8 +257,6 @@ GitHub Actions 构建两个 Windows x64 单文件 exe，直接作为 Release 发
 - **`...-self-contained.exe`** — 自包含 .NET Runtime。
 - **`...-no-runtime.exe`** — 不带运行库（需要本机已安装 .NET）。
 
-每个产物附带 Sigstore 签名（`.sig` / `.crt`）。
-
 Release 发行说明从 [`CHANGELOG.md`](CHANGELOG.md) 自动提取对应 tag 的版本小节。
 
 ---
