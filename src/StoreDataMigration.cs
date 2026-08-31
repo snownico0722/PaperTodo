@@ -12,6 +12,14 @@ namespace PaperTodo;
 /// </summary>
 internal static class StoreDataMigration
 {
+    private static readonly JsonSerializerOptions ImportStateJsonOptions = new(JsonSerializerOptions.Strict)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+        UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
+    };
+
     private static readonly string[] OptionalPortableFiles =
     {
         "data.backup.json",
@@ -64,7 +72,7 @@ internal static class StoreDataMigration
             var dialog = new OpenFileDialog
             {
                 Title = text.PickerTitle,
-                Filter = "data.json|data.json",
+                Filter = "PaperTodo data|data.json;data.backup.json|data.json|data.json|data.backup.json|data.backup.json",
                 FileName = "data.json",
                 CheckFileExists = true,
                 Multiselect = false
@@ -139,10 +147,15 @@ internal static class StoreDataMigration
                     destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                     StringComparison.OrdinalIgnoreCase))
             {
+                error = MigrationText.ForCurrentCulture().SameDirectory;
                 return false;
             }
 
-            ValidateStateJson(sourceDirectory);
+            // Validate before creating or writing anything in the Store data directory. The rule
+            // mirrors StateStore.Load(): prefer a loadable primary and accept a loadable backup if
+            // the primary is missing or damaged. Both originals are still copied so StateStore can
+            // perform its normal recovery/preservation path on first load.
+            ValidateLoadableState(sourceDirectory);
             Directory.CreateDirectory(destinationDirectory);
 
             var sourceFiles = CollectPortableFiles(sourceDirectory);
@@ -213,22 +226,54 @@ internal static class StoreDataMigration
         }
     }
 
-    private static void ValidateStateJson(string sourceDirectory)
+    private static void ValidateLoadableState(string sourceDirectory)
     {
-        var statePath = Path.Combine(sourceDirectory, "data.json");
-        if (!File.Exists(statePath))
+        var mainPath = Path.Combine(sourceDirectory, "data.json");
+        var backupPath = Path.Combine(sourceDirectory, "data.backup.json");
+
+        Exception? mainError = null;
+        if (File.Exists(mainPath) && TryValidateStateFile(mainPath, out mainError))
         {
-            statePath = Path.Combine(sourceDirectory, "data.backup.json");
+            return;
         }
 
-        using var stream = File.Open(statePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var _ = JsonDocument.Parse(
-            stream,
-            new JsonDocumentOptions
+        Exception? backupError = null;
+        if (File.Exists(backupPath) && TryValidateStateFile(backupPath, out backupError))
+        {
+            return;
+        }
+
+        var text = MigrationText.ForCurrentCulture();
+        throw new InvalidDataException(text.InvalidData, mainError ?? backupError);
+    }
+
+    private static bool TryValidateStateFile(string path, out Exception? error)
+    {
+        try
+        {
+            var json = File.ReadAllText(path);
+            var state = JsonSerializer.Deserialize<AppState>(json, ImportStateJsonOptions);
+            if (state == null)
             {
-                AllowTrailingCommas = true,
-                CommentHandling = JsonCommentHandling.Skip
-            });
+                throw new InvalidDataException($"{Path.GetFileName(path)} deserialized to null.");
+            }
+
+            // This is the only required root invariant enforced by StateStore.NormalizeAfterLoad.
+            // Other missing/legacy fields are deliberately tolerated and normalized by StateStore
+            // after the files have been imported.
+            if (state.Papers == null)
+            {
+                throw new JsonException("Required property 'papers' cannot be null.");
+            }
+
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return false;
+        }
     }
 
     private static IReadOnlyList<string> CollectPortableFiles(string sourceDirectory)
@@ -269,7 +314,9 @@ internal static class StoreDataMigration
         string SelectPrompt,
         string PickerTitle,
         string Failure,
-        string MissingData)
+        string MissingData,
+        string InvalidData,
+        string SameDirectory)
     {
         public static MigrationText ForCurrentCulture()
         {
@@ -278,31 +325,39 @@ internal static class StoreDataMigration
                 "zh" => new MigrationText(
                     "导入现有 PaperTodo 数据",
                     "检测到现有 PaperTodo 便携版数据。是否导入到 Microsoft Store 版？\n\n将复制纸片、待办、笔记图片和自定义图标/字体。",
-                    "Microsoft Store 版尚无数据。是否从现有 PaperTodo 便携版导入？\n\n选择“是”后，请选择旧版目录中的 data.json。",
-                    "选择旧版 PaperTodo 的 data.json",
+                    "Microsoft Store 版尚无数据。是否从现有 PaperTodo 便携版导入？\n\n选择“是”后，请选择旧版目录中的 data.json 或 data.backup.json。",
+                    "选择旧版 PaperTodo 的 data.json 或 data.backup.json",
                     "导入失败：{0}\n\n商店版现有数据未被覆盖。",
-                    "所选目录中没有可用的 data.json 或 data.backup.json。"),
+                    "所选目录中没有可用的 data.json 或 data.backup.json。",
+                    "所选 PaperTodo 数据无法正常加载；data.json 和备份均不可用。",
+                    "不能从商店版当前数据目录导入。"),
                 "ja" => new MigrationText(
                     "既存の PaperTodo データをインポート",
                     "既存のポータブル版 PaperTodo データが見つかりました。Microsoft Store 版へインポートしますか？\n\n紙片、ToDo、ノート画像、カスタムアイコン/フォントをコピーします。",
-                    "Microsoft Store 版にはまだデータがありません。既存のポータブル版 PaperTodo からインポートしますか？\n\n「はい」を選んだ後、旧版フォルダーの data.json を選択してください。",
-                    "旧版 PaperTodo の data.json を選択",
+                    "Microsoft Store 版にはまだデータがありません。既存のポータブル版 PaperTodo からインポートしますか？\n\n「はい」を選んだ後、旧版フォルダーの data.json または data.backup.json を選択してください。",
+                    "旧版 PaperTodo の data.json または data.backup.json を選択",
                     "インポートに失敗しました: {0}\n\nStore 版の既存データは上書きされていません。",
-                    "選択したフォルダーに data.json または data.backup.json がありません。"),
+                    "選択したフォルダーに data.json または data.backup.json がありません。",
+                    "選択した PaperTodo データを正常に読み込めません。data.json とバックアップの両方が使用できません。",
+                    "現在の Store データフォルダーからはインポートできません。"),
                 "ko" => new MigrationText(
                     "기존 PaperTodo 데이터 가져오기",
                     "기존 휴대용 PaperTodo 데이터를 찾았습니다. Microsoft Store 버전으로 가져오시겠습니까?\n\n메모, 할 일, 노트 이미지, 사용자 지정 아이콘/글꼴을 복사합니다.",
-                    "Microsoft Store 버전에 아직 데이터가 없습니다. 기존 휴대용 PaperTodo에서 가져오시겠습니까?\n\n‘예’를 선택한 뒤 이전 폴더의 data.json을 선택하세요.",
-                    "이전 PaperTodo의 data.json 선택",
+                    "Microsoft Store 버전에 아직 데이터가 없습니다. 기존 휴대용 PaperTodo에서 가져오시겠습니까?\n\n‘예’를 선택한 뒤 이전 폴더의 data.json 또는 data.backup.json을 선택하세요.",
+                    "이전 PaperTodo의 data.json 또는 data.backup.json 선택",
                     "가져오기에 실패했습니다: {0}\n\nStore 버전의 기존 데이터는 덮어쓰지 않았습니다.",
-                    "선택한 폴더에 사용할 수 있는 data.json 또는 data.backup.json이 없습니다."),
+                    "선택한 폴더에 사용할 수 있는 data.json 또는 data.backup.json이 없습니다.",
+                    "선택한 PaperTodo 데이터를 정상적으로 불러올 수 없습니다. data.json과 백업을 모두 사용할 수 없습니다.",
+                    "현재 Store 데이터 폴더에서는 가져올 수 없습니다."),
                 _ => new MigrationText(
                     "Import existing PaperTodo data",
                     "Existing portable PaperTodo data was detected. Import it into the Microsoft Store version?\n\nPapers, todos, note images, and custom icons/fonts will be copied.",
-                    "The Microsoft Store version has no data yet. Import from an existing portable PaperTodo installation?\n\nAfter choosing Yes, select data.json from the old PaperTodo folder.",
-                    "Select the old PaperTodo data.json",
+                    "The Microsoft Store version has no data yet. Import from an existing portable PaperTodo installation?\n\nAfter choosing Yes, select data.json or data.backup.json from the old PaperTodo folder.",
+                    "Select the old PaperTodo data.json or data.backup.json",
                     "Import failed: {0}\n\nExisting Store data was not overwritten.",
-                    "The selected folder does not contain a usable data.json or data.backup.json.")
+                    "The selected folder does not contain a usable data.json or data.backup.json.",
+                    "The selected PaperTodo data cannot be loaded; both data.json and its backup are unusable.",
+                    "The current Store data directory cannot be used as an import source.")
             };
         }
     }
