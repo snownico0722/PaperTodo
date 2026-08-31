@@ -19,7 +19,7 @@ The workflow has two explicit package kinds:
 - **STORE** — official Partner Center identity, unsigned MSIX intended for Partner Center. Microsoft Store signs the package during certification/distribution.
 - **TEST** — isolated `PaperTodo.Test` / `CN=PaperTodo Test` identity. CI self-signs this package and includes the temporary `.cer` so it can be deliberately validated and sideloaded on a real test machine.
 
-Pull requests and ordinary `3.x` branch pushes build TEST packages. `v3*` tag pushes build STORE packages. A manual **Build MSIX** run lets you choose either kind and defaults to STORE.
+Pull requests and ordinary `3.x` branch pushes build TEST packages. `v3*` tag pushes build STORE packages. A manual **Build MSIX** run lets you choose either kind and defaults to STORE. The dedicated MSIX feature branch also builds the official STORE identity on push so both identities are exercised before merge.
 
 Artifacts are named visibly so a TEST package cannot be mistaken for a Store submission:
 
@@ -56,11 +56,11 @@ CI requires:
 7. for TEST packages, successful temporary self-signing;
 8. artifact upload with SHA-256 digest.
 
-GitHub-hosted Windows Server runners are not a reliable interactive desktop for trusting a self-signed root, `Add-AppxPackage`, or Windows App Certification Kit testing. Signature-chain verification, installation, launch smoke testing, and WACK therefore live in `Validate-MSIX.ps1` and must be run on a real Windows test session.
+GitHub-hosted Windows Server runners are not a reliable interactive desktop for machine certificate trust, `Add-AppxPackage`, or Windows App Certification Kit testing. Installation, launch smoke testing, and WACK therefore live in `Validate-MSIX.ps1` and must be run on a real Windows test session.
 
 ## Real Windows validation / WACK
 
-For the TEST artifact:
+Run the basic TEST validation from an **elevated PowerShell session**:
 
 ```powershell
 .\Validate-MSIX.ps1 `
@@ -68,14 +68,16 @@ For the TEST artifact:
   -CertificatePath .\PaperTodo-MSIX-test.cer
 ```
 
-The script:
+The basic install/launch smoke test does **not** require the Windows SDK. The script reads the MSIX manifest with the built-in ZIP APIs and:
 
-1. unpacks and reads the manifest;
-2. temporarily trusts the TEST certificate in CurrentUser;
-3. runs `SignTool verify /pa /v`;
-4. installs the package;
+1. reads the package identity/application id;
+2. temporarily trusts the TEST signing certificate in `Local Computer -> Trusted People`;
+3. runs `SignTool verify` only when an SDK is already present;
+4. installs the package with `Add-AppxPackage` (which validates the package signature/trust itself);
 5. launches PaperTodo through its packaged AppUserModelId and checks that the process stays running;
 6. removes the package/certificate again unless `-KeepInstalled` is used.
+
+Do not put the TEST code-signing certificate into `Trusted Root Certification Authorities`; it is not a CA root certificate. App Installer/MSIX deployment expects this development certificate in the Local Computer `Trusted People` store.
 
 To include Windows App Certification Kit testing, run from an elevated PowerShell session:
 
@@ -86,7 +88,7 @@ To include Windows App Certification Kit testing, run from an elevated PowerShel
   -RunWack
 ```
 
-The script uses the `appcert.exe reset` and `appcert.exe test -packagefullname ... -reportoutputpath ...` flow. WACK needs a real signed-in Windows desktop session; it is intentionally not a GitHub-hosted CI gate.
+`-RunWack` requires the Windows App Certification Kit from the Windows SDK. The script uses the `appcert.exe reset` and `appcert.exe test -packagefullname ... -reportoutputpath ...` flow. WACK needs a real signed-in Windows desktop session; it is intentionally not a GitHub-hosted CI gate.
 
 ## Store submission
 
