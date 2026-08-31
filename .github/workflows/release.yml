@@ -79,6 +79,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "self_contained_exe=PaperTodo-v$version-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
           "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
+          "win7_best_effort_exe=PaperTodo-v$version-win7BestEffort-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
@@ -137,6 +138,23 @@ jobs:
 
           Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
 
+      - name: Publish Windows 7 best-effort executable
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          WIN7_BEST_EFFORT_EXE: ${{ steps.meta.outputs.win7_best_effort_exe }}
+        run: |
+          .\build-win7.ps1 -SelfContained
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $source = Join-Path $env:GITHUB_WORKSPACE "输出\PaperTodo-v$env:VERSION-win7BestEffort\$env:WIN7_BEST_EFFORT_EXE"
+          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "Windows 7 best-effort executable not found: $source"
+          }
+
+          Copy-Item -LiteralPath $source -Destination (Join-Path $env:GITHUB_WORKSPACE "release\$env:WIN7_BEST_EFFORT_EXE") -Force
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -144,11 +162,13 @@ jobs:
         env:
           SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
           FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+          WIN7_BEST_EFFORT_EXE: ${{ steps.meta.outputs.win7_best_effort_exe }}
         run: |
           $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
           $exeFiles = @(
             (Join-Path $releaseDir $env:SELF_CONTAINED_EXE),
-            (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
+            (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE),
+            (Join-Path $releaseDir $env:WIN7_BEST_EFFORT_EXE)
           )
 
           foreach ($exe in $exeFiles) {
@@ -177,6 +197,9 @@ jobs:
             release/${{ steps.meta.outputs.framework_dependent_exe }}
             release/${{ steps.meta.outputs.framework_dependent_exe }}.sig
             release/${{ steps.meta.outputs.framework_dependent_exe }}.crt
+            release/${{ steps.meta.outputs.win7_best_effort_exe }}
+            release/${{ steps.meta.outputs.win7_best_effort_exe }}.sig
+            release/${{ steps.meta.outputs.win7_best_effort_exe }}.crt
 
       - name: Resolve release tag
         id: release
@@ -223,6 +246,7 @@ jobs:
           $tag = "${{ steps.release.outputs.tag }}"
           $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
           $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
+          $win7BestEffort = "${{ steps.meta.outputs.win7_best_effort_exe }}"
           $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
           if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
             throw "CHANGELOG.md not found."
@@ -261,7 +285,8 @@ jobs:
             "下载:",
             "",
             "- 完整版（含 .NET 运行库）：${selfContained}",
-            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}"
+            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}",
+            "- Windows 7 SP1 x64 Best Effort（含 .NET 运行库）：${win7BestEffort}"
           )
 
           Set-Content -LiteralPath (Join-Path $releaseDir "RELEASE_NOTES.md") -Value ($notesLines -join "`n") -Encoding utf8
@@ -300,13 +325,17 @@ jobs:
 
           $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
           $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
+          $win7BestEffort = "${{ steps.meta.outputs.win7_best_effort_exe }}"
           $assets = @(
             (Join-Path $releaseDir $selfContained),
             (Join-Path $releaseDir "$selfContained.sig"),
             (Join-Path $releaseDir "$selfContained.crt"),
             (Join-Path $releaseDir $frameworkDependent),
             (Join-Path $releaseDir "$frameworkDependent.sig"),
-            (Join-Path $releaseDir "$frameworkDependent.crt")
+            (Join-Path $releaseDir "$frameworkDependent.crt"),
+            (Join-Path $releaseDir $win7BestEffort),
+            (Join-Path $releaseDir "$win7BestEffort.sig"),
+            (Join-Path $releaseDir "$win7BestEffort.crt")
           )
           $notes = Join-Path $releaseDir "RELEASE_NOTES.md"
           $isPrerelease = ("${{ inputs.prerelease }}" -eq "true") -or ($tag -match '(?i)(alpha|beta|preview|rc)')
@@ -316,7 +345,10 @@ jobs:
             "$selfContained.crt",
             $frameworkDependent,
             "$frameworkDependent.sig",
-            "$frameworkDependent.crt"
+            "$frameworkDependent.crt",
+            $win7BestEffort,
+            "$win7BestEffort.sig",
+            "$win7BestEffort.crt"
           )
 
           gh release view $tag *> $null
