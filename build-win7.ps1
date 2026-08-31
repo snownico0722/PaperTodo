@@ -163,6 +163,7 @@ try {
         "-c", $Configuration,
         "-r", $Runtime,
         "--self-contained", $selfContainedValue,
+        "-p:PaperTodoWin7BestEffort=true",
         "-p:Version=$legacyVersion",
         "-p:InformationalVersion=$legacyVersion",
         "-p:CETCompat=false",
