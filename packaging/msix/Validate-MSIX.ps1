@@ -34,11 +34,20 @@ if ($null -eq $makeAppx) {
     throw "MakeAppx.exe was not found. Install a current Windows SDK."
 }
 
+$signTool = Get-ChildItem -LiteralPath $sdkBin -Filter SignTool.exe -File -Recurse |
+    Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
+    Sort-Object FullName -Descending |
+    Select-Object -First 1
+if ($null -eq $signTool) {
+    throw "SignTool.exe was not found. Install a current Windows SDK."
+}
+
 $unpackDirectory = Join-Path $env:TEMP ("PaperTodo-msix-validate-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $unpackDirectory -Force | Out-Null
 
 $trustedThumbprint = $null
-$trustedBefore = $false
+$trustedPeopleBefore = $false
+$trustedRootBefore = $false
 $installedPackage = $null
 
 try {
@@ -65,12 +74,28 @@ try {
     if ($certificatePath) {
         $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certificatePath)
         $trustedThumbprint = $certificate.Thumbprint
-        $trustedPath = "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint"
-        $trustedBefore = Test-Path -LiteralPath $trustedPath
-        if (-not $trustedBefore) {
+        $trustedPeoplePath = "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint"
+        $trustedRootPath = "Cert:\CurrentUser\Root\$trustedThumbprint"
+        $trustedPeopleBefore = Test-Path -LiteralPath $trustedPeoplePath
+        $trustedRootBefore = Test-Path -LiteralPath $trustedRootPath
+
+        if (-not $trustedPeopleBefore) {
             Import-Certificate -FilePath $certificatePath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
         }
+        if (-not $trustedRootBefore) {
+            Write-Host "Trusting the temporary TEST certificate as a CurrentUser root for signature validation."
+            Import-Certificate -FilePath $certificatePath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
+        }
     }
+
+    & $signTool.FullName verify /pa /v $packagePath
+    if ($LASTEXITCODE -ne 0) {
+        if (-not $certificatePath) {
+            throw "Signature verification failed. The STORE package is intentionally unsigned for Partner Center; use a signed TEST package plus -CertificatePath for local installation."
+        }
+        throw "SignTool verification failed with exit code $LASTEXITCODE."
+    }
+    Write-Host "MSIX signature verification passed."
 
     foreach ($existing in @(Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue)) {
         Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction Stop
@@ -150,8 +175,13 @@ finally {
         Remove-AppxPackage -Package $installedPackage.PackageFullName -ErrorAction SilentlyContinue
     }
 
-    if ($trustedThumbprint -and -not $trustedBefore) {
-        Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint" -Force -ErrorAction SilentlyContinue
+    if ($trustedThumbprint) {
+        if (-not $trustedRootBefore) {
+            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$trustedThumbprint" -Force -ErrorAction SilentlyContinue
+        }
+        if (-not $trustedPeopleBefore) {
+            Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$trustedThumbprint" -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if (Test-Path -LiteralPath $unpackDirectory) {
