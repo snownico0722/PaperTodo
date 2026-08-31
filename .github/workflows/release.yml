@@ -58,9 +58,6 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build native LMDB library
-        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
-
       - name: Read project metadata
         id: meta
         run: |
@@ -81,6 +78,32 @@ jobs:
           "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
           "win7_best_effort_exe=PaperTodo-v$version-win7BestEffort-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
 
+      - name: Publish Windows 7 best-effort executable
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          WIN7_BEST_EFFORT_EXE: ${{ steps.meta.outputs.win7_best_effort_exe }}
+        run: |
+          # Build the Win7 package before the release job rebuilds native LMDB with the
+          # runner's newest Visual Studio toolset. This keeps the Win7 package on the
+          # repository's compatibility-tested native binary rather than an unverified rebuild.
+          .\build-win7.ps1 -SelfContained
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+
+          $source = Join-Path $env:GITHUB_WORKSPACE "输出\PaperTodo-v$env:VERSION-win7BestEffort\$env:WIN7_BEST_EFFORT_EXE"
+          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "Windows 7 best-effort executable not found: $source"
+          }
+
+          Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDir $env:WIN7_BEST_EFFORT_EXE) -Force
+
+      - name: Build native LMDB library
+        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
 
@@ -93,7 +116,7 @@ jobs:
           $selfContainedOut = Join-Path $env:RUNNER_TEMP "publish-self-contained"
           $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "publish-no-runtime"
 
-          Remove-Item -LiteralPath $releaseDir, $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $releaseDir, $selfContainedOut, $frameworkDependentOut | Out-Null
 
           dotnet publish .\PaperTodo.csproj `
@@ -137,23 +160,6 @@ jobs:
           }
 
           Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:FRAMEWORK_DEPENDENT_EXE)
-
-      - name: Publish Windows 7 best-effort executable
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-          WIN7_BEST_EFFORT_EXE: ${{ steps.meta.outputs.win7_best_effort_exe }}
-        run: |
-          .\build-win7.ps1 -SelfContained
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          $source = Join-Path $env:GITHUB_WORKSPACE "输出\PaperTodo-v$env:VERSION-win7BestEffort\$env:WIN7_BEST_EFFORT_EXE"
-          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "Windows 7 best-effort executable not found: $source"
-          }
-
-          Copy-Item -LiteralPath $source -Destination (Join-Path $env:GITHUB_WORKSPACE "release\$env:WIN7_BEST_EFFORT_EXE") -Force
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
