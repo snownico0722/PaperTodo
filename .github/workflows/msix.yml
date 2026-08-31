@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package_kind:
-        description: "Package kind: STORE is the Partner Center submission; TEST is self-signed for local validation."
+        description: "STORE = Partner Center submission; TEST = self-signed local validation package."
         required: true
         default: store
         type: choice
@@ -84,7 +84,6 @@ jobs:
           }
           while ($numbers.Count -lt 3) { $numbers.Add(0) }
           if ($numbers[0] -eq 0) { throw "MSIX major version cannot be zero." }
-
           $msixVersion = "$($numbers[0]).$($numbers[1]).$($numbers[2]).0"
 
           if ("${{ github.ref_type }}" -eq "tag") {
@@ -97,21 +96,20 @@ jobs:
             $packageKind = "test"
           }
 
-          if ($packageKind -notin @("store", "test")) {
-            throw "Unsupported package kind '$packageKind'."
-          }
-
           if ($packageKind -eq "store") {
             $identityName = "snowtrigger.PaperTodo"
             $publisher = "CN=71A31110-CB7B-4E95-A801-2E034D3DB464"
             $publisherDisplayName = "snowtrigger"
             $suffix = "STORE"
           }
-          else {
+          elseif ($packageKind -eq "test") {
             $identityName = "PaperTodo.Test"
             $publisher = "CN=PaperTodo Test"
             $publisherDisplayName = "PaperTodo Test"
             $suffix = "TEST"
+          }
+          else {
+            throw "Unsupported package kind '$packageKind'."
           }
 
           "app_version=$appVersion" >> $env:GITHUB_OUTPUT
@@ -167,7 +165,7 @@ jobs:
           $telemetryResources = @(Get-ChildItem -LiteralPath $publishDir -Recurse -File |
             Where-Object { $_.Name -like 'TelemetryStrings*' })
           if ($telemetryResources.Count -ne 0) {
-            throw "Store flavor unexpectedly published telemetry resource files: $($telemetryResources.FullName -join ', ')"
+            throw "Store flavor unexpectedly published telemetry resources: $($telemetryResources.FullName -join ', ')"
           }
 
           "PUBLISH_DIR=$publishDir" >> $env:GITHUB_ENV
@@ -209,7 +207,6 @@ jobs:
                   $graphics.DrawImage($source, $x, $y, $width, $height)
                 }
                 finally { $graphics.Dispose() }
-
                 $bitmap.Save($destinationPath, [System.Drawing.Imaging.ImageFormat]::Png)
               }
               finally { $bitmap.Dispose() }
@@ -272,6 +269,7 @@ jobs:
 
       - name: Self-sign and verify TEST package
         if: steps.meta.outputs.package_kind == 'test'
+        timeout-minutes: 2
         env:
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
         run: |
@@ -286,10 +284,15 @@ jobs:
 
           $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
           Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
 
           try {
+            # certutil is deliberately used here instead of Import-Certificate so hosted runners
+            # never block on a trust-store UI prompt. The stores are per-user and removed below.
+            & certutil.exe -user -f -addstore TrustedPeople $cerPath | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPeople import failed: $LASTEXITCODE" }
+            & certutil.exe -user -f -addstore Root $cerPath | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed: $LASTEXITCODE" }
+
             $signTool = Get-ChildItem -LiteralPath $env:SDK_BIN -Filter SignTool.exe -File -Recurse |
               Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
               Sort-Object FullName -Descending |
@@ -303,8 +306,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           finally {
-            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
-            Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+            & certutil.exe -user -delstore Root $cert.Thumbprint | Out-Null
+            & certutil.exe -user -delstore TrustedPeople $cert.Thumbprint | Out-Null
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
 
