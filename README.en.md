@@ -252,8 +252,6 @@ GitHub Actions builds two Windows x64 single-file executables and publishes them
 - **`...-self-contained.exe`** — Self-contained with the .NET Runtime.
 - **`...-no-runtime.exe`** — No bundled runtime (requires .NET to be installed locally).
 
-Each build includes Sigstore signatures (`.sig` / `.crt`).
-
 Release notes are taken from the matching section in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
