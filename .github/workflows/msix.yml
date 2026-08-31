@@ -86,6 +86,11 @@ jobs:
             $packageKind = "store"
           } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $packageKind = "${{ inputs.package_kind }}".Trim().ToLowerInvariant()
+          } elseif ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_name }}" -eq "feature/msix-packaging-3x") {
+            # The development branch deliberately exercises the real Partner Center identity on
+            # push while the paired PR run uses TEST identity. After merge, normal 3.x pushes are
+            # TEST and v3* release tags are STORE.
+            $packageKind = "store"
           } else {
             $packageKind = "test"
           }
