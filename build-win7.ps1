@@ -6,7 +6,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$legacyVersion = "3.31-win7BestEffort"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectFile = Join-Path $repoRoot "PaperTodo.csproj"
 $notifyIconProject = Join-Path $repoRoot "vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj"
@@ -19,6 +18,18 @@ if (-not (Test-Path $notifyIconProject)) {
     throw "vendor/wpf-notifyicon is missing. Run: git submodule update --init --recursive"
 }
 
+$project = [xml][IO.File]::ReadAllText($projectFile)
+$versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
+if ($versionNodes.Count -ne 1) {
+    throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
+}
+
+$baseVersion = ([string]$versionNodes[0].InnerText).Trim()
+if ([string]::IsNullOrWhiteSpace($baseVersion) -or $baseVersion -match '\s') {
+    throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$baseVersion'."
+}
+
+$legacyVersion = "$baseVersion-win7BestEffort"
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("PaperTodo-win7-" + [Guid]::NewGuid().ToString("N"))
 $publishDir = Join-Path $repoRoot "输出\PaperTodo-v$legacyVersion"
 $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -106,7 +117,7 @@ try {
     private static uint GetDpiForWindow(IntPtr hwnd) =>
         Win7Compatibility.GetDpiForWindow(hwnd);
 '@
-    Replace-ExactBlock -RelativePath "WindowWorkAreaHelper.cs" -OldBlock $workAreaOld -NewBlock $workAreaNew
+    Replace-ExactBlock -RelativePath "src\WindowWorkAreaHelper.cs" -OldBlock $workAreaOld -NewBlock $workAreaNew
 
     $windowNativeOld = @'
     [DllImport("user32.dll")]
@@ -122,7 +133,7 @@ try {
     private static uint GetDpiForWindow(IntPtr hwnd) =>
         Win7Compatibility.GetDpiForWindow(hwnd);
 '@
-    Replace-ExactBlock -RelativePath "WindowNative.cs" -OldBlock $windowNativeOld -NewBlock $windowNativeNew
+    Replace-ExactBlock -RelativePath "src\WindowNative.cs" -OldBlock $windowNativeOld -NewBlock $windowNativeNew
 
     $paperWindowNativeOld = @'
     [DllImport("user32.dll")]
@@ -132,7 +143,7 @@ try {
     private static uint GetDpiForWindow(IntPtr hwnd) =>
         Win7Compatibility.GetDpiForWindow(hwnd);
 '@
-    Replace-ExactBlock -RelativePath "PaperWindow.Native.cs" -OldBlock $paperWindowNativeOld -NewBlock $paperWindowNativeNew
+    Replace-ExactBlock -RelativePath "src\PaperWindow.Native.cs" -OldBlock $paperWindowNativeOld -NewBlock $paperWindowNativeNew
 
     Assert-NoUnsupportedDpiImports
 
