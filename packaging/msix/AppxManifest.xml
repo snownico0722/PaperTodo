@@ -2,24 +2,28 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap10 rescap">
+  IgnorableNamespaces="uap uap5 uap10 rescap">
   <Identity
-    Name="PaperTodo.Test"
-    Publisher="CN=PaperTodo Test"
+    Name="snowtrigger.PaperTodo"
+    Publisher="CN=71A31110-CB7B-4E95-A801-2E034D3DB464"
     Version="3.31.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>PaperTodo</DisplayName>
-    <PublisherDisplayName>PaperTodo</PublisherDisplayName>
+    <PublisherDisplayName>snowtrigger</PublisherDisplayName>
     <Description>Minimal desktop sticky notes with todos and lightweight Markdown.</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
   <Resources>
     <Resource Language="zh-CN" />
+    <Resource Language="en-US" />
+    <Resource Language="ja-JP" />
+    <Resource Language="ko-KR" />
   </Resources>
 
   <Dependencies>
@@ -41,6 +45,17 @@
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="PaperTodo.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="PaperTodoStartup"
+            Enabled="false"
+            DisplayName="PaperTodo" />
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

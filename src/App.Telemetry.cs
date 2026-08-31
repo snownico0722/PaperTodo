@@ -6,14 +6,23 @@ namespace PaperTodo;
 
 public partial class App
 {
+#if PAPERTODO_STORE_BUILD
+    // Microsoft Store builds intentionally contain no active telemetry bootstrap. The telemetry
+    // implementation itself is also excluded from Store compilation in PaperTodo.csproj.
+    public App()
+    {
+    }
+#else
     private readonly TelemetryBootstrap _telemetryBootstrap;
 
     public App()
     {
         _telemetryBootstrap = new TelemetryBootstrap(this);
     }
+#endif
 }
 
+#if !PAPERTODO_STORE_BUILD
 internal sealed class TelemetryBootstrap
 {
     private readonly App _app;
@@ -111,3 +120,4 @@ internal sealed class TelemetryBootstrap
         _attachTimer = null;
     }
 }
+#endif

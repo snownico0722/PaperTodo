@@ -66,6 +66,17 @@ public partial class App : Application
 
         try
         {
+            // Store builds use a different writable data root. On the first packaged launch,
+            // offer a one-time import from an existing portable data folder after the single-
+            // instance mutex is owned, so LMDB/data files cannot be copied from a live old process.
+            if (startupCommand.Kind != StartupCommandKind.Exit &&
+                StoreDataMigration.TryMigrateBeforeController())
+            {
+                // The initial language probe ran before migration. Re-read the imported setting
+                // so the very first Store launch already uses the user's previous UI language.
+                ApplyStartupCultureOverride(startupCommand.DefaultLanguage);
+            }
+
             _controller = new AppController();
         }
         catch (Exception ex)

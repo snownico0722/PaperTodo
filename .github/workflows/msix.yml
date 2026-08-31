@@ -2,9 +2,21 @@ name: Build MSIX
 
 on:
   workflow_dispatch:
+    inputs:
+      package_kind:
+        description: "Package kind: STORE is the Partner Center submission; TEST is self-signed for local validation."
+        required: true
+        default: store
+        type: choice
+        options:
+          - store
+          - test
   push:
     branches:
+      - 3.x
       - feature/msix-packaging-3x
+    tags:
+      - "v3*"
     paths: &msix_paths
       - ".github/workflows/msix.yml"
       - "packaging/msix/**"
@@ -33,9 +45,6 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "true"
-      MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
-      MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
-      MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
 
     steps:
       - name: Check out source
@@ -77,65 +86,57 @@ jobs:
           if ($numbers[0] -eq 0) { throw "MSIX major version cannot be zero." }
 
           $msixVersion = "$($numbers[0]).$($numbers[1]).$($numbers[2]).0"
-          $identityName = if ([string]::IsNullOrWhiteSpace($env:MSIX_IDENTITY_NAME)) { "PaperTodo.Test" } else { $env:MSIX_IDENTITY_NAME }
-          $publisher = if ([string]::IsNullOrWhiteSpace($env:MSIX_PUBLISHER)) { "CN=PaperTodo Test" } else { $env:MSIX_PUBLISHER }
-          $publisherDisplayName = if ([string]::IsNullOrWhiteSpace($env:MSIX_PUBLISHER_DISPLAY_NAME)) { "PaperTodo" } else { $env:MSIX_PUBLISHER_DISPLAY_NAME }
+
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $packageKind = "store"
+          }
+          elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $packageKind = "${{ inputs.package_kind }}".Trim().ToLowerInvariant()
+          }
+          else {
+            $packageKind = "test"
+          }
+
+          if ($packageKind -notin @("store", "test")) {
+            throw "Unsupported package kind '$packageKind'."
+          }
+
+          if ($packageKind -eq "store") {
+            $identityName = "snowtrigger.PaperTodo"
+            $publisher = "CN=71A31110-CB7B-4E95-A801-2E034D3DB464"
+            $publisherDisplayName = "snowtrigger"
+            $suffix = "STORE"
+          }
+          else {
+            $identityName = "PaperTodo.Test"
+            $publisher = "CN=PaperTodo Test"
+            $publisherDisplayName = "PaperTodo Test"
+            $suffix = "TEST"
+          }
 
           "app_version=$appVersion" >> $env:GITHUB_OUTPUT
           "msix_version=$msixVersion" >> $env:GITHUB_OUTPUT
+          "package_kind=$packageKind" >> $env:GITHUB_OUTPUT
           "identity_name=$identityName" >> $env:GITHUB_OUTPUT
           "publisher=$publisher" >> $env:GITHUB_OUTPUT
           "publisher_display_name=$publisherDisplayName" >> $env:GITHUB_OUTPUT
-          "artifact_name=PaperTodo-v$appVersion-win-x64-msix" >> $env:GITHUB_OUTPUT
-          "msix_file=PaperTodo-v$appVersion-win-x64.msix" >> $env:GITHUB_OUTPUT
+          "artifact_name=PaperTodo-v$appVersion-win-x64-$suffix" >> $env:GITHUB_OUTPUT
+          "msix_file=PaperTodo-v$appVersion-win-x64-$suffix.msix" >> $env:GITHUB_OUTPUT
 
           Write-Host "App version:       $appVersion"
           Write-Host "MSIX version:      $msixVersion"
+          Write-Host "Package kind:      $packageKind"
           Write-Host "Identity name:     $identityName"
           Write-Host "Publisher:         $publisher"
           Write-Host "Publisher display: $publisherDisplayName"
 
-      - name: Prepare MSIX-only writable data paths
-        run: |
-          # Portable builds deliberately keep their existing app-directory storage model.
-          # Only the MSIX CI workspace is rewritten before compilation because the installed
-          # package directory is read-only.
-          $sourceFiles = @((Get-Item -LiteralPath .\App.xaml.cs))
-          $sourceFiles += @(Get-ChildItem -LiteralPath .\src -Filter *.cs -File |
-            Where-Object { $_.Name -ne 'MsixDataDirectory.cs' })
-          $sourcePaths = @($sourceFiles | ForEach-Object FullName)
-
-          $matches = @(Select-String -Path $sourcePaths -SimpleMatch 'AppContext.BaseDirectory')
-          if ($matches.Count -lt 3) {
-            throw "Expected several app-relative paths, found only $($matches.Count). Refusing a partial MSIX rewrite."
-          }
-
-          Write-Host "Rewriting $($matches.Count) app-relative path occurrence(s) for MSIX:"
-          $matches | ForEach-Object { Write-Host "  $($_.Path):$($_.LineNumber)" }
-
-          $utf8 = [System.Text.UTF8Encoding]::new($false)
-          foreach ($file in $sourceFiles) {
-            $text = [System.IO.File]::ReadAllText($file.FullName)
-            if ($text.Contains('AppContext.BaseDirectory')) {
-              [System.IO.File]::WriteAllText(
-                $file.FullName,
-                $text.Replace('AppContext.BaseDirectory', 'MsixDataDirectory.Current'),
-                $utf8)
-            }
-          }
-
-          $remaining = @(Select-String -Path $sourcePaths -SimpleMatch 'AppContext.BaseDirectory')
-          if ($remaining.Count -ne 0) {
-            throw "MSIX data-path rewrite left $($remaining.Count) occurrence(s) behind."
-          }
-
       - name: Build native LMDB library
         run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
 
-      - name: Restore
-        run: dotnet restore .\PaperTodo.csproj
+      - name: Restore Store flavor
+        run: dotnet restore .\PaperTodo.csproj /p:PaperTodoStoreBuild=true
 
-      - name: Publish self-contained x64 payload
+      - name: Publish self-contained Store-flavor x64 payload
         run: |
           $publishDir = Join-Path $env:RUNNER_TEMP "papertodo-msix-publish"
           Remove-Item -LiteralPath $publishDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -145,7 +146,9 @@ jobs:
             -c Release `
             -r win-x64 `
             --self-contained true `
+            --no-restore `
             -o $publishDir `
+            /p:PaperTodoStoreBuild=true `
             /p:PublishSingleFile=false `
             /p:PublishReadyToRun=false `
             /p:PublishTrimmed=false `
@@ -159,6 +162,12 @@ jobs:
             if (-not (Test-Path -LiteralPath (Join-Path $publishDir $required) -PathType Leaf)) {
               throw "Required MSIX payload file was not produced: $required"
             }
+          }
+
+          $telemetryResources = @(Get-ChildItem -LiteralPath $publishDir -Recurse -File |
+            Where-Object { $_.Name -like 'TelemetryStrings*' })
+          if ($telemetryResources.Count -ne 0) {
+            throw "Store flavor unexpectedly published telemetry resource files: $($telemetryResources.FullName -join ', ')"
           }
 
           "PUBLISH_DIR=$publishDir" >> $env:GITHUB_ENV
@@ -261,14 +270,11 @@ jobs:
           "MSIX_OUT_DIR=$outDir" >> $env:GITHUB_ENV
           "SDK_BIN=$sdkBin" >> $env:GITHUB_ENV
 
-      - name: Self-sign test package
+      - name: Self-sign and verify TEST package
+        if: steps.meta.outputs.package_kind == 'test'
         env:
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
         run: |
-          # Store distribution does not require a developer-managed trusted certificate; the
-          # Store re-signs MSIX packages after certification. This temporary self-signature only
-          # makes the CI artifact usable for deliberate local sideload testing after trusting
-          # the accompanying .cer file.
           $cert = New-SelfSignedCertificate `
             -Type CodeSigningCert `
             -Subject $env:PUBLISHER `
@@ -278,10 +284,12 @@ jobs:
             -KeyLength 2048 `
             -NotAfter (Get-Date).AddDays(7)
 
-          try {
-            $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
-            Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
+          $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
+          Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
+          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
 
+          try {
             $signTool = Get-ChildItem -LiteralPath $env:SDK_BIN -Filter SignTool.exe -File -Recurse |
               Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
               Sort-Object FullName -Descending |
@@ -290,8 +298,13 @@ jobs:
 
             & $signTool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint /s My $env:MSIX_PATH
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            & $signTool.FullName verify /pa /v $env:MSIX_PATH
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           finally {
+            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
 
@@ -299,24 +312,42 @@ jobs:
         env:
           APP_VERSION: ${{ steps.meta.outputs.app_version }}
           MSIX_VERSION: ${{ steps.meta.outputs.msix_version }}
+          PACKAGE_KIND: ${{ steps.meta.outputs.package_kind }}
           IDENTITY_NAME: ${{ steps.meta.outputs.identity_name }}
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
           PUBLISHER_DISPLAY_NAME: ${{ steps.meta.outputs.publisher_display_name }}
         run: |
+          if ($env:PACKAGE_KIND -eq "store") {
+            $signatureNote = "Unsigned STORE submission package. Upload this MSIX to Partner Center; Microsoft Store signs it during certification/distribution."
+          }
+          else {
+            $signatureNote = "Self-signed TEST package. Trust PaperTodo-MSIX-test.cer only on a deliberate test machine before sideloading."
+          }
+
           @"
           PaperTodo application version: $env:APP_VERSION
           MSIX package version: $env:MSIX_VERSION
+          Package kind: $env:PACKAGE_KIND
           Identity Name: $env:IDENTITY_NAME
           Publisher: $env:PUBLISHER
           Publisher Display Name: $env:PUBLISHER_DISPLAY_NAME
+          Telemetry: excluded from Store-flavor compilation
 
-          The .msix is self-signed only for local test installation. Microsoft Store replaces
-          that signature during Store publishing. Trust PaperTodo-MSIX-test.cer only on a test
-          machine where you deliberately want to sideload this artifact.
+          $signatureNote
           "@ | Set-Content -LiteralPath (Join-Path $env:MSIX_OUT_DIR "MSIX_BUILD.txt") -Encoding utf8
 
           Copy-Item -LiteralPath (Join-Path $env:STAGING_DIR "AppxManifest.xml") `
             -Destination (Join-Path $env:MSIX_OUT_DIR "AppxManifest.used.xml") -Force
+          Copy-Item -LiteralPath .\packaging\msix\README.md `
+            -Destination (Join-Path $env:MSIX_OUT_DIR "README-MSIX.md") -Force
+          Copy-Item -LiteralPath .\packaging\msix\Validate-MSIX.ps1 `
+            -Destination (Join-Path $env:MSIX_OUT_DIR "Validate-MSIX.ps1") -Force
+
+          $hash = (Get-FileHash -LiteralPath $env:MSIX_PATH -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $env:MSIX_PATH)" | Set-Content `
+            -LiteralPath ($env:MSIX_PATH + ".sha256") `
+            -Encoding ascii
+
           Get-ChildItem -LiteralPath $env:MSIX_OUT_DIR -File | Sort-Object Name | Format-Table Name, Length
 
       - name: Upload MSIX artifact

@@ -7,11 +7,21 @@ public sealed partial class AppController
 {
     private UIElement CreateAnonymousUsageStatisticsSettingsRow()
     {
+#if PAPERTODO_STORE_BUILD
+        // Store builds do not collect or upload telemetry, so do not expose a dead setting.
+        return new Border
+        {
+            Visibility = Visibility.Collapsed,
+            Height = 0,
+            Margin = new Thickness(0)
+        };
+#else
         var toggle = SettingsToggle(
             TelemetryStrings.Get("HelpImprove"),
             State.TelemetryEnabled,
             ToggleAnonymousUsageStatistics);
         return WrapWithCustomHint(toggle, TelemetryStrings.Get("Description"));
+#endif
     }
 
     private UIElement WrapWithCustomHint(FrameworkElement option, string tipText)
@@ -60,9 +70,13 @@ public sealed partial class AppController
 
     private void ToggleAnonymousUsageStatistics()
     {
+#if PAPERTODO_STORE_BUILD
+        State.TelemetryEnabled = false;
+#else
         State.TelemetryEnabled = !State.TelemetryEnabled;
         SaveNow();
         TelemetryService.SetEnabled(State.TelemetryEnabled);
         RefreshSettingsWindowContent();
+#endif
     }
 }
