@@ -14,7 +14,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows) {
+# Works in both Windows PowerShell 5.1 and PowerShell 7; $IsWindows only exists in PowerShell Core.
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw "Validate-MSIX.ps1 must be run on Windows."
 }
 
