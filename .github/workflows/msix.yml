@@ -73,14 +73,9 @@ jobs:
             }
             $numbers.Add($value)
           }
-          while ($numbers.Count -lt 3) {
-            $numbers.Add(0)
-          }
-          if ($numbers[0] -eq 0) {
-            throw "MSIX major version cannot be zero."
-          }
+          while ($numbers.Count -lt 3) { $numbers.Add(0) }
+          if ($numbers[0] -eq 0) { throw "MSIX major version cannot be zero." }
 
-          # Microsoft Store reserves the fourth field; Store-bound packages must end in .0.
           $msixVersion = "$($numbers[0]).$($numbers[1]).$($numbers[2]).0"
           $identityName = if ([string]::IsNullOrWhiteSpace($env:MSIX_IDENTITY_NAME)) { "PaperTodo.Test" } else { $env:MSIX_IDENTITY_NAME }
           $publisher = if ([string]::IsNullOrWhiteSpace($env:MSIX_PUBLISHER)) { "CN=PaperTodo Test" } else { $env:MSIX_PUBLISHER }
@@ -102,8 +97,9 @@ jobs:
 
       - name: Prepare MSIX-only writable data paths
         run: |
-          # The portable EXE remains portable. Only this CI workspace is rewritten before
-          # compilation so an installed MSIX never tries to write into its read-only package.
+          # Portable builds deliberately keep their existing app-directory storage model.
+          # Only the MSIX CI workspace is rewritten before compilation because the installed
+          # package directory is read-only.
           $sourceFiles = @((Get-Item -LiteralPath .\App.xaml.cs))
           $sourceFiles += @(Get-ChildItem -LiteralPath .\src -Filter *.cs -File |
             Where-Object { $_.Name -ne 'MsixDataDirectory.cs' })
@@ -184,13 +180,9 @@ jobs:
           Add-Type -AssemblyName System.Drawing
 
           function Write-SquarePng([string]$sourcePath, [string]$destinationPath, [int]$size) {
-            $resolvedSource = (Resolve-Path -LiteralPath $sourcePath).Path
-            $source = [System.Drawing.Image]::FromFile($resolvedSource)
+            $source = [System.Drawing.Image]::FromFile((Resolve-Path -LiteralPath $sourcePath).Path)
             try {
-              $bitmap = [System.Drawing.Bitmap]::new(
-                $size,
-                $size,
-                [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+              $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
               try {
                 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
                 try {
@@ -271,7 +263,6 @@ jobs:
 
       - name: Self-sign and validate package
         env:
-          IDENTITY_NAME: ${{ steps.meta.outputs.identity_name }}
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
         run: |
           $cert = New-SelfSignedCertificate `
@@ -299,26 +290,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             & $signTool.FullName verify /pa /v $env:MSIX_PATH
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-            # Hosted Windows images do not always expose a fully usable AppX deployment service.
-            # Registration is an extra smoke test; MakeAppx + SignTool remain the required checks.
-            try {
-              $existing = @(Get-AppxPackage -Name $env:IDENTITY_NAME -ErrorAction SilentlyContinue)
-              foreach ($package in $existing) {
-                Remove-AppxPackage -Package $package.PackageFullName -ErrorAction Stop
-              }
-
-              Add-AppxPackage -Path $env:MSIX_PATH -ErrorAction Stop
-              $installed = @(Get-AppxPackage -Name $env:IDENTITY_NAME -ErrorAction SilentlyContinue)
-              if ($installed.Count -ne 1) {
-                throw "Expected one registered package named '$env:IDENTITY_NAME', found $($installed.Count)."
-              }
-              Write-Host "Registered package smoke test passed: $($installed[0].PackageFullName)"
-              Remove-AppxPackage -Package $installed[0].PackageFullName -ErrorAction Stop
-            }
-            catch {
-              Write-Warning "MSIX registration smoke test was unavailable on this hosted runner: $($_.Exception.Message)"
-            }
           }
           finally {
             Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
