@@ -261,10 +261,14 @@ jobs:
           "MSIX_OUT_DIR=$outDir" >> $env:GITHUB_ENV
           "SDK_BIN=$sdkBin" >> $env:GITHUB_ENV
 
-      - name: Self-sign and validate package
+      - name: Self-sign test package
         env:
           PUBLISHER: ${{ steps.meta.outputs.publisher }}
         run: |
+          # Store distribution does not require a developer-managed trusted certificate; the
+          # Store re-signs MSIX packages after certification. This temporary self-signature only
+          # makes the CI artifact usable for deliberate local sideload testing after trusting
+          # the accompanying .cer file.
           $cert = New-SelfSignedCertificate `
             -Type CodeSigningCert `
             -Subject $env:PUBLISHER `
@@ -274,12 +278,10 @@ jobs:
             -KeyLength 2048 `
             -NotAfter (Get-Date).AddDays(7)
 
-          $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
-          Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
-
           try {
+            $cerPath = Join-Path $env:MSIX_OUT_DIR "PaperTodo-MSIX-test.cer"
+            Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
+
             $signTool = Get-ChildItem -LiteralPath $env:SDK_BIN -Filter SignTool.exe -File -Recurse |
               Where-Object { $_.FullName -match '\\x64\\SignTool\.exe$' } |
               Sort-Object FullName -Descending |
@@ -288,12 +290,8 @@ jobs:
 
             & $signTool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint /s My $env:MSIX_PATH
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & $signTool.FullName verify /pa /v $env:MSIX_PATH
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           finally {
-            Remove-Item -LiteralPath "Cert:\CurrentUser\Root\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
-            Remove-Item -LiteralPath "Cert:\CurrentUser\TrustedPeople\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           }
 
@@ -312,8 +310,9 @@ jobs:
           Publisher: $env:PUBLISHER
           Publisher Display Name: $env:PUBLISHER_DISPLAY_NAME
 
-          The .msix is self-signed only for CI validation. Microsoft Store replaces that
-          signature when publishing. For direct sideload testing, trust PaperTodo-MSIX-test.cer.
+          The .msix is self-signed only for local test installation. Microsoft Store replaces
+          that signature during Store publishing. Trust PaperTodo-MSIX-test.cer only on a test
+          machine where you deliberately want to sideload this artifact.
           "@ | Set-Content -LiteralPath (Join-Path $env:MSIX_OUT_DIR "MSIX_BUILD.txt") -Encoding utf8
 
           Copy-Item -LiteralPath (Join-Path $env:STAGING_DIR "AppxManifest.xml") `
