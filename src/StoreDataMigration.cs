@@ -277,28 +277,28 @@ internal static class StoreDataMigration
             {
                 "zh" => new MigrationText(
                     "导入现有 PaperTodo 数据",
-                    "检测到现有 PaperTodo 便携版数据。是否导入到 Microsoft Store 版？\n\n将复制纸片、待办、笔记图片和自定义图标/字体；不会复制遥测数据。",
+                    "检测到现有 PaperTodo 便携版数据。是否导入到 Microsoft Store 版？\n\n将复制纸片、待办、笔记图片和自定义图标/字体。",
                     "Microsoft Store 版尚无数据。是否从现有 PaperTodo 便携版导入？\n\n选择“是”后，请选择旧版目录中的 data.json。",
                     "选择旧版 PaperTodo 的 data.json",
                     "导入失败：{0}\n\n商店版现有数据未被覆盖。",
                     "所选目录中没有可用的 data.json 或 data.backup.json。"),
                 "ja" => new MigrationText(
                     "既存の PaperTodo データをインポート",
-                    "既存のポータブル版 PaperTodo データが見つかりました。Microsoft Store 版へインポートしますか？\n\n紙片、ToDo、ノート画像、カスタムアイコン/フォントをコピーします。テレメトリーデータはコピーしません。",
+                    "既存のポータブル版 PaperTodo データが見つかりました。Microsoft Store 版へインポートしますか？\n\n紙片、ToDo、ノート画像、カスタムアイコン/フォントをコピーします。",
                     "Microsoft Store 版にはまだデータがありません。既存のポータブル版 PaperTodo からインポートしますか？\n\n「はい」を選んだ後、旧版フォルダーの data.json を選択してください。",
                     "旧版 PaperTodo の data.json を選択",
                     "インポートに失敗しました: {0}\n\nStore 版の既存データは上書きされていません。",
                     "選択したフォルダーに data.json または data.backup.json がありません。"),
                 "ko" => new MigrationText(
                     "기존 PaperTodo 데이터 가져오기",
-                    "기존 휴대용 PaperTodo 데이터를 찾았습니다. Microsoft Store 버전으로 가져오시겠습니까?\n\n메모, 할 일, 노트 이미지, 사용자 지정 아이콘/글꼴을 복사하며 원격 측정 데이터는 복사하지 않습니다.",
+                    "기존 휴대용 PaperTodo 데이터를 찾았습니다. Microsoft Store 버전으로 가져오시겠습니까?\n\n메모, 할 일, 노트 이미지, 사용자 지정 아이콘/글꼴을 복사합니다.",
                     "Microsoft Store 버전에 아직 데이터가 없습니다. 기존 휴대용 PaperTodo에서 가져오시겠습니까?\n\n‘예’를 선택한 뒤 이전 폴더의 data.json을 선택하세요.",
                     "이전 PaperTodo의 data.json 선택",
                     "가져오기에 실패했습니다: {0}\n\nStore 버전의 기존 데이터는 덮어쓰지 않았습니다.",
                     "선택한 폴더에 사용할 수 있는 data.json 또는 data.backup.json이 없습니다."),
                 _ => new MigrationText(
                     "Import existing PaperTodo data",
-                    "Existing portable PaperTodo data was detected. Import it into the Microsoft Store version?\n\nPapers, todos, note images, and custom icons/fonts will be copied. Telemetry data will not be copied.",
+                    "Existing portable PaperTodo data was detected. Import it into the Microsoft Store version?\n\nPapers, todos, note images, and custom icons/fonts will be copied.",
                     "The Microsoft Store version has no data yet. Import from an existing portable PaperTodo installation?\n\nAfter choosing Yes, select data.json from the old PaperTodo folder.",
                     "Select the old PaperTodo data.json",
                     "Import failed: {0}\n\nExisting Store data was not overwritten.",
