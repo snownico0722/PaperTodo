@@ -1,0 +1,57 @@
+name: Win7 preview build
+
+on:
+  push:
+    branches:
+      - win7-3.31-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Win7 preview
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build Win7 compatibility package
+        run: .\build-win7.ps1
+
+      - name: Verify output
+        run: |
+          $output = ".\输出\PaperTodo-v3.31-Win7-Preview"
+          if (-not (Test-Path -LiteralPath $output -PathType Container)) {
+            throw "Win7 preview output directory was not produced."
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $output "PaperTodo.exe") -PathType Leaf)) {
+            throw "Win7 preview did not produce PaperTodo.exe."
+          }
+          Get-ChildItem -LiteralPath $output -File | Sort-Object Name | Format-Table Name, Length
+
+      - name: Upload Win7 preview artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-v3.31-Win7-Preview
+          if-no-files-found: error
+          path: 输出/PaperTodo-v3.31-Win7-Preview/**
