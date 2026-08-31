@@ -20,7 +20,7 @@ if (-not (Test-Path $notifyIconProject)) {
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("PaperTodo-win7-" + [Guid]::NewGuid().ToString("N"))
 $publishDir = Join-Path $repoRoot "输出\PaperTodo-v3.31-Win7-Preview"
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 
 function Copy-SourceTree {
     param([string]$Source, [string]$Destination)
@@ -77,7 +77,7 @@ function Assert-NoUnsupportedDpiImports {
         $text = [IO.File]::ReadAllText($file.FullName)
         foreach ($pattern in $patterns) {
             if ([regex]::IsMatch($text, $pattern, [Text.RegularExpressions.RegexOptions]::Singleline)) {
-                $relative = $file.FullName.Substring($stage.Length).TrimStart('\', '/')
+                $relative = $file.FullName.Substring($stage.Length).TrimStart([char[]]@('\', '/'))
                 throw "Unsupported post-Win7 DPI import remains in staged source: $relative"
             }
         }
