@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 uap10 rescap">
+  <Identity
+    Name="snowtrigger.PaperTodo"
+    Publisher="CN=71A31110-CB7B-4E95-A801-2E034D3DB464"
+    Version="3.31.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>PaperTodo</DisplayName>
+    <PublisherDisplayName>snowtrigger</PublisherDisplayName>
+    <Description>Minimal desktop sticky notes with todos and lightweight Markdown.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Resources>
+    <Resource Language="zh-CN" />
+    <Resource Language="en-US" />
+    <Resource Language="ja-JP" />
+    <Resource Language="ko-KR" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.19041.0"
+      MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Applications>
+    <Application
+      Id="PaperTodo"
+      Executable="PaperTodo.exe"
+      uap10:RuntimeBehavior="packagedClassicApp"
+      uap10:TrustLevel="mediumIL">
+      <uap:VisualElements
+        DisplayName="PaperTodo"
+        Description="Minimal desktop sticky notes with todos and lightweight Markdown."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="PaperTodo.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="PaperTodoStartup"
+            Enabled="false"
+            DisplayName="PaperTodo" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

@@ -29,9 +29,20 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;vendor\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
+
+  <!-- Store/MSIX builds opt into Windows SDK WinRT projections for StartupTask without changing
+       the target framework or Win7 best-effort behavior of the normal portable 3.x build. -->
+  <PropertyGroup Condition="'$(PaperTodoStoreBuild)' == 'true'">
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <DefineConstants>$(DefineConstants);PAPERTODO_STORE_BUILD</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
+
   <!-- Keep the legacy compatibility shim out of normal 3.x assemblies. The Win7 staged build
        opts it back in explicitly with PaperTodoWin7BestEffort=true. -->
   <ItemGroup>
@@ -40,6 +51,16 @@
   <ItemGroup Condition="'$(PaperTodoWin7BestEffort)' == 'true'">
     <Compile Include="win7.fork\Win7Compatibility.cs" />
   </ItemGroup>
+
+  <!-- Microsoft Store flavor intentionally contains no telemetry implementation/resources.
+       AppState keeps its legacy telemetryEnabled field only for data-file compatibility. -->
+  <ItemGroup Condition="'$(PaperTodoStoreBuild)' == 'true'">
+    <Compile Remove="src\TelemetryService.cs" />
+    <Compile Remove="src\TelemetryCrashMarkerMigration.cs" />
+    <Compile Remove="src\TelemetryStrings.cs" />
+    <EmbeddedResource Remove="Resources\TelemetryStrings*.resx" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="assets\icons\PaperTodo.ico" />
     <Content Include="$(PaperTodoLmdbLibrary)">
