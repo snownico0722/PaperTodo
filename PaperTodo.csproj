@@ -21,7 +21,7 @@
     <InformationalVersion>3.31</InformationalVersion>
     <!-- Keep tray header "PaperTodo v3.31" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <ApplicationIcon>assets\icons\PaperTodo.ico</ApplicationIcon>
+    <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
     <OutputPath>$(MSBuildProjectDirectory)\输出\PaperTodo-v$(Version)\</OutputPath>
@@ -62,7 +62,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="assets\icons\PaperTodo.ico" />
+    <EmbeddedResource Include="assets\PaperTodo.ico" />
     <Content Include="$(PaperTodoLmdbLibrary)">
       <Link>papertodo_lmdb.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

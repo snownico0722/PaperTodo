@@ -22,15 +22,15 @@
 
 | 纸片 |
 | :---: |
-| <img src="screenshots/Home.jpg" alt="桌面纸片" width="100%"> |
+| <img src="assets/Home.jpg" alt="桌面纸片" width="100%"> |
 
 | Markdown 浏览 |
 | :---: |
-| <img src="screenshots/Md.jpg" alt="Markdown 浏览" width="100%"> |
+| <img src="assets/Md.jpg" alt="Markdown 浏览" width="100%"> |
 
 | 胶囊模式 | 高级胶囊 |
 | :---: | :---: |
-| ![胶囊模式](screenshots/Pill_Mode.gif) | ![胶囊自动贴边](screenshots/Pill_Plus.gif) |
+| ![胶囊模式](assets/Pill_Mode.gif) | ![胶囊自动贴边](assets/Pill_Plus.gif) |
 | 纸片可折叠为小胶囊，减少桌面占用。 | 折叠胶囊自动贴到屏幕边缘，悬浮时滑出。 |
 
 ---

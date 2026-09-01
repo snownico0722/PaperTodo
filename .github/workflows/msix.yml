@@ -206,7 +206,7 @@ jobs:
             } finally { $source.Dispose() }
           }
 
-          $iconSource = Join-Path $env:GITHUB_WORKSPACE "assets\icons\papertodo-icon-1.png"
+          $iconSource = Join-Path $env:GITHUB_WORKSPACE "assets\papertodo-icon-1.png"
           Write-SquarePng $iconSource (Join-Path $assetsDir "Square44x44Logo.png") 44
           Write-SquarePng $iconSource (Join-Path $assetsDir "Square150x150Logo.png") 150
           Write-SquarePng $iconSource (Join-Path $assetsDir "StoreLogo.png") 50

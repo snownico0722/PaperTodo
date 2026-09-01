@@ -22,15 +22,15 @@ A minimal Windows desktop sticky-note app built with native WPF. No main window,
 
 | Papers |
 | :---: |
-| <img src="screenshots/Home.jpg" alt="Desktop papers" width="100%"> |
+| <img src="assets/Home.jpg" alt="Desktop papers" width="100%"> |
 
 | Markdown Preview |
 | :---: |
-| <img src="screenshots/Md.jpg" alt="Markdown preview" width="100%"> |
+| <img src="assets/Md.jpg" alt="Markdown preview" width="100%"> |
 
 | Capsule Mode | Advanced Capsules |
 | :---: | :---: |
-| ![Capsule mode](screenshots/Pill_Mode.gif) | ![Auto-docked capsules](screenshots/Pill_Plus.gif) |
+| ![Capsule mode](assets/Pill_Mode.gif) | ![Auto-docked capsules](assets/Pill_Plus.gif) |
 | Papers can collapse into small capsules to save desktop space. | Collapsed capsules dock to screen edges and slide out on hover. |
 
 ---

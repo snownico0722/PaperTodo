@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://snownico0722.github.io/PaperTodo/sitemap.xml
