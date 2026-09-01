@@ -15,7 +15,7 @@
     <!-- WPF keeps DPI policy in app.manifest (PerMonitorV2); ignore WinForms-only WFO0003. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>3.31.1</Version>
+    <Version>3.31</Version>
     <AssemblyVersion>3.31.0.0</AssemblyVersion>
     <FileVersion>3.31.0.0</FileVersion>
     <InformationalVersion>3.31</InformationalVersion>
