@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,8 +20,25 @@ public sealed class StateStore
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
     };
 
-    public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "data.json");
-    public string BackupPath { get; } = Path.Combine(AppContext.BaseDirectory, "data.backup.json");
+    private readonly IDurableAtomicFileWriter _atomicWriter;
+
+    public StateStore()
+        : this(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared)
+    {
+    }
+
+    internal StateStore(string dataDirectory, IDurableAtomicFileWriter atomicWriter)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        ArgumentNullException.ThrowIfNull(atomicWriter);
+
+        FilePath = Path.Combine(dataDirectory, "data.json");
+        BackupPath = Path.Combine(dataDirectory, "data.backup.json");
+        _atomicWriter = atomicWriter;
+    }
+
+    public string FilePath { get; }
+    public string BackupPath { get; }
     private bool _preserveRecoveredLoadFilesOnNextSave;
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
@@ -254,35 +272,83 @@ public sealed class StateStore
         }
     }
 
-    private void WriteJsonInternal(string json)
+    public bool TryRefreshBackupFromPrimary()
     {
-        var directory = Path.GetDirectoryName(FilePath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var skipBackupRotation = PreserveRecoveredLoadFilesIfNeeded();
-        var tempPath = FilePath + ".tmp";
-        File.WriteAllText(tempPath, json);
-
+        _writeLock.Wait();
         try
         {
-            if (!skipBackupRotation && File.Exists(FilePath))
+            // If startup recovered from backup, keep both recovery sources untouched until a
+            // successful normal save has preserved them under timestamped recovery names.
+            if (_preserveRecoveredLoadFilesOnNextSave ||
+                !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
             {
-                File.Copy(FilePath, BackupPath, overwrite: true);
+                return false;
             }
+
+            if (TryReadValidatedStateBytes(BackupPath, out var backupBytes) &&
+                primaryBytes.AsSpan().SequenceEqual(backupBytes))
+            {
+                return true;
+            }
+
+            _atomicWriter.Write(
+                BackupPath,
+                primaryBytes,
+                tempPath =>
+                    TryReadValidatedStateBytes(tempPath, out var writtenBytes) &&
+                    primaryBytes.AsSpan().SequenceEqual(writtenBytes));
+            return true;
         }
         catch
         {
-            // Backup failure should not block normal saving.
+            return false;
         }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
 
-        File.Move(tempPath, FilePath, overwrite: true);
+    private void WriteJsonInternal(string json)
+    {
+        var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded();
+        _atomicWriter.Write(FilePath, Encoding.UTF8.GetBytes(json));
 
-        if (skipBackupRotation)
+        if (preserveRecoverySources)
         {
             ClearRecoveredLoadPreservationState();
+        }
+    }
+
+    private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
+    {
+        bytes = [];
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            bytes = File.ReadAllBytes(path);
+            if (bytes.Length == 0)
+            {
+                return false;
+            }
+
+            var state = JsonSerializer.Deserialize<AppState>(bytes, JsonOptions);
+            if (state == null)
+            {
+                return false;
+            }
+
+            NormalizeAfterLoad(state);
+            return true;
+        }
+        catch
+        {
+            bytes = [];
+            return false;
         }
     }
 

@@ -101,7 +101,7 @@ public partial class App : Application
             return;
         }
 
-        SessionEnding += (s, args) => _controller?.Exit();
+        SessionEnding += (s, args) => _controller?.ExitForSystemShutdown();
         var handlesInitialVisibility = startupCommand.Kind is
             StartupCommandKind.Hide or StartupCommandKind.Toggle;
         await _controller.StartAsync(
@@ -117,6 +117,7 @@ public partial class App : Application
         {
             _controller.ExecuteStartupCommand(startupCommand);
         }
+        _controller.StartStateBackupPolicy();
         CompleteSingleInstanceStartup();
     }
 

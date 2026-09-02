@@ -1,0 +1,49 @@
+name: Persistence Checks 3.x
+
+on:
+  push:
+    branches:
+      - 3.x
+  pull_request:
+    branches:
+      - 3.x
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: persistence-checks-3x-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  persistence:
+    name: Persistence fault injection
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore persistence checks
+        run: dotnet restore .\tests\PaperTodo.PersistenceChecks\PaperTodo.PersistenceChecks.csproj -r win-x64
+
+      - name: Run persistence fault injection checks
+        run: dotnet run --project .\tests\PaperTodo.PersistenceChecks\PaperTodo.PersistenceChecks.csproj -c Release -r win-x64 --no-restore
