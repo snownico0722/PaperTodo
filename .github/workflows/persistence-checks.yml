@@ -1,5 +1,6 @@
 name: Persistence Checks 3.x
 
+# Runs on every 3.x change so lifecycle/save-adjacent edits cannot bypass the durability gate.
 on:
   push:
     branches:
