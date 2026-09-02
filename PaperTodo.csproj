@@ -43,10 +43,10 @@
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
 
-  <!-- Keep the legacy compatibility shim out of normal 3.x assemblies. The Win7 staged build
-       opts it back in explicitly with PaperTodoWin7BestEffort=true. -->
+  <!-- Keep the legacy compatibility shim and repository-level test programs out of the app assembly. -->
   <ItemGroup>
     <Compile Remove="win7.fork\**\*.cs" />
+    <Compile Remove="tests\PaperTodo.PersistenceChecks\**\*.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(PaperTodoWin7BestEffort)' == 'true'">
     <Compile Include="win7.fork\Win7Compatibility.cs" />
