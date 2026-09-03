@@ -549,7 +549,8 @@ public sealed partial class AppController
         {
             (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
             (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced"))
+            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced")),
+            (MarkdownRenderModes.Full, Strings.Get("MarkdownRenderFull"))
         };
 
         return CreateSegmentSelector(segments, State.MarkdownRenderMode, SetMarkdownRenderMode);

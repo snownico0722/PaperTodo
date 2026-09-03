@@ -97,6 +97,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MarkdownRenderEnhanced" xml:space="preserve">
     <value>강화</value>
   </data>
+  <data name="MarkdownRenderFull" xml:space="preserve">
+    <value>전체 렌더링</value>
+  </data>
   <data name="MarkdownRenderOff" xml:space="preserve">
     <value>끄기</value>
   </data>
@@ -567,7 +570,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>기본: Markdown 가벼운 강조.
-확장: 제목, 목록, 강조를 더 다듬어 표시.</value>
+확장: 제목, 목록, 강조를 더 다듬어 표시.
+완전 렌더링: 포커스를 잃으면 메모 전체를 제목, 목록, 인용 등으로 렌더링.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>동영상, 게임 등 전체 화면이 감지되면 종이와 가장자리 캡슐을 잠시 피할 수 있습니다.

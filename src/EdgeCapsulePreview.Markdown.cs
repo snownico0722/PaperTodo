@@ -9,6 +9,55 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
+/// <summary>
+/// 完全渲染面板(ScrollViewer + StackPanel)的图片渲染上下文。
+/// 承载 NoteImageStore、目标宽度与 DPI 缩放,供渲染器在解析块级图片引用时
+/// 调用 NoteImageStore.GetBitmapSource 取得真实位图。
+/// 设计为可空/可单例——旧调用点没有 imageStore 时降级为 ▧ 占位符。
+/// </summary>
+internal sealed class FullRenderImageContext
+{
+    public NoteImageStore? ImageStore { get; }
+    public string NoteId { get; }
+    public double TargetWidthDip { get; }
+    public double DpiScale { get; }
+
+    public bool HasImageStore => ImageStore != null && !string.IsNullOrEmpty(NoteId);
+
+    public FullRenderImageContext(
+        NoteImageStore? store,
+        string noteId,
+        double targetWidthDip,
+        double dpiScale)
+    {
+        ImageStore = store;
+        NoteId = noteId ?? "";
+        TargetWidthDip = Math.Max(80, targetWidthDip);
+        DpiScale = double.IsNaN(dpiScale) || double.IsInfinity(dpiScale) || dpiScale <= 0
+            ? 1.0
+            : dpiScale;
+    }
+
+    /// <summary>
+    /// 空上下文: 用于未配置 NoteImageStore 的调用点,所有图片降级为 ▧ 占位符。
+    /// </summary>
+    public static FullRenderImageContext Empty { get; } = new(
+        store: null,
+        noteId: "",
+        targetWidthDip: 240,
+        dpiScale: 1.0);
+}
+
+/// <summary>
+/// 在完全渲染模式 Border.Tag / Image.Tag 中保存足够信息,使得窗口 resize 时的
+/// "就地更新图片宽度"可以在不重新解析 markdown 的前提下重算 displayWidth。
+/// 对应编辑模式的 MarkdownTextBox.ImageBlockTag(私有 record)。
+/// </summary>
+internal sealed record FullRenderImageBlockTag(
+    string ImageId,
+    MarkdownImageDisplayOptions DisplayOptions,
+    int NaturalWidth);
+
 internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvider
 {
     public static MarkdownEdgeCapsulePreviewProvider Instance { get; } = new();
@@ -313,6 +362,293 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
     }
 
+    /// <summary>
+    /// 完整渲染 Markdown 到 StackPanel，支持行内样式，无内容限制
+    /// </summary>
+    /// <param name="target">目标 StackPanel</param>
+    /// <param name="markdown">Markdown 文本</param>
+    /// <param name="openExternal">打开外部链接的回调</param>
+    /// <param name="zoom">文字缩放比例，默认为 1.0</param>
+    /// <param name="imageContext">可选的图片渲染上下文(承载 NoteImageStore 与目标宽度等)。
+    /// 当 imageContext 为 null 或 HasImageStore 为 false 时,块级图片退化为 ▧ 占位符(向后兼容)。</param>
+    public static void RenderFullMarkdownToStackPanel(
+        StackPanel target,
+        string? markdown,
+        Action<string> openExternal,
+        double zoom = 1.0,
+        FullRenderImageContext? imageContext = null)
+    {
+        target.Children.Clear();
+        if (string.IsNullOrEmpty(markdown))
+        {
+            return;
+        }
+
+        imageContext ??= FullRenderImageContext.Empty;
+
+        var lines = markdown.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                target.Children.Add(new Border { Height = 8 });
+                continue;
+            }
+
+            var trimmed = line.Trim();
+
+            // 块级图片引用: ![alt](i:123) 单独成行,走真实位图渲染(可走 NoteImageStore)
+            if (MarkdownImageReferences.TryParseReferenceLine(
+                    trimmed,
+                    out var imageReference) &&
+                imageContext.HasImageStore &&
+                imageContext.ImageStore!.TryGetAsset(
+                    imageReference.ImageId,
+                    out var imageAsset))
+            {
+                target.Children.Add(BuildImageBlock(imageReference, imageAsset, imageContext));
+                continue;
+            }
+
+            // 一级标题 # 文字
+            if (trimmed.StartsWith("# "))
+            {
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = Scaled(17, zoom),
+                    FontWeight = FontWeights.Bold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(4, 8, 4, 4)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed.Substring(2), openExternal, zoom);
+                target.Children.Add(textBlock);
+                continue;
+            }
+
+            // 二级标题 ## 文字
+            if (trimmed.StartsWith("## "))
+            {
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = Scaled(15, zoom),
+                    FontWeight = FontWeights.Bold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(4, 6, 4, 4)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed.Substring(3), openExternal, zoom);
+                target.Children.Add(textBlock);
+                continue;
+            }
+
+            // 三级标题 ### 文字
+            if (trimmed.StartsWith("### "))
+            {
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = Scaled(14, zoom),
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(4, 4, 4, 4)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed.Substring(4), openExternal, zoom);
+                target.Children.Add(textBlock);
+                continue;
+            }
+
+            // 无序列表 - 文字
+            if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
+            {
+                var grid = new Grid { Margin = new Thickness(4, 4, 4, 4) };
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var bullet = new System.Windows.Controls.TextBlock
+                {
+                    Text = "•",
+                    FontSize = Scaled(14, zoom),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                bullet.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                Grid.SetColumn(bullet, 0);
+                grid.Children.Add(bullet);
+
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    FontSize = Scaled(NoteTypography.FontSize, zoom)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed.Substring(2), openExternal, zoom);
+                Grid.SetColumn(textBlock, 1);
+                grid.Children.Add(textBlock);
+                target.Children.Add(grid);
+                continue;
+            }
+
+            // 引用 > 文字
+            if (trimmed.StartsWith("> "))
+            {
+                var border = new Border
+                {
+                    Margin = new Thickness(4, 4, 4, 4),
+                    Padding = new Thickness(8, 4, 8, 4),
+                    CornerRadius = new CornerRadius(4)
+                };
+                border.SetResourceReference(Border.BackgroundProperty, "HoverBrushKey");
+
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    TextWrapping = TextWrapping.Wrap,
+                    FontStyle = FontStyles.Italic,
+                    Opacity = 0.85,
+                    FontSize = Scaled(NoteTypography.FontSize, zoom)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed.Substring(2), openExternal, zoom);
+                border.Child = textBlock;
+                target.Children.Add(border);
+                continue;
+            }
+
+            // 删除线 ~~文字~~
+            if (trimmed.StartsWith("~~") && trimmed.EndsWith("~~") && trimmed.Length > 4)
+            {
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(4, 4, 4, 4),
+                    FontWeight = FontWeights.Bold,
+                    TextDecorations = System.Windows.TextDecorations.Strikethrough,
+                    FontSize = Scaled(NoteTypography.FontSize, zoom)
+                };
+                textBlock.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+                AddInlineContent(textBlock.Inlines, trimmed[2..^2].ToString(), openExternal, zoom);
+                target.Children.Add(textBlock);
+                continue;
+            }
+
+            // 普通文本行（带行内样式）
+            var textBlock2 = new System.Windows.Controls.TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(4, 4, 4, 4),
+                FontSize = Scaled(NoteTypography.FontSize, zoom)
+            };
+            textBlock2.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+            AddInlineContent(textBlock2.Inlines, trimmed, openExternal, zoom);
+            target.Children.Add(textBlock2);
+        }
+    }
+
+    // 按视觉尺寸系数与外层注入的缩放系数一起计算字号,与 MarkdownTextBox 的 ScaledFontSize 保持一致
+    private static double Scaled(double baseSize, double zoom)
+    {
+        return AppTypography.Scale(baseSize) * zoom;
+    }
+
+    /// <summary>
+    /// 在完全渲染面板中渲染一块真实位图。
+    /// 复用 MarkdownTextBox.ResolveImageDisplayWidth 保持与编辑模式一致的尺寸规则,
+    /// 调用 NoteImageStore.GetBitmapSource(protectInViewport:true) 走 LRU + 视口保护。
+    /// 每个 Image 上挂 Tag=imageId,供外部扫描以维护视口保护集合。
+    /// </summary>
+    private static FrameworkElement BuildImageBlock(
+        MarkdownImageReference reference,
+        NoteImageAsset asset,
+        FullRenderImageContext imageContext)
+    {
+        var targetWidth = imageContext.TargetWidthDip;
+        var displayWidth = MarkdownTextBox.ResolveImageDisplayWidth(
+            reference.DisplayOptions,
+            asset,
+            targetWidth);
+        // 解码像素宽度按当前 DPI 缩放,避免高 DPI 下渲染模糊;
+        // NoteImageStore.DecodePixelWidth 内部还会把值 clamp 到 [32, asset.Width]。
+        var decodePixelWidth = Math.Max(
+            1,
+            (int)Math.Ceiling(Math.Min(targetWidth, displayWidth) * imageContext.DpiScale));
+
+        var bitmap = imageContext.ImageStore!.GetBitmapSource(
+            asset.Id,
+            decodePixelWidth,
+            allowDecodeUpgrade: true,
+            protectInViewport: true);
+
+        var host = new Border
+        {
+            Padding = new Thickness(0, 6, 0, 6),
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 24,
+            Width = targetWidth,
+            ToolTip = asset.OriginalName,
+            // Tag 缓存必要信息,让窗口 resize 时 PaperWindow.Note.cs 能就地重算
+            // displayWidth(对应编辑模式 MarkdownTextBox.ImageBlockTag 的设计)。
+            Tag = new FullRenderImageBlockTag(
+                reference.ImageId,
+                reference.DisplayOptions,
+                asset.Width)
+        };
+
+        if (bitmap == null)
+        {
+            // 位图缺失 / 解码失败:与 MarkdownTextBox.CreateImageBlock 同样的占位框
+            var fallback = new Border
+            {
+                Width = Math.Max(120, Math.Min(targetWidth, displayWidth)),
+                Height = 42,
+                CornerRadius = new CornerRadius(5),
+                Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            var fallbackText = new System.Windows.Controls.TextBlock
+            {
+                FontSize = AppTypography.Scale(11.5),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            fallbackText.SetResourceReference(
+                System.Windows.Controls.TextBlock.ForegroundProperty,
+                "WeakTextBrushKey");
+            fallbackText.Text = imageContext.ImageStore.IsImageCorrupted(reference.ImageId)
+                ? "⚠ image unavailable"
+                : "▧ image missing";
+            fallback.Child = fallbackText;
+            host.Child = fallback;
+            return host;
+        }
+
+        var image = new System.Windows.Controls.Image
+        {
+            Source = bitmap,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Width = displayWidth,
+            // 显式计算 Height:仅设置 Width + Stretch=Uniform 在某些布局路径下 WPF
+            // 不会按 source 宽高比自动算出 Height(尤其是 Border 作为父级时)。
+            // 这里用 bitmap 的实际像素宽高比 + displayWidth 算出 DIPs 高度,避免渲染为 0 高。
+            Height = asset.Height > 0 && bitmap.PixelWidth > 0
+                ? Math.Round(displayWidth * (double)bitmap.PixelHeight / bitmap.PixelWidth, 1)
+                : displayWidth,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true,
+            // 与 host 同 Tag,便于就地更新时遍历查找
+            Tag = new FullRenderImageBlockTag(
+                reference.ImageId,
+                reference.DisplayOptions,
+                asset.Width)
+        };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+
+        host.Child = image;
+        return host;
+    }
+
     private static void AddEmptyState(Panel target)
     {
         var empty = NewTextBlock("—", AppTypography.Scale(16));
@@ -432,7 +768,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 done: false);
         }
 
-        var normal = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var normal = NewTextBlock(string.Empty, NoteTypography.FontSize);
         normal.Margin = new Thickness(0, 2, 0, 3);
         AddInlineContent(normal.Inlines, trimmed, openExternal);
         return normal;
@@ -451,12 +787,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-        var markerText = NewTextBlock(marker, AppTypography.Scale(11.5));
+        var markerText = NewTextBlock(marker, NoteTypography.FontSize - 2.5);
         markerText.Width = marker.Length > 2 ? AppTypography.Scale(28) : AppTypography.Scale(22);
         markerText.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         grid.Children.Add(markerText);
 
-        var body = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var body = NewTextBlock(string.Empty, NoteTypography.FontSize);
         AddInlineContent(body.Inlines, content, openExternal);
         if (done)
         {
@@ -470,7 +806,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static FrameworkElement BuildCodeBlock(string code)
     {
-        var text = NewTextBlock(code, AppTypography.Scale(10.8));
+        var text = NewTextBlock(code, NoteTypography.CodeFontSize);
         text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
         text.LineHeight = AppTypography.Scale(16);
         var host = new Border
@@ -498,13 +834,28 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         InlineCollection target,
         string text,
         Action<string> openExternal)
-        => AddInlineContent(target, text, openExternal, depth: 0);
+        => AddInlineContent(target, text, openExternal, depth: 0, zoom: 1.0);
+
+    private static void AddInlineContent(
+        InlineCollection target,
+        string text,
+        Action<string> openExternal,
+        double zoom)
+        => AddInlineContent(target, text, openExternal, depth: 0, zoom: zoom);
 
     private static void AddInlineContent(
         InlineCollection target,
         string text,
         Action<string> openExternal,
         int depth)
+        => AddInlineContent(target, text, openExternal, depth, zoom: 1.0);
+
+    private static void AddInlineContent(
+        InlineCollection target,
+        string text,
+        Action<string> openExternal,
+        int depth,
+        double zoom)
     {
         if (depth >= MaximumInlineDepth)
         {
@@ -536,7 +887,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (match.Groups[3].Success)
             {
-                target.Add(CreateLink(Group(3), Group(4), openExternal, depth));
+                target.Add(CreateLink(Group(3), Group(4), openExternal, depth, zoom));
             }
             else if (match.Groups[5].Success || match.Groups[6].Success)
             {
@@ -546,20 +897,20 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     FontWeight = FontWeights.Bold,
                     FontStyle = FontStyles.Italic
                 };
-                AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(span);
             }
             else if (match.Groups[7].Success || match.Groups[8].Success)
             {
                 var group = match.Groups[7].Success ? 7 : 8;
                 var bold = new Bold();
-                AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(bold);
             }
             else if (match.Groups[9].Success)
             {
                 var strike = new Span { TextDecorations = TextDecorations.Strikethrough };
-                AddInlineContent(strike.Inlines, Group(9), openExternal, depth + 1);
+                AddInlineContent(strike.Inlines, Group(9), openExternal, depth + 1, zoom);
                 target.Add(strike);
             }
             else if (match.Groups[10].Success)
@@ -567,7 +918,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 var code = new Span(new Run(Group(10)))
                 {
                     FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-                    FontSize = AppTypography.Scale(10.8)
+                    FontSize = Scaled(NoteTypography.CodeFontSize, zoom)
                 };
                 code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
                 target.Add(code);
@@ -576,7 +927,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 var group = match.Groups[11].Success ? 11 : 12;
                 var italic = new Italic();
-                AddInlineContent(italic.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(italic.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(italic);
             }
 
@@ -593,14 +944,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string label,
         string value,
         Action<string> openExternal,
-        int depth)
+        int depth,
+        double zoom)
     {
         var normalizedValue = MarkdownInlineSyntax.Unescape(value);
         if (!Uri.TryCreate(normalizedValue, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https" or "mailto"))
         {
             var fallback = new Span();
-            AddInlineContent(fallback.Inlines, label, openExternal, depth + 1);
+            AddInlineContent(fallback.Inlines, label, openExternal, depth + 1, zoom);
             return fallback;
         }
 
@@ -609,7 +961,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             NavigateUri = uri,
             Cursor = Cursors.Hand
         };
-        AddInlineContent(link.Inlines, label, openExternal, depth + 1);
+        AddInlineContent(link.Inlines, label, openExternal, depth + 1, zoom);
         link.SetResourceReference(TextElement.ForegroundProperty, "LinkBrushKey");
         EdgeCapsulePreviewInteraction.SetConsumesPointer(link, true);
         link.RequestNavigate += (_, e) =>

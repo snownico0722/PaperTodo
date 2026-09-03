@@ -104,6 +104,9 @@
   <data name="MarkdownRenderEnhanced" xml:space="preserve">
     <value>增强</value>
   </data>
+  <data name="MarkdownRenderFull" xml:space="preserve">
+    <value>完全渲染</value>
+  </data>
   <data name="MarkdownRenderOff" xml:space="preserve">
     <value>关闭</value>
   </data>
@@ -580,7 +583,8 @@
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础：为md渲染轻量高亮。
-增强：标题、列表和强调更美观。</value>
+增强：标题、列表和强调更美观。
+完全渲染：失焦后将整篇笔记按标题、列表、引用等完整格式渲染。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；

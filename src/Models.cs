@@ -30,10 +30,11 @@ public static class MarkdownRenderModes
     public const string Off = "off";
     public const string Basic = "basic";
     public const string Enhanced = "enhanced";
+    public const string Full = "full";
 
     public static bool IsValid(string? mode)
     {
-        return mode is Off or Basic or Enhanced;
+        return mode is Off or Basic or Enhanced or Full;
     }
 }
 

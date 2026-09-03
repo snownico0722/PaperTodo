@@ -97,6 +97,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MarkdownRenderEnhanced" xml:space="preserve">
     <value>強化</value>
   </data>
+  <data name="MarkdownRenderFull" xml:space="preserve">
+    <value>完全レンダリング</value>
+  </data>
   <data name="MarkdownRenderOff" xml:space="preserve">
     <value>オフ</value>
   </data>
@@ -567,7 +570,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基本：Markdown の軽いハイライト。
-拡張：見出し・リスト・強調をより整えて表示。</value>
+拡張：見出し・リスト・強調をより整えて表示。
+フル レンダリング：フォーカスを外したとき、ノート全体を見出し・リスト・引用などとしてレンダリング。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>動画やゲームなどの全画面を検出したとき、紙片と端のカプセルを一時的に避けられます。

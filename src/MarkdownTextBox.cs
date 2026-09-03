@@ -156,6 +156,9 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public string MarkdownRenderMode => _markdownRenderMode;
 
+    public bool IsFullRenderMode =>
+        string.Equals(_markdownRenderMode, MarkdownRenderModes.Full, StringComparison.Ordinal);
+
     private string _markdownRenderMode = MarkdownRenderModes.Enhanced;
 
     public void SetPreviewMode(bool isPreviewMode)
@@ -1939,13 +1942,13 @@ public sealed partial class MarkdownTextBox : TextEditor
             string.Equals(imageId, _selectedImageId, StringComparison.Ordinal);
     }
 
-    private static double ResolveImageDisplayWidth(
+    internal static double ResolveImageDisplayWidth(
         MarkdownImageDisplayOptions options,
         NoteImageAsset? asset,
         double targetWidth)
         => ResolveImageDisplayWidth(options, Math.Max(1, asset?.Width ?? 180), targetWidth);
 
-    private static double ResolveImageDisplayWidth(
+    internal static double ResolveImageDisplayWidth(
         MarkdownImageDisplayOptions options,
         double naturalWidth,
         double targetWidth)

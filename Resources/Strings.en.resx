@@ -97,6 +97,9 @@ Error: {0}</value>
   <data name="MarkdownRenderEnhanced" xml:space="preserve">
     <value>Enhanced</value>
   </data>
+  <data name="MarkdownRenderFull" xml:space="preserve">
+    <value>Full Render</value>
+  </data>
   <data name="MarkdownRenderOff" xml:space="preserve">
     <value>Off</value>
   </data>
@@ -554,7 +557,8 @@ Place both papertodo and PaperTodo_Bold (.ttf/.otf).</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>Basic: light Markdown highlighting.
-Enhanced: nicer headings, lists, and emphasis.</value>
+Enhanced: nicer headings, lists, and emphasis.
+Full Render: render the entire note as headings, lists, quotes, etc. when unfocused.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
