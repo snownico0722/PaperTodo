@@ -264,8 +264,6 @@ public sealed partial class PaperWindow
         finally
         {
             Opacity = 1.0;
-            // Show() 已同步完成,清掉 Hide 时设的旗标,后续 fullRenderPanel 的 Unloaded 按真实销毁处理。
-            _suppressFullRenderPanelUnloadCleanup = false;
         }
     }
 
@@ -385,18 +383,7 @@ public sealed partial class PaperWindow
 
         BeginAnimation(Window.OpacityProperty, null);
         Opacity = 1.0;
-        // Window.Hide 会让 visual tree 异步派发 Unloaded;设旗标让 OnFullRenderPanelUnloaded
-        // 跳过清理,展开后图片仍能正常显示。Show 完成后清除旗标。
-        _suppressFullRenderPanelUnloadCleanup = true;
-        try
-        {
-            HideWithoutGeometrySave();
-        }
-        catch
-        {
-            _suppressFullRenderPanelUnloadCleanup = false;
-            throw;
-        }
+        HideWithoutGeometrySave();
     }
 
     internal void HideMainWindowForDeepCapsuleMode()

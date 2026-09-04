@@ -52,13 +52,6 @@ public sealed partial class PaperWindow : Window
     private readonly AppController _controller;
     private bool _isShellBuilt;
 
-    // deep capsule 模式下 Window.Hide/Window.Show 会让整棵 visual tree 异步派发 Unloaded,
-    // 包括挂在 host.Children 上的 fullRenderPanel——这是折叠/展开的临时卸载,不是销毁。
-    // 清掉它的 Image.Source 与视口保护集合会导致展开后图片永久空白。
-    // 设/清旗标:窗体 Hide 之前(在 HideMainWindowForDeepCapsuleRest)与 Show 完成后
-    // (在 ShowMainWindowForDeepCapsuleActivation)。
-    private bool _suppressFullRenderPanelUnloadCleanup;
-
     private Grid _windowHost = null!;
     private Border _paperChrome = null!;
     private readonly Grid _containerGrid = new();
@@ -757,15 +750,6 @@ public sealed partial class PaperWindow : Window
                     var clicked = e.OriginalSource as DependencyObject;
                     if (!IsDescendantOf(clicked, _noteBox))
                     {
-                        // 点击落在 markdown body host(例如 fullRenderPanel)时不抢先 ExitNoteEditor:
-                        // 抢先调会同步触发 ShowPreview,把 isRenderModeTransitioning 置 true,
-                        // 使后续 panel handler 的 ShowEditor 被动画守卫短路 return,
-                        // 导致 Full Render Mode 下"新建 paper 只能编辑一次"。
-                        // 把这种点击交给 body host 内部自己的 Preview handler 处理。
-                        if (IsClickInsideMarkdownBodyHost(clicked))
-                        {
-                            return;
-                        }
                         ExitNoteEditor();
                     }
                 }
@@ -2788,20 +2772,6 @@ public sealed partial class PaperWindow : Window
     private bool IsTitleEditBoxEventSource(DependencyObject? source)
     {
         return _titleEditBox != null && IsDescendantOf(source, _titleEditBox);
-    }
-
-    // 判定点击是否落在 markdown body host(例如 fullRenderPanel)内,
-    // 用于在 Window-level Preview handler 中让出 ExitNoteEditor,避免抢先触发
-    // ShowPreview 与 panel handler 的 ShowEditor 互相短路。
-    private bool IsClickInsideMarkdownBodyHost(DependencyObject? source)
-    {
-        if (source == null || _paper.Type != PaperTypes.Note)
-        {
-            return false;
-        }
-
-        var bodyView = _paperBodyHost.Current?.View;
-        return bodyView != null && IsDescendantOf(source, bodyView);
     }
 
     private void CommitTitleEdit()

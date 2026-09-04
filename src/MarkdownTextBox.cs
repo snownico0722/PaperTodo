@@ -156,9 +156,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public string MarkdownRenderMode => _markdownRenderMode;
 
-    public bool IsFullRenderMode =>
-        string.Equals(_markdownRenderMode, MarkdownRenderModes.Full, StringComparison.Ordinal);
-
     private string _markdownRenderMode = MarkdownRenderModes.Enhanced;
 
     public void SetPreviewMode(bool isPreviewMode)
