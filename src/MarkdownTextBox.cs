@@ -1861,14 +1861,19 @@ public sealed partial class MarkdownTextBox : TextEditor
         _imageStore != null &&
         !_imageRenderingSuspended &&
         !string.Equals(_markdownRenderMode, MarkdownRenderModes.Off, StringComparison.Ordinal);
+    /// <summary>
+    /// 是否将图片对应 Markdown 标记(整行)的前景设为透明。
+    /// 完全受"图片标记显示"设置项控制,在所有渲染档位(含 Full)统一生效;
+    /// 隐藏时仍占字形宽度,可被选中、可复制粘贴,布局不跳变。
+    /// </summary>
     private bool ShouldHideImageReferenceText =>
         ShouldRenderImages &&
-        (RenderModeIsFull || _imageReferenceTextMode switch
+        _imageReferenceTextMode switch
         {
             ImageReferenceTextModes.Hidden => true,
             ImageReferenceTextModes.Editing => _isPreviewMode,
             _ => false
-        });
+        };
 
     private FrameworkElement CreateImageBlock(
         MarkdownImageReference reference,
