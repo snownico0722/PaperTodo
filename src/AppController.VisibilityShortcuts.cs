@@ -73,12 +73,12 @@ public sealed partial class AppController
             return;
         }
 
-        _visibilityShortcutVisibleLinkedPaperIds = State.Papers
-            .Where(paper =>
-                IsLinkedPaperProtectedFromVisibilityShortcutRestore(paper) &&
-                IsPaperShown(paper))
-            .Select(paper => paper.Id)
-            .ToHashSet(StringComparer.Ordinal);
+        _visibilityShortcutVisibleLinkedPaperIds = VisibilityShortcutSnapshot.Capture(
+            _visibilityShortcutVisibleLinkedPaperIds,
+            State.Papers.Where(paper =>
+                    IsLinkedPaperProtectedFromVisibilityShortcutRestore(paper) &&
+                    IsPaperShown(paper))
+                .Select(paper => paper.Id));
     }
 
     private void ShowAllPapersForVisibilityShortcut()
