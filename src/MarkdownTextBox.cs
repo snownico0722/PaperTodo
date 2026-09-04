@@ -1944,13 +1944,13 @@ public sealed partial class MarkdownTextBox : TextEditor
             string.Equals(imageId, _selectedImageId, StringComparison.Ordinal);
     }
 
-    internal static double ResolveImageDisplayWidth(
+    private static double ResolveImageDisplayWidth(
         MarkdownImageDisplayOptions options,
         NoteImageAsset? asset,
         double targetWidth)
         => ResolveImageDisplayWidth(options, Math.Max(1, asset?.Width ?? 180), targetWidth);
 
-    internal static double ResolveImageDisplayWidth(
+    private static double ResolveImageDisplayWidth(
         MarkdownImageDisplayOptions options,
         double naturalWidth,
         double targetWidth)

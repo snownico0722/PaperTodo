@@ -510,20 +510,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         InlineCollection target,
         string text,
         Action<string> openExternal,
-        double zoom)
-        => AddInlineContent(target, text, openExternal, depth: 0, zoom: zoom);
-
-    private static void AddInlineContent(
-        InlineCollection target,
-        string text,
-        Action<string> openExternal,
-        int depth)
-        => AddInlineContent(target, text, openExternal, depth, zoom: 1.0);
-
-    private static void AddInlineContent(
-        InlineCollection target,
-        string text,
-        Action<string> openExternal,
         int depth,
         double zoom)
     {

@@ -8,8 +8,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using Microsoft.Win32;
 using PaperTodo.Plugin;
 
@@ -167,9 +165,6 @@ public sealed partial class PaperWindow
         var editorEntryGeneration = 0;
         var imageInteractionGeneration = 0;
 
-        // 按内容百分比把编辑器滚动位置同步到渲染面板,避免切换后被置顶。
-        // (已废弃: Full 渲染模式改用块渲染,编辑器始终可见,不再需要同步)
-
         bool IsCurrentPresenter()
         {
             return IsCurrentNotePresenter(presenterGeneration, box);
@@ -297,9 +292,6 @@ public sealed partial class PaperWindow
             }
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
-
-        // 块渲染模式不再需要独立的 fullRenderPanel;编辑器始终可见,
-        // MarkdownSemanticPresentation 完成所有块级装饰。
 
         void ShowEditorAtPreviewPoint(
             Point previewPoint,

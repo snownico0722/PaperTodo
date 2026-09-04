@@ -86,9 +86,6 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     internal MarkdownCaretReveal CaretReveal =>
         FullRevealEnabled ? _caretReveal : MarkdownCaretReveal.None;
 
-    internal bool IsCaretOnLine(int oneBasedLine) =>
-        CaretReveal.Active && CaretReveal.CaretLineZeroBased == oneBasedLine - 1;
-
     /// <summary>该控制符单元（行边界或行内成对范围）在 Full 编辑态是否显灵。</summary>
     internal bool IsRevealed(
         int markerLineOneBased,
