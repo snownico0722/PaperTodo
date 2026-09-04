@@ -85,6 +85,14 @@ public sealed partial class PaperWindow
     {
         base.OnPreviewKeyDown(e);
 
+        if (!e.Handled && !_advancedInteractionLocked && !_paper.IsCollapsed &&
+            e.Key == Key.C && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+            TryCopySelectedTodosAsMarkdown())
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Normally the HWND hook above consumes Ctrl+W before WPF creates a routed key event.
         // Keep this as a bounded fallback for input surfaces that can still route a WPF key event
         // without delivering the parent PaperWindow's WM_KEYDOWN first.
