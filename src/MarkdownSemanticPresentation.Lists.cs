@@ -31,7 +31,9 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             ApplyTaskMarkerSemantics(line, snapshot);
 
-            if (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line))
+            // 任务行：Enhanced 预览保持旧行为不在此处理；Full 档仍需隐藏/显灵项目符号。
+            if (!_owner.IsFullMode &&
+                (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line)))
             {
                 return;
             }
@@ -47,11 +49,20 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
+                var brush = _owner.IsFullMode
+                    ? (_owner.IsRevealed(
+                        line.LineNumber,
+                        marker.Start,
+                        marker.Length,
+                        marker.Kind)
+                        ? Theme.ActiveBrush
+                        : Brushes.Transparent)
+                    : Brushes.Transparent;
                 ApplyAbsolute(
                     line,
                     marker.Start,
                     marker.End,
-                    element => element.TextRunProperties.SetForegroundBrush(Brushes.Transparent));
+                    element => element.TextRunProperties.SetForegroundBrush(brush));
             }
         }
 
@@ -69,12 +80,19 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
+                var revealTask = !_owner.IsFullMode ||
+                    _owner.IsRevealed(
+                        line.LineNumber,
+                        marker.Start,
+                        marker.Length,
+                        MarkdownSemanticSpanKind.TaskListMarker);
                 ApplyAbsolute(
                     line,
                     marker.Start,
                     marker.End,
-                    element => element.TextRunProperties.SetForegroundBrush(Theme.ActiveBrush));
-                if (marker.Checked)
+                    element => element.TextRunProperties.SetForegroundBrush(
+                        revealTask ? Theme.ActiveBrush : Brushes.Transparent));
+                if (marker.Checked && revealTask)
                 {
                     ApplyAbsolute(
                         line,
@@ -143,6 +161,16 @@ internal sealed partial class MarkdownSemanticPresentation
                 {
                     if (HasTaskMarkerOnLine(snapshot, line))
                     {
+                        // Full 档：任务行按活动块显灵源码，否则以勾选框呈现。
+                        if (_owner.IsFullMode)
+                        {
+                            if (IsTaskRevealed(snapshot, line))
+                            {
+                                continue;
+                            }
+
+                            DrawTaskCheckBox(textView, drawingContext, line);
+                        }
                         continue;
                     }
 
@@ -157,9 +185,109 @@ internal sealed partial class MarkdownSemanticPresentation
                             continue;
                         }
 
+                        // Full 档已把该 marker 还原成源码（活动行），跳过图形覆盖。
+                        if (_owner.IsFullMode &&
+                            _owner.IsRevealed(
+                                line.LineNumber,
+                                marker.Start,
+                                marker.Length,
+                                marker.Kind))
+                        {
+                            continue;
+                        }
+
                         DrawMarker(textView, drawingContext, document, line, marker);
                     }
                 }
+            }
+        }
+
+        private bool IsTaskRevealed(MarkdownSemanticSnapshot snapshot, DocumentLine line)
+        {
+            foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
+            {
+                if (marker.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
+                    marker.Start < line.EndOffset &&
+                    marker.End > line.Offset)
+                {
+                    return _owner.IsRevealed(
+                        line.LineNumber,
+                        marker.Start,
+                        marker.Length,
+                        MarkdownSemanticSpanKind.TaskListMarker);
+                }
+            }
+
+            return false;
+        }
+
+        private void DrawTaskCheckBox(
+            TextView textView,
+            DrawingContext drawingContext,
+            DocumentLine line)
+        {
+            var task = default(MarkdownSemanticSpan);
+            var hasTask = false;
+            foreach (var marker in _owner.CurrentSnapshot().SpansForLine(Math.Max(0, line.LineNumber - 1)))
+            {
+                if (marker.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
+                    marker.End <= line.EndOffset &&
+                    marker.Start >= line.Offset)
+                {
+                    task = marker;
+                    hasTask = true;
+                    break;
+                }
+            }
+            if (!hasTask)
+            {
+                return;
+            }
+
+            if (!MarkdownSemanticPresentation.TryGetTextPoint(
+                    textView,
+                    line,
+                    task.Start,
+                    VisualYPosition.TextTop,
+                    out var topLeft) ||
+                !MarkdownSemanticPresentation.TryGetTextPoint(
+                    textView,
+                    line,
+                    task.End,
+                    VisualYPosition.TextBottom,
+                    out var bottomRight))
+            {
+                return;
+            }
+
+            var cellLeft = Math.Min(topLeft.X, bottomRight.X);
+            var cellRight = Math.Max(topLeft.X, bottomRight.X);
+            var height = Math.Max(1, bottomRight.Y - topLeft.Y);
+            var boxSize = Math.Min(Math.Max(8, height * 0.7), cellRight - cellLeft);
+            var rect = new Rect(
+                cellLeft + (cellRight - cellLeft - boxSize) / 2,
+                topLeft.Y + (height - boxSize) / 2,
+                boxSize,
+                boxSize);
+
+            drawingContext.DrawRectangle(Theme.PaperBrush, null, rect);
+            var pen = new Pen(Theme.PaperBorderBrush, 1);
+            if (task.Checked)
+            {
+                drawingContext.DrawRectangle(Theme.ActiveBrush, null, rect);
+                var checkPen = new Pen(Theme.PaperBrush, Math.Max(1.2, boxSize * 0.14));
+                drawingContext.DrawLine(
+                    checkPen,
+                    new Point(rect.Left + boxSize * 0.22, rect.Top + boxSize * 0.5),
+                    new Point(rect.Left + boxSize * 0.45, rect.Top + boxSize * 0.72));
+                drawingContext.DrawLine(
+                    checkPen,
+                    new Point(rect.Left + boxSize * 0.45, rect.Top + boxSize * 0.72),
+                    new Point(rect.Left + boxSize * 0.8, rect.Top + boxSize * 0.3));
+            }
+            else
+            {
+                drawingContext.DrawRectangle(null, pen, new Rect(rect.Left + 0.5, rect.Top + 0.5, rect.Width - 1, rect.Height - 1));
             }
         }
 

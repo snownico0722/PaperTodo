@@ -58,7 +58,14 @@ internal sealed partial class MarkdownSemanticPresentation
 
                     var semantic = snapshot.GetLine(Math.Max(0, line.LineNumber - 1));
                     var needsQuote = semantic.IsQuoted;
-                    var needsCode = semantic.IsCode && !semantic.IsFencedCodeMarker;
+                    var isCodeRow = semantic.IsCode;
+                    if (isCodeRow && semantic.IsFencedCodeMarker && !_owner.IsFullMode)
+                    {
+                        // 非 Full 档维持旧行为：围栏开闭行不垫底，避免与源码标记叠印。
+                        isCodeRow = false;
+                    }
+
+                    var needsCode = isCodeRow;
                     if (!needsQuote && !needsCode)
                     {
                         continue;

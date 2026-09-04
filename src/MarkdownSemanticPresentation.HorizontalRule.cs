@@ -45,6 +45,17 @@ internal sealed partial class MarkdownSemanticPresentation
                         continue;
                     }
 
+                    // Full 档把光标行还原成源码（--- 可见），不再画线覆盖。
+                    if (_owner.IsFullMode &&
+                        _owner.IsRevealed(
+                            line.LineNumber,
+                            line.Offset,
+                            Math.Max(1, line.Length),
+                            MarkdownSemanticSpanKind.HorizontalRule))
+                    {
+                        continue;
+                    }
+
                     var text = document.GetText(line);
                     var ruleStart = 0;
                     while (ruleStart < text.Length && char.IsWhiteSpace(text[ruleStart]))
@@ -83,7 +94,8 @@ internal sealed partial class MarkdownSemanticPresentation
                         height = Math.Max(textView.DefaultLineHeight, nextTop - top);
                     }
 
-                    if (_owner.FadeSyntax)
+                    var useErase = _owner.FadeSyntax || _owner.IsFullMode;
+                    if (useErase)
                     {
                         drawingContext.DrawRectangle(
                             Theme.PaperBrush,
@@ -91,7 +103,7 @@ internal sealed partial class MarkdownSemanticPresentation
                             new Rect(0, top, width, Math.Max(1, height)));
                     }
 
-                    var left = _owner.FadeSyntax
+                    var left = useErase
                         ? startPoint.X
                         : endPoint.X + 8;
                     left = Math.Max(0, left);

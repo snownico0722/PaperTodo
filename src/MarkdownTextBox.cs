@@ -156,6 +156,10 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public string MarkdownRenderMode => _markdownRenderMode;
 
+    /// <summary>当前渲染档位是否为 Full（所见即所得块级编辑态）。</summary>
+    public bool RenderModeIsFull =>
+        string.Equals(_markdownRenderMode, MarkdownRenderModes.Full, StringComparison.Ordinal);
+
     private string _markdownRenderMode = MarkdownRenderModes.Enhanced;
 
     public void SetPreviewMode(bool isPreviewMode)
@@ -1821,7 +1825,8 @@ public sealed partial class MarkdownTextBox : TextEditor
         !_imageRenderingSuspended &&
         !string.Equals(_markdownRenderMode, MarkdownRenderModes.Off, StringComparison.Ordinal);
     private bool ShouldHideImageReferenceText =>
-        ShouldRenderImages && (_imageReferenceTextMode switch
+        ShouldRenderImages &&
+        (RenderModeIsFull || _imageReferenceTextMode switch
         {
             ImageReferenceTextModes.Hidden => true,
             ImageReferenceTextModes.Editing => _isPreviewMode,

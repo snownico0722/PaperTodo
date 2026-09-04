@@ -13,10 +13,6 @@ internal sealed partial class MarkdownSemanticPresentation
             DocumentLine line,
             MarkdownSemanticSnapshot snapshot)
         {
-            var markerBrush = _owner.FadeSyntax
-                ? Theme.SyntaxFadeBrush
-                : Theme.ActiveBrush;
-
             foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
             {
                 if (span.End <= line.Offset || span.Start >= line.EndOffset)
@@ -27,6 +23,12 @@ internal sealed partial class MarkdownSemanticPresentation
                 switch (span.Kind)
                 {
                     case MarkdownSemanticSpanKind.HtmlMarker:
+                        var markerBrush = _owner.ControlBrush(
+                            _owner.IsRevealed(
+                                line.LineNumber,
+                                span.Start,
+                                span.Length,
+                                MarkdownSemanticSpanKind.HtmlMarker));
                         ApplyAbsolute(line, span.Start, span.End, element =>
                         {
                             element.TextRunProperties.SetTypeface(NormalTypeface);
@@ -118,7 +120,12 @@ internal sealed partial class MarkdownSemanticPresentation
                     var size = _owner.ScaledFontSize(NoteTypography.FontSize);
                     element.TextRunProperties.SetFontRenderingEmSize(size);
                     element.TextRunProperties.SetFontHintingEmSize(size);
-                    element.TextRunProperties.SetForegroundBrush(Theme.ActiveBrush);
+                    element.TextRunProperties.SetForegroundBrush(_owner.ControlBrush(
+                        _owner.IsRevealed(
+                            line.LineNumber,
+                            span.Start,
+                            span.Length,
+                            MarkdownSemanticSpanKind.EscapeMarker)));
                 });
             }
         }

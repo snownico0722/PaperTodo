@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
@@ -15,6 +17,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private readonly SemanticHorizontalRuleRenderer _horizontalRuleRenderer;
     private bool _redrawQueued;
     private bool _disposed;
+    private MarkdownCaretReveal _caretReveal = MarkdownCaretReveal.None;
 
     public MarkdownSemanticPresentation(
         MarkdownTextBox editor,
@@ -33,6 +36,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         textView.BackgroundRenderers.Add(_listRenderer);
         textView.BackgroundRenderers.Add(_horizontalRuleRenderer);
         _semanticDocument.SnapshotChanged += OnSnapshotChanged;
+        AttachCaretTracking();
+        SyncCaretReveal();
         RedrawAll();
     }
 
@@ -49,12 +54,22 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             StringComparison.Ordinal) &&
         _editor.IsPreviewMode;
 
+    /// <summary>Full 档：始终按块级语义呈现最终排版（含编辑态）。</summary>
+    private bool IsFullMode =>
+        string.Equals(
+            _editor.MarkdownRenderMode,
+            MarkdownRenderModes.Full,
+            StringComparison.Ordinal);
+
+    /// <summary>Full 且可编辑（非只读预览）时，控制符随活动块显灵；否则不参与 reveal。</summary>
+    private bool FullRevealEnabled => IsFullMode && !_editor.IsPreviewMode;
+
     private bool RenderBlocks => ApplyMarkdownStyle;
 
-    private bool RenderListBullets => FadeSyntax;
+    private bool RenderListBullets => FadeSyntax || IsFullMode;
 
     private bool RenderHorizontalRules =>
-        RenderBlocks && _editor.IsPreviewMode;
+        RenderBlocks && (_editor.IsPreviewMode || IsFullMode);
 
     private bool TryCurrentSnapshot(out MarkdownSemanticSnapshot snapshot) =>
         _semanticDocument.TryGetCurrent(out snapshot);
@@ -66,6 +81,56 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
 
     private MarkdownSemanticLine SemanticFor(DocumentLine line) =>
         CurrentSnapshot().GetLine(Math.Max(0, line.LineNumber - 1));
+
+    internal MarkdownCaretReveal CaretReveal =>
+        FullRevealEnabled ? _caretReveal : MarkdownCaretReveal.None;
+
+    internal bool IsCaretOnLine(int oneBasedLine) =>
+        CaretReveal.Active && CaretReveal.CaretLineZeroBased == oneBasedLine - 1;
+
+    /// <summary>该控制符单元（行边界或行内成对范围）在 Full 编辑态是否显灵。</summary>
+    internal bool IsRevealed(
+        int markerLineOneBased,
+        int markerStart,
+        int markerLength,
+        MarkdownSemanticSpanKind kind,
+        int rangeStart = -1,
+        int rangeEnd = -1) =>
+        FullRevealEnabled &&
+        MarkdownSemanticReveal.RevealMarker(
+            CaretReveal,
+            markerLineOneBased - 1,
+            markerStart,
+            markerLength,
+            kind,
+            rangeStart,
+            rangeEnd);
+
+    internal bool IsRangeRevealed(int rangeStart, int rangeEnd) =>
+        FullRevealEnabled &&
+        MarkdownSemanticReveal.RevealRange(CaretReveal, rangeStart, rangeEnd);
+
+    /// <summary>控制符取色：Full 档按显灵取 Active/透明，其余档保留原有淡化/激活语义。</summary>
+    internal Brush ControlBrush(bool revealed)
+    {
+        if (IsFullMode)
+        {
+            return revealed ? Theme.ActiveBrush : Brushes.Transparent;
+        }
+
+        return FadeSyntax ? Theme.SyntaxFadeBrush : Theme.ActiveBrush;
+    }
+
+    /// <summary>引用 &gt; 标记取色：Enhanced 预览沿用「完全透明保留宽度」，与一般语法淡化不同。</summary>
+    internal Brush QuoteControlBrush(bool revealed)
+    {
+        if (IsFullMode)
+        {
+            return revealed ? Theme.ActiveBrush : Brushes.Transparent;
+        }
+
+        return FadeSyntax ? Brushes.Transparent : Theme.ActiveBrush;
+    }
 
     private double ScaledFontSize(double baseFontSize)
     {
@@ -98,7 +163,69 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         }
     }
 
+    private void AttachCaretTracking()
+    {
+        _editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
+        _editor.GotKeyboardFocus += OnEditorGotFocus;
+    }
+
+    private void DetachCaretTracking()
+    {
+        _editor.TextArea.Caret.PositionChanged -= OnCaretPositionChanged;
+        _editor.GotKeyboardFocus -= OnEditorGotFocus;
+    }
+
+    private void OnCaretPositionChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        SyncCaretReveal();
+        if (FullRevealEnabled)
+        {
+            ScheduleRedraw();
+        }
+    }
+
+    private void OnEditorGotFocus(object? sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // 从只读预览进入编辑时 caret 可能未移动（不触发 PositionChanged），这里补刷一次，
+        // 避免活动块控制符在上一次预览态里仍保持隐藏。
+        SyncCaretReveal();
+        if (FullRevealEnabled)
+        {
+            ScheduleRedraw();
+        }
+    }
+
+    private void SyncCaretReveal()
+    {
+        var caret = _editor.TextArea.Caret;
+        var document = _editor.Document;
+        if (document == null)
+        {
+            _caretReveal = MarkdownCaretReveal.None;
+            return;
+        }
+
+        var offset = Math.Clamp(caret.Offset, 0, document.TextLength);
+        var line = document.GetLineByOffset(offset);
+        _caretReveal = new MarkdownCaretReveal(offset, line.LineNumber - 1);
+    }
+
     private void OnSnapshotChanged()
+    {
+        ScheduleRedraw();
+    }
+
+    private void ScheduleRedraw()
     {
         if (_redrawQueued || _disposed)
         {
@@ -133,6 +260,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
 
         _disposed = true;
         _semanticDocument.SnapshotChanged -= OnSnapshotChanged;
+        DetachCaretTracking();
         var textView = _editor.TextArea.TextView;
         textView.LineTransformers.Remove(_colorizer);
         textView.BackgroundRenderers.Remove(_backgroundRenderer);
