@@ -180,6 +180,22 @@ public sealed partial class MarkdownTextBox : TextEditor
         RefreshVisualStyle();
     }
 
+    /// <summary>Full 档控制符显灵时是否启用短淡入动画（供语义渲染层实时读取）。</summary>
+    public bool MarkdownEditAnimationEnabled => _markdownEditAnimationEnabled;
+
+    private bool _markdownEditAnimationEnabled = true;
+
+    public void SetMarkdownEditAnimationEnabled(bool enabled)
+    {
+        if (_markdownEditAnimationEnabled == enabled)
+        {
+            return;
+        }
+
+        _markdownEditAnimationEnabled = enabled;
+        RefreshVisualStyle();
+    }
+
     public void SetImageReferenceTextMode(string mode)
     {
         var normalized = ImageReferenceTextModes.Normalize(mode);

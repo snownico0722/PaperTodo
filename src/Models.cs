@@ -407,6 +407,8 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
+    /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
+    public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }

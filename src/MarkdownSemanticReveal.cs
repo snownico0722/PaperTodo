@@ -72,4 +72,110 @@ internal static class MarkdownSemanticReveal
             MarkdownSemanticSpanKind.Strikethrough or
             MarkdownSemanticSpanKind.InlineCode;
     }
+
+    /// <summary>
+    /// caret 所在行是否至少有一个控制符显灵。作为「进入编辑态」淡入的上升沿判定：
+    /// reveal 单元全部落在 caret 所在 DocumentLine 上，故只需判定该行是否存在任一显灵单元。
+    /// 判定参数与各取色点（Blocks/Lists/Html/Colorizer）保持一致；漏判只会使对应标记失去淡入
+    /// （仍保持瞬显），不会产生错误显示。
+    /// </summary>
+    public static bool HasRevealOnLine(
+        MarkdownSemanticSnapshot snapshot,
+        string lineText,
+        int lineAbsStart,
+        int lineZeroBased,
+        MarkdownCaretReveal caret)
+    {
+        if (!caret.Active || caret.CaretLineZeroBased != lineZeroBased)
+        {
+            return false;
+        }
+
+        foreach (var span in snapshot.SpansForLine(lineZeroBased))
+        {
+            if (span.Length <= 0)
+            {
+                continue;
+            }
+
+            if (IsRangeKind(span.Kind))
+            {
+                if (RevealRange(caret, span.Start, span.End))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if ((span.Kind is MarkdownSemanticSpanKind.Heading or
+                    MarkdownSemanticSpanKind.FencedCodeOpening or
+                    MarkdownSemanticSpanKind.FencedCodeClosing or
+                    MarkdownSemanticSpanKind.SetextMarker or
+                    MarkdownSemanticSpanKind.HorizontalRule or
+                    MarkdownSemanticSpanKind.UnorderedListMarker or
+                    MarkdownSemanticSpanKind.OrderedListMarker or
+                    MarkdownSemanticSpanKind.TaskListMarker or
+                    MarkdownSemanticSpanKind.HtmlMarker or
+                    MarkdownSemanticSpanKind.EscapeMarker) &&
+                RevealMarker(caret, lineZeroBased, span.Start, span.Length, span.Kind))
+            {
+                return true;
+            }
+        }
+
+        foreach (var link in snapshot.LinksForLine(lineZeroBased))
+        {
+            if (!link.IsAuto && RevealRange(caret, link.Start, link.End))
+            {
+                return true;
+            }
+        }
+
+        // 引用 `>` 单元不进 spans，按文本逐格显灵（与 SemanticColorizer.ExplicitQuoteMarkers 规则一致）。
+        if (snapshot.GetLine(lineZeroBased).IsQuoted &&
+            HasRevealedQuoteCell(lineText, lineAbsStart, caret))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>引用行的显灵 `>` 单元扫描：行首最多 3 空格后连续 `>`（含嵌套），规则同渲染器。</summary>
+    private static bool HasRevealedQuoteCell(
+        string lineText,
+        int lineAbsStart,
+        MarkdownCaretReveal caret)
+    {
+        var index = 0;
+        while (index < lineText.Length)
+        {
+            var spaces = 0;
+            while (index < lineText.Length && spaces < 3 && lineText[index] == ' ')
+            {
+                index++;
+                spaces++;
+            }
+
+            if (index >= lineText.Length || lineText[index] != '>')
+            {
+                return false;
+            }
+
+            var start = index;
+            index++;
+            if (index < lineText.Length && lineText[index] is ' ' or '\t')
+            {
+                index++;
+            }
+
+            if (caret.CaretOffset >= lineAbsStart + start)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

@@ -38,6 +38,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _semanticDocument.SnapshotChanged += OnSnapshotChanged;
         AttachCaretTracking();
         SyncCaretReveal();
+        SyncRevealFade();
         AttachCollapseGenerator();
         RedrawAll();
     }
@@ -113,7 +114,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     {
         if (IsFullMode)
         {
-            return revealed ? Theme.ActiveBrush : Brushes.Transparent;
+            return RevealColor(Theme.ActiveBrush, revealed);
         }
 
         return FadeSyntax ? Theme.SyntaxFadeBrush : Theme.ActiveBrush;
@@ -124,7 +125,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     {
         if (IsFullMode)
         {
-            return revealed ? Theme.ActiveBrush : Brushes.Transparent;
+            return RevealColor(Theme.ActiveBrush, revealed);
         }
 
         return FadeSyntax ? Brushes.Transparent : Theme.ActiveBrush;
@@ -181,6 +182,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         }
 
         SyncCaretReveal();
+        SyncRevealFade();
         if (FullRevealEnabled)
         {
             ScheduleRedraw();
@@ -197,6 +199,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         // 从只读预览进入编辑时 caret 可能未移动（不触发 PositionChanged），这里补刷一次，
         // 避免活动块控制符在上一次预览态里仍保持隐藏。
         SyncCaretReveal();
+        SyncRevealFade();
         if (FullRevealEnabled)
         {
             ScheduleRedraw();
@@ -220,6 +223,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
 
     private void OnSnapshotChanged()
     {
+        // 文本编辑会使标记位移：中止进行中的淡入，避免把旧 alpha 施加到新布局的标记上。
+        AbortRevealFade();
         ScheduleRedraw();
     }
 
@@ -261,6 +266,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _semanticDocument.SnapshotChanged -= OnSnapshotChanged;
         DetachCaretTracking();
         DetachCollapseGenerator();
+        AbortRevealFade();
         var textView = _editor.TextArea.TextView;
         textView.LineTransformers.Remove(_colorizer);
         textView.BackgroundRenderers.Remove(_backgroundRenderer);

@@ -156,6 +156,22 @@ public static class Theme
     /// <summary>Markdown 浏览态淡化标记用的弱前景（正文色的低透明版）。</summary>
     public static Brush SyntaxFadeBrush => Solid(WithAlpha(Current.Text, (byte)(IsDark ? 78 : 72)));
 
+    /// <summary>
+    /// 把实色画刷按 0..1 透明度派生一份，供动画逐帧取色；alpha=1 时命中颜色缓存、
+    /// 返回与源画刷同一实例（零分配零语义差异）。source 须为 SolidColorBrush。
+    /// </summary>
+    public static Brush BrushWithAlpha(Brush source, double alpha)
+    {
+        if (source is not SolidColorBrush solid || alpha >= 0.999)
+        {
+            return source;
+        }
+
+        var normalized = Math.Clamp(alpha, 0.0, 1.0);
+        var a = (byte)Math.Round(255.0 * normalized);
+        return Solid(WithAlpha(solid.Color, a));
+    }
+
     // 勾选框三态：hover 描边朝正文色靠（浅色变深、深色变亮，方向自适应）；
     // active hover 在强调色上压暗；未选 hover 底用极淡叠加。
     public static Brush CheckBoxHoverBorderBrush => Solid(Mix(Current.CheckBox, Current.Text, 0.35));

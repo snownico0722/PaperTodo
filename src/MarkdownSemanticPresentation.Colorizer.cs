@@ -149,9 +149,9 @@ internal sealed partial class MarkdownSemanticPresentation
             {
                 if (isFullMode)
                 {
-                    return _owner.IsRangeRevealed(currentLink.Start, currentLink.End)
-                        ? Theme.ActiveBrush
-                        : Brushes.Transparent;
+                    return _owner.RevealColor(
+                        Theme.ActiveBrush,
+                        _owner.IsRangeRevealed(currentLink.Start, currentLink.End));
                 }
 
                 return _owner.FadeSyntax
@@ -163,9 +163,9 @@ internal sealed partial class MarkdownSemanticPresentation
             {
                 if (isFullMode)
                 {
-                    return _owner.IsRangeRevealed(currentLink.Start, currentLink.End)
-                        ? Theme.WeakTextBrush
-                        : Brushes.Transparent;
+                    return _owner.RevealColor(
+                        Theme.WeakTextBrush,
+                        _owner.IsRangeRevealed(currentLink.Start, currentLink.End));
                 }
 
                 return _owner.FadeSyntax
@@ -258,17 +258,16 @@ internal sealed partial class MarkdownSemanticPresentation
 
             Brush MarkerBrushFor(MarkdownSemanticSpan span)
             {
+                var revealed = _owner.IsRevealed(
+                    line.LineNumber,
+                    span.Start,
+                    span.Length,
+                    span.Kind,
+                    span.Start,
+                    span.End);
                 if (fullMode)
                 {
-                    return _owner.IsRevealed(
-                            line.LineNumber,
-                            span.Start,
-                            span.Length,
-                            span.Kind,
-                            span.Start,
-                            span.End)
-                        ? Theme.ActiveBrush
-                        : Brushes.Transparent;
+                    return _owner.RevealColor(Theme.ActiveBrush, revealed);
                 }
 
                 return _owner.FadeSyntax

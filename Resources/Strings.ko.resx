@@ -573,6 +573,12 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
 확장: 제목, 목록, 강조를 더 다듬어 표시.
 완전 렌더링: 편집 중에도 제목·목록·인용·코드 등을 최종 레이아웃으로 표시하고 대부분의 Markdown 기호를 숨깁니다(기호는 폭을 차지하지 않아 글자가 최종 레이아웃으로 빽빽하게 다시 배치됩니다). 커서가 있는 블록만 기호를 보여주어 편집할 수 있습니다. 포커스를 잃으면 메모 전체를 읽기 전용으로 렌더링합니다.</value>
   </data>
+  <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
+    <value>Markdown 렌더링 애니메이션</value>
+  </data>
+  <data name="TipMarkdownEditAnimation" xml:space="preserve">
+    <value>커서가 블록 편집 상태에 들어가 Markdown 기호가 나타날 때, 페이드인 애니메이션으로 소스 기호를 표시합니다.</value>
+  </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>동영상, 게임 등 전체 화면이 감지되면 종이와 가장자리 캡슐을 잠시 피할 수 있습니다.
 「위에 유지」는 항상 보이게 합니다.</value>

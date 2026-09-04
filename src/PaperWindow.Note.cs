@@ -80,6 +80,15 @@ public sealed partial class PaperWindow
         }
     }
 
+    public void UpdateMarkdownEditAnimation()
+    {
+        if (_paper.Type == PaperTypes.Note && _noteBox != null)
+        {
+            _noteBox.SetMarkdownEditAnimationEnabled(
+                _controller.State.MarkdownEditAnimationEnabled);
+        }
+    }
+
     private void TraceNoteRender(string message)
     {
 #if DEBUG
@@ -146,6 +155,7 @@ public sealed partial class PaperWindow
         box.ImageContextMenuFactory = CreateContextMenu;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
         box.SetImageReferenceTextMode(_controller.State.ImageReferenceTextMode);
+        box.SetMarkdownEditAnimationEnabled(_controller.State.MarkdownEditAnimationEnabled);
         box.SetTextZoom(CurrentTextZoom());
         box.ConfigureNoteImages(_paper.Id, _controller.ImageStore);
         _noteContentDirty = box.Document.TextLength != (_paper.Content?.Length ?? 0);

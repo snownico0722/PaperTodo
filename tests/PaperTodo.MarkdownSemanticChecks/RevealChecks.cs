@@ -181,6 +181,83 @@ internal static class RevealChecks
                 MarkdownSemanticReveal.RevealMarker(caret, 0, 0, 1, MarkdownSemanticSpanKind.Heading),
                 "heading marker on another CR line stays hidden");
         });
+
+        Check("HasRevealOnLine flips with caret row", () =>
+        {
+            const string source = "# Title\nplain";
+            var snapshot = MarkdownSemanticSnapshot.Parse(source);
+            True(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "# Title", 0, 0, new MarkdownCaretReveal(3, 0)),
+                "caret in heading text reveals a control marker on the row");
+            False(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "plain", source.IndexOf("plain", StringComparison.Ordinal), 1,
+                    new MarkdownCaretReveal(source.IndexOf("plain", StringComparison.Ordinal), 1)),
+                "next plain paragraph has no revealed control marker");
+        });
+
+        Check("HasRevealOnLine quote row vs plain row", () =>
+        {
+            const string source = "> alpha\nplain";
+            var snapshot = MarkdownSemanticSnapshot.Parse(source);
+            True(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "> alpha", 0, 0, new MarkdownCaretReveal(2, 0)),
+                "quote row caret reveals its > marker");
+            var plainStart = source.IndexOf("plain", StringComparison.Ordinal);
+            False(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "plain", plainStart, 1, new MarkdownCaretReveal(plainStart + 1, 1)),
+                "non-quote plain row reveals nothing");
+        });
+
+        Check("HasRevealOnLine fenced code content row stays clean", () =>
+        {
+            const string source = "```\ncode\n```";
+            var snapshot = MarkdownSemanticSnapshot.Parse(source);
+            var codeStart = source.IndexOf("code", StringComparison.Ordinal);
+            False(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "code", codeStart, 1, new MarkdownCaretReveal(codeStart + 2, 1)),
+                "caret inside code content does not reveal fence rows");
+            True(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, "```", 0, 0, new MarkdownCaretReveal(1, 0)),
+                "caret on the opening fence row reveals it");
+        });
+
+        Check("HasRevealOnLine strong span enters and leaves", () =>
+        {
+            const string source = "before **bold** after";
+            var snapshot = MarkdownSemanticSnapshot.Parse(source);
+            var strong = SingleSpan(snapshot, MarkdownSemanticSpanKind.Strong);
+            var inside = new MarkdownCaretReveal(
+                strong.Start + 4, LineForOffset(source, strong.Start + 4));
+            True(
+                MarkdownSemanticReveal.HasRevealOnLine(snapshot, source, 0, inside.CaretLineZeroBased, inside),
+                "caret inside the strong content reveals delimiters on the row");
+            var before = new MarkdownCaretReveal(
+                strong.Start - 1, LineForOffset(source, strong.Start - 1));
+            False(
+                MarkdownSemanticReveal.HasRevealOnLine(snapshot, source, 0, before.CaretLineZeroBased, before),
+                "caret before the strong span reveals nothing");
+        });
+
+        Check("HasRevealOnLine detects revealed link", () =>
+        {
+            const string source = "see [label](url) end";
+            var snapshot = MarkdownSemanticSnapshot.Parse(source);
+            var labelStart = source.IndexOf("label", StringComparison.Ordinal);
+            True(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, source, 0, 0, new MarkdownCaretReveal(labelStart, 0)),
+                "caret on the label reveals the link syntax");
+            False(
+                MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, source, 0, 0, new MarkdownCaretReveal(1, 0)),
+                "caret in leading plain text reveals no link");
+        });
     }
 
     /// <summary>由源文本与绝对偏移计算零基行号（与快照 lineStarts 规则一致）。</summary>

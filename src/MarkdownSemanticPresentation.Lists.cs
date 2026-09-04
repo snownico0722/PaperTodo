@@ -49,14 +49,13 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
+                var revealed = _owner.IsRevealed(
+                    line.LineNumber,
+                    marker.Start,
+                    marker.Length,
+                    marker.Kind);
                 var brush = _owner.IsFullMode
-                    ? (_owner.IsRevealed(
-                        line.LineNumber,
-                        marker.Start,
-                        marker.Length,
-                        marker.Kind)
-                        ? Theme.ActiveBrush
-                        : Brushes.Transparent)
+                    ? _owner.RevealColor(Theme.ActiveBrush, revealed)
                     : Brushes.Transparent;
                 ApplyAbsolute(
                     line,
@@ -91,7 +90,7 @@ internal sealed partial class MarkdownSemanticPresentation
                     marker.Start,
                     marker.End,
                     element => element.TextRunProperties.SetForegroundBrush(
-                        revealTask ? Theme.ActiveBrush : Brushes.Transparent));
+                        _owner.RevealColor(Theme.ActiveBrush, revealTask)));
                 if (marker.Checked && revealTask)
                 {
                     ApplyAbsolute(
