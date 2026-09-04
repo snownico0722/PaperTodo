@@ -584,7 +584,7 @@
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础：为md渲染轻量高亮。
 增强：标题、列表和强调更美观。
-完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
+完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记（不占宽度、内容紧凑重排）；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；

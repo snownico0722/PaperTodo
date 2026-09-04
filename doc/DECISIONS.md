@@ -1129,3 +1129,10 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `src/MarkdownSemanticPresentation.Colorizer.cs` / `.Blocks.cs` / `.Lists.cs` / `.Html.cs` / `.Background.cs` / `.HorizontalRule.cs`。
 - `src/MarkdownTextBox.cs`（`RenderModeIsFull`、`ShouldHideImageReferenceText` 加 Full 分支）。
 - `tests/PaperTodo.MarkdownSemanticChecks/RevealChecks.cs`。
+
+### Follow-up：控制符改由元素层真塌缩（2026-09）
+
+- **验证**：`VisualLineElement(visualLength:1, documentLength:N)` + U+200B（~0 宽）run 被 TextFormatter 接受，内容随塌缩贴齐重排（spike 实测 `# Title` 塌缩 `# ` 后行宽 53.9→38.5px、标题文字贴左）。
+- **决定**：Full 档中无需留白的控制符（ATX 标题 `#`、行内成对分隔符、链接语法、HTML 标签、转义反斜杠）改由 `MarkdownSemanticCollapseLayout`（纯逻辑，可测）+ `SyntaxCollapseElementGenerator`（元素层）真塌缩；隐藏区间经 `GetRelativeOffset/GetVisualColumn/GetNextCaretPosition` 映射到“内容侧”。显灵（活动块）区间不塌缩。
+- **明确不做**：整行高度归零（``` 围栏行、setext、分隔线）。内置 Folding 对“单 marker 行折叠”实测不可行（可见行仍保留/内容行被吞）；真行高归零需自研跨行折叠+零占位生成器，风险高，留待后续。列表/任务标记、引用 `>` 保留透明格与图形，不塌缩。
+- **证据追加**：`src/MarkdownSemanticCollapseLayout.cs`、`src/MarkdownSemanticPresentation.Collapse.cs`、`tests/PaperTodo.MarkdownSemanticChecks/CollapseLayoutChecks.cs`。
