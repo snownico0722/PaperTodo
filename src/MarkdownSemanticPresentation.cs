@@ -138,6 +138,13 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         return Math.Round(baseFontSize * scale, 1);
     }
 
+    /// <summary>当前字号缩放系数（0.5..1.5）。图形元素的像素度量乘它后与文本同步缩放。</summary>
+    internal double ZoomFactor()
+    {
+        var baseSize = Math.Max(1, NoteTypography.FontSize);
+        return Math.Clamp(_editor.FontSize / baseSize, 0.5, 1.5);
+    }
+
     private static bool TryGetTextPoint(
         TextView textView,
         DocumentLine line,

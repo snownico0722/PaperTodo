@@ -266,6 +266,10 @@ public sealed partial class MarkdownTextBox : TextEditor
             textView.EnsureVisualLines();
         }
 
+        // CaretLayer 等子层只有在布局之后显式失效才会重绘：只读预览态下 caret 隐藏，
+        // 缩放/重排不会自动刷新这些子层（列表圆点/勾选框、分隔线会停留在旧帧）。
+        InvalidateTextViewChildLayers(textView);
+
         textView.InvalidateLayer(KnownLayer.Background);
         textView.InvalidateLayer(KnownLayer.Text);
         textView.InvalidateLayer(KnownLayer.Caret);
@@ -275,6 +279,23 @@ public sealed partial class MarkdownTextBox : TextEditor
         textView.InvalidateVisual();
         TextArea.InvalidateVisual();
         InvalidateVisual();
+    }
+
+    /// <summary>
+    /// 显式失效 TextView 的所有视觉子层（CaretLayer/TextLayer 等）。AvalonEdit 的
+    /// InvalidateLayer 只转成 InvalidateMeasure，无法让子层重绘；此处用于任何布局/字号变化
+    /// 后确保装饰层（画在 Caret 层上的圆点/勾选框/分隔线）跟随刷新。
+    /// </summary>
+    private static void InvalidateTextViewChildLayers(TextView textView)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(textView);
+        for (var index = 0; index < count; index++)
+        {
+            if (VisualTreeHelper.GetChild(textView, index) is UIElement childLayer)
+            {
+                childLayer.InvalidateVisual();
+            }
+        }
     }
 
     public void WrapSelection(string prefix, string suffix)

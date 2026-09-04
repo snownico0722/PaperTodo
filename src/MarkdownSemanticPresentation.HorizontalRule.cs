@@ -32,7 +32,8 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var snapshot = _owner.CurrentSnapshot();
-            var pen = new Pen(Theme.PaperBorderBrush, 1);
+            // 横线随字号缩放略微加粗（zoom=1 保持 1px；0.75 下限防过细不可见）。
+            var pen = new Pen(Theme.PaperBorderBrush, Math.Max(0.75, _owner.ZoomFactor()));
             foreach (var visualLine in textView.VisualLines)
             {
                 for (var line = visualLine.FirstDocumentLine;

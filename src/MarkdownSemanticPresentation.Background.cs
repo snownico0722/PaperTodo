@@ -27,11 +27,13 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var snapshot = _owner.CurrentSnapshot();
-            var quotePen = new Pen(Theme.QuoteBorderBrush, 3);
+            var zoom = _owner.ZoomFactor();
+            // 引用竖条/圆角随字号等比缩放（zoom=1 还原 3px / 圆角 3），避免放大后仍为细线小角。
+            var quotePen = new Pen(Theme.QuoteBorderBrush, 3 * zoom);
             var inlineCodeBuilder = new BackgroundGeometryBuilder
             {
                 AlignToWholePixels = true,
-                CornerRadius = 3,
+                CornerRadius = 3 * zoom,
                 BorderThickness = 0
             };
 
@@ -72,11 +74,11 @@ internal sealed partial class MarkdownSemanticPresentation
 
             // 代码块背景：把“纳入代码块的可见行”合成一个 run，一次画一整块圆角面板，
             // 消除逐行绘制造成的接缝；Full 档围栏开/闭行也并入（代码面板上下连续）。
-            DrawCodeRuns(textView, drawingContext, snapshot, visible);
+            DrawCodeRuns(textView, drawingContext, snapshot, visible, zoom);
 
             // 引用竖条：把“连续 IsQuoted 的可见行”合成一个 run，一个 run 只画一条贯穿竖条，
             // 消除逐行 2px 缩进造成的行间断裂（> a\n>\n> b 与惰性续行/软折行都保持连续）。
-            DrawQuoteRuns(textView, drawingContext, snapshot, visible, quotePen);
+            DrawQuoteRuns(textView, drawingContext, snapshot, visible, quotePen, zoom);
 
             var inlineCodeGeometry = inlineCodeBuilder.CreateGeometry();
             if (inlineCodeGeometry != null)
@@ -107,7 +109,8 @@ internal sealed partial class MarkdownSemanticPresentation
             TextView textView,
             DrawingContext drawingContext,
             MarkdownSemanticSnapshot snapshot,
-            List<DocumentLine> visible)
+            List<DocumentLine> visible,
+            double zoom)
         {
             var count = visible.Count;
             var index = 0;
@@ -130,6 +133,7 @@ internal sealed partial class MarkdownSemanticPresentation
                 var top = RowTop(textView, first);
                 var bottom = RowBottom(textView, last);
                 var height = Math.Max(1, bottom - top);
+                var cornerRadius = 4 * zoom;
                 drawingContext.DrawRoundedRectangle(
                     Theme.CodeBrush,
                     null,
@@ -138,8 +142,8 @@ internal sealed partial class MarkdownSemanticPresentation
                         top + 1,
                         Math.Max(0, textView.ActualWidth - 4),
                         Math.Max(1, height - 2)),
-                    4,
-                    4);
+                    cornerRadius,
+                    cornerRadius);
                 index++;
             }
         }
@@ -149,9 +153,11 @@ internal sealed partial class MarkdownSemanticPresentation
             DrawingContext drawingContext,
             MarkdownSemanticSnapshot snapshot,
             List<DocumentLine> visible,
-            Pen quotePen)
+            Pen quotePen,
+            double zoom)
         {
-            const double x = 2.5;
+            // 左轨距随字号等比（zoom=1 还原 2.5）。
+            var x = 2.5 * zoom;
             var count = visible.Count;
             var index = 0;
             while (index < count)
