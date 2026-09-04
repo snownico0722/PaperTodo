@@ -761,11 +761,11 @@ internal sealed class PaperCommandService
 
     private void EnsurePaperCapacity()
     {
-        if (_controller.State.Papers.Count >= 200)
+        if (_controller.State.Papers.Count >= PaperLimits.MaxPapers)
         {
             throw Error(
                 "paper_limit",
-                "PaperTodo supports at most 200 papers.");
+                $"PaperTodo supports at most {PaperLimits.MaxPapers} papers.");
         }
     }
 

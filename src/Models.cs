@@ -9,6 +9,11 @@ public static class PaperTypes
     public const string Note = "note";
 }
 
+public static class PaperLimits
+{
+    public const int MaxPapers = 200;
+}
+
 public static class PaperLayoutDefaults
 {
     public const double MinWidth = 96;

@@ -117,9 +117,8 @@ public sealed partial class PaperWindow
         // Collapse-on-click must run before any cursor placement: writing paper.X/Y here would
         // clobber the expanded geometry even though this invocation only folds the paper. Treat
         // an effectively obscured paper as a retrieval target instead of retracting it unseen.
-        if (ShouldCollapseExpandedDeepCapsuleFromEdgeClick())
+        if (TryHandleExpandedDeepCapsuleRepeatClick())
         {
-            CollapseExpandedDeepCapsuleFromEdgeSilently();
             return;
         }
 
@@ -165,11 +164,7 @@ public sealed partial class PaperWindow
             ShowMainWindowForDeepCapsuleActivation();
             SetCollapsedState(false, alignExpandedToDockedEdge: true, activateOnExpand: true);
         }
-        else if (ShouldCollapseExpandedDeepCapsuleFromEdgeClick())
-        {
-            CollapseExpandedDeepCapsuleFromEdgeSilently();
-        }
-        else
+        else if (!TryHandleExpandedDeepCapsuleRepeatClick())
         {
             EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
             _controller.BringPaperToFront(_paper);

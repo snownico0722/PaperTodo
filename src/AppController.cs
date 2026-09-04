@@ -492,7 +492,7 @@ public sealed partial class AppController : IDisposable
 
     public PaperData? CreatePaper(string type, bool show = true, PaperData? sourcePaper = null)
     {
-        if (State.Papers.Count >= 200)
+        if (State.Papers.Count >= PaperLimits.MaxPapers)
         {
             ShowPaperLimitDialog();
             return null;
