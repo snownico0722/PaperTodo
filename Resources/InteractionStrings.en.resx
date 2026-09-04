@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="OnlyIncomplete" xml:space="preserve"><value>Incomplete only</value></data>
+  <data name="OnlyIncompleteTip" xml:space="preserve"><value>Filter this preview only; the paper, item order and other papers are unchanged.</value></data>
+  <data name="CompletionSummary" xml:space="preserve"><value>Completed {0}/{1}</value></data>
+  <data name="MoreItems" xml:space="preserve"><value>{0} more · Open paper</value></data>
+  <data name="OpenPaper" xml:space="preserve"><value>Open paper</value></data>
+  <data name="OpenPaperTip" xml:space="preserve"><value>The preview shows up to {0} items. Click to open the paper and see everything.</value></data>
+  <data name="NoItems" xml:space="preserve"><value>No items yet</value></data>
+  <data name="AllCompleted" xml:space="preserve"><value>All done</value></data>
+</root>

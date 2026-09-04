@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -31,6 +33,7 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
             body,
             minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
             maximum: 450);
+        width = Math.Max(items.Count == 0 ? 130 : 180, width);
         var availableTextWidth = Math.Max(64, width - 60);
         var estimatedLines = items.Count == 0
             ? 1
@@ -43,7 +46,7 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
         var height = items.Count == 0
             ? 120
             : Math.Clamp(
-                62 + Math.Min(MaximumRenderedItems, estimatedLines) *
+                104 + Math.Min(MaximumRenderedItems, estimatedLines) *
                     AppTypography.Scale(28),
                 150,
                 400);
@@ -57,53 +60,16 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
             size => new TodoEdgeCapsulePreviewView(context, size, snapshot));
     }
 
-    internal static TodoEdgeCapsulePreviewSnapshot CaptureSnapshot(PaperData paper)
-    {
-        var selected = new List<PaperItem>(MaximumRenderedItems);
-        var total = 0;
-        var done = 0;
-        foreach (var item in paper.Items)
-        {
-            if (!TodoRules.HasMeaningfulContent(item))
-            {
-                continue;
-            }
-
-            total++;
-            if (item.Done)
-            {
-                done++;
-            }
-
-            // Keep only the stable first 12 items by Order. With a fixed-size insertion list this
-            // is one model pass, O(n * 12), and never sorts/materializes the complete todo model.
-            var insertionIndex = selected.Count;
-            for (var index = 0; index < selected.Count; index++)
-            {
-                if (item.Order < selected[index].Order)
-                {
-                    insertionIndex = index;
-                    break;
-                }
-            }
-            if (insertionIndex == selected.Count)
-            {
-                if (selected.Count < MaximumRenderedItems)
-                {
-                    selected.Add(item);
-                }
-                continue;
-            }
-
-            selected.Insert(insertionIndex, item);
-            if (selected.Count > MaximumRenderedItems)
-            {
-                selected.RemoveAt(MaximumRenderedItems);
-            }
-        }
-
-        return new TodoEdgeCapsulePreviewSnapshot(selected, total, done);
-    }
+    internal static TodoPreviewSelection<PaperItem> CaptureSnapshot(
+        PaperData paper,
+        bool incompleteOnly = false) =>
+        TodoPreviewSelection.Capture(
+            paper.Items,
+            TodoRules.HasMeaningfulContent,
+            item => item.Done,
+            item => item.Order,
+            incompleteOnly,
+            MaximumRenderedItems);
 
     internal static string PreviewItemText(string? value)
     {
@@ -133,30 +99,32 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
     }
 }
 
-internal sealed record TodoEdgeCapsulePreviewSnapshot(
-    IReadOnlyList<PaperItem> Items,
-    int Total,
-    int Done);
-
 internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
 {
     private readonly TextBlock _title;
     private readonly TextBlock _summary;
     private readonly StackPanel _items;
     private readonly ScrollViewer _scrollViewer;
+    private readonly ToggleButton _filter;
+    private readonly TextBlock _openPaper;
+    private bool _incompleteOnly;
+    private bool _scrollToStart;
+    private int _contentGeneration;
     private bool _rebuilding;
-    private TodoEdgeCapsulePreviewSnapshot? _initialSnapshot;
+    private TodoPreviewSelection<PaperItem>? _initialSnapshot;
 
     public TodoEdgeCapsulePreviewView(
         EdgeCapsulePreviewContext context,
         EdgeCapsulePreviewSize size,
-        TodoEdgeCapsulePreviewSnapshot initialSnapshot)
+        TodoPreviewSelection<PaperItem> initialSnapshot)
         : base(context, size)
     {
         _initialSnapshot = initialSnapshot;
         Margin = new Thickness(10, 9, 9, 10);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition());
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var heading = new Grid
         {
@@ -190,6 +158,10 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         heading.Children.Add(_summary);
         Children.Add(heading);
 
+        _filter = CreateIncompleteFilter();
+        Grid.SetRow(_filter, 1);
+        Children.Add(_filter);
+
         _items = new StackPanel
         {
             Margin = new Thickness(0, 0, 2, 0)
@@ -202,23 +174,95 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             Focusable = false,
             Padding = new Thickness(0)
         };
-        Grid.SetRow(_scrollViewer, 1);
+        Grid.SetRow(_scrollViewer, 2);
         Children.Add(_scrollViewer);
+
+        // Deliberately non-consuming: the existing host-owned background click opens the paper.
+        // Do not add a second activation path or close/recreate the preview on filter changes.
+        _openPaper = new TextBlock
+        {
+            Margin = new Thickness(3, 5, 1, 0),
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(11),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Cursor = Cursors.Hand,
+            ToolTip = InteractionStrings.Format(
+                "OpenPaperTip", TodoEdgeCapsulePreviewProvider.MaximumRenderedItems)
+        };
+        _openPaper.SetResourceReference(TextBlock.ForegroundProperty, "LinkBrushKey");
+        Grid.SetRow(_openPaper, 3);
+        Children.Add(_openPaper);
 
         InitializeLiveContent();
     }
 
+    private ToggleButton CreateIncompleteFilter()
+    {
+        var chrome = new FrameworkElementFactory(typeof(Border));
+        chrome.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+        chrome.SetBinding(Border.BackgroundProperty,
+            new Binding("Background") { RelativeSource = RelativeSource.TemplatedParent });
+        chrome.SetBinding(Border.PaddingProperty,
+            new Binding("Padding") { RelativeSource = RelativeSource.TemplatedParent });
+        chrome.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
+        var style = new Style(typeof(ToggleButton));
+        style.Setters.Add(new Setter(Control.TemplateProperty,
+            new ControlTemplate(typeof(ToggleButton)) { VisualTree = chrome }));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+        foreach (var property in new[] { IsMouseOverProperty, ToggleButton.IsCheckedProperty })
+        {
+            var trigger = new Trigger { Property = property, Value = true };
+            trigger.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension("HoverBrushKey")));
+            style.Triggers.Add(trigger);
+        }
+        var filter = new ToggleButton
+        {
+            Content = InteractionStrings.Get("OnlyIncomplete"),
+            ToolTip = InteractionStrings.Get("OnlyIncompleteTip"),
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(11),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(6, 2, 6, 2),
+            Margin = new Thickness(0, 0, 0, 4),
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            IsTabStop = false,
+            Style = style
+        };
+        filter.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
+        System.Windows.Automation.AutomationProperties.SetName(
+            filter, InteractionStrings.Get("OnlyIncomplete"));
+        EdgeCapsulePreviewInteraction.SetConsumesPointer(filter, true);
+        filter.Click += (_, _) =>
+        {
+            _incompleteOnly = filter.IsChecked == true;
+            filter.Content = (_incompleteOnly ? "✓ " : "") + InteractionStrings.Get("OnlyIncomplete");
+            _initialSnapshot = null;
+            _scrollToStart = true;
+            InitializeLiveContent();
+        };
+        return filter;
+    }
+
     protected override void RebuildContent()
     {
-        var offset = _scrollViewer.VerticalOffset;
+        var generation = ++_contentGeneration;
+        var offset = _scrollToStart ? 0 : _scrollViewer.VerticalOffset;
+        _scrollToStart = false;
         var snapshot = _initialSnapshot ??
-            TodoEdgeCapsulePreviewProvider.CaptureSnapshot(Context.Paper);
+            TodoEdgeCapsulePreviewProvider.CaptureSnapshot(Context.Paper, _incompleteOnly);
         _initialSnapshot = null;
         var meaningful = snapshot.Items;
 
         _title.Text = Context.Title;
         _title.ToolTip = Context.Title;
         _summary.Text = $"{snapshot.Done}/{snapshot.Total}";
+        _summary.ToolTip = InteractionStrings.Format("CompletionSummary", snapshot.Done, snapshot.Total);
+        _filter.Visibility = snapshot.Total == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _openPaper.Text = snapshot.RemainingCount > 0
+            ? InteractionStrings.Format("MoreItems", snapshot.RemainingCount)
+            : InteractionStrings.Get("OpenPaper");
 
         _rebuilding = true;
         try
@@ -228,10 +272,13 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             {
                 var empty = new TextBlock
                 {
-                    Text = "—",
+                    Text = InteractionStrings.Get(
+                        _incompleteOnly && snapshot.Total > 0 ? "AllCompleted" : "NoItems"),
                     Margin = new Thickness(8, 18, 8, 8),
                     FontFamily = AppTypography.UiFontFamily,
-                    FontSize = AppTypography.Scale(16),
+                    FontSize = AppTypography.Scale(12),
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
                 empty.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
@@ -251,7 +298,13 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         }
 
         Dispatcher.BeginInvoke(
-            (Action)(() => _scrollViewer.ScrollToVerticalOffset(offset)),
+            (Action)(() =>
+            {
+                if (IsLoaded && generation == _contentGeneration)
+                {
+                    _scrollViewer.ScrollToVerticalOffset(offset);
+                }
+            }),
             DispatcherPriority.Loaded);
     }
 

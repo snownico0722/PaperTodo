@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="OnlyIncomplete" xml:space="preserve"><value>미완료만</value></data>
+  <data name="OnlyIncompleteTip" xml:space="preserve"><value>현재 미리보기만 필터링합니다. 본문, 항목 순서, 다른 메모는 바뀌지 않습니다.</value></data>
+  <data name="CompletionSummary" xml:space="preserve"><value>완료 {0}/{1}</value></data>
+  <data name="MoreItems" xml:space="preserve"><value>{0}개 더 · 전체 메모 열기</value></data>
+  <data name="OpenPaper" xml:space="preserve"><value>전체 메모 열기</value></data>
+  <data name="OpenPaperTip" xml:space="preserve"><value>미리보기에는 최대 {0}개 항목이 표시됩니다. 클릭하여 전체 메모를 여세요.</value></data>
+  <data name="NoItems" xml:space="preserve"><value>아직 할 일이 없습니다</value></data>
+  <data name="AllCompleted" xml:space="preserve"><value>모두 완료</value></data>
+</root>
