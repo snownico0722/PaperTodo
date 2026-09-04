@@ -45,11 +45,17 @@ internal static class RevealChecks
                     MarkdownSemanticSpanKind.Strong, strong.Start, strong.End),
                 "caret before the span must stay hidden");
             var atEnd = new MarkdownCaretReveal(strong.End, LineForOffset(source, strong.End));
-            False(
+            True(
                 MarkdownSemanticReveal.RevealMarker(
                     atEnd, atEnd.CaretLineZeroBased, strong.Start, strong.Length,
                     MarkdownSemanticSpanKind.Strong, strong.Start, strong.End),
-                "caret at exclusive span end must stay hidden");
+                "caret at the right boundary reveals the span for editing");
+            var beyondEnd = new MarkdownCaretReveal(strong.End + 1, LineForOffset(source, strong.End + 1));
+            False(
+                MarkdownSemanticReveal.RevealMarker(
+                    beyondEnd, beyondEnd.CaretLineZeroBased, strong.Start, strong.Length,
+                    MarkdownSemanticSpanKind.Strong, strong.Start, strong.End),
+                "caret one step into the following plain text stays hidden");
         });
 
         Check("Heading marker reveals on its own row", () =>

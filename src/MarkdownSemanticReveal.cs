@@ -30,11 +30,13 @@ internal static class MarkdownSemanticReveal
         int rangeStart,
         int rangeEnd)
     {
+        // 闭区间：光标“到达可见内容的左右边界点”也视为进入该行内格式化区间，立即显灵，
+        // 便于停在边界退格去格式。再外一格（真正进入相邻普通文本）才回到隐藏态。
         return caret.Active &&
             rangeStart >= 0 &&
             rangeEnd > rangeStart &&
             caret.CaretOffset >= rangeStart &&
-            caret.CaretOffset < rangeEnd;
+            caret.CaretOffset <= rangeEnd;
     }
 
     public static bool RevealMarker(
