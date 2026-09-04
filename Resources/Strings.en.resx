@@ -317,7 +317,7 @@ Error: {0}</value>
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>You have reached the 100-paper limit.&#x0A;Delete papers you no longer need before creating more.</value>
+    <value>You have reached the 200-paper limit.&#x0A;Delete papers you no longer need before creating more.</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
     <value>Paper limit reached</value>

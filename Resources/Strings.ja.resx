@@ -317,7 +317,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>紙片の数が上限の 100 枚に達しました。&#x0A;不要な紙片を削除してから新規作成してください。</value>
+    <value>紙片の数が上限の 200 枚に達しました。&#x0A;不要な紙片を削除してから新規作成してください。</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
     <value>紙片数が上限です</value>

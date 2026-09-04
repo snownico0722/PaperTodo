@@ -327,7 +327,7 @@
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>纸片已达到 100 张上限。
+    <value>纸片已达到 200 张上限。
 请删除不再需要的纸片后再新建。</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">

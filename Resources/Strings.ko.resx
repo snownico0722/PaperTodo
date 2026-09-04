@@ -317,7 +317,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>종이 수가 최대 100장에 도달했습니다.&#x0A;더 이상 필요 없는 종이를 삭제한 뒤 새로 만들어 주세요.</value>
+    <value>종이 수가 최대 200장에 도달했습니다.&#x0A;더 이상 필요 없는 종이를 삭제한 뒤 새로 만들어 주세요.</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
     <value>종이 수가 가득 찼습니다</value>
