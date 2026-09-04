@@ -2630,7 +2630,10 @@ public sealed partial class PaperWindow : Window
     internal void RefreshEffectiveTopmost()
     {
         var shouldBeTopmost = !IsExperimentalPassive &&
-            (_paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed));
+            (_paper.AlwaysOnTop ||
+             (_controller.State.UseCapsuleMode &&
+              _paper.IsCollapsed &&
+              !UsesNonPaperGeometry));
         var fullscreenAvoidanceWindow =
             _controller.FullscreenAvoidanceWindowFor(this);
         var avoidanceWindow = ResolveExperimentalCapsuleFollowZOrderTarget(

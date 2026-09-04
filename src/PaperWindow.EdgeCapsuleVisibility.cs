@@ -136,27 +136,6 @@ public sealed partial class PaperWindow
 
     private void CollapseExpandedDeepCapsuleFromEdgeSilently()
     {
-        var foreground = WindowNative.ForegroundWindow;
-        var handle = new WindowInteropHelper(this).Handle;
-        var preserveExternalForeground =
-            foreground != IntPtr.Zero &&
-            foreground != handle;
-
         SetCollapsedState(true, alignExpandedToDockedEdge: true);
-
-        if (!preserveExternalForeground ||
-            !_paper.IsCollapsed ||
-            !IsVisible)
-        {
-            return;
-        }
-
-        // SetCollapsedState marks the paper collapsed before the main HWND finishes its shrink.
-        // RefreshEffectiveTopmost therefore promotes the main PaperWindow for ordinary capsule
-        // semantics. A deep capsule already has its own EdgeCapsuleHost, so immediately undo that
-        // promotion in the same dispatcher turn. The external foreground HWND never changes and
-        // the still-visible part of the paper can retract behind it without flashing to the front.
-        Topmost = false;
-        WindowNative.ApplyTopmostZOrder(this, topmost: false, insertAfter: foreground);
     }
 }
