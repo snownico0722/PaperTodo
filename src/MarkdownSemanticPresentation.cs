@@ -38,6 +38,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _semanticDocument.SnapshotChanged += OnSnapshotChanged;
         AttachCaretTracking();
         SyncCaretReveal();
+        AttachCollapseGenerator();
         RedrawAll();
     }
 
@@ -232,6 +233,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             return;
         }
 
+        _collapseDirty = true;
         _redrawQueued = true;
         _editor.Dispatcher.BeginInvoke(
             (Action)(() =>
@@ -261,6 +263,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _disposed = true;
         _semanticDocument.SnapshotChanged -= OnSnapshotChanged;
         DetachCaretTracking();
+        DetachCollapseGenerator();
         var textView = _editor.TextArea.TextView;
         textView.LineTransformers.Remove(_colorizer);
         textView.BackgroundRenderers.Remove(_backgroundRenderer);
