@@ -558,7 +558,7 @@ Place both papertodo and PaperTodo_Bold (.ttf/.otf).</value>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>Basic: light Markdown highlighting.
 Enhanced: nicer headings, lists, and emphasis.
-Full Render: render the entire note as headings, lists, quotes, etc. when unfocused.</value>
+Full Render: while editing, blocks (headings, lists, quotes, code, images) appear in their final layout and most Markdown markers are hidden; the block under the caret reveals its markers for editing. Blur switches to read-only whole-note rendering.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
