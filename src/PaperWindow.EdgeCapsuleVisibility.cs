@@ -8,22 +8,12 @@ namespace PaperTodo;
 internal static partial class WindowNative
 {
     private const uint EdgeToggleGaRoot = 2;
-    private const uint EdgeToggleGwOwner = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct EdgeToggleNativePoint
     {
         public int X;
         public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct EdgeToggleNativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
     }
 
     public static bool IsRootWindowAtDeviceScreenPoint(
@@ -63,29 +53,29 @@ internal static partial class WindowNative
             return false;
         }
 
-        var foreground = GetForegroundWindowForEdgeToggle();
+        var foreground = ForegroundWindow;
         if (foreground == IntPtr.Zero || foreground == paperWindow)
         {
             return false;
         }
 
-        var owner = GetWindowForEdgeToggle(foreground, EdgeToggleGwOwner);
+        var owner = GetWindow(foreground, GwOwner);
         if (owner == IntPtr.Zero ||
             owner == paperWindow ||
-            !IsWindowVisibleForEdgeToggle(owner) ||
+            !IsWindowVisible(owner) ||
             IsWindowEnabledForEdgeToggle(owner))
         {
             return false;
         }
 
-        _ = GetWindowThreadProcessIdForEdgeToggle(paperWindow, out var paperProcessId);
-        _ = GetWindowThreadProcessIdForEdgeToggle(owner, out var ownerProcessId);
+        _ = GetWindowThreadProcessId(paperWindow, out var paperProcessId);
+        _ = GetWindowThreadProcessId(owner, out var ownerProcessId);
         if (paperProcessId != 0 && ownerProcessId == paperProcessId)
         {
             return false;
         }
 
-        if (!GetWindowRectForEdgeToggle(owner, out var ownerBounds))
+        if (!GetWindowRect(owner, out var ownerBounds))
         {
             return false;
         }
@@ -105,32 +95,9 @@ internal static partial class WindowNative
         IntPtr hwnd,
         uint flags);
 
-    [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
-    private static extern IntPtr GetForegroundWindowForEdgeToggle();
-
-    [DllImport("user32.dll", EntryPoint = "GetWindow")]
-    private static extern IntPtr GetWindowForEdgeToggle(
-        IntPtr hwnd,
-        uint command);
-
-    [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisibleForEdgeToggle(IntPtr hwnd);
-
     [DllImport("user32.dll", EntryPoint = "IsWindowEnabled")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowEnabledForEdgeToggle(IntPtr hwnd);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRectForEdgeToggle(
-        IntPtr hwnd,
-        out EdgeToggleNativeRect rect);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
-    private static extern uint GetWindowThreadProcessIdForEdgeToggle(
-        IntPtr hwnd,
-        out uint processId);
 }
 
 public sealed partial class PaperWindow
