@@ -1,0 +1,47 @@
+name: Starpaper plugin
+
+on:
+  pull_request:
+    paths:
+      - 'plugin-samples/PaperTodo.Plugin.Starpaper/**'
+      - 'plugins/com.papertodo.starpaper/**'
+      - '.github/workflows/starpaper.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'plugin-samples/PaperTodo.Plugin.Starpaper/**'
+      - 'plugins/com.papertodo.starpaper/**'
+      - '.github/workflows/starpaper.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test model and refresh policy
+        run: node --test plugin-samples/PaperTodo.Plugin.Starpaper/tests/core.test.cjs
+      - name: Install test-only browser
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Test UI against the public host contract
+        run: python plugin-samples/PaperTodo.Plugin.Starpaper/tests/browser_test.py --screenshots dist/screenshots
+      - name: Verify deployed files and package
+        run: python plugin-samples/PaperTodo.Plugin.Starpaper/package.py --check --output dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Starpaper-plugin
+          path: |
+            dist/Starpaper-*.zip
+            dist/Starpaper-*.sha256
+            dist/screenshots/

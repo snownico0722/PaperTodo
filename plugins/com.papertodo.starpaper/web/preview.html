@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>星笺 · Starpaper</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="core.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="art.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body data-preview="true">
+  <div id="app" aria-busy="true"></div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog"></dialog>
+  <input id="image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+  <input id="backup-file" type="file" accept=".json,application/json" hidden>
+</body>
+</html>
