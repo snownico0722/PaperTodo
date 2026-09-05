@@ -8,12 +8,22 @@ namespace PaperTodo;
 internal static partial class WindowNative
 {
     private const uint EdgeToggleGaRoot = 2;
+    private const uint EdgeToggleGwOwner = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct EdgeToggleNativePoint
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EdgeToggleNativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 
     public static bool IsRootWindowAtDeviceScreenPoint(
@@ -44,6 +54,48 @@ internal static partial class WindowNative
         return GetAncestorForEdgeToggle(hit, EdgeToggleGaRoot) == rootWindow;
     }
 
+    public static bool HasExternalVisibleDisabledForegroundOwnerOverlapping(
+        IntPtr paperWindow,
+        DeviceScreenRect paperBounds)
+    {
+        if (paperWindow == IntPtr.Zero || paperBounds.IsEmpty)
+        {
+            return false;
+        }
+
+        var foreground = GetForegroundWindowForEdgeToggle();
+        if (foreground == IntPtr.Zero || foreground == paperWindow)
+        {
+            return false;
+        }
+
+        var owner = GetWindowForEdgeToggle(foreground, EdgeToggleGwOwner);
+        if (owner == IntPtr.Zero ||
+            owner == paperWindow ||
+            !IsWindowVisibleForEdgeToggle(owner) ||
+            IsWindowEnabledForEdgeToggle(owner))
+        {
+            return false;
+        }
+
+        _ = GetWindowThreadProcessIdForEdgeToggle(paperWindow, out var paperProcessId);
+        _ = GetWindowThreadProcessIdForEdgeToggle(owner, out var ownerProcessId);
+        if (paperProcessId != 0 && ownerProcessId == paperProcessId)
+        {
+            return false;
+        }
+
+        if (!GetWindowRectForEdgeToggle(owner, out var ownerBounds))
+        {
+            return false;
+        }
+
+        return ownerBounds.Left < paperBounds.Right &&
+            ownerBounds.Right > paperBounds.Left &&
+            ownerBounds.Top < paperBounds.Bottom &&
+            ownerBounds.Bottom > paperBounds.Top;
+    }
+
     [DllImport("user32.dll", EntryPoint = "WindowFromPoint")]
     private static extern IntPtr WindowFromPointForEdgeToggle(
         EdgeToggleNativePoint point);
@@ -52,6 +104,33 @@ internal static partial class WindowNative
     private static extern IntPtr GetAncestorForEdgeToggle(
         IntPtr hwnd,
         uint flags);
+
+    [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
+    private static extern IntPtr GetForegroundWindowForEdgeToggle();
+
+    [DllImport("user32.dll", EntryPoint = "GetWindow")]
+    private static extern IntPtr GetWindowForEdgeToggle(
+        IntPtr hwnd,
+        uint command);
+
+    [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisibleForEdgeToggle(IntPtr hwnd);
+
+    [DllImport("user32.dll", EntryPoint = "IsWindowEnabled")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowEnabledForEdgeToggle(IntPtr hwnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRectForEdgeToggle(
+        IntPtr hwnd,
+        out EdgeToggleNativeRect rect);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
+    private static extern uint GetWindowThreadProcessIdForEdgeToggle(
+        IntPtr hwnd,
+        out uint processId);
 }
 
 public sealed partial class PaperWindow
@@ -68,6 +147,14 @@ public sealed partial class PaperWindow
             (!HoldsDeepCapsuleSlotWhileExpanded && !HasExpandedDeepCapsuleSlotReservation))
         {
             return false;
+        }
+
+        // Native restore for maximized/snapped windows can activate the paper while collapsing.
+        // Keep this edge case on the safe retrieval path instead of trying to make restore silent.
+        if (WindowState == WindowState.Maximized || _isSnappedPresentation)
+        {
+            _controller.BringPaperToFront(_paper);
+            return true;
         }
 
         if (IsExpandedPaperMeaningfullyVisible())
@@ -96,6 +183,14 @@ public sealed partial class PaperWindow
         if (handle == IntPtr.Zero ||
             !WindowNative.TryGetWindowDeviceBounds(this, out var bounds) ||
             bounds.IsEmpty)
+        {
+            return false;
+        }
+
+        // WindowFromPoint skips disabled windows. A common modal-dialog pattern therefore makes
+        // the still-visible disabled owner look transparent to the grid below it. Handle only
+        // that narrow, externally-owned case and conservatively retrieve instead of retracting.
+        if (WindowNative.HasExternalVisibleDisabledForegroundOwnerOverlapping(handle, bounds))
         {
             return false;
         }
