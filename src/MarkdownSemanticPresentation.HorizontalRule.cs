@@ -32,7 +32,8 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var snapshot = _owner.CurrentSnapshot();
-            var pen = new Pen(Theme.PaperBorderBrush, 1);
+            // 横线随字号缩放略微加粗（zoom=1 保持 1px；0.75 下限防过细不可见）。
+            var pen = new Pen(Theme.PaperBorderBrush, Math.Max(0.75, _owner.ZoomFactor()));
             foreach (var visualLine in textView.VisualLines)
             {
                 for (var line = visualLine.FirstDocumentLine;
@@ -41,6 +42,17 @@ internal sealed partial class MarkdownSemanticPresentation
                 {
                     var semantic = snapshot.GetLine(Math.Max(0, line.LineNumber - 1));
                     if (!semantic.IsHorizontalRule)
+                    {
+                        continue;
+                    }
+
+                    // Full 档把光标行还原成源码（--- 可见），不再画线覆盖。
+                    if (_owner.IsFullMode &&
+                        _owner.IsRevealed(
+                            line.LineNumber,
+                            line.Offset,
+                            Math.Max(1, line.Length),
+                            MarkdownSemanticSpanKind.HorizontalRule))
                     {
                         continue;
                     }
@@ -83,7 +95,8 @@ internal sealed partial class MarkdownSemanticPresentation
                         height = Math.Max(textView.DefaultLineHeight, nextTop - top);
                     }
 
-                    if (_owner.FadeSyntax)
+                    var useErase = _owner.FadeSyntax || _owner.IsFullMode;
+                    if (useErase)
                     {
                         drawingContext.DrawRectangle(
                             Theme.PaperBrush,
@@ -91,7 +104,7 @@ internal sealed partial class MarkdownSemanticPresentation
                             new Rect(0, top, width, Math.Max(1, height)));
                     }
 
-                    var left = _owner.FadeSyntax
+                    var left = useErase
                         ? startPoint.X
                         : endPoint.X + 8;
                     left = Math.Max(0, left);

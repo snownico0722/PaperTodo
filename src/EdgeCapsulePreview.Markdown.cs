@@ -313,6 +313,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
     }
 
+    // 按视觉尺寸系数与外层注入的缩放系数一起计算字号,与 MarkdownTextBox 的 ScaledFontSize 保持一致
+    private static double Scaled(double baseSize, double zoom)
+    {
+        return AppTypography.Scale(baseSize) * zoom;
+    }
+
     private static void AddEmptyState(Panel target)
     {
         var empty = NewTextBlock("—", AppTypography.Scale(16));
@@ -432,7 +438,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 done: false);
         }
 
-        var normal = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var normal = NewTextBlock(string.Empty, NoteTypography.FontSize);
         normal.Margin = new Thickness(0, 2, 0, 3);
         AddInlineContent(normal.Inlines, trimmed, openExternal);
         return normal;
@@ -451,12 +457,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-        var markerText = NewTextBlock(marker, AppTypography.Scale(11.5));
+        var markerText = NewTextBlock(marker, NoteTypography.FontSize - 2.5);
         markerText.Width = marker.Length > 2 ? AppTypography.Scale(28) : AppTypography.Scale(22);
         markerText.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         grid.Children.Add(markerText);
 
-        var body = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var body = NewTextBlock(string.Empty, NoteTypography.FontSize);
         AddInlineContent(body.Inlines, content, openExternal);
         if (done)
         {
@@ -470,7 +476,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static FrameworkElement BuildCodeBlock(string code)
     {
-        var text = NewTextBlock(code, AppTypography.Scale(10.8));
+        var text = NewTextBlock(code, NoteTypography.CodeFontSize);
         text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
         text.LineHeight = AppTypography.Scale(16);
         var host = new Border
@@ -498,13 +504,14 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         InlineCollection target,
         string text,
         Action<string> openExternal)
-        => AddInlineContent(target, text, openExternal, depth: 0);
+        => AddInlineContent(target, text, openExternal, depth: 0, zoom: 1.0);
 
     private static void AddInlineContent(
         InlineCollection target,
         string text,
         Action<string> openExternal,
-        int depth)
+        int depth,
+        double zoom)
     {
         if (depth >= MaximumInlineDepth)
         {
@@ -536,7 +543,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (match.Groups[3].Success)
             {
-                target.Add(CreateLink(Group(3), Group(4), openExternal, depth));
+                target.Add(CreateLink(Group(3), Group(4), openExternal, depth, zoom));
             }
             else if (match.Groups[5].Success || match.Groups[6].Success)
             {
@@ -546,20 +553,20 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     FontWeight = FontWeights.Bold,
                     FontStyle = FontStyles.Italic
                 };
-                AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(span);
             }
             else if (match.Groups[7].Success || match.Groups[8].Success)
             {
                 var group = match.Groups[7].Success ? 7 : 8;
                 var bold = new Bold();
-                AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(bold);
             }
             else if (match.Groups[9].Success)
             {
                 var strike = new Span { TextDecorations = TextDecorations.Strikethrough };
-                AddInlineContent(strike.Inlines, Group(9), openExternal, depth + 1);
+                AddInlineContent(strike.Inlines, Group(9), openExternal, depth + 1, zoom);
                 target.Add(strike);
             }
             else if (match.Groups[10].Success)
@@ -567,7 +574,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 var code = new Span(new Run(Group(10)))
                 {
                     FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-                    FontSize = AppTypography.Scale(10.8)
+                    FontSize = Scaled(NoteTypography.CodeFontSize, zoom)
                 };
                 code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
                 target.Add(code);
@@ -576,7 +583,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 var group = match.Groups[11].Success ? 11 : 12;
                 var italic = new Italic();
-                AddInlineContent(italic.Inlines, Group(group), openExternal, depth + 1);
+                AddInlineContent(italic.Inlines, Group(group), openExternal, depth + 1, zoom);
                 target.Add(italic);
             }
 
@@ -593,14 +600,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string label,
         string value,
         Action<string> openExternal,
-        int depth)
+        int depth,
+        double zoom)
     {
         var normalizedValue = MarkdownInlineSyntax.Unescape(value);
         if (!Uri.TryCreate(normalizedValue, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https" or "mailto"))
         {
             var fallback = new Span();
-            AddInlineContent(fallback.Inlines, label, openExternal, depth + 1);
+            AddInlineContent(fallback.Inlines, label, openExternal, depth + 1, zoom);
             return fallback;
         }
 
@@ -609,7 +617,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             NavigateUri = uri,
             Cursor = Cursors.Hand
         };
-        AddInlineContent(link.Inlines, label, openExternal, depth + 1);
+        AddInlineContent(link.Inlines, label, openExternal, depth + 1, zoom);
         link.SetResourceReference(TextElement.ForegroundProperty, "LinkBrushKey");
         EdgeCapsulePreviewInteraction.SetConsumesPointer(link, true);
         link.RequestNavigate += (_, e) =>

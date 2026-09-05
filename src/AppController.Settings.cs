@@ -549,7 +549,8 @@ public sealed partial class AppController
         {
             (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
             (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced"))
+            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced")),
+            (MarkdownRenderModes.Full, Strings.Get("MarkdownRenderFull"))
         };
 
         return CreateSegmentSelector(segments, State.MarkdownRenderMode, SetMarkdownRenderMode);
@@ -585,6 +586,17 @@ public sealed partial class AppController
             segments,
             ImageReferenceTextModes.Normalize(State.ImageReferenceTextMode),
             SetImageReferenceTextMode);
+    }
+
+    private void ToggleMarkdownEditAnimation()
+    {
+        State.MarkdownEditAnimationEnabled = !State.MarkdownEditAnimationEnabled;
+        SaveNow();
+
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateMarkdownEditAnimation();
+        }
     }
 
     private void SetFullscreenTopmostMode(string mode)
@@ -2414,6 +2426,12 @@ public sealed partial class AppController
 
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode"), topMargin: 8), "TipMarkdownRender"));
         leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsMarkdownEditAnimation"),
+                State.MarkdownEditAnimationEnabled,
+                ToggleMarkdownEditAnimation),
+            "TipMarkdownEditAnimation"));
 
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewTodoButton"), State.ShowTopBarNewTodoButton, ToggleTopBarNewTodoButton), "TipNewTodoButton"));
@@ -2756,6 +2774,7 @@ public sealed partial class AppController
         State.UiLanguage = UiLanguages.Default;
         State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
         State.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
+        State.MarkdownEditAnimationEnabled = true;
         State.ShowTopBarNewTodoButton = true;
         State.ShowTopBarNewNoteButton = true;
         State.ShowTopBarExternalOpenButton = true;

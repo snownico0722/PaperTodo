@@ -42,6 +42,7 @@
 | D-027 | Built-in Note Markdown 语义更新使用同线程同步发布 | Accepted | Note / Markdown / performance |
 | D-028 | 大 Note 使用轻量局部重解析与 fence 状态扩窗 | Accepted | Note / Markdown / performance |
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
+| D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 
 ## 维护规则
 
@@ -1080,3 +1081,66 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `e16ecef` — 删除 guard / 16K retry，确立 <2K full + 大 Note best-effort local。
 - `db6b3dc` — 删除 snapshot 常驻 line starts 与 production incremental diagnostic state。
 - `e041ca7` — 增加 fence-state window propagation，并覆盖长 fence、marker length、换行创建/破坏 fence 与性能 profile。
+
+## D-030 — Full 档 = 编辑器内 WYSIWYG 块级编辑态
+
+**Status:** Accepted
+
+### Context
+
+编辑器内块渲染（refactor 8d4d02e）落地后，`MarkdownRenderModes.Full` 在代码里没有任何运行时分支：控制符淡化/透明只由 `mode==Enhanced && IsPreviewMode` 门控，因此「隐藏控制符、呈现最终排版」只在失焦只读预览态成立，聚焦编辑时仍是「源文 + 彩色标记」。这与产品对 Full（完全渲染）档的预期（编辑时也应看到按标题/列表/引用/代码块排版的结果，而不是原始 Markdown 标记）不一致，也无法支撑 Typora 式的“块级所见即所得”。
+
+直接复刻 Typora 的 DOM 块编辑器（内容文本与语法分离、失焦再合成 Markdown）与 D-019 冲突，并需要自建 undo/IME/选区/滚动等整套编辑基础。
+
+### Decision
+
+- **Full = 编辑器内 WYSIWYG 块级编辑态**：`MarkdownSemanticPresentation` 把块级装饰「常开」与语法控制符「按活动块显灵」结合。
+  - 块级装饰（标题分级字号/字重、引用弱化+竖条、代码块圆角底+等宽、行内强调/删除线/链接、图片整行元素）在 Full **聚焦可编辑时也生效**，不只限于失焦预览。
+  - 非活动文本的语法控制符（`#`、`>`、`-`/`1.`、围栏行、setext、行内 `**`/`~~`/反引号、HTML 标签、转义反斜杠、链接 `[]()` 等）**透明化**：不删除源码字符、保留字符宽度与布局，不建 source→rendered offset mapping。
+  - 光标所在块的语法控制符依 `MarkdownSemanticReveal`（纯逻辑，两级规则）显灵为 `ActiveBrush`，供直接源编辑；失焦只读预览时 reveal 关闭 → 全篇隐藏。列表未显灵项绘圆点/序号、任务项绘勾选框、分隔线画横线。
+  - Off/Basic/Enhanced 三档行为保持不变；默认档仍是 Enhanced。
+- reveal 判定做成无 WPF 依赖的纯函数 `src/MarkdownSemanticReveal.cs`（行内成对范围：`caret ∈ [start,end)`；行边界单元：caret 同处一行且在单元起点之后），可被 `PaperTodo.MarkdownSemanticChecks` 直接链接测试。
+- Full 下图片元素照常渲染；图片引用文本是否隐藏由 `ImageReferenceTextModes` 决定（Always 显示 / Editing 仅编辑态显示 / Hidden 始终隐藏），不再单独覆盖。
+- Markdown 表格不在当前语法面内（pipeline 未启用 PipeTables，语义层也不收集表格）；纳入需另行评估。
+
+### Why
+
+- 保持 D-019 / D-026：唯一 `MarkdownTextBox`/`TextDocument` surface，不建第二份 rendered document / HTML DOM / WebView，也不引入 offset mapping。
+- “透明保留宽度”保证渲染/编辑态切换不跳变，同时让 undo / 复制 / 粘贴 / 选区仍作用于源码。
+- reveal 只需消费最终 snapshot 的 span/links + caret，天然兼容 D-027 同步发布与 D-028 大 Note 增量（增量只在最终 spans 上重建行索引，reveal 不再拼接任何注解）。
+- 渐进路线：在既有语义呈现层上加状态机，而不是新造块编辑器，改动面与回退风险显著更小。
+
+### Rejected / Do not reintroduce
+
+- 不为此新造独立 DOM/块编辑器（内容与语法分离、导出时合成 Markdown）：重复 undo/IME/选区/滚动成本，且违背 D-019「共享同一 MarkdownTextBox」。
+- 不在渲染/编辑态切换时物理删除控制符以“真正折叠宽度”：那会引入 source↔rendered 偏移映射与 Markdown 再合成问题；透明保宽是更有界的一致路线。
+
+### Consequences
+
+- 透明控制符仍占字形宽度，隐藏 `**`/标题 `#` 处会有非 Typora 像素级的空隙；接受为本路线固有权衡，必要时后续可纸色叠绘填缝。
+- Full 编辑态下光标移动会触发合并到 Render 优先级的可视区重绘（复用 `ScheduleRedraw` 节流），量级与既有逐键快照红绘一致。
+- Full 档下图片引用文本由 `ImageReferenceTextModes` 统一控制（与 Off/Basic/Enhanced 行为一致）；其余档位行为不变。
+- Markdown 表格、以及“无源字符”的逐字符 WYSIWYG（内容语法分离）仍属范围外/后续。
+
+### Evidence
+
+- `src/MarkdownSemanticReveal.cs`（纯 reveal 判定）。
+- `src/MarkdownSemanticPresentation.cs`（模式策略、caret 跟踪、reveal 帮助方法、`ControlBrush/QuoteControlBrush`）。
+- `src/MarkdownSemanticPresentation.Colorizer.cs` / `.Blocks.cs` / `.Lists.cs` / `.Html.cs` / `.Background.cs` / `.HorizontalRule.cs`。
+- `src/MarkdownTextBox.cs`（`RenderModeIsFull`；`ShouldHideImageReferenceText` 由 `ImageReferenceTextModes` 统一控制，不再按 Full 分支短路）。
+- `tests/PaperTodo.MarkdownSemanticChecks/RevealChecks.cs`。
+
+### Follow-up：控制符改由元素层真塌缩（2026-09）
+
+- **验证**：`VisualLineElement(visualLength:1, documentLength:N)` + U+200B（~0 宽）run 被 TextFormatter 接受，内容随塌缩贴齐重排（spike 实测 `# Title` 塌缩 `# ` 后行宽 53.9→38.5px、标题文字贴左）。
+- **决定**：Full 档中无需留白的控制符（ATX 标题 `#`、行内成对分隔符、链接语法、HTML 标签、转义反斜杠）改由 `MarkdownSemanticCollapseLayout`（纯逻辑，可测）+ `SyntaxCollapseElementGenerator`（元素层）真塌缩；隐藏区间经 `GetRelativeOffset/GetVisualColumn/GetNextCaretPosition` 映射到“内容侧”。显灵（活动块）区间不塌缩。
+- **明确不做**：整行高度归零（``` 围栏行、setext、分隔线）。内置 Folding 对“单 marker 行折叠”实测不可行（可见行仍保留/内容行被吞）；真行高归零需自研跨行折叠+零占位生成器，风险高，留待后续。列表/任务标记、引用 `>` 保留透明格与图形，不塌缩。
+- **证据追加**：`src/MarkdownSemanticCollapseLayout.cs`、`src/MarkdownSemanticPresentation.Collapse.cs`、`tests/PaperTodo.MarkdownSemanticChecks/CollapseLayoutChecks.cs`。
+
+### Follow-up：Full 档让位“图片标记显示”设置项（2026-09）
+
+- **触发**：D-030 原决策“Full 下图片引用文本恒隐藏”在产品迭代中被认为过度限制——用户在 Full 档无法让“图片标记显示（`ImageReferenceTextMode`）”生效，即便切到 `Always` 也被强制隐藏。
+- **决定**：删除 `ShouldHideImageReferenceText` 上的 `RenderModeIsFull ||` 短路。Full 档下图片引用文本是否隐藏由 `ImageReferenceTextMode` 决定：`Always` 始终显示、`Editing` 仅编辑态显示、`Hidden` 始终隐藏，与 Off/Basic/Enhanced 三档行为对齐。
+- **影响**：Full 档默认 `ImageReferenceTextMode = Always`（`ImageReferenceTextModes.Normalize` 兜底值），因此用户从其他档切到 Full 后默认会看到图片引用文字。仍希望紧凑观感的用户可在设置面板改为 `Hidden` 或 `Editing`，不需要改代码。
+- **不冲突**：与控制符显灵（`MarkdownSemanticReveal`）解耦——后者只决定 `#`/`**`/链接等语法控制符在活动块内是否显灵，与图片引用文本显隐无关。
+- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.SemanticImages.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。

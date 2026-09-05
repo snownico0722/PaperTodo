@@ -142,12 +142,36 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var isPreviewMode = _owner._editor.IsPreviewMode;
-            var syntaxBrush = _owner.FadeSyntax
-                ? Theme.SyntaxFadeBrush
-                : Theme.ActiveBrush;
-            var destinationBrush = _owner.FadeSyntax
-                ? Theme.SyntaxFadeBrush
-                : Theme.WeakTextBrush;
+            var isFullMode = _owner.IsFullMode;
+            var showLabelStyle = isPreviewMode || isFullMode;
+
+            Brush SyntaxBrush(MarkdownSemanticLink currentLink)
+            {
+                if (isFullMode)
+                {
+                    return _owner.RevealColor(
+                        Theme.ActiveBrush,
+                        _owner.IsRangeRevealed(currentLink.Start, currentLink.End));
+                }
+
+                return _owner.FadeSyntax
+                    ? Theme.SyntaxFadeBrush
+                    : Theme.ActiveBrush;
+            }
+
+            Brush DestinationBrush(MarkdownSemanticLink currentLink)
+            {
+                if (isFullMode)
+                {
+                    return _owner.RevealColor(
+                        Theme.WeakTextBrush,
+                        _owner.IsRangeRevealed(currentLink.Start, currentLink.End));
+                }
+
+                return _owner.FadeSyntax
+                    ? Theme.SyntaxFadeBrush
+                    : Theme.WeakTextBrush;
+            }
 
             foreach (var link in snapshot.LinksForLine(Math.Max(0, line.LineNumber - 1)))
             {
@@ -164,12 +188,12 @@ internal sealed partial class MarkdownSemanticPresentation
                         line,
                         link.Start,
                         Math.Min(link.LabelStart, link.End),
-                        element => element.TextRunProperties.SetForegroundBrush(syntaxBrush));
+                        element => element.TextRunProperties.SetForegroundBrush(SyntaxBrush(link)));
                     ApplyAbsolute(
                         line,
                         Math.Max(link.LabelEnd, link.Start),
                         link.End,
-                        element => element.TextRunProperties.SetForegroundBrush(syntaxBrush));
+                        element => element.TextRunProperties.SetForegroundBrush(SyntaxBrush(link)));
 
                     if (link.DestinationStart >= 0 && link.DestinationLength > 0)
                     {
@@ -177,11 +201,11 @@ internal sealed partial class MarkdownSemanticPresentation
                             line,
                             link.DestinationStart,
                             link.DestinationEnd,
-                            element => element.TextRunProperties.SetForegroundBrush(destinationBrush));
+                            element => element.TextRunProperties.SetForegroundBrush(DestinationBrush(link)));
                     }
                 }
 
-                if (isPreviewMode && link.LabelLength > 0)
+                if (showLabelStyle && link.LabelLength > 0)
                 {
                     ApplyAbsolute(
                         line,
@@ -230,9 +254,26 @@ internal sealed partial class MarkdownSemanticPresentation
             List<SourceRange>? emphasisRanges = null;
             List<SourceRange>? strongRanges = null;
             List<int>? boundaries = null;
-            var markerBrush = _owner.FadeSyntax
-                ? Theme.SyntaxFadeBrush
-                : Theme.ActiveBrush;
+            var fullMode = _owner.IsFullMode;
+
+            Brush MarkerBrushFor(MarkdownSemanticSpan span)
+            {
+                var revealed = _owner.IsRevealed(
+                    line.LineNumber,
+                    span.Start,
+                    span.Length,
+                    span.Kind,
+                    span.Start,
+                    span.End);
+                if (fullMode)
+                {
+                    return _owner.RevealColor(Theme.ActiveBrush, revealed);
+                }
+
+                return _owner.FadeSyntax
+                    ? Theme.SyntaxFadeBrush
+                    : Theme.ActiveBrush;
+            }
 
             foreach (var span in lineSpans)
             {
@@ -265,11 +306,11 @@ internal sealed partial class MarkdownSemanticPresentation
                     {
                         if (span.Kind == MarkdownSemanticSpanKind.InlineCode)
                         {
-                            ApplyCodeTypography(element, markerBrush);
+                            ApplyCodeTypography(element, MarkerBrushFor(span));
                         }
                         else
                         {
-                            element.TextRunProperties.SetForegroundBrush(markerBrush);
+                            element.TextRunProperties.SetForegroundBrush(MarkerBrushFor(span));
                         }
                     });
                 ApplyAbsolute(
@@ -280,11 +321,11 @@ internal sealed partial class MarkdownSemanticPresentation
                     {
                         if (span.Kind == MarkdownSemanticSpanKind.InlineCode)
                         {
-                            ApplyCodeTypography(element, markerBrush);
+                            ApplyCodeTypography(element, MarkerBrushFor(span));
                         }
                         else
                         {
-                            element.TextRunProperties.SetForegroundBrush(markerBrush);
+                            element.TextRunProperties.SetForegroundBrush(MarkerBrushFor(span));
                         }
                     });
 
