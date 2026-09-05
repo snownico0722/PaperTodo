@@ -8,37 +8,25 @@ namespace PaperTodo;
 internal sealed partial class MarkdownSemanticPresentation
 {
     private SyntaxCollapseElementGenerator? _collapseGenerator;
-    private IReadOnlyList<MarkdownCollapseRun> _collapseRuns = Array.Empty<MarkdownCollapseRun>();
-    private bool _collapseDirty = true;
-    private bool _collapseWasFull;
-    private bool _collapseWasPreview;
-    private MarkdownCaretReveal _collapseCaret = MarkdownCaretReveal.None;
 
-    /// <summary>当前应塌缩的源码区间（Full 档；随光标/预览/结构变化按需重算）。</summary>
+    /// <summary>增量折叠表：静态候选随 snapshot 重建，光标只做局部摘除/插入。</summary>
+    private MarkdownCollapseTable? _collapseTable;
+
+    /// <summary>
+    /// 当前应塌缩的源码区间（Full 档）。由增量表按需维护：文本/模式变化时整表重建，光标移动时
+    /// 只翻转旧/新光标行的显灵位。返回的是与「当前显灵值」一致的表内 Runs。
+    /// </summary>
     internal IReadOnlyList<MarkdownCollapseRun> CollapseRuns
     {
         get
         {
-            var stillValid = !_collapseDirty &&
-                _collapseWasFull == IsFullMode &&
-                _collapseWasPreview == _editor.IsPreviewMode &&
-                _collapseCaret == CaretReveal;
-            if (stillValid)
+            if (!IsFullMode)
             {
-                return _collapseRuns;
+                return Array.Empty<MarkdownCollapseRun>();
             }
 
-            _collapseDirty = false;
-            _collapseWasFull = IsFullMode;
-            _collapseWasPreview = _editor.IsPreviewMode;
-            _collapseCaret = CaretReveal;
-            _collapseRuns = IsFullMode
-                ? MarkdownSemanticCollapseLayout.ComputeCollapsedRuns(
-                    CurrentSnapshot(),
-                    _editor.Text ?? string.Empty,
-                    CaretReveal)
-                : Array.Empty<MarkdownCollapseRun>();
-            return _collapseRuns;
+            AlignCollapseTableToReveal(scheduleRedraw: false);
+            return _collapseTable?.Runs ?? Array.Empty<MarkdownCollapseRun>();
         }
     }
 
@@ -55,6 +43,67 @@ internal sealed partial class MarkdownSemanticPresentation
             _editor.TextArea.TextView.ElementGenerators.Remove(_collapseGenerator);
             _collapseGenerator = null;
         }
+    }
+
+    /// <summary>首次进入 Full / snapshot 变化后重建一次增量表（O(n)）。</summary>
+    private MarkdownCollapseTable EnsureCollapseTable()
+    {
+        if (_collapseTable == null)
+        {
+            _collapseTable = MarkdownCollapseTable.Build(
+                CurrentSnapshot(),
+                _editor.Text ?? string.Empty,
+                CaretReveal);
+        }
+
+        return _collapseTable;
+    }
+
+    /// <summary>
+    /// 把增量表对齐到当前显灵值（CaretReveal：预览= None、手势冻结=快照、其余=实际光标）。
+    /// 仅当显灵驱动的视觉真的变化时才可选地触发整篇重排。
+    /// </summary>
+    private void AlignCollapseTableToReveal(bool scheduleRedraw)
+    {
+        if (!IsFullMode)
+        {
+            _collapseTable = null;
+            return;
+        }
+
+        var table = EnsureCollapseTable();
+        var target = CaretReveal;
+        if (table.Caret == target)
+        {
+            return;
+        }
+
+        var change = table.SyncTo(target);
+        if (scheduleRedraw && change.VisualChanged)
+        {
+            ScheduleRedraw();
+        }
+    }
+
+    /// <summary>在有序 Runs 上二分首个 run.Start &gt;= value 的下标。</summary>
+    private static int LowerBoundStart(IReadOnlyList<MarkdownCollapseRun> runs, int value)
+    {
+        var low = 0;
+        var high = runs.Count;
+        while (low < high)
+        {
+            var middle = low + ((high - low) >> 1);
+            if (runs[middle].Start < value)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        return low;
     }
 
     private sealed class SyntaxCollapseElementGenerator : VisualLineElementGenerator
@@ -74,12 +123,10 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var runs = _owner.CollapseRuns;
-            foreach (var run in runs)
+            var index = LowerBoundStart(runs, startOffset);
+            if (index < runs.Count && runs[index].End > runs[index].Start)
             {
-                if (run.End > run.Start && run.Start >= startOffset)
-                {
-                    return run.Start;
-                }
+                return runs[index].Start;
             }
 
             return -1;
@@ -87,12 +134,11 @@ internal sealed partial class MarkdownSemanticPresentation
 
         public override VisualLineElement ConstructElement(int offset)
         {
-            foreach (var run in _owner.CollapseRuns)
+            var runs = _owner.CollapseRuns;
+            var index = LowerBoundStart(runs, offset);
+            if (index < runs.Count && runs[index].Start == offset)
             {
-                if (run.Start == offset)
-                {
-                    return new CollapsedSyntaxElement(run.Length);
-                }
+                return new CollapsedSyntaxElement(runs[index].Length);
             }
 
             return null!;
@@ -147,6 +193,7 @@ internal sealed partial class MarkdownSemanticPresentation
                     return VisualColumn;
                 }
             }
+
             return -1;
         }
     }

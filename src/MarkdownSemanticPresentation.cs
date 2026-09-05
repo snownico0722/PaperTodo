@@ -203,10 +203,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
 
         SyncCaretReveal();
         SyncRevealFade();
-        if (FullRevealEnabled)
-        {
-            ScheduleRedraw();
-        }
+        // 折叠/显灵只在“旧/新光标行的显灵集合变化”时才需要重排；同区间移动、无格式区移动零开销。
+        AlignCollapseTableToReveal(scheduleRedraw: true);
     }
 
     private void OnEditorGotFocus(object? sender, KeyboardFocusChangedEventArgs e)
@@ -225,10 +223,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
 
         SyncCaretReveal();
         SyncRevealFade();
-        if (FullRevealEnabled)
-        {
-            ScheduleRedraw();
-        }
+        // 折叠/显灵只在“旧/新光标行的显灵集合变化”时才需要重排；同区间移动、无格式区移动零开销。
+        AlignCollapseTableToReveal(scheduleRedraw: true);
     }
 
     private void SyncCaretReveal()
@@ -266,17 +262,13 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         }
 
         _revealGestureFrozen = false;
-        var previous = _frozenGestureReveal;
         _frozenGestureReveal = MarkdownCaretReveal.None;
         if (IsFullMode && FullRevealEnabled)
         {
             // AvalonEdit 已结束本次手势的拖选判定，这里才允许按最终 caret 显灵一次并重排。
             SyncCaretReveal();
             SyncRevealFade();
-            if (CaretReveal != previous)
-            {
-                ScheduleRedraw();
-            }
+            AlignCollapseTableToReveal(scheduleRedraw: true);
         }
     }
 
@@ -284,6 +276,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     {
         // 文本编辑会使标记位移：中止进行中的淡入，避免把旧 alpha 施加到新布局的标记上。
         AbortRevealFade();
+        // 语义版本变化：静态候选须随新 snapshot 重建一次（下次 Ensure 时 O(n) 构建）。
+        _collapseTable = null;
         ScheduleRedraw();
     }
 
@@ -294,7 +288,6 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             return;
         }
 
-        _collapseDirty = true;
         _redrawQueued = true;
         _editor.Dispatcher.BeginInvoke(
             (Action)(() =>
