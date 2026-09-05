@@ -1,0 +1,8 @@
+Starpaper is distributed as part of the PaperTodo project under its existing terms.
+Full licensing terms (PolyForm Noncommercial License 1.0.0 and PaperTodo Individual Professional Use Additional Permission 1.0):
+https://github.com/snownico0722/PaperTodo/blob/75494e324c70d76ccd5aaaef20fd05c18a7d6083/LICENSE.md
+https://polyformproject.org/licenses/noncommercial/1.0.0/
+
+Required Notice: PaperTodo Copyright © 2026 snownico0722. PaperTodo is licensed under the PolyForm Noncommercial License 1.0.0 together with the PaperTodo Individual Professional Use Additional Permission 1.0, available in the original project LICENSE file at https://github.com/snownico0722/PaperTodo/blob/main/LICENSE.md. Original project: https://github.com/snownico0722/PaperTodo
+
+Illustrations in web/art.js are original local vector artwork; no third-party image assets or web fonts are bundled.

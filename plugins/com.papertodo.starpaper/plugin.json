@@ -1,0 +1,61 @@
+{
+  "kind": "web",
+  "id": "com.papertodo.starpaper",
+  "name": "星笺 · Starpaper",
+  "description": "知识星图与待办插画。Knowledge constellations and illustrated, live-linked to-dos. Offline; no account or AI service required.",
+  "version": "1.0.0",
+  "apiVersion": "2.1",
+  "stateVersion": 1,
+  "maxPaperInstances": 0,
+  "entry": "web/index.html",
+  "miniEntry": "web/index.html",
+  "miniSize": {
+    "width": 320,
+    "height": 240
+  },
+  "miniMaxSize": {
+    "width": 320,
+    "height": 240
+  },
+  "permissions": [
+    "papers.read",
+    "papers.observe",
+    "todos.read",
+    "todos.observe",
+    "todos.append",
+    "todos.update",
+    "notes.read",
+    "notes.observe"
+  ],
+  "settings": [
+    {
+      "id": "language",
+      "type": "select",
+      "name": "语言 / Language",
+      "default": "auto",
+      "quick": true,
+      "options": [
+        {
+          "value": "auto",
+          "name": "系统 / System"
+        },
+        {
+          "value": "zh",
+          "name": "简体中文"
+        },
+        {
+          "value": "en",
+          "name": "English"
+        },
+        {
+          "value": "ja",
+          "name": "日本語"
+        },
+        {
+          "value": "ko",
+          "name": "한국어"
+        }
+      ]
+    }
+  ]
+}
