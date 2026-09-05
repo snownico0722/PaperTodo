@@ -18,10 +18,12 @@
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Escapes.cs" Link="MarkdownSemanticSnapshot.Escapes.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Compatibility.cs" Link="MarkdownSemanticSnapshot.Compatibility.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Incremental.cs" Link="MarkdownSemanticSnapshot.Incremental.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.PlainText.cs" Link="MarkdownSemanticSnapshot.PlainText.cs" />
     <Compile Include="..\..\src\MarkdownSemanticReveal.cs" Link="MarkdownSemanticReveal.cs" />
     <Compile Include="..\..\src\MarkdownSemanticCollapseLayout.cs" Link="MarkdownSemanticCollapseLayout.cs" />
     <Compile Include="..\..\src\MarkdownFencedCodeScanner.cs" Link="MarkdownFencedCodeScanner.cs" />
     <Compile Include="..\..\src\MarkdownListEditing.cs" Link="MarkdownListEditing.cs" />
     <Compile Include="..\..\src\MarkdownImageReferences.cs" Link="MarkdownImageReferences.cs" />
+    <Compile Include="..\..\src\TodoClipboardFormatter.cs" Link="TodoClipboardFormatter.cs" />
   </ItemGroup>
 </Project>

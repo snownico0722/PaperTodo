@@ -110,11 +110,13 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // Treat the complete title bar as one middle-click close target, including title-bar
+        // buttons and drag space. As with a normal button, the release must still land on it.
         _middleClickTitleArmed =
             !e.Handled &&
             !_advancedInteractionLocked &&
             !_paper.IsCollapsed &&
-            _topBarTitleArea?.IsMouseOver == true;
+            _topBarHost?.IsMouseOver == true;
     }
 
     protected override void OnPreviewMouseUp(MouseButtonEventArgs e)
@@ -131,7 +133,7 @@ public sealed partial class PaperWindow
             !e.Handled &&
             !_advancedInteractionLocked &&
             !_paper.IsCollapsed &&
-            _topBarTitleArea?.IsMouseOver == true;
+            _topBarHost?.IsMouseOver == true;
         _middleClickTitleArmed = false;
         if (!shouldClose)
         {

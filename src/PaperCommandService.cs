@@ -231,7 +231,6 @@ internal sealed class PaperCommandService
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
-        var wasDone = item.Done;
         var text = request.Text == null
             ? null
             : RequiredText(
@@ -239,14 +238,42 @@ internal sealed class PaperCommandService
                 PaperWindow.TodoTextMaxLength,
                 allowEmpty: true,
                 "text");
+        var textChanged = text != null &&
+            !string.Equals(item.Text, text, StringComparison.Ordinal);
         var linkedPaperId = NormalizeLinkedPaperUpdate(request);
+        var doneChanged = request.Done.HasValue &&
+            request.Done.Value != item.Done;
+        var requestedOrder = request.Order.HasValue
+            ? Math.Clamp(
+                request.Order.Value,
+                0,
+                Math.Max(0, paper.Items.Count - 1))
+            : (int?)null;
+        var orderChanged = requestedOrder.HasValue &&
+            requestedOrder.Value != item.Order;
+        var linkedPaperChanged = request.UpdateLinkedPaper &&
+            (!string.Equals(
+                 item.LinkedPaperId,
+                 linkedPaperId,
+                 StringComparison.Ordinal) ||
+             item.LinkedPath != null ||
+             item.LinkedPathIsDirectory.HasValue);
+
+        if (!textChanged &&
+            !doneChanged &&
+            !orderChanged &&
+            !linkedPaperChanged)
+        {
+            return new TodoMutationResult(paper.Id, item.Id);
+        }
+
         var snapshot = TodoPaperSnapshot.Capture(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
         {
-            if (text != null)
+            if (textChanged)
             {
-                item.Text = text;
+                item.Text = text!;
                 if (item.ReminderTriggered)
                 {
                     item.ReminderAt = null;
@@ -266,11 +293,10 @@ internal sealed class PaperCommandService
             {
                 item.LinkPaper(linkedPaperId);
             }
-            if (request.Order.HasValue)
+            if (requestedOrder.HasValue)
             {
-                MoveTodo(paper, item, request.Order.Value);
+                MoveTodo(paper, item, requestedOrder.Value);
             }
-            var doneChanged = request.Done.HasValue && item.Done != wasDone;
             if (doneChanged && item.Done && _controller.State.AutoClearCompletedTodos)
             {
                 TodoRules.ApplyCompletionPolicy(
@@ -340,6 +366,12 @@ internal sealed class PaperCommandService
         }
         ValidateReminder(request.ReminderAt);
 
+        if (item.ReminderAt == request.ReminderAt &&
+            !item.ReminderTriggered)
+        {
+            return new TodoMutationResult(paper.Id, item.Id);
+        }
+
         var snapshot = TodoPaperSnapshot.Capture(paper);
         using (_controller.SuppressPaperPluginEventScans())
         {
@@ -403,6 +435,11 @@ internal sealed class PaperCommandService
             throw Error(
                 "content_too_long",
                 $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+        }
+
+        if (string.Equals(result, original, StringComparison.Ordinal))
+        {
+            return new NoteMutationResult(paper.Id, original.Length);
         }
 
         using (_controller.SuppressPaperPluginEventScans())
@@ -473,19 +510,26 @@ internal sealed class PaperCommandService
         var originalIndex = papers.IndexOf(paper);
         var affectedLinks = papers
             .Where(candidate => candidate.Type == PaperTypes.Todo)
-            .SelectMany(candidate => candidate.Items)
-            .Where(item => string.Equals(
-                item.LinkedPaperId,
-                paper.Id,
-                StringComparison.Ordinal))
-            .Select(item => (Item: item, Link: item.LinkedPaperId))
+            .SelectMany(candidate => candidate.Items
+                .Where(item => string.Equals(
+                    item.LinkedPaperId,
+                    paper.Id,
+                    StringComparison.Ordinal))
+                .Select(item => (
+                    PaperId: candidate.Id,
+                    Item: item,
+                    Link: item.LinkedPaperId)))
             .ToList();
+        var affectedTodoPaperIds = affectedLinks
+            .Select(entry => entry.PaperId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         PaperData? replacement = null;
 
         using (_controller.SuppressPaperPluginEventScans())
         {
             papers.RemoveAt(originalIndex);
-            foreach (var (item, _) in affectedLinks)
+            foreach (var (_, item, _) in affectedLinks)
             {
                 item.ClearQuickLaunch();
             }
@@ -540,11 +584,15 @@ internal sealed class PaperCommandService
 
             _controller.QueuePluginPaperStateDeletion(paper.Id);
             _controller.TryFlushPendingPluginPaperStateDeletes();
-            _controller.RunExternalPostCommitUi(
-                () => _controller.FinalizeExternalPaperDeletion(
+            _controller.RunExternalPostCommitUi(() =>
+            {
+                _controller.RefreshTodoPapersForExternalLinkMutation(
+                    affectedTodoPaperIds);
+                _controller.FinalizeExternalPaperDeletion(
                     paper,
                     replacement,
-                    affectedLinks.Count > 0));
+                    refreshLinkedTodos: false);
+            });
         }
 
         _controller.PublishExternalPaperOperation(context);
@@ -555,14 +603,14 @@ internal sealed class PaperCommandService
         IList<PaperData> papers,
         int originalIndex,
         PaperData paper,
-        IEnumerable<(PaperItem Item, string? Link)> affectedLinks,
+        IEnumerable<(string PaperId, PaperItem Item, string? Link)> affectedLinks,
         PaperData? replacement)
     {
         if (!papers.Contains(paper))
         {
             papers.Insert(Math.Clamp(originalIndex, 0, papers.Count), paper);
         }
-        foreach (var (item, link) in affectedLinks)
+        foreach (var (_, item, link) in affectedLinks)
         {
             item.LinkPaper(link);
         }
