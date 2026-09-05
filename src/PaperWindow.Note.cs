@@ -717,7 +717,12 @@ public sealed partial class PaperWindow
                 {
                     OpenMarkdownLink(editUrl);
                     e.Handled = true;
+                    return;
                 }
+
+                // 普通文本点击交给 AvalonEdit 落光标。按下（隧道阶段，早于 AvalonEdit）先按当前布局
+                // 冻结控制符显灵，避免落点触发 reveal 重排后，同一点在手势内命中两处偏移而被误判为拖选。
+                box.BeginCaretRevealGesture();
                 return;
             }
 
@@ -728,6 +733,10 @@ public sealed partial class PaperWindow
                 return;
             }
 
+            // 点入编辑前先冻结：快照为按下瞬间的显灵值（预览态为 None），ShowEditorAtPreviewPoint
+            // 内 SetPreviewMode(false) 的重排、落光标触发的 reveal 事件均保持在冻结布局上，
+            // 松开后再由 up 收尾按最终光标显灵一次。
+            box.BeginCaretRevealGesture();
             ShowEditorAtPreviewPoint(point, originalSource);
             e.Handled = true;
         };
@@ -736,6 +745,9 @@ public sealed partial class PaperWindow
             UIElement.MouseLeftButtonUpEvent,
             new MouseButtonEventHandler((_, e) =>
             {
+                // 手势结束（bubble 阶段晚于 AvalonEdit 内部 TextArea 的 up 处理），恢复显灵跟随光标。
+                box.EndCaretRevealGesture();
+
                 if (!pendingImageReferenceOffset.HasValue ||
                     string.IsNullOrWhiteSpace(pendingImageId))
                 {
@@ -746,6 +758,19 @@ public sealed partial class PaperWindow
                     pendingImageReferenceOffset.Value,
                     pendingImageId);
                 e.Handled = true;
+            }),
+            true);
+
+        // 鼠标捕获真正释放且不会再有 Up 送达（拖出窗口/中途失活）时兜底结束手势；
+        // 捕获若被 AvalonEdit 转到其内部 TextArea（Mouse.Captured != null）则保持，交给 up 收尾。
+        box.AddHandler(
+            UIElement.LostMouseCaptureEvent,
+            new MouseEventHandler((_, _) =>
+            {
+                if (box.IsCaretRevealGestureActive && Mouse.Captured == null)
+                {
+                    box.EndCaretRevealGesture();
+                }
             }),
             true);
 

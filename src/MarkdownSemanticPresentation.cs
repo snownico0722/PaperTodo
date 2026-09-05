@@ -18,6 +18,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private bool _redrawQueued;
     private bool _disposed;
     private MarkdownCaretReveal _caretReveal = MarkdownCaretReveal.None;
+    private bool _revealGestureFrozen;
+    private MarkdownCaretReveal _frozenGestureReveal = MarkdownCaretReveal.None;
 
     public MarkdownSemanticPresentation(
         MarkdownTextBox editor,
@@ -37,6 +39,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         textView.BackgroundRenderers.Add(_horizontalRuleRenderer);
         _semanticDocument.SnapshotChanged += OnSnapshotChanged;
         AttachCaretTracking();
+        _editor.CaretRevealGestureStarted += OnCaretRevealGestureStarted;
+        _editor.CaretRevealGestureEnded += OnCaretRevealGestureEnded;
         SyncCaretReveal();
         SyncRevealFade();
         AttachCollapseGenerator();
@@ -85,7 +89,9 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         CurrentSnapshot().GetLine(Math.Max(0, line.LineNumber - 1));
 
     internal MarkdownCaretReveal CaretReveal =>
-        FullRevealEnabled ? _caretReveal : MarkdownCaretReveal.None;
+        !FullRevealEnabled
+            ? MarkdownCaretReveal.None // 预览态绝不显灵：优先级高于冻结快照，覆盖手势中途退回预览
+            : _revealGestureFrozen ? _frozenGestureReveal : _caretReveal;
 
     /// <summary>该控制符单元（行边界或行内成对范围）在 Full 编辑态是否显灵。</summary>
     internal bool IsRevealed(
@@ -188,6 +194,13 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             return;
         }
 
+        // 鼠标手势内冻结：手势结束时再由 OnCaretRevealGestureEnded 用最终 caret 同步一次，
+        // 避免按下落点触发 reveal 重排，使手势内两次命中测试落在不同布局。
+        if (_revealGestureFrozen)
+        {
+            return;
+        }
+
         SyncCaretReveal();
         SyncRevealFade();
         if (FullRevealEnabled)
@@ -204,7 +217,12 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         }
 
         // 从只读预览进入编辑时 caret 可能未移动（不触发 PositionChanged），这里补刷一次，
-        // 避免活动块控制符在上一次预览态里仍保持隐藏。
+        // 避免活动块控制符在上一次预览态里仍保持隐藏。鼠标手势内（预览点入）同样冻结到松开。
+        if (_revealGestureFrozen)
+        {
+            return;
+        }
+
         SyncCaretReveal();
         SyncRevealFade();
         if (FullRevealEnabled)
@@ -226,6 +244,40 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         var offset = Math.Clamp(caret.Offset, 0, document.TextLength);
         var line = document.GetLineByOffset(offset);
         _caretReveal = new MarkdownCaretReveal(offset, line.LineNumber - 1);
+    }
+
+    private void OnCaretRevealGestureStarted()
+    {
+        if (_disposed || !IsFullMode)
+        {
+            return;
+        }
+
+        // 快照取「按下瞬间」实际生效的显灵值（预览起点即 None），整段手势内保持该布局不变。
+        _frozenGestureReveal = CaretReveal;
+        _revealGestureFrozen = true;
+    }
+
+    private void OnCaretRevealGestureEnded()
+    {
+        if (_disposed || !_revealGestureFrozen)
+        {
+            return;
+        }
+
+        _revealGestureFrozen = false;
+        var previous = _frozenGestureReveal;
+        _frozenGestureReveal = MarkdownCaretReveal.None;
+        if (IsFullMode && FullRevealEnabled)
+        {
+            // AvalonEdit 已结束本次手势的拖选判定，这里才允许按最终 caret 显灵一次并重排。
+            SyncCaretReveal();
+            SyncRevealFade();
+            if (CaretReveal != previous)
+            {
+                ScheduleRedraw();
+            }
+        }
     }
 
     private void OnSnapshotChanged()
@@ -272,6 +324,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _disposed = true;
         _semanticDocument.SnapshotChanged -= OnSnapshotChanged;
         DetachCaretTracking();
+        _editor.CaretRevealGestureStarted -= OnCaretRevealGestureStarted;
+        _editor.CaretRevealGestureEnded -= OnCaretRevealGestureEnded;
         DetachCollapseGenerator();
         AbortRevealFade();
         var textView = _editor.TextArea.TextView;

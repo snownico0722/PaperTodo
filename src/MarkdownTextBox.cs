@@ -196,6 +196,39 @@ public sealed partial class MarkdownTextBox : TextEditor
         RefreshVisualStyle();
     }
 
+    /// <summary>一次鼠标左键手势（按下→松开/捕获丢失）期间是否冻结 caret 驱动的控制符显灵。</summary>
+    internal bool IsCaretRevealGestureActive { get; private set; }
+
+    internal event Action? CaretRevealGestureStarted;
+    internal event Action? CaretRevealGestureEnded;
+
+    /// <summary>
+    /// 标记一次鼠标左键手势开始。宿主在 PreviewMouseLeftButtonDown / MouseLeftButtonUp 成对调用，
+    /// 语义呈现层据此在整段手势内冻结控制符显灵，使 AvalonEdit 的命中测试全程使用同一塌缩布局，
+    /// 消除「点击进入编辑态」时布局重排造成的幽灵选区。
+    /// </summary>
+    internal void BeginCaretRevealGesture()
+    {
+        if (IsCaretRevealGestureActive)
+        {
+            EndCaretRevealGesture(); // 自愈：上一手势异常未收尾时先按旧手势收尾，再以当前布局起新快照
+        }
+
+        IsCaretRevealGestureActive = true;
+        CaretRevealGestureStarted?.Invoke();
+    }
+
+    internal void EndCaretRevealGesture()
+    {
+        if (!IsCaretRevealGestureActive)
+        {
+            return;
+        }
+
+        IsCaretRevealGestureActive = false;
+        CaretRevealGestureEnded?.Invoke();
+    }
+
     public void SetImageReferenceTextMode(string mode)
     {
         var normalized = ImageReferenceTextModes.Normalize(mode);
