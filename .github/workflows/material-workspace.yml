@@ -6,16 +6,36 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  capture:
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: 94d2908d4695629cb711edd7988a3a1f8bfb3931
+          fetch-depth: 0
+          submodules: recursive
           persist-credentials: false
-      - run: git archive --format=zip HEAD -o source.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          name: material-source
-          path: source.zip
-          retention-days: 1
+          dotnet-version: '10.0.x'
+      - name: Install isolated visual probe
+        shell: python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          import base64,json,os,pathlib,urllib.request
+          req=urllib.request.Request('https://api.github.com/repos/snownico0722/PaperTodo/git/blobs/5cd423c99686a5ec85d639a81facc51e3784747e',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+          with urllib.request.urlopen(req) as r: data=json.load(r)
+          pathlib.Path('tests/PaperTodo.MicaChecks/Program.cs').write_bytes(base64.b64decode(data['content']))
+      - name: Real window captures
+        shell: pwsh
+        env:
+          MATERIAL_CAPTURE: ${{ runner.temp }}/material-capture
+        run: dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-baseline-capture
+          path: ${{ runner.temp }}/material-capture
+          retention-days: 2
