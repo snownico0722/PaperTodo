@@ -624,6 +624,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
     }
 
+    internal void RefreshSurfaceMaterial(Brush surfaceBrush) => _paperBackground.Background = surfaceBrush;
+
     private void BindOptions(EdgeCapsuleDragWindowOptions options)
     {
         // The expensive Window, HWND, DropShadowEffect and WPF tree are permanent. Switching papers

@@ -16,7 +16,9 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ---
 
-### Unreleased (4.0.0-preview)
+### Unreleased
+
+- **Mica skin**: Choose Mica under Settings → Appearance → Color scheme for soft, static-wallpaper-tinted paper, capsule and settings surfaces in light, dark or system mode. This WPF-compatible Mica-style rendering is not native system Mica and does not reveal apps behind it. Disabled transparency or an unreadable wallpaper uses solid colors; high contrast uses system colors. (4.0.0-preview)
 
 **Edge Preview Cards (Edge Browse)**
 

@@ -223,6 +223,7 @@ public sealed partial class AppController : IDisposable
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.TimeChanged += OnSystemTimeChanged;
+        RefreshMicaWallpaper();
     }
 
     private bool StripInternalImageRenderMarkersFromState()
@@ -3657,6 +3658,7 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        _ = _micaMaterial.RefreshAsync(enabled: false);
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;

@@ -1509,6 +1509,7 @@ public sealed partial class PaperWindow : Window
     private void InitializeThemeResources()
     {
         Resources["PaperBrushKey"] = PaperBrush;
+        Resources["PaperSurfaceBrushKey"] = Theme.SurfaceBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
         Resources["WeakTextBrushKey"] = WeakTextBrush;
@@ -1547,7 +1548,7 @@ public sealed partial class PaperWindow : Window
             _paperChrome != null &&
             oldPaperColor.HasValue &&
             oldBorderColor.HasValue &&
-            TryGetSolidColor(Resources["PaperBrushKey"] as Brush, out var newPaperColor) &&
+            TryGetSolidColor(Resources["PaperSurfaceBrushKey"] as Brush, out var newPaperColor) &&
             TryGetSolidColor(Resources["PaperBorderBrushKey"] as Brush, out var newBorderColor);
 
         // 主题动画只能使用临时本地画刷；完成后必须恢复动态资源绑定。
@@ -1771,6 +1772,16 @@ public sealed partial class PaperWindow : Window
         transitionBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
     }
 
+    internal void RefreshSurfaceMaterial()
+    {
+        _themeAnimationGeneration++;
+        Resources["PaperSurfaceBrushKey"] = Theme.SurfaceBrush;
+        RestorePaperChromeThemeReferences();
+        _edgeCapsuleHost?.RefreshSurfaceMaterial(Theme.SurfaceBrush);
+        _deepCapsuleFloatingDragHost?.RefreshSurfaceMaterial(Theme.SurfaceBrush);
+        _experimentalTetherCapsule?.RefreshSurfaceMaterial();
+    }
+
     private void RestorePaperChromeThemeReferences()
     {
         if (_paperChrome == null)
@@ -1778,7 +1789,7 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
     }
 
@@ -1799,7 +1810,7 @@ public sealed partial class PaperWindow : Window
             SnapsToDevicePixels = true,
             Effect = CreatePaperChromeShadow()
         };
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
 
         // Chrome-level drag gesture: when users click the chrome background itself (top margin

@@ -183,6 +183,8 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 内置 Markdown Note 的编辑态和浏览态复用同一个 `MarkdownTextBox`，通过 interaction/presentation 状态切换，而不是维护两套正文 surface。
 
+配色仍由 `Theme` 统一提供。`PaperBrush` 保持实色语义（Markdown、控件与插件颜色协议），`SurfaceBrush` 只用于宿主外壳。云母是兼容 layered WPF 窗口的壁纸融合皮肤，并非 DWM 原生 Mica：`AppController.Mica` 拥有系统偏好刷新与生命周期，`MicaMaterialCache` 只保留一对共享、冻结的明暗材质并丢弃过期异步结果，`MicaMaterial` 在后台有界采样本地静态壁纸，不截屏、不轮询、不改变 HWND 或 Edge shape/translation authority。后台结果仅刷新背景，不重建编辑器；关闭系统透明效果、壁纸不可读时使用实色，高对比度使用系统颜色。
+
 ### 5.2 Provider / session 分层
 
 Provider 当前分三类：

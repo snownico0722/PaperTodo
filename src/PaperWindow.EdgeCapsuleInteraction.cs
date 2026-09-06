@@ -165,7 +165,7 @@ public sealed partial class PaperWindow
             UiFontFamily = CapsuleLabelFontFamily,
             SymbolFontFamily = AppTypography.SymbolFontFamily,
             Language = AppTypography.Language,
-            PaperBrush = PaperBrush,
+            PaperBrush = Theme.SurfaceBrush,
             PaperBorderBrush = PaperBorderBrush,
             IconBrush = BrightWeakTextBrush,
             LabelBrush = WeakTextBrush,

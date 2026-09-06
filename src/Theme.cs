@@ -13,10 +13,11 @@ public static class ColorSchemes
     public const string Ink = "ink";
     public const string Forest = "forest";
     public const string Rose = "rose";
+    public const string Mica = "mica";
 
-    public static readonly string[] All = { Warm, Ink, Forest, Rose };
+    public static readonly string[] All = { Warm, Ink, Forest, Rose, Mica };
 
-    public static bool IsValid(string? id) => id is Warm or Ink or Forest or Rose;
+    public static bool IsValid(string? id) => id is Warm or Ink or Forest or Rose or Mica;
 
     public static string Normalize(string? id) => IsValid(id) ? id! : Warm;
 }
@@ -84,6 +85,25 @@ public static class Theme
                 return _paletteCache;
             }
 
+            if (CurrentScheme == ColorSchemes.Mica && SystemParameters.HighContrast)
+            {
+                _paletteCache = new Palette
+                {
+                    Paper = SystemColors.WindowColor,
+                    PaperBorder = SystemColors.WindowTextColor,
+                    Text = SystemColors.WindowTextColor,
+                    WeakText = SystemColors.WindowTextColor,
+                    Active = SystemColors.HighlightColor,
+                    Code = SystemColors.WindowColor,
+                    QuoteBorder = SystemColors.WindowTextColor,
+                    Link = SystemColors.HotTrackColor,
+                    CheckBox = SystemColors.WindowTextColor,
+                    Tint = SystemColors.WindowTextColor,
+                    Danger = SystemColors.WindowTextColor
+                };
+                return _paletteCache;
+            }
+
             var pair = Schemes.TryGetValue(CurrentScheme, out var s) ? s : Schemes[ColorSchemes.Warm];
             _paletteCache = IsDark ? pair.Dark : pair.Light;
             return _paletteCache;
@@ -108,7 +128,12 @@ public static class Theme
     }
 
     // ---- 基色画刷 ----
+    // Keep the semantic paper color solid: glyph cut-outs, menus, Markdown markers and
+    // plugin color contracts must not accidentally receive a wallpaper/image brush.
     public static Brush PaperBrush => Solid(Current.Paper);
+    public static Brush SurfaceBrush => CurrentScheme == ColorSchemes.Mica && !SystemParameters.HighContrast
+        ? AppController.Current?.MicaSurfaceBrush ?? PaperBrush
+        : PaperBrush;
     public static Brush PaperBorderBrush => Solid(Current.PaperBorder);
     public static Brush TextBrush => Solid(Current.Text);
     public static Brush WeakTextBrush => Solid(Current.WeakText);
@@ -191,6 +216,37 @@ public static class Theme
     {
         return new Dictionary<string, (Palette, Palette)>
         {
+            // 云母 — 中性明暗底色与冷蓝强调。壁纸只进入 SurfaceBrush，不改变文字颜色。
+            [ColorSchemes.Mica] = (
+                new Palette
+                {
+                    Paper = MicaMaterial.LightBase,
+                    PaperBorder = Color.FromRgb(199, 203, 214),
+                    Text = Color.FromRgb(28, 30, 36),
+                    WeakText = Color.FromRgb(76, 80, 93),
+                    Active = Color.FromRgb(49, 71, 144),
+                    Code = Color.FromRgb(230, 231, 239),
+                    QuoteBorder = Color.FromRgb(164, 174, 205),
+                    Link = Color.FromRgb(27, 72, 140),
+                    CheckBox = Color.FromRgb(118, 128, 157),
+                    Tint = Color.FromRgb(76, 91, 142),
+                    Danger = Color.FromRgb(161, 47, 65)
+                },
+                new Palette
+                {
+                    Paper = MicaMaterial.DarkBase,
+                    PaperBorder = Color.FromRgb(68, 73, 88),
+                    Text = Color.FromRgb(245, 246, 250),
+                    WeakText = Color.FromRgb(190, 194, 205),
+                    Active = Color.FromRgb(155, 177, 255),
+                    Code = Color.FromRgb(46, 48, 59),
+                    QuoteBorder = Color.FromRgb(101, 115, 161),
+                    Link = Color.FromRgb(163, 193, 255),
+                    CheckBox = Color.FromRgb(130, 140, 173),
+                    Tint = Color.FromRgb(199, 210, 255),
+                    Danger = Color.FromRgb(255, 151, 155)
+                }),
+
             // 暖纸 — 经典奶白纸张焕新：去掉旧版偏冷的紫蓝链接，换暖陶土；弱文字略降饱和。
             [ColorSchemes.Warm] = (
                 new Palette

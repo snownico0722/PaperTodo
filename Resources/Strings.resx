@@ -559,7 +559,7 @@
     <value>浅色、深色，或跟随 Windows 系统主题。</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>切换纸片配色：背景、强调色与弱化文字。</value>
+    <value>切换纸片配色：背景、强调色与弱化文字。云母还会融合静态壁纸的柔和色调。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>语言默认会分别为界面与笔记正文挑选系统字体。
@@ -1428,5 +1428,11 @@
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
+  </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>云母</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>云母质感：融合 Windows 当前静态壁纸的柔和色调，不透出后方应用。兼容 WPF 绘制，非系统原生 Mica；关闭系统透明效果、开启高对比度或壁纸不可读时使用实色。</value>
   </data>
 </root>

@@ -546,7 +546,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>라이트, 다크 또는 Windows 시스템 테마 따르기.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>종이 배색: 배경, 강조색, 약한 글자색.</value>
+    <value>메모 배경, 강조색과 보조 텍스트 색상을 바꿉니다. 마이카는 정적 배경 화면의 부드러운 색감도 반영합니다.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>언어 기본값은 UI와 노트 본문에 각각 알맞은 시스템 글꼴을 씁니다.
@@ -1379,5 +1379,11 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>선택한 이미지 내용이 너무 커서 이번에는 텍스트만 복사했습니다.</value>
+  </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>마이카</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>현재 Windows 정적 배경 화면의 부드러운 색감을 반영하는 마이카 스타일입니다. 뒤의 앱은 비치지 않습니다. 시스템 기본 Mica가 아닌 WPF 호환 렌더링이며, 투명 효과가 꺼져 있거나 고대비가 켜져 있거나 배경 화면을 읽을 수 없으면 단색으로 표시됩니다.</value>
   </data>
 </root>

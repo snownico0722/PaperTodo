@@ -533,7 +533,7 @@ Error: {0}</value>
     <value>Light, dark, or follow the Windows system theme.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>Paper colors: background, accents, and muted text.</value>
+    <value>Change the paper, accent and secondary-text colors. Mica also blends soft tones from the static wallpaper.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>Language default picks system fonts for UI and note body separately.
@@ -1379,5 +1379,11 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
+  </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Mica-style surfaces blend soft tones from the current Windows static wallpaper, not apps behind the window. Rendered in WPF, not native system Mica. Solid colors are used when transparency is off, high contrast is on, or the wallpaper cannot be read.</value>
   </data>
 </root>

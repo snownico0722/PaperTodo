@@ -78,6 +78,7 @@ public sealed partial class AppController
     private void RefreshThemeSurfaces()
     {
         Theme.Invalidate();
+        RefreshMicaWallpaper();
         RefreshApplicationThemeResources();
         foreach (var window in _windows.Values)
         {
@@ -118,7 +119,8 @@ public sealed partial class AppController
             (ColorSchemes.Warm, Strings.Get("ColorSchemeWarm")),
             (ColorSchemes.Ink, Strings.Get("ColorSchemeInk")),
             (ColorSchemes.Forest, Strings.Get("ColorSchemeForest")),
-            (ColorSchemes.Rose, Strings.Get("ColorSchemeRose"))
+            (ColorSchemes.Rose, Strings.Get("ColorSchemeRose")),
+            (ColorSchemes.Mica, Strings.Get("ColorSchemeMica"))
         };
 
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
@@ -2606,7 +2608,8 @@ public sealed partial class AppController
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDisplay")));
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayThemeMode")), "TipThemeMode"));
         leftColumn.Children.Add(CreateThemeSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")),
+            State.ColorScheme == ColorSchemes.Mica ? "TipColorSchemeMica" : "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
@@ -3016,7 +3019,7 @@ public sealed partial class AppController
 
         var border = new Border
         {
-            Background = TrayPaperBrush,
+            Background = Theme.SurfaceBrush,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
@@ -3754,9 +3757,17 @@ public sealed partial class AppController
             ScheduleDisplayMetricsRefresh();
         }
 
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or
+            UserPreferenceCategory.Desktop or UserPreferenceCategory.Accessibility)
+        {
+            // Mica also follows wallpaper, accessibility and transparency changes when the
+            // user explicitly selected light/dark. Marshal all reads/writes to the UI owner.
+            QueueMicaPreferenceRefresh();
+        }
+
         if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color)
         {
-            if (State.Theme == "system")
+            if (State.Theme == "system" && State.ColorScheme != ColorSchemes.Mica)
             {
                 Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {

@@ -546,7 +546,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>ライト、ダーク、または Windows のシステムテーマに合わせます。</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>紙片の配色：背景、アクセント、弱い文字色。</value>
+    <value>紙の背景、アクセント、補助テキストの配色を切り替えます。マイカは静止壁紙の柔らかな色調も取り入れます。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>言語既定では、UI とノート本文にそれぞれ適したシステムフォントを使います。
@@ -1379,5 +1379,11 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
+  </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>マイカ</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Windows の現在の静止壁紙の色調を柔らかく取り入れるマイカ調です。背後のアプリは透けません。WPF による互換描画で、システム標準の Mica ではありません。透明効果がオフ、高コントラストがオン、または壁紙を読み込めない場合は単色になります。</value>
   </data>
 </root>

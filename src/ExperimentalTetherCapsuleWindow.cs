@@ -172,9 +172,11 @@ internal sealed class ExperimentalTetherCapsuleWindow : Window
         ApplyExperimentalPassiveState();
     }
 
+    internal void RefreshSurfaceMaterial() => _pill.Background = Theme.SurfaceBrush;
+
     public void UpdateTheme()
     {
-        _pill.Background = Theme.PaperBrush;
+        _pill.Background = Theme.SurfaceBrush;
         _pill.BorderBrush = Theme.PaperBorderBrush;
         _label.Foreground = Theme.TextBrush;
     }
