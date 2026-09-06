@@ -1,0 +1,41 @@
+name: Material pixel probe
+on:
+  push:
+    branches: [work/mica-materials-20260907]
+    paths: [.github/workflows/material-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Prepare isolated visual probe
+        shell: python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          import pathlib, urllib.request, json, base64
+          req=urllib.request.Request('https://api.github.com/repos/snownico0722/PaperTodo/git/blobs/adbfc11808a3d02075be957288c23c074ae156c2', headers={'Authorization':'Bearer '+__import__('os').environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=60) as r: code=base64.b64decode(json.load(r)['content'])
+          p=pathlib.Path('tests/MaterialProbe'); p.mkdir(exist_ok=True)
+          (p/'Program.cs').write_bytes(code)
+          (p/'MaterialProbe.csproj').write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><AssemblyName>PaperTodo.MicaChecks</AssemblyName><TargetFramework>net10.0-windows10.0.17763.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/><ProjectReference Include="../../PaperTodo.csproj"/></ItemGroup></Project>''')
+      - name: Capture actual DWM and WPF layers
+        env:
+          MATERIAL_PROBE_OUT: ${{ runner.temp }}/material-pixels
+        run: dotnet run --project tests/MaterialProbe/MaterialProbe.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-pixels-baseline
+          path: ${{ runner.temp }}/material-pixels/*.png
+          retention-days: 3
