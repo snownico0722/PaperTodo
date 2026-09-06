@@ -1,0 +1,49 @@
+name: Website checks
+
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'scripts/website/**'
+      - '.github/workflows/website-checks.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'scripts/website/**'
+      - '.github/workflows/website-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Chromium responsive and interaction checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/website/requirements.txt
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r scripts/website/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Test real static-site delivery and behavior
+        run: python scripts/website/test_website.py --screenshots '${{ runner.temp }}/website-screenshots'
+      - name: Keep responsive previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-previews
+          path: ${{ runner.temp }}/website-screenshots
+          if-no-files-found: ignore
+          retention-days: 7
