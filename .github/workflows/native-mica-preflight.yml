@@ -1,0 +1,69 @@
+name: Native Mica preflight
+on:
+  push:
+    branches: [enhancement/mica-skin]
+    paths: [.github/workflows/native-mica-preflight.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Keep source line endings stable
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          ref: d15df50e6a4c20dc022f8471be9bdc0ffd21a9b9
+          submodules: recursive
+          persist-credentials: false
+      - name: Apply reviewed native replacement and stage source blobs only
+        shell: python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request, zlib
+          assert os.environ['GITHUB_REPOSITORY'] == 'snownico0722/PaperTodo'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/enhancement/mica-skin'
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == 'd15df50e6a4c20dc022f8471be9bdc0ffd21a9b9'
+          root = 'https://api.github.com/repos/snownico0722/PaperTodo'
+          def api(path, data=None):
+              req = urllib.request.Request(root + path,
+                  data=None if data is None else json.dumps(data).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'})
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return json.load(response)
+          chunks = ['9afa8c27e58b02a87f8936b6eebd38591eb4cf5a', '4b7ec678f11e09380ad0dec1ff9a5dde2c3cfccc',
+                    '549dd5aaed5905050a6e70bdaab1d05ca77b2ef7', 'badfcb7251db71c5ff1c1ba74d7f4c8c52270ab2',
+                    'b37b1c1efb6f716b92ab0537502cb97e2990d0af', 'b2f776c6ee4a581e9cfc4c75c438e7e705460de7',
+                    '49273384f16f017d1c6fee14f546e20be3d746ba', 'f0a36842c6ae03167992c32bc8fc97a9b3f867c4']
+          encoded = b''.join(base64.b64decode(api('/git/blobs/' + sha)['content']) for sha in chunks)
+          patch = zlib.decompress(base64.b64decode(encoded))
+          assert hashlib.sha256(patch).hexdigest() == '70aa17e2209aee3c50854aead8f307c19e1ebfbd6aa7ff08856d496e440ff578'
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          subprocess.run(['git', 'add', '-A'], check=True)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().strip('\0').split('\0')
+          entries = []
+          for path in paths:
+              content = pathlib.Path(path).read_bytes()
+              sha = api('/git/blobs', {'content': base64.b64encode(content).decode(), 'encoding': 'base64'})['sha']
+              assert sha == hashlib.sha1(('blob ' + str(len(content)) + '\0').encode() + content).hexdigest()
+              entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': sha})
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-mica-blobs.json'
+          output.write_text(json.dumps(entries, indent=2), encoding='utf-8')
+          print('NATIVE_SOURCE_BLOBS=' + json.dumps(entries))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-mica-reviewed-blobs
+          path: ${{ runner.temp }}/native-mica-blobs.json
+          retention-days: 1
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build native Mica implementation
+        run: dotnet build .\PaperTodo.csproj -c Release
+      - name: Native Mica behavior and real HWND checks
+        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
