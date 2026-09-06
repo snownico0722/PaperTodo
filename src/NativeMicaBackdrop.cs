@@ -200,8 +200,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
             handled = true;
             return IntPtr.Zero;
         }
-        if (message is 0x0320 /* WM_DWMCOMPOSITIONCHANGED */ or 0x031A /* WM_THEMECHANGED */ or
-            0x001A /* WM_SETTINGCHANGE */ or 0x02E0 /* WM_DPICHANGED */)
+        if (message is 0x031E /* WM_DWMCOMPOSITIONCHANGED */ or 0x0320 /* WM_DWMCOLORIZATIONCOLORCHANGED */ or
+            0x031A /* WM_THEMECHANGED */ or 0x001A /* WM_SETTINGCHANGE */ or 0x02E0 /* WM_DPICHANGED */)
         {
             QueueRefresh();
         }
