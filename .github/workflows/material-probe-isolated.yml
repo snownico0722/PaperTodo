@@ -26,11 +26,15 @@ jobs:
           import pathlib, urllib.request, json, base64, os
           req=urllib.request.Request('https://api.github.com/repos/snownico0722/PaperTodo/git/blobs/adbfc11808a3d02075be957288c23c074ae156c2', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
           with urllib.request.urlopen(req,timeout=60) as r: code=base64.b64decode(json.load(r)['content']).decode()
-          code=code.replace('new App {','new IsolatedApp {').replace('controller.State.EnableAnimations = false;', 'controller.State.EnableAnimations = true;')
+          code=code.replace('var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();', '''var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+          var xaml = System.Xml.Linq.XDocument.Load("App.xaml");
+          System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+          var resources = new System.Xml.Linq.XElement(ns + "ResourceDictionary", xaml.Root!.Attributes().Where(a => a.IsNamespaceDeclaration), xaml.Root.Element(ns + "Application.Resources")!.Nodes());
+          app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());''')
+          code=code.replace('controller.State.EnableAnimations = false;', 'controller.State.EnableAnimations = true;')
           code=code.replace('w.Show(); w.Activate(); Wait();', 'w.Show(); Wait(); w.Activate(); Wait();')
           code=code.replace('Capture(w, "01-baseline-active");', 'Capture(w, "01-baseline-active"); w.SetCollapsedState(true, animate: true, saveGeometry: false); Wait(); w.SetCollapsedState(false, animate: true, saveGeometry: false); Wait(); w.Activate(); Wait(); Capture(w, "01b-expanded-active");')
           code=code.replace('key.SetValue("EnableTransparency", 1);', 'key.SetValue("EnableTransparency", 1); using var dwmKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\\Microsoft\\Windows\\DWM"); dwmKey.SetValue("ColorPrevalence", 1);')
-          code+='\ninternal sealed class IsolatedApp : App { protected override void OnStartup(StartupEventArgs e) { } }\n'
           p=pathlib.Path('tests/MaterialProbe'); p.mkdir(exist_ok=True)
           (p/'Program.cs').write_text(code,encoding='utf-8')
           (p/'MaterialProbe.csproj').write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><AssemblyName>PaperTodo.MicaChecks</AssemblyName><TargetFramework>net10.0-windows10.0.17763.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/><ProjectReference Include="../../PaperTodo.csproj"/></ItemGroup></Project>''')
