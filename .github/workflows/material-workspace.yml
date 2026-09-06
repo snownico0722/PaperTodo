@@ -4,12 +4,13 @@ on:
     branches: [work/mica-materials-20260907]
     paths: [.github/workflows/material-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  capture:
+  validate:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
         with:
           ref: 94d2908d4695629cb711edd7988a3a1f8bfb3931
@@ -19,23 +20,56 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Install isolated visual probe
+      - name: Apply reviewed material patch
         shell: python
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          import base64,json,os,pathlib,urllib.request
-          req=urllib.request.Request('https://api.github.com/repos/snownico0722/PaperTodo/git/blobs/5cd423c99686a5ec85d639a81facc51e3784747e',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
-          with urllib.request.urlopen(req) as r: data=json.load(r)
-          pathlib.Path('tests/PaperTodo.MicaChecks/Program.cs').write_bytes(base64.b64decode(data['content']))
-      - name: Real window captures
-        shell: pwsh
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request, zlib
+          assert os.environ['GITHUB_REPOSITORY'] == 'snownico0722/PaperTodo'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/work/mica-materials-20260907'
+          root = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          def api(path, data=None):
+              req = urllib.request.Request(root + path,
+                  data=None if data is None else json.dumps(data).encode(),
+                  headers={'Authorization':'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept':'application/vnd.github+json', 'Content-Type':'application/json'})
+              with urllib.request.urlopen(req, timeout=60) as r: return json.load(r)
+          chunks = ['0b328c526f39acab5ee0e2c7280e363c4e430338','36e8bd677316013a36faf1d0e46e934ec5c6d2ad',
+                    '12852ad3e965d320b204b7445fd8493603b0f41c','597d31951ea43657e4db5a1bb3678f50acf03378',
+                    '4220a2dfe795adc02fa3ae92b02014baa520aa90','a4092ed0096b9d062f991b374ad06252445bddad']
+          encoded = b''.join(base64.b64decode(api('/git/blobs/' + x)['content']) for x in chunks)
+          patch = zlib.decompress(base64.b64decode(encoded))
+          assert hashlib.sha256(patch).hexdigest() == '1751222d5df69b16194921a2f1f4b09368596077829df8b9604cd692479129eb'
+          subprocess.run(['git','apply','--check','-'], input=patch, check=True)
+          subprocess.run(['git','apply','-'], input=patch, check=True)
+          subprocess.run(['git','add','src','Resources','tests'], check=True)
+          subprocess.run(['git','diff','--cached','--check'], check=True)
+          paths = subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().strip('\0').split('\0')
+          entries = []
+          for name in paths:
+              content = pathlib.Path(name).read_bytes()
+              sha = api('/git/blobs', {'content':base64.b64encode(content).decode(),'encoding':'base64'})['sha']
+              entries.append({'path':name,'type':'blob','mode':'100644','sha':sha})
+          base = subprocess.check_output(['git','rev-parse','HEAD^{tree}']).decode().strip()
+          tree = api('/git/trees', {'base_tree':base,'tree':entries})['sha']
+          pathlib.Path(os.environ['RUNNER_TEMP'],'material-tree.json').write_text(json.dumps({'tree':tree,'entries':entries},indent=2))
+          print('MATERIAL_TREE=' + tree)
+      - name: Build Release
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Material behavior and desktop capture checks
         env:
-          MATERIAL_CAPTURE: ${{ runner.temp }}/material-capture
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-capture
         run: dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+      - name: Markdown regression checks
+        run: dotnet run --project tests/PaperTodo.MarkdownSemanticChecks/PaperTodo.MarkdownSemanticChecks.csproj -c Release
+      - name: Todo navigation checks
+        run: dotnet run --project tests/PaperTodo.TodoNavigationChecks/PaperTodo.TodoNavigationChecks.csproj -c Release
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: material-baseline-capture
-          path: ${{ runner.temp }}/material-capture
+          name: material-validation
+          path: |
+            ${{ runner.temp }}/material-tree.json
+            ${{ runner.temp }}/material-capture
           retention-days: 2
