@@ -183,7 +183,7 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 内置 Markdown Note 的编辑态和浏览态复用同一个 `MarkdownTextBox`，通过 interaction/presentation 状态切换，而不是维护两套正文 surface。
 
-配色仍由 `Theme` 统一提供。`PaperBrush` 保持实色语义（Markdown、控件与插件颜色协议），`SurfaceBrush` 只用于宿主外壳。云母是兼容 layered WPF 窗口的壁纸融合皮肤，并非 DWM 原生 Mica：`AppController.Mica` 拥有系统偏好刷新与生命周期，`MicaMaterialCache` 只保留一对共享、冻结的明暗材质并丢弃过期异步结果，`MicaMaterial` 在后台有界采样本地静态壁纸，不截屏、不轮询、不改变 HWND 或 Edge shape/translation authority。后台结果仅刷新背景，不重建编辑器；关闭系统透明效果、壁纸不可读时使用实色，高对比度使用系统颜色。
+配色由 `Theme` 提供实色语义；云母只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的云母选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM Mica、系统事件和原生裁切，`DwmMicaApi` 封装官方 Win32 API。成功设置 `DWMWA_SYSTEMBACKDROP_TYPE=DWMSBT_MAINWINDOW`、glass 与裁切后才让外壳透明；失败/关闭效果恢复实色。裁切从现有 WPF chrome 的最终布局与 DPI 导出，不保存第二份纸片几何。普通纸片折叠、形态动画或部分透明时先关闭原生背景，再使用 WPF alpha 绘制。Edge、drag、master、tether 胶囊仍是原有 layered HWND 和实色配色，不进入这个适配器，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存（见 D-030）。
 
 ### 5.2 Provider / session 分层
 

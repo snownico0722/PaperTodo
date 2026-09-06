@@ -176,7 +176,7 @@ public sealed class MasterCapsuleWindow : Window
             Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
             CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
             BorderThickness = new Thickness(1),
-            Background = Theme.SurfaceBrush,
+            Background = Theme.PaperBrush,
             BorderBrush = Theme.PaperBorderBrush,
             SnapsToDevicePixels = true,
             Cursor = System.Windows.Input.Cursors.Hand,
@@ -188,7 +188,7 @@ public sealed class MasterCapsuleWindow : Window
             }
         };
 
-        // The pill background stays opaque (SurfaceBrush) at all times. Hover tint is a separate
+        // The pill background stays opaque (PaperBrush) at all times. Hover tint is a separate
         // overlay layered on top — the same shape as the pill — so the (semi-transparent)
         // HoverBrush never replaces the only opaque layer and let the desktop show through.
         var content = new Grid();
@@ -334,12 +334,10 @@ public sealed class MasterCapsuleWindow : Window
         };
     }
 
-    internal void RefreshSurfaceMaterial() => _pill.Background = Theme.SurfaceBrush;
-
     public void UpdateTheme()
     {
         // The pill background stays opaque; hover is rendered by the overlay.
-        _pill.Background = Theme.SurfaceBrush;
+        _pill.Background = Theme.PaperBrush;
         _pill.BorderBrush = Theme.PaperBorderBrush;
         _hoverOverlay.Background = _isHovering ? Theme.HoverBrush : Brushes.Transparent;
         _glyph.Foreground = Theme.TextBrush;

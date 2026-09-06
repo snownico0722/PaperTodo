@@ -42,6 +42,7 @@
 | D-027 | Built-in Note Markdown 语义更新使用同线程同步发布 | Accepted | Note / Markdown / performance |
 | D-028 | 大 Note 使用轻量局部重解析与 fence 状态扩窗 | Accepted | Note / Markdown / performance |
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
+| D-030 | 普通窗口原生 Mica 与 layered 胶囊边界 | Accepted | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1080,3 +1081,34 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `e16ecef` — 删除 guard / 16K retry，确立 <2K full + 大 Note best-effort local。
 - `db6b3dc` — 删除 snapshot 常驻 line starts 与 production incremental diagnostic state。
 - `e041ca7` — 增加 fence-state window propagation，并覆盖长 fence、marker length、换行创建/破坏 fence 与性能 profile。
+
+---
+
+## D-030 — 普通窗口原生 Mica 与 layered 胶囊边界
+
+**Status:** Accepted
+
+### Context
+
+PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云母的背景。用户随后明确要求原生 DWM Mica，壁纸模拟不再满足本次皮肤需求。与此同时，Edge bounded HWND 仍依赖 WPF alpha/shape 和 DComp translation-only 的已确定边界，不能为了皮肤把胶囊改成整窗原生背景，覆盖容量空白或打断 handoff。
+
+### Decision
+
+- 展开的普通纸片与设置窗口在 Windows 11 22H2+ 使用官方 `DWMWA_SYSTEMBACKDROP_TYPE` / `DWMSBT_MAINWINDOW`，不使用 undocumented 22000 属性，不引入 Windows App SDK 运行时。
+- 普通窗口的 non-layered 模式只在启动时根据已保存的配色确定。由其他皮肤切入时提示重启，并先显示实色；不关闭重建正在编辑的窗口，不迁移光标或撤销栈。退出保存仍经过现有生命周期。
+- DWM、glass、dark-mode 和窗口区域设置都成功后才让 WPF chrome 透明。正文和插件仍获得实色 `Theme.PaperBrush`，原生背景失败时不留透明正文壳。
+- 原生背景区域取自既有 chrome 的最终布局，按当前 DPI 更新裁切；同一几何不重复设置。裁切期间不使用会给文字投影的 WPF 外壳阴影，也不承诺自定义窗口区域具有系统阴影。
+- 折叠形态、形态动画与部分透明时关闭原生背景并恢复 WPF alpha 绘制；完成边界恢复 Mica。所有贴边、拖动、主和系绳胶囊保留原 layered 路线和实色背景，不接入原生适配器。
+- 移除壁纸采样、模拟模糊、异步材质缓存。无后台 HWND 或逐帧截图。关闭透明效果、高对比度和接口失败使用实色；系统的材质节能/非活动回退仍由 DWM 决定。
+
+### Why / Consequences
+
+原生材质属于 HWND 合成，不是一个可放进所有 WPF Brush 槽位的画刷。把非矩形动态 Edge surface 强行挂到 full-HWND Mica 上会改变既有 shape authority；一次性重启普通窗口比重建用户正在编辑的所有对象更简单，也不会丢失未持久化的撤销状态。代价是首次换肤需要重启，胶囊不具备原生材质，真机视觉、跨 DPI 与 alpha fallback 仍需人工确认；这些限制在设置说明和 PR 中明确呈现。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
+- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
+- `tests/PaperTodo.MicaChecks/Program.cs`。
+- PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。

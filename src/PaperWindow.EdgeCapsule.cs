@@ -41,7 +41,6 @@ public sealed partial class PaperWindow
             CapsuleLabelFontWeight,
             Strings.Get("ToolTipHideThisPaper"),
             PaperBrush,
-            Theme.SurfaceBrush,
             PaperBorderBrush,
             Theme.CapsuleFocusBorderBrush,
             HoverBrush,
@@ -162,7 +161,6 @@ public sealed partial class PaperWindow
     {
         _edgeCapsuleHost?.UpdateTheme(
             PaperBrush,
-            Theme.SurfaceBrush,
             PaperBorderBrush,
             Theme.CapsuleFocusBorderBrush,
             HoverBrush,

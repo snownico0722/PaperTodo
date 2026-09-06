@@ -546,7 +546,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>라이트, 다크 또는 Windows 시스템 테마 따르기.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>메모 배경, 강조색과 보조 텍스트 색상을 바꿉니다. 마이카는 정적 배경 화면의 부드러운 색감도 반영합니다.</value>
+    <value>종이 배색: 배경, 강조색, 약한 글자색.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>언어 기본값은 UI와 노트 본문에 각각 알맞은 시스템 글꼴을 씁니다.
@@ -1384,6 +1384,15 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>마이카</value>
   </data>
   <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>현재 Windows 정적 배경 화면의 부드러운 색감을 반영하는 마이카 스타일입니다. 뒤의 앱은 비치지 않습니다. 시스템 기본 Mica가 아닌 WPF 호환 렌더링이며, 투명 효과가 꺼져 있거나 고대비가 켜져 있거나 배경 화면을 읽을 수 없으면 단색으로 표시됩니다.</value>
+    <value>Windows 11 22H2 이상의 네이티브 DWM Mica를 사용합니다. 배경 화면을 읽거나 모방하지 않고 Windows가 배경을 합성합니다. 펼친 메모와 설정 창에 적용되며, 캡슐, 접기 애니메이션 및 반투명 상태에서는 단색 렌더링을 유지합니다. 투명 효과가 꺼져 있거나 고대비가 켜져 있거나 네이티브 API를 사용할 수 없으면 단색으로 표시됩니다. 다른 스킨에서 처음 전환한 후에는 PaperTodo를 종료하고 다시 여세요.</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>마이카 선택을 저장했습니다. 트레이에서 PaperTodo를 종료하고 다시 열면 네이티브 Mica가 활성화됩니다. 현재 창은 단색으로 표시됩니다. 스킨 변경으로 편집기나 실행 취소 기록을 다시 만들지 않습니다.</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>네이티브 Mica는 Windows 11 22H2(빌드 22621) 이상이 필요합니다. 이 시스템에서는 마이카 배색의 단색 배경을 사용합니다.</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>네이티브 Mica는 펼친 메모와 설정 창에 적용됩니다. 캡슐, 접기 애니메이션 및 반투명 상태에서는 단색 배경을 사용합니다. Windows의 투명 효과 및 절전 설정에 따라서도 단색으로 표시될 수 있습니다.</value>
   </data>
 </root>

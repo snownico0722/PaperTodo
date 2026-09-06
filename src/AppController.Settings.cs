@@ -78,7 +78,6 @@ public sealed partial class AppController
     private void RefreshThemeSurfaces()
     {
         Theme.Invalidate();
-        RefreshMicaWallpaper();
         RefreshApplicationThemeResources();
         foreach (var window in _windows.Values)
         {
@@ -1020,7 +1019,7 @@ public sealed partial class AppController
             SizeToContent = SizeToContent.Manual,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.NoResize,
-            AllowsTransparency = true,
+            AllowsTransparency = !UsesNativeMicaWindows,
             Background = Brushes.Transparent,
             ShowInTaskbar = false,
             Topmost = false,
@@ -1062,9 +1061,19 @@ public sealed partial class AppController
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
             DiscardShortcutDraft();
+            _settingsMica?.Dispose();
+            _settingsMica = null;
             _settingsWindow = null;
         };
         _settingsWindow = window;
+        if (UsesNativeMicaWindows)
+        {
+            _settingsMica = new NativeMicaBackdrop(window, () => window.Content as Border,
+                () => true, brush =>
+                {
+                    if (window.Content is Border chrome) chrome.Background = brush;
+                }, () => { });
+        }
         RefreshSettingsWindowContent();
         // Resolve the final fitted size before the first frame, then switch to manual positioning.
         // Later typography changes keep this top-left anchor and grow only toward the bottom.
@@ -1143,6 +1152,7 @@ public sealed partial class AppController
         }
 
         ApplyToolTipSetting(window);
+        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, force: true);
     }
 
     private void RefreshTypography()
@@ -2611,6 +2621,16 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")),
             State.ColorScheme == ColorSchemes.Mica ? "TipColorSchemeMica" : "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+        if (State.ColorScheme == ColorSchemes.Mica)
+        {
+            leftColumn.Children.Add(new TextBlock
+            {
+                Text = Strings.Get(!NativeMicaBackdrop.IsSupported ? "MicaUnsupported" :
+                    !UsesNativeMicaWindows ? "MicaRestartRequired" : "MicaScope"),
+                TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
+                FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 3, 2, 5)
+            });
+        }
         leftColumn.Children.Add(WrapWithHint(
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
             "TipResizeGripMode"));
@@ -3019,7 +3039,7 @@ public sealed partial class AppController
 
         var border = new Border
         {
-            Background = Theme.SurfaceBrush,
+            Background = TrayPaperBrush,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
@@ -3758,11 +3778,9 @@ public sealed partial class AppController
         }
 
         if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or
-            UserPreferenceCategory.Desktop or UserPreferenceCategory.Accessibility)
+            UserPreferenceCategory.Accessibility)
         {
-            // Mica also follows wallpaper, accessibility and transparency changes when the
-            // user explicitly selected light/dark. Marshal all reads/writes to the UI owner.
-            QueueMicaPreferenceRefresh();
+            QueueNativeMicaPreferenceRefresh();
         }
 
         if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color)

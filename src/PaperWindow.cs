@@ -51,6 +51,8 @@ public sealed partial class PaperWindow : Window
     private readonly PaperData _paper;
     private readonly AppController _controller;
     private bool _isShellBuilt;
+    private NativeMicaBackdrop? _nativeMica;
+    internal bool IsNativeMicaEffective => _nativeMica?.IsActive == true;
 
     private Grid _windowHost = null!;
     private Border _paperChrome = null!;
@@ -676,6 +678,14 @@ public sealed partial class PaperWindow : Window
         InitializePaperPresentationState();
 
         ConfigureWindow();
+        if (_controller.UsesNativeMicaWindows)
+        {
+            _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
+                () => !_paper.IsCollapsed && !IsPaperFormTransitioning,
+                brush => Resources["PaperSurfaceBrushKey"] = brush,
+                ApplyPaperChromePresentation);
+            RefreshNativeMica();
+        }
         if (deferShellConstruction)
         {
             UpdateToolTipSetting();
@@ -875,7 +885,7 @@ public sealed partial class PaperWindow : Window
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
     {
         hitTest = 0;
-        if (ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden ||
+        if ((!IsNativeMicaEffective && ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden) ||
             _paper.IsCollapsed ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
@@ -901,7 +911,9 @@ public sealed partial class PaperWindow : Window
 
         var dpi = GetDpiForWindow(hwnd);
         var dpiScale = dpi > 0 ? dpi / 96.0 : 1.0;
-        var resizeBorder = Math.Max(1.0, WindowChromeMargin * dpiScale);
+        // Native Mica clips the transparent shadow margin; reserve an additional inner
+        // strip so resize remains reachable inside the visible region (including DPI > 100%).
+        var resizeBorder = Math.Max(1.0, (WindowChromeMargin + (IsNativeMicaEffective ? 5 : 0)) * dpiScale);
         var nearLeft = pointerX < bounds.Left + resizeBorder;
         var nearRight = pointerX >= bounds.Right - resizeBorder;
         var nearTop = pointerY < bounds.Top + resizeBorder;
@@ -1132,7 +1144,9 @@ public sealed partial class PaperWindow : Window
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        _paperChrome.Effect = isCapsule
+        // A native region clips the outer shadow. Do not shadow the text through a
+        // transparent Mica shell; alpha fallback keeps the original WPF shadow.
+        _paperChrome.Effect = IsNativeMicaEffective ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         RefreshPluginBodyClip();
@@ -1496,7 +1510,7 @@ public sealed partial class PaperWindow : Window
 
         RefreshEffectiveTopmost();
         WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
+        AllowsTransparency = !_controller.UsesNativeMicaWindows;
         Background = Brushes.Transparent;
         FontFamily = AppTypography.UiFontFamily;
         FontSize = AppTypography.Scale(12);
@@ -1509,7 +1523,7 @@ public sealed partial class PaperWindow : Window
     private void InitializeThemeResources()
     {
         Resources["PaperBrushKey"] = PaperBrush;
-        Resources["PaperSurfaceBrushKey"] = Theme.SurfaceBrush;
+        Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective ? Brushes.Transparent : PaperBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
         Resources["WeakTextBrushKey"] = WeakTextBrush;
@@ -1544,11 +1558,11 @@ public sealed partial class PaperWindow : Window
         _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
-        var canAnimateTheme = _controller.State.EnableAnimations &&
+        var canAnimateTheme = _nativeMica == null && _controller.State.EnableAnimations &&
             _paperChrome != null &&
             oldPaperColor.HasValue &&
             oldBorderColor.HasValue &&
-            TryGetSolidColor(Resources["PaperSurfaceBrushKey"] as Brush, out var newPaperColor) &&
+            TryGetSolidColor(Resources["PaperBrushKey"] as Brush, out var newPaperColor) &&
             TryGetSolidColor(Resources["PaperBorderBrushKey"] as Brush, out var newBorderColor);
 
         // 主题动画只能使用临时本地画刷；完成后必须恢复动态资源绑定。
@@ -1591,6 +1605,7 @@ public sealed partial class PaperWindow : Window
             RestorePaperChromeThemeReferences();
         }
 
+        RefreshNativeMica(force: true);
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
@@ -1772,15 +1787,8 @@ public sealed partial class PaperWindow : Window
         transitionBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
     }
 
-    internal void RefreshSurfaceMaterial()
-    {
-        _themeAnimationGeneration++;
-        Resources["PaperSurfaceBrushKey"] = Theme.SurfaceBrush;
-        RestorePaperChromeThemeReferences();
-        _edgeCapsuleHost?.RefreshSurfaceMaterial(Theme.SurfaceBrush);
-        _deepCapsuleFloatingDragHost?.RefreshSurfaceMaterial(Theme.SurfaceBrush);
-        _experimentalTetherCapsule?.RefreshSurfaceMaterial();
-    }
+    internal void RefreshNativeMica(bool force = false) =>
+        _nativeMica?.Refresh(Theme.IsMica, Theme.IsDark, force);
 
     private void RestorePaperChromeThemeReferences()
     {

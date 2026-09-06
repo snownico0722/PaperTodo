@@ -54,5 +54,5 @@ jobs:
       - name: Todo navigation checks
         run: dotnet run --project .\tests\PaperTodo.TodoNavigationChecks\PaperTodo.TodoNavigationChecks.csproj -c Release
 
-      - name: Mica material checks
+      - name: Native Mica checks
         run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release

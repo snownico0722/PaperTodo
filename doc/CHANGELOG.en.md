@@ -16,9 +16,9 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ---
 
-### Unreleased
+### Unreleased (4.0.0-preview)
 
-- **Mica skin**: Choose Mica under Settings → Appearance → Color scheme for soft, static-wallpaper-tinted paper, capsule and settings surfaces in light, dark or system mode. This WPF-compatible Mica-style rendering is not native system Mica and does not reveal apps behind it. Disabled transparency or an unreadable wallpaper uses solid colors; high contrast uses system colors. (4.0.0-preview)
+- **Native Mica skin**: Choose Mica under Settings → Visual → Color scheme, then exit and reopen PaperTodo. Expanded papers and Settings use native Windows DWM Mica in light, dark or system mode, without reading or simulating the wallpaper. Requires Windows 11 22H2 or later; unsupported systems, disabled transparency and high contrast use solid colors. Capsules, folding animations and translucent states keep solid rendering without changing the edge capsule animation architecture.
 
 **Edge Preview Cards (Edge Browse)**
 

@@ -25,7 +25,6 @@ internal sealed record EdgeCapsuleHostOptions(
     FontWeight LabelFontWeight,
     string CloseToolTip,
     Brush PaperBrush,
-    Brush SurfaceBrush,
     Brush PaperBorderBrush,
     Brush OutlineBrush,
     Brush HoverBrush,
@@ -818,7 +817,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             Margin = new Thickness(options.WindowChromeMargin),
             CornerRadius = new CornerRadius(options.ChromeCornerRadius),
             BorderThickness = new Thickness(1),
-            Background = options.SurfaceBrush,
+            Background = options.PaperBrush,
             BorderBrush = options.PaperBorderBrush,
             SnapsToDevicePixels = true,
             Effect = new DropShadowEffect
@@ -1325,14 +1324,8 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         return default;
     }
 
-    internal void RefreshSurfaceMaterial(Brush surfaceBrush)
-    {
-        if (!_disposed) Chrome.Background = surfaceBrush;
-    }
-
     public void UpdateTheme(
         Brush paperBrush,
-        Brush surfaceBrush,
         Brush paperBorderBrush,
         Brush outlineBrush,
         Brush hoverBrush,
@@ -1350,7 +1343,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         _hoverBrush = hoverBrush;
         _textBrush = strongTextBrush;
         _weakTextBrush = weakTextBrush;
-        Chrome.Background = surfaceBrush;
+        Chrome.Background = paperBrush;
         Chrome.BorderBrush = paperBorderBrush;
         Outline.BorderBrush = outlineBrush;
         Label.Foreground = weakTextBrush;

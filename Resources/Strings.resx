@@ -559,7 +559,7 @@
     <value>浅色、深色，或跟随 Windows 系统主题。</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>切换纸片配色：背景、强调色与弱化文字。云母还会融合静态壁纸的柔和色调。</value>
+    <value>切换纸片配色：背景、强调色与弱化文字。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>语言默认会分别为界面与笔记正文挑选系统字体。
@@ -1433,6 +1433,15 @@
     <value>云母</value>
   </data>
   <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>云母质感：融合 Windows 当前静态壁纸的柔和色调，不透出后方应用。兼容 WPF 绘制，非系统原生 Mica；关闭系统透明效果、开启高对比度或壁纸不可读时使用实色。</value>
+    <value>使用 Windows 11 22H2 及以上的原生 DWM Mica，背景由系统合成，不读取或模拟壁纸。用于展开的纸片和设置窗口；胶囊、折叠动画和半透明状态保留实色绘制。关闭系统透明效果、开启高对比度或原生接口不可用时回退实色。首次从其他皮肤切换后需退出并重新打开 PaperTodo。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>已保存云母选择。请从托盘退出并重新打开 PaperTodo，以启用原生 Mica；当前窗口先使用实色，编辑内容和撤销记录不会因换肤被重建。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>原生 Mica 需要 Windows 11 22H2（22621）及以上。当前系统使用云母配色的实色背景。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>原生 Mica 用于展开的纸片和设置窗口。胶囊、折叠动画及半透明状态使用实色背景；系统也可能按透明效果和节能策略回退。</value>
   </data>
 </root>

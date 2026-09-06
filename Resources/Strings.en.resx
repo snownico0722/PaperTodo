@@ -533,7 +533,7 @@ Error: {0}</value>
     <value>Light, dark, or follow the Windows system theme.</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>Change the paper, accent and secondary-text colors. Mica also blends soft tones from the static wallpaper.</value>
+    <value>Paper colors: background, accents, and muted text.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>Language default picks system fonts for UI and note body separately.
@@ -1384,6 +1384,15 @@ When off, open at the docked edge or remembered position.</value>
     <value>Mica</value>
   </data>
   <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>Mica-style surfaces blend soft tones from the current Windows static wallpaper, not apps behind the window. Rendered in WPF, not native system Mica. Solid colors are used when transparency is off, high contrast is on, or the wallpaper cannot be read.</value>
+    <value>Uses native DWM Mica on Windows 11 22H2 or later, composed by Windows without reading or simulating the wallpaper. Applies to expanded papers and Settings; capsules, folding animations and translucent states keep solid rendering. Falls back to solid colors when transparency is disabled, high contrast is enabled, or native APIs are unavailable. After switching from another skin for the first time, exit and reopen PaperTodo.</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>Mica selection saved. Exit PaperTodo from the tray and reopen it to enable native Mica. Existing windows use solid colors for now; changing skins does not recreate your editors or undo history.</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>Native Mica requires Windows 11 22H2 (build 22621) or later. This system uses solid Mica palette colors.</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>Native Mica applies to expanded papers and Settings. Capsules, folding animations and translucent states use solid backgrounds. Windows may also use its fallback based on transparency and power settings.</value>
   </data>
 </root>

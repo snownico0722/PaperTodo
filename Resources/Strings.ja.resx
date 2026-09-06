@@ -546,7 +546,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>ライト、ダーク、または Windows のシステムテーマに合わせます。</value>
   </data>
   <data name="TipColorScheme" xml:space="preserve">
-    <value>紙の背景、アクセント、補助テキストの配色を切り替えます。マイカは静止壁紙の柔らかな色調も取り入れます。</value>
+    <value>紙片の配色：背景、アクセント、弱い文字色。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
     <value>言語既定では、UI とノート本文にそれぞれ適したシステムフォントを使います。
@@ -1384,6 +1384,15 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>マイカ</value>
   </data>
   <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>Windows の現在の静止壁紙の色調を柔らかく取り入れるマイカ調です。背後のアプリは透けません。WPF による互換描画で、システム標準の Mica ではありません。透明効果がオフ、高コントラストがオン、または壁紙を読み込めない場合は単色になります。</value>
+    <value>Windows 11 22H2 以降のネイティブ DWM Mica を使用します。壁紙を読み込んだり模倣したりせず、Windows が背景を合成します。展開した紙片と設定画面が対象です。カプセル、折りたたみアニメーション、半透明状態では単色描画を維持します。透明効果がオフ、高コントラストがオン、またはネイティブ API が利用できない場合は単色になります。他のスキンから初めて切り替えた後は PaperTodo を終了して開き直してください。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>マイカの選択を保存しました。トレイから PaperTodo を終了して開き直すと、ネイティブ Mica が有効になります。現在のウィンドウは単色のままです。スキン変更で編集画面や元に戻す履歴は作り直しません。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>ネイティブ Mica には Windows 11 22H2（ビルド 22621）以降が必要です。このシステムではマイカ配色の単色背景を使用します。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>ネイティブ Mica は展開した紙片と設定画面に適用されます。カプセル、折りたたみアニメーション、半透明状態では単色背景を使用します。Windows の透明効果や省電力設定によっても単色表示になります。</value>
   </data>
 </root>

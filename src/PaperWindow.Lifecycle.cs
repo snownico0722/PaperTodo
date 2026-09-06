@@ -73,6 +73,7 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
+        RefreshNativeMica();
     }
 
     private void CompletePaperFormTransition(bool collapsed)
@@ -85,6 +86,8 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
+
+        RefreshNativeMica();
 
         // Collapse: release images only after the form transition finishes so the fading shell
         // still shows bitmaps. Expand restores rendering earlier (when the shell becomes visible).
