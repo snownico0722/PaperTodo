@@ -1,0 +1,21 @@
+name: Material workspace
+on:
+  push:
+    branches: [work/mica-materials-20260907]
+    paths: [.github/workflows/material-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip HEAD -o source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: material-source
+          path: source.zip
+          retention-days: 1
