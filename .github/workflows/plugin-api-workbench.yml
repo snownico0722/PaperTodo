@@ -1,0 +1,17 @@
+name: Plugin API workbench
+on:
+  push:
+    branches: [feat/plugin-actions-assets-surfaces-20260907]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-api-source
+          path: source.zip
+          retention-days: 1
