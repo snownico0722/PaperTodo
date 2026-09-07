@@ -1,0 +1,25 @@
+diff --git a/src/PluginSurfaceHost.cs b/src/PluginSurfaceHost.cs
+--- a/src/PluginSurfaceHost.cs
++++ b/src/PluginSurfaceHost.cs
+@@ -226,6 +226,8 @@
+             Height = isWindow ? double.NaN : Math.Max(1, height),
+             UseLayoutRounding = true, SnapsToDevicePixels = true
+         };
++        // Focusable for read-only fallback, but never a tab stop before plugin controls.
++        KeyboardNavigation.SetIsTabStop(frame, false);
+         KeyboardNavigation.SetTabNavigation(frame, KeyboardNavigationMode.Cycle);
+         surface.Frame = frame;
+         return frame;
+diff --git a/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs b/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
+--- a/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
++++ b/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
+@@ -77,7 +77,8 @@
+                 return new Content(combo);
+             });
+         Pump();
+-        Assert(combo.IsKeyboardFocusWithin, "Shell fallback stole focus from an interactive child.");
++        Assert(combo.IsKeyboardFocusWithin,
++            $"Popup did not focus its interactive child (focused: {Keyboard.FocusedElement?.GetType().Name}, open: {handle.IsOpen}).");
+         combo.IsDropDownOpen = true;
+         Pump();
+         PressEscape();
