@@ -1395,4 +1395,19 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="MicaScope" xml:space="preserve">
     <value>ネイティブ Mica は展開した紙片と設定画面に適用されます。カプセル、折りたたみアニメーション、半透明状態では単色背景を使用します。Windows の透明効果や省電力設定によっても単色表示になります。</value>
   </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>背景効果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>システムネイティブの背景効果を選択します。Mica は控えめな壁紙色、Mica Alt はより濃い壁紙色、アクリルは強いすりガラス半透明効果を提供します。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="MicaBackdropMicaAlt" xml:space="preserve">
+    <value>Mica Alt</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>アクリル</value>
+  </data>
 </root>

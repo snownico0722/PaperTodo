@@ -1395,4 +1395,19 @@ When off, open at the docked edge or remembered position.</value>
   <data name="MicaScope" xml:space="preserve">
     <value>Native Mica applies to expanded papers and Settings. Capsules, folding animations and translucent states use solid backgrounds. Windows may also use its fallback based on transparency and power settings.</value>
   </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>Backdrop material</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>Choose the system native backdrop material: Mica provides subtle wallpaper tinting, Mica Alt provides deeper tinting, and Acrylic provides a strong frosted translucent effect.</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="MicaBackdropMicaAlt" xml:space="preserve">
+    <value>Mica Alt</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>Acrylic</value>
+  </data>
 </root>

@@ -25,7 +25,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
 {
     internal static readonly DwmMicaApi Instance = new();
     internal const int None = 1;
-    internal const int MainWindow = 2; // DWMSBT_MAINWINDOW: Windows 11 Mica, not Acrylic/Mica Alt.
+    internal const int MainWindow = 2;      // DWMSBT_MAINWINDOW: Windows 11 Mica
+    internal const int TransientWindow = 3; // DWMSBT_TRANSIENTWINDOW: Acrylic
+    internal const int TabbedWindow = 4;    // DWMSBT_TABBEDWINDOW: Mica Alt
     internal const int SystemBackdropAttribute = 38;
     public bool IsSupported => NativeMicaBackdrop.IsSupported;
     public bool HighContrast => System.Windows.SystemParameters.HighContrast;

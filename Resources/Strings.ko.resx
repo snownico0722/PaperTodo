@@ -1395,4 +1395,19 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="MicaScope" xml:space="preserve">
     <value>네이티브 Mica는 펼친 메모와 설정 창에 적용됩니다. 캡슐, 접기 애니메이션 및 반투명 상태에서는 단색 배경을 사용합니다. Windows의 투명 효과 및 절전 설정에 따라서도 단색으로 표시될 수 있습니다.</value>
   </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>배경 효과</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>시스템 기본 배경 효과를 선택합니다. Mica는 은은한 배경화면 색상, Mica Alt는 더 짙은 색상, 아크릴은 강한 반투명 블러 효과를 제공합니다.</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="MicaBackdropMicaAlt" xml:space="preserve">
+    <value>Mica Alt</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>아크릴</value>
+  </data>
 </root>

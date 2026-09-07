@@ -26,9 +26,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly DependencyPropertyDescriptor _opacity;
     private HwndSource? _source;
     private Border? _observedChrome;
-    private (bool Requested, bool Dark, bool Eligible, bool Rounded)? _applied;
+    private (bool Requested, bool Dark, bool Eligible, bool Rounded, int Backdrop)? _applied;
     private bool _requested;
     private bool _dark;
+    private int _backdrop = DwmMicaApi.MainWindow;
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
@@ -67,12 +68,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
         window.Closed += OnClosed;
     }
 
-    internal void Refresh(bool requested, bool dark, bool force = false)
+    internal void Refresh(bool requested, bool dark, int? backdrop = null, bool force = false)
     {
         if (_disposed) return;
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
+        if (backdrop.HasValue) _backdrop = backdrop.Value;
         if (_updating) return;
         var chrome = _getChrome();
         ObserveChrome(chrome);
@@ -82,7 +84,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
-        var state = (requested, dark, eligible, rounded);
+        var state = (requested, dark, eligible, rounded, _backdrop);
         if (!force && _applied == state) return;
 
         _updating = true;
@@ -108,7 +110,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                         LastHResult = _native.SetDarkMode(hwnd, dark);
                         if (LastHResult >= 0)
                         {
-                            LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.MainWindow);
+                            LastHResult = _native.SetBackdrop(hwnd, _backdrop);
                             IsActive = LastHResult >= 0;
                         }
                     }
@@ -127,7 +129,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
                 ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
             _window.Background = IsActive || alphaReady ? Brushes.Transparent : Theme.PaperBrush;
-            _setSurface(IsActive ? Brushes.Transparent : Theme.PaperBrush);
+            _setSurface(IsActive ? GetActiveSurfaceBrush(_backdrop, dark) : Theme.PaperBrush);
             if (wasActive != IsActive) _changed();
             if (enable && !IsActive)
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
@@ -202,5 +204,22 @@ internal sealed class NativeMicaBackdrop : IDisposable
         IsActive = false;
         _source = null;
         _observedChrome = null;
+    }
+
+    internal static Brush GetActiveSurfaceBrush(int backdrop, bool dark)
+    {
+        if (backdrop == DwmMicaApi.TransientWindow)
+        {
+            // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
+            // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
+            // noise and lifts the darkness, producing a clean, luminous frosted glass.
+            var color = dark
+                ? Color.FromArgb(160, 32, 33, 40)
+                : Color.FromArgb(168, 255, 255, 255);
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+        return Brushes.Transparent;
     }
 }

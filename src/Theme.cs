@@ -22,6 +22,26 @@ public static class ColorSchemes
     public static string Normalize(string? id) => IsValid(id) ? id! : Warm;
 }
 
+public static class MicaBackdropTypes
+{
+    public const string Mica = "mica";
+    public const string MicaAlt = "micaAlt";
+    public const string Acrylic = "acrylic";
+
+    public static readonly string[] All = { Mica, MicaAlt, Acrylic };
+
+    public static bool IsValid(string? id) => id is Mica or MicaAlt or Acrylic;
+
+    public static string Normalize(string? id) => IsValid(id) ? id! : Mica;
+
+    public static int ToDwmBackdrop(string? id) => Normalize(id) switch
+    {
+        MicaAlt => DwmMicaApi.TabbedWindow,
+        Acrylic => DwmMicaApi.TransientWindow,
+        _ => DwmMicaApi.MainWindow
+    };
+}
+
 public static class Theme
 {
     // 一套主题的全部基色。半透明叠加色（hover / 拖放 / 标题栏 / 删除区）

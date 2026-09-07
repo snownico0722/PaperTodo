@@ -125,6 +125,37 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
     }
 
+    private void SetMicaBackdrop(string type)
+    {
+        var normalized = MicaBackdropTypes.Normalize(type);
+        if (State.MicaBackdropType == normalized)
+        {
+            return;
+        }
+
+        State.MicaBackdropType = normalized;
+        SaveNow();
+        var dwmBackdrop = MicaBackdropTypes.ToDwmBackdrop(normalized);
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshNativeMica(force: true);
+        }
+        _settingsMica?.Refresh(UsesNativeMicaWindows && State.ColorScheme == ColorSchemes.Mica, Theme.IsDark, dwmBackdrop, force: true);
+        RefreshSettingsWindowContent();
+    }
+
+    private UIElement CreateMicaBackdropSegmentSelector()
+    {
+        var segments = new[]
+        {
+            (MicaBackdropTypes.Mica, Strings.Get("MicaBackdropMica")),
+            (MicaBackdropTypes.MicaAlt, Strings.Get("MicaBackdropMicaAlt")),
+            (MicaBackdropTypes.Acrylic, Strings.Get("MicaBackdropAcrylic"))
+        };
+
+        return CreateSegmentSelector(segments, MicaBackdropTypes.Normalize(State.MicaBackdropType), SetMicaBackdrop);
+    }
+
     private void SetUiFontPreset(string preset)
     {
         var normalized = UiFontPresets.Normalize(preset);
@@ -1152,7 +1183,7 @@ public sealed partial class AppController
         }
 
         ApplyToolTipSetting(window);
-        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, force: true);
+        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, MicaBackdropTypes.ToDwmBackdrop(State.MicaBackdropType), force: true);
     }
 
     private void RefreshTypography()
@@ -2630,6 +2661,11 @@ public sealed partial class AppController
                 TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
                 FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 3, 2, 5)
             });
+            if (NativeMicaBackdrop.IsSupported)
+            {
+                leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMicaBackdrop")), "TipMicaBackdrop"));
+                leftColumn.Children.Add(CreateMicaBackdropSegmentSelector());
+            }
         }
         leftColumn.Children.Add(WrapWithHint(
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
@@ -2823,6 +2859,7 @@ public sealed partial class AppController
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;
+        State.MicaBackdropType = MicaBackdropTypes.Mica;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;

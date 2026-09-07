@@ -39,15 +39,20 @@ internal static class Program
                 Assert(ColorSchemes.All.Distinct().Count() == 5, "unique skins");
                 Assert(ColorSchemes.Normalize(null) == ColorSchemes.Warm, "null default");
                 Assert(ColorSchemes.Normalize("future") == ColorSchemes.Warm, "unknown default");
+                Assert(MicaBackdropTypes.Normalize(null) == MicaBackdropTypes.Mica, "null mica backdrop default");
+                Assert(MicaBackdropTypes.Normalize("future") == MicaBackdropTypes.Mica, "unknown mica backdrop default");
+                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Mica) == 2, "mica backdrop dwm value");
+                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.MicaAlt) == 4, "mica alt backdrop dwm value");
+                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
                 long version = 0;
                 foreach (var mode in new[] { "light", "dark", "system" })
                 {
-                    var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = mode };
+                    var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = mode, MicaBackdropType = MicaBackdropTypes.MicaAlt };
                     state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# Mica\n保留笔记" });
                     store.SaveJsonSync(store.SerializeState(state), ++version);
                     var restored = store.Load();
-                    Assert(restored.ColorScheme == "mica" && restored.Theme == mode, "saved selection");
+                    Assert(restored.ColorScheme == "mica" && restored.Theme == mode && restored.MicaBackdropType == "micaAlt", "saved selection");
                     Assert(restored.Papers[0].Content == state.Papers[0].Content, "preserved body");
                 }
             });
@@ -69,6 +74,10 @@ internal static class Program
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && Transparent(f.Chrome.Background), "transparent native surface");
                 Assert(!f.Api.Alpha && f.Api.Backdrop == 2 && f.Api.Rounded, "native recipe and corners");
+                f.Backdrop.Refresh(true, false, backdrop: DwmMicaApi.TabbedWindow, force: true);
+                Assert(f.Api.Backdrop == 4, "Mica Alt backdrop");
+                f.Backdrop.Refresh(true, false, backdrop: DwmMicaApi.TransientWindow, force: true);
+                Assert(f.Api.Backdrop == 3, "Acrylic backdrop");
                 f.Apply(true, true);
                 Assert(f.Api.Dark, "explicit dark mode");
                 f.Apply(false, true);
