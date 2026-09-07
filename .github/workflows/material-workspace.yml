@@ -36,7 +36,7 @@ jobs:
           patch = zlib.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(patch).hexdigest() == '25d4fdc32f4cc234bdf03f075bf3431051ca9078483378927b81e9de7c2a6019'
           changes = [patch]
-          for sha, digest in [('1790ce5fc8082fb829d86730a39fc3353d0edda5','4f56e80eb9fdcba330dc53b8ecb128c14375ebd868e220da28a831fb7bec25d1'),('89faa576ca355d1daaf7cc5a2c1b7b58e479cf05','ba1d08e1f560ae3d194e4547ac962b4c8009eef6e0318416bc33eb7458307b3f')]:
+          for sha, digest in [('1790ce5fc8082fb829d86730a39fc3353d0edda5','4f56e80eb9fdcba330dc53b8ecb128c14375ebd868e220da28a831fb7bec25d1'),('89faa576ca355d1daaf7cc5a2c1b7b58e479cf05','ba1d08e1f560ae3d194e4547ac962b4c8009eef6e0318416bc33eb7458307b3f'),('cf96c626924ea73101db6e36c5f3701c4b57aa6f','643de3cdbfa679320af77aafefce6a6c7e38138d5c255b71113b62b36611e4b4')]:
               change = base64.b64decode(api('/git/blobs/' + sha)['content']).replace(b'\n diff --git',b'\ndiff --git')
               assert hashlib.sha256(change).hexdigest() == digest
               changes.append(change)
