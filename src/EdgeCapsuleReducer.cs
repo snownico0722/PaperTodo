@@ -190,7 +190,9 @@ internal static class EdgeCapsuleReducer
         EdgeCapsuleModel model,
         bool overInteractiveSurface)
     {
-        overInteractiveSurface &= !model.PeerReorderActive;
+        // An outgoing frame can still receive pointer samples after its queue slot is gone.
+        overInteractiveSurface &= model.State.Slot != EdgeCapsuleSlotState.None &&
+            !model.PeerReorderActive;
         var visual = model.State.Slot switch
         {
             EdgeCapsuleSlotState.ExpandedReserved => EdgeCapsuleVisualState.Active,
