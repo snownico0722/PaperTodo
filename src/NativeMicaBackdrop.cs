@@ -217,7 +217,6 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _syncingTransitionBounds = true;
         try
         {
-            _window.ResizeMode = ResizeMode.NoResize;
             if (hasAnimatedWidth)
             {
                 _transitionOuterWidthInset ??= CaptureOuterInset(_window.ActualWidth, chrome.Width);
