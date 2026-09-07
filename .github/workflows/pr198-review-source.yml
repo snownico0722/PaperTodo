@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/pr198-review-source.yml
       - .github/pr198-review.patch
+      - .github/pr198-focus.patch
 permissions:
   contents: read
 jobs:
@@ -29,10 +30,11 @@ jobs:
         shell: python
         run: |
           import pathlib, subprocess, tempfile
-          patch = pathlib.Path(tempfile.gettempdir()) / 'pr198-review.patch'
-          patch.write_bytes(pathlib.Path('.github/pr198-review.patch').read_bytes().replace(b'\r\n', b'\n'))
-          subprocess.run(['git', 'apply', '--check', str(patch)], check=True)
-          subprocess.run(['git', 'apply', str(patch)], check=True)
+          for name in ['pr198-review.patch', 'pr198-focus.patch']:
+              patch = pathlib.Path(tempfile.gettempdir()) / name
+              patch.write_bytes((pathlib.Path('.github') / name).read_bytes().replace(b'\r\n', b'\n'))
+              subprocess.run(['git', 'apply', '--check', str(patch)], check=True)
+              subprocess.run(['git', 'apply', str(patch)], check=True)
       - name: Build Release and validate interaction behavior
         shell: pwsh
         run: |
@@ -50,7 +52,7 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Unexpected branch' }
           $remote = (git ls-remote origin "refs/heads/$branch").Split()[0]
           if ($remote -ne $env:GITHUB_SHA) { throw 'Branch changed during validation' }
-          git rm .github/pr198-review.patch
+          git rm .github/pr198-review.patch .github/pr198-focus.patch
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git add -u
