@@ -80,11 +80,35 @@ internal static class VisualChecks
             other.Close(); other = null;
             window.Activate();
 
-            window.SetCollapsedState(true, animate: true, saveGeometry: false); Wait();
+            var expandedWidth = window.ActualWidth;
+            var expandedHeight = window.ActualHeight;
+            window.SetCollapsedState(true, animate: true, saveGeometry: false);
+            Wait(150); // 70 ms shell fade + part of the 150 ms size transition.
+            Program.Assert(!window.IsNativeMicaEffective, "collapse animation uses WPF alpha fallback");
+            Program.Assert(window.ActualWidth < expandedWidth - 20 && window.ActualHeight < expandedHeight - 20,
+                "native HWND must shrink during collapse instead of staying at expanded bounds");
+            Program.Assert(double.IsFinite(chrome.Width) && double.IsFinite(chrome.Height),
+                "form animation owns explicit visual chrome bounds");
+            Program.Assert(window.ActualWidth - chrome.Width <= 24 && window.ActualHeight - chrome.Height <= 24,
+                "native HWND must stay aligned with the animated paper instead of exposing an outer frame");
+            Capture(window, "03a-collapse-mid", null, null, dark: null);
+            Wait();
             Program.Assert(!window.IsNativeMicaEffective, "capsule stays on WPF alpha fallback");
             swatches.Visibility = Visibility.Collapsed;
             Capture(window, "03-collapsed", null, null, dark: null);
-            window.SetCollapsedState(false, animate: true, saveGeometry: false); Wait();
+
+            var capsuleWidth = window.ActualWidth;
+            var capsuleHeight = window.ActualHeight;
+            window.SetCollapsedState(false, animate: true, saveGeometry: false);
+            Wait(90);
+            Program.Assert(window.ActualWidth > capsuleWidth + 20 && window.ActualHeight > capsuleHeight + 20,
+                "native HWND must grow during expansion rather than jump only at the endpoint");
+            Program.Assert(double.IsFinite(chrome.Width) && double.IsFinite(chrome.Height),
+                "expand animation owns explicit visual chrome bounds");
+            Program.Assert(window.ActualWidth - chrome.Width <= 24 && window.ActualHeight - chrome.Height <= 24,
+                "expanding native HWND must remain aligned with the visible paper");
+            Capture(window, "04a-expand-mid", null, null, dark: null);
+            Wait();
             swatches.Visibility = Visibility.Visible; Wait();
             AssertExpanded(window, chrome, hwnd, body);
             Capture(window, "04-expanded-after-animation", white, black, dark: false);
@@ -221,10 +245,10 @@ internal static class VisualChecks
         return sample;
     }
 
-    private static void Wait()
+    private static void Wait(int milliseconds = 650)
     {
         var frame = new DispatcherFrame();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
         timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
         timer.Start(); Dispatcher.PushFrame(frame);
     }
