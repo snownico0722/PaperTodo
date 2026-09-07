@@ -127,6 +127,12 @@ public sealed partial class AppController
         RefreshTrayMenu();
         if (show) ShowPaper(paper);
         else ArrangeDeepCapsules(animate: false);
+
+        if (paper.Type == PaperTypes.Todo)
+        {
+            RefreshCapsuleEligibilityForLinkedPapers(
+                paper.Items.Select(item => item.LinkedPaperId));
+        }
     }
 
     internal void RefreshMcpTodoPaper(PaperData paper)
@@ -137,6 +143,8 @@ public sealed partial class AppController
         }
         NotifyTodoReminderCollectionChanged();
         RefreshTrayMenu();
+        RefreshCapsuleEligibilityForLinkedPapers(
+            paper.Items.Select(item => item.LinkedPaperId));
     }
 
     internal void RefreshTodoPapersForExternalLinkMutation(
