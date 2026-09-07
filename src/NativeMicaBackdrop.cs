@@ -4,15 +4,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shell;
 using System.Windows.Threading;
 
 namespace PaperTodo;
 
 /// <summary>
-/// Native backdrop for ordinary, non-layered paper/settings HWNDs only. The bounded
-/// layered Edge hosts must not use this adapter: DWM paints the entire HWND capacity.
-/// A WPF window's AllowsTransparency is immutable after HWND creation, so the controller
-/// chooses a native-window session at startup rather than replacing live editors.
+/// Owns the backdrop, not paper geometry or focus. Only ordinary non-layered HWNDs
+/// enter this adapter; the bounded layered Edge hosts retain their own presentation.
+/// WindowChrome owns non-client/glass integration. Do not add a parallel NCCALCSIZE
+/// handler or crop the expanded HWND to an inset WPF Border.
 /// </summary>
 internal sealed class NativeMicaBackdrop : IDisposable
 {
@@ -25,15 +26,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly DependencyPropertyDescriptor _opacity;
     private HwndSource? _source;
     private Border? _observedChrome;
-    private NativeMicaRegion? _region;
-    private (bool Requested, bool Dark, bool Eligible)? _applied;
+    private (bool Requested, bool Dark, bool Eligible, bool Rounded)? _applied;
     private bool _requested;
     private bool _dark;
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
-    private bool _alphaReady;
-    private bool _regionOwned;
 
     internal bool IsActive { get; private set; }
     internal int LastHResult { get; private set; }
@@ -51,35 +49,41 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _setSurface = setSurface;
         _changed = changed;
         _native = native ?? DwmMicaApi.Instance;
+        // One frame owner, installed before HWND creation. PaperWindow's existing native
+        // hit-test still owns resizing; settings/capsules must not acquire resize borders.
+        WindowChrome.SetWindowChrome(window, new WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(0),
+            GlassFrameThickness = new Thickness(-1),
+            CornerRadius = new CornerRadius(0),
+            UseAeroCaptionButtons = false
+        });
         _opacity = DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(UIElement));
         _opacity.AddValueChanged(window, OnOpacityChanged);
         window.SourceInitialized += OnSourceInitialized;
         window.LayoutUpdated += OnLayoutUpdated;
+        window.StateChanged += OnStateChanged;
         window.Closed += OnClosed;
     }
 
     internal void Refresh(bool requested, bool dark, bool force = false)
     {
+        if (_disposed) return;
+        _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (_disposed || _updating) return;
-        _window.Dispatcher.VerifyAccess();
+        if (_updating) return;
         var chrome = _getChrome();
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
 
         var eligible = _canPresent() && _window.Opacity >= 1 && chrome.Opacity >= 1 &&
-            !_native.IsLayered(_source.Handle) &&
-            chrome.IsVisible && _window.WindowState != WindowState.Minimized;
-        var state = (requested, dark, eligible);
-        var regionFailed = false;
-        if (!force && _applied == state)
-        {
-            if (!IsActive || UpdateRegion(chrome)) return;
-            // A failed resize clip must not retain a native slab over stale geometry.
-            // Stay on fallback until an explicit preference/source refresh retries it.
-            regionFailed = true;
-        }
+            !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
+            _window.WindowState != WindowState.Minimized;
+        var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
+        var state = (requested, dark, eligible, rounded);
+        if (!force && _applied == state) return;
 
         _updating = true;
         try
@@ -87,41 +91,42 @@ internal sealed class NativeMicaBackdrop : IDisposable
             _applied = state;
             var wasActive = IsActive;
             var hwnd = _source.Handle;
-            var enable = !regionFailed && requested && eligible && _native.IsSupported &&
+            var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             IsActive = false;
-            LastHResult = regionFailed ? unchecked((int)0x80004005) : 0;
+            LastHResult = 0;
             if (enable)
             {
-                // Prepare glass + alpha before making any application brush transparent.
-                LastHResult = _native.ExtendFrame(hwnd, true);
+                // Legacy blur-behind alpha is ONLY a fallback. Leaving it enabled when
+                // restoring Mica mixes two composition recipes after the startup fade.
+                LastHResult = _native.DisableAlpha(hwnd);
                 if (LastHResult >= 0)
                 {
-                    LastHResult = _native.SetDarkMode(hwnd, dark);
+                    LastHResult = _native.ExtendFrame(hwnd, true);
                     if (LastHResult >= 0)
                     {
-                        LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.MainWindow);
+                        LastHResult = _native.SetDarkMode(hwnd, dark);
                         if (LastHResult >= 0)
                         {
-                            IsActive = UpdateRegion(chrome);
+                            LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.MainWindow);
+                            IsActive = LastHResult >= 0;
                         }
                     }
                 }
             }
 
+            // DWM owns the outer corners and border. No SetWindowRgn: it invalidates native
+            // rounding/shadow and used to turn the paper's shadow margin into a second frame.
+            _native.ConfigureFrame(hwnd, IsActive && rounded);
+            var alphaReady = false;
             if (!IsActive)
             {
-                // Remove the full-HWND material BEFORE releasing its clip. Collapse/opacity
-                // animations then use the existing WPF pixels, never an expanded Mica slab.
-                var disabled = !_native.IsSupported || _native.SetBackdrop(hwnd, DwmMicaApi.None) >= 0;
-                // If DWM rejected disable, keep its last owned clip rather than expose a
-                // full-capacity native background during the WPF fallback animation.
-                if (disabled) ClearRegion();
-                _alphaReady = _native.CompositionEnabled && _native.EnableAlpha(hwnd) >= 0;
+                if (_native.IsSupported) _native.SetBackdrop(hwnd, DwmMicaApi.None);
+                alphaReady = _native.CompositionEnabled && _native.EnableAlpha(hwnd) >= 0;
             }
-            _source.CompositionTarget.BackgroundColor = IsActive || _alphaReady
-                ? Colors.Transparent : ((SolidColorBrush)Theme.PaperBrush).Color;
-            _window.Background = IsActive || _alphaReady ? Brushes.Transparent : Theme.PaperBrush;
+            _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
+                ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
+            _window.Background = IsActive || alphaReady ? Brushes.Transparent : Theme.PaperBrush;
             _setSurface(IsActive ? Brushes.Transparent : Theme.PaperBrush);
             if (wasActive != IsActive) _changed();
             if (enable && !IsActive)
@@ -135,10 +140,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _source = HwndSource.FromHwnd(new WindowInteropHelper(_window).Handle);
         if (_source == null) return;
         _source.AddHook(WindowMessage);
-        // WindowStyle.None may still have a resize non-client frame in a non-layered HWND.
-        // Recalculate it once; subsequent sizing remains in PaperWindow's existing owner.
-        _native.RefreshFrame(_source.Handle);
         Refresh(_requested, _dark, force: true);
+        QueueRefresh(); // WindowChrome and startup shell styles have now been installed.
     }
 
     private void ObserveChrome(Border? chrome)
@@ -147,64 +150,26 @@ internal sealed class NativeMicaBackdrop : IDisposable
         if (_observedChrome != null) _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
         _observedChrome = chrome;
         if (chrome != null) _opacity.AddValueChanged(chrome, OnOpacityChanged);
-        // Settings rebuild their root; do not leave the replacement chrome opaque.
+        // Settings rebuild their root; the replacement must receive the actual surface.
         _applied = null;
-        _region = null;
     }
 
     private void OnLayoutUpdated(object? sender, EventArgs e) => Refresh(_requested, _dark);
+    private void OnStateChanged(object? sender, EventArgs e) => QueueRefresh();
     private void OnOpacityChanged(object? sender, EventArgs e)
     {
         Refresh(_requested, _dark);
-        // WPF can remove its uniform-opacity WS_EX_LAYERED flag after the DP callback.
-        // A single boundary refresh sees the settled style; no per-frame polling/timer.
-        if (_window.Opacity >= 1 && (_observedChrome?.Opacity ?? 1) >= 1)
-            QueueRefresh();
+        // WPF can remove its temporary WS_EX_LAYERED flag after the DP callback.
+        // Refresh only at the boundary, never poll or write native attributes every frame.
+        if (_window.Opacity >= 1 && (_observedChrome?.Opacity ?? 1) >= 1) QueueRefresh();
     }
     private void OnClosed(object? sender, EventArgs e) => Dispose();
 
-    private bool UpdateRegion(Border chrome)
-    {
-        if (_source == null || chrome.ActualWidth <= 0 || chrome.ActualHeight <= 0) return false;
-        var origin = chrome.TranslatePoint(new Point(), _window);
-        var dpi = VisualTreeHelper.GetDpi(_window);
-        var region = NativeMicaRegion.FromLayout(origin, chrome.RenderSize, chrome.CornerRadius.TopLeft, dpi);
-        if (_region == region) return true;
-        // Cache before SetWindowRgn: it synchronously raises WM_WINDOWPOSCHANGED.
-        var previous = _region;
-        _region = region;
-        if (_native.SetRegion(_source.Handle, region))
-        {
-            _regionOwned = true;
-            return true;
-        }
-        _region = previous;
-        LastHResult = unchecked((int)0x80004005);
-        return false;
-    }
-
-    private void ClearRegion()
-    {
-        if (!_regionOwned || _source == null) return;
-        if (_native.ClearRegion(_source.Handle))
-        {
-            _regionOwned = false;
-            _region = null;
-        }
-    }
-
     private IntPtr WindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (message == 0x0083 /* WM_NCCALCSIZE */ && _window.WindowStyle == WindowStyle.None)
-        {
-            handled = true;
-            return IntPtr.Zero;
-        }
         if (message is 0x031E /* WM_DWMCOMPOSITIONCHANGED */ or 0x0320 /* WM_DWMCOLORIZATIONCOLORCHANGED */ or
             0x031A /* WM_THEMECHANGED */ or 0x001A /* WM_SETTINGCHANGE */ or 0x02E0 /* WM_DPICHANGED */)
-        {
             QueueRefresh();
-        }
         return IntPtr.Zero;
     }
 
@@ -225,26 +190,17 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _disposed = true;
         _window.SourceInitialized -= OnSourceInitialized;
         _window.LayoutUpdated -= OnLayoutUpdated;
+        _window.StateChanged -= OnStateChanged;
         _window.Closed -= OnClosed;
         _opacity.RemoveValueChanged(_window, OnOpacityChanged);
         if (_observedChrome != null) _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
-        if (_source != null && !_source.IsDisposed) _source.RemoveHook(WindowMessage);
+        if (_source != null && !_source.IsDisposed)
+        {
+            _source.RemoveHook(WindowMessage);
+            if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
+        }
+        IsActive = false;
         _source = null;
         _observedChrome = null;
-        // HWND destruction releases its system backdrop and any system-owned HRGN.
-    }
-}
-
-internal readonly record struct NativeMicaRegion(int Left, int Top, int Right, int Bottom, int EllipseWidth, int EllipseHeight)
-{
-    internal static NativeMicaRegion FromLayout(Point origin, Size size, double radius, DpiScale dpi)
-    {
-        var left = (int)Math.Round(origin.X * dpi.DpiScaleX);
-        var top = (int)Math.Round(origin.Y * dpi.DpiScaleY);
-        var right = (int)Math.Round((origin.X + size.Width) * dpi.DpiScaleX);
-        var bottom = (int)Math.Round((origin.Y + size.Height) * dpi.DpiScaleY);
-        radius = Math.Clamp(radius, 0, Math.Min(size.Width, size.Height) / 2);
-        return new(left, top, Math.Max(left + 1, right), Math.Max(top + 1, bottom),
-            (int)Math.Round(radius * 2 * dpi.DpiScaleX), (int)Math.Round(radius * 2 * dpi.DpiScaleY));
     }
 }

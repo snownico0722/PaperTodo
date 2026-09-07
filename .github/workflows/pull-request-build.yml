@@ -55,4 +55,15 @@ jobs:
         run: dotnet run --project .\tests\PaperTodo.TodoNavigationChecks\PaperTodo.TodoNavigationChecks.csproj -c Release
 
       - name: Native Mica checks
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/mica-pixels
         run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
+
+      - name: Upload native Mica desktop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-mica-visual-${{ github.sha }}
+          path: ${{ runner.temp }}/mica-pixels
+          if-no-files-found: warn
+          retention-days: 7

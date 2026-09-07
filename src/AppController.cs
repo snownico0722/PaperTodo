@@ -1389,6 +1389,22 @@ public sealed partial class AppController : IDisposable
                     {
                         EasingFunction = AnimationHelper.QuickEase
                     };
+                    fadeIn.Completed += (_, _) =>
+                    {
+                        if (window.IsClosed || !paper.IsVisible ||
+                            !IsVisibilityAnimationCurrent(paper.Id, visibilityVersion) ||
+                            !_windows.TryGetValue(paper.Id, out var latestWindow) ||
+                            !ReferenceEquals(latestWindow, window))
+                        {
+                            return;
+                        }
+                        // Commit the opaque endpoint before removing the animation. Keeping
+                        // a HoldEnd clock over the original Opacity=0 can leave a temporary
+                        // layered composition path around a native-backdrop window.
+                        window.Opacity = originalOpacity;
+                        window.BeginAnimation(Window.OpacityProperty, null);
+                        window.RefreshNativeMica(force: true);
+                    };
                     window.BeginAnimation(Window.OpacityProperty, fadeIn);
                 }
                 else

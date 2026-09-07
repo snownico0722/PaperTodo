@@ -3,10 +3,14 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
     <ProjectReference Include="../../PaperTodo.csproj" />
+    <EmbeddedResource Include="../../App.xaml" LogicalName="PaperTodo.App.xaml" />
   </ItemGroup>
 </Project>

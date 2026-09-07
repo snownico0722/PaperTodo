@@ -16,9 +16,8 @@ internal interface INativeMicaApi
     int SetDarkMode(IntPtr hwnd, bool dark);
     int SetBackdrop(IntPtr hwnd, int backdrop);
     int EnableAlpha(IntPtr hwnd);
-    bool SetRegion(IntPtr hwnd, NativeMicaRegion region);
-    bool ClearRegion(IntPtr hwnd);
-    void RefreshFrame(IntPtr hwnd);
+    int DisableAlpha(IntPtr hwnd);
+    void ConfigureFrame(IntPtr hwnd, bool rounded);
 }
 
 /// <summary>Documented DWM APIs; no wallpaper decoding, capture or undocumented Mica flag.</summary>
@@ -79,20 +78,20 @@ internal sealed class DwmMicaApi : INativeMicaApi
         finally { DeleteObject(region); } // Unlike SetWindowRgn, DWM does not take ownership.
     }
 
-    public bool SetRegion(IntPtr hwnd, NativeMicaRegion region)
+    public int DisableAlpha(IntPtr hwnd)
     {
-        var handle = region.EllipseWidth == 0 || region.EllipseHeight == 0
-            ? CreateRectRgn(region.Left, region.Top, region.Right, region.Bottom)
-            : CreateRoundRectRgn(region.Left, region.Top, region.Right + 1, region.Bottom + 1,
-                region.EllipseWidth, region.EllipseHeight);
-        if (handle == IntPtr.Zero) return false;
-        if (SetWindowRgn(hwnd, handle, true) != 0) return true; // System now owns HRGN.
-        DeleteObject(handle);
-        return false;
+        var blur = new BlurBehind { Flags = 1 /* ENABLE */, Enabled = false };
+        return DwmEnableBlurBehindWindow(hwnd, ref blur);
     }
-    public bool ClearRegion(IntPtr hwnd) => SetWindowRgn(hwnd, IntPtr.Zero, true) != 0;
-    public void RefreshFrame(IntPtr hwnd) => SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
-        0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020 /* NOMOVE/NOSIZE/NOZORDER/NOACTIVATE/FRAMECHANGED */);
+
+    public void ConfigureFrame(IntPtr hwnd, bool rounded)
+    {
+        var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
+        var noColor = unchecked((int)0xfffffffe); // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
+        DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref noColor, sizeof(int));
+        DwmSetWindowAttribute(hwnd, 35 /* CAPTION_COLOR */, ref noColor, sizeof(int));
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Margins { internal int Left, Right, Top, Bottom; }
@@ -119,13 +118,6 @@ internal sealed class DwmMicaApi : INativeMicaApi
     [DllImport("gdi32.dll")]
     private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
     [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
-    [DllImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr handle);
-    [DllImport("user32.dll")]
-    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
 }

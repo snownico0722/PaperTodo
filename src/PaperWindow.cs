@@ -53,6 +53,9 @@ public sealed partial class PaperWindow : Window
     private bool _isShellBuilt;
     private NativeMicaBackdrop? _nativeMica;
     internal bool IsNativeMicaEffective => _nativeMica?.IsActive == true;
+    // Stable for the session, including solid/opacity fallback; no inset frame may reappear
+    // just because a startup animation temporarily suspends the material.
+    private bool UsesNativePaperChrome => _controller.UsesNativeMicaWindows && !_paper.IsCollapsed;
 
     private Grid _windowHost = null!;
     private Border _paperChrome = null!;
@@ -885,7 +888,7 @@ public sealed partial class PaperWindow : Window
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
     {
         hitTest = 0;
-        if ((!IsNativeMicaEffective && ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden) ||
+        if ((!_controller.UsesNativeMicaWindows && ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden) ||
             _paper.IsCollapsed ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
@@ -911,9 +914,9 @@ public sealed partial class PaperWindow : Window
 
         var dpi = GetDpiForWindow(hwnd);
         var dpiScale = dpi > 0 ? dpi / 96.0 : 1.0;
-        // Native Mica clips the transparent shadow margin; reserve an additional inner
-        // strip so resize remains reachable inside the visible region (including DPI > 100%).
-        var resizeBorder = Math.Max(1.0, (WindowChromeMargin + (IsNativeMicaEffective ? 5 : 0)) * dpiScale);
+        // Native expanded papers fill the HWND; resizing is inside the visible edge.
+        // Legacy paper/capsule geometry retains its existing transparent shadow margin.
+        var resizeBorder = Math.Max(1.0, (UsesNativePaperChrome ? 5 : WindowChromeMargin) * dpiScale);
         var nearLeft = pointerX < bounds.Left + resizeBorder;
         var nearRight = pointerX >= bounds.Right - resizeBorder;
         var nearTop = pointerY < bounds.Top + resizeBorder;
@@ -1142,11 +1145,11 @@ public sealed partial class PaperWindow : Window
         var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
-        _paperChrome.Margin = new Thickness(WindowChromeMargin);
+        _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        // A native region clips the outer shadow. Do not shadow the text through a
-        // transparent Mica shell; alpha fallback keeps the original WPF shadow.
-        _paperChrome.Effect = IsNativeMicaEffective ? null : isCapsule
+        // Native expanded papers use the system frame, even during solid fallback.
+        // Applying an Effect to a transparent content ancestor also shadows its glyphs.
+        _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         RefreshPluginBodyClip();
@@ -1812,7 +1815,7 @@ public sealed partial class PaperWindow : Window
 
         _paperChrome = new Border
         {
-            Margin = new Thickness(WindowChromeMargin),
+            Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
@@ -3467,9 +3470,10 @@ public sealed partial class PaperWindow : Window
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
     }
 
-    private static CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
+    private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
-        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius : ExpandedChromeCornerRadius);
+        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
+            _controller.UsesNativeMicaWindows ? 8 : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()

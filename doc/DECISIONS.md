@@ -42,7 +42,8 @@
 | D-027 | Built-in Note Markdown 语义更新使用同线程同步发布 | Accepted | Note / Markdown / performance |
 | D-028 | 大 Note 使用轻量局部重解析与 fence 状态扩窗 | Accepted | Note / Markdown / performance |
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
-| D-030 | 普通窗口原生 Mica 与 layered 胶囊边界 | Accepted | 主题 / Window integration |
+| D-030 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-031 | 主题 / Window integration |
+| D-031 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1086,7 +1087,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 
 ## D-030 — 普通窗口原生 Mica 与 layered 胶囊边界
 
-**Status:** Accepted
+**Status:** Superseded by D-031（替代外框/裁切实现，保留原生材质与 Edge 边界）
 
 ### Context
 
@@ -1112,3 +1113,34 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 - `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
 - `tests/PaperTodo.MicaChecks/Program.cs`。
 - PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。
+
+
+---
+
+## D-031 — 原生云母使用单一窗口外框，验证最终桌面像素
+
+**Status:** Accepted
+
+### Context
+
+用户报告展开纸片出现白色外圈、内层纸面压暗，且明确未开启失焦半透明。旧适配器把带 8 DIP 阴影留白的 WPF Border 与全 HWND 原生背景并置，手动处理 NCCALCSIZE 并按内层圆角裁切；启动/形态动画又在 legacy blur-behind alpha 和系统背景之间切换。仅检查 HRESULT、背景属性与裁切坐标无法证明最终桌面图像正确，不能据此把压暗归因于用户设置或正常失焦行为。
+
+### Decision
+
+- 保留官方 DWM Mica 与启动时选择 non-layered 普通窗口的策略，不引入 Windows App SDK，不重建窗口、编辑器、光标或撤销栈。
+- `WindowChrome` 是普通原生窗口唯一 non-client/glass 集成入口，移除适配器自己的 NCCALCSIZE 和 SetWindowRgn 路线。展开纸片在整个会话中填满 HWND，实色或动画回退时也不重新出现阴影外边距；圆角/外框由 DWM 处理，缩放命中保留现有实现。
+- legacy blur-behind alpha 只用于折叠、形态动画和显式透明的 WPF 回退；恢复系统背景前明确停用它。启动淡入提交终值并清除 opacity 时钟，过期显示回调不得覆盖后续隐藏状态。
+- 不把截图中的灰色直接判定为 DWM 非活动色。系统允许的材质回退仍由 DWM 管理；测试同时验证激活/失焦、浅/深色、启动淡入、折叠展开、隐藏显示、缩放和正文黑白色块的最终桌面像素。
+- Edge、drag、master、tether 的 layered shape/translation-only ownership、数据持久化和正文编辑行为不变。
+
+### Rejected / Why
+
+在 Windows CI 上试验 `MicaController.SetTarget(WindowId, DesktopWindowTarget)` 直接挂到现有 WPF HWND：接口成功并不代表兼容，捕获到的结果是背景覆盖 WPF 正文。没有把这条试验路线或额外 SDK 运行时留在产品中；要避免再次为了一个皮肤增加平行内容宿主、窗口和打包路径。
+
+原生系统圆角不承诺复刻旧皮肤的 16 DIP 轮廓。桌面捕获只属于测试，不是运行时生成材质的输入。CI 的 Windows Server 图形会话也不能替代用户 Windows 11 显卡、多屏 DPI 和系统材质策略的真机验证。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`、`src/PaperWindow.cs`。
+- `src/AppController.cs` 的显示动画终点，`src/AppController.Settings.cs` 的窗口集成。
+- `tests/PaperTodo.MicaChecks/Program.cs`、`VisualChecks.cs` 与 Release CI 的桌面/WPF 双通道捕获。
