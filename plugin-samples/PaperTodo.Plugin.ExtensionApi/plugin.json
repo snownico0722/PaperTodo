@@ -1,0 +1,32 @@
+{
+  "kind": "native",
+  "id": "sample.extension.native",
+  "name": "扩展 API 示例",
+  "description": "给 Markdown 添加纸片操作，读取本地图片，打开自绘窗口和锚定浮层。",
+  "version": "1.0.0",
+  "apiVersion": "2.1",
+  "stateVersion": 1,
+  "entry": "PaperTodo.Plugin.ExtensionApi.dll",
+  "capabilities": [
+    "runtime"
+  ],
+  "permissions": [
+    "papers.read",
+    "papers.observe",
+    "notes.read"
+  ],
+  "startupPaper": {
+    "enabledSetting": "autoStart",
+    "instanceKey": "main",
+    "presentation": "capsule",
+    "title": "扩展 API"
+  },
+  "settings": [
+    {
+      "id": "autoStart",
+      "type": "boolean",
+      "name": "启动后恢复示例胶囊",
+      "default": false
+    }
+  ]
+}

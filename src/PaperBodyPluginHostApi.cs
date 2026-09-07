@@ -408,6 +408,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
     {
         if (_disposed) return;
         _disposed = true;
+        ResetExtensionUi();
         _topBarActionHandler = null;
         try { _controller.RemovePluginPaperTopBarSession(_sessionId); } catch { }
         IDisposable[] subscriptions;

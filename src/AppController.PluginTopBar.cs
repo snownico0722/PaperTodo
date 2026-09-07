@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Windows;
 using System.Windows.Media;
 using PaperTodo.Plugin;
 
@@ -8,7 +9,10 @@ internal sealed record PluginTopBarActionBinding(
     Guid OwnerId,
     string ProviderId,
     PaperTopBarActionScope Scope,
-    PaperTopBarAction Action);
+    PaperTopBarAction Action)
+{
+    internal PluginPaperActionBinding? PaperAction { get; init; }
+}
 
 internal sealed record PluginTopBarRenderState(
     IReadOnlyList<PluginTopBarActionBinding> Actions,
@@ -213,8 +217,23 @@ public sealed partial class AppController
                 item.Action));
         }
 
+        var sessionCount = actions.Count(item => item.Scope == PaperTopBarActionScope.Paper);
+        foreach (var binding in GetPluginPaperActions(paperId, PaperActionPlacement.TopBar))
+        {
+            actions.Add(new PluginTopBarActionBinding(binding.OwnerId, binding.ProviderId,
+                PaperTopBarActionScope.Global, new PaperTopBarAction
+                {
+                    Id = binding.Action.Id, Icon = binding.Action.Icon,
+                    ToolTip = string.IsNullOrEmpty(binding.Action.ToolTip) ? binding.Action.Text : binding.Action.ToolTip,
+                    Priority = binding.Action.Priority, Enabled = binding.Action.Enabled, Visible = binding.Action.Visible
+                }) { PaperAction = binding });
+        }
+        // Existing body-session actions retain precedence; targeted Runtime contributions share
+        // the same bounded, lazy-materialized flexible tail as Global actions.
+        var ordered = actions.Take(sessionCount).Concat(actions.Skip(sessionCount)
+            .OrderByDescending(item => item.Action.Priority)).ToArray();
         return new PluginTopBarRenderState(
-            actions,
+            ordered,
             paperRegistration?.HiddenHostActions ?? PaperHostTopBarActions.None);
     }
 
@@ -222,8 +241,16 @@ public sealed partial class AppController
         PluginTopBarActionBinding binding,
         string targetPaperId,
         string targetPaperType,
-        string targetBodyProviderId)
+        string targetBodyProviderId,
+        FrameworkElement? source = null)
     {
+        if (binding.PaperAction is { } paperAction)
+        {
+            if (paperAction.PaperId == targetPaperId)
+                InvokePluginPaperAction(paperAction, PaperActionPlacement.TopBar,
+                    source, source == null ? null : Window.GetWindow(source));
+            return;
+        }
         Action<PaperTopBarActionInvocation>? invoke = null;
         IReadOnlyList<PaperTopBarAction>? actions = null;
 
@@ -266,7 +293,11 @@ public sealed partial class AppController
                 binding.Scope,
                 targetPaperId,
                 targetPaperType,
-                targetBodyProviderId));
+                targetBodyProviderId)
+            {
+                Anchor = CapturePluginUiAnchor(binding.OwnerId, targetPaperId, source,
+                    source == null ? null : Window.GetWindow(source))
+            });
         }
         catch (Exception ex)
         {

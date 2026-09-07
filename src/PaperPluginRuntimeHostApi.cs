@@ -11,7 +11,7 @@ namespace PaperTodo;
 /// before entering PaperCommandService. Protocol 2.1 Runtime contribution surfaces are exposed by
 /// capability interfaces on this same lease so teardown has one owner.
 /// </summary>
-internal sealed class PaperPluginRuntimeWorkspaceApi :
+internal sealed partial class PaperPluginRuntimeWorkspaceApi :
     IPaperTodoHostApi,
     IPaperPluginRuntimeTodoActions,
     IPaperPluginRuntimeTopBarLabels,
@@ -44,6 +44,13 @@ internal sealed class PaperPluginRuntimeWorkspaceApi :
             permissions,
             isSessionCurrent: isActive,
             canReceiveEvents: isActive);
+    }
+
+    internal PaperPluginRuntimeWorkspaceApi(AppController controller, string providerId,
+        IEnumerable<string> permissions, Func<bool> isActive, Guid runtimeId)
+        : this(controller, providerId, permissions, isActive)
+    {
+        _contributionOwnerId = runtimeId;
     }
 
     public IReadOnlySet<string> GrantedPermissions => _inner.GrantedPermissions;
@@ -246,6 +253,7 @@ internal sealed class PaperPluginRuntimeWorkspaceApi :
 
     private void RemoveContributionsAndDisposeInner()
     {
+        ResetExtensionUi();
         _controller.RemovePluginTodoActionsOwner(_contributionOwnerId, _providerId);
         _controller.RemovePluginTopBarLabelsOwner(_contributionOwnerId, _providerId);
         _inner.Dispose();

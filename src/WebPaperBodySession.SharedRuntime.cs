@@ -17,6 +17,9 @@ internal sealed partial class WebPaperBodySession
         string pluginDirectory) =>
         GetPluginEnvironmentAsync(pluginDirectory, backgroundRuntime: true);
 
+    internal static Task<CoreWebView2Environment> SharedSurfaceEnvironmentAsync(string pluginDirectory) =>
+        GetPluginEnvironmentAsync(pluginDirectory);
+
     internal static string SharedWebHostName(string pluginId) =>
         WebHostName(pluginId);
 }

@@ -16,6 +16,36 @@ internal static class PluginContributionPolicy
     private const double MinimumSvgStrokeWidth = 0.1;
     private const double MaximumSvgStrokeWidth = 4.0;
 
+    internal static PaperAction[] NormalizePaperActions(IReadOnlyList<PaperAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        if (actions.Count > 32)
+            throw new PaperTodoPluginException("too_many_paper_actions", "At most 32 actions may target one paper per plugin.");
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return actions.Select(action =>
+        {
+            if (action == null)
+                throw new PaperTodoPluginException("invalid_paper_action", "Actions cannot be null.");
+            var id = NormalizeIdentifier(action.Id, "invalid_paper_action_id", "Paper action");
+            if (!seen.Add(id))
+                throw new PaperTodoPluginException("invalid_paper_action_id", "Action ids must be unique per paper.");
+            const PaperActionPlacement supported = PaperActionPlacement.TopBar | PaperActionPlacement.ContextMenu;
+            if (action.Placement == PaperActionPlacement.None || (action.Placement & ~supported) != 0)
+                throw new PaperTodoPluginException("invalid_paper_action_placement", "Unsupported action placement.");
+            var provider = action.BodyProviderId?.Trim();
+            if (provider != null && (provider.Length is 0 or > 120 || provider.Any(char.IsControl)))
+                throw new PaperTodoPluginException("invalid_paper_action_provider", "Invalid body provider filter.");
+            return action with
+            {
+                Id = id,
+                BodyProviderId = provider,
+                Text = NormalizeText(action.Text, 64, true, "invalid_paper_action_text", "Action text"),
+                ToolTip = NormalizeText(action.ToolTip, 160, false, "invalid_paper_action_tooltip", "Action tooltip"),
+                Icon = NormalizeIcon(action.Icon, true, "invalid_paper_action_icon")
+            };
+        }).ToArray();
+    }
+
     internal static PaperTodoAction[] NormalizeTodoActions(
         IReadOnlyList<PaperTodoAction>? actions)
     {

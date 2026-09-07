@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>扩展 API Runtime</title><script>
+async function refresh() {
+  await papertodo.paperActions.clearAll();
+  const papers = await papertodo.workspace.request('papers.list', {type:'note'});
+  for (const paper of papers) {
+    if (paper.bodyProviderId !== 'builtin.markdown') continue;
+    await papertodo.paperActions.set(paper.id, [
+      {id:'popup', text:'Web 笔记浮层', icon:{kind:'character',value:'W'}, placement:'topBar, contextMenu', bodyProviderId:'builtin.markdown'},
+      {id:'window', text:'Web 笔记窗口', icon:{kind:'character',value:'W'}, placement:'contextMenu', bodyProviderId:'builtin.markdown'}
+    ]);
+  }
+}
+papertodo.onEvent(async message => {
+  try {
+    if (message.type === 'initialize' || (message.type === 'paperEvent' && message.event?.message?.action === 'refresh')) {
+      await refresh(); return;
+    }
+    if (message.type === 'surfaceError') { console.error(message.message); return; }
+    if (message.type !== 'paperActionInvoked') return;
+    const action = message.action;
+    const options = {id:'web-note-' + action.paper.id, title:action.paper.title, entry:'panel.html', width:460, height:330, data:{paperId:action.paper.id}};
+    if (action.actionId === 'popup' && action.anchor) await papertodo.surfaces.openPopup(action.anchor, {...options, id:'web-note-popup'});
+    else await papertodo.surfaces.openWindow({...options, anchor:action.anchor});
+  } catch (error) { console.error(error.code, error.message); }
+});
+</script></html>

@@ -267,7 +267,8 @@ public sealed partial class PaperWindow
                 _paper.Type,
                 _paper.Type == PaperTypes.Note
                     ? NormalizeBodyProviderId(_paper.BodyProviderId)
-                    : string.Empty);
+                    : string.Empty,
+                button);
         return button;
     }
 
@@ -356,7 +357,7 @@ public sealed partial class PaperWindow
     }
 
     private static UIElement CreatePluginTopBarIcon(
-        Button button,
+        Control button,
         PaperTopBarIcon icon)
     {
         if (icon.Kind == PaperTopBarIconKind.SvgPath)

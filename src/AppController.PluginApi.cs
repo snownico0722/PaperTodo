@@ -159,6 +159,8 @@ public sealed partial class AppController
                 continue;
             }
 
+            _pluginPaperActions?.RemovePaper(paperId);
+            ClosePluginSurfacesForPaper(paperId);
             RemovePluginTodoActionsForPaper(paperId);
             RemovePluginTopBarLabelsForPaper(paperId);
 
@@ -190,6 +192,7 @@ public sealed partial class AppController
     internal void DisposePaperPluginHostRuntime()
     {
         DisposePluginRuntimes();
+        DisposePluginSurfaces();
         _paperBodyPluginEvents?.Dispose();
         _paperBodyPluginEvents = null;
         _paperCommands = null;

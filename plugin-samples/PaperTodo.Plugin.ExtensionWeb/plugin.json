@@ -1,0 +1,17 @@
+{
+  "kind": "web",
+  "id": "sample.extension.web",
+  "name": "扩展 API Web 示例",
+  "description": "用 HTML 自绘辅助窗口和浮层，读取 Markdown 本地图片。",
+  "version": "1.0.0",
+  "apiVersion": "2.1",
+  "stateVersion": 1,
+  "entry": "web/index.html",
+  "capabilities": [
+    "runtime"
+  ],
+  "permissions": [
+    "papers.read",
+    "notes.read"
+  ]
+}

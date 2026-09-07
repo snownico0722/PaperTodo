@@ -297,7 +297,18 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
               const runtime = Object.freeze({
                 post(message) { return request('runtime.post', { message: message ?? null }); }
               });
+              const noteAssets = Object.freeze({
+                readImage(paperId, imageId) { return request('noteAssets.readImage', {paperId, imageId}); }
+              });
+              const surfaces = Object.freeze({
+                openWindow(options) { return request('surfaces.openWindow', options); },
+                openPopup(anchor, options) { return request('surfaces.openPopup', {...options, anchor}); },
+                close(id) { return request('surfaces.close', {id}); },
+                closeAll() { return request('surfaces.closeAll'); }
+              });
               window.papertodo = Object.freeze({
+                noteAssets,
+                surfaces,
                 surface: 'body',
                 paper,
                 body,
@@ -788,6 +799,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             OptionalPayloadString(parameters, "paperId"),
             OptionalPayloadBoolean(parameters, "includeBlank") ?? false),
         "notes.get" => _context.Host.GetNote(PayloadString(parameters, "paperId")),
+        "noteAssets.readImage" => WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+        "surfaces.openWindow" or "surfaces.openPopup" or "surfaces.close" or "surfaces.closeAll" =>
+            WebPluginSurfaceRequests.Execute(_context.Surfaces, _context.Host, _manifest, method, parameters, message => Send(message)),
         "papers.create" => _context.Host.CreatePaper(
             DeserializePayload<CreatePaperRequest>(parameters)),
         "todos.append" => _context.Host.AppendTodos(
@@ -873,6 +887,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     private void ClearHostSubscriptions()
     {
+        (_context.Host as PaperBodyPluginHostApi)?.ResetExtensionUi();
         foreach (var subscription in _hostSubscriptions.Values)
         {
             try { subscription.Dispose(); } catch { }

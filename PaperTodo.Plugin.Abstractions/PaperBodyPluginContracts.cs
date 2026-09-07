@@ -130,7 +130,10 @@ public sealed record PaperTopBarActionInvocation(
     PaperTopBarActionScope Scope,
     string TargetPaperId,
     string TargetPaperType,
-    string TargetBodyProviderId);
+    string TargetBodyProviderId)
+{
+    public PaperUiAnchor? Anchor { get; init; }
+}
 
 /// <summary>
 /// Paper-session-scoped Top Bar capability. It can contribute actions only to the paper carrying
@@ -345,6 +348,10 @@ public sealed class PaperBodyContext
     // Convenience views for non-ambiguous values. Presentation writes stay in Paper / Body /
     // TopBar / Presentation.
     public string PaperId => Paper.PaperId;
+    public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
+        ?? throw new NotSupportedException("This host does not expose NoteAssets.");
+    public IPaperPluginSurfaces Surfaces => Workspace as IPaperPluginSurfaces
+        ?? throw new NotSupportedException("This host does not expose plugin surfaces.");
     public IPaperTodoHostApi Host => Workspace;
     public IPaperBodyControls Controls => Body.Controls;
     public PaperBodyTheme Theme => Body.Theme;

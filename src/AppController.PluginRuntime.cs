@@ -367,7 +367,8 @@ public sealed partial class AppController
             this,
             descriptor.Id,
             descriptor.Permissions,
-            IsActive);
+            IsActive,
+            runtimeId);
         var settings = new PaperPluginRuntimeSettingsApi(
             PaperBodyPlugins.DataStore,
             descriptor,

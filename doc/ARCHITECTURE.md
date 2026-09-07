@@ -243,6 +243,16 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 具体 fallback 次序、尺寸和 ready 时序属于当前 contract/代码实现；为什么形成这些边界见 D-018。
 
+### 5.6 Plugin enhancement API 与辅助壳
+
+`PaperActions` 是 Runtime 对已有 Paper 的临时展示贡献，要求 `papers.read`。`PluginPaperActionRegistry` 是唯一注册表，按 owner / Paper 保存描述和注册版本；既有 Top Bar renderer 复用这些描述，Paper 菜单在每次打开时读注册表。动作分发校验当前 owner、Paper、正文过滤、启用状态与注册版本，不允许旧菜单触发同 ID 的替代注册。它不替代 Paper 的正文 provider，也不写入核心或插件持久状态。
+
+`NoteAssets` 只是 `notes.read` 下的读入口：facade 校验权限，`PaperCommandService` 提交待保存正文并校验 Note，`NoteImageStore` 在同一锁内验证图片归属、读取上限与既有编码完整性，再返回独立 bytes。没有第二套资产库、数据库句柄或图片写入协议。
+
+辅助 `Surfaces` 属于发起的 Body session / provider Runtime lease，不属于正文内容，也不生成或维持实体 Paper。`PluginSurfaceHost` 管理单实例 Window / 单个 Popup 壳、定位、关闭及回收；插件提供全新的 WPF 内容树或本地 HTML entry，负责内部控件和业务。共享下拉样式继续调用 `PaperSelectControl`，主题更新由壳显式通知内容。没有菜单/表单 DSL、模态、嵌套开壳或布局持久化。
+
+动作中的 Anchor 是有限期、owner 绑定的定位 token。`PluginUiAnchorStore` 仅弱引用 UI 源，不把宿主 Button/Window 对象交给插件；菜单动作使用可验证窗口内的几何快照。Web 辅助前端独立拥有导航 token，继承创建者的 Workspace 权限而不冒充 Body；创建者文档重建、Runtime 结束或宿主退出会撤销辅助 UI。新增 Runtime UI 请求使用文档 token，既有 2.1 数据请求合同不变。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。

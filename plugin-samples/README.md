@@ -581,6 +581,14 @@ Top Bar 不提供另一套 `GetBodyText/SetBodyText`。需要读写目标纸片�
 
 插件 Workspace 与 MCP 共用 `PaperCommandService` 业务边界，因此保存、失败回滚、UI reconcile 和事件顺序不因为入口不同而复制第二套实现。
 
+### 6.2 NoteAssets：读取笔记图片
+
+当前宿主增加可选的 `IPaperNoteAssetsApi`，通过 Native `context.NoteAssets` / `runtime.NoteAssets` 或 Web `papertodo.noteAssets.readImage(paperId, imageId)` 使用。原始请求名为 `noteAssets.readImage`，也可通过 Workspace 请求通道调用。
+
+需要 `notes.read`；先提交待保存的编辑，再经 `PaperCommandService` 和 `NoteImageStore` 读取。只接受内置 Markdown Note 和其所属图片，`imageId` 是 `i:` 后面的 ID。返回 `ImageId / Mime / Bytes`；Web JSON 的 `bytes` 是 Base64。单次编码数据上限为 16 MiB，检查在复制数据前完成。返回独立字节数组，不暴露数据库句柄、Bitmap 或可变资产对象。
+
+不存在、损坏、错误归属统一报 `asset_not_found`；超限报 `asset_too_large`，非 Markdown 正文报 `note_content_unavailable`。`notes.read` 仍是 Workspace 级权限，并非逐篇授权，也不是 Native 安全沙箱。正文读取与多张图片读取不是一个原子快照；插件导出时应处理笔记被删除、切换或图片消失，不输出缺图的半成品。
+
 ## 7. Top Bar 扩展（2.1）
 
 **PaperTodo 始终拥有顶栏 WPF tree、按钮尺寸、位置、主题、Hover、DPI 和 responsive layout；插件只贡献 action descriptor。** 不接受插件直接塞 `FrameworkElement`、Button、WebView 或任意顶栏控件。
@@ -771,6 +779,16 @@ papertodo.topBarLabels.set(paperId, labels);
 ```
 
 这两类内容只在当前 Runtime 生命周期内存在，不成为长期业务状态。完整示例见 `PaperTodo.Plugin.Protocol21Web`。
+
+### 7.7 PaperActions：增强已有纸片
+
+Runtime 的 `PaperActions`（`IPaperPluginPaperActions`）可以对任意已存在 Paper 注册操作，不占用该 Paper 的正文。需要 `papers.read`。先 `SetActionHandler`，再 `SetActions(paperId, actions)`；同一 Runtime 对同一 Paper 再次设置是整组替换。`Clear(paperId)` 清一张，`Clear()` 清全部。每个插件对每张纸片最多 32 个描述。
+
+`PaperAction` 包含 `Id / Text / ToolTip / Icon / Priority / Visible / Enabled / Placement`，图标仍复用现有 Character / SVG Path 合同。`Placement` 支持 `TopBar | ContextMenu`；可选 `BodyProviderId` 过滤当前正文提供者，如 `builtin.markdown`。现有 Body 顶栏操作优先；Runtime 纸片操作和 Global 操作共用按优先级排序、只创建能放下按钮的弹性区域。菜单按打开时的最新描述生成，点击再次校验当前注册版本、目标、过滤条件和 Enabled，已替换或已删除的旧菜单不能执行新注册。
+
+回调 `PaperActionInvocation` 返回操作 ID、点击时的 `PaperSnapshot`、触发位置类型和可空 `Anchor`。现有 `PaperTopBarActionInvocation` 也增加可空 `Anchor` 属性，保留原构造函数。Anchor 是短期的宿主定位 token，不是 Button 对象或屏幕坐标；见第 15 节。
+
+Web Runtime 使用 `papertodo.paperActions.set(paperId, actions)`、`.clear(paperId)`、`.clearAll()`，点击由 `paperActionInvoked` 事件送达。原始请求为 `paperActions.set / clear / clearAll`；flag 字段使用字符串，如 `"topBar, contextMenu"`。Body 不直接获得 Runtime 的 PaperActions。完整 Native/Web 示例见 `PaperTodo.Plugin.ExtensionApi` 与 `PaperTodo.Plugin.ExtensionWeb`。
 
 ## 8. 胶囊 presentation
 
@@ -1132,3 +1150,52 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+
+## 15. Surfaces：基础辅助窗口与浮层
+
+这是一组 Protocol 2.1 的**可选新增能力**。旧插件无需改写；使用新能力的 Native 插件应以当前 Abstractions 编译，旧宿主没有对应能力时应降级或提示升级。Runtime 存在条件、`startupPaper` 和原有 Body/Mini API 不变。
+
+### 15.1 Native
+
+通过 Body `context.Surfaces` 或 Runtime `runtime.Surfaces` 使用：
+
+```csharp
+IPaperPluginSurface OpenWindow(PaperPluginWindowOptions options,
+    Func<PaperPluginSurfaceContext, IPaperPluginSurfaceContent> createContent);
+IPaperPluginSurface OpenPopup(PaperUiAnchor anchor, PaperPluginPopupOptions options,
+    Func<PaperPluginSurfaceContext, IPaperPluginSurfaceContent> createContent);
+void Close(string id);
+void CloseAll();
+```
+
+`WindowOptions` 是 `Id / Title / Width / Height / Anchor?`，`PopupOptions` 是 `Id / Width / Height`。尺寸是完整壳的首选 DIP 尺寸，包含内部留白；窗口还包括系统标题栏，浮层会约束到工作区。ID 为 1～64 个 ASCII 字母、数字、`.`、`_`、`-`，尺寸为 64～4096 DIP。每个 lease 最多 8 个独立窗口、1 个浮层；重复窗口 ID 激活已有窗口且不重跑 factory，打开浮层则替换原浮层。同一个 ID 不能同时属于两种壳。
+
+factory 在宿主 UI 线程执行，包括从 Native Runtime worker 发起的请求。返回全新的、未被挂载的 WPF 根元素，不能返回 Window、已有正文树或其他窗口正在使用的内容。`IPaperPluginSurfaceContent` 负责内容与业务；接受的内容关闭时由宿主调用 `Dispose`。不要从 Dispose 重新开壳，也不要在 UI 线程同步等待一个可能正在调用宿主的 worker。
+
+`PaperPluginSurfaceContext` 提供当前主题快照、`Controls` 和自身 `Close` 回调。`Controls.ApplySelectStyle` 仍复用 `PaperSelectControl`，不复制设置页实现。主题/字体变化调用内容的 `OnThemeChanged`；插件须在这里刷新动态样式，首次 ApplyStyle 不会自动订阅未来变化。
+
+壳使用标准 WPF Window 标题栏和主题色内容框；第一版不强制 Mica、不保存布局、不提供模态或停靠系统。插件拥有里面的控件、键盘处理与布局，宿主不解释菜单、表单或控件描述。
+
+### 15.2 Anchor 与关闭规则
+
+Anchor 仅供收到它的 Body session / Runtime 使用，最多保留约 30 秒，移动、隐藏、卸载或尺寸/DPI 变化可能使它提前失效。每个 lease 只保留最近的有限个 token。异步菜单动作使用相对于仍存活窗口的几何快照，不要求已关闭的 MenuItem 继续存在。不能解析到有效显示窗口的来源（例如隐藏 Paper 的部分边缘菜单）会返回空 Anchor；这时可以打开不带 Anchor 的独立窗口，不应猜鼠标坐标。
+
+浮层由 WPF 定位在锚点附近并处理屏幕边界；点击外部、未被内部控件处理的 Esc、窗口移动/缩放/失活、锚点卸载和显示器变化会收起。内置样式下拉框的第一下 Esc 优先关闭下拉列表。独立窗口不跟随按钮移动，但 owner 关闭或相关 Paper 删除时关闭。lease/session 结束和宿主退出时全部回收；辅助窗口不是 Paper，不会维持 Runtime 的存在。
+
+`surface_id_conflict` 表示 ID 被另一种壳或创建中的壳占用；`surface_content_in_use` 表示重复挂载内容；`anchor_unavailable` 表示锚点过期、错 lease 或失效；`surface_owner_closed` 表示不能在结束的 lease 上再打开界面。返回的 handle 只操作它代表的那一个实例；旧 handle 不会关闭后来同 ID 的窗口。
+
+### 15.3 Web
+
+Body 与 Runtime 的 Web bridge 都提供 `papertodo.surfaces.openWindow(options)`、`.openPopup(anchor, options)`、`.close(id)`、`.closeAll()`。options 除 Native 同名数据字段外，必须指定 `entry`，还可携带 `data`。`entry` 是**相对于原 body entry 所在目录**的现存本地 HTML 文件，不是 URL，也不能越过 Web 根目录。`data` 和前端回传消息限 64 KiB UTF-8。
+
+```javascript
+await papertodo.surfaces.openPopup(action.anchor, {
+  id: 'details', entry: 'panel.html', width: 360, height: 300,
+  data: { paperId: action.paper.id }
+});
+```
+
+辅助 HTML 前端不是 Body：`await papertodo.ready` 获得 `{data, theme}`；`papertodo.workspace.request` 继承创建者的 Workspace 权限；`papertodo.noteAssets.readImage` 返回 Base64；`papertodo.surface.close()` 关闭自己；`papertodo.surface.post(message)` 向创建者发送 `surfaceMessage` 事件。主题更新通过 `onEvent` 的 `themeChanged` 提供，同时更新 `--paper-background / --paper-text / --paper-accent / --paper-border / --paper-font` CSS 变量。
+
+第一版辅助前端不提供 `saveState`、额外 Runtime、嵌套开壳或下载接口。HTML 仍由插件自绘，不能将 WPF ComboBox 嵌进 DOM。创建壳成功不等于 WebView 页面已加载；加载失败会关闭壳并向创建者报告 `surfaceError`。创建者导航或渲染进程失效会关闭其辅助前端并撤销旧锚点；Runtime 的新增 UI 请求另有文档 token，旧页面不能在恢复后的 Runtime 上重新开壳。

@@ -2599,6 +2599,8 @@ public sealed partial class PaperWindow : Window
             }
         }
 
+        AttachPluginPaperMenuActions(menu);
+
         if (CanDisplayAsCapsule())
         {
             menu.Items.Add(_paper.IsCollapsed

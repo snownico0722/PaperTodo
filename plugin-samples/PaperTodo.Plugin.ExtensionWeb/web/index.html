@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>扩展 API Web 示例</title>
+<p>保持这张示例纸片存在。点击刷新，为当前 Markdown 纸片添加操作。</p>
+<button id="refresh">刷新纸片操作</button><p id="status" role="status"></p>
+<script>
+papertodo.paper.setCapsulePresentation({preferredWidth: 0, plainText: 'Web API', components: [{kind:'text', text:'Web API', fill:true}]});
+document.querySelector('#refresh').onclick = async () => {
+  try { await papertodo.runtime.post({action:'refresh'}); document.querySelector('#status').textContent='已请求刷新'; }
+  catch (error) { document.querySelector('#status').textContent=error.message; }
+};
+</script></html>

@@ -1080,3 +1080,29 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `e16ecef` — 删除 guard / 16K retry，确立 <2K full + 大 Note best-effort local。
 - `db6b3dc` — 删除 snapshot 常驻 line starts 与 production incremental diagnostic state。
 - `e041ca7` — 增加 fence-state window propagation，并覆盖长 fence、marker length、换行创建/破坏 fence 与性能 profile。
+
+
+---
+
+## D-029 — 插件扩展复用宿主入口与基础壳，不引入控件描述语言
+
+**Status:** Accepted
+
+### Context
+
+增强现有 Markdown 的工具插件需要纸片操作入口和图片读取；复杂面板还需要有明确生命周期的额外界面。全部交给 Native `new Window()` 无法统一回收，反过来由宿主描述并绘制插件表单又会扩大协议和维护范围。
+
+### Decision
+
+- Runtime 的 PaperActions 注册已有 Paper 的临时动作，复用现有顶栏布局、图标校验和 Paper 菜单；点击携带不透明 Anchor，不暴露宿主控件树。
+- NoteAssets 仅增加受权限、归属和大小检查的编码数据读取，仍经 PaperCommandService 与 NoteImageStore，不另建数据库通道。
+- Surfaces 只提供 Window / Popup 基础壳；Native 提供新 WPF 树，Web 提供插件目录内 HTML。宿主管壳、定位和 lease，插件管内容与业务。设置页与插件下拉框继续共用原子控件实现，不复用设置页对象或业务绑定。
+- 不为本次扩展改变 Runtime 必须有实体插件 Paper 的存在条件。辅助壳不能充当 Runtime owner。
+
+### Why
+
+这些边界将定位/回收错误收敛到一处，同时不让每一种插件 UI 需求变成新的宿主控件合同。注册版本和文档 token 用于撤销过时回调，而不是给可信 Native 插件制造安全沙箱。
+
+### Evidence
+
+`PaperPluginExtensionContracts.cs`、`PluginPaperActionRegistry`、`PaperCommandService.NoteAssets`、`PluginUiAnchorStore`、`PluginSurfaceHost`、`WebPluginSurfaceContent` 和 `tests/PaperTodo.PluginApiChecks`。

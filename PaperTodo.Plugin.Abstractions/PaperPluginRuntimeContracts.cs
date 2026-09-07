@@ -131,6 +131,13 @@ public sealed class PaperPluginRuntimeContext
     public required IPaperGlobalTopBarApi GlobalTopBar { get; init; }
     public required IPaperGlobalShortcutApi GlobalShortcuts { get; init; }
 
+    public IPaperPluginPaperActions PaperActions => Workspace as IPaperPluginPaperActions
+        ?? throw new NotSupportedException("This host does not expose PaperActions.");
+    public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
+        ?? throw new NotSupportedException("This host does not expose NoteAssets.");
+    public IPaperPluginSurfaces Surfaces => Workspace as IPaperPluginSurfaces
+        ?? throw new NotSupportedException("This host does not expose plugin surfaces.");
+
     public IPaperPluginRuntimeTodoActions TodoActions =>
         Workspace as IPaperPluginRuntimeTodoActions
         ?? throw new InvalidOperationException(

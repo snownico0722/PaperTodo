@@ -901,6 +901,7 @@ public sealed partial class PaperWindow
         var previousProviderId = NormalizeBodyProviderId(_paper.BodyProviderId);
         RemoveCurrentPaperBody();
         _paper.BodyProviderId = normalized;
+        RefreshPluginTopBarActions();
         _paper.BodyHeaderText = "";
         _paper.BodyCapsuleText = "";
         AttachCurrentPaperBody();

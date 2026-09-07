@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>笔记信息</title>
+<style>
+body{margin:12px;background:var(--paper-background);color:var(--paper-text);font-family:var(--paper-font),sans-serif}
+input,button{font:inherit;padding:6px;margin:4px 0}#result{overflow-wrap:anywhere}h2{font-size:1.2em}
+</style></head><body>
+<h2 id="title">读取笔记…</h2><p id="info"></p><label for="image">图片 ID（i: 后面的部分）</label><br>
+<input id="image"><button id="read">读取</button><p id="result" role="status"></p><button id="close">关闭</button>
+<script>
+let paperId;
+const result = document.querySelector('#result');
+(async () => {
+  try {
+    const initial = await papertodo.ready; paperId=initial.data.paperId;
+    const note = await papertodo.workspace.request('notes.get', {paperId});
+    document.querySelector('#title').textContent=note?.paperTitle || '笔记不存在';
+    document.querySelector('#info').textContent=note?.contentAvailable ? `正文：${note.content.length} 字符` : '正文不可读';
+  } catch (error) { result.textContent=error.message; }
+})();
+document.querySelector('#read').onclick = async () => {
+  try {
+    const imageId=document.querySelector('#image').value.trim().replace(/^i:/,'');
+    const image=await papertodo.noteAssets.readImage(paperId,imageId);
+    result.textContent=`${image.mime} · ${atob(image.bytes).length} 字节`;
+  } catch (error) { result.textContent=`${error.code}: ${error.message}`; }
+};
+document.querySelector('#close').onclick=()=>papertodo.surface.close();
+</script></body></html>
