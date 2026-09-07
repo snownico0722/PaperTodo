@@ -606,7 +606,7 @@
     <value>关联到脚本胶囊时：左键运行，右键打开编辑。</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>勾选完成后立即从当前纸片移除；可用撤销恢复。</value>
+    <value>次日：完成当天保留，次日移出。下周：保留到本周日，下周一移出。重启或休眠恢复后补查。重新打开的待办和缺少完成时间的旧待办不会按日期自动移出。</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
     <value>超过 8 MB，或任一边超过 2048 像素时，尝试缩到最长边 2048 并重编码。
@@ -713,7 +713,7 @@
     <value>启用待办关联纸片</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
-    <value>完成后自动清除待办</value>
+    <value>完成待办的移出时间</value>
   </data>
   <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
     <value>自动压缩过大图片</value>
@@ -1429,4 +1429,8 @@
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
   </data>
+  <data name="CompletedTodoKeep" xml:space="preserve"><value>不移出</value></data>
+  <data name="CompletedTodoImmediate" xml:space="preserve"><value>立即</value></data>
+  <data name="CompletedTodoNextDay" xml:space="preserve"><value>次日</value></data>
+  <data name="CompletedTodoNextWeek" xml:space="preserve"><value>下周</value></data>
 </root>

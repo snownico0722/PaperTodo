@@ -39,7 +39,7 @@ public sealed partial class PaperWindow
 
         var focusedId = CurrentFocusedTodoItemId();
         PushUndoSnapshot();
-        item.Done = done;
+        TodoRules.SetDone(item, done, DateTimeOffset.Now);
         InvalidateEdgeCapsulePreviewContent();
 
         if (done && (item.ReminderAt.HasValue || item.ReminderTriggered))
@@ -54,7 +54,7 @@ public sealed partial class PaperWindow
         }
 
         _controller.MarkDirty();
-        if (done && _controller.State.AutoClearCompletedTodos)
+        if (done && TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
         {
             RemoveItem(item, pushUndo: false);
             return true;

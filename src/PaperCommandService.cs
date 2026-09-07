@@ -285,7 +285,7 @@ internal sealed class PaperCommandService
             }
             if (request.Done.HasValue)
             {
-                item.Done = request.Done.Value;
+                TodoRules.SetDone(item, request.Done.Value, DateTimeOffset.Now);
                 if (item.Done)
                 {
                     item.ReminderAt = null;
@@ -300,7 +300,7 @@ internal sealed class PaperCommandService
             {
                 MoveTodo(paper, item, requestedOrder.Value);
             }
-            if (doneChanged && item.Done && _controller.State.AutoClearCompletedTodos)
+            if (doneChanged && item.Done && TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
             {
                 TodoRules.ApplyCompletionPolicy(
                     paper.Items,
@@ -635,6 +635,7 @@ internal sealed class PaperCommandService
             {
                 Text = input.Text,
                 Done = input.Done,
+                CompletedAt = input.Done ? DateTimeOffset.Now : null,
                 Order = paper.Items.Count,
                 ReminderAt = input.Done ? null : input.ReminderAt
             };
@@ -642,7 +643,7 @@ internal sealed class PaperCommandService
             paper.Items.Add(item);
             added.Add(item);
         }
-        if (_controller.State.AutoClearCompletedTodos)
+        if (TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
         {
             var completedIds = added
                 .Where(item => item.Done)
@@ -906,6 +907,7 @@ internal sealed class PaperCommandService
         PaperItem Item,
         string Text,
         bool Done,
+        DateTimeOffset? CompletedAt,
         int Order,
         string? LinkedPaperId,
         string? LinkedPath,
@@ -917,6 +919,7 @@ internal sealed class PaperCommandService
                 item,
                 item.Text,
                 item.Done,
+                item.CompletedAt,
                 item.Order,
                 item.LinkedPaperId,
                 item.LinkedPath,
@@ -927,6 +930,7 @@ internal sealed class PaperCommandService
         {
             Item.Text = Text;
             Item.Done = Done;
+            Item.CompletedAt = CompletedAt;
             Item.Order = Order;
             Item.RestoreQuickLaunch(LinkedPaperId, LinkedPath);
             Item.ReminderAt = ReminderAt;

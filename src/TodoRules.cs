@@ -6,6 +6,53 @@ namespace PaperTodo;
 /// </summary>
 internal static class TodoRules
 {
+    public const string KeepCompleted = "keep";
+    public const string RemoveImmediately = "immediate";
+    public const string RemoveNextDay = "next-day";
+    public const string RemoveNextWeek = "next-week";
+
+    public static string RemovalMode(AppState state) => state.CompletedTodoRemoval switch
+    {
+        KeepCompleted or RemoveImmediately or RemoveNextDay or RemoveNextWeek => state.CompletedTodoRemoval,
+        null => state.AutoClearCompletedTodos ? RemoveImmediately : KeepCompleted,
+        _ => KeepCompleted
+    };
+
+    public static bool SetDone(PaperItem item, bool done, DateTimeOffset now)
+    {
+        if (item.Done == done) return false;
+        item.Done = done;
+        item.CompletedAt = done ? now : null;
+        return true;
+    }
+
+    public static bool IsRemovalDue(PaperItem item, string mode, DateTimeOffset now, TimeZoneInfo? zone = null)
+    {
+        if (!item.Done || item.CompletedAt is not { } completed || completed > now) return false;
+        zone ??= TimeZoneInfo.Local;
+        var day = TimeZoneInfo.ConvertTime(completed, zone).Date;
+        var today = TimeZoneInfo.ConvertTime(now, zone).Date;
+        return mode switch
+        {
+            RemoveImmediately => true,
+            RemoveNextDay => today > day,
+            RemoveNextWeek => today >= day.AddDays(7 - ((int)day.DayOfWeek + 6) % 7),
+            _ => false
+        };
+    }
+
+    public static void RestoreCompletionTimes(IEnumerable<PaperItem> restored, IEnumerable<PaperItem> before, DateTimeOffset now)
+    {
+        var previous = before.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        foreach (var item in restored)
+        {
+            if (!item.Done) item.CompletedAt = null;
+            else if (previous.TryGetValue(item.Id, out var old) && !old.Done)
+                item.CompletedAt = now;
+        }
+    }
+
+
     public static bool HasMeaningfulContent(PaperItem item) =>
         !string.IsNullOrWhiteSpace(item.Text) ||
         item.Done ||
@@ -30,6 +77,7 @@ internal static class TodoRules
             Id = item.Id,
             Text = item.Text,
             Done = item.Done,
+            CompletedAt = item.CompletedAt,
             Order = item.Order,
             ReminderAt = item.ReminderAt,
             ReminderTriggered = item.ReminderTriggered

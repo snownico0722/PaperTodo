@@ -2509,17 +2509,21 @@ public sealed partial class AppController
         }
 
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsAutoClearCompletedTodos"),
-                State.AutoClearCompletedTodos,
-                ToggleAutoClearCompletedTodos),
+            SettingsFieldLabel(Strings.Get("SettingsAutoClearCompletedTodos")),
             "TipAutoClearCompletedTodos"));
+        content.Children.Add(CreateSegmentSelector(
+            [
+                (TodoRules.KeepCompleted, Strings.Get("CompletedTodoKeep")),
+                (TodoRules.RemoveImmediately, Strings.Get("CompletedTodoImmediate")),
+                (TodoRules.RemoveNextDay, Strings.Get("CompletedTodoNextDay")),
+                (TodoRules.RemoveNextWeek, Strings.Get("CompletedTodoNextWeek"))
+            ], TodoRules.RemovalMode(State), SetCompletedTodoRemoval));
 
         var autoMoveCompletedToggle = SettingsToggle(
             Strings.Get("SettingsAutoMoveCompletedTodosToBottom"),
             State.AutoMoveCompletedTodosToBottom,
             ToggleAutoMoveCompletedTodosToBottom);
-        autoMoveCompletedToggle.IsEnabled = !State.AutoClearCompletedTodos;
+        autoMoveCompletedToggle.IsEnabled = TodoRules.RemovalMode(State) != TodoRules.RemoveImmediately;
         autoMoveCompletedToggle.Opacity =
             autoMoveCompletedToggle.IsEnabled ? 1.0 : 0.55;
         content.Children.Add(WrapWithHint(
@@ -2774,6 +2778,8 @@ public sealed partial class AppController
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
         State.AutoCompressLargeImages = true;
         State.AutoClearCompletedTodos = false;
+        State.CompletedTodoRemoval = TodoRules.KeepCompleted;
+        RefreshTodoRetentionSchedule();
         State.AutoMoveCompletedTodosToBottom = false;
         State.EnableTodoPaperLinks = true;
         State.ShowLinkedPaperName = false;
@@ -3825,11 +3831,13 @@ public sealed partial class AppController
             SetResizeGripMode);
     }
 
-    private void ToggleAutoClearCompletedTodos()
+    private void SetCompletedTodoRemoval(string mode)
     {
-        State.AutoClearCompletedTodos = !State.AutoClearCompletedTodos;
+        State.CompletedTodoRemoval = mode;
+        State.AutoClearCompletedTodos = mode == TodoRules.RemoveImmediately;
         SaveNow();
         RefreshSettingsRegions("general.todos");
+        RequestTodoRetentionCheck();
     }
 
     private void ToggleAutoMoveCompletedTodosToBottom()

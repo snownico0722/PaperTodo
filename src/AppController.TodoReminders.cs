@@ -128,13 +128,14 @@ public sealed partial class AppController
         object? sender,
         EventArgs e)
     {
-        if (IsExiting || !State.ExperimentalTodoReminders)
+        if (IsExiting)
         {
             return;
         }
 
         TimeZoneInfo.ClearCachedData();
         RequestImmediateTodoReminderCheck();
+        RequestTodoRetentionCheck();
     }
 
     private void CheckTodoRemindersNow()

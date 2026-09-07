@@ -714,7 +714,7 @@ public sealed partial class PaperWindow
 
         foreach (var item in selected)
         {
-            item.Done = done;
+            TodoRules.SetDone(item, done, DateTimeOffset.Now);
             if (done)
             {
                 item.ReminderAt = null;
@@ -722,7 +722,7 @@ public sealed partial class PaperWindow
             }
         }
 
-        if (done && _controller.State.AutoClearCompletedTodos)
+        if (done && TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
         {
             var selectedIds = selected.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
             _paper.Items.RemoveAll(item => selectedIds.Contains(item.Id));
@@ -743,7 +743,7 @@ public sealed partial class PaperWindow
         _controller.MarkDirty();
         _controller.NotifyTodoReminderCollectionChanged();
         ReconcileTodoRows(
-            done && _controller.State.AutoClearCompletedTodos
+            done && TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately
                 ? null
                 : selected.Select(item => item.Id));
         RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);

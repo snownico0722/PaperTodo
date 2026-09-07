@@ -688,7 +688,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
 !p / !power는 종료를 기다리고 오류를 캡처하며, !pf / !powerf는 상주 프로세스에 전달만 합니다.</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>완료로 체크하면 현재 종이에서 바로 제거합니다. 실행 취소로 되돌릴 수 있습니다.</value>
+    <value>다음 날은 완료한 당일까지, 다음 주는 일요일까지 유지하고 월요일에 목록에서 제거합니다. 재시작 또는 절전 복귀 후에도 확인합니다. 미완료로 되돌린 항목과 완료 시간이 없는 이전 항목은 날짜에 따라 자동 제거되지 않습니다.</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
     <value>8MB 초과, 또는 한 변이 2048픽셀 초과면 긴 변 2048에 맞춰 축소 후 다시 인코딩을 시도합니다.
@@ -700,7 +700,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>할 일-종이 연결 사용</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
-    <value>완료한 할 일 자동 정리</value>
+    <value>완료한 할 일 제거 시점</value>
   </data>
   <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
     <value>큰 이미지 자동 압축</value>
@@ -1380,4 +1380,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>선택한 이미지 내용이 너무 커서 이번에는 텍스트만 복사했습니다.</value>
   </data>
+  <data name="CompletedTodoKeep" xml:space="preserve"><value>유지</value></data>
+  <data name="CompletedTodoImmediate" xml:space="preserve"><value>즉시</value></data>
+  <data name="CompletedTodoNextDay" xml:space="preserve"><value>다음 날</value></data>
+  <data name="CompletedTodoNextWeek" xml:space="preserve"><value>다음 주</value></data>
 </root>
