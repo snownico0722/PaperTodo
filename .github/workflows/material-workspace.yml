@@ -35,9 +35,12 @@ jobs:
           encoded = b''.join(base64.b64decode(api('/git/blobs/' + x)['content']) for x in chunks)
           patch = zlib.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(patch).hexdigest() == '25d4fdc32f4cc234bdf03f075bf3431051ca9078483378927b81e9de7c2a6019'
-          followup = base64.b64decode(api('/git/blobs/1790ce5fc8082fb829d86730a39fc3353d0edda5')['content']).replace(b'\n diff --git',b'\ndiff --git')
-          assert hashlib.sha256(followup).hexdigest() == '4f56e80eb9fdcba330dc53b8ecb128c14375ebd868e220da28a831fb7bec25d1'
-          for change in (patch,followup):
+          changes = [patch]
+          for sha, digest in [('1790ce5fc8082fb829d86730a39fc3353d0edda5','4f56e80eb9fdcba330dc53b8ecb128c14375ebd868e220da28a831fb7bec25d1'),('89faa576ca355d1daaf7cc5a2c1b7b58e479cf05','ba1d08e1f560ae3d194e4547ac962b4c8009eef6e0318416bc33eb7458307b3f')]:
+              change = base64.b64decode(api('/git/blobs/' + sha)['content']).replace(b'\n diff --git',b'\ndiff --git')
+              assert hashlib.sha256(change).hexdigest() == digest
+              changes.append(change)
+          for change in changes:
               subprocess.run(['git','apply','--check','-'], input=change, check=True)
               subprocess.run(['git','apply','-'], input=change, check=True)
           for name in ('material-workspace.yml','material-probe.yml','material-probe-isolated.yml'):
@@ -58,11 +61,15 @@ jobs:
           pathlib.Path(os.environ['RUNNER_TEMP'],'mica-tree.json').write_text(json.dumps(manifest,indent=2))
           print(json.dumps(manifest,indent=2))
       - name: Build Release
-        run: dotnet build PaperTodo.csproj -c Release
+        run: |
+          dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object '${{ runner.temp }}/mica-build.log'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Native Mica behavior and desktop pixels
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/mica-pixels
-        run: dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+        run: |
+          dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release 2>&1 | Tee-Object '${{ runner.temp }}/mica-tests.log'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Markdown semantic regression
         run: dotnet run --project tests/PaperTodo.MarkdownSemanticChecks/PaperTodo.MarkdownSemanticChecks.csproj -c Release
       - name: Todo navigation regression
@@ -74,4 +81,5 @@ jobs:
           path: |
             ${{ runner.temp }}/mica-tree.json
             ${{ runner.temp }}/mica-pixels
+            ${{ runner.temp }}/mica-*.log
           retention-days: 2
