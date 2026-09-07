@@ -500,11 +500,35 @@ public sealed partial class PaperWindow
             return true;
         }
 
+        static bool HasTextDropData(IDataObject data)
+        {
+            try
+            {
+                return data.GetDataPresent(DataFormats.UnicodeText) ||
+                    data.GetDataPresent(DataFormats.Text);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         box.AllowDrop = true;
         box.PreviewDragOver += (_, e) =>
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!isPreviewing || !HasTextDropData(e.Data))
+                {
+                    return;
+                }
+
+                e.Effects = (e.AllowedEffects & DragDropEffects.Copy) != 0
+                    ? DragDropEffects.Copy
+                    : (e.AllowedEffects & DragDropEffects.Move) != 0
+                        ? DragDropEffects.Move
+                        : DragDropEffects.None;
+                e.Handled = e.Effects != DragDropEffects.None;
                 return;
             }
 
@@ -515,11 +539,25 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!HasTextDropData(e.Data))
+                {
+                    return;
+                }
                 if (!box.ValidateTextDrop(e.Data))
                 {
                     e.Effects = DragDropEffects.None;
                     e.Handled = true;
+                    return;
                 }
+                if (isPreviewing)
+                {
+                    ShowEditorAtPreviewPoint(
+                        e.GetPosition(box),
+                        e.OriginalSource as DependencyObject,
+                        selectImage: false);
+                }
+                // Once edit mode is active, AvalonEdit still owns text insertion, move/copy
+                // semantics and undo grouping. Leave the Drop event unhandled here.
                 return;
             }
 
