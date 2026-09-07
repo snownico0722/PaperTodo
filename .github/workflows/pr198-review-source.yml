@@ -17,6 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
@@ -25,12 +26,13 @@ jobs:
         with:
           node-version: '22'
       - name: Apply focused review fixes
-        shell: pwsh
+        shell: python
         run: |
-          git apply --check .github/pr198-review.patch
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git apply .github/pr198-review.patch
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          import pathlib, subprocess, tempfile
+          patch = pathlib.Path(tempfile.gettempdir()) / 'pr198-review.patch'
+          patch.write_bytes(pathlib.Path('.github/pr198-review.patch').read_bytes().replace(b'\r\n', b'\n'))
+          subprocess.run(['git', 'apply', '--check', str(patch)], check=True)
+          subprocess.run(['git', 'apply', str(patch)], check=True)
       - name: Build Release and validate interaction behavior
         shell: pwsh
         run: |
