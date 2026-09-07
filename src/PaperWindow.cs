@@ -2596,6 +2596,7 @@ public sealed partial class PaperWindow : Window
                 menu.Items.Add(MenuItem(
                     OpenMarkdownEditorToolTip(),
                     (_, _) => OpenMarkdownInDefaultEditor()));
+                menu.Items.Add(MenuItem(Strings.Get("NoteHtmlExport"), (_, _) => ExportNoteHtml()));
             }
         }
 
