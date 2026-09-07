@@ -54,9 +54,9 @@ jobs:
                   sha = api('/git/blobs', {'content':base64.b64encode(content).decode(),'encoding':'base64'})['sha']
               entries.append({'path':name,'mode':'100644','type':'blob','sha':sha})
           base = subprocess.check_output(['git','rev-parse','HEAD^{tree}']).decode().strip()
-          tree = api('/git/trees', {'base_tree':base,'tree':entries})['sha']
-          pathlib.Path(os.environ['RUNNER_TEMP'],'mica-tree.json').write_text(json.dumps({'head':os.environ['GITHUB_SHA'],'tree':tree,'entries':entries},indent=2))
-          print('REVIEWED_MICA_TREE=' + tree)
+          manifest = {'head':os.environ['GITHUB_SHA'],'base_tree':base,'entries':entries}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'mica-tree.json').write_text(json.dumps(manifest,indent=2))
+          print(json.dumps(manifest,indent=2))
       - name: Build Release
         run: dotnet build PaperTodo.csproj -c Release
       - name: Native Mica behavior and desktop pixels
