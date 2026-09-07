@@ -106,6 +106,7 @@ public sealed partial class AppController
             return;
         }
 
+        PluginPopupThemeChanged?.Invoke();
         resources["PaperScrollThumbBrush"] = Theme.ScrollThumbBrush;
         resources["PaperScrollThumbHoverBrush"] = Theme.ScrollThumbHoverBrush;
         resources["PaperResizeGripBrush"] = Theme.ResizeGripBrush(State.ResizeGripMode);
@@ -1145,6 +1146,7 @@ public sealed partial class AppController
 
     private void RefreshTypography()
     {
+        PluginPopupThemeChanged?.Invoke();
         RebuildTrayMenu();
 
         foreach (var window in _windows.Values)

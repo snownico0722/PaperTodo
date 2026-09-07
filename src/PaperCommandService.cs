@@ -13,7 +13,7 @@ internal sealed class PaperCommandException : Exception
     public string Code { get; }
 }
 
-internal sealed class PaperCommandService
+internal sealed partial class PaperCommandService
 {
     private readonly AppController _controller;
 

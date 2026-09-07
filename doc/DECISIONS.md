@@ -1080,3 +1080,23 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `e16ecef` — 删除 guard / 16K retry，确立 <2K full + 大 Note best-effort local。
 - `db6b3dc` — 删除 snapshot 常驻 line starts 与 production incremental diagnostic state。
 - `e041ca7` — 增加 fence-state window propagation，并覆盖长 fence、marker length、换行创建/破坏 fence 与性能 profile。
+
+## D-029 — 插件弹窗只保留一次定位与失焦关闭
+
+- Status: Accepted
+
+### Context
+
+插件需要从顶栏按钮或纸片右键菜单打开鼠标附近的小界面。#198 曾把这组入口扩展为普通独立窗口、锚定浮层与控件来源生命周期；实际交互只要求打开时定位、离开弹窗后关闭。
+
+### Decision
+
+沿用既有顶栏，新增纸片文字菜单入口；点击传纯屏幕位置快照。宿主为现有 session / Runtime 承载一个失焦关闭的窗口，插件绘制内容。图片读取仍走权限 facade 和现有 NoteImageStore。暂不引入常驻独立窗口、来源跟踪、菜单图标或窗口编号复用。
+
+### Why
+
+窗口失活已给出明确的临时界面关闭边界。一次定位不需要维护原控件引用、位置跟随或另一套长期锚点 authority；不把展示小界面的需求变成第二个插件运行入口。后续有明确需求时可以独立扩展，不将当前未选能力作为永久禁令。
+
+### Evidence
+
+`PluginPopupHost`、`PluginPaperActionRegistry`、`PaperCommandService.NoteAssets`、`WebPluginPopupContent`；历史方案见 #198。当前合同与用法见 `plugin-samples/README.md`。

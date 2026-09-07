@@ -17,6 +17,9 @@ internal sealed partial class WebPaperBodySession
         string pluginDirectory) =>
         GetPluginEnvironmentAsync(pluginDirectory, backgroundRuntime: true);
 
+    internal static Task<CoreWebView2Environment> SharedSurfaceEnvironmentAsync(string pluginDirectory) =>
+        GetPluginEnvironmentAsync(pluginDirectory, backgroundRuntime: false);
+
     internal static string SharedWebHostName(string pluginId) =>
         WebHostName(pluginId);
 }
@@ -182,4 +185,18 @@ internal static class WebPluginRuntimeInfrastructure
         payload.TryGetProperty("params", out var paramsValue)
             ? paramsValue
             : JsonSerializer.SerializeToElement(new { });
+}
+
+// One classification for the existing Runtime and transient popup frontend. GPU/utility/frame-only
+// failures do not invalidate the top-level document; WebView2 handles their recovery itself.
+internal static class WebPluginProcessFailurePolicy
+{
+    internal enum Recovery { None, Reload, Restart }
+    internal static Recovery Classify(CoreWebView2ProcessFailedKind kind) => kind switch
+    {
+        CoreWebView2ProcessFailedKind.BrowserProcessExited => Recovery.Restart,
+        CoreWebView2ProcessFailedKind.RenderProcessExited or
+        CoreWebView2ProcessFailedKind.RenderProcessUnresponsive => Recovery.Reload,
+        _ => Recovery.None
+    };
 }

@@ -131,6 +131,13 @@ public sealed class PaperPluginRuntimeContext
     public required IPaperGlobalTopBarApi GlobalTopBar { get; init; }
     public required IPaperGlobalShortcutApi GlobalShortcuts { get; init; }
 
+    public IPaperPluginPaperActions PaperActions => Workspace as IPaperPluginPaperActions
+        ?? throw new InvalidOperationException("This host does not expose paper menu actions.");
+    public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
+        ?? throw new InvalidOperationException("This host does not expose note image reads.");
+    public IPaperPluginPopups Popups => Workspace as IPaperPluginPopups
+        ?? throw new InvalidOperationException("This host does not expose plugin popups.");
+
     public IPaperPluginRuntimeTodoActions TodoActions =>
         Workspace as IPaperPluginRuntimeTodoActions
         ?? throw new InvalidOperationException(

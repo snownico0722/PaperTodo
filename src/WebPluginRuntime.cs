@@ -12,7 +12,7 @@ namespace PaperTodo;
 /// The one hidden Web backend Runtime for a provider. Paper instances are logical ids routed through
 /// IPaperPluginRuntimePapers; PaperTodo never creates one hidden WebView per Paper.
 /// </summary>
-internal sealed class WebPluginRuntime : IDisposable
+internal sealed partial class WebPluginRuntime : IDisposable
 {
     private const int MaximumGlobalTopBarActions = 256;
 
@@ -33,7 +33,9 @@ internal sealed class WebPluginRuntime : IDisposable
         TodoActionsClearAll,
         TopBarLabelsSet,
         TopBarLabelsClear,
-        TopBarLabelsClearAll
+        TopBarLabelsClearAll,
+        PaperActions,
+        Popups
     }
 
     private readonly PaperBodyPluginDescriptor _descriptor;
@@ -181,8 +183,8 @@ internal sealed class WebPluginRuntime : IDisposable
               const pending = new Map();
               const queuedRequests = [];
               let sequence = 0;
-              let hostReady = false;
-              const post = (type, payload = null) => window.chrome.webview.postMessage({ type, payload });
+              let hostReady = false, uiToken = null;
+              const post = (type, payload = null) => window.chrome.webview.postMessage({ type, payload, uiToken });
               const postRequest = payload => {
                 if (hostReady) post('hostRequest', payload);
                 else queuedRequests.push(payload);
@@ -277,7 +279,22 @@ internal sealed class WebPluginRuntime : IDisposable
                 },
                 clearAll() { return request('topbar.labels.clearAll'); }
               });
+              const noteAssets = Object.freeze({
+                readImage(paperId, imageId) { return request('noteAssets.readImage', {paperId, imageId}); }
+              });
+              const popups = Object.freeze({
+                open(position, options) { return request('popups.open', {...options, position}); },
+                close() { return request('popups.close'); }
+              });
+              const paperActions = Object.freeze({
+                set(paperId, actions) { return request('paperActions.set', {paperId, actions}); },
+                clear(paperId) { return request('paperActions.clear', {paperId}); },
+                clearAll() { return request('paperActions.clearAll'); }
+              });
               window.papertodo = Object.freeze({
+                paperActions,
+                noteAssets,
+                popups,
                 surface: 'runtime',
                 workspace,
                 settings,
@@ -296,6 +313,7 @@ internal sealed class WebPluginRuntime : IDisposable
               window.chrome.webview.addEventListener('message', event => {
                 const message = event.data;
                 if (message?.type === 'initialize' && !hostReady) {
+                  uiToken = message.uiToken ?? null;
                   hostReady = true;
                   for (const payload of queuedRequests.splice(0)) {
                     post('hostRequest', payload);
@@ -381,11 +399,13 @@ internal sealed class WebPluginRuntime : IDisposable
             runtimePapers.ResetWebDocumentPresentation();
         }
         _documentReady = true;
+        _extensionDocumentToken = Guid.NewGuid().ToString("N");
         RegisterGlobalShortcutHandler();
         var runtimeState = ReadRuntimeState();
         Send(new
         {
             type = "initialize",
+            uiToken = _extensionDocumentToken,
             surface = "runtime",
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
@@ -406,13 +426,12 @@ internal sealed class WebPluginRuntime : IDisposable
             return;
         }
 
-        switch (e.ProcessFailedKind)
+        switch (WebPluginProcessFailurePolicy.Classify(e.ProcessFailedKind))
         {
-            case CoreWebView2ProcessFailedKind.BrowserProcessExited:
+            case WebPluginProcessFailurePolicy.Recovery.Restart:
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
-            case CoreWebView2ProcessFailedKind.RenderProcessExited:
-            case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
+            case WebPluginProcessFailurePolicy.Recovery.Reload:
                 RecoverRendererByReload();
                 return;
             default:
@@ -525,10 +544,9 @@ internal sealed class WebPluginRuntime : IDisposable
             {
                 return;
             }
-            HandleHostRequest(
-                root.TryGetProperty("payload", out var payload)
-                    ? payload
-                    : default);
+            var payload = root.TryGetProperty("payload", out var value) ? value : default;
+            if (!AcceptsExtensionRequest(root, payload, _extensionDocumentToken)) return;
+            HandleHostRequest(payload);
         }
         catch
         {
@@ -595,6 +613,9 @@ internal sealed class WebPluginRuntime : IDisposable
             HostRequestRoute.TopBarLabelsSet => SetTopBarLabels(parameters),
             HostRequestRoute.TopBarLabelsClear => ClearTopBarLabels(parameters),
             HostRequestRoute.TopBarLabelsClearAll => ClearTopBarLabels(),
+            HostRequestRoute.PaperActions => ExecutePaperActionRequest(method, parameters),
+            HostRequestRoute.Popups => WebPluginPopupRequests.Execute((IPaperPluginPopups)_workspace,
+                _workspace, _descriptor.Manifest!, method, parameters, Send),
             _ => throw new PaperTodoPluginException(
                 "method_not_found",
                 $"Unknown PaperTodo Runtime method: {method}")
@@ -786,6 +807,8 @@ internal sealed class WebPluginRuntime : IDisposable
             "topbar.labels.set" => HostRequestRoute.TopBarLabelsSet,
             "topbar.labels.clear" => HostRequestRoute.TopBarLabelsClear,
             "topbar.labels.clearAll" => HostRequestRoute.TopBarLabelsClearAll,
+            "paperActions.set" or "paperActions.clear" or "paperActions.clearAll" => HostRequestRoute.PaperActions,
+            "popups.open" or "popups.close" => HostRequestRoute.Popups,
             _ => HostRequestRoute.Workspace
         };
     }
@@ -929,6 +952,7 @@ internal sealed class WebPluginRuntime : IDisposable
     private void TryClearTopBarLabels()
     {
         try { TopBarLabels.Clear(); } catch { }
+        TryResetExtensionUi();
     }
 
     private void ThrowIfInactive()
