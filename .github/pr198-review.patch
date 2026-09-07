@@ -1,0 +1,374 @@
+diff --git a/plugin-samples/README.md b/plugin-samples/README.md
+index e000a47..9db39fe 100644
+--- a/plugin-samples/README.md
++++ b/plugin-samples/README.md
+@@ -1179,9 +1179,9 @@ factory 在宿主 UI 线程执行，包括从 Native Runtime worker 发起的请
+ 
+ ### 15.2 Anchor 与关闭规则
+ 
+-Anchor 仅供收到它的 Body session / Runtime 使用，最多保留约 30 秒，移动、隐藏、卸载或尺寸/DPI 变化可能使它提前失效。每个 lease 只保留最近的有限个 token。异步菜单动作使用相对于仍存活窗口的几何快照，不要求已关闭的 MenuItem 继续存在。不能解析到有效显示窗口的来源（例如隐藏 Paper 的部分边缘菜单）会返回空 Anchor；这时可以打开不带 Anchor 的独立窗口，不应猜鼠标坐标。
++Anchor 仅供收到它的 Body session / Runtime 使用，最多保留约 30 秒，移动、隐藏、卸载或尺寸/DPI 变化可能使它提前失效。每个 lease 只保留最近的有限个 token。异步菜单动作使用相对于实际可见宿主窗口的几何快照，不要求已关闭的 MenuItem 继续存在；边缘胶囊菜单使用菜单挂载的边缘宿主，不使用隐藏的原 PaperWindow。只有来源确实无法解析到有效显示窗口时才返回空 Anchor；这时可以打开不带 Anchor 的独立窗口，不应猜鼠标坐标。
+ 
+-浮层由 WPF 定位在锚点附近并处理屏幕边界；点击外部、未被内部控件处理的 Esc、窗口移动/缩放/失活、锚点卸载和显示器变化会收起。内置样式下拉框的第一下 Esc 优先关闭下拉列表。独立窗口不跟随按钮移动，但 owner 关闭或相关 Paper 删除时关闭。lease/session 结束和宿主退出时全部回收；辅助窗口不是 Paper，不会维持 Runtime 的存在。
++浮层由 WPF 定位在锚点附近并处理屏幕边界；点击外部、未被内部控件处理的 Esc、窗口移动/缩放/失活、锚点卸载和显示器变化会收起。纯文字/图片浮层没有可聚焦子控件时，壳自身接收键盘焦点；内置样式下拉框的第一下 Esc 优先关闭下拉列表。Web 浮层在完整键盘事件分发后才判断 `defaultPrevented`，插件可用 `preventDefault()` 保留浮层；输入法组合中的 Esc 不关闭浮层。Native/Web 独立窗口均不由宿主默认处理 Esc，交给插件内容决定。独立窗口不跟随按钮移动，但 owner 关闭或相关 Paper 删除时关闭。lease/session 结束和宿主退出时全部回收；辅助窗口不是 Paper，不会维持 Runtime 的存在。
+ 
+ `surface_id_conflict` 表示 ID 被另一种壳或创建中的壳占用；`surface_content_in_use` 表示重复挂载内容；`anchor_unavailable` 表示锚点过期、错 lease 或失效；`surface_owner_closed` 表示不能在结束的 lease 上再打开界面。返回的 handle 只操作它代表的那一个实例；旧 handle 不会关闭后来同 ID 的窗口。
+ 
+diff --git a/src/PaperWindow.PluginPaperActions.cs b/src/PaperWindow.PluginPaperActions.cs
+index 95e3f72..8479c2e 100644
+--- a/src/PaperWindow.PluginPaperActions.cs
++++ b/src/PaperWindow.PluginPaperActions.cs
+@@ -7,6 +7,11 @@ namespace PaperTodo;
+ public sealed partial class PaperWindow
+ {
+     private void AttachPluginPaperMenuActions(ContextMenu menu)
++        => AttachPluginPaperMenuActions(menu, _controller, _paper.Id);
++
++    // The Paper owns the action, but its visible menu may belong to an EdgeCapsuleHost.
++    // Keep the renderer independent of the hidden PaperWindow so placement uses the real UI.
++    internal static void AttachPluginPaperMenuActions(ContextMenu menu, AppController controller, string paperId)
+     {
+         var insertionIndex = menu.Items.Count;
+         var contributed = new List<MenuItem>();
+@@ -14,14 +19,16 @@ public sealed partial class PaperWindow
+         {
+             foreach (var item in contributed) menu.Items.Remove(item);
+             contributed.Clear();
+-            foreach (var binding in _controller.GetPluginPaperActions(_paper.Id, PaperActionPlacement.ContextMenu))
++            foreach (var binding in controller.GetPluginPaperActions(paperId, PaperActionPlacement.ContextMenu))
+             {
+                 var item = MenuItem(binding.Action.Text, (_, _) => { });
+                 item.IsEnabled = binding.Action.Enabled;
+                 item.ToolTip = string.IsNullOrEmpty(binding.Action.ToolTip) ? null : binding.Action.ToolTip;
+                 item.Icon = CreatePluginTopBarIcon(item, binding.Action.Icon);
+-                item.Click += (_, _) => _controller.InvokePluginPaperAction(
+-                    binding, PaperActionPlacement.ContextMenu, item, this, transientSource: true);
++                item.Click += (_, _) => controller.InvokePluginPaperAction(
++                    binding, PaperActionPlacement.ContextMenu, item,
++                    menu.PlacementTarget is { } target ? Window.GetWindow(target) : null,
++                    transientSource: true);
+                 menu.Items.Insert(insertionIndex + contributed.Count, item);
+                 contributed.Add(item);
+             }
+diff --git a/src/PluginSurfaceHost.cs b/src/PluginSurfaceHost.cs
+index cc328b8..e8c863a 100644
+--- a/src/PluginSurfaceHost.cs
++++ b/src/PluginSurfaceHost.cs
+@@ -181,8 +181,11 @@ internal sealed class PluginSurfaceHost : IPaperPluginSurfaces, IDisposable
+             popup.IsOpen = true;
+             _ = _dispatcher.BeginInvoke((Action)(() =>
+             {
+-                if (IsCurrent(surface) && popup.IsOpen)
+-                    frame.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
++                if (!IsCurrent(surface) || !popup.IsOpen || frame.IsKeyboardFocusWithin) return;
++                // Read-only content has no tab stop. Give the shell keyboard focus rather than
++                // leaving Escape and subsequent typing routed to the source paper.
++                if (!frame.MoveFocus(new TraversalRequest(FocusNavigationDirection.First)))
++                    frame.Focus();
+             }), DispatcherPriority.Input);
+             return (IPaperPluginSurface)surface;
+         }
+@@ -218,7 +221,7 @@ internal sealed class PluginSurfaceHost : IPaperPluginSurfaces, IDisposable
+         {
+             BorderThickness = isWindow ? new Thickness(0) : new Thickness(1),
+             CornerRadius = isWindow ? new CornerRadius(0) : new CornerRadius(8),
+-            Padding = new Thickness(8), ClipToBounds = true,
++            Padding = new Thickness(8), ClipToBounds = true, Focusable = !isWindow,
+             Width = isWindow ? double.NaN : Math.Max(1, width),
+             Height = isWindow ? double.NaN : Math.Max(1, height),
+             UseLayoutRounding = true, SnapsToDevicePixels = true
+diff --git a/src/WebPluginSurfaceContent.cs b/src/WebPluginSurfaceContent.cs
+index cf999a4..c1ca908 100644
+--- a/src/WebPluginSurfaceContent.cs
++++ b/src/WebPluginSurfaceContent.cs
+@@ -22,6 +22,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
+     private readonly JsonElement _data;
+     private readonly Action<JsonElement> _post;
+     private readonly Action<string> _failed;
++    private readonly bool _closeOnEscape;
+     private readonly WebView2CompositionControl _webView = new();
+     private readonly CancellationTokenSource _lifetime = new();
+     private PaperBodyTheme _theme;
+@@ -35,10 +36,11 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
+ 
+     internal WebPluginSurfaceContent(PaperBodyPluginManifest manifest, string entryPath,
+         IPaperTodoHostApi workspace, PaperPluginSurfaceContext context, JsonElement data,
+-        Action<JsonElement> post, Action<string> failed)
++        Action<JsonElement> post, Action<string> failed, bool closeOnEscape = false)
+     {
+         _manifest = manifest; _entryPath = entryPath; _workspace = workspace;
+         _context = context; _theme = context.Theme; _data = data; _post = post; _failed = failed;
++        _closeOnEscape = closeOnEscape;
+         _webView.Loaded += OnLoaded;
+     }
+     public FrameworkElement View => _webView;
+@@ -72,7 +74,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
+             core.NewWindowRequested += OnNewWindow;
+             core.ProcessFailed += OnProcessFailed;
+             core.DownloadStarting += OnDownload;
+-            await core.AddScriptToExecuteOnDocumentCreatedAsync(BridgeScript(_origin));
++            await core.AddScriptToExecuteOnDocumentCreatedAsync(BridgeScript(_origin, _closeOnEscape));
+             token.ThrowIfCancellationRequested();
+             if (!_disposed) _webView.Source = WebPluginRuntimeInfrastructure.LocalEntryUri(_origin, root, _entryPath);
+         }
+@@ -80,7 +82,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
+         catch (Exception ex) { Fail(ex.GetBaseException().Message); }
+     }
+ 
+-    internal static string BridgeScript(string origin) => $$"""
++    internal static string BridgeScript(string origin, bool closeOnEscape = false) => $$"""
+         (() => {
+           if (window !== window.top || location.origin !== {{JsonSerializer.Serialize(origin)}}) return;
+           let token = null, sequence = 0, initialized;
+@@ -124,9 +126,15 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
+             }
+             for (const listener of [...listeners]) { try { listener(value); } catch {} }
+           });
+-          window.addEventListener('keydown', e => {
+-            if (e.key === 'Escape') queueMicrotask(() => { if (!e.defaultPrevented) close(); });
+-          });
++          if ({{(closeOnEscape ? "true" : "false")}}) {
++            window.addEventListener('keydown', e => {
++              // A microtask can run between native event listeners. A task runs after event
++              // dispatch, allowing even later window listeners to cancel popup dismissal.
++              // Ordinary windows have no host Escape action; their content owns the key.
++              if (e.key === 'Escape' && !e.isComposing)
++                setTimeout(() => { if (!e.defaultPrevented) close(); }, 0);
++            });
++          }
+         })();
+         """;
+ 
+diff --git a/src/WebPluginSurfaceRequests.cs b/src/WebPluginSurfaceRequests.cs
+index e4100fd..e159684 100644
+--- a/src/WebPluginSurfaceRequests.cs
++++ b/src/WebPluginSurfaceRequests.cs
+@@ -35,7 +35,8 @@ internal static class WebPluginSurfaceRequests
+             IPaperPluginSurfaceContent Create(PaperPluginSurfaceContext context) =>
+                 new WebPluginSurfaceContent(manifest, entryPath, workspace, context, initialData,
+                     message => send(new { type = "surfaceMessage", surfaceId = id, message }),
+-                    error => send(new { type = "surfaceError", surfaceId = id, code = "web_surface_failed", message = error }));
++                    error => send(new { type = "surfaceError", surfaceId = id, code = "web_surface_failed", message = error }),
++                    closeOnEscape: method == "surfaces.openPopup");
+             var options = parameters.Deserialize<PaperPluginWindowOptions>(WebPluginRuntimeInfrastructure.JsonOptions)!;
+             var handle = method == "surfaces.openWindow"
+                 ? surfaces.OpenWindow(options, Create)
+diff --git a/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs b/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
+new file mode 100644
+--- /dev/null
++++ b/tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
+@@ -0,0 +1,191 @@
++using System.Diagnostics;
++using System.IO;
++using System.Runtime.InteropServices;
++using System.Text;
++using System.Windows;
++using System.Windows.Automation.Peers;
++using System.Windows.Automation.Provider;
++using System.Windows.Controls;
++using System.Windows.Input;
++using System.Windows.Media;
++using PaperTodo;
++using PaperTodo.Plugin;
++
++internal static partial class Program
++{
++    private static void PaperMenuVisibleHost()
++    {
++        // Keep a real original window hidden while a separate host presents its Paper menu.
++        // Exercise the production menu renderer and WPF's real menu-invocation/close sequence.
++        var (hiddenPaper, _) = Owner();
++        hiddenPaper.Hide();
++        var (visibleHost, target) = Owner();
++        var controller = Controller(new AppState
++        {
++            Papers = [new() { Id = "edge-paper", Title = "Edge", Type = PaperTypes.Note }]
++        });
++        using var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "test.plugin",
++            [PaperTodoPermissionNames.PapersRead], () => true);
++        var actions = (IPaperPluginPaperActions)runtime;
++        PaperActionInvocation? invocation = null;
++        actions.SetActionHandler(value => invocation = value);
++        actions.SetActions("edge-paper", [Action("panel", 1)]);
++        var menu = new ContextMenu { PlacementTarget = target };
++        PaperWindow.AttachPluginPaperMenuActions(menu, controller, "edge-paper");
++        menu.IsOpen = true;
++        Pump();
++        var item = menu.Items.OfType<MenuItem>().Single();
++        var peer = new MenuItemAutomationPeer(item);
++        ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)!).Invoke();
++        PumpUntil(() => invocation != null && !menu.IsOpen);
++        Pump(); // The MenuItem may now be gone; placement must survive on the visible host.
++        Assert(invocation!.Paper.Id == "edge-paper" && invocation.Anchor != null,
++            "The hidden paper's menu did not return a visible-host anchor.");
++        Assert(!hiddenPaper.IsVisible, "Opening the menu revealed the original Paper window.");
++        var handle = runtime.OpenPopup(invocation.Anchor!, new() { Id = "edge-panel" }, _ => new Content());
++        Assert(handle.IsOpen, "The visible menu owner could not open an anchored panel.");
++        visibleHost.Hide();
++        Pump();
++        Assert(!handle.IsOpen, "Hiding the actual visible owner did not dismiss its panel.");
++        hiddenPaper.Close();
++        visibleHost.Close();
++    }
++
++    private static void PopupKeyboard()
++    {
++        var (owner, button) = Owner();
++        button.Focus();
++        var anchors = new PluginUiAnchorStore();
++        var lease = Guid.NewGuid();
++        using var host = Host(anchors, lease, owner);
++        var content = new Content(); // TextBlock only; no tab stops.
++        var handle = host.OpenPopup(anchors.Capture(lease, "p", button, owner, false)!,
++            new() { Id = "read-only" }, _ => content);
++        Pump();
++        var frame = (Border)VisualTreeHelper.GetParent(content.View);
++        Assert(frame.IsKeyboardFocusWithin && ReferenceEquals(Keyboard.FocusedElement, frame),
++            "Read-only popup left keyboard focus on the source window instead of its shell.");
++        PressEscape();
++        PumpUntil(() => !handle.IsOpen);
++        Assert(content.DisposeCount == 1, "Keyboard dismissal did not dispose the read-only content.");
++
++        var combo = new ComboBox { ItemsSource = new[] { "A", "B" }, SelectedIndex = 0 };
++        handle = host.OpenPopup(anchors.Capture(lease, "p", button, owner, false)!,
++            new() { Id = "select" }, context =>
++            {
++                context.Controls.ApplySelectStyle(combo, 12);
++                return new Content(combo);
++            });
++        Pump();
++        Assert(combo.IsKeyboardFocusWithin, "Shell fallback stole focus from an interactive child.");
++        combo.IsDropDownOpen = true;
++        Pump();
++        PressEscape();
++        PumpUntil(() => !combo.IsDropDownOpen);
++        Assert(handle.IsOpen, "First real Escape closed the outer popup instead of its dropdown.");
++        PressEscape();
++        PumpUntil(() => !handle.IsOpen);
++
++        // Independent windows must leave Escape to their content on the Native path too.
++        var editor = new TextBox { Text = "unsaved" };
++        var window = host.OpenWindow(new() { Id = "editor" }, _ => new Content(editor));
++        editor.Focus();
++        Pump();
++        PressEscape();
++        Pump();
++        Assert(window.IsOpen && editor.Text == "unsaved", "Window inherited popup Escape behavior.");
++        window.Close();
++        owner.Close();
++    }
++
++    // Send actual Windows keyboard input to the focused HWND, not RaiseEvent on a chosen child.
++    private static void PressEscape()
++    {
++        var inputs = new[]
++        {
++            new NativeInput { Type = 1, Data = new() { Keyboard = new() { VirtualKey = 0x1B } } },
++            new NativeInput { Type = 1, Data = new() { Keyboard = new() { VirtualKey = 0x1B, Flags = 2 } } }
++        };
++        Assert(SendInput(2, inputs, Marshal.SizeOf<NativeInput>()) == 2,
++            $"SendInput failed: {Marshal.GetLastWin32Error()}");
++        Pump();
++    }
++    [DllImport("user32.dll", SetLastError = true)]
++    private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
++    [StructLayout(LayoutKind.Sequential)]
++    private struct NativeInput { public uint Type; public NativeInputData Data; }
++    [StructLayout(LayoutKind.Explicit)]
++    private struct NativeInputData
++    {
++        [FieldOffset(0)] public NativeKeyboardInput Keyboard;
++        [FieldOffset(0)] public NativeMouseInput Mouse;
++    }
++    [StructLayout(LayoutKind.Sequential)]
++    private struct NativeKeyboardInput
++    {
++        public ushort VirtualKey, Scan;
++        public uint Flags, Time;
++        public UIntPtr ExtraInfo;
++    }
++    [StructLayout(LayoutKind.Sequential)]
++    private struct NativeMouseInput
++    {
++        public int X, Y;
++        public uint Data, Flags, Time;
++        public UIntPtr ExtraInfo;
++    }
++
++    private static void WebEscape()
++    {
++        using var temp = new Temp();
++        File.WriteAllText(Path.Combine(temp.Path, "popup.js"),
++            WebPluginSurfaceContent.BridgeScript("https://surface.test", closeOnEscape: true), new UTF8Encoding(false));
++        File.WriteAllText(Path.Combine(temp.Path, "window.js"),
++            WebPluginSurfaceContent.BridgeScript("https://surface.test", closeOnEscape: false), new UTF8Encoding(false));
++        var harness = Path.Combine(temp.Path, "escape.cjs");
++        File.WriteAllText(harness, """
++            const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
++            const assert = require('node:assert/strict');
++            async function check(kind, cancel, composing, expected) {
++              const keys = [], messages = [], tasks = [], posted = [];
++              const scope = {
++                location:{origin:'https://surface.test'},
++                document:{documentElement:{style:{setProperty(){}}}},
++                chrome:{webview:{postMessage:value=>posted.push(value), addEventListener:(_,fn)=>messages.push(fn)}},
++                addEventListener:(type,fn)=>{ if(type==='keydown') keys.push(fn); },
++                queueMicrotask,
++                setTimeout:fn=>tasks.push(fn)
++              };
++              scope.window=scope; scope.top=scope;
++              vm.runInNewContext(fs.readFileSync(path.join(__dirname,kind+'.js'),'utf8'),scope);
++              for(const fn of messages) fn({data:{type:'initialize',token:'t',theme:{},data:{}}});
++              // Register plugin code AFTER host injection, just like a real local HTML entry.
++              keys.push(e=>{ if(cancel) e.preventDefault(); });
++              const event = {key:'Escape',isComposing:composing,defaultPrevented:false,
++                preventDefault(){this.defaultPrevented=true;}};
++              for(const fn of keys) {
++                fn(event);
++                // Browsers may perform a microtask checkpoint between native event callbacks.
++                await Promise.resolve();
++              }
++              for(const task of tasks) task();
++              assert.equal(posted.filter(x=>x.method==='surface.close').length,expected,
++                `${kind}: cancel=${cancel}, composing=${composing}`);
++            }
++            (async()=>{
++              await check('popup',true,false,0);
++              await check('popup',false,false,1);
++              await check('popup',false,true,0);
++              await check('window',false,false,0);
++              await check('window',true,false,0);
++            })().catch(e=>{console.error(e);process.exitCode=1;});
++            """, new UTF8Encoding(false));
++        var start = new ProcessStartInfo("node")
++        { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
++        start.ArgumentList.Add(harness);
++        using var process = Process.Start(start)!;
++        var error = process.StandardError.ReadToEndAsync();
++        if (!process.WaitForExit(15_000)) { process.Kill(true); throw new TimeoutException("Web Escape check timed out."); }
++        Assert(process.ExitCode == 0, error.GetAwaiter().GetResult());
++    }
++}
+diff --git a/tests/PaperTodo.PluginApiChecks/Program.cs b/tests/PaperTodo.PluginApiChecks/Program.cs
+index b73c8c8..d6fcaa0 100644
+--- a/tests/PaperTodo.PluginApiChecks/Program.cs
++++ b/tests/PaperTodo.PluginApiChecks/Program.cs
+@@ -13,7 +13,7 @@ using System.Windows.Threading;
+ using PaperTodo;
+ using PaperTodo.Plugin;
+ 
+-internal static class Program
++internal static partial class Program
+ {
+     private static readonly PaperBodyTheme Light = new(false, "#FFF8E6", "#202020", "#707070",
+         "#B07A31", "#807050", "Segoe UI", 1);
+@@ -31,6 +31,9 @@ internal static class Program
+             ("window-single-instance-factory-failure-and-disposal", Windows),
+             ("popup-dropdown-escape-and-owner-movement", Popups),
+             ("context-menu-anchor-survives-menu-dismissal", MenuAnchor),
++            ("paper-menu-anchors-to-visible-host", PaperMenuVisibleHost),
++            ("popup-real-keyboard-focus-and-dropdown-escape", PopupKeyboard),
++            ("web-popup-escape-respects-content-and-window-kind", WebEscape),
+             ("surface-factories-marshal-worker-to-ui", WorkerFactory),
+             ("surface-size-cap-and-content-ownership", SurfaceLimits),
+             ("web-entry-containment-and-data-limits", WebEntry),
