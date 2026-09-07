@@ -10,10 +10,10 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 /// <summary>
-/// Owns the backdrop, not paper geometry or focus. Only ordinary non-layered HWNDs
-/// enter this adapter; the bounded layered Edge hosts retain their own presentation.
-/// WindowChrome owns non-client/glass integration. Do not add a parallel NCCALCSIZE
-/// handler or crop the expanded HWND to an inset WPF Border.
+/// Owns the backdrop and keeps the outer HWND aligned with PaperTodo's form-transition surface.
+/// Only ordinary non-layered HWNDs enter this adapter; the bounded layered Edge hosts retain
+/// their own presentation. WindowChrome owns non-client/glass integration. Do not add a parallel
+/// NCCALCSIZE handler or crop the expanded HWND to an inset WPF Border.
 /// </summary>
 internal sealed class NativeMicaBackdrop : IDisposable
 {
@@ -24,6 +24,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly Action _changed;
     private readonly INativeMicaApi _native;
     private readonly DependencyPropertyDescriptor _opacity;
+    private readonly DependencyPropertyDescriptor _width;
+    private readonly DependencyPropertyDescriptor _height;
     private HwndSource? _source;
     private Border? _observedChrome;
     private (bool Requested, bool Dark, bool Eligible, bool Rounded, int Backdrop)? _applied;
@@ -33,6 +35,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
+    private bool _syncingTransitionBounds;
+    private double? _transitionOuterWidthInset;
+    private double? _transitionOuterHeightInset;
 
     internal bool IsActive { get; private set; }
     internal int LastHResult { get; private set; }
@@ -61,9 +66,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
             UseAeroCaptionButtons = false
         });
         _opacity = DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(UIElement));
+        _width = DependencyPropertyDescriptor.FromProperty(FrameworkElement.WidthProperty, typeof(FrameworkElement));
+        _height = DependencyPropertyDescriptor.FromProperty(FrameworkElement.HeightProperty, typeof(FrameworkElement));
         _opacity.AddValueChanged(window, OnOpacityChanged);
         window.SourceInitialized += OnSourceInitialized;
         window.LayoutUpdated += OnLayoutUpdated;
+        window.SizeChanged += OnWindowSizeChanged;
         window.StateChanged += OnStateChanged;
         window.Closed += OnClosed;
     }
@@ -149,14 +157,122 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private void ObserveChrome(Border? chrome)
     {
         if (ReferenceEquals(chrome, _observedChrome)) return;
-        if (_observedChrome != null) _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
+        if (_observedChrome != null)
+        {
+            _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
+            _width.RemoveValueChanged(_observedChrome, OnChromeTransitionSizeChanged);
+            _height.RemoveValueChanged(_observedChrome, OnChromeTransitionSizeChanged);
+        }
         _observedChrome = chrome;
-        if (chrome != null) _opacity.AddValueChanged(chrome, OnOpacityChanged);
+        ResetTransitionBoundsSync();
+        if (chrome != null)
+        {
+            _opacity.AddValueChanged(chrome, OnOpacityChanged);
+            _width.AddValueChanged(chrome, OnChromeTransitionSizeChanged);
+            _height.AddValueChanged(chrome, OnChromeTransitionSizeChanged);
+        }
         // Settings rebuild their root; the replacement must receive the actual surface.
         _applied = null;
     }
 
-    private void OnLayoutUpdated(object? sender, EventArgs e) => Refresh(_requested, _dark);
+    private void OnLayoutUpdated(object? sender, EventArgs e)
+    {
+        SyncTransitionWindowBounds();
+        Refresh(_requested, _dark);
+    }
+
+    private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e) =>
+        SyncTransitionWindowBounds();
+
+    private void OnChromeTransitionSizeChanged(object? sender, EventArgs e) =>
+        SyncTransitionWindowBounds();
+
+    private void SyncTransitionWindowBounds()
+    {
+        if (_disposed || _syncingTransitionBounds || _window.WindowState != WindowState.Normal)
+        {
+            return;
+        }
+
+        var chrome = _observedChrome;
+        if (chrome == null || _canPresent())
+        {
+            ResetTransitionBoundsSync();
+            return;
+        }
+
+        var hasAnimatedWidth = double.IsFinite(chrome.Width) && chrome.Width > 0;
+        var hasAnimatedHeight = double.IsFinite(chrome.Height) && chrome.Height > 0;
+        if (!hasAnimatedWidth && !hasAnimatedHeight)
+        {
+            ResetTransitionBoundsSync();
+            return;
+        }
+
+        // PaperTodo's legacy layered animation shrinks the inner paper first and used to resize
+        // the HWND only on the final frame. On a native non-layered session that exposes DWM's
+        // outer frame (seen as a blue outline) around the already-small paper. Capture the stable
+        // chrome-to-HWND inset on the first transition frame and move the real HWND with the same
+        // visual bounds. The shell itself remains scale-animated, so text never reflows per frame.
+        _syncingTransitionBounds = true;
+        try
+        {
+            _window.ResizeMode = ResizeMode.NoResize;
+            if (hasAnimatedWidth)
+            {
+                _transitionOuterWidthInset ??= CaptureOuterInset(_window.ActualWidth, chrome.Width);
+                var targetWidth = chrome.Width + _transitionOuterWidthInset.Value;
+                if (targetWidth > 0)
+                {
+                    if (_window.MinWidth > targetWidth) _window.MinWidth = targetWidth;
+                    if (!double.IsFinite(_window.Width) || Math.Abs(_window.Width - targetWidth) > 0.25)
+                        _window.Width = targetWidth;
+                }
+            }
+            else
+            {
+                _transitionOuterWidthInset = null;
+            }
+
+            if (hasAnimatedHeight)
+            {
+                _transitionOuterHeightInset ??= CaptureOuterInset(_window.ActualHeight, chrome.Height);
+                var targetHeight = chrome.Height + _transitionOuterHeightInset.Value;
+                if (targetHeight > 0)
+                {
+                    if (_window.MinHeight > targetHeight) _window.MinHeight = targetHeight;
+                    if (!double.IsFinite(_window.Height) || Math.Abs(_window.Height - targetHeight) > 0.25)
+                        _window.Height = targetHeight;
+                }
+            }
+            else
+            {
+                _transitionOuterHeightInset = null;
+            }
+        }
+        finally
+        {
+            _syncingTransitionBounds = false;
+        }
+    }
+
+    private static double CaptureOuterInset(double outer, double chrome)
+    {
+        if (!double.IsFinite(outer) || outer <= 0 || !double.IsFinite(chrome) || chrome <= 0)
+        {
+            return 0;
+        }
+        // PaperTodo's normal shadow allowance is small. Cap the captured delta so a stale
+        // layout cannot turn an expansion into a full-size jump before the first animation tick.
+        return Math.Clamp(outer - chrome, 0, 64);
+    }
+
+    private void ResetTransitionBoundsSync()
+    {
+        _transitionOuterWidthInset = null;
+        _transitionOuterHeightInset = null;
+    }
+
     private void OnStateChanged(object? sender, EventArgs e) => QueueRefresh();
     private void OnOpacityChanged(object? sender, EventArgs e)
     {
@@ -192,10 +308,16 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _disposed = true;
         _window.SourceInitialized -= OnSourceInitialized;
         _window.LayoutUpdated -= OnLayoutUpdated;
+        _window.SizeChanged -= OnWindowSizeChanged;
         _window.StateChanged -= OnStateChanged;
         _window.Closed -= OnClosed;
         _opacity.RemoveValueChanged(_window, OnOpacityChanged);
-        if (_observedChrome != null) _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
+        if (_observedChrome != null)
+        {
+            _opacity.RemoveValueChanged(_observedChrome, OnOpacityChanged);
+            _width.RemoveValueChanged(_observedChrome, OnChromeTransitionSizeChanged);
+            _height.RemoveValueChanged(_observedChrome, OnChromeTransitionSizeChanged);
+        }
         if (_source != null && !_source.IsDisposed)
         {
             _source.RemoveHook(WindowMessage);
@@ -204,6 +326,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         IsActive = false;
         _source = null;
         _observedChrome = null;
+        ResetTransitionBoundsSync();
     }
 
     internal static Brush GetActiveSurfaceBrush(int backdrop, bool dark)
