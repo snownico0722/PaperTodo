@@ -1,0 +1,18 @@
+name: PR198 review source
+on:
+  push:
+    branches: [feat/plugin-actions-assets-surfaces-20260907]
+    paths: [.github/workflows/pr198-review-source.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr198-review-source
+          path: source.zip
+          retention-days: 1
