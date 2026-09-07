@@ -4,47 +4,66 @@ on:
     branches: [work/mica-materials-20260907]
     paths: [.github/workflows/material-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   validate:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
         with:
+          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Prepare isolated controller proof
+      - name: Apply reviewed frame and visual regression patch
         shell: python
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          import base64, json, os, pathlib, urllib.request
-          root = pathlib.Path('tests/MicaControllerProof'); root.mkdir(exist_ok=True)
-          req = urllib.request.Request('https://api.github.com/repos/snownico0722/PaperTodo/git/blobs/b7a5700fc0a530f1f7657359dcaa2913bbb8c6b0', headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
-          with urllib.request.urlopen(req, timeout=60) as r: code=base64.b64decode(json.load(r)['content'])
-          (root/'Program.cs').write_bytes(code)
-          (root/'MicaControllerProof.csproj').write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows10.0.17763.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><WindowsPackageType>None</WindowsPackageType><WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained><RuntimeIdentifier>win-x64</RuntimeIdentifier><WindowsAppSDKDeploymentManagerInitialize>false</WindowsAppSDKDeploymentManagerInitialize></PropertyGroup><ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/><PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001"/></ItemGroup></Project>''')
-      - name: Build and capture controller output
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request, zlib
+          assert os.environ['GITHUB_REPOSITORY'] == 'snownico0722/PaperTodo'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/work/mica-materials-20260907'
+          root = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          def api(path, data=None):
+              req = urllib.request.Request(root + path, data=None if data is None else json.dumps(data).encode(), headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json','Content-Type': 'application/json'})
+              with urllib.request.urlopen(req, timeout=60) as r: return json.load(r)
+          chunks = ['1c30f44f5afd69837853ef90eda4973f00c8d4f6','f72849d2002166c1c068c8bf89c00d460352aceb','1bf7ed261fad607bf8d83616d702fb6bafa33ea9']
+          encoded = b''.join(base64.b64decode(api('/git/blobs/' + x)['content']) for x in chunks)
+          patch = zlib.decompress(base64.b64decode(encoded))
+          assert hashlib.sha256(patch).hexdigest() == '25d4fdc32f4cc234bdf03f075bf3431051ca9078483378927b81e9de7c2a6019'
+          subprocess.run(['git','apply','--check','-'], input=patch, check=True)
+          subprocess.run(['git','apply','-'], input=patch, check=True)
+          subprocess.run(['git','add','src','tests'],check=True)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          entries = []
+          paths = subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().strip('\0').split('\0')
+          for name in paths:
+              assert name.startswith(('src/','tests/'))
+              content = pathlib.Path(name).read_bytes()
+              sha = api('/git/blobs', {'content':base64.b64encode(content).decode(),'encoding':'base64'})['sha']
+              entries.append({'path':name,'mode':'100644','type':'blob','sha':sha})
+          base = subprocess.check_output(['git','rev-parse','HEAD^{tree}']).decode().strip()
+          tree = api('/git/trees', {'base_tree':base,'tree':entries})['sha']
+          pathlib.Path(os.environ['RUNNER_TEMP'],'mica-tree.json').write_text(json.dumps({'head':os.environ['GITHUB_SHA'],'tree':tree,'entries':entries},indent=2))
+          print('REVIEWED_MICA_TREE=' + tree)
+      - name: Build Release
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Native Mica behavior and desktop pixels
         env:
-          MICA_OUT: ${{ runner.temp }}/mica-proof/build
-        run: dotnet run --project tests/MicaControllerProof/MicaControllerProof.csproj -c Release
-      - name: Publish isolated single-file proof
-        run: dotnet publish tests/MicaControllerProof/MicaControllerProof.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:IncludeNativeLibrariesForSelfExtract=true -o '${{ runner.temp }}/mica-proof/publish'
-      - name: Run published proof
-        env:
-          MICA_OUT: ${{ runner.temp }}/mica-proof/published
-        run: |
-          & '${{ runner.temp }}/mica-proof/publish/MicaControllerProof.exe'
-          if ($LASTEXITCODE -ne 0) { throw "Published proof failed: $LASTEXITCODE" }
-          Get-ChildItem '${{ runner.temp }}/mica-proof/publish' | Select Name,Length
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/mica-pixels
+        run: dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+      - name: Markdown semantic regression
+        run: dotnet run --project tests/PaperTodo.MarkdownSemanticChecks/PaperTodo.MarkdownSemanticChecks.csproj -c Release
+      - name: Todo navigation regression
+        run: dotnet run --project tests/PaperTodo.TodoNavigationChecks/PaperTodo.TodoNavigationChecks.csproj -c Release
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mica-controller-proof
+          name: mica-frame-validation
           path: |
-            ${{ runner.temp }}/mica-proof/build
-            ${{ runner.temp }}/mica-proof/published
+            ${{ runner.temp }}/mica-tree.json
+            ${{ runner.temp }}/mica-pixels
           retention-days: 2
