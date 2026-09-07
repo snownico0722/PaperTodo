@@ -392,7 +392,10 @@ internal static class Program
         var watch = Stopwatch.StartNew();
         while (!done()) { if (watch.ElapsedMilliseconds > 15_000) throw new TimeoutException(); Pump(); Thread.Sleep(1); }
     }
-    private static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
+    private static void Assert([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
+    {
+        if (!condition) throw new Exception(message);
+    }
     private static void Error(string code, Action action)
     {
         try { action(); }
