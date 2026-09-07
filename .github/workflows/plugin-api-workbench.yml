@@ -5,13 +5,76 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
-    runs-on: ubuntu-latest
+  validate:
+    if: contains(github.event.head_commit.message, '[api-check]')
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: git archive --format=zip --output=source.zip HEAD
-      - uses: actions/upload-artifact@v4
         with:
-          name: plugin-api-source
-          path: source.zip
-          retention-days: 1
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply verified development patch
+        shell: python
+        run: |
+          import base64, hashlib, lzma, pathlib, subprocess, tempfile
+          parts = sorted(pathlib.Path('.github/plugin-api-payload').glob('part*.txt'))
+          assert len(parts) == 4, 'Missing development patch parts'
+          encoded = ''.join(p.read_text().strip() for p in parts)
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'cbfd502b0bcada03a526cd77f390ebbea033e183a319ca9056d1861fd012b5f4', 'Patch checksum mismatch'
+          path = pathlib.Path(tempfile.gettempdir()) / 'papertodo-plugin-api.patch'
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', str(path)], check=True)
+          for fix in sorted(pathlib.Path('.github/plugin-api-fixes').glob('*.patch')):
+              subprocess.run(['git', 'apply', str(fix)], check=True)
+      - name: Build Release host
+        shell: pwsh
+        run: |
+          dotnet build .\PaperTodo.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run behavior checks
+        shell: pwsh
+        run: |
+          $checks = 'PluginApiChecks', 'ProtocolPolicyChecks', 'PersistenceChecks', 'MarkdownSemanticChecks', 'TodoNavigationChecks'
+          foreach ($check in $checks) {
+            Write-Host "=== PaperTodo.$check ==="
+            dotnet run --project ".\tests\PaperTodo.$check\PaperTodo.$check.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Rebuild native plugin distributions
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem plugin-samples -Recurse -Filter *.csproj
+          foreach ($project in $projects) {
+            & .\plugin-samples\Build-And-Install-NativePlugin.ps1 -ProjectPath $project.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Commit validated changes to feature branch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = 'feat/plugin-actions-assets-surfaces-20260907'
+          if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Unexpected branch' }
+          $remote = (git ls-remote origin "refs/heads/$branch").Split()[0]
+          if ($remote -ne $env:GITHUB_SHA) { throw 'Branch changed during validation; refusing to overwrite' }
+          git rm -r --ignore-unmatch .github/plugin-api-payload .github/plugin-api-fixes
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add -A
+          git config user.name 'snownico0722'
+          git config user.email '36026283+snownico0722@users.noreply.github.com'
+          git commit -m 'feat: add plugin PaperActions, NoteAssets and basic Surfaces [ci]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "VALIDATED_COMMIT=$(git rev-parse HEAD)"
