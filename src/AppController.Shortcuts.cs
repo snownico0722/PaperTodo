@@ -1157,9 +1157,7 @@ public sealed partial class AppController
             return ShortcutUiStatus.Unassigned;
         }
 
-        return definitions.All(item => _globalHotkeys?.ActiveBindings.ContainsKey(item.Id) == true
-            ? true
-            : false)
+        return definitions.All(item => _globalHotkeys?.ActiveBindings.ContainsKey(item.Id) == true)
             ? ShortcutUiStatus.Registered
             : ShortcutUiStatus.RegistrationFailed;
     }
