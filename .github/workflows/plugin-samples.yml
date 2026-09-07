@@ -7,6 +7,9 @@ on:
       - "plugin-samples/**"
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
+      - "tests/PaperTodo.PluginApiChecks/**"
+      - "src/PaperCommandService*.cs"
+      - "src/NoteImageStore.cs"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
@@ -26,6 +29,9 @@ on:
       - "plugin-samples/**"
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
+      - "tests/PaperTodo.PluginApiChecks/**"
+      - "src/PaperCommandService*.cs"
+      - "src/NoteImageStore.cs"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
@@ -63,6 +69,10 @@ jobs:
       - name: Run protocol policy checks
         shell: pwsh
         run: dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+
+      - name: Run plugin extension API checks
+        shell: pwsh
+        run: dotnet run --project .\tests\PaperTodo.PluginApiChecks\PaperTodo.PluginApiChecks.csproj -c Release
 
       - name: Validate plugin manifests
         shell: pwsh
