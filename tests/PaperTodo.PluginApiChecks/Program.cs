@@ -13,7 +13,7 @@ using System.Windows.Threading;
 using PaperTodo;
 using PaperTodo.Plugin;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly PaperBodyTheme Light = new(false, "#FFF8E6", "#202020", "#707070",
         "#B07A31", "#807050", "Segoe UI", 1);
@@ -31,6 +31,9 @@ internal static class Program
             ("window-single-instance-factory-failure-and-disposal", Windows),
             ("popup-dropdown-escape-and-owner-movement", Popups),
             ("context-menu-anchor-survives-menu-dismissal", MenuAnchor),
+            ("paper-menu-anchors-to-visible-host", PaperMenuVisibleHost),
+            ("popup-real-keyboard-focus-and-dropdown-escape", PopupKeyboard),
+            ("web-popup-escape-respects-content-and-window-kind", WebEscape),
             ("surface-factories-marshal-worker-to-ui", WorkerFactory),
             ("surface-size-cap-and-content-ownership", SurfaceLimits),
             ("web-entry-containment-and-data-limits", WebEntry),

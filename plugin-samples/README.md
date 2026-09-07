@@ -1179,9 +1179,9 @@ factory 在宿主 UI 线程执行，包括从 Native Runtime worker 发起的请
 
 ### 15.2 Anchor 与关闭规则
 
-Anchor 仅供收到它的 Body session / Runtime 使用，最多保留约 30 秒，移动、隐藏、卸载或尺寸/DPI 变化可能使它提前失效。每个 lease 只保留最近的有限个 token。异步菜单动作使用相对于仍存活窗口的几何快照，不要求已关闭的 MenuItem 继续存在。不能解析到有效显示窗口的来源（例如隐藏 Paper 的部分边缘菜单）会返回空 Anchor；这时可以打开不带 Anchor 的独立窗口，不应猜鼠标坐标。
+Anchor 仅供收到它的 Body session / Runtime 使用，最多保留约 30 秒，移动、隐藏、卸载或尺寸/DPI 变化可能使它提前失效。每个 lease 只保留最近的有限个 token。异步菜单动作使用相对于实际可见宿主窗口的几何快照，不要求已关闭的 MenuItem 继续存在；边缘胶囊菜单使用菜单挂载的边缘宿主，不使用隐藏的原 PaperWindow。只有来源确实无法解析到有效显示窗口时才返回空 Anchor；这时可以打开不带 Anchor 的独立窗口，不应猜鼠标坐标。
 
-浮层由 WPF 定位在锚点附近并处理屏幕边界；点击外部、未被内部控件处理的 Esc、窗口移动/缩放/失活、锚点卸载和显示器变化会收起。内置样式下拉框的第一下 Esc 优先关闭下拉列表。独立窗口不跟随按钮移动，但 owner 关闭或相关 Paper 删除时关闭。lease/session 结束和宿主退出时全部回收；辅助窗口不是 Paper，不会维持 Runtime 的存在。
+浮层由 WPF 定位在锚点附近并处理屏幕边界；点击外部、未被内部控件处理的 Esc、窗口移动/缩放/失活、锚点卸载和显示器变化会收起。纯文字/图片浮层没有可聚焦子控件时，壳自身接收键盘焦点；内置样式下拉框的第一下 Esc 优先关闭下拉列表。Web 浮层在完整键盘事件分发后才判断 `defaultPrevented`，插件可用 `preventDefault()` 保留浮层；输入法组合中的 Esc 不关闭浮层。Native/Web 独立窗口均不由宿主默认处理 Esc，交给插件内容决定。独立窗口不跟随按钮移动，但 owner 关闭或相关 Paper 删除时关闭。lease/session 结束和宿主退出时全部回收；辅助窗口不是 Paper，不会维持 Runtime 的存在。
 
 `surface_id_conflict` 表示 ID 被另一种壳或创建中的壳占用；`surface_content_in_use` 表示重复挂载内容；`anchor_unavailable` 表示锚点过期、错 lease 或失效；`surface_owner_closed` 表示不能在结束的 lease 上再打开界面。返回的 handle 只操作它代表的那一个实例；旧 handle 不会关闭后来同 ID 的窗口。
 

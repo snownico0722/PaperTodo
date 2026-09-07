@@ -181,8 +181,11 @@ internal sealed class PluginSurfaceHost : IPaperPluginSurfaces, IDisposable
             popup.IsOpen = true;
             _ = _dispatcher.BeginInvoke((Action)(() =>
             {
-                if (IsCurrent(surface) && popup.IsOpen)
-                    frame.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+                if (!IsCurrent(surface) || !popup.IsOpen || frame.IsKeyboardFocusWithin) return;
+                // Read-only content has no tab stop. Give the shell keyboard focus rather than
+                // leaving Escape and subsequent typing routed to the source paper.
+                if (!frame.MoveFocus(new TraversalRequest(FocusNavigationDirection.First)))
+                    frame.Focus();
             }), DispatcherPriority.Input);
             return (IPaperPluginSurface)surface;
         }
@@ -218,11 +221,13 @@ internal sealed class PluginSurfaceHost : IPaperPluginSurfaces, IDisposable
         {
             BorderThickness = isWindow ? new Thickness(0) : new Thickness(1),
             CornerRadius = isWindow ? new CornerRadius(0) : new CornerRadius(8),
-            Padding = new Thickness(8), ClipToBounds = true,
+            Padding = new Thickness(8), ClipToBounds = true, Focusable = !isWindow,
             Width = isWindow ? double.NaN : Math.Max(1, width),
             Height = isWindow ? double.NaN : Math.Max(1, height),
             UseLayoutRounding = true, SnapsToDevicePixels = true
         };
+        // Focusable for read-only fallback, but never a tab stop before plugin controls.
+        KeyboardNavigation.SetIsTabStop(frame, false);
         KeyboardNavigation.SetTabNavigation(frame, KeyboardNavigationMode.Cycle);
         surface.Frame = frame;
         return frame;

@@ -35,7 +35,8 @@ internal static class WebPluginSurfaceRequests
             IPaperPluginSurfaceContent Create(PaperPluginSurfaceContext context) =>
                 new WebPluginSurfaceContent(manifest, entryPath, workspace, context, initialData,
                     message => send(new { type = "surfaceMessage", surfaceId = id, message }),
-                    error => send(new { type = "surfaceError", surfaceId = id, code = "web_surface_failed", message = error }));
+                    error => send(new { type = "surfaceError", surfaceId = id, code = "web_surface_failed", message = error }),
+                    closeOnEscape: method == "surfaces.openPopup");
             var options = parameters.Deserialize<PaperPluginWindowOptions>(WebPluginRuntimeInfrastructure.JsonOptions)!;
             var handle = method == "surfaces.openWindow"
                 ? surfaces.OpenWindow(options, Create)

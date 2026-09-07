@@ -22,6 +22,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
     private readonly JsonElement _data;
     private readonly Action<JsonElement> _post;
     private readonly Action<string> _failed;
+    private readonly bool _closeOnEscape;
     private readonly WebView2CompositionControl _webView = new();
     private readonly CancellationTokenSource _lifetime = new();
     private PaperBodyTheme _theme;
@@ -35,10 +36,11 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
 
     internal WebPluginSurfaceContent(PaperBodyPluginManifest manifest, string entryPath,
         IPaperTodoHostApi workspace, PaperPluginSurfaceContext context, JsonElement data,
-        Action<JsonElement> post, Action<string> failed)
+        Action<JsonElement> post, Action<string> failed, bool closeOnEscape = false)
     {
         _manifest = manifest; _entryPath = entryPath; _workspace = workspace;
         _context = context; _theme = context.Theme; _data = data; _post = post; _failed = failed;
+        _closeOnEscape = closeOnEscape;
         _webView.Loaded += OnLoaded;
     }
     public FrameworkElement View => _webView;
@@ -72,7 +74,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
             core.NewWindowRequested += OnNewWindow;
             core.ProcessFailed += OnProcessFailed;
             core.DownloadStarting += OnDownload;
-            await core.AddScriptToExecuteOnDocumentCreatedAsync(BridgeScript(_origin));
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(BridgeScript(_origin, _closeOnEscape));
             token.ThrowIfCancellationRequested();
             if (!_disposed) _webView.Source = WebPluginRuntimeInfrastructure.LocalEntryUri(_origin, root, _entryPath);
         }
@@ -80,7 +82,7 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
         catch (Exception ex) { Fail(ex.GetBaseException().Message); }
     }
 
-    internal static string BridgeScript(string origin) => $$"""
+    internal static string BridgeScript(string origin, bool closeOnEscape = false) => $$"""
         (() => {
           if (window !== window.top || location.origin !== {{JsonSerializer.Serialize(origin)}}) return;
           let token = null, sequence = 0, initialized;
@@ -124,9 +126,15 @@ internal sealed class WebPluginSurfaceContent : IPaperPluginSurfaceContent
             }
             for (const listener of [...listeners]) { try { listener(value); } catch {} }
           });
-          window.addEventListener('keydown', e => {
-            if (e.key === 'Escape') queueMicrotask(() => { if (!e.defaultPrevented) close(); });
-          });
+          if ({{(closeOnEscape ? "true" : "false")}}) {
+            window.addEventListener('keydown', e => {
+              // A microtask can run between native event listeners. A task runs after event
+              // dispatch, allowing even later window listeners to cancel popup dismissal.
+              // Ordinary windows have no host Escape action; their content owns the key.
+              if (e.key === 'Escape' && !e.isComposing)
+                setTimeout(() => { if (!e.defaultPrevented) close(); }, 0);
+            });
+          }
         })();
         """;
 
