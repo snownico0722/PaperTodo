@@ -13,6 +13,7 @@ jobs:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-dotnet@v6
@@ -34,16 +35,23 @@ jobs:
           encoded = b''.join(base64.b64decode(api('/git/blobs/' + x)['content']) for x in chunks)
           patch = zlib.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(patch).hexdigest() == '25d4fdc32f4cc234bdf03f075bf3431051ca9078483378927b81e9de7c2a6019'
-          subprocess.run(['git','apply','--check','-'], input=patch, check=True)
-          subprocess.run(['git','apply','-'], input=patch, check=True)
-          subprocess.run(['git','add','src','tests'],check=True)
+          followup = base64.b64decode(api('/git/blobs/1790ce5fc8082fb829d86730a39fc3353d0edda5')['content']).replace(b'\n diff --git',b'\ndiff --git')
+          assert hashlib.sha256(followup).hexdigest() == '4f56e80eb9fdcba330dc53b8ecb128c14375ebd868e220da28a831fb7bec25d1'
+          for change in (patch,followup):
+              subprocess.run(['git','apply','--check','-'], input=change, check=True)
+              subprocess.run(['git','apply','-'], input=change, check=True)
+          for name in ('material-workspace.yml','material-probe.yml','material-probe-isolated.yml'):
+              pathlib.Path('.github/workflows',name).unlink()
+          subprocess.run(['git','add','src','tests','doc','.github/workflows'],check=True)
           subprocess.run(['git','diff','--cached','--check'],check=True)
           entries = []
           paths = subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().strip('\0').split('\0')
           for name in paths:
-              assert name.startswith(('src/','tests/'))
-              content = pathlib.Path(name).read_bytes()
-              sha = api('/git/blobs', {'content':base64.b64encode(content).decode(),'encoding':'base64'})['sha']
+              assert name.startswith(('src/','tests/','doc/','.github/workflows/'))
+              sha = None
+              if pathlib.Path(name).exists():
+                  content = pathlib.Path(name).read_bytes()
+                  sha = api('/git/blobs', {'content':base64.b64encode(content).decode(),'encoding':'base64'})['sha']
               entries.append({'path':name,'mode':'100644','type':'blob','sha':sha})
           base = subprocess.check_output(['git','rev-parse','HEAD^{tree}']).decode().strip()
           tree = api('/git/trees', {'base_tree':base,'tree':entries})['sha']
