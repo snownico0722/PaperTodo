@@ -1,18 +1,62 @@
-name: PR198 review source
+name: PR198 review validation
 on:
   push:
     branches: [feat/plugin-actions-assets-surfaces-20260907]
-    paths: [.github/workflows/pr198-review-source.yml]
+    paths:
+      - .github/workflows/pr198-review-source.yml
+      - .github/pr198-review.patch
 permissions:
   contents: read
 jobs:
-  snapshot:
-    runs-on: ubuntu-latest
+  validate:
+    if: contains(github.event.head_commit.message, '[review-check]')
+    runs-on: windows-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: git archive --format=zip --output=source.zip HEAD
-      - uses: actions/upload-artifact@v4
         with:
-          name: pr198-review-source
-          path: source.zip
-          retention-days: 1
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply focused review fixes
+        shell: pwsh
+        run: |
+          git apply --check .github/pr198-review.patch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git apply .github/pr198-review.patch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Release and validate interaction behavior
+        shell: pwsh
+        run: |
+          dotnet build PaperTodo.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/PaperTodo.PluginApiChecks/PaperTodo.PluginApiChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/PaperTodo.ProtocolPolicyChecks/PaperTodo.ProtocolPolicyChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit validated fixes without overwriting concurrent work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = 'feat/plugin-actions-assets-surfaces-20260907'
+          if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Unexpected branch' }
+          $remote = (git ls-remote origin "refs/heads/$branch").Split()[0]
+          if ($remote -ne $env:GITHUB_SHA) { throw 'Branch changed during validation' }
+          git rm .github/pr198-review.patch
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add -u
+          git add tests/PaperTodo.PluginApiChecks/Program.SurfaceInput.cs
+          git config user.name 'snownico0722'
+          git config user.email '36026283+snownico0722@users.noreply.github.com'
+          git commit -m 'fix: correct plugin menu owners and popup keyboard handling [ci]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "VALIDATED_COMMIT=$(git rev-parse HEAD)"
