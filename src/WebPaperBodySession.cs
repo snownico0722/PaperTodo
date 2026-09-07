@@ -1009,6 +1009,12 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
+        if (!ShouldResetExtensionUiOnProcessFailure(e.ProcessFailedKind))
+        {
+            Trace.TraceWarning("Web body recoverable process failure: {0}", e.ProcessFailedKind);
+            return;
+        }
+
         _hasDocumentNavigation = false;
         _activeDocumentToken = null;
         _departingDocumentToken = null;
@@ -1016,6 +1022,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         ClearHostSubscriptions();
         ShowFailure(Strings.Format("PluginsWebProcessFailedFormat", e.ProcessFailedKind));
     }
+
+    internal static bool ShouldResetExtensionUiOnProcessFailure(CoreWebView2ProcessFailedKind kind) =>
+        WebPluginProcessFailurePolicy.Classify(kind) != WebPluginProcessFailurePolicy.Recovery.None;
 
     private static string ReadPayloadString(JsonElement payload) =>
         payload.ValueKind == JsonValueKind.String

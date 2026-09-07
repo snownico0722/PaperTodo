@@ -83,7 +83,7 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
     internal static string BridgeScript(string origin) => $$"""
         (() => {
           if (window !== window.top || location.origin !== {{JsonSerializer.Serialize(origin)}}) return;
-          let token = null, sequence = 0, initialized;
+          let token = null, sequence = 0, initialized, closeRequested = false;
           const ready = new Promise(resolve => initialized = resolve);
           const pending = new Map(), listeners = new Set();
           const request = async (method, params = {}) => {
@@ -94,7 +94,13 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
               chrome.webview.postMessage({token, requestId, method, params});
             });
           };
-          const close = () => { if (token) chrome.webview.postMessage({token, method:'popup.close'}); };
+          const close = () => {
+            if (token) {
+              chrome.webview.postMessage({token, method:'popup.close'});
+              return;
+            }
+            closeRequested = true;
+          };
           window.papertodo = Object.freeze({
             popup: Object.freeze({close, post: message => request('popup.post', {message})}),
             noteAssets: Object.freeze({readImage: (paperId, imageId) => request('noteAssets.readImage', {paperId, imageId})}),
@@ -103,7 +109,14 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
           });
           chrome.webview.addEventListener('message', e => {
             const value = e.data;
-            if (value?.type === 'initialize') { token = value.token; initialized(value); }
+            if (value?.type === 'initialize') {
+              token = value.token;
+              initialized(value);
+              if (closeRequested && token) {
+                closeRequested = false;
+                chrome.webview.postMessage({token, method:'popup.close'});
+              }
+            }
             if (value?.theme) {
               const t = value.theme, css = document.documentElement.style;
               css.setProperty('--paper-background', t.paperColor);

@@ -10,9 +10,11 @@ const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:a
   vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), scope);
   const api = scope.papertodo;
   const deliver = data => listeners.forEach(fn => fn({data}));
+  api.popup.close(); assert.equal(posted.length, 0);
   const image = api.noteAssets.readImage('note', 'image');
   await Promise.resolve(); assert.equal(posted.length, 0);
   deliver({type: 'initialize', token: 'document', theme: {paperColor: '#fff', isDark: false}, data: {paperId: 'note'}});
+  assert.equal(posted.shift().method, 'popup.close');
   await Promise.resolve();
   let request = posted.shift();
   assert.equal(request.token, 'document'); assert.equal(request.method, 'noteAssets.readImage');

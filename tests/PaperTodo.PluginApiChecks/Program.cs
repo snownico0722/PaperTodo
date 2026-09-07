@@ -320,12 +320,19 @@ internal static partial class Program
     {
         foreach (var kind in new[] { CoreWebView2ProcessFailedKind.GpuProcessExited, CoreWebView2ProcessFailedKind.UtilityProcessExited,
             CoreWebView2ProcessFailedKind.FrameRenderProcessExited })
+        {
             Assert(WebPluginProcessFailurePolicy.Classify(kind) == WebPluginProcessFailurePolicy.Recovery.None,
                 $"Recoverable process failure closes popup: {kind}");
+            Assert(!WebPaperBodySession.ShouldResetExtensionUiOnProcessFailure(kind),
+                $"Recoverable body process failure resets popup ownership: {kind}");
+        }
         Assert(WebPluginProcessFailurePolicy.Classify(CoreWebView2ProcessFailedKind.BrowserProcessExited) == WebPluginProcessFailurePolicy.Recovery.Restart,
             "Browser failure not classified.");
         Assert(WebPluginProcessFailurePolicy.Classify(CoreWebView2ProcessFailedKind.RenderProcessExited) == WebPluginProcessFailurePolicy.Recovery.Reload,
             "Renderer failure not classified.");
+        Assert(WebPaperBodySession.ShouldResetExtensionUiOnProcessFailure(CoreWebView2ProcessFailedKind.BrowserProcessExited) &&
+            WebPaperBodySession.ShouldResetExtensionUiOnProcessFailure(CoreWebView2ProcessFailedKind.RenderProcessExited),
+            "Fatal body process failure stopped resetting popup ownership.");
     }
 
     private static void WebBridge()
