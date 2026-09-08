@@ -10,6 +10,7 @@ internal static class ContainerPrefixChecks
         Check("10. > a", 0, expectedQuoteLevel: 1, expectedContentStart: 6, expectedQuoteStart: 4);
         Check("10. > a\n    > b", 1, expectedQuoteLevel: 1, expectedContentStart: 6, expectedQuoteStart: 4);
         Check("> - > a", 0, expectedQuoteLevel: 2, expectedContentStart: 6, expectedQuoteStart: 0);
+        Check("> - > - item", 0, expectedQuoteLevel: 2, expectedContentStart: 8, expectedQuoteStart: 0);
         Console.WriteLine("PASS unified container prefix offsets");
     }
 
