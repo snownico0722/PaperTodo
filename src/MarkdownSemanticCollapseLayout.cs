@@ -778,7 +778,7 @@ internal sealed class MarkdownCollapseTable
                 return;
             }
 
-            // 引用 `>` 单元不进 spans：按行首连续 `>` 前缀计数，翻越任一格视为视觉变化。
+            // 引用 `>` 单元不进 spans：按统一容器映射中的真实 Quote token 计数，翻越任一格视为视觉变化。
             if (QuoteCellCount(previous, line) != QuoteCellCount(target, line))
             {
                 visualChanged = true;
@@ -951,7 +951,7 @@ internal sealed class MarkdownCollapseTable
         return low;
     }
 
-    /// <summary>该光标下某行已显灵的引用 `&gt;` 单元数。</summary>
+    /// <summary>该光标下某行已显灵的真实引用 `&gt;` 单元数；容器归属只取 Markdig snapshot。</summary>
     private int QuoteCellCount(MarkdownCaretReveal caret, int line)
     {
         if (!caret.Active || line < 0 || line >= _lineStarts.Length)
@@ -961,10 +961,21 @@ internal sealed class MarkdownCollapseTable
 
         var lineStart = _lineStarts[line];
         var lineEnd = line + 1 < _lineStarts.Length ? _lineStarts[line + 1] : _source.Length;
-        var revealed = 0;
-        foreach (var marker in MarkdownQuoteMarkers.EnumerateMarkers(_source, lineStart, lineEnd))
+        while (lineEnd > lineStart && _source[lineEnd - 1] is '\r' or '\n')
         {
-            if (caret.CaretOffset >= marker.Start)
+            lineEnd--;
+        }
+
+        var lineText = _source[lineStart..lineEnd];
+        var container = MarkdownContainerPrefix.Parse(
+            lineText,
+            _snapshot,
+            lineStart,
+            lineEnd);
+        var revealed = 0;
+        foreach (var token in container.Tokens)
+        {
+            if (token.IsQuote && caret.CaretOffset >= lineStart + token.MarkerStart)
             {
                 revealed++;
             }
