@@ -15,6 +15,15 @@ public sealed record PaperAction
 public sealed record PaperActionInvocation(
     string ActionId, PaperSnapshot Paper, PaperPopupPosition Position);
 
+/// <summary>Requires papers.read. Entries belong to the existing provider Runtime and are volatile.</summary>
+public interface IPaperPluginPaperActions
+{
+    void SetActionHandler(Action<PaperActionInvocation>? handler);
+    void SetActions(string paperId, IReadOnlyList<PaperAction> actions);
+    void Clear(string paperId);
+    void Clear();
+}
+
 /// <summary>An independent copy of the encoded image, never a store buffer or file path.</summary>
 public sealed record PaperNoteImage(string ImageId, string Mime, byte[] Bytes);
 
