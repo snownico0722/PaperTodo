@@ -150,7 +150,7 @@ internal static class MarkdownSemanticReveal
         int lineAbsStart,
         MarkdownCaretReveal caret)
     {
-        foreach (var marker in MarkdownQuoteNormalization.EnumerateMarkers(lineText, 0, lineText.Length))
+        foreach (var marker in MarkdownQuoteMarkers.EnumerateMarkers(lineText, 0, lineText.Length))
         {
             if (caret.CaretOffset >= lineAbsStart + marker.Start)
             {

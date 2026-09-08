@@ -53,7 +53,7 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             // The mature enhanced-preview renderer made explicit quote markers fully transparent
             // (while retaining their original character width), which is distinct from generic syntax fade.
-            foreach (var marker in MarkdownQuoteNormalization.EnumerateMarkers(text, 0, text.Length))
+            foreach (var marker in MarkdownQuoteMarkers.EnumerateMarkers(text, 0, text.Length))
             {
                 var start = line.Offset + marker.Start;
                 var end = line.Offset + marker.End;
