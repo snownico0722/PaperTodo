@@ -14,6 +14,33 @@ internal static partial class Program
         const string blocks = "plain\n\nprefix **one** suffix\n\n# heading\n\n[b](https://example.com/a\\*b)\n\n> quote\n\n";
         var source = blocks + string.Concat(Enumerable.Repeat("unaffected text\n", 30));
 
+        check("Lazy quote continuation uses presentation-only indentation", () =>
+        {
+            foreach (var test in new[]
+            {
+                (Source: "> a\nb", ExplicitContent: 2, LazyContent: 4),
+                (Source: "> > a\nlazy", ExplicitContent: 4, LazyContent: 6),
+                (Source: "> **a**\n**b**", ExplicitContent: 4, LazyContent: 10)
+            })
+            {
+                using var viewport = new Viewport(test.Source);
+                viewport.Box.SetPreviewMode(true);
+                viewport.Flush();
+                var first = viewport.Box.Document.GetLineByNumber(1);
+                var explicitX = viewport.XAtOffset(first.Offset + test.ExplicitContent);
+                var lazyX = viewport.XAtOffset(test.LazyContent);
+                Near(explicitX, lazyX, $"{test.Source}: lazy quote content aligns with explicit marker content");
+                Equal(test.Source, viewport.Box.Text, "quote indentation preserves source");
+                Require(!viewport.Box.CanUndo, "quote indentation does not create undo history");
+
+                viewport.Box.SetPreviewMode(false);
+                viewport.Box.CaretOffset = test.LazyContent;
+                viewport.Flush();
+                Equal(test.Source, viewport.Box.Text, "editing keeps quote source exact");
+                Require(!viewport.Box.CanUndo, "editing presentation does not create undo history");
+            }
+        });
+
         check("Single-line caret redraw preserves unrelated visual lines and matches full rendering", () =>
         {
             using var viewport = new Viewport(source);
@@ -36,6 +63,26 @@ internal static partial class Program
             viewport.Box.CaretOffset = 1;
             viewport.Flush();
             Require(before.SequenceEqual(viewport.View.VisualLines), "plain-text caret movement needs no line rebuild");
+        });
+
+        check("Far-apart single-line caret redraw preserves middle visual lines", () =>
+        {
+            var farSource =
+                "**top**\n" +
+                string.Concat(Enumerable.Repeat("middle text\n", 12)) +
+                "# bottom";
+            using var viewport = new Viewport(farSource);
+            viewport.Box.CaretOffset = farSource.IndexOf("top", StringComparison.Ordinal);
+            viewport.Flush();
+            var middle = viewport.View.VisualLines.First(
+                line => line.FirstDocumentLine.LineNumber == 7);
+
+            viewport.Box.CaretOffset = farSource.IndexOf("bottom", StringComparison.Ordinal);
+            viewport.Flush();
+            Require(
+                viewport.View.VisualLines.Contains(middle),
+                "distant old/new caret lines do not invalidate the visual lines between them");
+            viewport.AssertFullRender("far-apart caret jump");
         });
 
         check("Queued caret moves coalesce and text edits supersede old redraw offsets", () =>
@@ -170,6 +217,18 @@ internal static partial class Program
             Box.Arrange(new Rect(0, 0, 800, 600));
             Box.UpdateLayout();
             View.EnsureVisualLines();
+        }
+
+        public double XAtOffset(int offset)
+        {
+            var clamped = Math.Clamp(offset, 0, Box.Document.TextLength);
+            var line = Box.Document.GetLineByOffset(clamped);
+            var point = View.GetVisualPosition(
+                new TextViewPosition(
+                    line.LineNumber,
+                    clamped - line.Offset + 1),
+                VisualYPosition.TextTop);
+            return point.X - View.HorizontalOffset;
         }
 
         public byte[] DrawFadeFrame(double alpha)
