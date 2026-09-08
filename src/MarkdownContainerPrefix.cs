@@ -220,7 +220,7 @@ internal static class MarkdownContainerPrefix
                 // 保持 index 不越过正文，由 MissingQuoteLevels 在显示层补位。
                 if (index < sourceLine.Length && sourceLine[index] == '>')
                 {
-                    var markerStart = index;
+                    var quoteMarkerStart = index;
                     var markerEnd = ++index;
                     if (index < sourceLine.Length && sourceLine[index] is ' ' or '\t')
                     {
@@ -229,7 +229,7 @@ internal static class MarkdownContainerPrefix
 
                     tokens.Add(new MarkdownContainerPrefixToken(
                         MarkdownContainerPrefixKind.Quote,
-                        markerStart,
+                        quoteMarkerStart,
                         markerEnd,
                         index));
                     explicitQuoteLevels++;
