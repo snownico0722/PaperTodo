@@ -83,11 +83,11 @@ jobs:
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
 
-      # Temporary branch bootstrap: the final squashed workflow removes this write-back step and
-      # returns contents permission to read-only. Keeping the generated DLL in git lets ordinary
-      # .NET-only builds follow the existing LMDB native-library pattern.
+      # Temporary branch bootstrap: the final workflow removes this write-back step and returns
+      # contents permission to read-only. Keeping the generated DLL in git follows the existing
+      # LMDB native-library pattern for ordinary .NET-only development builds.
       - name: Commit generated native artifacts
-        if: github.ref_name == 'feature/markdown-math'
+        if: github.ref_name == 'feat/markdown-math-ratex'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
