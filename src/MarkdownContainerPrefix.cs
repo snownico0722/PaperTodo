@@ -185,6 +185,40 @@ internal static class MarkdownContainerPrefix
             taskEnd);
     }
 
+    /// <summary>
+    /// 把当前物理行上的真实列表 marker 分配给覆盖该行的 Markdig 列表容器。
+    /// continuation 行可能仍处于多个外层列表中，却只含最内层真实 marker；因此必须从内向外匹配，
+    /// 不能让外层容器先把内层 marker 消费掉。该规则同时覆盖同类型嵌套与有序/无序混合嵌套。
+    /// </summary>
+    private static SemanticListMarker?[] AssignListMarkers(
+        IReadOnlyList<SemanticContainer> containers,
+        IReadOnlyList<SemanticListMarker> listMarkers)
+    {
+        var assigned = new SemanticListMarker?[containers.Count];
+        var containerIndex = containers.Count - 1;
+        for (var markerIndex = listMarkers.Count - 1; markerIndex >= 0; markerIndex--)
+        {
+            var marker = listMarkers[markerIndex];
+            for (; containerIndex >= 0; containerIndex--)
+            {
+                var container = containers[containerIndex];
+                if (container.Kind is not (
+                        MarkdownContainerPrefixKind.UnorderedList or
+                        MarkdownContainerPrefixKind.OrderedList) ||
+                    container.Kind != marker.Kind)
+                {
+                    continue;
+                }
+
+                assigned[containerIndex] = marker;
+                containerIndex--;
+                break;
+            }
+        }
+
+        return assigned;
+    }
+
     private static MarkdownContainerPrefixInfo MapPhysicalPrefix(
         string sourceLine,
         int quoteLevel,
@@ -196,10 +230,11 @@ internal static class MarkdownContainerPrefix
         var tokens = new List<MarkdownContainerPrefixToken>();
         var index = 0;
         var explicitQuoteLevels = 0;
-        var listMarkerIndex = 0;
+        var assignedListMarkers = AssignListMarkers(containers, listMarkers);
 
-        foreach (var semanticContainer in containers)
+        for (var containerIndex = 0; containerIndex < containers.Count; containerIndex++)
         {
+            var semanticContainer = containers[containerIndex];
             index = SkipWhitespace(sourceLine, index);
 
             if (semanticContainer.Kind == MarkdownContainerPrefixKind.Quote)
@@ -226,25 +261,10 @@ internal static class MarkdownContainerPrefix
                 continue;
             }
 
-            // List 是否存在、是有序还是无序、marker 的精确字符范围都来自 Markdig。
-            // continuation row 没有真实 list marker 时不猜；此前跳过的缩进仍保留为正文列。
-            while (listMarkerIndex < listMarkers.Count &&
-                   listMarkers[listMarkerIndex].Start < index)
+            // continuation row 没有当前容器自己的真实 marker 时不猜；真实 marker 已在上面按
+            // Markdig 容器层级从内向外分配，避免外层 continuation 容器吃掉内层 marker。
+            if (assignedListMarkers[containerIndex] is not { } marker || marker.Start != index)
             {
-                listMarkerIndex++;
-            }
-
-            if (listMarkerIndex >= listMarkers.Count ||
-                listMarkers[listMarkerIndex].Start != index)
-            {
-                continue;
-            }
-
-            var marker = listMarkers[listMarkerIndex++];
-            if (marker.Kind != semanticContainer.Kind)
-            {
-                // 两边都来自同一 Markdig snapshot，正常情况下不会分歧。防御性保持源码不动，
-                // 不用另一套语法猜测去“修正”解析器结果。
                 continue;
             }
 
@@ -292,6 +312,45 @@ internal static class MarkdownContainerPrefix
             taskMarkerEnd,
             visualIndentEnd,
             taskOwnerTokenIndex);
+    }
+
+    /// <summary>
+    /// 构造显示层的逻辑前缀：列表 marker 中的非空白源码字符按等量空格计宽，引用 marker 与真实
+    /// 空白保持原样。这样 `10. ` 与其 continuation 的四空格拥有相同逻辑宽度，同时不修改原文。
+    /// </summary>
+    internal static string BuildLogicalVisualPrefix(
+        string sourceLine,
+        MarkdownContainerPrefixInfo container,
+        int endExclusive)
+    {
+        ArgumentNullException.ThrowIfNull(sourceLine);
+        ArgumentNullException.ThrowIfNull(container);
+
+        var end = Math.Clamp(endExclusive, 0, sourceLine.Length);
+        if (end == 0)
+        {
+            return string.Empty;
+        }
+
+        var chars = sourceLine[..end].ToCharArray();
+        foreach (var token in container.Tokens)
+        {
+            if (!token.IsList || token.MarkerStart >= end)
+            {
+                continue;
+            }
+
+            var markerEnd = Math.Min(end, token.MarkerEnd);
+            for (var index = Math.Max(0, token.MarkerStart); index < markerEnd; index++)
+            {
+                if (!char.IsWhiteSpace(chars[index]))
+                {
+                    chars[index] = ' ';
+                }
+            }
+        }
+
+        return new string(chars);
     }
 
     private static int SkipWhitespace(string text, int start)

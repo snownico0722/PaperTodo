@@ -140,8 +140,9 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         /// <summary>
-        /// 每一层引用轨道都跟随它在统一容器前缀中的真实位置。列表中的引用不再固定画在最左侧；
-        /// 惰性续行使用显示层虚拟前缀的位置。相邻行同位置的轨道轻微重叠，避免行间断缝。
+        /// 每一层引用轨道都跟随统一容器前缀的逻辑位置。列表 marker 的非空白字符在这里按等量空格
+        /// 计宽，因此首行 `10. >` 与 continuation 行 `    >` 使用同一个引用轨道 X；源码、光标、复制
+        /// 仍保持真实字符坐标。惰性续行使用同一逻辑前缀规则计算虚拟轨道位置。
         /// </summary>
         private void DrawQuoteRails(
             TextView textView,
@@ -229,10 +230,12 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
-                if (MarkdownSemanticPresentation.TryGetTextPoint(
+                if (TryGetLogicalPrefixPoint(
                         textView,
                         line,
-                        line.Offset + token.MarkerStart,
+                        text,
+                        container,
+                        token.MarkerStart,
                         VisualYPosition.TextMiddle,
                         out var point))
                 {
@@ -241,10 +244,12 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             if (container.MissingQuoteLevels > 0 &&
-                MarkdownSemanticPresentation.TryGetTextPoint(
+                TryGetLogicalPrefixPoint(
                     textView,
                     line,
-                    line.Offset + container.ContentStart,
+                    text,
+                    container,
+                    container.ContentStart,
                     VisualYPosition.TextMiddle,
                     out var virtualPoint))
             {
@@ -270,6 +275,61 @@ internal sealed partial class MarkdownSemanticPresentation
 
             rails.Sort();
             return rails.ToArray();
+        }
+
+        /// <summary>
+        /// 把源码前缀换算成显示层逻辑 X。只把 Markdig 已确认的列表 marker 非空白字符替换成空格后
+        /// 测量，引用 marker 与用户真实空白保持不变；因此列表首行和 continuation 行共享同一缩进列。
+        /// </summary>
+        private bool TryGetLogicalPrefixPoint(
+            TextView textView,
+            DocumentLine line,
+            string sourceLine,
+            MarkdownContainerPrefixInfo container,
+            int relativeOffset,
+            VisualYPosition yPosition,
+            out Point point)
+        {
+            point = default;
+            if (!MarkdownSemanticPresentation.TryGetTextPoint(
+                    textView,
+                    line,
+                    line.Offset,
+                    yPosition,
+                    out var lineStartPoint))
+            {
+                return false;
+            }
+
+            var logicalPrefix = MarkdownContainerPrefix.BuildLogicalVisualPrefix(
+                sourceLine,
+                container,
+                relativeOffset);
+            if (logicalPrefix.Length == 0)
+            {
+                point = lineStartPoint;
+                return true;
+            }
+
+            var typeface = new Typeface(
+                _owner._editor.FontFamily,
+                _owner._editor.FontStyle,
+                _owner._editor.FontWeight,
+                _owner._editor.FontStretch);
+            var formatted = new FormattedText(
+                logicalPrefix,
+                UiLanguages.EffectiveUiCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                _owner._editor.FontSize,
+                Brushes.Transparent,
+                null,
+                AppTypography.TextFormattingMode,
+                VisualTreeHelper.GetDpi(textView).PixelsPerDip);
+            point = new Point(
+                lineStartPoint.X + formatted.WidthIncludingTrailingWhitespace,
+                lineStartPoint.Y);
+            return double.IsFinite(point.X) && double.IsFinite(point.Y);
         }
 
         private double MeasureVirtualQuoteUnit(TextView textView)
