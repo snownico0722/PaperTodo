@@ -36,8 +36,9 @@ jobs:
           $engine = if ($env:GITHUB_REF_NAME -like '*ratex*') { 'ratex' } else { 'wpf' }
           $publishDir = Join-Path $env:RUNNER_TEMP "publish-$engine"
           dotnet restore .\PaperTodo.csproj -r win-x64
-          dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -o $publishDir
+          dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:PublishTrimmed=false -o $publishDir
           if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+          Get-ChildItem -Path $publishDir -Filter *.pdb -Recurse -File | Remove-Item -Force
 
           New-Item -ItemType Directory -Path .\compare-builds -Force | Out-Null
           $zip = ".\compare-builds\PaperTodo-math-$engine-win-x64-selfcontained.zip"
