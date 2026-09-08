@@ -253,7 +253,8 @@ internal sealed partial class MarkdownSemanticPresentation
                     textView,
                     line,
                     line.Offset + container.ContentStart);
-                var virtualStart = startsAtPoint
+                // Full 才真正插入虚拟引用占位；Enhanced/Basic 没有该元素，不能凭空向左减宽度。
+                var virtualStart = startsAtPoint || !_owner.IsFullMode
                     ? virtualPoint.X
                     : virtualPoint.X - virtualUnitWidth * container.MissingQuoteLevels;
                 for (var level = 0; level < container.MissingQuoteLevels; level++)
