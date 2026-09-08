@@ -594,7 +594,7 @@ public sealed partial class PaperWindow
         check.Checked += (_, _) =>
         {
             PushUndoSnapshot();
-            item.Done = true;
+            TodoRules.SetDone(item, true, DateTimeOffset.Now);
             InvalidateEdgeCapsulePreviewContent();
             if (item.ReminderAt.HasValue || item.ReminderTriggered)
             {
@@ -614,7 +614,7 @@ public sealed partial class PaperWindow
             text.Foreground = BrightWeakTextBrush;
             _controller.MarkDirty();
 
-            if (_controller.State.AutoClearCompletedTodos)
+            if (TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
             {
                 RemoveItem(item, pushUndo: false);
                 return;
@@ -636,7 +636,7 @@ public sealed partial class PaperWindow
         check.Unchecked += (_, _) =>
         {
             PushUndoSnapshot();
-            item.Done = false;
+            TodoRules.SetDone(item, false, DateTimeOffset.Now);
             InvalidateEdgeCapsulePreviewContent();
             if (reminderButton != null)
             {
@@ -2272,6 +2272,7 @@ public sealed partial class PaperWindow
         _undoStack.RemoveAt(_undoStack.Count - 1);
 
         _paper.Items = previousItems;
+        TodoRules.RestoreCompletionTimes(_paper.Items, currentItems, DateTimeOffset.Now);
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();
@@ -2297,6 +2298,7 @@ public sealed partial class PaperWindow
         _redoStack.RemoveAt(_redoStack.Count - 1);
 
         _paper.Items = nextItems;
+        TodoRules.RestoreCompletionTimes(_paper.Items, currentItems, DateTimeOffset.Now);
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();

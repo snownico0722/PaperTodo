@@ -685,7 +685,7 @@ Scripts can also use !pwsh / !ps5.</value>
 !p / !power wait for exit and capture errors; !pf / !powerf only submit to the persistent process.</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>Checking a todo as done removes it from the paper; Undo can restore it.</value>
+    <value>Next day keeps completed todos until the following day. Next week keeps them through Sunday and removes them on Monday. Due items are checked again after restart or resume. Reopened todos and legacy todos with unknown completion times are not removed by date.</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
     <value>Over 8 MB, or any side over 2048 px: try scaling to a 2048-px longest edge and re-encode.
@@ -697,7 +697,7 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Enable todo-paper links</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
-    <value>Auto-clear completed todos</value>
+    <value>Remove completed todos</value>
   </data>
   <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
     <value>Automatically compress large images</value>
@@ -1390,4 +1390,8 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
+  <data name="CompletedTodoKeep" xml:space="preserve"><value>Keep</value></data>
+  <data name="CompletedTodoImmediate" xml:space="preserve"><value>Now</value></data>
+  <data name="CompletedTodoNextDay" xml:space="preserve"><value>Next day</value></data>
+  <data name="CompletedTodoNextWeek" xml:space="preserve"><value>Next week</value></data>
 </root>

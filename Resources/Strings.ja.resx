@@ -698,7 +698,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
 !p / !power は終了を待ってエラーを取得し、!pf / !powerf は常駐プロセスへ投入するだけです。</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
-    <value>完了にした直後、現在の紙片から削除します。元に戻すで復元できます。</value>
+    <value>翌日は完了した当日まで、翌週は日曜日まで保持し月曜日に一覧から除きます。再起動・復帰後も確認します。未完了に戻した項目や完了日時が不明な旧項目は日付によって自動削除されません。</value>
   </data>
   <data name="TipAutoCompressLargeImages" xml:space="preserve">
     <value>8 MB 超、またはいずれかの辺が 2048 ピクセル超のとき、最長辺 2048 まで縮小して再エンコードを試みます。
@@ -710,7 +710,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ToDo と紙片の関連付けを有効化</value>
   </data>
   <data name="SettingsAutoClearCompletedTodos" xml:space="preserve">
-    <value>完了した ToDo を自動クリア</value>
+    <value>完了したタスクの除去時期</value>
   </data>
   <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
     <value>大きすぎる画像を自動圧縮</value>
@@ -1390,4 +1390,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
   </data>
+  <data name="CompletedTodoKeep" xml:space="preserve"><value>残す</value></data>
+  <data name="CompletedTodoImmediate" xml:space="preserve"><value>すぐ</value></data>
+  <data name="CompletedTodoNextDay" xml:space="preserve"><value>翌日</value></data>
+  <data name="CompletedTodoNextWeek" xml:space="preserve"><value>翌週</value></data>
 </root>

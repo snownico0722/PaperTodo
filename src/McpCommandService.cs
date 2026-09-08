@@ -253,7 +253,7 @@ internal sealed class McpCommandService
 
         if (done == true &&
             !before.Done &&
-            _controller.State.AutoClearCompletedTodos)
+            TodoRules.RemovalMode(_controller.State) == TodoRules.RemoveImmediately)
         {
             return new
             {

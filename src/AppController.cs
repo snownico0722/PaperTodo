@@ -279,6 +279,7 @@ public sealed partial class AppController : IDisposable
             }
             RefreshMcpRuntime();
             SchedulePluginStartupPapers(initialVisibilityCommand);
+            RequestTodoRetentionCheck();
             return;
         }
 
@@ -300,6 +301,7 @@ public sealed partial class AppController : IDisposable
         }
         RefreshMcpRuntime();
         SchedulePluginStartupPapers(initialVisibilityCommand);
+        RequestTodoRetentionCheck();
     }
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)
@@ -1794,6 +1796,7 @@ public sealed partial class AppController : IDisposable
         if (e.Mode == PowerModes.Resume)
         {
             RequestImmediateTodoReminderCheck();
+            RequestTodoRetentionCheck();
         }
     }
 
@@ -1803,6 +1806,7 @@ public sealed partial class AppController : IDisposable
         {
             RefreshTopmostAfterSystemResume();
             RequestImmediateTodoReminderCheck();
+            RequestTodoRetentionCheck();
         }
     }
 
@@ -3665,6 +3669,7 @@ public sealed partial class AppController : IDisposable
         _startupShellPrewarmGeneration++;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _todoRetentionTimer?.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.TimeChanged -= OnSystemTimeChanged;

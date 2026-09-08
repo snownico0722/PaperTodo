@@ -411,6 +411,8 @@ public sealed class AppState
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public bool AutoClearCompletedTodos { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompletedTodoRemoval { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
     public string UiFontPreset { get; set; } = UiFontPresets.Default;
@@ -597,6 +599,9 @@ public sealed class PaperItem
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Text { get; set; } = "";
     public bool Done { get; set; }
+    // Legacy completed items have no known completion time; do not invent an expiry.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? CompletedAt { get; set; }
     public int Order { get; set; }
 
     [JsonInclude]

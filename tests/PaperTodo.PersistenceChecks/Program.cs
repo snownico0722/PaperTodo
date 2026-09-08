@@ -6,6 +6,7 @@ using PaperTodo;
 
 var checks = new (string Name, Action Run)[]
 {
+    ("completed-todo-calendar-policy-and-legacy-settings", TodoRetentionChecks.CalendarPolicy),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
