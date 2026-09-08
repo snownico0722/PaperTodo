@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace PaperTodo;
 
@@ -9,9 +10,8 @@ internal readonly record struct MarkdownListContinuationPlan(
     string Continuation);
 
 /// <summary>
-/// Builds editor continuation behavior from PaperTodo semantic spans plus the untouched source line.
-/// Markdig decides whether a real list item/task marker exists; this helper only preserves the exact
-/// source prefix/spacing and computes the text that Enter should insert.
+/// 依据统一容器前缀选择当前行最内层列表。外层列表在新行变为内容缩进，外层引用继续保留；
+/// 仅最内层列表 marker 被续写或递增。
 /// </summary>
 internal static class MarkdownListEditing
 {
@@ -26,147 +26,101 @@ internal static class MarkdownListEditing
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var absoluteLineEnd = absoluteLineStart + lineText.Length;
-        if (!TryFindListMarker(snapshot, absoluteLineStart, absoluteLineEnd, out var marker))
-        {
-            return false;
-        }
-
-        var markerStart = marker.Start - absoluteLineStart;
-        var markerEnd = marker.End - absoluteLineStart;
-        if (markerStart < 0 || markerEnd <= markerStart || markerEnd > lineText.Length)
-        {
-            return false;
-        }
-
-        var contentStart = markerEnd;
-        while (contentStart < lineText.Length && char.IsWhiteSpace(lineText[contentStart]))
-        {
-            contentStart++;
-        }
-
-        var task = FindTaskMarker(
+        var container = MarkdownContainerPrefix.Parse(
+            lineText,
             snapshot,
-            absoluteLineStart + contentStart,
+            absoluteLineStart,
             absoluteLineEnd);
-        var hasTask = task.HasValue && task.Value.Start == absoluteLineStart + contentStart;
-        var emptyContentStart = contentStart;
 
-        string continuation;
-        if (marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
+        var ownerIndex = -1;
+        for (var index = container.Tokens.Count - 1; index >= 0; index--)
         {
-            continuation = lineText[..contentStart];
-        }
-        else
-        {
-            if (!TryBuildOrderedContinuation(
-                    lineText,
-                    markerStart,
-                    markerEnd,
-                    contentStart,
-                    out continuation))
+            if (container.Tokens[index].IsList)
             {
-                return false;
+                ownerIndex = index;
+                break;
             }
         }
 
+        if (ownerIndex < 0 ||
+            container.MissingQuoteLevels > 0 ||
+            ownerIndex != container.InnermostTokenIndex)
+        {
+            // 最内层是引用时由引用续行接管；没有真实列表 marker 时不猜测。
+            return false;
+        }
+
+        var owner = container.Tokens[ownerIndex];
+        var continuation = new StringBuilder(lineText.Length + 8);
+        var cursor = 0;
+        for (var index = 0; index <= ownerIndex; index++)
+        {
+            var token = container.Tokens[index];
+            AppendRange(continuation, lineText, cursor, token.MarkerStart);
+            if (index < ownerIndex)
+            {
+                if (token.IsQuote)
+                {
+                    continuation.Append("> ");
+                }
+                else
+                {
+                    AppendListContentIndent(
+                        continuation,
+                        lineText,
+                        token.MarkerStart,
+                        token.ContentStart);
+                }
+            }
+            else
+            {
+                if (!AppendOwnerMarker(continuation, lineText, token))
+                {
+                    return false;
+                }
+                AppendRange(continuation, lineText, token.MarkerEnd, token.ContentStart);
+            }
+
+            cursor = token.ContentStart;
+        }
+
+        var hasTask = container.TaskOwnerTokenIndex == ownerIndex &&
+            container.TaskMarkerStart == owner.ContentStart;
+        var emptyContentStart = owner.ContentStart;
         if (hasTask)
         {
-            continuation += "[ ] ";
-            emptyContentStart = Math.Clamp(
-                task!.Value.End - absoluteLineStart,
-                contentStart,
-                lineText.Length);
-            while (emptyContentStart < lineText.Length &&
-                   char.IsWhiteSpace(lineText[emptyContentStart]))
-            {
-                emptyContentStart++;
-            }
+            continuation.Append("[ ] ");
+            emptyContentStart = container.VisualIndentEnd;
         }
 
         plan = new MarkdownListContinuationPlan(
-            markerStart,
-            contentStart,
+            owner.MarkerStart,
+            owner.ContentStart,
             emptyContentStart,
-            continuation);
+            continuation.ToString());
         return true;
     }
 
-    private static bool TryFindListMarker(
-        MarkdownSemanticSnapshot snapshot,
-        int lineStart,
-        int lineEnd,
-        out MarkdownSemanticSpan marker)
+    private static bool AppendOwnerMarker(
+        StringBuilder builder,
+        string lineText,
+        MarkdownContainerPrefixToken owner)
     {
-        foreach (var span in snapshot.Spans)
+        if (owner.Kind == MarkdownContainerPrefixKind.UnorderedList)
         {
-            if (span.Start >= lineEnd)
-            {
-                break;
-            }
-
-            if (span.Start < lineStart ||
-                span.End > lineEnd ||
-                span.Kind is not (
-                    MarkdownSemanticSpanKind.UnorderedListMarker or
-                    MarkdownSemanticSpanKind.OrderedListMarker))
-            {
-                continue;
-            }
-
-            // Preserve established PaperTodo behavior for multiple markers on one physical line:
-            // the first source marker owns Enter continuation for that line.
-            marker = span;
+            AppendRange(builder, lineText, owner.MarkerStart, owner.MarkerEnd);
             return true;
         }
 
-        marker = default;
-        return false;
-    }
-
-    private static MarkdownSemanticSpan? FindTaskMarker(
-        MarkdownSemanticSnapshot snapshot,
-        int searchStart,
-        int lineEnd)
-    {
-        foreach (var span in snapshot.Spans)
-        {
-            if (span.Start >= lineEnd)
-            {
-                break;
-            }
-
-            if (span.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
-                span.Start >= searchStart &&
-                span.End <= lineEnd)
-            {
-                return span;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool TryBuildOrderedContinuation(
-        string lineText,
-        int markerStart,
-        int markerEnd,
-        int contentStart,
-        out string continuation)
-    {
-        continuation = string.Empty;
-        if (markerEnd - markerStart < 2)
+        var delimiterIndex = owner.MarkerEnd - 1;
+        if (delimiterIndex <= owner.MarkerStart ||
+            delimiterIndex >= lineText.Length ||
+            lineText[delimiterIndex] is not ('.' or ')'))
         {
             return false;
         }
 
-        var delimiterIndex = markerEnd - 1;
-        var delimiter = lineText[delimiterIndex];
-        if (delimiter is not ('.' or ')'))
-        {
-            return false;
-        }
-
-        var numberText = lineText[markerStart..delimiterIndex];
+        var numberText = lineText[owner.MarkerStart..delimiterIndex];
         if (!long.TryParse(
                 numberText,
                 NumberStyles.None,
@@ -177,10 +131,36 @@ internal static class MarkdownListEditing
             return false;
         }
 
-        continuation = lineText[..markerStart] +
-            (number + 1).ToString(CultureInfo.InvariantCulture) +
-            delimiter +
-            lineText[markerEnd..contentStart];
+        builder.Append((number + 1).ToString(CultureInfo.InvariantCulture));
+        builder.Append(lineText[delimiterIndex]);
         return true;
+    }
+
+    private static void AppendListContentIndent(
+        StringBuilder builder,
+        string text,
+        int start,
+        int end)
+    {
+        for (var index = Math.Clamp(start, 0, text.Length);
+             index < Math.Clamp(end, 0, text.Length);
+             index++)
+        {
+            builder.Append(char.IsWhiteSpace(text[index]) ? text[index] : ' ');
+        }
+    }
+
+    private static void AppendRange(
+        StringBuilder builder,
+        string text,
+        int start,
+        int end)
+    {
+        var normalizedStart = Math.Clamp(start, 0, text.Length);
+        var normalizedEnd = Math.Clamp(end, normalizedStart, text.Length);
+        if (normalizedEnd > normalizedStart)
+        {
+            builder.Append(text, normalizedStart, normalizedEnd - normalizedStart);
+        }
     }
 }

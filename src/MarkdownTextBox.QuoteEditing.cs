@@ -1,3 +1,4 @@
+using System.Text;
 using ICSharpCode.AvalonEdit.Document;
 
 namespace PaperTodo;
@@ -5,7 +6,8 @@ namespace PaperTodo;
 public sealed partial class MarkdownTextBox
 {
     /// <summary>
-    /// Full 编辑态在引用内容行按 Enter 时按语义层级续前缀；空引用行返回 false，交默认换行结束引用。
+    /// Full 编辑态在引用内容行按 Enter 时续写当前最内层引用容器；若最内层真实容器是列表，返回
+    /// false 让列表续行接管。空引用行同样交既有退出逻辑处理。
     /// </summary>
     private bool TryContinueQuoteOnEnter(DocumentLine line, string text)
     {
@@ -14,28 +16,25 @@ public sealed partial class MarkdownTextBox
             return false;
         }
 
-        var level = snapshot.GetLine(Math.Max(0, line.LineNumber - 1)).QuoteLevel;
-        if (level <= 0)
+        if (snapshot.GetLine(Math.Max(0, line.LineNumber - 1)).QuoteLevel <= 0 ||
+            !TryBuildQuoteContinuationPrefix(
+                text,
+                snapshot,
+                line.Offset,
+                line.EndOffset,
+                out var prefix,
+                out var contentStart))
         {
             return false;
         }
 
         var caret = Math.Clamp(CaretOffset, 0, Document!.TextLength);
         var indexInLine = Math.Clamp(caret - line.Offset, 0, text.Length);
-        var contentStart = QuoteContentStart(text);
-        if (indexInLine < contentStart)
+        if (indexInLine < contentStart || IsQuoteLineEmpty(text, contentStart))
         {
-            // 光标还停在 marker 前缀里：不主动续行，走默认换行。
             return false;
         }
 
-        if (IsQuoteLineEmpty(text, contentStart))
-        {
-            // 空引用行 Enter → 默认换行产生空行，引用到此结束。
-            return false;
-        }
-
-        var prefix = MarkdownQuoteMarkers.RepeatMarkerPrefix(level);
         var insertion = NewLineTextFor(line) + prefix;
         if (MaxLength > 0 && Text.Length + insertion.Length > MaxLength)
         {
@@ -57,16 +56,97 @@ public sealed partial class MarkdownTextBox
         return true;
     }
 
-    /// <summary>行首显式引用 marker 组之后的正文起点。</summary>
-    private static int QuoteContentStart(string text)
+    /// <summary>
+    /// 生成引用续行前缀。外层列表 marker 变为等宽空白，外层引用保留，最内层引用继续；若真实
+    /// 最内层容器是列表，则让列表逻辑处理。惰性续行缺少的引用层级由 Markdig QuoteLevel 补到新行。
+    /// </summary>
+    private static bool TryBuildQuoteContinuationPrefix(
+        string text,
+        MarkdownSemanticSnapshot snapshot,
+        int absoluteLineStart,
+        int absoluteLineEnd,
+        out string prefix,
+        out int contentStart)
     {
-        var markers = MarkdownQuoteMarkers.EnumerateMarkers(text, 0, text.Length);
-        return markers.Count == 0 ? 0 : markers[^1].End;
+        prefix = string.Empty;
+        contentStart = 0;
+
+        var container = MarkdownContainerPrefix.Parse(
+            text,
+            snapshot,
+            absoluteLineStart,
+            absoluteLineEnd);
+        if (container.QuoteLevel <= 0)
+        {
+            return false;
+        }
+
+        contentStart = container.ContentStart;
+        if (container.MissingQuoteLevels == 0 &&
+            container.InnermostTokenIndex >= 0 &&
+            container.Tokens[container.InnermostTokenIndex].IsList)
+        {
+            return false;
+        }
+
+        var builder = new StringBuilder(text.Length + container.QuoteLevel * 2);
+        var cursor = 0;
+        foreach (var token in container.Tokens)
+        {
+            AppendRange(builder, text, cursor, token.MarkerStart);
+            if (token.IsQuote)
+            {
+                builder.Append("> ");
+            }
+            else
+            {
+                AppendListContentIndent(builder, text, token.MarkerStart, token.ContentStart);
+            }
+
+            cursor = token.ContentStart;
+        }
+
+        AppendRange(builder, text, cursor, container.ContentStart);
+        if (container.MissingQuoteLevels > 0)
+        {
+            builder.Append(MarkdownQuoteMarkers.RepeatMarkerPrefix(container.MissingQuoteLevels));
+        }
+
+        prefix = builder.ToString();
+        return prefix.Length > 0;
+    }
+
+    internal static void AppendListContentIndent(
+        StringBuilder builder,
+        string text,
+        int start,
+        int end)
+    {
+        for (var index = Math.Clamp(start, 0, text.Length);
+             index < Math.Clamp(end, 0, text.Length);
+             index++)
+        {
+            builder.Append(char.IsWhiteSpace(text[index]) ? text[index] : ' ');
+        }
+    }
+
+    internal static void AppendRange(
+        StringBuilder builder,
+        string text,
+        int start,
+        int end)
+    {
+        var normalizedStart = Math.Clamp(start, 0, text.Length);
+        var normalizedEnd = Math.Clamp(end, normalizedStart, text.Length);
+        if (normalizedEnd > normalizedStart)
+        {
+            builder.Append(text, normalizedStart, normalizedEnd - normalizedStart);
+        }
     }
 
     private static bool IsQuoteLineEmpty(string text, int contentStart)
     {
-        for (var index = contentStart; index < text.Length; index++)
+        for (var index = Math.Clamp(contentStart, 0, text.Length); index < text.Length; index++)
         {
             if (!char.IsWhiteSpace(text[index]))
             {
