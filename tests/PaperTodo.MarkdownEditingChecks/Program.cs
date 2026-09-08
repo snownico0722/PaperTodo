@@ -137,6 +137,8 @@ internal static partial class Program
             WalkCaret(changed, next, table!, prefix.Length - 1, prefix.Length + syntax.Length + 3);
         });
 
+        RunLocalRedrawChecks(Check);
+
         Console.WriteLine($"Markdown editing checks: {failures} failure(s).");
         return failures == 0 ? 0 : 1;
 

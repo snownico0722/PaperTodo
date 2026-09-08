@@ -16,6 +16,9 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private readonly SemanticListRenderer _listRenderer;
     private readonly SemanticHorizontalRuleRenderer _horizontalRuleRenderer;
     private bool _redrawQueued;
+    private bool _redrawAllQueued;
+    private int _redrawStart = int.MaxValue;
+    private int _redrawEnd;
     private bool _disposed;
     private MarkdownCaretReveal _caretReveal = MarkdownCaretReveal.None;
     private bool _revealGestureFrozen;
@@ -294,9 +297,22 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         ScheduleRedraw();
     }
 
-    private void ScheduleRedraw()
+    private void ScheduleRedraw(int start = 0, int length = -1)
     {
-        if (_redrawQueued || _disposed)
+        if (_disposed)
+        {
+            return;
+        }
+
+        // 快照变化请求全量刷新，覆盖此前排队的旧文本偏移；同一帧的光标移动合并到一个行区间。
+        _redrawAllQueued |= length < 0;
+        if (!_redrawAllQueued)
+        {
+            _redrawStart = Math.Min(_redrawStart, start);
+            _redrawEnd = Math.Max(_redrawEnd, start + length);
+        }
+
+        if (_redrawQueued)
         {
             return;
         }
@@ -306,9 +322,24 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             (Action)(() =>
             {
                 _redrawQueued = false;
+                var redrawAll = _redrawAllQueued;
+                var redrawStart = _redrawStart;
+                var redrawEnd = _redrawEnd;
+                _redrawAllQueued = false;
+                _redrawStart = int.MaxValue;
+                _redrawEnd = 0;
                 if (!_disposed)
                 {
-                    RedrawAll();
+                    if (redrawAll)
+                    {
+                        RedrawAll();
+                    }
+                    else
+                    {
+                        _editor.TextArea.TextView.Redraw(
+                            redrawStart, redrawEnd - redrawStart,
+                            System.Windows.Threading.DispatcherPriority.Render);
+                    }
                 }
             }),
             System.Windows.Threading.DispatcherPriority.Render);

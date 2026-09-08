@@ -61,7 +61,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
     /// <summary>
     /// 把增量表对齐到当前显灵值（CaretReveal：预览= None、手势冻结=快照、其余=实际光标）。
-    /// 仅当显灵驱动的视觉真的变化时才可选地触发整篇重排。
+    /// 仅当显灵驱动的视觉真的变化时才可选地重排受影响行；跨行范围保留全量兜底。
     /// </summary>
     private void AlignCollapseTableToReveal(bool scheduleRedraw)
     {
@@ -78,11 +78,53 @@ internal sealed partial class MarkdownSemanticPresentation
             return;
         }
 
+        var previous = table.Caret;
         var change = table.SyncTo(target);
         if (scheduleRedraw && change.VisualChanged)
         {
-            ScheduleRedraw();
+            ScheduleRevealRedraw(previous, target);
         }
+    }
+
+    private void ScheduleRevealRedraw(MarkdownCaretReveal previous, MarkdownCaretReveal target)
+    {
+        if (!TryGetLocalRevealLine(previous, out var oldLine) ||
+            !TryGetLocalRevealLine(target, out var newLine))
+        {
+            ScheduleRedraw();
+            return;
+        }
+
+        var first = oldLine ?? newLine;
+        var last = newLine ?? oldLine;
+        if (first == null || last == null)
+        {
+            return;
+        }
+
+        var start = Math.Min(first.Offset, last.Offset);
+        var end = Math.Max(first.Offset + first.TotalLength, last.Offset + last.TotalLength);
+        ScheduleRedraw(start, end - start);
+    }
+
+    /// <summary>单行显灵可局部刷新；任一活动范围越过该行时交给全量兜底。</summary>
+    private bool TryGetLocalRevealLine(MarkdownCaretReveal reveal, out DocumentLine? line)
+    {
+        line = null;
+        if (!reveal.Active)
+        {
+            return true;
+        }
+
+        var document = _editor.Document;
+        if (document == null)
+        {
+            return false;
+        }
+
+        line = document.GetLineByOffset(Math.Clamp(reveal.CaretOffset, 0, document.TextLength));
+        return !TryGetRevealedRangeExtent(reveal, out var start, out var end) ||
+            (start >= line.Offset && end <= line.EndOffset);
     }
 
     /// <summary>在有序 Runs 上二分首个 run.Start &gt;= value 的下标。</summary>
