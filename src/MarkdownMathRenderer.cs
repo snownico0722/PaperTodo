@@ -10,6 +10,7 @@ using XamlMath.Boxes;
 using XamlMath.Exceptions;
 using XamlMath.Rendering;
 using XamlMath.Rendering.Transformations;
+using WpfSize = System.Windows.Size;
 
 namespace PaperTodo;
 
@@ -43,8 +44,7 @@ internal static class MarkdownMathRenderer
 
     private sealed record CacheEntry(
         CacheKey Key,
-        MarkdownMathDrawing? Drawing,
-        bool DeterministicFailure);
+        MarkdownMathDrawing? Drawing);
 
     public static bool TryRender(
         string formula,
@@ -90,7 +90,7 @@ internal static class MarkdownMathRenderer
                     return true;
                 }
 
-                return !cached.Value.DeterministicFailure;
+                return false;
             }
         }
 
@@ -101,17 +101,17 @@ internal static class MarkdownMathRenderer
         }
         catch (TexException)
         {
-            AddToCache(key, null, deterministicFailure: true);
+            AddToCache(key, null);
             return false;
         }
         catch (ArgumentException)
         {
-            AddToCache(key, null, deterministicFailure: true);
+            AddToCache(key, null);
             return false;
         }
         catch (NotSupportedException)
         {
-            AddToCache(key, null, deterministicFailure: true);
+            AddToCache(key, null);
             return false;
         }
         catch (Exception exception) when (IsRecoverableRenderingFailure(exception))
@@ -123,11 +123,11 @@ internal static class MarkdownMathRenderer
 
         if (rendered == null)
         {
-            AddToCache(key, null, deterministicFailure: true);
+            AddToCache(key, null);
             return false;
         }
 
-        AddToCache(key, rendered, deterministicFailure: false);
+        AddToCache(key, rendered);
         drawing = rendered;
         return true;
     }
@@ -288,18 +288,18 @@ internal static class MarkdownMathRenderer
                     break;
 
                 case '}':
-                    depth--;
+                    if (--depth < 0)
+                    {
+                        return false;
+                    }
                     break;
             }
         }
 
-        return depth <= MaximumBraceDepth;
+        return depth == 0;
     }
 
-    private static void AddToCache(
-        CacheKey key,
-        MarkdownMathDrawing? drawing,
-        bool deterministicFailure)
+    private static void AddToCache(CacheKey key, MarkdownMathDrawing? drawing)
     {
         lock (CacheGate)
         {
@@ -309,7 +309,7 @@ internal static class MarkdownMathRenderer
                 Cache.Remove(key);
             }
 
-            var node = CacheOrder.AddLast(new CacheEntry(key, drawing, deterministicFailure));
+            var node = CacheOrder.AddLast(new CacheEntry(key, drawing));
             Cache[key] = node;
             while (Cache.Count > MaximumCacheEntries && CacheOrder.First != null)
             {
@@ -420,14 +420,14 @@ internal sealed class MarkdownMathVisual : FrameworkElement
 {
     private readonly DrawingGroup _drawing;
     private readonly double _scale;
-    private readonly Size _size;
+    private readonly WpfSize _size;
 
     public MarkdownMathVisual(MarkdownMathDrawing drawing, double scale)
     {
         ArgumentNullException.ThrowIfNull(drawing);
         _drawing = drawing.Drawing;
         _scale = Math.Clamp(scale, 0.01, 1.0);
-        _size = new Size(drawing.Width * _scale, drawing.Height * _scale);
+        _size = new WpfSize(drawing.Width * _scale, drawing.Height * _scale);
         IsHitTestVisible = false;
         Focusable = false;
         SnapsToDevicePixels = true;
@@ -435,9 +435,9 @@ internal sealed class MarkdownMathVisual : FrameworkElement
         TextBlock.SetBaselineOffset(this, drawing.Baseline * _scale);
     }
 
-    protected override Size MeasureOverride(Size availableSize) => _size;
+    protected override WpfSize MeasureOverride(WpfSize availableSize) => _size;
 
-    protected override Size ArrangeOverride(Size finalSize) => _size;
+    protected override WpfSize ArrangeOverride(WpfSize finalSize) => _size;
 
     protected override void OnRender(DrawingContext drawingContext)
     {
