@@ -40,7 +40,6 @@ internal static class ContainerPrefixChecks
         var lineText = source[lineStart..lineEnd];
         var prefix = MarkdownContainerPrefix.Parse(
             lineText,
-            semantic.QuoteLevel,
             snapshot,
             lineStart,
             lineEnd);
