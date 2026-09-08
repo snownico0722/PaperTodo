@@ -40,6 +40,8 @@ internal enum MarkdownSemanticSpanKind
     Strong,
     Strikethrough,
     InlineCode,
+    InlineMath,
+    BlockMath,
     Image,
     TaskListMarker,
     HtmlContainer,
@@ -259,8 +261,9 @@ internal sealed partial class MarkdownSemanticSnapshot
 
         CollectBlocks(document, source, lineStarts, spans, links);
         ApplyLegacyCompatibilityBoundaries(source, spans, links);
-        CollectEscapeMarkers(source, spans);
         CollectBareHttpLinks(source, spans, links);
+        CollectMathSemantics(source, spans, links);
+        CollectEscapeMarkers(source, spans);
         spans.Sort(CompareSemanticSpans);
         links.Sort(CompareSemanticLinks);
 
