@@ -234,6 +234,37 @@ internal static partial class Program
                 "leaving the formula restores the rendered element");
         });
 
+        check("Resizing multiline math invalidates stale visual lines before fold state changes", () =>
+        {
+            var longFormula = string.Join("+", Enumerable.Repeat("x", 80));
+            var source = $"before\n$$\n{longFormula}\n$$\nafter";
+            using var editor = new Editor(source);
+            var box = editor.Box;
+            box.SetPreviewMode(true);
+            Pump();
+
+            var span = MathSpans(MarkdownSemanticSnapshot.Parse(source)).Single();
+
+            // At a very narrow width the formula deliberately remains source because rendering it
+            // would require scaling below the readability floor. This constructs normal VisualLines
+            // for every physical source row.
+            LayoutMathEditor(box, 96);
+            Require(!HasMathElement(box, span), "narrow preview keeps oversized formula source");
+
+            // Widening makes the formula renderable. SizeChanged synchronously changes AvalonEdit's
+            // collapsed-line height tree; the old source VisualLines must be discarded before the
+            // same WPF layout pass can measure again. Without that invalidation AvalonEdit throws
+            // "Trying to build visual line from collapsed line".
+            LayoutMathEditor(box, 800);
+            Require(HasMathElement(box, span), "widening safely folds and renders the formula");
+
+            // Exercise the inverse transition as well: uncollapse back to source, then fold again.
+            LayoutMathEditor(box, 96);
+            Require(!HasMathElement(box, span), "narrowing safely restores formula source");
+            LayoutMathEditor(box, 800);
+            Require(HasMathElement(box, span), "re-widening safely renders the formula again");
+        });
+
         check("Math scanner stays cheap on a 100k note", () =>
         {
             var source = new string('a', 49_000) + "$x^2$" + new string('b', 49_000);
@@ -296,15 +327,19 @@ internal static partial class Program
             candidate.RelativeTextOffset == span.Start - visual.FirstDocumentLine.Offset);
     }
 
-    private static void LayoutMathEditor(MarkdownTextBox box)
+    private static void LayoutMathEditor(
+        MarkdownTextBox box,
+        double width = 800,
+        double height = 600)
     {
         box.ApplyTemplate();
-        box.Measure(new Size(800, 600));
-        box.Arrange(new Rect(0, 0, 800, 600));
+        var size = new Size(width, height);
+        box.Measure(size);
+        box.Arrange(new Rect(0, 0, width, height));
         box.UpdateLayout();
         var view = box.TextArea.TextView;
-        view.Measure(new Size(800, 600));
-        view.Arrange(new Rect(0, 0, 800, 600));
+        view.Measure(size);
+        view.Arrange(new Rect(0, 0, width, height));
         view.EnsureVisualLines();
     }
 }
