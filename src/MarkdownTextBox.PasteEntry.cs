@@ -15,6 +15,11 @@ public sealed partial class MarkdownTextBox
             DragDrop.PreviewDragOverEvent,
             new DragEventHandler(OnPreviewTextDragOver),
             handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(MarkdownTextBox),
+            DragDrop.PreviewDropEvent,
+            new DragEventHandler(OnPreviewTextDrop),
+            handledEventsToo: true);
         return true;
     }
 
@@ -36,6 +41,47 @@ public sealed partial class MarkdownTextBox
                 ? DragDropEffects.Copy
                 : DragDropEffects.None;
         e.Handled = e.Effects != DragDropEffects.None;
+    }
+
+    private static void OnPreviewTextDrop(object sender, DragEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor ||
+            !editor.IsPreviewMode ||
+            editor.CanInsertImagesFromDataObject(e.Data) ||
+            !HasTextDropData(e.Data))
+        {
+            return;
+        }
+
+        string? text;
+        try
+        {
+            text = e.Data.GetDataPresent(DataFormats.UnicodeText)
+                ? e.Data.GetData(DataFormats.UnicodeText) as string
+                : e.Data.GetDataPresent(DataFormats.Text)
+                    ? e.Data.GetData(DataFormats.Text) as string
+                    : null;
+        }
+        catch
+        {
+            editor.PasteRejected?.Invoke();
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        // Preview mode is intentionally read-only until PaperWindow places the caret and enters
+        // edit mode. Validate the payload here, before that state change, so the native Drop path
+        // cannot bypass the same length/line-length guard used by normal paste.
+        if (string.IsNullOrEmpty(text) ||
+            editor.TryBuildSafePasteText(text, selectedLength: 0, out _))
+        {
+            return;
+        }
+
+        editor.PasteRejected?.Invoke();
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
     }
 
     private static bool HasTextDropData(IDataObject data)
