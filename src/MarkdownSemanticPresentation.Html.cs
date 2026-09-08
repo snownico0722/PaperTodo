@@ -138,14 +138,15 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
-                if (MarkdownLinkEscapeOwnership.TryGetOwningLink(
+                if (_owner.IsFullMode &&
+                    MarkdownLinkEscapeOwnership.TryGetOwningLink(
                         span,
                         snapshot,
                         source,
                         out _))
                 {
-                    // 地址、标题、引用编号等 label 外链接语法由整条链接统一取色和显灵；
-                    // 此处不再用独立 EscapeMarker 规则把已显灵的反斜杠重新涂透明。
+                    // Full 中地址、标题、引用编号等 label 外链接语法由整条链接统一取色和显灵；
+                    // 其他渲染档仍沿用原有独立转义符取色。
                     continue;
                 }
 
