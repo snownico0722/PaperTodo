@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -43,7 +43,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Native math checks
-        run: cargo test --manifest-path .\native\math\Cargo.toml --target x86_64-pc-windows-msvc
+        run: cargo test --manifest-path .\native\math\Cargo.toml --target x86_64-pc-windows-msvc --locked
 
       - name: Build native math library
         run: .\native\math\build.ps1 -Configuration Release -ForceRebuild
@@ -82,19 +82,3 @@ jobs:
 
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
-
-      # Temporary branch bootstrap: the final workflow removes this write-back step and returns
-      # contents permission to read-only. Keeping the generated DLL in git follows the existing
-      # LMDB native-library pattern for ordinary .NET-only development builds.
-      - name: Commit generated native artifacts
-        if: github.ref_name == 'feat/markdown-math-ratex'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f -- native/math/Cargo.lock native/math/bin/win-x64/papertodo_math.dll
-          if (git diff --cached --quiet) {
-            Write-Output "Native artifacts already match the pinned sources."
-            exit 0
-          }
-          git commit -m "build(math): pin generated native artifacts"
-          git push origin HEAD:${{ github.ref_name }}
