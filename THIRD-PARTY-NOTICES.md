@@ -11,6 +11,18 @@ under the OpenLDAP Public License 2.8. The complete license and copyright
 notices are included in `native/lmdb/upstream/LICENSE` and
 `native/lmdb/upstream/COPYRIGHT`.
 
+## RaTeX and KaTeX math fonts
+
+PaperTodo's native Markdown formula bridge uses
+[`erweixin/RaTeX`](https://github.com/erweixin/RaTeX), pinned to commit
+`c902516816cdc84519827d8b46d1cd40270d0451`. RaTeX is distributed under the
+MIT License.
+
+The resulting native library embeds the unmodified KaTeX mathematical fonts
+used by RaTeX. Those fonts are distributed under the SIL Open Font License,
+Version 1.1. The upstream RaTeX license, third-party notice, KaTeX attribution,
+and complete OFL text are retained under `native/math/upstream/`.
+
 ## AvalonEdit
 
 PaperTodo uses AvalonEdit for text editing and Markdown highlighting.
