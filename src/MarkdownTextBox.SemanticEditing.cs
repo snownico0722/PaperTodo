@@ -36,6 +36,15 @@ public sealed partial class MarkdownTextBox
         if (SelectionLength == 0)
         {
             var text = Document.GetText(line);
+
+            // 先让最内层引用尝试接管 Enter。TryContinueQuoteOnEnter 会在 `> - item` 这类
+            // “列表比引用更内层”的行主动返回 false，因此不会破坏既有 list continuation；
+            // `- > item` / `> - > item` 则由引用续行保留外层 list content indent。
+            if (RenderModeIsFull && TryContinueQuoteOnEnter(line, text))
+            {
+                return true;
+            }
+
             if (TryBuildSemanticListContinuationPlan(line, text, out var plan))
             {
                 var indexInLine = Math.Clamp(caret - line.Offset, 0, text.Length);
@@ -72,12 +81,6 @@ public sealed partial class MarkdownTextBox
                         return true;
                     }
                 }
-            }
-
-            // Full 编辑态引用续行：按语义层级在新行补 `>` 前缀（空引用行回车则结束引用，交默认换行）。
-            if (RenderModeIsFull && TryContinueQuoteOnEnter(line, text))
-            {
-                return true;
             }
         }
 
