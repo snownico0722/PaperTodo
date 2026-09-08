@@ -34,13 +34,16 @@ internal static class EdgeCapsuleTargetPlanner
             EdgeCapsuleGestureState.FloatingTransfer or
             EdgeCapsuleGestureState.FloatingReordering or
             EdgeCapsuleGestureState.DockingHandoff;
+        var keepPermanentEndpointCompact = model.State.Gesture is
+            EdgeCapsuleGestureState.FloatingTransfer or
+            EdgeCapsuleGestureState.FloatingReordering;
         var preview = !retracted &&
             !dockedSuppressed &&
             model.Preview == EdgeCapsulePreviewState.Open;
-        // Keep the permanent endpoint compact only while it is actually suppressed. DockingReveal
-        // exposes that endpoint underneath the fading floating cover, so it must already use the
-        // final Hovered/Active geometry before input authority is handed back.
-        var expanded = !dockedSuppressed &&
+        // Free floating drag keeps the hidden permanent endpoint compact. Once docking hand-off
+        // begins, that endpoint becomes the authoritative physical target even while suppressed,
+        // so Handoff, Reveal and the final interactive frame must share one Hovered/Active geometry.
+        var expanded = !keepPermanentEndpointCompact &&
             !preview &&
             !retracted &&
             (model.State.Visual is
