@@ -43,6 +43,34 @@ Replace-RepoText "PaperTodo.csproj" @'
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
 '@
 
+Replace-RepoText "src/MarkdownTextBox.cs" @'
+    public event Action? ImageContextMenuClosed;
+
+    public bool IsImageContextMenuOpen { get; private set; }
+'@ @'
+    public event Action? ImageContextMenuClosed;
+
+    /// <summary>
+    /// Raised after Markdown presentation settings/theme/typography have changed but before the
+    /// TextView is synchronously refreshed. Presentation layers use this boundary to update native
+    /// line-collapse state before AvalonEdit constructs visual lines.
+    /// </summary>
+    internal event Action? MarkdownPresentationRefreshing;
+
+    public bool IsImageContextMenuOpen { get; private set; }
+'@
+
+Replace-RepoText "src/MarkdownTextBox.cs" @'
+    public void RefreshVisualStyle()
+    {
+        Foreground = Theme.TextBrush;
+'@ @'
+    public void RefreshVisualStyle()
+    {
+        MarkdownPresentationRefreshing?.Invoke();
+        Foreground = Theme.TextBrush;
+'@
+
 Replace-RepoText "src/MarkdownSemanticSnapshot.cs" @'
     Strikethrough,
     InlineCode,
