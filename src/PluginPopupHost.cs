@@ -28,11 +28,42 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
 
     private sealed class Popup(PluginPopupHost host) : IPaperPluginPopup
     {
+        private PaperPluginPopupFailure? _openFailure;
         internal Window? Window;
         internal Border? Frame;
         internal IPaperPluginPopupContent? Content;
         public bool IsOpen => host.OnUi(() => ReferenceEquals(host._current, this));
+        public PaperPluginPopupFailure? OpenFailure => host.OnUi(() => _openFailure);
+        public event Action<PaperPluginPopupFailure>? OpenFailed;
         public void Close() => host.OnUi(() => host.ClosePopup(this));
+
+        internal void FailOpen(Exception exception)
+        {
+            if (_openFailure != null)
+            {
+                return;
+            }
+
+            var root = exception.GetBaseException();
+            _openFailure = root is PaperTodoPluginException plugin
+                ? new PaperPluginPopupFailure(plugin.Code, plugin.Message)
+                : new PaperPluginPopupFailure(
+                    "popup_open_failed",
+                    "The popup could not be opened.");
+            var failure = _openFailure;
+
+            // Revoke and dispose the shell before notifying plugin code. A callback is therefore
+            // free to inspect IsOpen/OpenFailure or open a replacement without reentering teardown.
+            host.ClosePopup(this);
+            try
+            {
+                OpenFailed?.Invoke(failure);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning("Plugin popup open-failure callback failed: {0}", ex.GetBaseException());
+            }
+        }
     }
 
     internal static PaperPopupPosition CapturePosition()
@@ -119,13 +150,14 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
                         throw Error("popup_position_unavailable", "The popup work area is unavailable.");
                     window.Show();
                     // Do not leave a topmost, unfocused popup behind when Windows rejects activation.
-                    if (!window.IsActive && !window.Activate()) { ClosePopup(popup); return; }
+                    if (!window.IsActive && !window.Activate())
+                        throw Error("popup_activation_failed", "The popup could not be activated.");
                     if (!frame.MoveFocus(new TraversalRequest(FocusNavigationDirection.First))) frame.Focus();
                 }
                 catch (Exception ex)
                 {
                     Trace.TraceWarning("Plugin popup failed to open: {0}", ex.GetBaseException());
-                    ClosePopup(popup);
+                    popup.FailOpen(ex);
                 }
             }));
             return (IPaperPluginPopup)popup;
@@ -205,7 +237,14 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
         catch (Exception ex)
         {
             Trace.TraceWarning("Plugin popup theme failed: {0}", ex.GetBaseException());
-            ClosePopup(popup);
+            if (popup.Window?.IsVisible == true)
+            {
+                ClosePopup(popup);
+            }
+            else
+            {
+                popup.FailOpen(ex);
+            }
         }
     });
 
