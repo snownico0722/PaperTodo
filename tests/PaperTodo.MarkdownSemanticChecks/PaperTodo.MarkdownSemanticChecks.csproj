@@ -22,6 +22,7 @@
     <Compile Include="..\..\src\MarkdownSemanticReveal.cs" Link="MarkdownSemanticReveal.cs" />
     <Compile Include="..\..\src\MarkdownSemanticCollapseLayout.cs" Link="MarkdownSemanticCollapseLayout.cs" />
     <Compile Include="..\..\src\MarkdownFencedCodeScanner.cs" Link="MarkdownFencedCodeScanner.cs" />
+    <Compile Include="..\..\src\MarkdownContainerPrefix.cs" Link="MarkdownContainerPrefix.cs" />
     <Compile Include="..\..\src\MarkdownListEditing.cs" Link="MarkdownListEditing.cs" />
     <Compile Include="..\..\src\MarkdownQuoteMarkers.cs" Link="MarkdownQuoteMarkers.cs" />
     <Compile Include="..\..\src\MarkdownImageReferences.cs" Link="MarkdownImageReferences.cs" />
