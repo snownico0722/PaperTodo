@@ -185,18 +185,6 @@ internal static class MarkdownContainerPrefix
             taskEnd);
     }
 
-    /// <summary>
-    /// 旧调用点兼容入口。quoteLevel 参数故意不参与判定：引用层级必须来自同一 Markdig snapshot，
-    /// 避免调用方再次成为第二个语义来源。
-    /// </summary>
-    internal static MarkdownContainerPrefixInfo Parse(
-        string sourceLine,
-        int quoteLevel,
-        MarkdownSemanticSnapshot snapshot,
-        int absoluteLineStart,
-        int absoluteLineEnd) =>
-        Parse(sourceLine, snapshot, absoluteLineStart, absoluteLineEnd);
-
     private static MarkdownContainerPrefixInfo MapPhysicalPrefix(
         string sourceLine,
         int quoteLevel,
