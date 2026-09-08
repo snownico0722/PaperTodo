@@ -16,6 +16,7 @@
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Links.cs" Link="MarkdownSemanticSnapshot.Links.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Html.cs" Link="MarkdownSemanticSnapshot.Html.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Escapes.cs" Link="MarkdownSemanticSnapshot.Escapes.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Math.cs" Link="MarkdownSemanticSnapshot.Math.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Compatibility.cs" Link="MarkdownSemanticSnapshot.Compatibility.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Incremental.cs" Link="MarkdownSemanticSnapshot.Incremental.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.PlainText.cs" Link="MarkdownSemanticSnapshot.PlainText.cs" />
