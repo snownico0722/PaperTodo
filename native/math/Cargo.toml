@@ -1,0 +1,15 @@
+[package]
+name = "papertodo-math"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "papertodo_math"
+crate-type = ["cdylib"]
+
+[dependencies]
+ratex-parser = { git = "https://github.com/erweixin/RaTeX", rev = "c902516816cdc84519827d8b46d1cd40270d0451" }
+ratex-layout = { git = "https://github.com/erweixin/RaTeX", rev = "c902516816cdc84519827d8b46d1cd40270d0451" }
+ratex-render = { git = "https://github.com/erweixin/RaTeX", rev = "c902516816cdc84519827d8b46d1cd40270d0451", features = ["embed-fonts"] }
+ratex-types = { git = "https://github.com/erweixin/RaTeX", rev = "c902516816cdc84519827d8b46d1cd40270d0451" }
