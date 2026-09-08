@@ -36,24 +36,38 @@ internal static class ContainerWrapChecks
             throw new InvalidOperationException($"FAIL container wrap: {message}: text did not wrap");
         }
 
-        var element = visual.Elements.FirstOrDefault(candidate =>
-            candidate.RelativeTextOffset == 0 &&
-            candidate.DocumentLength == expectedLength);
-        if (element == null)
+        var covered = 0;
+        foreach (var element in visual.Elements)
         {
-            throw new InvalidOperationException(
-                $"FAIL container wrap: {message}: no {expectedLength}-character prefix element");
-        }
-
-        for (var column = element.VisualColumn;
-             column < element.VisualColumn + element.VisualLength;
-             column++)
-        {
-            if (!element.IsWhitespace(column))
+            if (element.RelativeTextOffset >= expectedLength)
+            {
+                break;
+            }
+            if (element.RelativeTextOffset != covered ||
+                element.RelativeTextOffset + element.DocumentLength > expectedLength)
             {
                 throw new InvalidOperationException(
-                    $"FAIL container wrap: {message}: prefix column {column} is not indentation");
+                    $"FAIL container wrap: {message}: prefix element coverage broke at {covered}");
             }
+
+            for (var column = element.VisualColumn;
+                 column < element.VisualColumn + element.VisualLength;
+                 column++)
+            {
+                if (!element.IsWhitespace(column))
+                {
+                    throw new InvalidOperationException(
+                        $"FAIL container wrap: {message}: prefix column {column} is not indentation");
+                }
+            }
+
+            covered += element.DocumentLength;
+        }
+
+        if (covered != expectedLength)
+        {
+            throw new InvalidOperationException(
+                $"FAIL container wrap: {message}: covered {covered}/{expectedLength} prefix characters");
         }
     }
 
