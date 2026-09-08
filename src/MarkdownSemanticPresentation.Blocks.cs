@@ -20,12 +20,11 @@ internal sealed partial class MarkdownSemanticPresentation
             }
             ApplyCodeBlockSemantics(line, semantic);
             ApplyBlockMarkerSemantics(line, semantic);
-            // Quote marker visibility is the final block-level override. Nested fenced code or
-            // headings may style the same source line, but must never make the reserved `>` cells
-            // visible again in enhanced preview.
+            // 引用 marker 最后覆盖块级取色。统一容器前缀能识别 `- >`、`> - >` 等组合，
+            // 不再只看物理行最开头的连续 `>`。
             if (semantic.IsQuoted)
             {
-                ApplyQuoteMarkerSemantics(line, text);
+                ApplyQuoteMarkerSemantics(line, snapshot, semantic, text);
             }
         }
 
@@ -49,14 +48,25 @@ internal sealed partial class MarkdownSemanticPresentation
 
         private void ApplyQuoteMarkerSemantics(
             DocumentLine line,
+            MarkdownSemanticSnapshot snapshot,
+            MarkdownSemanticLine semantic,
             string text)
         {
-            // The mature enhanced-preview renderer made explicit quote markers fully transparent
-            // (while retaining their original character width), which is distinct from generic syntax fade.
-            foreach (var marker in MarkdownQuoteMarkers.EnumerateMarkers(text, 0, text.Length))
+            var container = MarkdownContainerPrefix.Parse(
+                text,
+                semantic.QuoteLevel,
+                snapshot,
+                line.Offset,
+                line.EndOffset);
+            foreach (var token in container.Tokens)
             {
-                var start = line.Offset + marker.Start;
-                var end = line.Offset + marker.End;
+                if (!token.IsQuote)
+                {
+                    continue;
+                }
+
+                var start = line.Offset + token.MarkerStart;
+                var end = line.Offset + token.ContentStart;
                 var brush = _owner.QuoteControlBrush(
                     _owner.IsRevealed(
                         line.LineNumber,
@@ -222,6 +232,5 @@ internal sealed partial class MarkdownSemanticPresentation
                     element => element.TextRunProperties.SetForegroundBrush(brush));
             }
         }
-
     }
 }
