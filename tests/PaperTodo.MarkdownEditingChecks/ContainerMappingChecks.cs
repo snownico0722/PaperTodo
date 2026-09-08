@@ -1,18 +1,22 @@
 using System.Runtime.CompilerServices;
 using PaperTodo;
 
-internal static class QuoteVirtualIndentChecks
+internal static class ContainerMappingChecks
 {
     [ModuleInitializer]
     internal static void Run()
     {
+        CheckExplicitOffset("- > a", 0, expectedQuoteLevel: 1, expectedContentStart: 4, expectedQuoteStart: 2);
+        CheckExplicitOffset("10. > a", 0, expectedQuoteLevel: 1, expectedContentStart: 6, expectedQuoteStart: 4);
+        CheckExplicitOffset("10. > a\n    > b", 1, expectedQuoteLevel: 1, expectedContentStart: 6, expectedQuoteStart: 4);
+        CheckExplicitOffset("> - > a", 0, expectedQuoteLevel: 2, expectedContentStart: 6, expectedQuoteStart: 0);
+        CheckExplicitOffset("> - > - item", 0, expectedQuoteLevel: 2, expectedContentStart: 8, expectedQuoteStart: 0);
+
         ExpectNoMissingQuote("> a", 0, "root explicit quote");
         ExpectNoMissingQuote("> > a", 0, "nested explicit quote");
         ExpectNoMissingQuote("- > a", 0, "unordered-list quote marker");
         ExpectNoMissingQuote("1. > a", 0, "ordered-list quote marker");
         ExpectNoMissingQuote("> - > a", 0, "alternating quote/list containers");
-
-        // 四空格不是独立语法猜测，而是 10. 列表项真实上下文中的 content indent。
         ExpectNoMissingQuote("10. > a\n    > b", 1, "four-space ordered-list continuation quote");
         ExpectNoMissingQuote("10. > > a\n    > > b", 1, "four-space nested quote continuation");
 
@@ -25,7 +29,39 @@ internal static class QuoteVirtualIndentChecks
         CheckTaskOwner();
         CheckContinuationIndentComesFromContext();
         CheckIndentedLookalikeUsesMarkdigMeaning();
-        Console.WriteLine("PASS Markdig-backed quote/list container mapping");
+        Console.WriteLine("PASS Markdig-backed container mapping");
+    }
+
+    private static void CheckExplicitOffset(
+        string source,
+        int lineZero,
+        int expectedQuoteLevel,
+        int expectedContentStart,
+        int expectedQuoteStart)
+    {
+        var snapshot = MarkdownSemanticSnapshot.Parse(source);
+        var semantic = snapshot.GetLine(lineZero);
+        Expect(semantic.QuoteLevel == expectedQuoteLevel,
+            $"line {lineZero} quote level {semantic.QuoteLevel}");
+
+        var prefix = ParseLine(source, lineZero);
+        Expect(prefix.ContentStart == expectedContentStart,
+            $"content starts at {prefix.ContentStart}, expected {expectedContentStart}");
+        Expect(prefix.MissingQuoteLevels == 0,
+            $"unexpected {prefix.MissingQuoteLevels} missing quote level(s)");
+
+        var firstQuoteStart = -1;
+        foreach (var token in prefix.Tokens)
+        {
+            if (token.IsQuote)
+            {
+                firstQuoteStart = token.MarkerStart;
+                break;
+            }
+        }
+
+        Expect(firstQuoteStart == expectedQuoteStart,
+            $"quote starts at {firstQuoteStart}, expected {expectedQuoteStart}");
     }
 
     private static void CheckSemanticContainerOrder()
@@ -70,11 +106,8 @@ internal static class QuoteVirtualIndentChecks
     private static void ExpectNoMissingQuote(string markdown, int lineZero, string message)
     {
         var prefix = ParseLine(markdown, lineZero);
-        if (prefix.MissingQuoteLevels != 0)
-        {
-            throw new InvalidOperationException(
-                $"FAIL container mapping: {message}: unexpected {prefix.MissingQuoteLevels} missing quote level(s) at {prefix.ContentStart}");
-        }
+        Expect(prefix.MissingQuoteLevels == 0,
+            $"{message}: unexpected {prefix.MissingQuoteLevels} missing quote level(s) at {prefix.ContentStart}");
     }
 
     private static void ExpectMissingQuote(
@@ -86,13 +119,10 @@ internal static class QuoteVirtualIndentChecks
     {
         var prefix = ParseLine(markdown, lineZero);
         var actualText = MarkdownQuoteMarkers.RepeatMarkerPrefix(prefix.MissingQuoteLevels);
-        if (prefix.MissingQuoteLevels <= 0 ||
-            prefix.ContentStart != expectedOffset ||
-            !string.Equals(actualText, expectedText, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"FAIL container mapping: {message}: expected '{expectedText}' at {expectedOffset}, actual '{actualText}' at {prefix.ContentStart}");
-        }
+        Expect(prefix.MissingQuoteLevels > 0 &&
+            prefix.ContentStart == expectedOffset &&
+            string.Equals(actualText, expectedText, StringComparison.Ordinal),
+            $"{message}: expected '{expectedText}' at {expectedOffset}, actual '{actualText}' at {prefix.ContentStart}");
     }
 
     private static MarkdownContainerPrefixInfo ParseLine(string markdown, int lineZero)
