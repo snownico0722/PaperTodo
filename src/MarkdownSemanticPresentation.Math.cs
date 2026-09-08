@@ -12,6 +12,7 @@ internal sealed partial class MarkdownSemanticPresentation
     private MathElementGenerator? _mathElementGenerator;
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
     private bool _syncingMathCollapsedLines;
+    private bool _mathCollapseSyncQueued;
 
     private readonly record struct MathCollapseKey(int Start, int End);
 
@@ -39,6 +40,7 @@ internal sealed partial class MarkdownSemanticPresentation
     {
         _editor.MarkdownPresentationRefreshing -= OnMarkdownPresentationRefreshing;
         _editor.SizeChanged -= OnMathHostSizeChanged;
+        _mathCollapseSyncQueued = false;
         ClearMathCollapsedLines();
 
         if (_mathElementGenerator != null)
@@ -65,10 +67,41 @@ internal sealed partial class MarkdownSemanticPresentation
             return;
         }
 
-        // A formula that was too wide to remain legible may become renderable after widening, or
-        // must fall back to source after narrowing below the minimum scale.
-        SyncMathCollapsedLines();
-        ScheduleRedraw();
+        // SizeChanged can run while WPF is still arranging the editor. At that point TextView may
+        // still report the previous width. More importantly, mutating AvalonEdit's collapsed height
+        // tree in the middle of that layout pass can leave its current visual-line anchor stale.
+        // Coalesce resizes and sync once the current layout has settled instead.
+        QueueMathCollapseSyncAfterLayout();
+    }
+
+    private void QueueMathCollapseSyncAfterLayout()
+    {
+        if (_disposed || _mathCollapseSyncQueued)
+        {
+            return;
+        }
+
+        _mathCollapseSyncQueued = true;
+        _editor.Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                if (!_mathCollapseSyncQueued)
+                {
+                    return;
+                }
+
+                _mathCollapseSyncQueued = false;
+                if (_disposed || _mathElementGenerator == null)
+                {
+                    return;
+                }
+
+                // The child TextView now has its final width for this resize. Re-evaluate whether
+                // long formulas should render or stay source, then rebuild at that actual width.
+                SyncMathCollapsedLines();
+                ScheduleRedraw();
+            }),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void ResetMathPresentationState()
