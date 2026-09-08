@@ -284,7 +284,12 @@ internal sealed partial class MarkdownSemanticPresentation
 
         public override int GetVisualColumn(int relativeTextOffset)
         {
-            return DocumentLength == 0
+            // A combined element consumes the collapsed opener in source coordinates but draws the
+            // presentation-only quote prefix in visual coordinates. Map the source boundary after
+            // that opener to the right edge of the prefix; offsets inside the hidden opener remain
+            // at its left edge, matching CollapsedSyntaxElement semantics.
+            return DocumentLength == 0 ||
+                   relativeTextOffset >= RelativeTextOffset + DocumentLength
                 ? VisualColumn + VisualLength
                 : VisualColumn;
         }
@@ -311,7 +316,7 @@ internal sealed partial class MarkdownSemanticPresentation
                 return -1;
             }
 
-            if (DocumentLength == 0)
+            if (DocumentLength == 0 || !_isClosingEdge)
             {
                 var stop = VisualColumn + VisualLength;
                 if (direction == LogicalDirection.Forward)
@@ -322,6 +327,8 @@ internal sealed partial class MarkdownSemanticPresentation
                 return visualColumn > stop ? stop : -1;
             }
 
+            // Preserve the original closing-cell boundary: backward selection stops before the
+            // hidden closing marker instead of silently including it.
             if (direction == LogicalDirection.Forward)
             {
                 return visualColumn < VisualColumn ? VisualColumn : -1;
