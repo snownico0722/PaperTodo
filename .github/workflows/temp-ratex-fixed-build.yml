@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
@@ -23,6 +25,7 @@ jobs:
         shell: pwsh
         run: |
           dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o .\ratex-fixed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Compress-Archive -Path .\ratex-fixed\* -DestinationPath .\PaperTodo-math-ratex-fixed-win-x64-selfcontained.zip -CompressionLevel Optimal
       - name: Upload package
         uses: actions/upload-artifact@v6
