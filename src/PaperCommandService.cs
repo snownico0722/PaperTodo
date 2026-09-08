@@ -484,6 +484,7 @@ internal sealed class PaperCommandService
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
+        var originalLinkedPaperId = item.LinkedPaperId;
         var snapshot = TodoPaperSnapshot.Capture(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
@@ -502,8 +503,15 @@ internal sealed class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RunExternalPostCommitUi(
-                () => _controller.RefreshExternalTodoPaper(paper));
+            _controller.RunExternalPostCommitUi(() =>
+            {
+                _controller.RefreshExternalTodoPaper(paper);
+                if (!string.IsNullOrWhiteSpace(originalLinkedPaperId))
+                {
+                    _controller.RefreshCapsuleEligibilityForLinkedPapers(
+                        [originalLinkedPaperId]);
+                }
+            });
         }
 
         _controller.PublishExternalPaperOperation(context);
