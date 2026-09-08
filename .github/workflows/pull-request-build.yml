@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -82,3 +82,19 @@ jobs:
 
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
+
+      # Temporary branch bootstrap: the final squashed workflow removes this write-back step and
+      # returns contents permission to read-only. Keeping the generated DLL in git lets ordinary
+      # .NET-only builds follow the existing LMDB native-library pattern.
+      - name: Commit generated native artifacts
+        if: github.ref_name == 'feature/markdown-math'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- native/math/Cargo.lock native/math/bin/win-x64/papertodo_math.dll
+          if (git diff --cached --quiet) {
+            Write-Output "Native artifacts already match the pinned sources."
+            exit 0
+          }
+          git commit -m "build(math): pin generated native artifacts"
+          git push origin HEAD:${{ github.ref_name }}
