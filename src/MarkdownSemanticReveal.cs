@@ -142,10 +142,8 @@ internal static class MarkdownSemanticReveal
         int lineZeroBased,
         MarkdownCaretReveal caret)
     {
-        var semantic = snapshot.GetLine(lineZeroBased);
         var container = MarkdownContainerPrefix.Parse(
             lineText,
-            semantic.QuoteLevel,
             snapshot,
             lineAbsStart,
             lineAbsStart + lineText.Length);
