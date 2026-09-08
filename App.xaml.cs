@@ -118,7 +118,6 @@ public partial class App : Application
         SessionEnding += (s, args) => _controller?.ExitForSystemShutdown();
         var handlesInitialVisibility = startupCommand.Kind is
             StartupCommandKind.Hide or StartupCommandKind.Toggle;
-        await _controller.WaitForStartupDisplayTopologyAsync();
         await _controller.StartAsync(
             createDefaultPaper: !startupCommand.CreatesPaper,
             initialVisibilityCommand: handlesInitialVisibility
