@@ -145,9 +145,11 @@ internal sealed partial class MarkdownSemanticPresentation
             var lastLine = document.GetLineByOffset(Math.Max(minStart, maxEnd - 1));
             var length = lastLine.Offset + lastLine.TotalLength - firstLine.Offset;
             textView.Redraw(firstLine.Offset, length, DispatcherPriority.Render);
-            // AvalonEdit 范围 Redraw 的脏标记合并可能漏掉跨行 range 的非 caret 端，使两端
-            // alpha 一帧不同步；追加一次全量 Render Redraw 对齐两端。
-            textView.Redraw(DispatcherPriority.Render);
+            // 跨行 range 保留全量兜底，避免非 caret 端 alpha 停留旧帧；单行无需重建其他可视行。
+            if (firstLine != lastLine)
+            {
+                textView.Redraw(DispatcherPriority.Render);
+            }
             return;
         }
 
@@ -159,7 +161,7 @@ internal sealed partial class MarkdownSemanticPresentation
         // 无范围型显灵：退化到旧单行重绘（caret 行的标题/引用/列表/围栏/分隔线/转义 marker）。
         var offset = Math.Clamp(reveal.CaretOffset, 0, document.TextLength);
         var caretLine = document.GetLineByOffset(offset);
-        textView.Redraw(caretLine.Offset, caretLine.Length + 1, DispatcherPriority.Render);
+        textView.Redraw(caretLine.Offset, caretLine.TotalLength, DispatcherPriority.Render);
     }
 
     /// <summary>

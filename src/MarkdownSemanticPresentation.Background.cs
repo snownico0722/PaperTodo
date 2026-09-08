@@ -28,7 +28,6 @@ internal sealed partial class MarkdownSemanticPresentation
 
             var snapshot = _owner.CurrentSnapshot();
             var zoom = _owner.ZoomFactor();
-            // 引用竖条/圆角随字号等比缩放（zoom=1 还原 3px / 圆角 3），避免放大后仍为细线小角。
             var quotePen = new Pen(Theme.QuoteBorderBrush, 3 * zoom);
             var inlineCodeBuilder = new BackgroundGeometryBuilder
             {
@@ -37,7 +36,6 @@ internal sealed partial class MarkdownSemanticPresentation
                 BorderThickness = 0
             };
 
-            // 收集当前视口可见的 DocumentLine（软折行会被多个 VisualLine 访问，去重后仍按行号升序）。
             var visible = new List<DocumentLine>();
             foreach (var visualLine in textView.VisualLines)
             {
@@ -72,13 +70,8 @@ internal sealed partial class MarkdownSemanticPresentation
                 }
             }
 
-            // 代码块背景：把“纳入代码块的可见行”合成一个 run，一次画一整块圆角面板，
-            // 消除逐行绘制造成的接缝；Full 档围栏开/闭行也并入（代码面板上下连续）。
             DrawCodeRuns(textView, drawingContext, snapshot, visible, zoom);
-
-            // 引用竖条：把“连续 IsQuoted 的可见行”合成一个 run，一个 run 只画一条贯穿竖条，
-            // 消除逐行 2px 缩进造成的行间断裂（> a\n>\n> b 与惰性续行/软折行都保持连续）。
-            DrawQuoteRuns(textView, drawingContext, snapshot, visible, quotePen, zoom);
+            DrawQuoteRails(textView, drawingContext, document, snapshot, visible, quotePen, zoom);
 
             var inlineCodeGeometry = inlineCodeBuilder.CreateGeometry();
             if (inlineCodeGeometry != null)
@@ -87,7 +80,6 @@ internal sealed partial class MarkdownSemanticPresentation
             }
         }
 
-        /// <summary>该行是否被纳入代码块背景（Full 档含围栏开/闭行，其余档位维持旧语义）。</summary>
         private bool IsCodeRow(MarkdownSemanticSnapshot snapshot, DocumentLine line)
         {
             var semantic = snapshot.GetLine(LineIndex(line));
@@ -98,7 +90,6 @@ internal sealed partial class MarkdownSemanticPresentation
 
             if (semantic.IsFencedCodeMarker && !_owner.IsFullMode)
             {
-                // 非 Full 档：围栏开闭行不垫底，避免与可见源码标记叠印。
                 return false;
             }
 
@@ -148,58 +139,201 @@ internal sealed partial class MarkdownSemanticPresentation
             }
         }
 
-        private void DrawQuoteRuns(
+        /// <summary>
+        /// 每一层引用轨道都跟随它在统一容器前缀中的真实位置。列表中的引用不再固定画在最左侧；
+        /// 惰性续行使用显示层虚拟前缀的位置。相邻行同位置的轨道轻微重叠，避免行间断缝。
+        /// </summary>
+        private void DrawQuoteRails(
             TextView textView,
             DrawingContext drawingContext,
+            IDocument document,
             MarkdownSemanticSnapshot snapshot,
             List<DocumentLine> visible,
             Pen quotePen,
             double zoom)
         {
-            // 左轨距随字号等比（zoom=1 还原 2.5）。
-            var x = 2.5 * zoom;
-            var count = visible.Count;
-            var index = 0;
-            while (index < count)
+            var railRows = new List<double[]>(visible.Count);
+            var virtualUnitWidth = MeasureVirtualQuoteUnit(textView);
+            foreach (var line in visible)
             {
-                if (!snapshot.GetLine(LineIndex(visible[index])).IsQuoted)
+                railRows.Add(GetQuoteRailXs(
+                    textView,
+                    document,
+                    snapshot,
+                    line,
+                    zoom,
+                    virtualUnitWidth));
+            }
+
+            for (var row = 0; row < visible.Count; row++)
+            {
+                var rails = railRows[row];
+                if (rails.Length == 0)
                 {
-                    index++;
                     continue;
                 }
 
-                var first = visible[index];
-                var last = first;
-                while (index + 1 < count &&
-                       snapshot.GetLine(LineIndex(visible[index + 1])).IsQuoted)
+                var line = visible[row];
+                var previousRails = row > 0 && visible[row - 1].NextLine == line
+                    ? railRows[row - 1]
+                    : Array.Empty<double>();
+                var nextRails = row + 1 < visible.Count && line.NextLine == visible[row + 1]
+                    ? railRows[row + 1]
+                    : Array.Empty<double>();
+                var top = RowTop(textView, line);
+                var bottom = RowBottom(textView, line);
+                foreach (var x in rails)
                 {
-                    index++;
-                    last = visible[index];
-                }
+                    var joinsPrevious = ContainsNear(previousRails, x);
+                    var joinsNext = ContainsNear(nextRails, x);
+                    var startY = top + (joinsPrevious ? -0.5 : 1);
+                    var endY = bottom + (joinsNext ? 0.5 : -1);
+                    if (endY < startY)
+                    {
+                        endY = startY;
+                    }
 
-                var top = RowTop(textView, first);
-                var bottom = RowBottom(textView, last);
-                // 只在 run 的真首/末方向留 1px，中间不再有任何 inset，竖条无缝。
-                drawingContext.DrawLine(
-                    quotePen,
-                    new Point(x, top + 1),
-                    new Point(x, Math.Max(top + 1, bottom - 1)));
-                index++;
+                    drawingContext.DrawLine(
+                        quotePen,
+                        new Point(x, startY),
+                        new Point(x, endY));
+                }
             }
         }
 
-        /// <summary>行在视口坐标系中的上沿（该行首 VisualLine 的上沿）。</summary>
+        private double[] GetQuoteRailXs(
+            TextView textView,
+            IDocument document,
+            MarkdownSemanticSnapshot snapshot,
+            DocumentLine line,
+            double zoom,
+            double virtualUnitWidth)
+        {
+            var semantic = snapshot.GetLine(LineIndex(line));
+            if (!semantic.IsQuoted || semantic.QuoteLevel <= 0)
+            {
+                return Array.Empty<double>();
+            }
+
+            var text = document.GetText(line);
+            var container = MarkdownContainerPrefix.Parse(
+                text,
+                snapshot,
+                line.Offset,
+                line.EndOffset);
+            var rails = new List<double>(semantic.QuoteLevel);
+            foreach (var token in container.Tokens)
+            {
+                if (!token.IsQuote)
+                {
+                    continue;
+                }
+
+                if (MarkdownSemanticPresentation.TryGetTextPoint(
+                        textView,
+                        line,
+                        line.Offset + token.MarkerStart,
+                        VisualYPosition.TextMiddle,
+                        out var point))
+                {
+                    rails.Add(point.X + 2.5 * zoom);
+                }
+            }
+
+            if (container.MissingQuoteLevels > 0 &&
+                MarkdownSemanticPresentation.TryGetTextPoint(
+                    textView,
+                    line,
+                    line.Offset + container.ContentStart,
+                    VisualYPosition.TextMiddle,
+                    out var virtualPoint))
+            {
+                var startsAtPoint = VirtualQuoteElementConsumesSourceAt(
+                    textView,
+                    line,
+                    line.Offset + container.ContentStart);
+                // Full 才真正插入虚拟引用占位；Enhanced/Basic 没有该元素，不能凭空向左减宽度。
+                var virtualStart = startsAtPoint || !_owner.IsFullMode
+                    ? virtualPoint.X
+                    : virtualPoint.X - virtualUnitWidth * container.MissingQuoteLevels;
+                for (var level = 0; level < container.MissingQuoteLevels; level++)
+                {
+                    rails.Add(virtualStart + virtualUnitWidth * level + 2.5 * zoom);
+                }
+            }
+
+            // 防御性兜底：即使某个点暂时无法从 TextView 取得，也保证语义层级不会少画轨道。
+            while (rails.Count < semantic.QuoteLevel)
+            {
+                rails.Add(2.5 * zoom + rails.Count * virtualUnitWidth);
+            }
+
+            rails.Sort();
+            return rails.ToArray();
+        }
+
+        private double MeasureVirtualQuoteUnit(TextView textView)
+        {
+            var typeface = new Typeface(
+                _owner._editor.FontFamily,
+                _owner._editor.FontStyle,
+                _owner._editor.FontWeight,
+                _owner._editor.FontStretch);
+            var formatted = new FormattedText(
+                "> ",
+                UiLanguages.EffectiveUiCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                _owner._editor.FontSize,
+                Brushes.Transparent,
+                null,
+                AppTypography.TextFormattingMode,
+                VisualTreeHelper.GetDpi(textView).PixelsPerDip);
+            return Math.Max(1, formatted.WidthIncludingTrailingWhitespace);
+        }
+
+        private static bool VirtualQuoteElementConsumesSourceAt(
+            TextView textView,
+            DocumentLine line,
+            int absoluteOffset)
+        {
+            var visualLine = textView.GetVisualLine(line.LineNumber);
+            if (visualLine == null)
+            {
+                return false;
+            }
+
+            foreach (var element in visualLine.Elements)
+            {
+                var elementOffset = visualLine.FirstDocumentLine.Offset + element.RelativeTextOffset;
+                if (elementOffset == absoluteOffset && element is QuoteIndentElement quote)
+                {
+                    return quote.DocumentLength > 0;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsNear(IReadOnlyList<double> values, double target)
+        {
+            foreach (var value in values)
+            {
+                if (Math.Abs(value - target) <= 0.75)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static double RowTop(TextView textView, DocumentLine line) =>
             textView.GetVisualTopByDocumentLine(line.LineNumber) - textView.VerticalOffset;
 
-        /// <summary>DocumentLine.LineNumber 是 1-based，零基索引取 max 防越界。</summary>
         private static int LineIndex(DocumentLine line) =>
             Math.Max(0, line.LineNumber - 1);
 
-        /// <summary>
-        /// 行在视口坐标系中的下沿：优先用“下一 DocumentLine 的上沿”（覆盖整行含软折行全部
-        /// VisualLine）；若已是文档末行，则取其最后一个 VisualLine 的底部兜底，避免折行缺尾。
-        /// </summary>
         private static double RowBottom(TextView textView, DocumentLine line)
         {
             if (line.NextLine != null)

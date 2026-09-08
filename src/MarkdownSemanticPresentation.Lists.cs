@@ -7,21 +7,60 @@ namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
-    private static bool HasTaskMarkerOnLine(
+    private static bool TryGetTaskMarkerContext(
         MarkdownSemanticSnapshot snapshot,
-        DocumentLine line)
+        DocumentLine line,
+        out MarkdownSemanticSpan task,
+        out MarkdownSemanticSpan ownerList,
+        out bool hasOwnerList)
     {
+        task = default;
+        ownerList = default;
+        hasOwnerList = false;
+        var hasTask = false;
         foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
         {
-            if (span.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
-                span.Start < line.EndOffset &&
-                span.End > line.Offset)
+            if (!hasTask &&
+                span.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
+                span.Start >= line.Offset &&
+                span.End <= line.EndOffset)
             {
-                return true;
+                task = span;
+                hasTask = true;
             }
         }
-        return false;
+
+        if (!hasTask)
+        {
+            return false;
+        }
+
+        foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
+        {
+            if (span.Kind is not (
+                    MarkdownSemanticSpanKind.UnorderedListMarker or
+                    MarkdownSemanticSpanKind.OrderedListMarker) ||
+                span.Start < line.Offset ||
+                span.End > line.EndOffset ||
+                span.Start >= task.Start)
+            {
+                continue;
+            }
+
+            if (!hasOwnerList || span.Start > ownerList.Start)
+            {
+                ownerList = span;
+                hasOwnerList = true;
+            }
+        }
+
+        return true;
     }
+
+    private static bool HasTaskMarkerOnLine(
+        MarkdownSemanticSnapshot snapshot,
+        DocumentLine line) =>
+        TryGetTaskMarkerContext(snapshot, line, out _, out _, out _);
 
     private sealed partial class SemanticColorizer
     {
@@ -31,7 +70,7 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             ApplyTaskMarkerSemantics(line, snapshot);
 
-            // 任务行：Enhanced 预览保持旧行为不在此处理；Full 档仍需隐藏/显灵项目符号。
+            // Enhanced 预览维持旧行为；Full 档则逐个处理所有层级的列表 marker。
             if (!_owner.IsFullMode &&
                 (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line)))
             {
@@ -158,18 +197,23 @@ internal sealed partial class MarkdownSemanticPresentation
                      line != null && line.LineNumber <= visualLine.LastDocumentLine.LineNumber;
                      line = line.NextLine)
                 {
-                    var isTaskLine = HasTaskMarkerOnLine(snapshot, line);
-                    // Enhanced/Off 档或已显灵的任务行:源码即所见,整行跳过图形补画。
-                    if (isTaskLine && (!_owner.IsFullMode || IsTaskRevealed(snapshot, line)))
+                    var hasTask = TryGetTaskMarkerContext(
+                        snapshot,
+                        line,
+                        out var task,
+                        out var taskOwnerList,
+                        out var hasTaskOwnerList);
+                    var taskRevealed = hasTask && IsTaskRevealed(line, task);
+
+                    // Enhanced/Off 档或 Full 已显灵任务行：源码即所见，不补画任何图形。
+                    if (hasTask && (!_owner.IsFullMode || taskRevealed))
                     {
                         continue;
                     }
 
-                    // Full 档未显灵任务行画勾选框;无序 bullet 由勾选框顶替,有序序号
-                    // 仍由下方 marker 循环补画(普通行此处无事可做)。
-                    if (isTaskLine)
+                    if (hasTask)
                     {
-                        DrawTaskCheckBox(textView, drawingContext, line);
+                        DrawTaskCheckBox(textView, drawingContext, line, task);
                     }
 
                     foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
@@ -183,9 +227,9 @@ internal sealed partial class MarkdownSemanticPresentation
                             continue;
                         }
 
-                        // 任务行:勾选框已顶替无序 bullet,避免重叠重复绘制;有序序号与
-                        // 勾选框不重叠,照常由下方 DrawMarker 补画。
-                        if (isTaskLine &&
+                        // 任务框只替代与 [ ]/[x] 最近的那一个无序列表 marker；外层列表圆点继续画。
+                        if (hasTaskOwnerList &&
+                            marker.Equals(taskOwnerList) &&
                             marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
                         {
                             continue;
@@ -208,48 +252,19 @@ internal sealed partial class MarkdownSemanticPresentation
             }
         }
 
-        private bool IsTaskRevealed(MarkdownSemanticSnapshot snapshot, DocumentLine line)
-        {
-            foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
-            {
-                if (marker.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
-                    marker.Start < line.EndOffset &&
-                    marker.End > line.Offset)
-                {
-                    return _owner.IsRevealed(
-                        line.LineNumber,
-                        marker.Start,
-                        marker.Length,
-                        MarkdownSemanticSpanKind.TaskListMarker);
-                }
-            }
+        private bool IsTaskRevealed(DocumentLine line, MarkdownSemanticSpan task) =>
+            _owner.IsRevealed(
+                line.LineNumber,
+                task.Start,
+                task.Length,
+                MarkdownSemanticSpanKind.TaskListMarker);
 
-            return false;
-        }
-
-        private void DrawTaskCheckBox(
+        private static void DrawTaskCheckBox(
             TextView textView,
             DrawingContext drawingContext,
-            DocumentLine line)
+            DocumentLine line,
+            MarkdownSemanticSpan task)
         {
-            var task = default(MarkdownSemanticSpan);
-            var hasTask = false;
-            foreach (var marker in _owner.CurrentSnapshot().SpansForLine(Math.Max(0, line.LineNumber - 1)))
-            {
-                if (marker.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
-                    marker.End <= line.EndOffset &&
-                    marker.Start >= line.Offset)
-                {
-                    task = marker;
-                    hasTask = true;
-                    break;
-                }
-            }
-            if (!hasTask)
-            {
-                return;
-            }
-
             if (!MarkdownSemanticPresentation.TryGetTextPoint(
                     textView,
                     line,
@@ -269,7 +284,6 @@ internal sealed partial class MarkdownSemanticPresentation
             var cellLeft = Math.Min(topLeft.X, bottomRight.X);
             var cellRight = Math.Max(topLeft.X, bottomRight.X);
             var height = Math.Max(1, bottomRight.Y - topLeft.Y);
-            // 框体高度取自缩放后的字形高度：去掉固定 8px 地板，缩小缩放时可随之变小。
             var boxSize = Math.Max(1, Math.Min(height * 0.7, cellRight - cellLeft));
             var rect = new Rect(
                 cellLeft + (cellRight - cellLeft - boxSize) / 2,
@@ -278,7 +292,6 @@ internal sealed partial class MarkdownSemanticPresentation
                 boxSize);
 
             drawingContext.DrawRectangle(Theme.PaperBrush, null, rect);
-            // 描边随框体等比加粗（zoom=1 时 ≈1px），避免放大后仍是细边框。
             var penWidth = Math.Max(1.0, boxSize * 0.09);
             var pen = new Pen(Theme.PaperBorderBrush, penWidth);
             if (task.Checked)
@@ -353,7 +366,6 @@ internal sealed partial class MarkdownSemanticPresentation
 
             if (marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
             {
-                // 半径随字号等比（zoom=1 时 ≈2.2px）：去掉固定 [2.0,3.2] 硬钳以跟随缩放。
                 var radius = Math.Max(
                     0.5,
                     _owner.ScaledFontSize(NoteTypography.FontSize) * 0.16);
