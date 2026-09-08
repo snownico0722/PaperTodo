@@ -355,12 +355,12 @@ public sealed partial class AppController
         };
 
         // Advanced blocks extend their backgrounds 8 DIPs beyond the aligned controls.
-        // Keep that space inside the viewport, plus a little extra on the scroll edge so
+        // Keep that space inside the viewport, plus a small inset on the scroll edge so
         // rounded right borders do not land on the clipping boundary.
         var content = new Border
         {
             Width = SettingsContentWidth() + 16,
-            Padding = new Thickness(8, 0, 12, 0),
+            Padding = new Thickness(8, 0, 10, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = BuildSettingsPage()
         };
