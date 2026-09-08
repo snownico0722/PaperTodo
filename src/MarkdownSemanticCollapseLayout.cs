@@ -203,7 +203,7 @@ internal static class MarkdownSemanticCollapseLayout
                 MarkdownSemanticSpanKind.Strong or
                 MarkdownSemanticSpanKind.Strikethrough or
                 MarkdownSemanticSpanKind.InlineCode => BuildInlineDelimiters(span, source, lineStarts),
-                MarkdownSemanticSpanKind.EscapeMarker => BuildCell(span, source, lineStarts),
+                MarkdownSemanticSpanKind.EscapeMarker => BuildEscapeCell(span, snapshot, source, lineStarts),
                 MarkdownSemanticSpanKind.HtmlContainer =>
                     BuildHtmlPair(span, openerByStart, closerByEnd, source, lineStarts),
                 _ => null
@@ -342,14 +342,26 @@ internal static class MarkdownSemanticCollapseLayout
             Cell2End: closerEnd);
     }
 
-    /// <summary>整段塌缩的单格标记（转义反斜杠；HTML 标签已改为按成对区间候选）。</summary>
-    private static MarkdownCollapseCandidate? BuildCell(
+    /// <summary>转义反斜杠仅在未被链接语法格覆盖时独立塌缩；label 内的转义仍独立显隐。</summary>
+    private static MarkdownCollapseCandidate? BuildEscapeCell(
         MarkdownSemanticSpan span,
+        MarkdownSemanticSnapshot snapshot,
         string source,
         int[] lineStarts)
     {
         if (span.Length <= 0)
         {
+            return null;
+        }
+
+        if (snapshot.TryGetLinkAtOffset(span.Start, out var link) &&
+            link.HasVisibleSyntax &&
+            BuildLink(link, source, lineStarts) is { } linkCandidate &&
+            ((linkCandidate.HasCell1 && span.Start >= linkCandidate.Cell1Start && span.End <= linkCandidate.Cell1End) ||
+             (linkCandidate.HasCell2 && span.Start >= linkCandidate.Cell2Start && span.End <= linkCandidate.Cell2End)))
+        {
+            // URL、title、reference id 等由链接拥有整个隐藏区间。重叠的小格会让增量表
+            // 在光标离开链接时拒绝恢复大格；只在该链接格实际可塌缩时去重（跨行格可能不塌缩）。
             return null;
         }
 
@@ -766,7 +778,7 @@ internal sealed class MarkdownCollapseTable
                 return;
             }
 
-            // 引用 `>` 单元不进 spans：按行首连续 `>` 前缀计数，翻越任一格视为视觉变化。
+            // 引用 `>` 单元不进 spans：按统一容器映射中的真实 Quote token 计数，翻越任一格视为视觉变化。
             if (QuoteCellCount(previous, line) != QuoteCellCount(target, line))
             {
                 visualChanged = true;
@@ -939,7 +951,7 @@ internal sealed class MarkdownCollapseTable
         return low;
     }
 
-    /// <summary>该光标下某行已显灵的引用 `&gt;` 单元数。</summary>
+    /// <summary>该光标下某行已显灵的真实引用 `&gt;` 单元数；容器归属只取 Markdig snapshot。</summary>
     private int QuoteCellCount(MarkdownCaretReveal caret, int line)
     {
         if (!caret.Active || line < 0 || line >= _lineStarts.Length)
@@ -949,10 +961,21 @@ internal sealed class MarkdownCollapseTable
 
         var lineStart = _lineStarts[line];
         var lineEnd = line + 1 < _lineStarts.Length ? _lineStarts[line + 1] : _source.Length;
-        var revealed = 0;
-        foreach (var marker in MarkdownQuoteNormalization.EnumerateMarkers(_source, lineStart, lineEnd))
+        while (lineEnd > lineStart && _source[lineEnd - 1] is '\r' or '\n')
         {
-            if (caret.CaretOffset >= marker.Start)
+            lineEnd--;
+        }
+
+        var lineText = _source[lineStart..lineEnd];
+        var container = MarkdownContainerPrefix.Parse(
+            lineText,
+            _snapshot,
+            lineStart,
+            lineEnd);
+        var revealed = 0;
+        foreach (var token in container.Tokens)
+        {
+            if (token.IsQuote && caret.CaretOffset >= lineStart + token.MarkerStart)
             {
                 revealed++;
             }
