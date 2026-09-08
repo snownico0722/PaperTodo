@@ -6,6 +6,7 @@ on:
       - feat/markdown-math-wpf
     paths:
       - .github/workflows/apply-markdown-math-wpf.yml
+      - tools/apply-markdown-math-wpf.ps1
 
 permissions:
   contents: write
