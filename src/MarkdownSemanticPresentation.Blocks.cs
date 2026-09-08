@@ -24,7 +24,7 @@ internal sealed partial class MarkdownSemanticPresentation
             // 不再只看物理行最开头的连续 `>`。
             if (semantic.IsQuoted)
             {
-                ApplyQuoteMarkerSemantics(line, snapshot, semantic, text);
+                ApplyQuoteMarkerSemantics(line, snapshot, text);
             }
         }
 
@@ -49,12 +49,10 @@ internal sealed partial class MarkdownSemanticPresentation
         private void ApplyQuoteMarkerSemantics(
             DocumentLine line,
             MarkdownSemanticSnapshot snapshot,
-            MarkdownSemanticLine semantic,
             string text)
         {
             var container = MarkdownContainerPrefix.Parse(
                 text,
-                semantic.QuoteLevel,
                 snapshot,
                 line.Offset,
                 line.EndOffset);
