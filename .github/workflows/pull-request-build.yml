@@ -91,7 +91,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- native/math/Cargo.lock native/math/bin/win-x64/papertodo_math.dll
+          git add -f -- native/math/Cargo.lock native/math/bin/win-x64/papertodo_math.dll
           if (git diff --cached --quiet) {
             Write-Output "Native artifacts already match the pinned sources."
             exit 0
