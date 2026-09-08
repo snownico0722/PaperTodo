@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 
@@ -93,6 +94,32 @@ internal static partial class Program
             }
         });
 
+        Check("Link-owned escape follows the revealed link brush", () =>
+        {
+            const string source = "[b](https://example.com/a\\*b)\n\nplain";
+            using var editor = new Editor(source);
+            var escape = source.IndexOf('\\');
+            editor.Box.CaretOffset = 1;
+            Pump();
+            Require(
+                ForegroundAlphaAtOffset(editor.Box, escape) > 0,
+                "destination backslash is visible when any part of the link is being edited");
+        });
+
+        Check("Quote marker after a list marker hides and reveals with the quote", () =>
+        {
+            const string source = "- > item";
+            using var editor = new Editor(source);
+            var quote = source.IndexOf('>');
+            editor.Box.SetPreviewMode(true);
+            Pump();
+            Equal((byte)0, ForegroundAlphaAtOffset(editor.Box, quote), "list-contained quote marker hides in preview");
+            editor.Box.SetPreviewMode(false);
+            editor.Box.CaretOffset = source.Length;
+            Pump();
+            Require(ForegroundAlphaAtOffset(editor.Box, quote) > 0, "list-contained quote marker reveals on its active line");
+        });
+
         Check("Link escapes have nonoverlapping collapse runs in both caret directions", () =>
         {
             foreach (var syntax in new[] {
@@ -171,6 +198,33 @@ internal static partial class Program
             for (var index = 1; index < expected.Count; index++)
                 Require(expected[index - 1].End <= expected[index].Start, $"collapse cells do not overlap at {caret.CaretOffset}");
         }
+    }
+
+    private static byte ForegroundAlphaAtOffset(MarkdownTextBox box, int offset)
+    {
+        box.ApplyTemplate();
+        box.Measure(new Size(800, 600));
+        box.Arrange(new Rect(0, 0, 800, 600));
+        box.UpdateLayout();
+        var view = box.TextArea.TextView;
+        view.Measure(new Size(800, 600));
+        view.Arrange(new Rect(0, 0, 800, 600));
+        view.EnsureVisualLines();
+        var documentLine = box.Document.GetLineByOffset(offset);
+        var visual = view.GetOrConstructVisualLine(documentLine);
+        var relative = offset - visual.FirstDocumentLine.Offset;
+        foreach (var element in visual.Elements)
+        {
+            if (element.RelativeTextOffset <= relative &&
+                relative < element.RelativeTextOffset + element.DocumentLength)
+            {
+                return element.TextRunProperties.ForegroundBrush is SolidColorBrush solid
+                    ? solid.Color.A
+                    : byte.MaxValue;
+            }
+        }
+
+        throw new InvalidOperationException($"no visual element owns source offset {offset}");
     }
 
     private static double FirstLineWidth(MarkdownTextBox box)
