@@ -128,12 +128,24 @@ internal sealed partial class MarkdownSemanticPresentation
                 return;
             }
 
+            var source = _owner._editor.Text ?? string.Empty;
             foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
             {
                 if (span.Kind != MarkdownSemanticSpanKind.EscapeMarker ||
                     span.End <= line.Offset ||
                     span.Start >= line.EndOffset)
                 {
+                    continue;
+                }
+
+                if (MarkdownLinkEscapeOwnership.TryGetOwningLink(
+                        span,
+                        snapshot,
+                        source,
+                        out _))
+                {
+                    // 地址、标题、引用编号等 label 外链接语法由整条链接统一取色和显灵；
+                    // 此处不再用独立 EscapeMarker 规则把已显灵的反斜杠重新涂透明。
                     continue;
                 }
 
