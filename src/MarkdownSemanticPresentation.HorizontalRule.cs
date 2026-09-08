@@ -32,7 +32,6 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var snapshot = _owner.CurrentSnapshot();
-            // 横线随字号缩放略微加粗（zoom=1 保持 1px；0.75 下限防过细不可见）。
             var pen = new Pen(Theme.PaperBorderBrush, Math.Max(0.75, _owner.ZoomFactor()));
             foreach (var visualLine in textView.VisualLines)
             {
@@ -46,7 +45,7 @@ internal sealed partial class MarkdownSemanticPresentation
                         continue;
                     }
 
-                    // Full 档把光标行还原成源码（--- 可见），不再画线覆盖。
+                    // Full 档光标行直接显示源码，不再叠加最终横线。
                     if (_owner.IsFullMode &&
                         _owner.IsRevealed(
                             line.LineNumber,
@@ -58,7 +57,13 @@ internal sealed partial class MarkdownSemanticPresentation
                     }
 
                     var text = document.GetText(line);
-                    var ruleStart = 0;
+                    var container = MarkdownContainerPrefix.Parse(
+                        text,
+                        semantic.QuoteLevel,
+                        snapshot,
+                        line.Offset,
+                        line.EndOffset);
+                    var ruleStart = Math.Clamp(container.ContentStart, 0, text.Length);
                     while (ruleStart < text.Length && char.IsWhiteSpace(text[ruleStart]))
                     {
                         ruleStart++;
@@ -95,16 +100,23 @@ internal sealed partial class MarkdownSemanticPresentation
                         height = Math.Max(textView.DefaultLineHeight, nextTop - top);
                     }
 
-                    var useErase = _owner.FadeSyntax || _owner.IsFullMode;
-                    if (useErase)
+                    // Enhanced 预览仍需盖住可见的 --- 源码，但只擦控制符本身；Full 源码已透明，
+                    // 不擦整行，避免把外层引用竖线、列表圆点或任务框一起盖掉。
+                    if (_owner.FadeSyntax)
                     {
+                        var eraseLeft = Math.Min(startPoint.X, endPoint.X) - 1;
+                        var eraseRight = Math.Max(startPoint.X, endPoint.X) + 1;
                         drawingContext.DrawRectangle(
                             Theme.PaperBrush,
                             null,
-                            new Rect(0, top, width, Math.Max(1, height)));
+                            new Rect(
+                                eraseLeft,
+                                top,
+                                Math.Max(1, eraseRight - eraseLeft),
+                                Math.Max(1, height)));
                     }
 
-                    var left = useErase
+                    var left = _owner.FadeSyntax || _owner.IsFullMode
                         ? startPoint.X
                         : endPoint.X + 8;
                     left = Math.Max(0, left);
