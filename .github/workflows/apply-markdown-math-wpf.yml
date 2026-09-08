@@ -7,6 +7,9 @@ on:
     paths:
       - .github/workflows/apply-markdown-math-wpf.yml
       - tools/apply-markdown-math-wpf.ps1
+      - src/MarkdownMath*.cs
+      - src/MarkdownSemanticPresentation.Math.cs
+      - tests/PaperTodo.MarkdownEditingChecks/MathFormulaChecks.cs
 
 permissions:
   contents: write
