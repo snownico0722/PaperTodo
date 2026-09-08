@@ -16,11 +16,9 @@ public sealed partial class MarkdownTextBox
             return false;
         }
 
-        var level = snapshot.GetLine(Math.Max(0, line.LineNumber - 1)).QuoteLevel;
-        if (level <= 0 ||
+        if (snapshot.GetLine(Math.Max(0, line.LineNumber - 1)).QuoteLevel <= 0 ||
             !TryBuildQuoteContinuationPrefix(
                 text,
-                level,
                 snapshot,
                 line.Offset,
                 line.EndOffset,
@@ -60,11 +58,10 @@ public sealed partial class MarkdownTextBox
 
     /// <summary>
     /// 生成引用续行前缀。外层列表 marker 变为等宽空白，外层引用保留，最内层引用继续；若真实
-    /// 最内层容器是列表，则让列表逻辑处理。惰性续行缺少的引用层级按 QuoteLevel 补到新行。
+    /// 最内层容器是列表，则让列表逻辑处理。惰性续行缺少的引用层级由 Markdig QuoteLevel 补到新行。
     /// </summary>
     private static bool TryBuildQuoteContinuationPrefix(
         string text,
-        int quoteLevel,
         MarkdownSemanticSnapshot snapshot,
         int absoluteLineStart,
         int absoluteLineEnd,
@@ -73,19 +70,18 @@ public sealed partial class MarkdownTextBox
     {
         prefix = string.Empty;
         contentStart = 0;
-        if (quoteLevel <= 0)
+
+        var container = MarkdownContainerPrefix.Parse(
+            text,
+            snapshot,
+            absoluteLineStart,
+            absoluteLineEnd);
+        if (container.QuoteLevel <= 0)
         {
             return false;
         }
 
-        var container = MarkdownContainerPrefix.Parse(
-            text,
-            quoteLevel,
-            snapshot,
-            absoluteLineStart,
-            absoluteLineEnd);
         contentStart = container.ContentStart;
-
         if (container.MissingQuoteLevels == 0 &&
             container.InnermostTokenIndex >= 0 &&
             container.Tokens[container.InnermostTokenIndex].IsList)
@@ -93,7 +89,7 @@ public sealed partial class MarkdownTextBox
             return false;
         }
 
-        var builder = new StringBuilder(text.Length + quoteLevel * 2);
+        var builder = new StringBuilder(text.Length + container.QuoteLevel * 2);
         var cursor = 0;
         foreach (var token in container.Tokens)
         {
