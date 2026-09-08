@@ -156,9 +156,9 @@ internal static class MarkdownContainerPrefix
                 index < sourceLine.Length &&
                 sourceLine[index] == '>')
             {
-                var markerStart = index;
+                var quoteMarkerStart = index;
                 index++;
-                var markerEnd = index;
+                var quoteMarkerEnd = index;
                 if (index < sourceLine.Length && sourceLine[index] is ' ' or '\t')
                 {
                     index++;
@@ -166,8 +166,8 @@ internal static class MarkdownContainerPrefix
 
                 tokens.Add(new MarkdownContainerPrefixToken(
                     MarkdownContainerPrefixKind.Quote,
-                    markerStart,
-                    markerEnd,
+                    quoteMarkerStart,
+                    quoteMarkerEnd,
                     index));
                 explicitQuoteLevels++;
                 continue;
@@ -181,7 +181,7 @@ internal static class MarkdownContainerPrefix
             }
 
             MarkdownContainerPrefixKind listKind;
-            int markerEnd;
+            int listMarkerEnd;
             if (semanticListMarkers != null)
             {
                 if (semanticListIndex >= semanticListMarkers.Count ||
@@ -192,15 +192,15 @@ internal static class MarkdownContainerPrefix
 
                 var marker = semanticListMarkers[semanticListIndex++];
                 listKind = marker.Kind;
-                markerEnd = marker.End;
+                listMarkerEnd = marker.End;
             }
-            else if (!TryReadListMarker(sourceLine, index, out listKind, out markerEnd))
+            else if (!TryReadListMarker(sourceLine, index, out listKind, out listMarkerEnd))
             {
                 break;
             }
 
-            var markerStart = index;
-            index = markerEnd;
+            var listMarkerStart = index;
+            index = listMarkerEnd;
             while (index < sourceLine.Length && sourceLine[index] is ' ' or '\t')
             {
                 index++;
@@ -208,8 +208,8 @@ internal static class MarkdownContainerPrefix
 
             tokens.Add(new MarkdownContainerPrefixToken(
                 listKind,
-                markerStart,
-                markerEnd,
+                listMarkerStart,
+                listMarkerEnd,
                 index));
         }
 
