@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 
 namespace PaperTodo;
@@ -115,6 +116,42 @@ public sealed partial class AppController
         pageArea.Children.Add(pageHost);
 
         frame.Child = root;
+
+        var checkMarkAlignmentQueued = false;
+        void QueueCheckMarkAlignment()
+        {
+            if (checkMarkAlignmentQueued)
+            {
+                return;
+            }
+
+            checkMarkAlignmentQueued = true;
+            frame.Dispatcher.BeginInvoke(
+                (Action)(() =>
+                {
+                    checkMarkAlignmentQueued = false;
+                    if (frame.IsLoaded)
+                    {
+                        AlignSettingsCheckMarks(frame);
+                    }
+                }),
+                DispatcherPriority.Loaded);
+        }
+
+        frame.Loaded += (_, _) => QueueCheckMarkAlignment();
+
+        var registeredRefreshers =
+            new List<KeyValuePair<string, Action>>(_settingsRegionRefreshers);
+        foreach (var entry in registeredRefreshers)
+        {
+            var refresh = entry.Value;
+            _settingsRegionRefreshers[entry.Key] = () =>
+            {
+                refresh();
+                QueueCheckMarkAlignment();
+            };
+        }
+
         return frame;
     }
 
@@ -150,27 +187,103 @@ public sealed partial class AppController
         };
         AttachSettingsSidebarDragBehavior(closeRow, window);
 
+        var closeGlyph = new Path
+        {
+            Data = Geometry.Parse("M 1,1 L 7,7 M 7,1 L 1,7"),
+            Stroke = TrayWeakTextBrush,
+            StrokeThickness = 1.2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Width = 8,
+            Height = 8,
+            Stretch = Stretch.None,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
         var closeButton = new Button
         {
-            Content = "×",
-            Width = 28,
-            Height = 20,
+            Content = closeGlyph,
+            Width = 30,
+            Height = 18,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 4, 0),
+            Margin = new Thickness(0, 1, 1, 0),
             BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
-            Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(16),
+            BorderBrush = TrayBorderBrush,
             Cursor = Cursors.Hand,
             Focusable = false,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
-            Style = BuildSettingsCloseButtonStyle()
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Style = BuildSettingsWindowCloseButtonStyle()
         };
         closeButton.Click += (_, _) => window.Close();
         closeRow.Children.Add(closeButton);
         return closeRow;
+    }
+
+    private Style BuildSettingsWindowCloseButtonStyle()
+    {
+        var style = new Style(typeof(Button));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, TrayBorderBrush));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
+
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(
+            Border.BackgroundProperty,
+            new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(
+            Border.BorderBrushProperty,
+            new TemplateBindingExtension(Control.BorderBrushProperty));
+        border.SetValue(
+            Border.BorderThicknessProperty,
+            new TemplateBindingExtension(Control.BorderThicknessProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(
+            ContentPresenter.ContentProperty,
+            new TemplateBindingExtension(ContentControl.ContentProperty));
+        content.SetValue(
+            FrameworkElement.HorizontalAlignmentProperty,
+            HorizontalAlignment.Center);
+        content.SetValue(
+            FrameworkElement.VerticalAlignmentProperty,
+            VerticalAlignment.Center);
+        border.AppendChild(content);
+
+        var template = new ControlTemplate(typeof(Button))
+        {
+            VisualTree = border
+        };
+        var hover = new Trigger
+        {
+            Property = UIElement.IsMouseOverProperty,
+            Value = true
+        };
+        hover.Setters.Add(new Setter(Control.BackgroundProperty, TrayHoverBrush));
+        template.Triggers.Add(hover);
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
+    }
+
+    private static void AlignSettingsCheckMarks(DependencyObject root)
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is Path { Name: "CheckMark" } checkMark)
+            {
+                checkMark.RenderTransform = new TranslateTransform(-0.5, -0.5);
+            }
+            AlignSettingsCheckMarks(child);
+        }
     }
 
     private void AttachSettingsSidebarDragBehavior(UIElement surface, Window window)
@@ -354,14 +467,11 @@ public sealed partial class AppController
             Margin = new Thickness(16, 0, 10, 14)
         };
 
-        // Advanced blocks extend their backgrounds 8 DIPs beyond the aligned controls.
-        // Keep that space inside the viewport, plus a small inset on the scroll edge so
-        // rounded right borders do not land on the clipping boundary.
         var content = new Border
         {
             Width = SettingsContentWidth() + 16,
-            Padding = new Thickness(8, 0, 10, 0),
-            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(8, 0, 8, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Child = BuildSettingsPage()
         };
 
@@ -369,10 +479,54 @@ public sealed partial class AppController
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             CanContentScroll = false,
             PanningMode = PanningMode.Both,
             Content = content
         };
+
+        void FitContentWidthToViewport()
+        {
+            var viewportWidth = scrollViewer.ViewportWidth;
+            if (!double.IsFinite(viewportWidth) || viewportWidth <= 0)
+            {
+                return;
+            }
+
+            var targetWidth = Math.Max(SettingsContentWidth() + 16, viewportWidth);
+            if (!double.IsFinite(content.Width) || Math.Abs(content.Width - targetWidth) > 0.5)
+            {
+                content.Width = targetWidth;
+            }
+        }
+
+        var widthFitQueued = false;
+        void QueueFitContentWidth()
+        {
+            if (widthFitQueued)
+            {
+                return;
+            }
+
+            widthFitQueued = true;
+            scrollViewer.Dispatcher.BeginInvoke(
+                (Action)(() =>
+                {
+                    widthFitQueued = false;
+                    FitContentWidthToViewport();
+                }),
+                DispatcherPriority.Loaded);
+        }
+
+        scrollViewer.Loaded += (_, _) => QueueFitContentWidth();
+        scrollViewer.ScrollChanged += (_, e) =>
+        {
+            if (Math.Abs(e.ViewportWidthChange) > 0.01)
+            {
+                QueueFitContentWidth();
+            }
+        };
+
         _settingsPageScrollViewer = scrollViewer;
         _settingsPageScrollViewerPage = _settingsPage;
         if (_settingsPageScrollOffsets.TryGetValue(_settingsPage, out var offset) && offset > 0)
