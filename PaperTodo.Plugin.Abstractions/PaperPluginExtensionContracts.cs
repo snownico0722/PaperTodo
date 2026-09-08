@@ -15,15 +15,6 @@ public sealed record PaperAction
 public sealed record PaperActionInvocation(
     string ActionId, PaperSnapshot Paper, PaperPopupPosition Position);
 
-/// <summary>Requires papers.read. Entries belong to the existing provider Runtime and are volatile.</summary>
-public interface IPaperPluginPaperActions
-{
-    void SetActionHandler(Action<PaperActionInvocation>? handler);
-    void SetActions(string paperId, IReadOnlyList<PaperAction> actions);
-    void Clear(string paperId);
-    void Clear();
-}
-
 /// <summary>An independent copy of the encoded image, never a store buffer or file path.</summary>
 public sealed record PaperNoteImage(string ImageId, string Mime, byte[] Bytes);
 
@@ -44,6 +35,8 @@ public sealed record PaperPluginPopupOptions
 public sealed record PaperPluginPopupContext(
     PaperBodyTheme Theme, IPaperBodyControls Controls, Action Close);
 
+public sealed record PaperPluginPopupFailure(string Code, string Message);
+
 /// <summary>Return a fresh unparented view on the UI dispatcher. The shell disposes accepted content.</summary>
 public interface IPaperPluginPopupContent : IDisposable
 {
@@ -53,8 +46,18 @@ public interface IPaperPluginPopupContent : IDisposable
 
 public interface IPaperPluginPopup
 {
-    /// <summary>True while opening or visible; false after Close or failed creation.</summary>
+    /// <summary>True while opening or visible; false after Close or a failed open.</summary>
     bool IsOpen { get; }
+
+    /// <summary>
+    /// Set when the deferred shell show/placement/activation step fails. Synchronous validation
+    /// and content-factory failures are still thrown directly from Open.
+    /// </summary>
+    PaperPluginPopupFailure? OpenFailure { get; }
+
+    /// <summary>Raised once when a deferred shell show/placement/activation step fails.</summary>
+    event Action<PaperPluginPopupFailure>? OpenFailed;
+
     void Close();
 }
 
@@ -63,7 +66,8 @@ public interface IPaperPluginPopup
 /// Placement happens once near the supplied click position; moving the source does not track it.
 /// Leaving the popup window closes it; moving focus between its controls does not.
 /// The host owns UI-thread creation and cleanup when the session/Runtime ends. Content owns layout,
-/// business logic and keyboard behavior. No ordinary windows, ids, nested shells or source leases.
+/// business logic and keyboard behavior. Deferred shell failures are observable from the returned
+/// popup handle. No ordinary windows, ids, nested shells or source leases.
 /// </summary>
 public interface IPaperPluginPopups
 {
