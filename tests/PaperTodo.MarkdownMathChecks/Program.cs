@@ -127,23 +127,18 @@ $$
     {
         const string source = "$$\n\\frac{a}{b}";
         var snapshot = MarkdownSemanticSnapshot.Parse(source);
-        foreach (var span in snapshot.Spans.Where(IsMath))
-        {
-            Assert(
-                !MarkdownMathSource.TryExtract(source, span, out _, out _),
-                "An unclosed display formula became renderable.");
-        }
+        Assert(!snapshot.Spans.Any(IsMath), "An unclosed display formula became semantic math.");
     }
 
     private static void BlockDelimiterEditForcesExactParse()
     {
         Assert(
-            MarkdownSemanticSnapshot.MathDelimiterEditRequiresFullParse(
+            MarkdownMathIncremental.ChangeMayAffectDelimiterState(
                 "prefix\n$\nbody",
                 "prefix\n$$\nbody"),
             "Adding the second block delimiter dollar must force a full parse.");
         Assert(
-            !MarkdownSemanticSnapshot.MathDelimiterEditRequiresFullParse(
+            !MarkdownMathIncremental.ChangeMayAffectDelimiterState(
                 "prefix\nordinary text",
                 "prefix\nordinary texts"),
             "Ordinary long-note edits must retain the incremental path.");
