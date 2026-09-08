@@ -236,7 +236,7 @@ internal static partial class Program
 
         check("Resizing multiline math invalidates stale visual lines before fold state changes", () =>
         {
-            var longFormula = string.Join("+", Enumerable.Repeat("x", 80));
+            var longFormula = string.Join("+", Enumerable.Repeat("x", 50));
             var source = $"before\n$$\n{longFormula}\n$$\nafter";
             using var editor = new Editor(source);
             var box = editor.Box;
@@ -249,19 +249,22 @@ internal static partial class Program
             // would require scaling below the readability floor. This constructs normal VisualLines
             // for every physical source row.
             LayoutMathEditor(box, 96);
+            Pump();
             Require(!HasMathElement(box, span), "narrow preview keeps oversized formula source");
 
-            // Widening makes the formula renderable. SizeChanged synchronously changes AvalonEdit's
-            // collapsed-line height tree; the old source VisualLines must be discarded before the
-            // same WPF layout pass can measure again. Without that invalidation AvalonEdit throws
-            // "Trying to build visual line from collapsed line".
+            // Widening queues the fold sync until the current WPF layout has settled. It must then
+            // discard the old source VisualLines before collapsing continuation lines; otherwise
+            // AvalonEdit can throw "Trying to build visual line from collapsed line" on re-measure.
             LayoutMathEditor(box, 800);
+            Pump();
             Require(HasMathElement(box, span), "widening safely folds and renders the formula");
 
             // Exercise the inverse transition as well: uncollapse back to source, then fold again.
             LayoutMathEditor(box, 96);
+            Pump();
             Require(!HasMathElement(box, span), "narrowing safely restores formula source");
             LayoutMathEditor(box, 800);
+            Pump();
             Require(HasMathElement(box, span), "re-widening safely renders the formula again");
         });
 
