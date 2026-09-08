@@ -50,11 +50,12 @@
   <ItemGroup>
     <ProjectReference Include="PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />
     <ProjectReference Include="vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj" />
+    <!-- XAML-Math 3.0 development mainline. vendor/xaml-math is a gitlink pinned to
+         ForNeVeR/xaml-math commit e8b3681b7aac0902c14c6a80a009be847623fbbc. -->
+    <ProjectReference Include="vendor\xaml-math\src\WpfMath\WpfMath.csproj" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <!-- Markdig owns ordinary Markdown grammar; AvalonEdit remains the only source document. -->
     <PackageReference Include="Markdig" Version="1.3.2" />
-    <!-- Native WPF vector layout for PaperTodo's bounded TeX math surface. -->
-    <PackageReference Include="WpfMath" Version="2.1.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
     <PackageReference Include="ModelContextProtocol" Version="2.0.0" />

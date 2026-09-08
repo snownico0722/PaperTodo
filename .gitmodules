@@ -2,3 +2,6 @@
 	path = vendor/wpf-notifyicon
 	url = https://github.com/snownico0722/wpf-notifyicon.git
 	branch = develop
+[submodule "vendor/xaml-math"]
+	path = vendor/xaml-math
+	url = https://github.com/ForNeVeR/xaml-math.git
