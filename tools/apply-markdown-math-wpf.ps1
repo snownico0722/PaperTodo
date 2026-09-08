@@ -134,7 +134,18 @@ Replace-RepoText "src/MarkdownSemanticPresentation.cs" @'
         SyncRevealFade();
         AlignCollapseTableToReveal(scheduleRedraw: true);
         SyncMathRevealRedraw();
-'@ 3
+'@ 2
+
+Replace-RepoText "src/MarkdownSemanticPresentation.cs" @'
+            SyncCaretReveal();
+            SyncRevealFade();
+            AlignCollapseTableToReveal(scheduleRedraw: true);
+'@ @'
+            SyncCaretReveal();
+            SyncRevealFade();
+            AlignCollapseTableToReveal(scheduleRedraw: true);
+            SyncMathRevealRedraw();
+'@
 
 Replace-RepoText "src/MarkdownSemanticPresentation.cs" @'
         // 文本编辑会使标记位移：中止进行中的淡入，避免把旧 alpha 施加到新布局的标记上。
