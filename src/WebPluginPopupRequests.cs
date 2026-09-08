@@ -27,6 +27,27 @@ internal static class WebPluginPopupRequests
                 manifest, entryPath, workspace, context, data,
                 message => send(new { type = "popupMessage", message }),
                 error => send(new { type = "popupError", code = "web_popup_failed", message = error })));
+
+            var failureSent = false;
+            void SendOpenFailure(PaperPluginPopupFailure failure)
+            {
+                if (failureSent)
+                {
+                    return;
+                }
+
+                failureSent = true;
+                send(new { type = "popupError", code = failure.Code, message = failure.Message });
+            }
+
+            // The shell is shown after ContextMenu dismissal. Subscribe to future failure first,
+            // then inspect the latched state in case creation failed before this subscription.
+            popup.OpenFailed += SendOpenFailure;
+            if (popup.OpenFailure is { } openFailure)
+            {
+                SendOpenFailure(openFailure);
+            }
+
             return new { isOpen = popup.IsOpen };
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or KeyNotFoundException)
