@@ -23,7 +23,7 @@
     <Compile Include="..\..\src\MarkdownSemanticCollapseLayout.cs" Link="MarkdownSemanticCollapseLayout.cs" />
     <Compile Include="..\..\src\MarkdownFencedCodeScanner.cs" Link="MarkdownFencedCodeScanner.cs" />
     <Compile Include="..\..\src\MarkdownListEditing.cs" Link="MarkdownListEditing.cs" />
-    <Compile Include="..\..\src\MarkdownQuoteNormalization.cs" Link="MarkdownQuoteNormalization.cs" />
+    <Compile Include="..\..\src\MarkdownQuoteMarkers.cs" Link="MarkdownQuoteMarkers.cs" />
     <Compile Include="..\..\src\MarkdownImageReferences.cs" Link="MarkdownImageReferences.cs" />
     <Compile Include="..\..\src\TodoClipboardFormatter.cs" Link="TodoClipboardFormatter.cs" />
   </ItemGroup>

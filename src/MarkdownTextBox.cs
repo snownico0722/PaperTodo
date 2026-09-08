@@ -178,8 +178,6 @@ public sealed partial class MarkdownTextBox : TextEditor
             ? mode
             : MarkdownRenderModes.Enhanced;
         RefreshVisualStyle();
-        // 切进 Full（可编辑）时把既有惰性续行按层级补齐一次；载入时若先 Text 后切档也由此覆盖。
-        TryQueueQuotePrefixFill();
     }
 
     /// <summary>Full 档控制符显灵时是否启用短淡入动画（供语义渲染层实时读取）。</summary>

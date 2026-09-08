@@ -1150,3 +1150,9 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - **触发**：元素层真塌缩最初用「1 个 visual column + U+200B 零宽字符 run」占位。但 U+200B 不只零宽，还带 Unicode「允许在此断行」语义，会在隐藏标记两端引入幻影断行点——如 `**foo**bar` 本应按连续的 `foobarbaz` 排版，却可能在 `foo`/`bar` 之间被断行。
 - **决定**：占位 run 改为 WPF 原生 `TextHidden`（`System.Windows.Media.TextFormatting`）——其语义就是「表示一段隐藏内容」，占用一个文本位置但零 advance、无字形、不产生断行。`CollapsedSyntaxElement` 的 `VisualLength` 恒为 1，故长度取 `VisualLength`（`new TextHidden(VisualLength)`），**不可取被隐藏的源码字符数**：AvalonEdit `VisualLineTextSource.GetTextRun` 强制 `run.Length > 0` 且 `≤ element.VisualLength`，传 `documentLength` 会抛异常。
 - **证据**：`src/MarkdownSemanticPresentation.Collapse.cs` `CollapsedSyntaxElement.CreateTextRun`。Architecture 只写「塌缩为 ~0 宽单列」未指名 U+200B，无需改动。
+
+### Follow-up：引用显示不自动改写源文（2026-09）
+
+- **触发**：为惰性引用续行补写 `>` 的路径，把 `QuoteLevel > 0` 且物理行首扫描不到 `>` 当成缺少引用前缀。合法的 `- > a` 会因此被改成 `> - > a`，改变容器结构；Dispatcher 中的补写还会另建 Undo group。
+- **决定**：删除载入、切档及含换行变更后的整篇补写。显示层读取 Markdig 语义与原始 source，不为缩进重写 Markdown；用户按 Enter 的引用续行保留在输入层。复杂引用的视觉缩进差异不通过源码规范化消除。
+- **证据**：`src/MarkdownTextBox.QuoteEditing.cs`、`src/MarkdownQuoteMarkers.cs`；`tests/PaperTodo.MarkdownEditingChecks` 验证 Full 切换不改源码、插入/撤销/重做与主动回车续行。
