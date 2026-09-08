@@ -482,6 +482,9 @@ public sealed partial class AppController
                 _visibilityShortcutVisibleLinkedPaperIds,
                 StringComparer.Ordinal);
 
+        // Plugin digit aliases share the same OS registration space. Release them before changing
+        // the digit mode so built-in defaults are applied atomically against the desired mode.
+        SuspendPluginShortcutRegistrations();
         State.OpenEdgeCapsuleShortcutAtCursor = true;
         State.DistinguishNumpadShortcutDigits = false;
         State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
@@ -492,6 +495,7 @@ public sealed partial class AppController
         if (_shortcutApplyFailure == GlobalShortcutRegistrationFailure.None &&
             !_shortcutApplyFailureStatus.HasValue)
         {
+            RefreshPluginShortcuts();
             return;
         }
 
@@ -500,6 +504,7 @@ public sealed partial class AppController
         State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts =
             previousPreserveLinkedHidden;
         _visibilityShortcutVisibleLinkedPaperIds = previousVisibilitySnapshot;
+        RefreshPluginShortcuts();
         RefreshShortcutSettingsUi();
     }
 
