@@ -59,7 +59,6 @@ internal sealed partial class MarkdownSemanticPresentation
                     var text = document.GetText(line);
                     var container = MarkdownContainerPrefix.Parse(
                         text,
-                        semantic.QuoteLevel,
                         snapshot,
                         line.Offset,
                         line.EndOffset);
