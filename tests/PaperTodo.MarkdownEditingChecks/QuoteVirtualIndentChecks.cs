@@ -24,6 +24,7 @@ internal static class QuoteVirtualIndentChecks
         CheckSemanticContainerOrder();
         CheckTaskOwner();
         CheckContinuationIndentComesFromContext();
+        CheckIndentedLookalikeUsesMarkdigMeaning();
         Console.WriteLine("PASS Markdig-backed quote/list container mapping");
     }
 
@@ -55,6 +56,15 @@ internal static class QuoteVirtualIndentChecks
             "Markdig list context keeps the physical quote after four-space content indent");
         Expect(prefix.ContentStart == 6,
             "content starts after the real quote marker, not after a synthetic three-space rule");
+    }
+
+    private static void CheckIndentedLookalikeUsesMarkdigMeaning()
+    {
+        var prefix = ParseLine("    > b", 0);
+        Expect(prefix.QuoteLevel == 0,
+            "four-space indented standalone row is code, not a quote guessed from its characters");
+        Expect(prefix.Tokens.Count == 0,
+            "no quote token is fabricated when Markdig did not parse a quote container");
     }
 
     private static void ExpectNoMissingQuote(string markdown, int lineZero, string message)
