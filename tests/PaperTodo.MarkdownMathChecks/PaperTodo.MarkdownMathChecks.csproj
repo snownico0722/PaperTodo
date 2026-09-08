@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="Markdig" Version="1.3.2" />
+    <Compile Include="..\..\src\MarkdownSemanticDocument.cs" Link="MarkdownSemanticDocument.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.cs" Link="MarkdownSemanticSnapshot.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Blocks.cs" Link="MarkdownSemanticSnapshot.Blocks.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Inlines.cs" Link="MarkdownSemanticSnapshot.Inlines.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Links.cs" Link="MarkdownSemanticSnapshot.Links.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Html.cs" Link="MarkdownSemanticSnapshot.Html.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Escapes.cs" Link="MarkdownSemanticSnapshot.Escapes.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Math.cs" Link="MarkdownSemanticSnapshot.Math.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Compatibility.cs" Link="MarkdownSemanticSnapshot.Compatibility.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.Incremental.cs" Link="MarkdownSemanticSnapshot.Incremental.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticSnapshot.PlainText.cs" Link="MarkdownSemanticSnapshot.PlainText.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticReveal.cs" Link="MarkdownSemanticReveal.cs" />
+    <Compile Include="..\..\src\MarkdownSemanticCollapseLayout.cs" Link="MarkdownSemanticCollapseLayout.cs" />
+    <Compile Include="..\..\src\MarkdownFencedCodeScanner.cs" Link="MarkdownFencedCodeScanner.cs" />
+    <Compile Include="..\..\src\MarkdownContainerPrefix.cs" Link="MarkdownContainerPrefix.cs" />
+    <Compile Include="..\..\src\MarkdownListEditing.cs" Link="MarkdownListEditing.cs" />
+    <Compile Include="..\..\src\MarkdownQuoteMarkers.cs" Link="MarkdownQuoteMarkers.cs" />
+    <Compile Include="..\..\src\MarkdownImageReferences.cs" Link="MarkdownImageReferences.cs" />
+    <Compile Include="..\..\src\MarkdownMathSource.cs" Link="MarkdownMathSource.cs" />
+    <Compile Include="..\..\src\TodoClipboardFormatter.cs" Link="TodoClipboardFormatter.cs" />
+  </ItemGroup>
+</Project>
