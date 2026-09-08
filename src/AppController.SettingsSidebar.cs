@@ -170,10 +170,10 @@ public sealed partial class AppController
         var closeButton = new Button
         {
             Content = closeGlyph,
-            Width = 28,
+            Width = 26,
             Height = 20,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = new Thickness(0, 0, 1, 0),
             BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
