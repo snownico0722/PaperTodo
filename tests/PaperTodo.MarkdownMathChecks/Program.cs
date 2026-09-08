@@ -13,7 +13,7 @@ internal static class Program
             ("multiline display math", MultilineDisplayMath),
             ("code regions exclude math", CodeRegionsExcludeMath),
             ("escaped and currency dollars stay text", DollarTextBoundaries),
-            ("links inside math stay formula source", LinksInsideMath),
+            ("Markdown links exclude math", MarkdownLinksExcludeMath),
             ("CRLF display math", CrLfDisplayMath),
             ("unclosed display math stays source", UnclosedDisplayMath),
             ("block delimiter edits force exact parse", BlockDelimiterEditForcesExactParse)
@@ -103,12 +103,12 @@ $$
         Assert(!snapshot.Spans.Any(IsMath), "Escaped/currency dollars were misread as math.");
     }
 
-    private static void LinksInsideMath()
+    private static void MarkdownLinksExcludeMath()
     {
-        const string source = "Formula $https://example.com/x$.";
+        const string source = "[$x$](https://example.com)";
         var snapshot = MarkdownSemanticSnapshot.Parse(source);
-        Assert(snapshot.Spans.Count(IsMath) == 1, "Formula URL was not parsed as math.");
-        Assert(snapshot.Links.Count == 0, "Formula URL leaked into clickable-link semantics.");
+        Assert(!snapshot.Spans.Any(IsMath), "Math escaped a Markdown-owned link range.");
+        Assert(snapshot.Links.Count == 1, "The surrounding Markdown link was lost.");
     }
 
     private static void CrLfDisplayMath()
