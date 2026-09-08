@@ -154,7 +154,6 @@ public sealed partial class AppController
         var closeGlyph = new Path
         {
             Data = Geometry.Parse("M 1,1 L 7,7 M 7,1 L 1,7"),
-            Stroke = TrayWeakTextBrush,
             StrokeThickness = 1.2,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
@@ -166,6 +165,15 @@ public sealed partial class AppController
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
+        closeGlyph.SetBinding(
+            Shape.StrokeProperty,
+            new System.Windows.Data.Binding(nameof(Control.Foreground))
+            {
+                RelativeSource = new System.Windows.Data.RelativeSource(
+                    System.Windows.Data.RelativeSourceMode.FindAncestor,
+                    typeof(Button),
+                    1)
+            });
 
         var closeButton = new Button
         {
