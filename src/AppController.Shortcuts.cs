@@ -1461,80 +1461,23 @@ public sealed partial class AppController
         return ordered;
     }
 
-    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = DeepCapsuleTitleMeasureLimitText(),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, Action onClick)
-        {
-            var glyphText = new TextBlock
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () =>
             {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
+                var current = State.DeepCapsuleTitleMeasureCharacterLimit;
+                SetDeepCapsuleTitleMeasureCharacterLimit(
+                    current == 0 ? PaperTitles.MaxConfigurableTitleLength : current - 1);
+            },
+            () =>
             {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                onClick();
-                valueText.Text = DeepCapsuleTitleMeasureLimitText();
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? PaperTitles.MaxConfigurableTitleLength : current - 1);
-        }));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? 0 : current >= PaperTitles.MaxConfigurableTitleLength ? 0 : current + 1);
-        }));
-
-        container.Child = grid;
-        return container;
-    }
+                var current = State.DeepCapsuleTitleMeasureCharacterLimit;
+                SetDeepCapsuleTitleMeasureCharacterLimit(
+                    current == 0
+                        ? 0
+                        : current >= PaperTitles.MaxConfigurableTitleLength ? 0 : current + 1);
+            });
 
     private string DeepCapsuleTitleMeasureLimitText()
     {

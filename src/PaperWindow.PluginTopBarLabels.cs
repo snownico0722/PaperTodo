@@ -11,24 +11,10 @@ public sealed partial class PaperWindow
     private static bool _pluginTopBarLabelsLoadedHandlerRegistered;
     private StackPanel? _pluginTopBarLabelsHost;
 
-    internal static void EnsurePluginTopBarLabelsLoadedHandler()
-    {
-        if (_pluginTopBarLabelsLoadedHandlerRegistered)
-        {
-            return;
-        }
-        _pluginTopBarLabelsLoadedHandlerRegistered = true;
-        EventManager.RegisterClassHandler(
-            typeof(PaperWindow),
-            LoadedEvent,
-            new RoutedEventHandler((sender, _) =>
-            {
-                if (sender is PaperWindow window && !window.IsClosed)
-                {
-                    window.RefreshPluginTopBarLabels();
-                }
-            }));
-    }
+    internal static void EnsurePluginTopBarLabelsLoadedHandler() =>
+        EnsurePluginLoadedRefreshHandler(
+            ref _pluginTopBarLabelsLoadedHandlerRegistered,
+            static window => window.RefreshPluginTopBarLabels());
 
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     {

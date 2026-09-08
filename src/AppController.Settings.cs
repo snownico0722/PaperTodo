@@ -545,18 +545,6 @@ public sealed partial class AppController
         RebuildTrayMenu();
     }
 
-    private UIElement CreateMarkdownRenderSegmentSelector()
-    {
-        var segments = new[]
-        {
-            (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
-            (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced"))
-        };
-
-        return CreateSegmentSelector(segments, State.MarkdownRenderMode, SetMarkdownRenderMode);
-    }
-
     private void SetImageReferenceTextMode(string mode)
     {
         var normalized = ImageReferenceTextModes.Normalize(mode);
@@ -625,70 +613,11 @@ public sealed partial class AppController
         ApplyTypographySettingsChange();
     }
 
-    private UIElement CreateOverallFontScaleStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = OverallFontScaleText(),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, double delta)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                SetOverallFontScale(State.Zoom + delta);
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, -OverallFontScales.Step));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, OverallFontScales.Step));
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateOverallFontScaleStepper() =>
+        CreateSettingsStepper(
+            OverallFontScaleText,
+            () => SetOverallFontScale(State.Zoom - OverallFontScales.Step),
+            () => SetOverallFontScale(State.Zoom + OverallFontScales.Step));
 
     private string OverallFontScaleText()
     {
@@ -871,72 +800,11 @@ public sealed partial class AppController
         return container;
     }
 
-    private UIElement CreateMaxTitleLengthStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, Action onClick)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                onClick();
-                valueText.Text = State.MaxTitleLength.ToString(CultureInfo.InvariantCulture);
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, () => SetMaxTitleLength(State.MaxTitleLength - 1)));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, () => SetMaxTitleLength(State.MaxTitleLength + 1)));
-
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateMaxTitleLengthStepper() =>
+        CreateSettingsStepper(
+            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
+            () => SetMaxTitleLength(State.MaxTitleLength - 1),
+            () => SetMaxTitleLength(State.MaxTitleLength + 1));
 
     private void SetMaxTitleLength(int value)
     {
@@ -1195,71 +1063,6 @@ public sealed partial class AppController
         column.Children.Add(content);
     }
 
-    private static void MovePluginMoreSettingsButtonsToTail(DependencyObject root)
-    {
-        if (root is Panel panel)
-        {
-            Button? moreButton = null;
-            for (var index = panel.Children.Count - 1; index >= 0; index--)
-            {
-                var child = panel.Children[index];
-                if (child is Button directButton && IsPluginMoreSettingsButton(directButton))
-                {
-                    moreButton = directButton;
-                    panel.Children.RemoveAt(index);
-                    continue;
-                }
-
-                if (child is WrapPanel wrap)
-                {
-                    var nestedButton = wrap.Children
-                        .OfType<Button>()
-                        .FirstOrDefault(IsPluginMoreSettingsButton);
-                    if (nestedButton != null)
-                    {
-                        wrap.Children.Remove(nestedButton);
-                        moreButton = nestedButton;
-                        if (wrap.Children.Count == 1)
-                        {
-                            var remaining = wrap.Children[0];
-                            wrap.Children.RemoveAt(0);
-                            panel.Children.RemoveAt(index);
-                            panel.Children.Insert(index, remaining);
-                        }
-                        else if (wrap.Children.Count == 0)
-                        {
-                            panel.Children.RemoveAt(index);
-                        }
-                    }
-                }
-            }
-
-            foreach (UIElement child in panel.Children)
-            {
-                MovePluginMoreSettingsButtonsToTail(child);
-            }
-
-            if (moreButton != null)
-            {
-                moreButton.Margin = new Thickness(0, 8, 0, 0);
-                moreButton.HorizontalAlignment = HorizontalAlignment.Left;
-                panel.Children.Add(moreButton);
-            }
-            return;
-        }
-
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < count; index++)
-        {
-            MovePluginMoreSettingsButtonsToTail(VisualTreeHelper.GetChild(root, index));
-        }
-    }
-
-    private static bool IsPluginMoreSettingsButton(Button button) =>
-        string.Equals(
-            button.Content?.ToString(),
-            Strings.Get("PluginsMoreSettings"),
-            StringComparison.Ordinal);
 
     private UIElement BuildLabsWindowCoordinationSettings()
     {

@@ -17,24 +17,10 @@ public sealed partial class PaperWindow
     private bool _pluginTodoActionHooksInstalled;
     private int _pluginTodoActionsAppliedRowsGeneration = -1;
 
-    internal static void EnsurePluginTodoActionsLoadedHandler()
-    {
-        if (_pluginTodoActionsLoadedHandlerRegistered)
-        {
-            return;
-        }
-        _pluginTodoActionsLoadedHandlerRegistered = true;
-        EventManager.RegisterClassHandler(
-            typeof(PaperWindow),
-            LoadedEvent,
-            new RoutedEventHandler((sender, _) =>
-            {
-                if (sender is PaperWindow window && !window.IsClosed)
-                {
-                    window.RefreshPluginTodoActions();
-                }
-            }));
-    }
+    internal static void EnsurePluginTodoActionsLoadedHandler() =>
+        EnsurePluginLoadedRefreshHandler(
+            ref _pluginTodoActionsLoadedHandlerRegistered,
+            static window => window.RefreshPluginTodoActions());
 
     internal void RefreshPluginTodoActions(string? todoId = null)
     {
