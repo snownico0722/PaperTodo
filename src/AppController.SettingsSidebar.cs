@@ -101,7 +101,7 @@ public sealed partial class AppController
         root.Children.Add(separator);
 
         var pageArea = new Grid();
-        pageArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
+        pageArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
         pageArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(pageArea, 2);
         root.Children.Add(pageArea);
@@ -144,7 +144,7 @@ public sealed partial class AppController
     {
         var closeRow = new Grid
         {
-            Height = 32,
+            Height = 20,
             Background = Brushes.Transparent,
             Cursor = Cursors.SizeAll
         };
@@ -154,9 +154,9 @@ public sealed partial class AppController
         {
             Content = "×",
             Width = 28,
-            Height = 24,
+            Height = 20,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 4, 4, 0),
+            Margin = new Thickness(0, 0, 4, 0),
             BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
