@@ -84,23 +84,13 @@ public sealed partial class AppController
         };
 
         var root = new Grid();
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(158) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var titleRow = BuildSettingsSidebarTitleRow(window);
-        Grid.SetRow(titleRow, 0);
-        root.Children.Add(titleRow);
-
-        var body = new Grid();
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(158) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetRow(body, 1);
-        root.Children.Add(body);
-
-        var navigation = BuildSettingsSidebarNavigation();
+        var navigation = BuildSettingsSidebarNavigation(window);
         Grid.SetColumn(navigation, 0);
-        body.Children.Add(navigation);
+        root.Children.Add(navigation);
 
         var separator = new Border
         {
@@ -108,11 +98,21 @@ public sealed partial class AppController
             Opacity = 0.65
         };
         Grid.SetColumn(separator, 1);
-        body.Children.Add(separator);
+        root.Children.Add(separator);
+
+        var pageArea = new Grid();
+        pageArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
+        pageArea.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(pageArea, 2);
+        root.Children.Add(pageArea);
+
+        var closeRow = BuildSettingsSidebarCloseRow(window);
+        Grid.SetRow(closeRow, 0);
+        pageArea.Children.Add(closeRow);
 
         var pageHost = BuildSettingsPageHost();
-        Grid.SetColumn(pageHost, 2);
-        body.Children.Add(pageHost);
+        Grid.SetRow(pageHost, 1);
+        pageArea.Children.Add(pageHost);
 
         frame.Child = root;
         return frame;
@@ -127,9 +127,55 @@ public sealed partial class AppController
             Cursor = Cursors.SizeAll,
             Margin = new Thickness(14, 4, 10, 0)
         };
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.MouseLeftButtonDown += (_, e) =>
+        AttachSettingsSidebarDragBehavior(titleRow, window);
+
+        titleRow.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("TraySettings"),
+            Foreground = TrayTextBrush,
+            FontSize = AppTypography.Scale(15),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        return titleRow;
+    }
+
+    private Grid BuildSettingsSidebarCloseRow(Window window)
+    {
+        var closeRow = new Grid
+        {
+            Height = 32,
+            Background = Brushes.Transparent,
+            Cursor = Cursors.SizeAll
+        };
+        AttachSettingsSidebarDragBehavior(closeRow, window);
+
+        var closeButton = new Button
+        {
+            Content = "×",
+            Width = 28,
+            Height = 24,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 4, 0),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.Transparent,
+            Foreground = TrayWeakTextBrush,
+            FontFamily = AppTypography.SymbolFontFamily,
+            FontSize = AppTypography.Scale(16),
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Style = BuildSettingsCloseButtonStyle()
+        };
+        closeButton.Click += (_, _) => window.Close();
+        closeRow.Children.Add(closeButton);
+        return closeRow;
+    }
+
+    private void AttachSettingsSidebarDragBehavior(UIElement surface, Window window)
+    {
+        surface.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ChangedButton != MouseButton.Left)
             {
@@ -151,45 +197,26 @@ public sealed partial class AppController
                 RefreshSettingsSidebarAfterMonitorChange(window);
             }
         };
-
-        titleRow.Children.Add(new TextBlock
-        {
-            Text = Strings.Get("TraySettings"),
-            Foreground = TrayTextBrush,
-            FontSize = AppTypography.Scale(15),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var closeButton = new Button
-        {
-            Content = "×",
-            Width = 28,
-            Height = 24,
-            Padding = new Thickness(0),
-            BorderThickness = new Thickness(1),
-            Background = Brushes.Transparent,
-            Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(16),
-            Cursor = Cursors.Hand,
-            Focusable = false,
-            Style = BuildSettingsCloseButtonStyle()
-        };
-        closeButton.Click += (_, _) => window.Close();
-        Grid.SetColumn(closeButton, 1);
-        titleRow.Children.Add(closeButton);
-        return titleRow;
     }
 
-    private UIElement BuildSettingsSidebarNavigation()
+    private UIElement BuildSettingsSidebarNavigation(Window window)
     {
+        var shell = new Border
+        {
+            Background = Theme.Tint((byte)(Theme.IsDark ? 12 : 8)),
+            CornerRadius = new CornerRadius(9, 0, 0, 9),
+            Margin = new Thickness(1, 1, 0, 1)
+        };
         var root = new DockPanel
         {
             LastChildFill = true,
-            Background = Theme.Tint((byte)(Theme.IsDark ? 12 : 8)),
-            Margin = new Thickness(1, 0, 0, 1)
+            Background = Brushes.Transparent
         };
+        shell.Child = root;
+
+        var titleRow = BuildSettingsSidebarTitleRow(window);
+        DockPanel.SetDock(titleRow, Dock.Top);
+        root.Children.Add(titleRow);
 
         var footer = new StackPanel
         {
@@ -232,7 +259,7 @@ public sealed partial class AppController
             CanContentScroll = false,
             PanningMode = PanningMode.VerticalOnly
         });
-        return root;
+        return shell;
     }
 
     private IEnumerable<SettingsPage> SettingsPages()
@@ -324,26 +351,16 @@ public sealed partial class AppController
         var root = new DockPanel
         {
             LastChildFill = true,
-            Margin = new Thickness(16, 12, 10, 14)
+            Margin = new Thickness(16, 0, 10, 14)
         };
-
-        var title = new TextBlock
-        {
-            Text = SettingsPageLabel(_settingsPage),
-            Foreground = TrayTextBrush,
-            FontSize = AppTypography.Scale(19),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(8, 0, 8, 12)
-        };
-        DockPanel.SetDock(title, Dock.Top);
-        root.Children.Add(title);
 
         // Advanced blocks extend their backgrounds 8 DIPs beyond the aligned controls.
-        // Keep that space inside the viewport so scrolling does not clip rounded borders.
+        // Keep that space inside the viewport, plus a little extra on the scroll edge so
+        // rounded right borders do not land on the clipping boundary.
         var content = new Border
         {
             Width = SettingsContentWidth() + 16,
-            Padding = new Thickness(8, 0, 8, 0),
+            Padding = new Thickness(8, 0, 12, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = BuildSettingsPage()
         };
