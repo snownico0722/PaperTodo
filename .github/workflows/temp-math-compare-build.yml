@@ -1,0 +1,51 @@
+name: Temporary math comparison build
+
+on:
+  push:
+    branches:
+      - feat/markdown-math-wpf
+      - feat/markdown-math-ratex
+    paths:
+      - .github/workflows/temp-math-compare-build.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish self-contained win-x64 build
+        run: |
+          $engine = if ($env:GITHUB_REF_NAME -like '*ratex*') { 'ratex' } else { 'wpf' }
+          $publishDir = Join-Path $env:RUNNER_TEMP "publish-$engine"
+          dotnet restore .\PaperTodo.csproj -r win-x64
+          dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -o $publishDir
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+
+          New-Item -ItemType Directory -Path .\compare-builds -Force | Out-Null
+          $zip = ".\compare-builds\PaperTodo-math-$engine-win-x64-selfcontained.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zip -CompressionLevel Optimal
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f -- $zip
+          git commit -m "chore: add temporary $engine comparison build"
+          git push origin HEAD:${{ github.ref_name }}
