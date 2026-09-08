@@ -5,6 +5,11 @@ The bridge accepts UTF-8 LaTeX math, delegates parsing/layout/rasterization to
 [RaTeX](https://github.com/erweixin/RaTeX), and returns a transparent PNG plus logical dimensions
 and baseline. It does not own note content or create a second Markdown document.
 
+PaperTodo recognizes `$...$` inline formulas and `$$...$$` display formulas, including display
+content spanning multiple source lines. The semantic scanner also understands the conventional
+`\(...\)` and `\[...\]` aliases while keeping code, links, images, escaped delimiters, and ordinary
+currency text outside formula ranges.
+
 RaTeX is pinned in `Cargo.toml` to commit
 `c902516816cdc84519827d8b46d1cd40270d0451`. The `embed-fonts` feature embeds the KaTeX math
 fonts used by RaTeX, so a deployed PaperTodo directory only needs `papertodo_math.dll`.
