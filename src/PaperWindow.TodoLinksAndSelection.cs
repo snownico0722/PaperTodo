@@ -937,6 +937,11 @@ public sealed partial class PaperWindow
             DragDrop.PreviewDropEvent,
             new DragEventHandler((_, e) =>
             {
+                if (!HasTodoFileDrop(e.Data))
+                {
+                    return;
+                }
+
                 try
                 {
                     var paths = GetTodoFileDropPaths(e.Data);
@@ -988,6 +993,12 @@ public sealed partial class PaperWindow
 
     private void UpdateTodoPathDropEffect(Border row, DragEventArgs e)
     {
+        if (!HasTodoFileDrop(e.Data))
+        {
+            ResetTodoPathDropVisual(row);
+            return;
+        }
+
         var paths = GetTodoFileDropPaths(e.Data);
         if (paths.Length == 1)
         {
@@ -1002,6 +1013,18 @@ public sealed partial class PaperWindow
             e.Effects = DragDropEffects.None;
         }
         e.Handled = true;
+    }
+
+    private static bool HasTodoFileDrop(IDataObject data)
+    {
+        try
+        {
+            return data.GetDataPresent(DataFormats.FileDrop);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string[] GetTodoFileDropPaths(IDataObject data)

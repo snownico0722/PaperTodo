@@ -243,6 +243,16 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 具体 fallback 次序、尺寸和 ready 时序属于当前 contract/代码实现；为什么形成这些边界见 D-018。
 
+### 5.6 插件右键入口、图片读取与临时弹窗
+
+`PluginPaperActionRegistry` 只拥有 Runtime 对指定纸片的文字菜单贡献；`PaperWindow` 在既有右键菜单中呈现并分发，注册替换、目标删除与 Runtime 结束撤销旧回调。它不构建第二套顶栏，也不改变胶囊呈现或命中机制。
+
+图片读取由 session / Runtime facade 检查 `notes.read`，进入 `PaperCommandService.ReadNoteImage` → `NoteImageStore.TryReadOwnedImage`，在既有存储锁内检查笔记归属与编码大小并返回独立字节，不复制持久化 authority。
+
+`PluginPopupHost` 为既有 session / Runtime 承载一个临时、可交互窗口。右键与原有顶栏点击传递一次性的屏幕位置；宿主只在显示时约束到工作区，以窗口失活作为关闭边界，不监视原控件或来源窗口的位置。窗口内容与主题由插件处理，壳和释放由宿主处理；它不是 Paper，不延长 provider Runtime 存活，也没有常驻独立窗口入口。
+
+Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。
@@ -424,6 +434,5 @@ same AvalonEdit TextView
 - pipeline 刻意保持最小：precise source location + strikethrough + task list；PaperTodo 既有 bare HTTP(S)、inline HTML 白名单、图片协议等兼容边界在 snapshot/host 层显式处理，不直接启用整包 advanced extensions。
 - syntax fading 不删除源码字符，也不创建 source/rendered offset mapping；`#`、`**`、`[]()` 等 marker 仍占据原布局，只改变 presentation。
 - **Full 档 = 编辑器内 WYSIWYG 块级编辑态**：`MarkdownSemanticPresentation` 在 Full 下把块级装饰「常开」与控制符「按活动块显灵」结合。无需留白/缩进的控制符（ATX 标题 `#`、行内 `**`/`*`/`~~`/反引号、链接 `[]()` 非 label 部分、HTML 标签、转义反斜杠）由 `SyntaxCollapseElementGenerator` 在元素层塌缩为 ~0 宽单列（源码仍留在 Document/undo，不参与排版、内容紧凑重排）；列表/引用/围栏等需要保留视觉格子或整行的控制符维持透明保宽。光标所在块的控制符依 `MarkdownSemanticReveal` 纯判定显灵供源编辑；失焦进入整篇只读渲染。不建第二份 rendered document、不做 HTML/DOM/WebView，也不建 source→rendered offset mapping，仍受 D-019 / D-026 约束。Markdown 表格不在当前语法面内。
-- Full 的语义接线和 presentation 切换只读 Markdown 源码，不为引用缩进自动补写 `>`；用户明确按 Enter 的引用续行仍由输入层作为一次可撤销的编辑处理。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。

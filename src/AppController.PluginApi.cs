@@ -159,6 +159,7 @@ public sealed partial class AppController
                 continue;
             }
 
+            _pluginPaperActions?.RemovePaper(paperId);
             RemovePluginTodoActionsForPaper(paperId);
             RemovePluginTopBarLabelsForPaper(paperId);
 

@@ -7,9 +7,17 @@ namespace PaperTodo;
 
 public static class AnimationHelper
 {
-    public static readonly IEasingFunction SmoothEase = new CubicEase { EasingMode = EasingMode.EaseOut };
-    public static readonly IEasingFunction QuickEase = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-    public static readonly IEasingFunction SnapEase = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut };
+    public static readonly IEasingFunction SmoothEase = FreezeShared(new CubicEase { EasingMode = EasingMode.EaseOut });
+    public static readonly IEasingFunction QuickEase = FreezeShared(new QuadraticEase { EasingMode = EasingMode.EaseOut });
+    public static readonly IEasingFunction SnapEase = FreezeShared(new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut });
+
+    // These fixed curves are immutable Freezables, not per-window animation state.
+    // Freeze before publication so the first caller need not be the UI thread.
+    private static T FreezeShared<T>(T value) where T : Freezable
+    {
+        value.Freeze();
+        return value;
+    }
 
     // 确保元素有 RenderTransform（TransformGroup 包含 ScaleTransform 和 TranslateTransform）
     public static void EnsureTransform(UIElement element)

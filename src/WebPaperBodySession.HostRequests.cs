@@ -24,6 +24,9 @@ internal static class WebPluginWorkspaceRequests
             OptionalString(parameters, "paperId"),
             OptionalBoolean(parameters, "includeBlank") ?? false),
         "notes.get" => host.GetNote(RequiredString(parameters, "paperId")),
+        "noteAssets.readImage" => (host as IPaperNoteAssetsApi
+            ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable."))
+            .ReadImage(RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
         "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters)),
         "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters)),
         "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters)),

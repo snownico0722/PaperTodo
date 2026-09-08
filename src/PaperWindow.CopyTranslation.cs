@@ -13,13 +13,44 @@ public sealed partial class PaperWindow
         EventManager.RegisterClassHandler(
             typeof(PaperWindow),
             UIElement.PreviewKeyDownEvent,
-            new KeyEventHandler(OnCopyTranslationPreviewKeyDown),
+            new KeyEventHandler(OnPaperWindowPreviewKeyDown),
             handledEventsToo: true);
         EventManager.RegisterClassHandler(
             typeof(PaperWindow),
             ContextMenuService.ContextMenuOpeningEvent,
             new ContextMenuEventHandler(OnCopyTranslationContextMenuOpening),
             handledEventsToo: true);
+    }
+
+    private static void OnPaperWindowPreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (e.Handled || sender is not PaperWindow window)
+        {
+            return;
+        }
+
+        // The Todo window also owns list-level undo/redo. While the title TextBox has focus,
+        // keep Ctrl+Z/Ctrl+Y inside that editor so an empty title undo stack cannot fall through
+        // and unexpectedly replay Todo-list history.
+        if (window._isEditingTitle &&
+            window._titleEditBox is { IsKeyboardFocusWithin: true } titleEditBox &&
+            Keyboard.Modifiers == ModifierKeys.Control &&
+            e.Key is Key.Z or Key.Y)
+        {
+            var command = e.Key == Key.Z
+                ? ApplicationCommands.Undo
+                : ApplicationCommands.Redo;
+            if (command.CanExecute(null, titleEditBox))
+            {
+                command.Execute(null, titleEditBox);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        OnCopyTranslationPreviewKeyDown(window, e);
     }
 
     private static void OnCopyTranslationPreviewKeyDown(

@@ -43,6 +43,7 @@
 | D-028 | 大 Note 使用轻量局部重解析与 fence 状态扩窗 | Accepted | Note / Markdown / performance |
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
+| D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
 
 ## 维护规则
 
@@ -1118,7 +1119,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 ### Consequences
 
 - 透明控制符仍占字形宽度，隐藏 `**`/标题 `#` 处会有非 Typora 像素级的空隙；接受为本路线固有权衡，必要时后续可纸色叠绘填缝。
-- Full 编辑态下显灵变化合并到 Render 优先级重绘：单行语法只刷新旧/新光标行的并集，单行动画只刷新当前行；跨行范围保留全量兜底，避免非光标端停留旧帧。文本快照变化仍全量刷新，并覆盖排队中的旧偏移。
+- Full 编辑态下光标移动会触发合并到 Render 优先级的可视区重绘（复用 `ScheduleRedraw` 节流），量级与既有逐键快照红绘一致。
 - Full 档下图片引用文本由 `ImageReferenceTextModes` 统一控制（与 Off/Basic/Enhanced 行为一致）；其余档位行为不变。
 - Markdown 表格、以及“无源字符”的逐字符 WYSIWYG（内容语法分离）仍属范围外/后续。
 
@@ -1151,8 +1152,29 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - **决定**：占位 run 改为 WPF 原生 `TextHidden`（`System.Windows.Media.TextFormatting`）——其语义就是「表示一段隐藏内容」，占用一个文本位置但零 advance、无字形、不产生断行。`CollapsedSyntaxElement` 的 `VisualLength` 恒为 1，故长度取 `VisualLength`（`new TextHidden(VisualLength)`），**不可取被隐藏的源码字符数**：AvalonEdit `VisualLineTextSource.GetTextRun` 强制 `run.Length > 0` 且 `≤ element.VisualLength`，传 `documentLength` 会抛异常。
 - **证据**：`src/MarkdownSemanticPresentation.Collapse.cs` `CollapsedSyntaxElement.CreateTextRun`。Architecture 只写「塌缩为 ~0 宽单列」未指名 U+200B，无需改动。
 
-### Follow-up：引用显示不自动改写源文（2026-09）
+---
 
-- **触发**：为惰性引用续行补写 `>` 的路径，把 `QuoteLevel > 0` 且物理行首扫描不到 `>` 当成缺少引用前缀。合法的 `- > a` 会因此被改成 `> - > a`，改变容器结构；Dispatcher 中的补写还会另建 Undo group。
-- **决定**：删除载入、切档及含换行变更后的整篇补写。显示层读取 Markdig 语义与原始 source，不为缩进重写 Markdown；用户按 Enter 的引用续行保留在输入层。复杂引用的视觉缩进差异不通过源码规范化消除。
-- **证据**：`src/MarkdownTextBox.QuoteEditing.cs`、`src/MarkdownQuoteMarkers.cs`；`tests/PaperTodo.MarkdownEditingChecks` 验证 Full 切换不改源码、插入/撤销/重做与主动回车续行。
+## D-031 — 插件弹窗只保留一次定位与失焦关闭
+
+**Status:** Accepted
+
+### Context
+
+插件需要从顶栏按钮或纸片右键菜单打开鼠标附近的小界面。#198 曾把这组入口扩展为普通独立窗口、锚定浮层与控件来源生命周期；实际交互只要求打开时定位、离开弹窗后关闭。
+
+### Decision
+
+沿用既有顶栏，新增纸片文字菜单入口；点击传纯屏幕位置快照。宿主为现有 session / Runtime 承载一个失焦关闭的窗口，插件绘制内容。图片读取仍走权限 facade 和现有 `NoteImageStore`。暂不引入常驻独立窗口、来源跟踪、菜单图标或窗口编号复用。
+
+### Why
+
+窗口失活已给出明确的临时界面关闭边界。一次定位不需要维护原控件引用、位置跟随或另一套长期锚点 authority；不把展示小界面的需求变成第二个插件运行入口。后续有明确需求时可以独立扩展，不将当前未选能力作为永久禁令。
+
+### Evidence
+
+- `src/PluginPopupHost.cs`。
+- `src/PluginPaperActionRegistry.cs`。
+- `src/PaperCommandService.NoteAssets.cs`。
+- `src/WebPluginPopupContent.cs`。
+- 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
+- 当前合同与用法见 `plugin-samples/README.md`。

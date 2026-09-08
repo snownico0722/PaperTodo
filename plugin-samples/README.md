@@ -772,6 +772,67 @@ papertodo.topBarLabels.set(paperId, labels);
 
 这两类内容只在当前 Runtime 生命周期内存在，不成为长期业务状态。完整示例见 `PaperTodo.Plugin.Protocol21Web`。
 
+### 7.7 纸片右键菜单与轻量弹窗
+
+这组能力只补充现有入口：**纸片右键菜单的文字动作、笔记图片读取、点击处的临时弹窗**。仍使用 Protocol 2.1 的可选接口；不会仅因安装插件而启动 Runtime。
+
+| Native 入口 | Web 入口 | 边界 |
+| --- | --- | --- |
+| `runtimeContext.PaperActions` | Runtime `papertodo.paperActions` | `papers.read`；给指定纸片注册文字菜单项 |
+| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read`；读取指定笔记拥有的图片 |
+| `context.Popups` | Body / Runtime `papertodo.popups` | 内容由插件绘制，宿主负责一次定位和失焦关闭 |
+
+这里的 `context` 可以是 `PaperBodyContext` 或 `PaperPluginRuntimeContext`。右键菜单入口仅由现有 provider Runtime 注册，使用 `SetActionHandler` / `SetActions(paperId, actions)`；Web 对应 `paperActions.set(paperId, actions)` 和 `paperActionInvoked` 事件。菜单项只包含 `Id` 和 `Text`，按声明顺序显示；不要求图标、不提供菜单提示、排序优先级或新的顶栏能力。替换、清除注册后旧菜单回调失效，Runtime 结束时清理所有注册。
+
+右键点击返回 `PaperActionInvocation`：动作编号、当前纸片快照以及 `Position`。**已有的顶栏点击事件也增加可选 `Position` 属性，但保留原五参数构造与解构方法**，已编译的旧插件不需要使用新能力。位置是点击时的物理屏幕像素快照，不是控件引用或长期定位凭证；传回宿主即可，不应自行当成 WPF 逻辑坐标。
+
+Native 用法（在现有 Runtime 的初始化中注册；示例内容类由插件实现）：
+
+```csharp
+var menus = context.PaperActions!;
+var popups = context.Popups!;
+menus.SetActionHandler(action =>
+    popups.Open(action.Position, new() { Width = 320, Height = 240 },
+        popup => new MyPanel(popup, action.Paper.Id)));
+menus.SetActions(paperId, [new() { Id = "details", Text = "查看详情" }]);
+```
+
+`MyPanel` 实现 `IPaperPluginPopupContent`，返回工厂所在线程创建的全新、未挂载 WPF `View`。宿主不接收另一个 `Window`，不迁移已经挂在正文上的控件。工厂收到当前主题、现有 `Controls.ApplySelectStyle` 和关闭回调；内容被接管后，宿主在正常关闭或创建失败时释放一次。主题变化通过 `OnThemeChanged` 通知。
+
+弹窗尺寸使用 WPF 逻辑像素，宿主首次显示时换算到目标显示器并约束在工作区内。每个 session / Runtime 只有一个弹窗，后一次打开替换前一个。**弹窗取得焦点；切到弹窗外关闭，在内部点击输入框、按钮或下拉列表不关闭。** 显示后不再跟随来源控件或窗口；宿主不额外接管 Esc，内容自己处理。插件结束或创建者网页导航时回收。没有独立常驻窗口、多窗口编号、嵌套开窗或长期锚点接口。
+
+Web 在创建者页面中使用（`panel.html` 相对于 manifest `entry` 所在目录）：
+
+```javascript
+papertodo.onEvent(event => {
+  if (event.type === 'paperActionInvoked') {
+    const action = event.action;
+    papertodo.popups.open(action.position, {
+      entry: 'panel.html', width: 320, height: 240,
+      data: { paperId: action.paper.id }
+    }).catch(console.error);
+  }
+});
+await papertodo.paperActions.set(paperId, [{ id: 'details', text: '查看详情' }]);
+```
+
+已有顶栏的 `topBarActionInvoked` 事件同样可以把 `event.action.position` 传给 `popups.open`。普通 Body 没有 `paperActions` 注册权，但有 `popups` 和 `noteAssets`。创建者可调用 `popups.close()`。
+
+弹窗自身是小型前端，不是第二个 Runtime，其页面只得到以下能力：
+
+```javascript
+const { data, theme } = await papertodo.ready;
+// 需要图片时传编号读取，不把大块 Base64 塞进初始 data。
+const image = await papertodo.noteAssets.readImage(data.paperId, imageId);
+document.querySelector('img').src = `data:${image.mime};base64,${image.bytes}`;
+await papertodo.popup.post({ selected: imageId }); // 创建者收到 popupMessage
+papertodo.popup.close();
+```
+
+弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，外部跳转、新窗口和下载被取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
+
+`NoteAssets.ReadImage(paperId, imageId)` 返回 `PaperNoteImage` 的 MIME 和独立编码字节；Web 的 `bytes` 为 Base64。沿用 `notes.read`，只读内置 Markdown 笔记拥有的图片，单次上限 16 MiB。缺失、损坏或归属错误报告 `asset_not_found`，超限报告 `asset_too_large`；不提供图片写入、磁盘路径或内部存储对象，也不承诺整篇笔记的原子导出快照。
+
 ## 8. 胶囊 presentation
 
 ### 8.1 宿主绘制的标准胶囊

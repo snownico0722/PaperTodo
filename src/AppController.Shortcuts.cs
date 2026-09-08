@@ -373,23 +373,7 @@ public sealed partial class AppController
         var resetAll = SettingsTextButton(Strings.Get("SettingsRestorePageDefaults"));
         resetAll.MinWidth = 108;
         resetAll.Padding = new Thickness(18, 0, 18, 0);
-        resetAll.Click += (_, _) =>
-        {
-            EnsureShortcutDraft();
-            foreach (var definition in GlobalShortcutCatalog.Definitions
-                         .Where(item => item.Group != GlobalShortcutGroup.Labs))
-            {
-                _shortcutDraft![definition.Id] = definition.DefaultGesture;
-                _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
-            }
-
-            State.OpenEdgeCapsuleShortcutAtCursor = true;
-            State.DistinguishNumpadShortcutDigits = false;
-            State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
-            ClearVisibilityShortcutRestoreSnapshot();
-            _shortcutRecordingCommandId = null;
-            ApplyShortcutDraft();
-        };
+        resetAll.Click += (_, _) => RestoreShortcutSettingsPageDefaults();
         Grid.SetColumn(resetAll, 1);
         actions.Children.Add(resetAll);
 
@@ -476,6 +460,52 @@ public sealed partial class AppController
         root.Children.Add(rows);
 
         return root;
+    }
+
+    private void RestoreShortcutSettingsPageDefaults()
+    {
+        EnsureShortcutDraft();
+        foreach (var definition in GlobalShortcutCatalog.Definitions
+                     .Where(item => item.Group != GlobalShortcutGroup.Labs))
+        {
+            _shortcutDraft![definition.Id] = definition.DefaultGesture;
+            _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
+        }
+
+        var previousOpenAtCursor = State.OpenEdgeCapsuleShortcutAtCursor;
+        var previousDistinguishNumpad = State.DistinguishNumpadShortcutDigits;
+        var previousPreserveLinkedHidden =
+            State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts;
+        var previousVisibilitySnapshot = _visibilityShortcutVisibleLinkedPaperIds == null
+            ? null
+            : new HashSet<string>(
+                _visibilityShortcutVisibleLinkedPaperIds,
+                StringComparer.Ordinal);
+
+        // Plugin digit aliases share the same OS registration space. Release them before changing
+        // the digit mode so built-in defaults are applied atomically against the desired mode.
+        SuspendPluginShortcutRegistrations();
+        State.OpenEdgeCapsuleShortcutAtCursor = true;
+        State.DistinguishNumpadShortcutDigits = false;
+        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
+        ClearVisibilityShortcutRestoreSnapshot();
+        _shortcutRecordingCommandId = null;
+        ApplyShortcutDraft();
+
+        if (_shortcutApplyFailure == GlobalShortcutRegistrationFailure.None &&
+            !_shortcutApplyFailureStatus.HasValue)
+        {
+            RefreshPluginShortcuts();
+            return;
+        }
+
+        State.OpenEdgeCapsuleShortcutAtCursor = previousOpenAtCursor;
+        State.DistinguishNumpadShortcutDigits = previousDistinguishNumpad;
+        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts =
+            previousPreserveLinkedHidden;
+        _visibilityShortcutVisibleLinkedPaperIds = previousVisibilitySnapshot;
+        RefreshPluginShortcuts();
+        RefreshShortcutSettingsUi();
     }
 
     private static bool SupportsShortcutRecording(SettingsPage page)
