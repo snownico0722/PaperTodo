@@ -2,13 +2,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Rendering;
 
 namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
-    private readonly Dictionary<MathCollapseKey, CollapsedLineSection> _mathCollapsedSections = new();
+    private readonly Dictionary<MathCollapseKey, FoldingSection> _mathFoldings = new();
+    private FoldingManager? _mathFoldingManager;
+    private FoldingMargin? _mathFoldingMargin;
     private MathElementGenerator? _mathElementGenerator;
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
     private bool _syncingMathCollapsedLines;
@@ -17,21 +20,36 @@ internal sealed partial class MarkdownSemanticPresentation
     private readonly record struct MathCollapseKey(int Start, int End);
 
     private readonly record struct MathCollapseTarget(
-        DocumentLine StartLine,
-        DocumentLine EndLine);
+        int Start,
+        int End,
+        bool ShouldFold);
 
     private bool RenderMath =>
         ApplyMarkdownStyle && (_editor.IsPreviewMode || IsFullMode);
 
     private void AttachMathPresentation()
     {
+        // Use AvalonEdit's own folding subsystem for physical continuation lines instead of
+        // manipulating TextView.CollapseLines directly. FoldingManager owns height-tree updates,
+        // visual-line invalidation and document-offset rebasing as one coherent transaction.
+        _mathFoldingManager = FoldingManager.Install(_editor.TextArea);
+        _mathFoldingMargin = _editor.TextArea.LeftMargins
+            .OfType<FoldingMargin>()
+            .FirstOrDefault(margin => ReferenceEquals(margin.FoldingManager, _mathFoldingManager));
+        if (_mathFoldingMargin != null)
+        {
+            // Formula folding is presentation-only; PaperTodo must not expose a code-editor folding
+            // gutter or let the user toggle the internal continuation-line folds manually.
+            _editor.TextArea.LeftMargins.Remove(_mathFoldingMargin);
+        }
+
         _mathElementGenerator = new MathElementGenerator(this);
         _editor.MarkdownPresentationRefreshing += OnMarkdownPresentationRefreshing;
         _editor.SizeChanged += OnMathHostSizeChanged;
 
-        // Formula replacement must win when it starts at the same source offset as a normal
-        // syntax-collapse cell. The redraw raised by Insert is deferred, so continuation lines can
-        // be registered in the height tree immediately afterwards, before visual-line creation.
+        // FoldingManager installs its own marker generator at index 0. Formula replacement must win
+        // at the same source offset, while the stock folding generator remains as a safety net for
+        // any folded span our generator cannot construct in a transient layout frame.
         _editor.TextArea.TextView.ElementGenerators.Insert(0, _mathElementGenerator);
         SyncMathCollapsedLines();
     }
@@ -41,7 +59,6 @@ internal sealed partial class MarkdownSemanticPresentation
         _editor.MarkdownPresentationRefreshing -= OnMarkdownPresentationRefreshing;
         _editor.SizeChanged -= OnMathHostSizeChanged;
         _mathCollapseSyncQueued = false;
-        ClearMathCollapsedLines();
 
         if (_mathElementGenerator != null)
         {
@@ -49,6 +66,14 @@ internal sealed partial class MarkdownSemanticPresentation
             _mathElementGenerator = null;
         }
 
+        ClearMathCollapsedLines();
+        if (_mathFoldingManager != null)
+        {
+            FoldingManager.Uninstall(_mathFoldingManager);
+            _mathFoldingManager = null;
+        }
+
+        _mathFoldingMargin = null;
         _lastRevealedMathSpan = null;
     }
 
@@ -67,10 +92,8 @@ internal sealed partial class MarkdownSemanticPresentation
             return;
         }
 
-        // SizeChanged can run while WPF is still arranging the editor. At that point TextView may
-        // still report the previous width. More importantly, mutating AvalonEdit's collapsed height
-        // tree in the middle of that layout pass can leave its current visual-line anchor stale.
-        // Coalesce resizes and sync once the current layout has settled instead.
+        // SizeChanged can run while WPF is still arranging the editor, before TextView has its final
+        // width. Coalesce resizes and re-evaluate long-formula readability after that layout settles.
         QueueMathCollapseSyncAfterLayout();
     }
 
@@ -91,13 +114,11 @@ internal sealed partial class MarkdownSemanticPresentation
                 }
 
                 _mathCollapseSyncQueued = false;
-                if (_disposed || _mathElementGenerator == null)
+                if (_disposed || _mathElementGenerator == null || _mathFoldingManager == null)
                 {
                     return;
                 }
 
-                // The child TextView now has its final width for this resize. Re-evaluate whether
-                // long formulas should render or stay source, then rebuild at that actual width.
                 SyncMathCollapsedLines();
                 ScheduleRedraw();
             }),
@@ -132,8 +153,6 @@ internal sealed partial class MarkdownSemanticPresentation
         _lastRevealedMathSpan = next;
         if (previous.HasValue || next.HasValue)
         {
-            // Uncollapse before rebuilding the source view; collapse before rebuilding the formula
-            // view. This keeps AvalonEdit's height tree and element generator in agreement.
             SyncMathCollapsedLines();
             ScheduleRedraw();
         }
@@ -144,8 +163,6 @@ internal sealed partial class MarkdownSemanticPresentation
         var revealed = IsMathSpanCurrentlyRevealed(span);
         if (revealed)
         {
-            // Set during layout as well, so a render-mode switch with an unmoved caret still leaves
-            // enough state for the next caret move to restore the formula element.
             _lastRevealedMathSpan = span;
         }
 
@@ -214,14 +231,12 @@ internal sealed partial class MarkdownSemanticPresentation
             MarkdownSemanticSpanKind.BlockMath;
 
     /// <summary>
-    /// A visual element may consume newline characters only when the physical continuation lines
-    /// are registered as collapsed in AvalonEdit's height tree. The opening line remains visible and
-    /// owns the formula object; every later source line through the closing delimiter has zero
-    /// document height until the formula is revealed for editing.
+    /// Cross-line VisualLineElements are only legal when their continuation lines are folded.
+    /// Let FoldingManager own that invariant instead of mutating TextView's HeightTree directly.
     /// </summary>
     private void SyncMathCollapsedLines()
     {
-        if (_disposed || _syncingMathCollapsedLines)
+        if (_disposed || _syncingMathCollapsedLines || _mathFoldingManager == null)
         {
             return;
         }
@@ -230,60 +245,40 @@ internal sealed partial class MarkdownSemanticPresentation
         try
         {
             var desired = BuildMathCollapseTargets();
-            var textView = _editor.TextArea.TextView;
-            var removals = new List<MathCollapseKey>();
-
-            foreach (var existing in _mathCollapsedSections)
+            foreach (var existing in _mathFoldings.ToArray())
             {
                 if (desired.TryGetValue(existing.Key, out var target) &&
-                    existing.Value.IsCollapsed &&
-                    ReferenceEquals(existing.Value.Start, target.StartLine) &&
-                    ReferenceEquals(existing.Value.End, target.EndLine))
+                    existing.Value.StartOffset == target.Start &&
+                    existing.Value.EndOffset == target.End)
                 {
+                    existing.Value.IsFolded = target.ShouldFold;
                     desired.Remove(existing.Key);
                     continue;
                 }
 
-                removals.Add(existing.Key);
-            }
-
-            if (removals.Count == 0 && desired.Count == 0)
-            {
-                return;
-            }
-
-            // Clear old VisualLine objects before touching the height tree. Clearing only after
-            // CollapseLines/Uncollapse leaves a re-entrancy window where WPF can measure with a
-            // pre-change visual line and a post-change collapsed-line tree, which produces either
-            // "Trying to build visual line from collapsed line" or the inverse skipped-line error.
-            // Redraw() drops the cache synchronously; its actual measure is still deferred.
-            textView.Redraw();
-
-            foreach (var key in removals)
-            {
-                if (_mathCollapsedSections.Remove(key, out var section))
-                {
-                    section.Uncollapse();
-                }
+                _mathFoldingManager.RemoveFolding(existing.Value);
+                _mathFoldings.Remove(existing.Key);
             }
 
             foreach (var target in desired)
             {
                 try
                 {
-                    _mathCollapsedSections[target.Key] = textView.CollapseLines(
-                        target.Value.StartLine,
-                        target.Value.EndLine);
+                    var section = _mathFoldingManager.CreateFolding(
+                        target.Value.Start,
+                        target.Value.End);
+                    section.Title = string.Empty;
+                    section.IsFolded = target.Value.ShouldFold;
+                    _mathFoldings[target.Key] = section;
                 }
                 catch (ArgumentException)
                 {
-                    // A concurrent document replacement/deletion can invalidate a line object. The
-                    // generator checks the section table and leaves exact source visible instead.
+                    // A document replacement can invalidate a just-computed semantic range. The next
+                    // semantic refresh rebuilds it; exact Markdown source remains untouched meanwhile.
                 }
                 catch (InvalidOperationException)
                 {
-                    // A detached/disposed TextView likewise falls back to source without affecting
-                    // note data or the undo stack.
+                    // Detached/disposed editor: fail open to source rather than affecting note data.
                 }
             }
         }
@@ -311,28 +306,23 @@ internal sealed partial class MarkdownSemanticPresentation
                 span.Length <= 0 ||
                 span.Start < 0 ||
                 span.End > document.TextLength ||
-                IsMathSpanCurrentlyRevealed(span))
+                !SpansMultipleDocumentLines(span))
             {
                 continue;
             }
 
-            var firstLine = document.GetLineByOffset(span.Start);
-            var lastLine = document.GetLineByOffset(Math.Max(span.Start, span.End - 1));
-            if (lastLine.LineNumber <= firstLine.LineNumber || firstLine.NextLine == null)
-            {
-                continue;
-            }
-
-            // Do not hide continuation lines until WpfMath has produced a valid replacement at the
-            // current font, theme and available width. Unsupported/invalid TeX remains exact source.
+            // Keep a valid section while the caret reveals its source, but leave it unfolded. That
+            // avoids destroying/recreating folding objects on every entry/exit while still exposing
+            // the complete Markdown range for editing.
             if (!TryCreateMathElement(span, out _))
             {
                 continue;
             }
 
             targets[new MathCollapseKey(span.Start, span.End)] = new MathCollapseTarget(
-                firstLine.NextLine,
-                lastLine);
+                span.Start,
+                span.End,
+                !IsMathSpanCurrentlyRevealed(span));
         }
 
         return targets;
@@ -347,8 +337,7 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         var key = new MathCollapseKey(span.Start, span.End);
-        return _mathCollapsedSections.TryGetValue(key, out var section) &&
-            section.IsCollapsed;
+        return _mathFoldings.TryGetValue(key, out var section) && section.IsFolded;
     }
 
     private bool SpansMultipleDocumentLines(MarkdownSemanticSpan span)
@@ -363,21 +352,15 @@ internal sealed partial class MarkdownSemanticPresentation
 
     private void ClearMathCollapsedLines()
     {
-        if (_mathCollapsedSections.Count == 0)
+        if (_mathFoldingManager != null)
         {
-            return;
+            foreach (var section in _mathFoldings.Values.ToArray())
+            {
+                _mathFoldingManager.RemoveFolding(section);
+            }
         }
 
-        // As in SyncMathCollapsedLines, invalidate the old folded VisualLines before restoring
-        // physical line heights so no later measure can reuse a cross-line visual against an
-        // uncollapsed height tree.
-        _editor.TextArea.TextView.Redraw();
-        foreach (var section in _mathCollapsedSections.Values)
-        {
-            section.Uncollapse();
-        }
-
-        _mathCollapsedSections.Clear();
+        _mathFoldings.Clear();
     }
 
     private bool TryCreateMathElement(
@@ -416,7 +399,6 @@ internal sealed partial class MarkdownSemanticPresentation
             : availableWidth / drawing.Width;
         if (!double.IsFinite(scale) || scale < 0.2)
         {
-            // An unreadably small formula is less useful than its exact editable source.
             return false;
         }
 
