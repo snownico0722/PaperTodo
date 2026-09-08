@@ -47,4 +47,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- src/AppController.Settings.cs src/AppController.SettingsSidebar.cs
           git commit -m "fix(settings): preserve vector states and alignment [ci]"
-          git push origin HEAD:${{ github.ref_name }}
+          git fetch origin $env:GITHUB_REF_NAME
+          git rebase "origin/$env:GITHUB_REF_NAME"
+          git push origin "HEAD:$env:GITHUB_REF_NAME"
