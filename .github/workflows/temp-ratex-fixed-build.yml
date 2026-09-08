@@ -1,0 +1,33 @@
+name: Temporary fixed RaTeX build
+
+on:
+  push:
+    branches:
+      - feat/markdown-math-ratex
+    paths:
+      - .github/workflows/temp-ratex-fixed-build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Publish self-contained win-x64
+        shell: pwsh
+        run: |
+          dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o .\ratex-fixed
+          Compress-Archive -Path .\ratex-fixed\* -DestinationPath .\PaperTodo-math-ratex-fixed-win-x64-selfcontained.zip -CompressionLevel Optimal
+      - name: Upload package
+        uses: actions/upload-artifact@v6
+        with:
+          name: PaperTodo-math-ratex-fixed-win-x64-selfcontained
+          path: PaperTodo-math-ratex-fixed-win-x64-selfcontained.zip
+          if-no-files-found: error
+          compression-level: 0
