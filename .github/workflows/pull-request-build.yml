@@ -74,6 +74,9 @@ jobs:
       - name: Markdown math checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownMathChecks\PaperTodo.MarkdownMathChecks.csproj -c Release
 
+      - name: Markdown math layout regression checks
+        run: dotnet run --project .\tests\PaperTodo.MarkdownMathLayoutChecks\PaperTodo.MarkdownMathLayoutChecks.csproj -c Release
+
       - name: Markdown editing checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownEditingChecks\PaperTodo.MarkdownEditingChecks.csproj -c Release
 
