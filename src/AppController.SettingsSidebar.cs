@@ -116,42 +116,6 @@ public sealed partial class AppController
         pageArea.Children.Add(pageHost);
 
         frame.Child = root;
-
-        var checkMarkAlignmentQueued = false;
-        void QueueCheckMarkAlignment()
-        {
-            if (checkMarkAlignmentQueued)
-            {
-                return;
-            }
-
-            checkMarkAlignmentQueued = true;
-            frame.Dispatcher.BeginInvoke(
-                (Action)(() =>
-                {
-                    checkMarkAlignmentQueued = false;
-                    if (frame.IsLoaded)
-                    {
-                        AlignSettingsCheckMarks(frame);
-                    }
-                }),
-                DispatcherPriority.Loaded);
-        }
-
-        frame.Loaded += (_, _) => QueueCheckMarkAlignment();
-
-        var registeredRefreshers =
-            new List<KeyValuePair<string, Action>>(_settingsRegionRefreshers);
-        foreach (var entry in registeredRefreshers)
-        {
-            var refresh = entry.Value;
-            _settingsRegionRefreshers[entry.Key] = () =>
-            {
-                refresh();
-                QueueCheckMarkAlignment();
-            };
-        }
-
         return frame;
     }
 
@@ -224,20 +188,6 @@ public sealed partial class AppController
         closeButton.Click += (_, _) => window.Close();
         closeRow.Children.Add(closeButton);
         return closeRow;
-    }
-
-    private static void AlignSettingsCheckMarks(DependencyObject root)
-    {
-        var childCount = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < childCount; index++)
-        {
-            var child = VisualTreeHelper.GetChild(root, index);
-            if (child is Path { Name: "CheckMark" } checkMark)
-            {
-                checkMark.RenderTransform = new TranslateTransform(-1, -1);
-            }
-            AlignSettingsCheckMarks(child);
-        }
     }
 
     private void AttachSettingsSidebarDragBehavior(UIElement surface, Window window)
