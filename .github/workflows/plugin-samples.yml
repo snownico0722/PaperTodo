@@ -58,9 +58,13 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Restore PaperTodo plugin host
+        shell: pwsh
+        run: dotnet restore .\PaperTodo.csproj --configfile .\NuGet.Config
+
       - name: Build PaperTodo plugin host
         shell: pwsh
-        run: dotnet build .\PaperTodo.csproj -c Release
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
       - name: Run protocol policy checks
         shell: pwsh
@@ -78,175 +82,25 @@ jobs:
             throw "No plugin manifests were found."
           }
           foreach ($manifest in $manifests) {
-            Write-Host "Validating $($manifest.FullName)"
-            $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
-              ConvertFrom-Json -Depth 100
-            if ($document.apiVersion -ne "2.1") {
-              throw "$($manifest.FullName) must target apiVersion 2.1."
-            }
+            node .\scripts\validate-plugin-manifest.mjs $manifest.FullName
           }
 
       - name: Validate capsule sample coverage
         shell: pwsh
-        run: |
-          $sampleDirectories = Get-ChildItem plugin-samples -Directory -Filter "PaperTodo.Plugin.*"
-          foreach ($directory in $sampleDirectories) {
-            $manifestPath = Join-Path $directory.FullName "plugin.json"
-            if (-not (Test-Path $manifestPath)) {
-              continue
-            }
-
-            $source = Get-ChildItem $directory.FullName -File -Recurse |
-              Where-Object { $_.Extension -in ".cs", ".js", ".html" } |
-              ForEach-Object { Get-Content $_.FullName -Raw -Encoding UTF8 } |
-              Out-String
-            if ($source -notmatch 'setCapsulePresentation\s*\(') {
-              throw "$($directory.Name) does not exercise host-rendered capsule presentation."
-            }
-            if ($source -notmatch 'PaperCapsulePresentation\.AutomaticWidth' -and
-                $source -notmatch 'preferredWidth\s*:\s*0') {
-              throw "$($directory.Name) must exercise host-measured capsule width."
-            }
-          }
-
-          $clockSource = Get-Content "plugin-samples/PaperTodo.Plugin.SampleClock/SampleClockPlugin.cs" -Raw -Encoding UTF8
-          if ($clockSource -notmatch 'IPaperCapsuleViewProvider' -or
-              $clockSource -notmatch 'CreateCapsuleView\s*\(') {
-            throw "SampleClock must exercise native custom capsule views."
-          }
+        run: node .\scripts\validate-plugin-capsule-samples.mjs
 
       - name: Validate protocol 2.1 top bar sample
         shell: pwsh
-        run: |
-          $root = "plugin-samples/PaperTodo.Plugin.TopBarWeb"
-          $manifest = Get-Content (Join-Path $root "plugin.json") -Raw -Encoding UTF8 | ConvertFrom-Json -Depth 100
-          $bodySource = Get-Content (Join-Path $root "web/index.html") -Raw -Encoding UTF8
-          $runtimeSource = Get-Content (Join-Path $root "web/runtime.html") -Raw -Encoding UTF8
-
-          if ($manifest.apiVersion -ne "2.1") {
-            throw "TopBarWeb must target apiVersion 2.1."
-          }
-          if ($manifest.capabilities -notcontains "runtime") {
-            throw "TopBarWeb must declare the runtime capability."
-          }
-          if ($bodySource -notmatch "topbar\.paper\.set" -or
-              $bodySource -match "topbar\.global\.set") {
-            throw "TopBarWeb body must stay paper-scoped."
-          }
-          $runtimePatterns = @(
-            "globalTopBar\.setActions",
-            "topBarActionInvoked",
-            "targetPaperId",
-            "papertodo\.workspace\.request\('papers\.get'",
-            "renderMode\s*:\s*'stroke'",
-            "strokeWidth\s*:\s*1\.5",
-            "shortcutInvoked",
-            "runtime\.ping"
-          )
-          foreach ($pattern in $runtimePatterns) {
-            if ($runtimeSource -notmatch $pattern) {
-              throw "TopBarWeb Runtime is missing required protocol 2.1 coverage: $pattern"
-            }
-          }
-
-          $shortcutSettings = @($manifest.settings | Where-Object { $_.type -eq "shortcut" })
-          if ($shortcutSettings.Count -lt 2) {
-            throw "TopBarWeb must cover both host-owned and custom plugin shortcuts."
-          }
-          if (-not ($shortcutSettings | Where-Object { $_.shortcutAction -eq "paper.toggle" })) {
-            throw "TopBarWeb must cover the host-owned paper.toggle shortcut action."
-          }
-          if (-not ($shortcutSettings | Where-Object { $_.shortcutAction -eq "runtime.ping" })) {
-            throw "TopBarWeb must cover a custom Runtime shortcut action."
-          }
-          if ($bodySource -notmatch "papertodo\.paper\.toggleCollapsed" -or
-              $bodySource -notmatch "papertodo\.paper\.hide") {
-            throw "TopBarWeb body must exercise own-paper presentation controls."
-          }
-
-          $workspaceContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperTodoHostContracts.cs" -Raw -Encoding UTF8
-          $paperContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperBodyPluginContracts.cs" -Raw -Encoding UTF8
-          $presentationContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperPresentationContracts.cs" -Raw -Encoding UTF8
-          $runtimeContract = Get-Content "PaperTodo.Plugin.Abstractions/PaperPluginRuntimeContracts.cs" -Raw -Encoding UTF8
-          if ($workspaceContract -match 'TopBar') {
-            throw "Top Bar must not be exposed through IPaperTodoHostApi/Workspace."
-          }
-          if ($paperContract -notmatch 'interface\s+IPaperTopBarApi' -or
-              $paperContract -notmatch 'PaperTopBarSvgRenderMode' -or
-              $paperContract -notmatch 'IPaperPresentationApi' -or
-              $presentationContract -notmatch 'interface\s+IPaperPresentationApi' -or
-              $runtimeContract -notmatch 'interface\s+IPaperGlobalTopBarApi' -or
-              $runtimeContract -notmatch 'interface\s+IPaperGlobalShortcutApi' -or
-              $runtimeContract -notmatch 'interface\s+IPaperPluginRuntimeProvider') {
-            throw "Protocol 2.1 top-bar/Runtime/shortcut/presentation contracts are incomplete."
-          }
+        run: node .\scripts\validate-plugin-topbar-samples.mjs
 
       - name: Validate Web source and runtime copies
         shell: pwsh
-        run: |
-          $source = Join-Path $PWD "plugin-samples/PaperTodo.Plugin.OfficialClockWeb"
-          $runtime = Join-Path $PWD "plugins/official.clock.web"
-          $sourceFiles = @(
-            Get-Item (Join-Path $source "plugin.json")
-            Get-ChildItem (Join-Path $source "web") -File -Recurse
-          ) |
-            ForEach-Object {
-              [pscustomobject]@{
-                Path = [IO.Path]::GetRelativePath($source, $_.FullName)
-                Hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-              }
-            }
-          $runtimeFiles = Get-ChildItem $runtime -File -Recurse |
-            ForEach-Object {
-              [pscustomobject]@{
-                Path = [IO.Path]::GetRelativePath($runtime, $_.FullName)
-                Hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-              }
-            }
-          $difference = Compare-Object $sourceFiles $runtimeFiles -Property Path,Hash
-          if ($difference) {
-            $difference | Format-Table | Out-String | Write-Host
-            throw "Web plugin source and runtime copies are out of sync."
-          }
+        run: node .\scripts\validate-plugin-web-source-sync.mjs
 
       - name: Check Web plugin scripts
         shell: pwsh
-        run: |
-          $htmlFiles = Get-ChildItem plugin-samples,plugins -Recurse -Filter *.html
-          foreach ($html in $htmlFiles) {
-            $content = Get-Content $html.FullName -Raw -Encoding UTF8
-            $matches = [regex]::Matches(
-              $content,
-              '<script(?:\s[^>]*)?>([\s\S]*?)</script>',
-              [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-            for ($index = 0; $index -lt $matches.Count; $index++) {
-              $temporary = Join-Path $env:RUNNER_TEMP (
-                "$($html.BaseName)-$index-" + [Guid]::NewGuid().ToString("N") + ".js")
-              Set-Content $temporary $matches[$index].Groups[1].Value -Encoding UTF8
-              node --check $temporary
-              if ($LASTEXITCODE -ne 0) {
-                exit $LASTEXITCODE
-              }
-            }
-          }
+        run: node --check .\plugin-samples\PaperTodo.Plugin.WebClock\index.js
 
       - name: Rebuild and verify native runtime outputs
         shell: pwsh
-        run: |
-          $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
-            Sort-Object FullName
-          if (-not $projects) {
-            throw "No native plugin sample projects were found."
-          }
-          foreach ($project in $projects) {
-            Write-Host "Rebuilding $($project.FullName)"
-            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
-              -ProjectPath $project.FullName
-            if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-            }
-          }
-          git diff --exit-code -- plugins
-          if ($LASTEXITCODE -ne 0) {
-            throw "Committed native plugin outputs do not match their source projects."
-          }
+        run: .\scripts\build-plugin-native-runtime.ps1 -Verify
