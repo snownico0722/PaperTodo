@@ -177,11 +177,9 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var line = context.VisualLine.FirstDocumentLine;
-            var semantic = snapshot.GetLine(Math.Max(0, line.LineNumber - 1));
             var text = context.Document.GetText(line);
             var container = MarkdownContainerPrefix.Parse(
                 text,
-                semantic.QuoteLevel,
                 snapshot,
                 line.Offset,
                 line.EndOffset);
