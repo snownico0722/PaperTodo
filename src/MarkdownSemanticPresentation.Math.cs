@@ -8,8 +8,16 @@ namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
+    private readonly Dictionary<MathCollapseKey, CollapsedLineSection> _mathCollapsedSections = new();
     private MathElementGenerator? _mathElementGenerator;
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
+    private bool _syncingMathCollapsedLines;
+
+    private readonly record struct MathCollapseKey(int Start, int End);
+
+    private readonly record struct MathCollapseTarget(
+        DocumentLine StartLine,
+        DocumentLine EndLine);
 
     private bool RenderMath =>
         ApplyMarkdownStyle && (_editor.IsPreviewMode || IsFullMode);
@@ -17,15 +25,22 @@ internal sealed partial class MarkdownSemanticPresentation
     private void AttachMathPresentation()
     {
         _mathElementGenerator = new MathElementGenerator(this);
-        // Formula replacement must win when it starts at the same source offset as a normal
-        // syntax-collapse cell.
-        _editor.TextArea.TextView.ElementGenerators.Insert(0, _mathElementGenerator);
+        _editor.MarkdownPresentationRefreshing += OnMarkdownPresentationRefreshing;
         _editor.SizeChanged += OnMathHostSizeChanged;
+
+        // Formula replacement must win when it starts at the same source offset as a normal
+        // syntax-collapse cell. The redraw raised by Insert is deferred, so continuation lines can
+        // be registered in the height tree immediately afterwards, before visual-line creation.
+        _editor.TextArea.TextView.ElementGenerators.Insert(0, _mathElementGenerator);
+        SyncMathCollapsedLines();
     }
 
     private void DetachMathPresentation()
     {
+        _editor.MarkdownPresentationRefreshing -= OnMarkdownPresentationRefreshing;
         _editor.SizeChanged -= OnMathHostSizeChanged;
+        ClearMathCollapsedLines();
+
         if (_mathElementGenerator != null)
         {
             _editor.TextArea.TextView.ElementGenerators.Remove(_mathElementGenerator);
@@ -35,17 +50,31 @@ internal sealed partial class MarkdownSemanticPresentation
         _lastRevealedMathSpan = null;
     }
 
+    private void OnMarkdownPresentationRefreshing()
+    {
+        if (!_disposed)
+        {
+            SyncMathCollapsedLines();
+        }
+    }
+
     private void OnMathHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!_disposed && Math.Abs(e.NewSize.Width - e.PreviousSize.Width) > 0.5)
+        if (_disposed || Math.Abs(e.NewSize.Width - e.PreviousSize.Width) <= 0.5)
         {
-            ScheduleRedraw();
+            return;
         }
+
+        // A formula that was too wide to remain legible may become renderable after widening, or
+        // must fall back to source after narrowing below the minimum scale.
+        SyncMathCollapsedLines();
+        ScheduleRedraw();
     }
 
     private void ResetMathPresentationState()
     {
         _lastRevealedMathSpan = null;
+        SyncMathCollapsedLines();
     }
 
     /// <summary>
@@ -70,16 +99,16 @@ internal sealed partial class MarkdownSemanticPresentation
         _lastRevealedMathSpan = next;
         if (previous.HasValue || next.HasValue)
         {
-            // A block formula may own several DocumentLines. Full invalidation is rare (only at
-            // formula entry/exit) and avoids leaving a stale continuation visual line behind.
+            // Uncollapse before rebuilding the source view; collapse before rebuilding the formula
+            // view. This keeps AvalonEdit's height tree and element generator in agreement.
+            SyncMathCollapsedLines();
             ScheduleRedraw();
         }
     }
 
     private bool IsMathSpanRevealed(MarkdownSemanticSpan span)
     {
-        var revealed = FullRevealEnabled &&
-            MarkdownSemanticReveal.RevealRange(CaretReveal, span.Start, span.End);
+        var revealed = IsMathSpanCurrentlyRevealed(span);
         if (revealed)
         {
             // Set during layout as well, so a render-mode switch with an unmoved caret still leaves
@@ -89,6 +118,10 @@ internal sealed partial class MarkdownSemanticPresentation
 
         return revealed;
     }
+
+    private bool IsMathSpanCurrentlyRevealed(MarkdownSemanticSpan span) =>
+        FullRevealEnabled &&
+        MarkdownSemanticReveal.RevealRange(CaretReveal, span.Start, span.End);
 
     private static bool SameMathRange(
         MarkdownSemanticSpan? left,
@@ -146,6 +179,143 @@ internal sealed partial class MarkdownSemanticPresentation
     private static bool IsMathSpan(MarkdownSemanticSpan span) =>
         span.Kind is MarkdownSemanticSpanKind.InlineMath or
             MarkdownSemanticSpanKind.BlockMath;
+
+    /// <summary>
+    /// A visual element may consume newline characters only when the physical continuation lines
+    /// are registered as collapsed in AvalonEdit's height tree. The opening line remains visible and
+    /// owns the formula object; every later source line through the closing delimiter has zero
+    /// document height until the formula is revealed for editing.
+    /// </summary>
+    private void SyncMathCollapsedLines()
+    {
+        if (_disposed || _syncingMathCollapsedLines)
+        {
+            return;
+        }
+
+        _syncingMathCollapsedLines = true;
+        try
+        {
+            var desired = BuildMathCollapseTargets();
+            foreach (var existing in _mathCollapsedSections.ToArray())
+            {
+                if (desired.TryGetValue(existing.Key, out var target) &&
+                    existing.Value.IsCollapsed &&
+                    ReferenceEquals(existing.Value.Start, target.StartLine) &&
+                    ReferenceEquals(existing.Value.End, target.EndLine))
+                {
+                    desired.Remove(existing.Key);
+                    continue;
+                }
+
+                existing.Value.Uncollapse();
+                _mathCollapsedSections.Remove(existing.Key);
+            }
+
+            var textView = _editor.TextArea.TextView;
+            foreach (var target in desired)
+            {
+                try
+                {
+                    _mathCollapsedSections[target.Key] = textView.CollapseLines(
+                        target.Value.StartLine,
+                        target.Value.EndLine);
+                }
+                catch (ArgumentException)
+                {
+                    // A concurrent document replacement/deletion can invalidate a line object. The
+                    // generator checks the section table and leaves exact source visible instead.
+                }
+                catch (InvalidOperationException)
+                {
+                    // A detached/disposed TextView likewise falls back to source without affecting
+                    // note data or the undo stack.
+                }
+            }
+        }
+        finally
+        {
+            _syncingMathCollapsedLines = false;
+        }
+    }
+
+    private Dictionary<MathCollapseKey, MathCollapseTarget> BuildMathCollapseTargets()
+    {
+        var targets = new Dictionary<MathCollapseKey, MathCollapseTarget>();
+        var document = _editor.Document;
+        if (!RenderMath ||
+            document == null ||
+            document.TextLength == 0 ||
+            !TryCurrentSnapshot(out var snapshot))
+        {
+            return targets;
+        }
+
+        foreach (var span in snapshot.Spans)
+        {
+            if (span.Kind != MarkdownSemanticSpanKind.BlockMath ||
+                span.Length <= 0 ||
+                span.Start < 0 ||
+                span.End > document.TextLength ||
+                IsMathSpanCurrentlyRevealed(span))
+            {
+                continue;
+            }
+
+            var firstLine = document.GetLineByOffset(span.Start);
+            var lastLine = document.GetLineByOffset(Math.Max(span.Start, span.End - 1));
+            if (lastLine.LineNumber <= firstLine.LineNumber || firstLine.NextLine == null)
+            {
+                continue;
+            }
+
+            // Do not hide continuation lines until WpfMath has produced a valid replacement at the
+            // current font, theme and available width. Unsupported/invalid TeX remains exact source.
+            if (!TryCreateMathElement(span, out _))
+            {
+                continue;
+            }
+
+            targets[new MathCollapseKey(span.Start, span.End)] = new MathCollapseTarget(
+                firstLine.NextLine,
+                lastLine);
+        }
+
+        return targets;
+    }
+
+    private bool IsMathSpanReadyForLayout(MarkdownSemanticSpan span)
+    {
+        if (span.Kind != MarkdownSemanticSpanKind.BlockMath ||
+            !SpansMultipleDocumentLines(span))
+        {
+            return true;
+        }
+
+        var key = new MathCollapseKey(span.Start, span.End);
+        return _mathCollapsedSections.TryGetValue(key, out var section) &&
+            section.IsCollapsed;
+    }
+
+    private bool SpansMultipleDocumentLines(MarkdownSemanticSpan span)
+    {
+        var document = _editor.Document;
+        return document != null &&
+            span.Start >= 0 &&
+            span.End <= document.TextLength &&
+            document.GetLineByOffset(span.Start).LineNumber !=
+            document.GetLineByOffset(Math.Max(span.Start, span.End - 1)).LineNumber;
+    }
+
+    private void ClearMathCollapsedLines()
+    {
+        foreach (var section in _mathCollapsedSections.Values)
+        {
+            section.Uncollapse();
+        }
+
+        _mathCollapsedSections.Clear();
+    }
 
     private bool TryCreateMathElement(
         MarkdownSemanticSpan span,
@@ -287,48 +457,21 @@ internal sealed partial class MarkdownSemanticPresentation
             var lineZero = Math.Max(0, line.LineNumber - 1);
             foreach (var span in snapshot.SpansForLine(lineZero))
             {
-                if (!IsMathSpan(span) || span.End <= startOffset)
-                {
-                    continue;
-                }
-
-                int elementOffset;
-                if (span.Start >= startOffset)
-                {
-                    elementOffset = span.Start;
-                }
-                else if (span.Kind == MarkdownSemanticSpanKind.BlockMath &&
-                         span.Start < line.Offset &&
-                         span.End > line.Offset)
-                {
-                    // TextView may start constructing at a physical line in the middle of a folded
-                    // multi-line formula. Render the complete formula there and consume the
-                    // remaining source; when its real opening line is present, the normal start
-                    // path owns the whole range and this fallback is never reached.
-                    elementOffset = startOffset;
-                }
-                else
-                {
-                    continue;
-                }
-
-                if (_owner.IsMathSpanRevealed(span) ||
+                if (!IsMathSpan(span) ||
+                    span.Start < startOffset ||
+                    span.End <= span.Start ||
+                    _owner.IsMathSpanRevealed(span) ||
+                    !_owner.IsMathSpanReadyForLayout(span) ||
                     !_owner.TryCreateMathElement(span, out var element))
                 {
                     continue;
                 }
 
-                var documentLength = span.End - elementOffset;
-                if (documentLength <= 0)
-                {
-                    continue;
-                }
-
                 _prepared = new PreparedMathElement(
-                    elementOffset,
-                    documentLength,
+                    span.Start,
+                    span.Length,
                     element);
-                return elementOffset;
+                return span.Start;
             }
 
             return -1;
