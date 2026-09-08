@@ -26,11 +26,8 @@ internal static class MarkdownListEditing
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var absoluteLineEnd = absoluteLineStart + lineText.Length;
-        var lineIndex = FindLine(snapshot.LineStarts, absoluteLineStart);
-        var quoteLevel = snapshot.GetLine(lineIndex).QuoteLevel;
         var container = MarkdownContainerPrefix.Parse(
             lineText,
-            quoteLevel,
             snapshot,
             absoluteLineStart,
             absoluteLineEnd);
@@ -165,17 +162,5 @@ internal static class MarkdownListEditing
         {
             builder.Append(text, normalizedStart, normalizedEnd - normalizedStart);
         }
-    }
-
-    private static int FindLine(int[] lineStarts, int offset)
-    {
-        if (lineStarts.Length == 0)
-        {
-            return 0;
-        }
-
-        var normalized = Math.Clamp(offset, 0, lineStarts[^1]);
-        var index = Array.BinarySearch(lineStarts, normalized);
-        return index >= 0 ? index : Math.Max(0, ~index - 1);
     }
 }
