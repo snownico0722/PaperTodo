@@ -2866,6 +2866,7 @@ public sealed partial class AppController
         foreach (var window in windows)
         {
             window.UpdateMarkdownRenderMode();
+            window.UpdateMarkdownEditAnimation();
             window.UpdateExternalMarkdownExtension();
             window.UpdateTodoLinkFeature();
             window.RefreshPaperTitle();
