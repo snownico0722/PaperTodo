@@ -153,6 +153,8 @@ internal sealed partial class MarkdownSemanticPresentation
     private sealed class SyntaxCollapseElementGenerator : VisualLineElementGenerator
     {
         private readonly MarkdownSemanticPresentation _owner;
+        private int _containerPrefixOffset = -1;
+        private int _containerPrefixLength;
         private int _quotePrefixOffset = -1;
         private string? _quotePrefixText;
 
@@ -164,6 +166,8 @@ internal sealed partial class MarkdownSemanticPresentation
         public override void StartGeneration(ITextRunConstructionContext context)
         {
             base.StartGeneration(context);
+            _containerPrefixOffset = -1;
+            _containerPrefixLength = 0;
             _quotePrefixOffset = -1;
             _quotePrefixText = null;
             if (!_owner.IsFullMode ||
@@ -174,21 +178,35 @@ internal sealed partial class MarkdownSemanticPresentation
 
             var line = context.VisualLine.FirstDocumentLine;
             var semantic = snapshot.GetLine(Math.Max(0, line.LineNumber - 1));
-            if (semantic.QuoteLevel <= 0 ||
-                !MarkdownQuoteVirtualIndent.TryCreate(
-                    context.Document.GetText(line),
-                    semantic.QuoteLevel,
-                    out var prefix))
+            var text = context.Document.GetText(line);
+            var container = MarkdownContainerPrefix.Parse(
+                text,
+                semantic.QuoteLevel,
+                snapshot,
+                line.Offset,
+                line.EndOffset);
+
+            // 真实列表/引用/任务前缀仍显示原源码并保持一一映射，但向 AvalonEdit 声明为视觉缩进，
+            // 使软折行从正文列继续，而不是掉回圆点/引用竖线下方。
+            if (container.VisualIndentEnd > 0 &&
+                ContainsNonWhitespace(text, container.VisualIndentEnd))
             {
-                return;
+                _containerPrefixOffset = line.Offset;
+                _containerPrefixLength = container.VisualIndentEnd;
             }
 
-            _quotePrefixOffset = line.Offset + prefix.Offset;
-            _quotePrefixText = prefix.Text;
+            if (container.MissingQuoteLevels > 0)
+            {
+                _quotePrefixOffset = line.Offset + container.ContentStart;
+                _quotePrefixText = MarkdownQuoteMarkers.RepeatMarkerPrefix(
+                    container.MissingQuoteLevels);
+            }
         }
 
         public override void FinishGeneration()
         {
+            _containerPrefixOffset = -1;
+            _containerPrefixLength = 0;
             _quotePrefixOffset = -1;
             _quotePrefixText = null;
             base.FinishGeneration();
@@ -201,9 +219,16 @@ internal sealed partial class MarkdownSemanticPresentation
                 return -1;
             }
 
-            var interested = _quotePrefixOffset >= startOffset
-                ? _quotePrefixOffset
-                : int.MaxValue;
+            var interested = int.MaxValue;
+            if (_containerPrefixLength > 0 && _containerPrefixOffset >= startOffset)
+            {
+                interested = _containerPrefixOffset;
+            }
+            if (_quotePrefixOffset >= startOffset)
+            {
+                interested = Math.Min(interested, _quotePrefixOffset);
+            }
+
             var runs = _owner.CollapseRuns;
             var index = LowerBoundStart(runs, startOffset);
             if (index < runs.Count && runs[index].End > runs[index].Start)
@@ -216,6 +241,13 @@ internal sealed partial class MarkdownSemanticPresentation
 
         public override VisualLineElement ConstructElement(int offset)
         {
+            if (offset == _containerPrefixOffset && _containerPrefixLength > 0)
+            {
+                return new ContainerPrefixTextElement(
+                    CurrentContext.VisualLine,
+                    _containerPrefixLength);
+            }
+
             var hasQuotePrefix =
                 offset == _quotePrefixOffset &&
                 !string.IsNullOrEmpty(_quotePrefixText);
@@ -241,6 +273,36 @@ internal sealed partial class MarkdownSemanticPresentation
                     isClosingEdge: false)
                 : null!;
         }
+
+        private static bool ContainsNonWhitespace(string text, int end)
+        {
+            for (var index = 0; index < Math.Min(text.Length, end); index++)
+            {
+                if (!char.IsWhiteSpace(text[index]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 消费真实源码前缀，但保持源码字符与视觉列一一对应。唯一变化是把整个前缀声明为视觉空白，
+    /// 让 AvalonEdit 的自动折行继承到正文起点。拆分后仍保持该语义，便于着色器分别隐藏 marker。
+    /// </summary>
+    private sealed class ContainerPrefixTextElement : VisualLineText
+    {
+        public ContainerPrefixTextElement(VisualLine parentVisualLine, int length)
+            : base(parentVisualLine, length)
+        {
+        }
+
+        protected override VisualLineText CreateInstance(int length) =>
+            new ContainerPrefixTextElement(ParentVisualLine, length);
+
+        public override bool IsWhitespace(int visualColumn) => true;
     }
 
     /// <summary>
