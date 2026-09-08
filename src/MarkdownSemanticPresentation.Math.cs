@@ -197,6 +197,8 @@ internal sealed partial class MarkdownSemanticPresentation
         try
         {
             var desired = BuildMathCollapseTargets();
+            var textView = _editor.TextArea.TextView;
+            var collapseStateChanged = false;
             foreach (var existing in _mathCollapsedSections.ToArray())
             {
                 if (desired.TryGetValue(existing.Key, out var target) &&
@@ -210,9 +212,9 @@ internal sealed partial class MarkdownSemanticPresentation
 
                 existing.Value.Uncollapse();
                 _mathCollapsedSections.Remove(existing.Key);
+                collapseStateChanged = true;
             }
 
-            var textView = _editor.TextArea.TextView;
             foreach (var target in desired)
             {
                 try
@@ -220,6 +222,7 @@ internal sealed partial class MarkdownSemanticPresentation
                     _mathCollapsedSections[target.Key] = textView.CollapseLines(
                         target.Value.StartLine,
                         target.Value.EndLine);
+                    collapseStateChanged = true;
                 }
                 catch (ArgumentException)
                 {
@@ -231,6 +234,18 @@ internal sealed partial class MarkdownSemanticPresentation
                     // A detached/disposed TextView likewise falls back to source without affecting
                     // note data or the undo stack.
                 }
+            }
+
+            if (collapseStateChanged)
+            {
+                // CollapseLines mutates AvalonEdit's height tree immediately, but existing
+                // VisualLine instances still describe the pre-collapse layout. If WPF measures
+                // before our queued redraw runs, a reused opening line can point at a now-collapsed
+                // continuation line and BuildVisualLine throws "Trying to build visual line from
+                // collapsed line". AvalonEdit's FoldingManager invalidates visual lines immediately
+                // after updating its collapsed sections; do the same here. Redraw() clears the stale
+                // VisualLine cache synchronously while the actual re-measure may still be deferred.
+                textView.Redraw();
             }
         }
         finally
