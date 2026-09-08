@@ -9,44 +9,18 @@ on:
       - .github/workflows/temp-math-compare-build.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "true"
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Upload comparison package
+        uses: actions/upload-artifact@v6
         with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Publish self-contained win-x64 build
-        run: |
-          $engine = if ($env:GITHUB_REF_NAME -like '*ratex*') { 'ratex' } else { 'wpf' }
-          $publishDir = Join-Path $env:RUNNER_TEMP "publish-$engine"
-          dotnet restore .\PaperTodo.csproj -r win-x64
-          dotnet publish .\PaperTodo.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:PublishTrimmed=false -o $publishDir
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
-          Get-ChildItem -Path $publishDir -Filter *.pdb -Recurse -File | Remove-Item -Force
-
-          New-Item -ItemType Directory -Path .\compare-builds -Force | Out-Null
-          $zip = ".\compare-builds\PaperTodo-math-$engine-win-x64-selfcontained.zip"
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zip -CompressionLevel Optimal
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f -- $zip
-          git commit -m "chore: add temporary $engine comparison build"
-          git push origin HEAD:${{ github.ref_name }}
+          name: PaperTodo-math-ratex-win-x64-selfcontained
+          path: compare-builds/PaperTodo-math-ratex-win-x64-selfcontained.zip
+          if-no-files-found: error
+          compression-level: 0
