@@ -1438,9 +1438,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinPaper" xml:space="preserve">
     <value>기본 메모</value>
   </data>
-  <data name="SkinPearl" xml:space="preserve">
-    <value>진주 / 홀로그램</value>
-  </data>
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>반투명 트레이싱지</value>
   </data>
@@ -1456,17 +1453,14 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinPixel" xml:space="preserve">
     <value>픽셀</value>
   </data>
-  <data name="TipSkinPearl" xml:space="preserve">
-    <value>진주 필름이 정지 중에도 약 28초 주기로 천천히 흐르고, 창을 움직이면 반사가 달라집니다. 애니메이션 끄기, 고대비, 숨김, 최소화 시 정지합니다.</value>
-  </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>배경을 흐리지 않는 옅은 투명색과 가는 테두리 반사입니다. 포인터를 따라 하이라이트가 움직입니다. 실제 배경 굴절은 없으며 Apple Liquid Glass와 같지 않습니다.</value>
+    <value>눈에 보이는 반투명 렌즈 표면과 가는 가장자리 반사가 제목과 본문에 이어집니다. 뒤쪽 내용은 선명하게 유지됩니다. 실제 굴절은 없으며 Apple Liquid Glass와 같지 않습니다.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>불투명한 크림색 도자기 표면과 부드러운 유약 광택, 옅은 아래쪽 음영입니다. 두꺼운 안쪽 틀 없이 선택한 색상을 따릅니다.</value>
+    <value>크림색 도자기에 넓은 유약 하이라이트와 부드러운 입체 명암을 적용합니다. 불투명하며 선택한 색상을 따르고 두꺼운 안쪽 틀은 없습니다.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>얼음빛 파랑, 넓고 부드러운 사선 반사와 가는 밝은 테두리가 제목과 본문에 이어집니다. Windows 7 시스템 테마는 아닙니다.</value>

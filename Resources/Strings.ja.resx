@@ -1438,9 +1438,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinPaper" xml:space="preserve">
     <value>標準の紙</value>
   </data>
-  <data name="SkinPearl" xml:space="preserve">
-    <value>パール／ホログラム</value>
-  </data>
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>半透明トレーシングペーパー</value>
   </data>
@@ -1456,17 +1453,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinPixel" xml:space="preserve">
     <value>ピクセル</value>
   </data>
-  <data name="TipSkinPearl" xml:space="preserve">
-    <value>パール膜は静止中も約28秒周期でゆっくり流れ、移動時にも偏光が変わります。アニメーション無効・ハイコントラスト・非表示・最小化で停止します。</value>
-  </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>背景をぼかさない薄い透明色と細い縁の反射。ハイライトはポインターに追従します。背景の実際の屈折はなく、Apple Liquid Glass と同等ではありません。</value>
+    <value>見える半透明のレンズ面と細い縁の反射が、ヘッダーから本文まで続きます。背後の細部は鮮明なままです。実際の屈折はなく、Apple Liquid Glass と同等ではありません。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>不透明なクリーム色の磁器面に柔らかな釉薬の光と浅い下部の陰影。厚い内枠はなく、選択した配色に追従します。</value>
+    <value>クリーム色の磁器に、広い釉薬のハイライトと柔らかな立体陰影を加えます。不透明で配色に追従し、厚い内枠はありません。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>氷青色、柔らかく幅広い斜めの反射と細い光る縁。ヘッダーと本文がつながります。Windows 7 のシステムテーマではありません。</value>

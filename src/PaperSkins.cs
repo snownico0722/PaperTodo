@@ -7,16 +7,15 @@ public static class PaperSkins
     public const string Mica = "mica";
     public const string Acrylic = "acrylic";
     public const string ClearAcrylic = "clearAcrylic";
-    public const string Pearl = "pearl";
     public const string TracingPaper = "tracingPaper";
     public const string LiquidGlass = "liquidGlass";
     public const string Ceramic = "ceramic";
     public const string Aero = "aero";
     public const string Pixel = "pixel";
     public static readonly string[] All =
-        { Paper, Mica, Acrylic, ClearAcrylic, Pearl, TracingPaper, LiquidGlass, Ceramic, Aero, Pixel };
+        { Paper, Mica, Acrylic, ClearAcrylic, TracingPaper, LiquidGlass, Ceramic, Aero, Pixel };
     public static bool IsValid(string? id) => id is Paper or Mica or Acrylic or ClearAcrylic or
-        Pearl or TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
+        TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
     public static string Normalize(string? id) => IsValid(id) ? id! : Paper;
     // A missing field means legacy data; an explicit unknown ID means safe fallback.
     public static string Resolve(string? skin, string? colorScheme, string? oldBackdrop) =>
@@ -27,7 +26,7 @@ public static class PaperSkins
     public static bool UsesNativeBackdrop(string? id) => id is Mica or Acrylic or ClearAcrylic or
         TracingPaper or LiquidGlass or Aero;
     public static bool UsesSystemPalette(string? id) => id is Mica or Acrylic or ClearAcrylic;
-    public static bool IsDecorated(string? id) => id is Pearl or TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
+    public static bool IsDecorated(string? id) => id is TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
     public static bool Decorate(string? id, bool highContrast) => !highContrast && IsDecorated(id);
     // Tracing/Aero reuse system Acrylic; the clear lens uses unblurred alpha composition.
     public static string NativeBackdrop(string? id) => id switch
@@ -40,7 +39,7 @@ public static class PaperSkins
     public static string LabelKey(string id) => id switch
     {
         Mica => "MicaBackdropMica", Acrylic => "MicaBackdropAcrylic", ClearAcrylic => "MicaBackdropClearAcrylic",
-        Pearl => "SkinPearl", TracingPaper => "SkinTracingPaper", LiquidGlass => "SkinLiquidGlass",
+        TracingPaper => "SkinTracingPaper", LiquidGlass => "SkinLiquidGlass",
         Ceramic => "SkinCeramic", Aero => "SkinAero", Pixel => "SkinPixel", _ => "SkinPaper"
     };
 }

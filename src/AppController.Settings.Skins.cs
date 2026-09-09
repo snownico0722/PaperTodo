@@ -26,7 +26,7 @@ public sealed partial class AppController
         {
             Text = Strings.Get(skin switch
             {
-                PaperSkins.Pearl => "TipSkinPearl", PaperSkins.TracingPaper => "TipSkinTracingPaper",
+                PaperSkins.TracingPaper => "TipSkinTracingPaper",
                 PaperSkins.LiquidGlass => "TipSkinLiquidGlass", PaperSkins.Ceramic => "TipSkinCeramic",
                 PaperSkins.Aero => "TipSkinAero", PaperSkins.Pixel => "TipSkinPixel", _ => "TipPaperSkin"
             }),

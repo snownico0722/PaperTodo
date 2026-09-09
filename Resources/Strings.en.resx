@@ -1438,9 +1438,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinPaper" xml:space="preserve">
     <value>Default paper</value>
   </data>
-  <data name="SkinPearl" xml:space="preserve">
-    <value>Pearl / holographic foil</value>
-  </data>
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>Tracing paper</value>
   </data>
@@ -1456,17 +1453,14 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinPixel" xml:space="preserve">
     <value>Pixel</value>
   </data>
-  <data name="TipSkinPearl" xml:space="preserve">
-    <value>Pearl foil flows slowly on a 28-second cycle, with additional reflections while moving. Animation off, high contrast, hiding or minimizing stops motion.</value>
-  </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>A clear, lightly tinted surface with fine edge reflections, not frosted background blur. Highlights follow the pointer. No true background refraction; not Apple Liquid Glass.</value>
+    <value>A visible translucent lens veil with fine edge reflections, continuous across header and body. Rear detail stays sharp. No real refraction; not equivalent to Apple Liquid Glass.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>An opaque cream porcelain face with soft glazed light and shallow lower shading, without a thick inset frame. Follows the selected palette.</value>
+    <value>Cream porcelain with a broad glazed highlight and softly rounded light/shade. Opaque, palette-aware, without a thick inset frame.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>Icy blue tint, a broad soft diagonal reflection and fine highlights, continuous across header and paper. Not a Windows 7 system theme.</value>

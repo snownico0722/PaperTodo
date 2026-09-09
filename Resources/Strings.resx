@@ -1487,9 +1487,6 @@
   <data name="SkinPaper" xml:space="preserve">
     <value>默认纸片</value>
   </data>
-  <data name="SkinPearl" xml:space="preserve">
-    <value>珠光／镭射膜</value>
-  </data>
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>半透明描图纸</value>
   </data>
@@ -1505,17 +1502,14 @@
   <data name="SkinPixel" xml:space="preserve">
     <value>像素风</value>
   </data>
-  <data name="TipSkinPearl" xml:space="preserve">
-    <value>珠光膜在静止时约 28 秒缓慢往返流动，拖动时偏光也会变化。关闭动画、高对比度、隐藏或最小化时停止。</value>
-  </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>清透底色与细线边缘反光，背后内容不再被磨砂模糊；鼠标移动时高光变化。没有真实背景折射，不等同于苹果 Liquid Glass。</value>
+    <value>可见的半透明镜片底色、细线边缘反光，顶栏与纸面连成一体；不再是一扇近乎全透明的窗口。背景保持清晰，不含真实折射，不等同于苹果 Liquid Glass。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>不透明的奶油色瓷面、柔和釉光与浅底部阴影；不再叠加宽厚套框，跟随配色。</value>
+    <value>奶油色瓷面、宽幅釉面亮斑与柔和的凸面明暗；不透明，保留配色倾向，不叠加宽厚内套框。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>冰蓝染色、柔和宽幅斜向反光与细亮边；顶栏与纸面连续。不是 Win7 系统主题。</value>

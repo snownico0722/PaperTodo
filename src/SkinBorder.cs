@@ -13,7 +13,7 @@ internal sealed partial class SkinBorder : Border
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),
         new FrameworkPropertyMetadata(PaperSkins.Paper, FrameworkPropertyMetadataOptions.AffectsRender,
-            (d, _) => ((SkinBorder)d).SyncReflectionSubscription()));
+            (d, _) => ((SkinBorder)d).SyncLensLight()));
     public static readonly DependencyProperty IsCapsuleProperty = DependencyProperty.Register(
         nameof(IsCapsule), typeof(bool), typeof(SkinBorder),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -21,7 +21,6 @@ internal sealed partial class SkinBorder : Border
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
     internal bool IsOutline { get; init; }
     private bool _dark, _highContrast, _animateReflection;
-    private Window? _reflectionWindow;
     private (string Skin, bool Dark, bool Capsule, Color Paper)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private Brush _glint = Brushes.Transparent;
@@ -37,10 +36,9 @@ internal sealed partial class SkinBorder : Border
 
     internal SkinBorder()
     {
-        Loaded += (_, _) => SyncReflectionSubscription();
-        Unloaded += (_, _) => DetachReflection();
-        IsVisibleChanged += (_, _) => SyncReflectionSubscription();
-        InitializeReflection();
+        Loaded += (_, _) => SyncLensLight();
+        Unloaded += (_, _) => DetachLensLight();
+        IsVisibleChanged += (_, _) => SyncLensLight();
         RefreshSkin();
     }
 
@@ -54,7 +52,7 @@ internal sealed partial class SkinBorder : Border
         Skin = Theme.Skin;
         RenderOptions.SetEdgeMode(this, PaperSkins.Decorate(Skin, _highContrast) && Skin == PaperSkins.Pixel
             ? EdgeMode.Aliased : EdgeMode.Unspecified);
-        SyncReflectionSubscription();
+        SyncLensLight();
         InvalidateVisual();
     }
     internal static void Refresh(Border? border)

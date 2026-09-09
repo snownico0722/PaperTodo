@@ -42,7 +42,7 @@ internal static class NativeSurfaceChecks
             rear.Show();
             foreach (var mode in new[] { "light", "dark" })
             foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic,
-                PaperSkins.TracingPaper, PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Pearl, PaperSkins.Ceramic, PaperSkins.Pixel })
+                PaperSkins.TracingPaper, PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Ceramic, PaperSkins.Pixel })
             {
                 controller.State.PaperSkin = skin; controller.State.Theme = mode; Theme.Invalidate();
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
@@ -61,6 +61,9 @@ internal static class NativeSurfaceChecks
                         var h = image.GetPixel(image.Width / 2, (int)Math.Round(y));
                         var b = image.GetPixel(image.Width / 2, (int)Math.Round(y + 70));
                         Console.WriteLine($"CONTINUITY {skin}/{mode}: header={h} body={b}");
+                        if (mode == "light" && skin == PaperSkins.Mica)
+                            Program.Assert(Math.Min(b.R, Math.Min(b.G, b.B)) >= 120,
+                                $"light Mica must not expose an uncomposited black underlay: {b}");
                         if (skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic)
                             Program.Assert(Difference(h, b) <= 4,
                                 $"{skin}/{mode}: native header must use the body material, not a solid caption ({h} versus {b})");
@@ -71,8 +74,8 @@ internal static class NativeSurfaceChecks
                         // A frosted Acrylic wash cannot pass this high-frequency contrast check.
                         var row = image.Height - 90;
                         var values = Enumerable.Range(image.Width / 2 - 32, 64).Select(x => image.GetPixel(x, row).R).ToArray();
-                        Program.Assert(values.Max() - values.Min() >= 130,
-                            $"{mode}: glass must reveal sharp rear detail, not an opaque or frosted plate ({values.Min()}..{values.Max()})");
+                        Program.Assert(values.Max() - values.Min() is >= 35 and <= 150,
+                            $"{mode}: glass must retain rear detail AND a visible veil, neither opaque nor invisible ({values.Min()}..{values.Max()})");
                         Console.WriteLine($"CLEAR GLASS {mode}: sharp rear stripe range {values.Min()}..{values.Max()}");
                     }
                 }
@@ -88,7 +91,7 @@ internal static class NativeSurfaceChecks
                     using var final = Capture(paper, output, $"desktop-{skin}-{mode}-restored");
                     var row = final.Height - 90;
                     var values = Enumerable.Range(final.Width / 2 - 32, 64).Select(x => final.GetPixel(x, row).R).ToArray();
-                    Program.Assert(values.Max() - values.Min() >= 130, "resizing/collapse does not restore full glass or opaque backing");
+                    Program.Assert(values.Max() - values.Min() is >= 35 and <= 150, "resizing/collapse preserves the visible translucent lens");
                 }
                 paper.CloseForReal(); paper = null;
             }

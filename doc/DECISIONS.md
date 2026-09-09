@@ -47,7 +47,8 @@
 | D-032 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-033 | 主题 / Window integration |
 | D-033 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
 | D-034 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
-| D-035 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Experimental | 主题 / Window integration |
+| D-035 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-036 | 主题 / Window integration |
+| D-036 | 系统材质保留 full glass，清透接法的零边距不通用 | Accepted | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1272,6 +1273,8 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-035 — 自绘材质顶栏不再叠加 native caption，清透玻璃不用磨砂
 
+**Status:** Superseded by D-036（仅纠正所有材质统一零 glass 的选择）。
+
 日期：2026-09-10。补充 D-033 / D-034，替代其 full/top-1 glass margin 细节，不替代单窗口边界。
 
 用户真机反馈暴露了 WPF-only 图像检查的盲区：透明 WPF 顶栏下仍有固定 CAPTION_COLOR 的实色 native 带；透色模式保留顶部 1 DIP glass 还可能露出亮线。Windows 独立探针对比确认固定 caption 色与最终桌面顶栏／正文色差有关。
@@ -1281,3 +1284,15 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 液态皮肤使用内部 clearGlass alpha composition recipe，不再复用系统 Acrylic；不截屏、不采样壁纸，不声称真实背景折射。原有系统 Mica/Acrylic 与 accent recipe 保持互斥并清理前一状态。普通胶囊和形态动画仍回退实色。
 
 验证必须包含最终桌面顶栏／正文像素和清透背景的高频条纹，而不仅仅是 WPF Background.A 或不同皮肤图像 hash；真实 Windows 11 主观材质与混合 DPI 仍需人工验收。
+
+---
+
+## D-036 — 系统材质保留 full glass，清透接法的零边距不通用
+
+**Status:** Accepted
+
+**Context / Why:** `d36a4f47` 把全部材质的实际 DWM glass margin 归零，同时关闭 legacy alpha。用户反馈云母纯黑、带半透明画刷的亚克力／描图纸／Aero 为深灰：透明 WPF 像素没有系统材质承接，白色覆盖层只能把黑底混成灰底。原生 API 成功、顶栏与正文同色，都不能证明背景已正确合成。独立探针原本使用 full glass，不能据此推导所有接法都应清零。
+
+**Decision:** 恢复系统 Mica/Acrylic 的 full glass，保持清理旧 alpha → 设置对应 glass → 启用系统 backdrop 的顺序；零实际边距只属于 accent 与清透 alpha 接法。caption 颜色仍用默认值，不恢复实色顶栏遮盖。窗口、编辑器、形态动画和 Edge authority 不变。
+
+**Evidence:** `NativeMicaBackdrop.Refresh` 与 `PaperTodo.MicaChecks` 的 full-glass 互斥检查、浅色云母黑底拒绝检查及最终桌面捕获。液态皮肤同时检查背景细节与可见遮色范围，不能再让一扇近乎隐形的窗口通过“有透明效果”检查。Windows Server 无法显示真实 Acrylic 透色时仍记录 SKIP，不冒充 Windows 11 真机验收。

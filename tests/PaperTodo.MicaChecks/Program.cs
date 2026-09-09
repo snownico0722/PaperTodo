@@ -95,8 +95,8 @@ internal static class Program
                     "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
-                Assert(f.Api.CaptionColor == unchecked((int)0xffffffff) && f.Api.FrameTop == 0,
-                    "no solid caption override or extended-glass stripe behind the material header");
+                Assert(f.Api.CaptionColor == unchecked((int)0xffffffff) && f.Api.FrameTop == -1,
+                    "system material requires full glass but no solid caption override");
                 f.Api.Failure = "frame-colors"; f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && f.Backdrop.LastFrameHResult < 0 && !Transparent(f.Chrome.BorderBrush),
                     "rejected native frame settings retain a visible WPF outline");
@@ -109,7 +109,7 @@ internal static class Program
                 {
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
                     var standard = ((SolidColorBrush)f.Chrome.Background).Color;
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0, "standard system Acrylic recipe restored");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == -1, "standard system Acrylic recipe restored");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     var clear = ((SolidColorBrush)f.Chrome.Background).Color;
                     Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
@@ -117,7 +117,7 @@ internal static class Program
                     Assert(f.Api.Backdrop == 1 && !f.Api.Alpha && f.Chrome.Opacity == 1 && f.Window.Opacity == 1,
                         "exclusive accent blur with opaque content");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0, "switching back removes the active accent");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == -1, "switching back removes the active accent");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     f.Eligible = false; f.Apply(true, dark);
                     Assert(!f.Api.ClearAcrylic && f.Api.Alpha, "collapse removes accent before alpha fallback");
@@ -360,7 +360,7 @@ internal static class Program
         {
             BackdropCalls++;
             if (backdrop == 2 && Failure == "backdrop") return Error;
-            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic, "system backdrop excludes fallback alpha and accent Acrylic");
+            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && Glass, "system backdrop needs full glass and excludes alpha/accent");
             Backdrop = backdrop; return 0;
         }
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)

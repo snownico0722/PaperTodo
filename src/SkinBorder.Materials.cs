@@ -7,6 +7,8 @@ namespace PaperTodo;
 internal sealed partial class SkinBorder
 {
     private Brush _header = Brushes.Transparent;
+    private Brush _glazeTop = Brushes.Transparent, _glazeBottom = Brushes.Transparent;
+    private Brush _glazeLeft = Brushes.Transparent, _glazeRight = Brushes.Transparent;
     private readonly RadialGradientBrush _lensLight = new(Colors.White, Colors.Transparent)
     {
         Center = new Point(.24, .05), GradientOrigin = new Point(.24, .05), RadiusX = .65, RadiusY = .65
@@ -23,26 +25,14 @@ internal sealed partial class SkinBorder
         {
             PaperSkins.TracingPaper => (byte)(_dark ? 226 : 211),
             PaperSkins.Aero => (byte)(_dark ? 168 : 112),
-            _ => (byte)(_dark ? 70 : 44)
+            // A visible lens veil, not a near-empty transparent window. The rear
+            // detail remains sharp; opacity is independent of background blur.
+            _ => (byte)(_dark ? 196 : 152)
         };
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
         _shine = _glint = _header = Brushes.Transparent;
         switch (Skin)
         {
-            case PaperSkins.Pearl:
-                _fill = Frozen(new SolidColorBrush(Mix(paper, _dark ? Color.FromRgb(29, 28, 41) : Colors.White, .30)));
-                _shine = new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(WithAlpha(Color.FromRgb(242, 147, 204), _dark ? (byte)56 : (byte)102), 0),
-                    new(WithAlpha(Color.FromRgb(183, 159, 242), _dark ? (byte)48 : (byte)86), .24),
-                    new(WithAlpha(Color.FromRgb(97, 211, 217), _dark ? (byte)48 : (byte)96), .46),
-                    new(White(_dark ? 48 : 160), .53),
-                    new(WithAlpha(Color.FromRgb(224, 198, 132), _dark ? (byte)40 : (byte)80), .61),
-                    new(WithAlpha(Color.FromRgb(236, 157, 206), _dark ? (byte)52 : (byte)92), .82),
-                    new(WithAlpha(Color.FromRgb(157, 200, 239), _dark ? (byte)44 : (byte)88), 1)
-                }, new Point(-.2, 0), new Point(1.2, .8))
-                { SpreadMethod = GradientSpreadMethod.Reflect, RelativeTransform = _filmTransform };
-                break;
             case PaperSkins.Aero:
                 var glass = Mix(paper, _dark ? Color.FromRgb(25, 45, 62) : Color.FromRgb(185, 220, 243), .38);
                 _fill = Gradient(0, WithAlpha(Mix(glass, Colors.White, _dark ? .025 : .12), alpha),
@@ -59,10 +49,15 @@ internal sealed partial class SkinBorder
                 _glint = Gradient(0, White(_dark ? 60 : 154), 1, White(_dark ? 4 : 12));
                 break;
             case PaperSkins.LiquidGlass:
-                // A clear, neutral lens, not a cream plate over system Acrylic.
+                // A translucent, neutral lens with a readable center; no frosted Acrylic.
                 // The native adapter supplies alpha composition without background blur.
                 var clear = _dark ? Color.FromRgb(26, 34, 44) : Color.FromRgb(246, 251, 255);
-                _fill = Frozen(new SolidColorBrush(WithAlpha(clear, alpha)));
+                _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
+                {
+                    new(WithAlpha(clear, opaque ? (byte)255 : (byte)Math.Min(255, alpha + 20)), 0),
+                    new(WithAlpha(clear, alpha), .20), new(WithAlpha(clear, alpha), .80),
+                    new(WithAlpha(clear, opaque ? (byte)255 : (byte)Math.Min(255, alpha + 12)), 1)
+                }, new Point(0, 0), new Point(0, 1)));
                 _shine = Frozen(new RadialGradientBrush(White(_dark ? 6 : 18), Colors.Transparent)
                 { Center = new Point(.25, 0), GradientOrigin = new Point(.25, 0), RadiusX = .85, RadiusY = .5 });
                 // Keep reflection on a single device-pixel rim. No concentric dark frame,
@@ -75,14 +70,23 @@ internal sealed partial class SkinBorder
                 _lensLight.GradientStops[0].Color = White(_dark ? 100 : 150);
                 break;
             case PaperSkins.Ceramic:
-                var glaze = Mix(paper, _dark ? Color.FromRgb(38, 42, 47) : Color.FromRgb(255, 254, 247), .64);
+                // A warm porcelain body and broad specular shoulder, not a paper tint.
+                // Smooth edge shading has no inner outline and cannot make another bezel.
+                var glaze = Mix(paper, _dark ? Color.FromRgb(49, 51, 55) : Color.FromRgb(232, 218, 193), .72);
                 _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
-                    new(Mix(glaze, Colors.White, _dark ? .06 : .25), 0), new(glaze, .20),
-                    new(Mix(glaze, paper, .16), .78), new(Mix(glaze, Colors.Black, _dark ? .09 : .055), 1)
-                }, new Point(0, 0), new Point(.12, 1)));
-                _shine = Frozen(new RadialGradientBrush(White(_dark ? 14 : 88), Colors.Transparent)
-                { Center = new Point(.2, -.1), GradientOrigin = new Point(.2, -.1), RadiusX = 1.1, RadiusY = .44 });
+                    new(Mix(glaze, Colors.White, _dark ? .03 : .22), 0),
+                    new(glaze, .35), new(Mix(glaze, Colors.Black, _dark ? .10 : .025), 1)
+                }, new Point(0, 0), new Point(.25, 1)));
+                _shine = Frozen(new RadialGradientBrush(new GradientStopCollection
+                {
+                    new(White(_dark ? 20 : 165), 0), new(White(_dark ? 18 : 150), .30),
+                    new(White(_dark ? 8 : 65), .63), new(Colors.Transparent, 1)
+                }) { Center = new Point(.25, .02), GradientOrigin = new Point(.18, -.03), RadiusX = .90, RadiusY = .65 });
+                _glazeTop = Gradient(0, White(_dark ? 38 : 195), 1, Colors.Transparent);
+                _glazeBottom = Gradient(0, Colors.Transparent, 1, Color.FromArgb(_dark ? (byte)76 : (byte)48, 65, 50, 33));
+                _glazeLeft = Frozen(new LinearGradientBrush(White(_dark ? 20 : 100), Colors.Transparent, 0));
+                _glazeRight = Frozen(new LinearGradientBrush(Colors.Transparent, Color.FromArgb(_dark ? (byte)56 : (byte)32, 40, 34, 26), 0));
                 break;
             case PaperSkins.Pixel:
                 var retro = Mix(paper, _dark ? Color.FromRgb(22, 29, 46) : Color.FromRgb(240, 235, 217), .42);
@@ -102,6 +106,15 @@ internal sealed partial class SkinBorder
             dc.DrawGeometry(_glint, null, _glintRing);
         if (Skin == PaperSkins.LiquidGlass)
             dc.DrawGeometry(_lensLight, null, _glintRing);
+        if (Skin == PaperSkins.Ceramic)
+        {
+            // Blend into the one outer surface. No hollow nested rectangle/ring.
+            var depth = Math.Min(IsCapsule ? 3 : 6, Math.Min(ActualWidth, ActualHeight) / 2);
+            if (BorderThickness.Top > 0) dc.DrawRectangle(_glazeTop, null, new Rect(0, 0, ActualWidth, depth));
+            if (BorderThickness.Bottom > 0) dc.DrawRectangle(_glazeBottom, null, new Rect(0, ActualHeight - depth, ActualWidth, depth));
+            if (BorderThickness.Left > 0) dc.DrawRectangle(_glazeLeft, null, new Rect(0, 0, depth, ActualHeight));
+            if (BorderThickness.Right > 0) dc.DrawRectangle(_glazeRight, null, new Rect(ActualWidth - depth, 0, depth, ActualHeight));
+        }
         if (Skin == PaperSkins.Pixel && !IsCapsule && HeaderHeight > 0)
         {
             var dpi = VisualTreeHelper.GetDpi(this);

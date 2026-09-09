@@ -154,7 +154,7 @@ public static class Theme
     public static Brush PaperBorderBrush => Solid(Current.PaperBorder);
     public static Brush TextBrush => Solid(Current.Text);
     private static Color SurfaceWeakText => PaperSkins.Decorate(Skin, SystemParameters.HighContrast)
-        ? Mix(Current.WeakText, Current.Text, 0.36) : Current.WeakText;
+        ? Mix(Current.WeakText, Current.Text, Skin == PaperSkins.LiquidGlass ? 0.80 : 0.36) : Current.WeakText;
     public static Brush WeakTextBrush => Solid(SurfaceWeakText);
     public static Brush BrightWeakTextBrush => Solid(IsDark ? Lighten(SurfaceWeakText, 0.22) : SurfaceWeakText);
     public static Brush ActiveBrush => Solid(Current.Active);

@@ -14,7 +14,7 @@ internal static class SkinChecks
     private static readonly string[] Decorated = PaperSkins.All.Where(PaperSkins.IsDecorated).ToArray();
     internal static void Run(AppController controller)
     {
-        Program.Assert(PaperSkins.All.Distinct().Count() == 10 && Decorated.Length == 6, "unique skin choices");
+        Program.Assert(PaperSkins.All.Distinct().Count() == 9 && Decorated.Length == 5, "unique skin choices");
         Program.Assert(PaperSkins.Resolve(null, "mica", "clearAcrylic") == PaperSkins.ClearAcrylic, "legacy clear Acrylic");
         Program.Assert(PaperSkins.Resolve(null, "mica", "micaAlt") == PaperSkins.Mica, "retired material migration");
         Program.Assert(PaperSkins.Resolve(null, "forest", "acrylic") == PaperSkins.Paper, "ordinary legacy palette");
@@ -75,9 +75,9 @@ internal static class SkinChecks
                     }
                     samples++;
                 }
-                Program.Assert(hashes.Count == 6, "six different surfaces, not renamed presets");
+                Program.Assert(hashes.Count == Decorated.Length, "different surfaces, not renamed presets");
             }
-            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckReflectionLifecycle(controller);
+            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckLensAndGlaze(controller);
             Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders and editor identity.");
         }
         finally
@@ -182,7 +182,7 @@ internal static class SkinChecks
     }
     private static void CheckLiveSwitch(AppController controller)
     {
-        var paper = new PaperData { Type = PaperTypes.Note, Title = "六种材质 · 同一张纸", Content = "# 今日待办\n\n保持正文清晰，**不要重建编辑器**。\n\n- 拖动纸片观察反光\n- 收起为胶囊\n- 切换深浅色", Width = 360, Height = 320, X = 40, Y = 40 };
+        var paper = new PaperData { Type = PaperTypes.Note, Title = "材质切换 · 同一张纸", Content = "# 今日待办\n\n保持正文清晰，**不要重建编辑器**。\n\n- 拖动纸片观察反光\n- 收起为胶囊\n- 切换深浅色", Width = 360, Height = 320, X = 40, Y = 40 };
         controller.State.Papers.Add(paper);
         var window = new PaperWindow(paper, controller);
         try
@@ -244,56 +244,35 @@ internal static class SkinChecks
             Program.Assert(Math.Abs(bytes[(row * image.PixelWidth + x) * 4 + c] - bytes[above + c]) < 18,
                 "rendered header boundary has no bright strip or restarted texture");
     }
-    private static void CheckReflectionLifecycle(AppController controller)
+    private static void CheckLensAndGlaze(AppController controller)
     {
-        var enabled = controller.State.EnableAnimations;
-        controller.State.PaperSkin = PaperSkins.Pearl; controller.State.Theme = "light";
-        controller.State.EnableAnimations = true; Theme.Invalidate();
-        var window = new PaperWindow(new PaperData { Title = "珠光 · 慢速流动", X = 60, Y = 60, Width = 360, Height = 280 }, controller);
-        try
+        foreach (var mode in new[] { "light", "dark" })
         {
-            window.Show(); Wait(120);
-            var surface = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(window)!;
-            Program.Assert(surface.IsReflectionRunning && surface.HasReflectionWindow, "visible pearl has an idle clock and movement listener");
-            var first = surface.IdleReflectionOffset;
-            var pixels = Pixels(Render(window, 1));
-            for (var frame = 0; frame < 64; frame++)
+            controller.State.Theme = mode; controller.State.PaperSkin = PaperSkins.LiquidGlass; Theme.Invalidate();
+            var lens = new SkinBorder { Width = 240, Height = 160, CornerRadius = new CornerRadius(8), Background = Brushes.Transparent };
+            var image = Render(lens, 1); var bytes = Pixels(image);
+            var i = (80 * image.PixelWidth + 120) * 4;
+            var alpha = bytes[i + 3];
+            Program.Assert(alpha is >= 128 and <= 220, "lens has a visible veil, neither bare clear nor opaque");
+            foreach (var rear in new byte[] { 0, 255 })
             {
-                Save(Render(window, 1), $"pearl-motion-{frame:D3}");
-                Wait(125);
+                byte Channel(int c) => (byte)Math.Min(255, bytes[i + c] + rear * (255 - alpha) / 255);
+                var background = Color.FromRgb(Channel(2), Channel(1), Channel(0));
+                Program.Assert(Contrast(((SolidColorBrush)Theme.TextBrush).Color, background) >= 4.5,
+                    "primary lens text remains readable over black/white rear content");
+                Program.Assert(Contrast(((SolidColorBrush)Theme.WeakTextBrush).Color, background) >= 3,
+                    "secondary lens text remains readable over black/white rear content");
             }
-            Program.Assert(Math.Abs(first - surface.IdleReflectionOffset) > .02 && !pixels.SequenceEqual(Pixels(Render(window, 1))),
-                "actual WPF film pixels change without dragging");
-            var moved = surface.MovementReflectionOffset;
-            var updates = surface.MovementUpdateCount;
-            for (var i = 0; i < 16; i++) { window.Left += 10; window.Top += 1; }
-            Program.Pump();
-            Program.Assert(surface.MovementUpdateCount - updates <= 2,
-                "position notifications coalesce instead of repainting twice for each Left/Top pair");
-            Program.Assert(Math.Abs(moved - surface.MovementReflectionOffset) > .02, "drag position changes reflection independently of idle movement");
-            Save(Render(window, 1), "pearl-motion-drag");
-            window.Hide(); Program.Pump();
-            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "hidden surface owns no animation or window listener");
-            window.Show(); Wait(80);
-            Program.Assert(surface.IsReflectionRunning, "show resumes pearl motion");
-            window.WindowState = WindowState.Minimized; Program.Pump();
-            Program.Assert(!surface.IsReflectionRunning, "minimized surface stops motion");
-            window.WindowState = WindowState.Normal; Wait(80);
-            Program.Assert(surface.IsReflectionRunning, "restore resumes pearl motion");
-            controller.State.EnableAnimations = false; window.RefreshSkin();
-            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "animation toggle removes clocks and listeners");
-            controller.State.EnableAnimations = true; controller.State.PaperSkin = PaperSkins.Ceramic;
-            Theme.Invalidate(); window.UpdateTheme();
-            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "leaving pearl releases motion");
+            controller.State.PaperSkin = PaperSkins.Ceramic; Theme.Invalidate();
+            var ceramic = new SkinBorder { Width = 240, Height = 160, CornerRadius = new CornerRadius(8),
+                Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1) };
+            var painted = Render(ceramic, 1); var pixels = Pixels(painted);
+            var baseColor = ((SolidColorBrush)Theme.PaperBrush).Color;
+            var bottom = (120 * painted.PixelWidth + 160) * 4;
+            Program.Assert(pixels[bottom + 3] == 255 && Math.Abs(pixels[bottom] - baseColor.B) >= 14,
+                "porcelain body differs visibly from flat default paper without adding an inset frame");
+            Save(painted, $"porcelain-volume-{mode}");
         }
-        finally { window.CloseForReal(); controller.State.EnableAnimations = enabled; }
-    }
-    private static void Wait(int milliseconds)
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
-        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
-        timer.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
     private static RenderTargetBitmap Render(FrameworkElement element, double scale)
     {

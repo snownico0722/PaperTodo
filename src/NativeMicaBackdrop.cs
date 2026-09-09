@@ -113,16 +113,18 @@ internal sealed class NativeMicaBackdrop : IDisposable
             }
             if (enable && LastHResult >= 0)
             {
-                // Keep WindowChrome in its glass-managed (no HRGN) path, but reserve
-                // zero physical glass pixels. Its exact-zero DP path installs an HRGN;
-                // its full-glass path paints a native caption behind our custom header.
-                // The adapter is the final margin writer after theme/DPI/composition
-                // changes. No layout listener, resize mutation or window-region patch.
-                _windowChrome.GlassFrameThickness = new Thickness(-1);
-                LastHResult = _native.ExtendFrame(hwnd, 0);
+                // First leave the old alpha recipe. Mica/system Acrylic then need a
+                // full glass composition surface (-1). Setting this to zero turns WPF's
+                // transparent pixels black; a white material wash merely disguises it.
+                // Only accent Acrylic and the unblurred lens use zero physical margins.
+                LastHResult = _native.DisableAlpha(hwnd);
+                if (LastHResult >= 0)
+                {
+                    // Keep WindowChrome on its glass-managed, no-window-region path.
+                    _windowChrome.GlassFrameThickness = new Thickness(-1);
+                    LastHResult = _native.ExtendFrame(hwnd, clear || glass ? 0 : -1);
+                }
                 if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
-                // Remove the preceding alpha path before installing a system backdrop.
-                if (LastHResult >= 0) LastHResult = _native.DisableAlpha(hwnd);
                 if (LastHResult >= 0) LastHResult = _native.SetBackdrop(hwnd,
                     glass ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
                 if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
@@ -139,7 +141,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
             var edgeColor = edge.R | edge.G << 8 | edge.B << 16; // COLORREF, no alpha
             // Do not put a solid native caption back underneath the transparent header.
-            // With no extended glass and no WS_CAPTION it has no client-area band to paint.
+            // COLOR_DEFAULT allows the system material to continue below the WPF header.
             var captionColor = unchecked((int)0xffffffff);
             LastFrameHResult = _native.ConfigureFrame(hwnd, IsActive && rounded,
                 IsActive && !glass && !clear ? edgeColor : unchecked((int)0xfffffffe), captionColor);

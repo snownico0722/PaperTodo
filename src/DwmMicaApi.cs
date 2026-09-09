@@ -116,8 +116,8 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
     {
         var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
-        // The adapter supplies COLOR_DEFAULT for the caption and zero extended glass.
-        // A fixed caption color draws an opaque band even behind a borderless WPF header.
+        // Do not paint a fixed-color native caption underneath the custom material.
+        // Frame extent is selected independently for system versus accent/alpha recipes.
         var result = DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
         if (result < 0) return result;
         result = DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref borderColor, sizeof(int));
