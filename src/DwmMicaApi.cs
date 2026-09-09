@@ -12,7 +12,7 @@ internal interface INativeMicaApi
     bool TransparencyEnabled { get; }
     bool HighContrast { get; }
     bool IsLayered(IntPtr hwnd);
-    int ExtendFrame(IntPtr hwnd, bool enabled);
+    int ExtendFrame(IntPtr hwnd, int top);
     int SetDarkMode(IntPtr hwnd, bool dark);
     int SetBackdrop(IntPtr hwnd, int backdrop);
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
@@ -53,10 +53,10 @@ internal sealed class DwmMicaApi : INativeMicaApi
 
     public bool IsLayered(IntPtr hwnd) => (GetWindowLong(hwnd, -20) & 0x00080000) != 0;
 
-    public int ExtendFrame(IntPtr hwnd, bool enabled)
+    public int ExtendFrame(IntPtr hwnd, int top)
     {
-        var margins = new Margins { Left = enabled ? -1 : 0, Right = enabled ? -1 : 0,
-            Top = enabled ? -1 : 0, Bottom = enabled ? -1 : 0 };
+        var margins = new Margins { Left = top < 0 ? -1 : 0, Right = top < 0 ? -1 : 0,
+            Top = top, Bottom = top < 0 ? -1 : 0 };
         return DwmExtendFrameIntoClientArea(hwnd, ref margins);
     }
     public int SetDarkMode(IntPtr hwnd, bool dark)

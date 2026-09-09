@@ -113,10 +113,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 LastHResult = _native.DisableAlpha(hwnd);
                 if (LastHResult >= 0)
                 {
-                    // Accent Acrylic needs zero glass; system backdrops need full glass.
-                    // Update the existing frame owner so later WindowChrome messages agree.
-                    _windowChrome.GlassFrameThickness = new Thickness(clear ? 0 : -1);
-                    LastHResult = _native.ExtendFrame(hwnd, !clear);
+                    // Full glass interferes with the accent tint. Keep a 1-DIP top strip:
+                    // exact zero makes WindowChrome install a window region on every resize,
+                    // disabling native corners/shadow. Both frame writers use the same margins.
+                    _windowChrome.GlassFrameThickness = clear ? new Thickness(0, 1, 0, 0) : new Thickness(-1);
+                    LastHResult = _native.ExtendFrame(hwnd, clear
+                        ? (int)Math.Ceiling(VisualTreeHelper.GetDpi(_window).DpiScaleY) : -1);
                     if (LastHResult >= 0)
                     {
                         LastHResult = _native.SetDarkMode(hwnd, dark);

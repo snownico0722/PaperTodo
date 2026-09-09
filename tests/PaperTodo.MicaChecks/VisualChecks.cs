@@ -161,6 +161,7 @@ internal static class VisualChecks
             Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 &&
                 type == MicaBackdropTypes.ToDwmBackdrop(material) && window.IsNativeMicaEffective,
                 "selected material is active with the matching system backdrop policy");
+            AssertNoWindowRegion(hwnd);
             var active = Capture(window, name + "-active", white, black, dark: null);
             other.Activate(); Wait();
             var inactive = Capture(window, name + "-inactive", white, black, dark: null);
@@ -202,7 +203,13 @@ internal static class VisualChecks
         };
         try
         {
-            backdrop.Show(); window.Activate();
+            backdrop.Show();
+            // Showing a non-activating HWND can still put it above an already active paper;
+            // Activate() alone then does nothing. Place the test background explicitly below it.
+            Program.Assert(SetWindowPos(new WindowInteropHelper(backdrop).Handle,
+                new WindowInteropHelper(window).Handle, 0, 0, 0, 0, 0x13 /* NOSIZE | NOMOVE | NOACTIVATE */),
+                "test background is placed behind the paper");
+            window.Activate();
             controller.State.Theme = "light";
             controller.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
             Theme.Invalidate(); window.UpdateTheme(); Wait();
@@ -367,6 +374,11 @@ internal static class VisualChecks
             Packed(bounds.Left + 2, (bounds.Top + bounds.Bottom) / 2)).ToInt32() == 10, "left edge still resizes");
         Program.Assert(SendMessage(hwnd, 0x0084, IntPtr.Zero,
             Packed(bounds.Right - 2, (bounds.Top + bounds.Bottom) / 2)).ToInt32() == 11, "right edge still resizes");
+        AssertNoWindowRegion(hwnd);
+    }
+
+    private static void AssertNoWindowRegion(IntPtr hwnd)
+    {
         var region = CreateRectRgn(0, 0, 0, 0);
         try { Program.Assert(GetWindowRgn(hwnd, region) == 0, "no manual rounded-region crop over the native frame"); }
         finally { DeleteObject(region); }
@@ -436,6 +448,7 @@ internal static class VisualChecks
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] private static extern int GetWindowRgn(IntPtr hwnd, IntPtr region);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);

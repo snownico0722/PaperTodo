@@ -325,7 +325,7 @@ internal static class Program
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls;
         public bool IsLayered(IntPtr hwnd) => Layered;
-        public int ExtendFrame(IntPtr hwnd, bool enabled) { Glass = enabled; return Failure == "frame" ? Error : 0; }
+        public int ExtendFrame(IntPtr hwnd, int top) { Glass = top < 0; return Failure == "frame" ? Error : 0; }
         public int SetDarkMode(IntPtr hwnd, bool dark) { Dark = dark; return Failure == "dark" ? Error : 0; }
         public int SetBackdrop(IntPtr hwnd, int backdrop)
         {
@@ -337,7 +337,7 @@ internal static class Program
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
         {
             if (enabled && Failure == "accent") return Error;
-            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass, "accent requires a clean zero-glass HWND");
+            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass, "accent excludes system backdrop, full glass and alpha fallback");
             ClearAcrylic = enabled; return 0;
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
