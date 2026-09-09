@@ -17,6 +17,6 @@ public sealed partial class AppController
         State.TelemetryEnabled = !State.TelemetryEnabled;
         SaveNow();
         TelemetryService.SetEnabled(State.TelemetryEnabled);
-        RefreshSettingsWindowContent();
+        RefreshSettingsRegions("general.telemetry");
     }
 }

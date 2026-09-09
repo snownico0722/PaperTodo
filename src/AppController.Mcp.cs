@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -72,38 +73,42 @@ public sealed partial class AppController
         try
         {
             update();
+            return;
         }
-        catch
+        catch (Exception ex)
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null || IsExiting)
-            {
-                return;
-            }
+            Trace.WriteLine($"PaperTodo post-commit UI refresh failed; retrying at ContextIdle: {ex}");
+        }
 
-            try
-            {
-                _ = dispatcher.BeginInvoke(
-                    (Action)(() =>
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || IsExiting)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = dispatcher.BeginInvoke(
+                (Action)(() =>
+                {
+                    if (IsExiting) return;
+                    try
                     {
-                        if (IsExiting) return;
-                        try
-                        {
-                            update();
-                        }
-                        catch
-                        {
-                            try
-                            {
-                                ArrangeDeepCapsules(animate: false);
-                                RefreshTrayMenu();
-                            }
-                            catch { }
-                        }
-                    }),
-                    DispatcherPriority.ContextIdle);
-            }
-            catch { }
+                        update();
+                    }
+                    catch (Exception ex)
+                    {
+                        // The business mutation is already persisted. Keep that success result,
+                        // but do not turn an arbitrary UI exception into a global capsule/tray
+                        // rebuild that can hide the real failing surface.
+                        Trace.WriteLine($"PaperTodo post-commit UI retry failed: {ex}");
+                    }
+                }),
+                DispatcherPriority.ContextIdle);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"PaperTodo could not schedule post-commit UI retry: {ex}");
         }
     }
 
@@ -142,7 +147,6 @@ public sealed partial class AppController
             window.RefreshTodoRowsForExternalMutation();
         }
         NotifyTodoReminderCollectionChanged();
-        RefreshTrayMenu();
         RefreshCapsuleEligibilityForLinkedPapers(
             paper.Items.Select(item => item.LinkedPaperId));
     }
@@ -171,8 +175,9 @@ public sealed partial class AppController
         {
             window.RefreshNoteForExternalChange();
         }
+        // Note content can change whether a linked paper behaves as a script capsule, so linked
+        // Todo rows still need reconciliation even though the tray title itself does not.
         RefreshTodoRowsForLinkedPaper(paper.Id);
-        RefreshTrayMenu();
     }
 
     internal void FinalizeMcpPaperDeletion(

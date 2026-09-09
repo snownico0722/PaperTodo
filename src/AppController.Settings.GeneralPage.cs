@@ -44,7 +44,9 @@ public sealed partial class AppController
                 ToggleAnimations),
             "TipEnableAnimations"));
 
-        leftColumn.Children.Add(CreateAnonymousUsageStatisticsSettingsRow());
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.telemetry",
+            CreateAnonymousUsageStatisticsSettingsRow));
 
         if (State.AdvancedSettingsMode)
         {
