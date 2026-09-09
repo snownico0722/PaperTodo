@@ -1,83 +1,22 @@
-name: Skin material rework validation
+name: Recover material source
 on:
   push:
     branches: [exp/playful-skins-20260909]
-    paths: [.github/workflows/skin-review-source.yml, '.skin-rework.*.json']
+    paths: [.github/workflows/skin-review-source.yml]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  validate:
-    if: contains(github.event.head_commit.message, '[apply-skin-rework]')
-    runs-on: windows-latest
-    timeout-minutes: 15
+  recover:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          submodules: recursive
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-      - name: Apply checksum-verified surface changes
-        shell: pwsh
+      - name: Export current source and pending changes, never credentials
         run: |
-          @'
-          from pathlib import Path
-          import subprocess, json, hashlib
-          assert subprocess.check_output(['git','branch','--show-current'], text=True).strip() == 'exp/playful-skins-20260909'
-          digest = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
-          outputs = {}
-          inputs = sorted(Path('.').glob('.skin-rework.*.json'))
-          assert len(inputs) == 3
-          for payload in inputs:
-              for entry in json.loads(payload.read_text(encoding='utf-8-sig')):
-                  name = entry['path']
-                  assert name == 'CHANGELOG.md' or name.startswith(('src/','tests/','Resources/','doc/'))
-                  assert '..' not in Path(name).parts and name not in outputs
-                  if entry['before'] is None:
-                      assert not Path(name).exists(), name
-                      s = entry['content']
-                  else:
-                      s = subprocess.check_output(['git','show',f'HEAD:{name}']).decode('utf-8-sig').replace('\r\n','\n')
-                      assert digest(s) == entry['before'], f'Changed source: {name}'
-                      previous = 0
-                      for start, end, value in entry['edits']:
-                          assert previous <= start <= end <= len(s) and isinstance(value, str)
-                          previous = end
-                      for start, end, value in reversed(entry['edits']): s = s[:start] + value + s[end:]
-                  assert digest(s) == entry['after'], f'Transfer mismatch: {name}'
-                  outputs[name] = s
-          assert len(outputs) == 17
-          for name, s in outputs.items(): Path(name).write_text(s, encoding='utf-8', newline='\n')
-          for payload in inputs: payload.unlink()
-          subprocess.run(['git','diff','--check'], check=True)
-          print('Applied 17 verified source updates.')
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'Source transfer failed' }
-      - name: Build Release
-        shell: pwsh
-        run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
-      - name: Check skins, live reflection and seamless header pixels
-        shell: pwsh
-        env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/skin-rework-evidence/native
-          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/skin-rework-evidence/skins
-        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
-      - name: Commit only the validated implementation
-        shell: pwsh
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow edit' }
-          git commit -m 'feat: distinct skin materials, seamless headers and live pearl reflections'
-          if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
-          git push origin HEAD:refs/heads/exp/playful-skins-20260909
-          if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+          git bundle create "$RUNNER_TEMP/skin-current.bundle" HEAD
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: skin-rework-evidence-${{ github.run_id }}
-          path: ${{ runner.temp }}/skin-rework-evidence
-          if-no-files-found: ignore
-          retention-days: 2
+          name: skin-current-source
+          path: ${{ runner.temp }}/skin-current.bundle
+          retention-days: 1
