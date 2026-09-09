@@ -239,12 +239,15 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
             // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
             // noise and lifts the darkness, producing a clean, luminous frosted glass.
-            // Clear Acrylic keeps the same native blur with a much lighter tint wash.
+            // Clear Acrylic uses a faint white wash to lift the native material's dark tint
+            // while keeping much more of the background visible than standard Acrylic.
             // Only the background tint changes; text and controls stay fully opaque.
             var clear = material == MicaBackdropTypes.ClearAcrylic;
-            var color = dark
-                ? Color.FromArgb((byte)(clear ? 32 : 144), 32, 33, 40)
-                : Color.FromArgb((byte)(clear ? 40 : 152), 255, 255, 255);
+            var color = clear
+                ? Color.FromArgb((byte)(dark ? 32 : 56), 255, 255, 255)
+                : dark
+                    ? Color.FromArgb(144, 32, 33, 40)
+                    : Color.FromArgb(152, 255, 255, 255);
             var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;
