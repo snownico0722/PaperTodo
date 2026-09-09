@@ -113,6 +113,23 @@ internal static partial class Program
                     out _,
                     out _),
                 "splitting inline dollar math forces a full parse before distant re-pairing");
+
+            // The delimiter character can stay untouched while its escape state changes. With two
+            // backslashes the nearby dollar closes the old formula; deleting one makes that dollar
+            // escaped and allows the opener to pair with the distant dollar instead. The distant
+            // close sits beyond the normal local window, so this must decline incremental parsing.
+            var escapeSource = prefix + "$x\\\\$" + new string('c', 1_800) + "$" + suffix;
+            var escapeSnapshot = MarkdownSemanticSnapshot.Parse(escapeSource);
+            var escapeRun = escapeSource.IndexOf("\\\\$", prefix.Length, StringComparison.Ordinal);
+            var escapeChanged = escapeSource.Remove(escapeRun, 1);
+            Require(
+                !MarkdownSemanticSnapshot.TryParseIncrementalLocal(
+                    escapeSource,
+                    escapeSnapshot,
+                    escapeChanged,
+                    out _,
+                    out _),
+                "changing backslash parity before a dollar forces a full parse");
         });
 
         check("WpfMath renders common inline and multiline structures", () =>
@@ -121,6 +138,7 @@ internal static partial class Program
             {
                 @"x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}",
                 @"\sum_{i=1}^{n} i^2",
+                @"\left\{x\right.",
                 @"\begin{aligned}a&=b+c\\d&=e+f\end{aligned}",
                 @"\begin{matrix}a&b\\c&d\end{matrix}",
                 @"\begin{pmatrix}a&b\\c&d\end{pmatrix}",
