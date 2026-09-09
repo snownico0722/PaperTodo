@@ -203,6 +203,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -334,6 +335,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(() =>
             {
                 _controller.RefreshExternalTodoPaper(paper);
@@ -395,6 +397,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -503,6 +506,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(() =>
             {
                 _controller.RefreshExternalTodoPaper(paper);
@@ -907,6 +911,9 @@ internal sealed partial class PaperCommandService
         public static TodoPaperSnapshot Capture(PaperData paper) =>
             new(paper.Items.Select(PaperItemSnapshot.Capture).ToList());
 
+        public IReadOnlyList<PaperItem> ToItems() =>
+            _items.Select(item => item.ToItem()).ToArray();
+
         public void Restore(PaperData paper)
         {
             paper.Items.Clear();
@@ -940,6 +947,24 @@ internal sealed partial class PaperCommandService
                 item.LinkedPathIsDirectory,
                 item.ReminderAt,
                 item.ReminderTriggered);
+
+        public PaperItem ToItem()
+        {
+            var copy = new PaperItem
+            {
+                Id = Item.Id,
+                Text = Text,
+                Done = Done,
+                Order = Order,
+                ReminderAt = ReminderAt,
+                ReminderTriggered = ReminderTriggered
+            };
+            copy.RestoreQuickLaunch(
+                LinkedPaperId,
+                LinkedPath,
+                LinkedPathIsDirectory);
+            return copy;
+        }
 
         public void Restore()
         {

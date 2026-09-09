@@ -95,6 +95,16 @@ public sealed partial class AppController
         return TrySaveNow(sync: true);
     }
 
+    internal void RecordExternalTodoMutationUndoStep(
+        PaperData paper,
+        IReadOnlyList<PaperItem> before)
+    {
+        if (_windows.TryGetValue(paper.Id, out var window))
+        {
+            window.RecordExternalTodoMutationAsUndoStep(before);
+        }
+    }
+
     internal void RunExternalPostCommitUi(Action update) =>
         RunMcpPostCommitUi(update);
 
@@ -137,10 +147,20 @@ public sealed partial class AppController
 
     internal void QueuePluginPaperStateDeletion(string paperId)
     {
-        if (!string.IsNullOrWhiteSpace(paperId))
+        if (string.IsNullOrWhiteSpace(paperId))
         {
-            _pendingPluginPaperStateDeletes.Add(paperId);
+            return;
         }
+
+        // Both user and external deletion reach this point only after the Paper has left the
+        // authoritative state (and external deletion has already saved successfully). A deleted
+        // Paper id must not survive only inside a live Todo window's undo/redo snapshots.
+        foreach (var window in _windows.Values)
+        {
+            window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
+        }
+
+        _pendingPluginPaperStateDeletes.Add(paperId);
     }
 
     internal void TryFlushPendingPluginPaperStateDeletes()
