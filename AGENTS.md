@@ -128,6 +128,7 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 
 ## 待办、笔记、主题与资源
 
+- 通用操作和状态图标使用固定矢量几何，不用字符或字体字形代替。
 - 多行粘贴待办形成一次用户操作时，只形成一次撤销快照。
 - `PaperItem.LinkedPaperId` 是跨纸片关系，不要只在单个 UI 路径里清理。
 - 内置 Note 编辑/浏览共享一个 `MarkdownTextBox`；不要拆成两套独立文本 surface（见 D-019）。`MarkdownTextBox` 长度上限属于 WPF 布局/渲染保护，不要无依据删除。
