@@ -25,6 +25,7 @@
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
+    <PaperTodoMathLibrary>$(MSBuildProjectDirectory)\native\math\bin\win-x64\papertodo_math.dll</PaperTodoMathLibrary>
     <OutputPath>$(MSBuildProjectDirectory)\输出\PaperTodo-v$(Version)\</OutputPath>
     <SatelliteResourceLanguages>en;ja;ko</SatelliteResourceLanguages>
     <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;tests\**;vendor\**</DefaultItemExcludes>
@@ -43,6 +44,11 @@
     </Content>
     <Content Include="$(PaperTodoLmdbLibrary)">
       <Link>papertodo_lmdb.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(PaperTodoMathLibrary)">
+      <Link>papertodo_math.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
@@ -70,5 +76,10 @@
     <Error
       Condition="!Exists('$(PaperTodoLmdbLibrary)')"
       Text="PaperTodo's native LMDB library is missing. Restore native\lmdb\bin\win-x64\papertodo_lmdb.dll or build it with native\lmdb\build.ps1." />
+  </Target>
+  <Target Name="EnsurePaperTodoMathLibrary" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="!Exists('$(PaperTodoMathLibrary)')"
+      Text="PaperTodo's native math library is missing. Restore native\math\bin\win-x64\papertodo_math.dll or build it with native\math\build.ps1." />
   </Target>
 </Project>

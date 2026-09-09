@@ -20,7 +20,7 @@ jobs:
       group: pull-request-build-${{ github.ref }}
       cancel-in-progress: true
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     defaults:
       run:
@@ -37,6 +37,26 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Native math checks
+        run: cargo test --manifest-path .\native\math\Cargo.toml --target x86_64-pc-windows-msvc --locked
+
+      - name: Build native math library
+        run: .\native\math\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Upload native math build
+        uses: actions/upload-artifact@v6
+        with:
+          name: papertodo-math-native
+          path: |
+            native/math/bin/win-x64/papertodo_math.dll
+            native/math/Cargo.lock
+          if-no-files-found: error
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -50,6 +70,12 @@ jobs:
 
       - name: Markdown semantic checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownSemanticChecks\PaperTodo.MarkdownSemanticChecks.csproj -c Release
+
+      - name: Markdown math checks
+        run: dotnet run --project .\tests\PaperTodo.MarkdownMathChecks\PaperTodo.MarkdownMathChecks.csproj -c Release
+
+      - name: Markdown math layout regression checks
+        run: dotnet run --project .\tests\PaperTodo.MarkdownMathLayoutChecks\PaperTodo.MarkdownMathLayoutChecks.csproj -c Release
 
       - name: Markdown editing checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownEditingChecks\PaperTodo.MarkdownEditingChecks.csproj -c Release
