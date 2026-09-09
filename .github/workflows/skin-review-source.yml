@@ -1,0 +1,21 @@
+name: Skin regression source snapshot
+on:
+  push:
+    branches: [exp/playful-skins-20260909]
+    paths: [.github/workflows/skin-review-source.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Export source objects only
+        run: git bundle create "$RUNNER_TEMP/skin-review.bundle" HEAD refs/remotes/origin/main refs/remotes/origin/exp/mica-materials-20260907
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skin-review-source
+          path: ${{ runner.temp }}/skin-review.bundle
+          retention-days: 1
