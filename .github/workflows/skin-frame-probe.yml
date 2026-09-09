@@ -13,13 +13,13 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Probe native frame separately from WPF decorations
-        shell: pwsh
+      - shell: pwsh
         run: |
           New-Item -ItemType Directory probe | Out-Null
           Set-Location probe
           '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><OutputType>Exe</OutputType><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/></ItemGroup></Project>' | Set-Content probe.csproj
           @'
+          using System.IO;
           using System.Runtime.InteropServices;
           using System.Windows;
           using System.Windows.Controls;
