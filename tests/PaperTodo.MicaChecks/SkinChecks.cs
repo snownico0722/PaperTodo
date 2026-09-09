@@ -22,8 +22,10 @@ internal static class SkinChecks
             Program.Assert(PaperSkins.Resolve(id, "mica", "acrylic") == PaperSkins.Paper, "explicit choice wins over legacy palette");
         foreach (var id in PaperSkins.All)
             Program.Assert(PaperSkins.IsValid(id) && PaperSkins.Normalize(id) == id && !PaperSkins.Decorate(id, true), "valid IDs / high contrast");
-        foreach (var id in new[] { PaperSkins.TracingPaper, PaperSkins.Aero, PaperSkins.LiquidGlass })
+        foreach (var id in new[] { PaperSkins.TracingPaper, PaperSkins.Aero })
             Program.Assert(PaperSkins.UsesNativeBackdrop(id) && PaperSkins.NativeBackdrop(id) == MicaBackdropTypes.Acrylic, "supported Acrylic recipe");
+        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.LiquidGlass) == NativeMicaBackdrop.ClearGlassMaterial,
+            "liquid glass no longer maps to frosted Acrylic");
         CheckPersistence();
         var resources = new ResourceManager("PaperTodo.Resources.Strings", typeof(Strings).Assembly);
         foreach (var culture in new[] { "", "en", "ja", "ko" })
@@ -68,7 +70,7 @@ internal static class SkinChecks
                     Save(image, $"{skin}-{mode}-{(capsule ? "capsule" : "paper")}-{scale:0.##}");
                     if (PaperSkins.UsesNativeBackdrop(skin))
                     {
-                        border.Background = NativeMicaBackdrop.GetActiveSurfaceBrush(MicaBackdropTypes.Acrylic, mode == "dark");
+                        border.Background = NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(skin), mode == "dark");
                         Program.Assert(Pixels(Render(border, scale))[center + 3] is > 0 and < 255, "native fill allows compositor through");
                     }
                     samples++;
@@ -263,7 +265,11 @@ internal static class SkinChecks
             Program.Assert(Math.Abs(first - surface.IdleReflectionOffset) > .02 && !pixels.SequenceEqual(Pixels(Render(window, 1))),
                 "actual WPF film pixels change without dragging");
             var moved = surface.MovementReflectionOffset;
-            window.Left += 160; Program.Pump();
+            var updates = surface.MovementUpdateCount;
+            for (var i = 0; i < 16; i++) { window.Left += 10; window.Top += 1; }
+            Program.Pump();
+            Program.Assert(surface.MovementUpdateCount - updates <= 2,
+                "position notifications coalesce instead of repainting twice for each Left/Top pair");
             Program.Assert(Math.Abs(moved - surface.MovementReflectionOffset) > .02, "drag position changes reflection independently of idle movement");
             Save(Render(window, 1), "pearl-motion-drag");
             window.Hide(); Program.Pump();

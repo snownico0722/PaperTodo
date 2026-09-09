@@ -47,6 +47,7 @@
 | D-032 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-033 | 主题 / Window integration |
 | D-033 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
 | D-034 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
+| D-035 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Experimental | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1265,3 +1266,18 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 - `src/DwmMicaApi.cs` 的 `SetClearAcrylic`、`src/NativeMicaBackdrop.cs` 的材质切换与清理。
 - `tests/PaperTodo.MicaChecks/Program.cs` 的接法互斥/失败回退；`VisualChecks.cs` 的白底/彩色底和形态动画捕获。
 - 社区接法：[SlimeNull 的 WPF 示例](https://slimenull.com/posts/20240530104846/)、[WindowEffectTest 源码](https://github.com/TwilightLemon/WindowEffectTest/blob/master/WindowEffectTest/WindowMaterial.cs)。
+
+
+---
+
+## D-035 — 自绘材质顶栏不再叠加 native caption，清透玻璃不用磨砂
+
+日期：2026-09-10。补充 D-033 / D-034，替代其 full/top-1 glass margin 细节，不替代单窗口边界。
+
+用户真机反馈暴露了 WPF-only 图像检查的盲区：透明 WPF 顶栏下仍有固定 CAPTION_COLOR 的实色 native 带；透色模式保留顶部 1 DIP glass 还可能露出亮线。Windows 独立探针对比确认固定 caption 色与最终桌面顶栏／正文色差有关。
+
+当前选择：caption 使用 COLOR_DEFAULT，适配器刷新原生状态时把实际 DWM glass margin 归零；WindowChrome 的逻辑 glass 标志保持非零，仅用于留在无 HRGN 的管理路径。禁止通过裁窗口、负 margin 或新增 NCCALCSIZE 处理补洞。主题、DPI、composition 和形态终点沿用既有刷新入口。
+
+液态皮肤使用内部 clearGlass alpha composition recipe，不再复用系统 Acrylic；不截屏、不采样壁纸，不声称真实背景折射。原有系统 Mica/Acrylic 与 accent recipe 保持互斥并清理前一状态。普通胶囊和形态动画仍回退实色。
+
+验证必须包含最终桌面顶栏／正文像素和清透背景的高频条纹，而不仅仅是 WPF Background.A 或不同皮肤图像 hash；真实 Windows 11 主观材质与混合 DPI 仍需人工验收。

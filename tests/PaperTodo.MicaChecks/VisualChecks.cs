@@ -430,8 +430,8 @@ internal static class VisualChecks
             var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
             var p = header.PointToScreen(new Point(header.ActualWidth / 2, 2));
             var actual = bitmap.GetPixel((int)Math.Round(p.X) - bounds.Left, (int)Math.Round(p.Y) - bounds.Top);
-            // Native controls no longer sit on an opaque WPF strip. The fake API
-            // test still verifies an explicit caption color (never OS accent default).
+            // WPF transparency alone does not prove continuity. NativeSurfaceChecks also
+            // compares the final desktop caption/body pixels against the same rear surface.
             Program.Assert(header.Background is SolidColorBrush { Color.A: 0 } && header.Margin.Bottom == 0 &&
                 header.BorderThickness == new Thickness(), $"{name}: native header uses the same material as the body");
             Console.WriteLine($"HEADER {name}: final desktop material pixel {actual}");

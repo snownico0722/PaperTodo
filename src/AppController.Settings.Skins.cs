@@ -11,7 +11,7 @@ public sealed partial class AppController
         if (!PaperSkins.IsValid(id) || PaperSkins.Resolve(State) == id) return;
         State.PaperSkin = id;
         // Retain the last native recipe for older experimental builds.
-        if (PaperSkins.UsesNativeBackdrop(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
+        if (PaperSkins.UsesSystemPalette(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
         SaveNow();
         RefreshThemeSurfaces();
     }

@@ -1463,16 +1463,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>凸レンズ風の厚い縁、内外のハイライト、ポインターに応じた反射がヘッダーと本文をつなぎます。見た目の近似であり、デスクトップ背景のリアルタイム屈折は行いません。</value>
+    <value>背景をぼかさない薄い透明色と細い縁の反射。ハイライトはポインターに追従します。背景の実際の屈折はなく、Apple Liquid Glass と同等ではありません。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>盛り上がった釉薬の縁、クリーム色の磁器面、厚みを感じる下部の陰影。不透明で配色に追従します。</value>
+    <value>不透明なクリーム色の磁器面に柔らかな釉薬の光と浅い下部の陰影。厚い内枠はなく、選択した配色に追従します。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>氷青色、斜めの反射帯、二重の光る縁がヘッダーまで続くガラス面です。Windows 7のシステムテーマではありません。</value>
+    <value>氷青色、柔らかく幅広い斜めの反射と細い光る縁。ヘッダーと本文がつながります。Windows 7 のシステムテーマではありません。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>レトロなクエストパネル風。小さな段状の角、二重枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントを保ちます。</value>
+    <value>レトロなクエストパネル風。小さな段状の角、一重の外枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントです。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>スキンを保存しました。トレイから終了し再起動するとネイティブ背景が有効になります。それまでは単色で表示し、編集内容や取り消し履歴は作り直しません。</value>

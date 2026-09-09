@@ -1512,16 +1512,16 @@
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>凸透镜厚边、内外高光与鼠标方向反光；顶栏和纸面连成一体。仍是外观近似，不包含桌面背景的实时折射。</value>
+    <value>清透底色与细线边缘反光，背后内容不再被磨砂模糊；鼠标移动时高光变化。没有真实背景折射，不等同于苹果 Liquid Glass。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>凸起的釉面边缘、奶油色瓷面和底部厚度阴影；不透明，跟随配色。</value>
+    <value>不透明的奶油色瓷面、柔和釉光与浅底部阴影；不再叠加宽厚套框，跟随配色。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>冰蓝染色、明显的斜向反射带、内外亮边，顶栏与纸面共用玻璃表面。不是 Win7 系统主题。</value>
+    <value>冰蓝染色、柔和宽幅斜向反光与细亮边；顶栏与纸面连续。不是 Win7 系统主题。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>复古任务面板：紧凑阶梯角、双层边框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
+    <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>皮肤已保存。请从托盘退出并重新打开，启用原生背景；当前先显示实色外观，不重建编辑内容或撤销记录。</value>

@@ -116,9 +116,8 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
     {
         var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
-        // PaperTodo draws its own title bar. Never restore COLOR_DEFAULT here: with
-        // Windows accent captions enabled that lets a blue active caption bleed through.
-        // COLOR_NONE suppresses borders only, not captions; use the explicit paper tone.
+        // The adapter supplies COLOR_DEFAULT for the caption and zero extended glass.
+        // A fixed caption color draws an opaque band even behind a borderless WPF header.
         var result = DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
         if (result < 0) return result;
         result = DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref borderColor, sizeof(int));

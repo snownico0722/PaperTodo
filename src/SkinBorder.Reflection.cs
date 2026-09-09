@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -12,10 +13,12 @@ internal sealed partial class SkinBorder
     private readonly TranslateTransform _idleReflection = new();
     private readonly TranslateTransform _moveReflection = new();
     private bool _reflectionRunning;
+    private DispatcherOperation? _movementUpdate;
     internal bool IsReflectionRunning => _reflectionRunning;
     internal bool HasReflectionWindow => _reflectionWindow != null;
     internal double IdleReflectionOffset => _idleReflection.X;
     internal double MovementReflectionOffset => _moveReflection.X;
+    internal int MovementUpdateCount { get; private set; }
 
     private void InitializeReflection()
     {
@@ -51,7 +54,8 @@ internal sealed partial class SkinBorder
                     AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever,
                     EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
                 };
-                Timeline.SetDesiredFrameRate(animation, 24);
+                // Do not cap the WPF timing manager for this small decorative clock. A
+                // 24-Hz root animation can also pace layered HWND updates during dragging.
                 _idleReflection.BeginAnimation(TranslateTransform.XProperty, animation);
             }
         }
@@ -59,6 +63,8 @@ internal sealed partial class SkinBorder
     }
     private void DetachReflection()
     {
+        _movementUpdate?.Abort();
+        _movementUpdate = null;
         if (_reflectionWindow != null)
         {
             _reflectionWindow.LocationChanged -= OnReflectionLocationChanged;
@@ -76,8 +82,20 @@ internal sealed partial class SkinBorder
     private void OnReflectionStateChanged(object? sender, EventArgs e) => SyncReflectionSubscription();
     private void OnReflectionLocationChanged(object? sender, EventArgs e)
     {
+        if (_movementUpdate != null || _reflectionWindow == null || Skin != PaperSkins.Pearl) return;
+        // A native move may publish Left and Top separately. Read their latest pair
+        // after input, rather than synchronously invalidating twice per WM_WINDOWPOS.
+        _movementUpdate = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _movementUpdate = null;
+            UpdateMovementReflection();
+        }));
+    }
+    private void UpdateMovementReflection()
+    {
         if (_reflectionWindow is not { IsVisible: true } window || window.WindowState == WindowState.Minimized ||
             !double.IsFinite(window.Left) || !double.IsFinite(window.Top)) return;
+        MovementUpdateCount++;
         // Independent from the idle clock, so dragging never restarts slow film movement.
         _moveReflection.X = Math.Sin((window.Left + window.Top * .25) / 380) * .32;
         _moveReflection.Y = Math.Sin(window.Top / 450) * .12;

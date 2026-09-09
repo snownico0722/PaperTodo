@@ -41,6 +41,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
     internal int LastFrameHResult { get; private set; }
     internal static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621);
     internal const double CornerRadius = 8;
+    // Internal composition recipe, never a saved MicaBackdropType / UI choice.
+    internal const string ClearGlassMaterial = "clearGlass";
 
     internal NativeMicaBackdrop(Window window, Func<Border?> getChrome,
         Func<bool> canPresent, Action<Brush> setSurface,
@@ -78,7 +80,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (material != null) _material = MicaBackdropTypes.Normalize(material);
+        if (material != null) _material = material == ClearGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
         var wasForcedActive = IsActive && _alwaysActive;
         if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
         if (_updating) return;
@@ -101,6 +103,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
+            var glass = _material == ClearGlassMaterial;
             IsActive = false;
             LastHResult = 0;
             if (_clearAcrylicApplied && (!enable || !clear))
@@ -110,44 +113,36 @@ internal sealed class NativeMicaBackdrop : IDisposable
             }
             if (enable && LastHResult >= 0)
             {
-                // Legacy blur-behind alpha is ONLY a fallback. Leaving it enabled when
-                // restoring Mica mixes two composition recipes after the startup fade.
-                LastHResult = _native.DisableAlpha(hwnd);
-                if (LastHResult >= 0)
+                // Keep WindowChrome in its glass-managed (no HRGN) path, but reserve
+                // zero physical glass pixels. Its exact-zero DP path installs an HRGN;
+                // its full-glass path paints a native caption behind our custom header.
+                // The adapter is the final margin writer after theme/DPI/composition
+                // changes. No layout listener, resize mutation or window-region patch.
+                _windowChrome.GlassFrameThickness = new Thickness(-1);
+                LastHResult = _native.ExtendFrame(hwnd, 0);
+                if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
+                // Remove the preceding alpha path before installing a system backdrop.
+                if (LastHResult >= 0) LastHResult = _native.DisableAlpha(hwnd);
+                if (LastHResult >= 0) LastHResult = _native.SetBackdrop(hwnd,
+                    glass ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
+                if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
+                if (LastHResult >= 0 && clear)
                 {
-                    // Full glass interferes with the accent tint. Keep a 1-DIP top strip:
-                    // exact zero makes WindowChrome install a window region on every resize,
-                    // disabling native corners/shadow. Both frame writers use the same margins.
-                    _windowChrome.GlassFrameThickness = clear ? new Thickness(0, 1, 0, 0) : new Thickness(-1);
-                    LastHResult = _native.ExtendFrame(hwnd, clear
-                        ? (int)Math.Ceiling(VisualTreeHelper.GetDpi(_window).DpiScaleY) : -1);
-                    if (LastHResult >= 0)
-                    {
-                        LastHResult = _native.SetDarkMode(hwnd, dark);
-                        if (LastHResult >= 0)
-                        {
-                            LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
-                            if (LastHResult >= 0 && clear)
-                            {
-                                LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
-                                // Retain ownership if a later refresh fails: fallback still
-                                // has to remove the accent that was previously installed.
-                                _clearAcrylicApplied |= LastHResult >= 0;
-                            }
-                            IsActive = LastHResult >= 0;
-                        }
-                    }
+                    LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
+                    _clearAcrylicApplied |= LastHResult >= 0;
                 }
+                IsActive = LastHResult >= 0;
             }
 
             // DWM owns the outer corners and border. No SetWindowRgn: it invalidates native
             // rounding/shadow and used to turn the paper's shadow margin into a second frame.
             var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
             var edgeColor = edge.R | edge.G << 8 | edge.B << 16; // COLORREF, no alpha
-            var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
-            var captionColor = caption.R | caption.G << 8 | caption.B << 16;
+            // Do not put a solid native caption back underneath the transparent header.
+            // With no extended glass and no WS_CAPTION it has no client-area band to paint.
+            var captionColor = unchecked((int)0xffffffff);
             LastFrameHResult = _native.ConfigureFrame(hwnd, IsActive && rounded,
-                IsActive ? edgeColor : unchecked((int)0xfffffffe), captionColor);
+                IsActive && !glass && !clear ? edgeColor : unchecked((int)0xfffffffe), captionColor);
             // Let DWM draw the one outer stroke along its own rounded clip. Drawing a WPF
             // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
             // thickness for layout; restore the WPF stroke when the native frame is suspended.

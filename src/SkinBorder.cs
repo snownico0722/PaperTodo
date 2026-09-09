@@ -24,11 +24,10 @@ internal sealed partial class SkinBorder : Border
     private Window? _reflectionWindow;
     private (string Skin, bool Dark, bool Capsule, Color Paper)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
-    private Brush _glint = Brushes.Transparent, _depth = Brushes.Transparent;
+    private Brush _glint = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
     private Geometry _shape = Geometry.Empty, _borderRing = Geometry.Empty;
-    private Geometry _glintRing = Geometry.Empty, _depthRing = Geometry.Empty;
-    private Geometry _bevelRing = Geometry.Empty, _innerRing = Geometry.Empty;
+    private Geometry _glintRing = Geometry.Empty;
     public static readonly DependencyProperty HeaderHeightProperty = DependencyProperty.Register(
         nameof(HeaderHeight), typeof(double), typeof(SkinBorder),
         new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -84,8 +83,6 @@ internal sealed partial class SkinBorder : Border
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
         PaintMaterialDetails(dc);
-        if (Skin != PaperSkins.TracingPaper)
-            dc.DrawGeometry(_glint, null, _glintRing);
         // The owner's stroke wins. Transparent/zero-width borders really disappear, and
         // left/right docked open edges stay open instead of acquiring a white seam.
         dc.DrawGeometry(BorderBrush, null, _borderRing);
@@ -101,12 +98,9 @@ internal sealed partial class SkinBorder : Border
         _geometryKey = key;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
         _borderRing = Ring(new Thickness(), BorderThickness);
-        var unit = pixel ? 1 / dpi.DpiScaleX : 1;
-        _glintRing = Ring(Sides(1), Sides(unit));
-        var bevel = Skin == PaperSkins.LiquidGlass ? (IsCapsule ? 4 : 7) : Skin == PaperSkins.Ceramic ? 5 : 3;
-        _bevelRing = Ring(Sides(1), Sides(bevel));
-        _innerRing = Ring(Sides(1 + bevel), Sides(unit));
-        _depthRing = Ring(Sides(2 + bevel), Sides(1));
+        // Only a hairline optical reflection, never the old nested 3-9 DIP bezel.
+        var unit = 1 / dpi.DpiScaleX;
+        _glintRing = Ring(Sides(unit), Sides(unit));
 
         Thickness Sides(double width) => new(
             BorderThickness.Left > 0 ? width : 0, BorderThickness.Top > 0 ? width : 0,

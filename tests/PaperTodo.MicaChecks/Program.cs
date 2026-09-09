@@ -95,9 +95,8 @@ internal static class Program
                     "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
-                var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
-                Assert(f.Api.CaptionColor == (caption.R | caption.G << 8 | caption.B << 16),
-                    "custom header uses its own color, never the OS active accent");
+                Assert(f.Api.CaptionColor == unchecked((int)0xffffffff) && f.Api.FrameTop == 0,
+                    "no solid caption override or extended-glass stripe behind the material header");
                 f.Api.Failure = "frame-colors"; f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && f.Backdrop.LastFrameHResult < 0 && !Transparent(f.Chrome.BorderBrush),
                     "rejected native frame settings retain a visible WPF outline");
@@ -110,15 +109,15 @@ internal static class Program
                 {
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
                     var standard = ((SolidColorBrush)f.Chrome.Background).Color;
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.Glass, "standard system Acrylic recipe restored");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0, "standard system Acrylic recipe restored");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     var clear = ((SolidColorBrush)f.Chrome.Background).Color;
                     Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
-                    Assert(clear.A == 0 && f.Api.ClearAcrylic && !f.Api.Glass, "native tint without a second WPF wash or full glass");
+                    Assert(clear.A == 0 && f.Api.ClearAcrylic && f.Api.FrameTop == 0, "native tint without a second WPF wash or full glass");
                     Assert(f.Api.Backdrop == 1 && !f.Api.Alpha && f.Chrome.Opacity == 1 && f.Window.Opacity == 1,
                         "exclusive accent blur with opaque content");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.Glass, "switching back removes the active accent");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0, "switching back removes the active accent");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     f.Eligible = false; f.Apply(true, dark);
                     Assert(!f.Api.ClearAcrylic && f.Api.Alpha, "collapse removes accent before alpha fallback");
@@ -133,6 +132,24 @@ internal static class Program
                 Assert(new WindowInteropHelper(f.Window).Handle == hwnd, "material changes retain the same HWND");
                 f.Backdrop.Dispose();
                 Assert(!f.Api.ClearAcrylic, "disposal removes accent");
+            });
+            Check("clear glass preserves alpha without enabling either blur recipe", () =>
+            {
+                using var f = new Fixture();
+                var hwnd = new WindowInteropHelper(f.Window).Handle;
+                foreach (var previous in new[] { MicaBackdropTypes.Mica, MicaBackdropTypes.Acrylic, MicaBackdropTypes.ClearAcrylic })
+                {
+                    f.Backdrop.Refresh(true, false, previous);
+                    f.Backdrop.Refresh(true, false, NativeMicaBackdrop.ClearGlassMaterial);
+                    Assert(f.Backdrop.IsActive && f.Api.Alpha && f.Api.Backdrop == 1 && !f.Api.ClearAcrylic &&
+                        f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "unblurred clear composition");
+                    f.Backdrop.Refresh(true, false, previous);
+                    Assert(!f.Api.Alpha, "switching to a native material clears glass alpha before backdrop setup");
+                }
+                f.Backdrop.Refresh(true, false, NativeMicaBackdrop.ClearGlassMaterial);
+                f.Api.TransparencyEnabled = false; f.Apply(true, false);
+                Assert(!f.Backdrop.IsActive && !Transparent(f.Chrome.Background), "disabled transparency remains opaque");
+                Assert(new WindowInteropHelper(f.Window).Handle == hwnd, "same editor HWND across recipes");
             });
             Check("active material appearance never prevents real focus changes", () =>
             {
@@ -276,6 +293,7 @@ internal static class Program
                 });
                 Check("experimental skins", () => SkinChecks.Run(controller));
                 Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
+                Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));
                 Check("non-Mica startup keeps the original layered paper", () =>
                 {
                     typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, false);
@@ -334,9 +352,9 @@ internal static class Program
         internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass;
         internal int ActivationCalls;
         internal string? Failure;
-        internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor;
+        internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor, FrameTop;
         public bool IsLayered(IntPtr hwnd) => Layered;
-        public int ExtendFrame(IntPtr hwnd, int top) { Glass = top < 0; return Failure == "frame" ? Error : 0; }
+        public int ExtendFrame(IntPtr hwnd, int top) { FrameTop = top; Glass = top < 0; return Failure == "frame" ? Error : 0; }
         public int SetDarkMode(IntPtr hwnd, bool dark) { Dark = dark; return Failure == "dark" ? Error : 0; }
         public int SetBackdrop(IntPtr hwnd, int backdrop)
         {

@@ -1463,16 +1463,16 @@ When off, open at the docked edge or remembered position.</value>
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>Convex lens edges, inner/outer highlights and pointer-directed reflections continue across header and body. This remains a visual approximation, without live desktop refraction.</value>
+    <value>A clear, lightly tinted surface with fine edge reflections, not frosted background blur. Highlights follow the pointer. No true background refraction; not Apple Liquid Glass.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>Raised glazed edges, a creamy porcelain face and shaded lower bevel; opaque and palette-aware.</value>
+    <value>An opaque cream porcelain face with soft glazed light and shallow lower shading, without a thick inset frame. Follows the selected palette.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Icy blue tint, distinct diagonal reflection bands and double glass rims continue through the header. Not a Windows 7 system theme.</value>
+    <value>Icy blue tint, a broad soft diagonal reflection and fine highlights, continuous across header and paper. Not a Windows 7 system theme.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>A retro quest panel with compact stepped corners, a double frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
+    <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>Skin saved. Exit from the tray and reopen to enable the native backdrop. Existing windows use a solid approximation without rebuilding editors or undo history.</value>
