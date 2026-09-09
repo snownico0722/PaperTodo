@@ -162,6 +162,13 @@ internal static class VisualChecks
                 type == MicaBackdropTypes.ToDwmBackdrop(material) && window.IsNativeMicaEffective,
                 "selected material is active with the matching system backdrop policy");
             AssertNoWindowRegion(hwnd);
+            var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
+            var expectedEdge = edge.R | edge.G << 8 | edge.B << 16;
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 34, out var borderColor, 4) >= 0 && borderColor == expectedEdge,
+                "native outline uses the paper palette, independent of system accent");
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 35, out var captionColor, 4) >= 0 &&
+                captionColor == (material == MicaBackdropTypes.ClearAcrylic ? expectedEdge : -1),
+                "Clear Acrylic glass uses the frame color; system materials retain their default caption");
             var active = Capture(window, name + "-active", white, black, dark: null);
             other.Activate(); Wait();
             var inactive = Capture(window, name + "-inactive", white, black, dark: null);
@@ -378,6 +385,7 @@ internal static class VisualChecks
         Program.Assert(!window.AllowsTransparency && !DwmMicaApi.Instance.IsLayered(hwnd), "opaque endpoint uses non-layered HWND");
         Program.Assert(window.Opacity == 1 && chrome.Opacity == 1, "no accidental whole-UI translucency");
         Program.Assert(chrome.Margin == new Thickness(0) && chrome.Effect == null, "no inset or WPF outer shadow");
+        Program.Assert(chrome.BorderBrush is SolidColorBrush { Color.A: 0 }, "no second WPF outline inside the native corners");
         Program.Assert(hwnd == new WindowInteropHelper(window).Handle && ReferenceEquals(body, chrome.Child), "stable HWND and editor tree");
         Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 2, "actual Mica, not Acrylic or a painted imitation");
         Program.Assert(GetWindowRect(hwnd, out var bounds), "window bounds");

@@ -39,6 +39,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     internal bool IsActive { get; private set; }
     internal int LastHResult { get; private set; }
     internal static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621);
+    internal const double CornerRadius = 8;
 
     internal NativeMicaBackdrop(Window window, Func<Border?> getChrome,
         Func<bool> canPresent, Action<Brush> setSurface,
@@ -140,7 +141,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
             // DWM owns the outer corners and border. No SetWindowRgn: it invalidates native
             // rounding/shadow and used to turn the paper's shadow margin into a second frame.
-            _native.ConfigureFrame(hwnd, IsActive && rounded);
+            var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
+            var edgeColor = edge.R | edge.G << 8 | edge.B << 16; // COLORREF, no alpha
+            _native.ConfigureFrame(hwnd, IsActive && rounded,
+                IsActive ? edgeColor : unchecked((int)0xfffffffe), IsActive && clear);
+            // Let DWM draw the one outer stroke along its own rounded clip. Drawing a WPF
+            // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
+            // thickness for layout; restore the WPF stroke when the native frame is suspended.
+            chrome.SetCurrentValue(Border.BorderBrushProperty, IsActive ? Brushes.Transparent : Theme.PaperBorderBrush);
             // WM_NCACTIVATE controls appearance only. Never synthesize WM_ACTIVATE or
             // change keyboard focus. Restore real activation when the override ends.
             if (IsActive && _alwaysActive || wasForcedActive)

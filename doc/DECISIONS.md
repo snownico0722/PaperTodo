@@ -1159,7 +1159,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 ### Decision / Why
 
 - 仅透色模式使用 `SetWindowCompositionAttribute` 的 `WCA_ACCENT_POLICY`，直接设置原生混合颜色与 alpha；WPF 外壳不再叠加底色。标准云母/亚克力保留官方系统 backdrop。
-- accent 只保留顶部 1 DIP glass，系统 backdrop 使用 full glass；由现有 `WindowChrome` 和适配器统一切换。不能直接设为 zero glass：WPF 会在缩放时安装窗口 region，破坏系统圆角和阴影。进入动画、退出透色模式或释放时清除 accent，失败恢复实色。正文、HWND、编辑器和 Edge 胶囊不重建。
+- accent 只保留顶部 1 DIP glass，系统 backdrop 使用 full glass；由现有 `WindowChrome` 和适配器统一切换。不能直接设为 zero glass：WPF 会在缩放时安装窗口 region，破坏系统圆角和阴影。 顶部 glass 必须显式使用纸片边框色；`DWMWA_COLOR_NONE` 只适用于边框，不能用它隐藏 caption，否则该区域可能露出系统强调色。进入动画、退出透色模式或释放时清除 accent，失败恢复实色。正文、HWND、编辑器和 Edge 胶囊不重建。
 - 这是未公开保证兼容性的 accent policy，有版本与拖动/缩放性能代价；不能以接口成功或 CI 像素正确替代用户机器上的视觉和流畅度确认。暂不引入 Windows App SDK、第二个内容窗口或背景捕获。
 
 ### Evidence

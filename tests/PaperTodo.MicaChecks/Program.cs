@@ -83,6 +83,7 @@ internal static class Program
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && Transparent(f.Chrome.Background), "transparent native surface");
                 Assert(!f.Api.Alpha && f.Api.Backdrop == 2 && f.Api.Rounded, "native recipe and corners");
+                Assert(Transparent(f.Chrome.BorderBrush) && f.Api.BorderColor >= 0, "native frame is the only outer stroke");
                 f.Backdrop.Refresh(true, false, material: MicaBackdropTypes.Acrylic, force: true);
                 Assert(f.Api.Backdrop == 3, "Acrylic backdrop");
                 f.Apply(true, true);
@@ -90,6 +91,8 @@ internal static class Program
                 f.Apply(false, true);
                 Assert(!f.Backdrop.IsActive && !Transparent(f.Chrome.Background), "solid fallback");
                 Assert(f.Api.Alpha && f.Api.Backdrop == 1 && !f.Api.Rounded, "fallback recipe");
+                Assert(!Transparent(f.Chrome.BorderBrush) && f.Api.BorderColor == unchecked((int)0xfffffffe),
+                    "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
             });
@@ -323,7 +326,7 @@ internal static class Program
         internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass;
         internal int ActivationCalls;
         internal string? Failure;
-        internal int Backdrop = 1, BackdropCalls;
+        internal int Backdrop = 1, BackdropCalls, BorderColor;
         public bool IsLayered(IntPtr hwnd) => Layered;
         public int ExtendFrame(IntPtr hwnd, int top) { Glass = top < 0; return Failure == "frame" ? Error : 0; }
         public int SetDarkMode(IntPtr hwnd, bool dark) { Dark = dark; return Failure == "dark" ? Error : 0; }
@@ -342,7 +345,8 @@ internal static class Program
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
-        public void ConfigureFrame(IntPtr hwnd, bool rounded) => Rounded = rounded;
+        public void ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
+        { Rounded = rounded; BorderColor = borderColor; }
         public void SetNonClientActive(IntPtr hwnd, bool active) { NonClientActive = active; ActivationCalls++; }
     }
 }

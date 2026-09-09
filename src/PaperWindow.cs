@@ -1129,6 +1129,11 @@ public sealed partial class PaperWindow : Window
         }
 
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
+        if (_controller.UsesNativeMicaWindows && _topBarHost != null)
+        {
+            var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+            _topBarHost.CornerRadius = new CornerRadius(innerRadius, innerRadius, 0, 0);
+        }
 
         // Snapped presentation: make the paper fill the tile edge-to-edge (no shadow, no
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
@@ -3505,7 +3510,7 @@ public sealed partial class PaperWindow : Window
     private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
         return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
-            _controller.UsesNativeMicaWindows ? 8 : ExpandedChromeCornerRadius);
+            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()

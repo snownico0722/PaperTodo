@@ -3094,7 +3094,7 @@ public sealed partial class AppController
             Background = TrayPaperBrush,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 12),
             Width = SettingsWindowWidth(),
             Padding = new Thickness(14, 12, 14, 14),
             // Fill the window client area so shorter pages keep a stable frame without clipping
