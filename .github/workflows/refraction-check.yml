@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Verify exclusion and caption independently
+      - name: Verify exclusion and native caption independently
         shell: pwsh
         run: |
           New-Item -ItemType Directory probe | Out-Null
@@ -28,35 +28,30 @@ jobs:
           using System.Windows.Media;
           using System.Windows.Shell;
           using System.Windows.Threading;
-          using D = System.Drawing;
+          using D=System.Drawing;
           class Probe {
-            [STAThread] static void Main() {
-              new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
-              Directory.CreateDirectory("evidence");
-              var rear=new Window { Left=30,Top=30,Width=500,Height=360,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Lime,ShowInTaskbar=false };
-              rear.Show(); Wait();
-              var front=new Window { Left=80,Top=80,Width=300,Height=200,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Magenta,Topmost=true,ShowInTaskbar=false };
-              front.Show();Wait();var fh=new WindowInteropHelper(front).Handle;
-              Capture(front,"capture-included");
-              Console.WriteLine("EXCLUDE " + SetWindowDisplayAffinity(fh,0x11)+" error="+Marshal.GetLastWin32Error());Wait();
-              using(var b=Capture(front,"capture-excluded")) Console.WriteLine("EXCLUDED-PIXEL " + b.GetPixel(100,100));
+            [STAThread] static void Main(){
+              new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown}; Directory.CreateDirectory("evidence");
+              var rear=new Window{Left=30,Top=30,Width=500,Height=360,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Lime,ShowInTaskbar=false};rear.Show();Wait();
+              var front=new Window{Left=80,Top=80,Width=300,Height=200,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Magenta,Topmost=true,ShowInTaskbar=false};front.Show();Wait();var fh=new WindowInteropHelper(front).Handle;
+              using(var included=Capture(front,"included"))Console.WriteLine("INCLUDED "+included.GetPixel(100,100));
+              Console.WriteLine("EXCLUDE "+SetWindowDisplayAffinity(fh,0x11)+" error="+Marshal.GetLastWin32Error());Wait();
+              using(var excluded=Capture(front,"excluded"))Console.WriteLine("EXCLUDED "+excluded.GetPixel(100,100));
               SetWindowDisplayAffinity(fh,0);front.Close();Wait();
-              foreach(var recipe in new[]{2,3}) foreach(var mode in new[]{"baseline","no-caption-style","no-nc","theme-options","alpha-zero"}) {
-                var w=new Window {WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.CanResizeWithGrip,ShowInTaskbar=false,Topmost=true,Left=60,Top=50,Width=340,Height=230,Background=Brushes.Transparent};
-                WindowChrome.SetWindowChrome(w,new WindowChrome {CaptionHeight=0,ResizeBorderThickness=new Thickness(),GlassFrameThickness=new Thickness(-1),UseAeroCaptionButtons=false});
-                w.Content=new Border {Background=Brushes.Transparent};w.Show();Wait();var h=new WindowInteropHelper(w).Handle;
+              foreach(var recipe in new[]{2,3})foreach(var mode in new[]{"baseline","no-caption-style","no-nc","theme-options","alpha-zero"}){
+                var w=new Window{WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.CanResizeWithGrip,ShowInTaskbar=false,Topmost=true,Left=60,Top=50,Width=340,Height=230,Background=Brushes.Transparent};
+                WindowChrome.SetWindowChrome(w,new WindowChrome{CaptionHeight=0,ResizeBorderThickness=new Thickness(),GlassFrameThickness=new Thickness(-1),UseAeroCaptionButtons=false});
+                w.Content=new Border{Background=Brushes.Transparent};w.Show();Wait();var h=new WindowInteropHelper(w).Handle;
                 HwndSource.FromHwnd(h).CompositionTarget.BackgroundColor=Colors.Transparent;
-                Set(h,38,recipe); Set(h,35,0x00ff00ff);Set(h,34,unchecked((int)0xfffffffe));
-                if(mode=="no-caption-style") {var st=GetWindowLong(h,-16);SetWindowLong(h,-16,st&~0x00c00000);SetWindowPos(h,IntPtr.Zero,0,0,0,0,0x0037);}
-                if(mode=="no-nc") Set(h,2,1);
-                if(mode=="theme-options") {var o=new Options {Flags=3,Mask=3};Console.WriteLine("THEME " + SetWindowThemeAttribute(h,1,ref o,8));}
-                if(mode=="alpha-zero") {Set(h,39,1);var margins=new Margins();Extend(h,ref margins);}
-                Wait();using(var b=Capture(w,$"caption-{recipe}-{mode}"))Console.WriteLine($"CAPTION {recipe}/{mode} style={GetWindowLong(h,-16):x} top={b.GetPixel(b.Width/2,8)} body={b.GetPixel(b.Width/2,100)}");
-                w.Close();Wait();
-              }
-              rear.Close();
+                Set(h,38,recipe);Set(h,35,0x00ff00ff);Set(h,34,unchecked((int)0xfffffffe));
+                if(mode=="no-caption-style"){var st=GetWindowLong(h,-16);SetWindowLong(h,-16,st&~0x00c00000);SetWindowPos(h,IntPtr.Zero,0,0,0,0,0x0037);}
+                if(mode=="no-nc")Set(h,2,1);
+                if(mode=="theme-options"){var o=new Options{Flags=3,Mask=3};Console.WriteLine("THEME "+SetWindowThemeAttribute(h,1,ref o,8));}
+                if(mode=="alpha-zero"){Set(h,39,1);var m=new Margins();Extend(h,ref m);}
+                Wait();using(var b=Capture(w,$"caption-{recipe}-{mode}"))Console.WriteLine($"CAPTION {recipe}/{mode} style={GetWindowLong(h,-16):x} top={b.GetPixel(b.Width/2,8)} body={b.GetPixel(b.Width/2,100)}");w.Close();Wait();
+              }rear.Close();
             }
-            static D.Bitmap Capture(Window w,string name){DwmFlush();GetWindowRect(new WindowInteropHelper(w).Handle,out var r);var b=new D.Bitmap(r.R-r.L,r.B-r.T);using(var g=D.Graphics.FromImage(b))g.CopyFromScreen(r.L,r.T,0,0,b.Size,D.CopyPixelOperation.SourceCopy|D.CopyPixelOperation.CaptureBlt);b.Save($"evidence/{name}.png");return b;}
+            static D.Bitmap Capture(Window w,string name){DwmFlush();GetWindowRect(new WindowInteropHelper(w).Handle,out var r);var b=new D.Bitmap(r.R-r.L,r.B-r.T);using(var g=D.Graphics.FromImage(b))g.CopyFromScreen(r.L,r.T,0,0,b.Size);b.Save($"evidence/{name}.png");return b;}
             static void Wait(){var f=new DispatcherFrame();var t=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(200)};t.Tick+=(_,_)=>{t.Stop();f.Continue=false;};t.Start();Dispatcher.PushFrame(f);}
             static void Set(IntPtr h,int a,int v)=>Console.WriteLine($"DWM {a}={v}: {DwmSetWindowAttribute(h,a,ref v,4):x}");
             [StructLayout(LayoutKind.Sequential)]struct Margins{public int L,R,T,B;}
