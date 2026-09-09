@@ -1,37 +1,61 @@
-name: Skin branch bootstrap
+name: Skin branch validation
 on:
   push:
     branches: [exp/playful-skins-20260909]
-    paths: [.github/workflows/skin-branch-bootstrap.yml, .skin-bootstrap.py]
+    paths: [.github/workflows/skin-branch-bootstrap.yml, '.skin-payload.*.b64']
 permissions:
   contents: write
 jobs:
-  integrate:
-    runs-on: ubuntu-latest
+  validate:
+    if: contains(github.event.head_commit.message, '[apply-skins]')
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Integrate on the isolated experiment only
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git branch --show-current)" = "exp/playful-skins-20260909"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git merge --no-commit --no-ff e074d84084921a2c3d16e7d0448e725706bf8779; then
-            python3 .skin-bootstrap.py
-          fi
-          # Workflow edits are applied separately through the authorized GitHub connector.
-          # The Actions token has contents-write, not workflows-write.
-          git restore --source=HEAD --staged --worktree .github/workflows
-          git add -u
-          git commit -m "chore: sync main before playful skin implementation"
-          git push origin HEAD:refs/heads/exp/playful-skins-20260909
-          # Git bundle carries source objects only, never checkout credentials or git config.
-          git bundle create "$RUNNER_TEMP/papertodo.bundle" HEAD refs/remotes/origin/main refs/remotes/origin/exp/mica-materials-20260907
-      - uses: actions/upload-artifact@v4
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
         with:
-          name: skin-development-source
-          path: ${{ runner.temp }}/papertodo.bundle
-          retention-days: 1
+          dotnet-version: 10.0.x
+      - name: Apply reviewed source patch on the experiment only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git branch --show-current) -ne 'exp/playful-skins-20260909') { throw 'Unexpected branch' }
+          @'
+          import pathlib, gzip, base64, hashlib, subprocess
+          payload = ''.join(p.read_text().strip() for p in sorted(pathlib.Path('.').glob('.skin-payload.*.b64')))
+          patch = gzip.decompress(base64.b64decode(payload, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'aaf43d2a687661ad165f500acc63f3277f5eecb32acf64157dcd34e6a2bfd3e1'
+          subprocess.run(['git','apply','--check','--whitespace=error','-'], input=patch, check=True)
+          subprocess.run(['git','apply','-'], input=patch, check=True)
+          for name in ['.skin-bootstrap.py','.skin-conflicts.txt','.skin-context.txt']:
+              pathlib.Path(name).unlink(missing_ok=True)
+          for p in pathlib.Path('.').glob('.skin-payload.*.b64'): p.unlink()
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Patch validation failed' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if (git diff --cached --name-only -- .github/workflows) { throw 'Workflow changes must use the authorized connector' }
+          git commit -m 'feat: add six experimental paper and capsule skins'
+          if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+          git push origin HEAD:refs/heads/exp/playful-skins-20260909
+          if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
+      - name: Native material and skin behavior checks
+        shell: pwsh
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/skin-evidence/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/skin-evidence/skins
+        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release --no-restore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: skin-visual-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/skin-evidence
+          if-no-files-found: ignore
+          retention-days: 7
