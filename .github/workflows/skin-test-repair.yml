@@ -1,0 +1,40 @@
+name: Adapt skin test entry
+on:
+  push:
+    branches: [exp/playful-skins-20260909]
+    paths: [.github/workflows/skin-test-repair.yml]
+permissions:
+  contents: write
+jobs:
+  adapt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Preserve coverage through the new settings entry
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/PaperTodo.MicaChecks/VisualChecks.cs')
+          s = p.read_text(encoding='utf-8-sig')
+          assert s.count('GetMethod("SetMicaBackdrop", Program.Private)') == 1
+          s = s.replace('GetMethod("SetMicaBackdrop", Program.Private)', 'GetMethod("SetPaperSkin", Program.Private)')
+          s = s.replace('.Invoke(controller, new object[] { MicaBackdropTypes.ClearAcrylic });', '.Invoke(controller, new object[] { PaperSkins.ClearAcrylic });')
+          s = s.replace('            window.Close(); controller.State.Theme = "light";', '            window.Close(); controller.State.Theme = "light";\n            controller.State.PaperSkin = null; // Restore the legacy fixture for the following checks.')
+          p.write_text(s, encoding='utf-8')
+          p = Path('tests/PaperTodo.MicaChecks/Program.cs')
+          s = p.read_text(encoding='utf-8-sig')
+          check = '                Check("experimental skins", () => SkinChecks.Run(controller));\n'
+          assert s.count(check) == 1
+          s = s.replace(check, '')
+          needle = '                Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));'
+          assert needle in s
+          s = s.replace(needle, check + needle)
+          p.write_text(s, encoding='utf-8')
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/PaperTodo.MicaChecks/VisualChecks.cs tests/PaperTodo.MicaChecks/Program.cs
+          git commit -m 'test: exercise new skin selection and restore legacy material fixture'
+          git push origin HEAD:refs/heads/exp/playful-skins-20260909
