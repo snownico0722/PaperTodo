@@ -1457,13 +1457,13 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>눈에 보이는 반투명 렌즈 표면과 가는 가장자리 반사가 제목과 본문에 이어집니다. 뒤쪽 내용은 선명하게 유지됩니다. 실제 굴절은 없으며 Apple Liquid Glass와 같지 않습니다.</value>
+    <value>실제 데스크톱의 세부가 곡면 가장자리에서 굴절되며 미세한 색 분산과 방향성 광택을 더합니다. 본문은 왜곡하지 않습니다. 실시간 굴절은 펼친 메모에서만 사용하고 캡슐과 설정은 정적 재질입니다. Apple Liquid Glass를 완전히 재현한 것은 아닙니다.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>크림색 도자기에 넓은 유약 하이라이트와 부드러운 입체 명암을 적용합니다. 불투명하며 선택한 색상을 따르고 두꺼운 안쪽 틀은 없습니다.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>얼음빛 파랑, 넓고 부드러운 사선 반사와 가는 밝은 테두리가 제목과 본문에 이어집니다. Windows 7 시스템 테마는 아닙니다.</value>
+    <value>얼음빛 유리색, 가장자리가 부드러운 두 개의 넓은 반사와 가는 밝은 테두리가 제목과 본문에 이어집니다. 아크릴 투명도 프리셋이나 Windows 7 테마가 아닙니다.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>레트로 퀘스트 패널 스타일로 작은 계단형 모서리, 단일 테두리, 픽셀 정렬 아이콘과 사각 컨트롤을 사용합니다. 본문 글꼴은 유지됩니다.</value>
@@ -1479,5 +1479,11 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>표준 마이카와 두 아크릴 스킨은 기존 중성 색상을 유지합니다. 다른 스킨으로 돌아가면 저장된 색상 선택이 복원되며 덮어쓰지 않습니다.</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>실시간 배경 굴절</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>펼친 메모에만 적용됩니다. 뒤쪽 데스크톱 일부를 메모리에서만 처리하며 저장하거나 업로드하지 않습니다. 자기 화면의 반복을 막기 위해 켜진 메모는 일부 스크린샷·녹화·화면 공유에 표시되지 않습니다. 공유할 때는 끄세요. 숨김·접기·스킨 변경 시 중지하며 너무 큰 창이나 캡처 실패 시 정적인 렌즈로 돌아갑니다.</value>
   </data>
 </root>

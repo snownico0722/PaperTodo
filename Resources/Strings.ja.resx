@@ -1457,13 +1457,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>見える半透明のレンズ面と細い縁の反射が、ヘッダーから本文まで続きます。背後の細部は鮮明なままです。実際の屈折はなく、Apple Liquid Glass と同等ではありません。</value>
+    <value>実際のデスクトップの細部が曲面の縁で屈折し、控えめな色分散と方向性のある光沢を加えます。本文は歪みません。リアルタイム屈折は展開した紙のみで、カプセルと設定は静的な素材です。Apple Liquid Glass の完全な再現ではありません。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>クリーム色の磁器に、広い釉薬のハイライトと柔らかな立体陰影を加えます。不透明で配色に追従し、厚い内枠はありません。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>氷青色、柔らかく幅広い斜めの反射と細い光る縁。ヘッダーと本文がつながります。Windows 7 のシステムテーマではありません。</value>
+    <value>氷青色のガラス、ぼかした2本の幅広い反射、細い光の縁がヘッダーと紙面をつなぎます。アクリルの透明度プリセットやWindows 7のテーマではありません。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>レトロなクエストパネル風。小さな段状の角、一重の外枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントです。</value>
@@ -1479,5 +1479,11 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>標準のマイカと2種類のアクリルは従来のニュートラル配色を使います。他のスキンに戻すと保存した配色が復元され、選択は上書きされません。</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>背景のリアルタイム屈折</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>展開した紙のみ。背後の局所的なデスクトップをメモリー内で処理し、保存・送信しません。自己映り込みを防ぐため、有効時の紙は一部のスクリーンショット・録画・画面共有に映りません。共有時は無効にしてください。非表示・折りたたみ・スキン変更で停止し、大きすぎる窓や取得失敗時は静的なレンズに戻ります。</value>
   </data>
 </root>

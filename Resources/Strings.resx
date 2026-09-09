@@ -1506,13 +1506,13 @@
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>可见的半透明镜片底色、细线边缘反光，顶栏与纸面连成一体；不再是一扇近乎全透明的窗口。背景保持清晰，不含真实折射，不等同于苹果 Liquid Glass。</value>
+    <value>真实桌面细节沿弧面边缘折射，带轻微色散和方向高光；正文不变形。仅展开纸片可启用实时折射，胶囊和设置窗口使用静态材质。不是苹果 Liquid Glass 的等同复现。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>奶油色瓷面、宽幅釉面亮斑与柔和的凸面明暗；不透明，保留配色倾向，不叠加宽厚内套框。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>冰蓝染色、柔和宽幅斜向反光与细亮边；顶栏与纸面连续。不是 Win7 系统主题。</value>
+    <value>冰蓝染色、两道宽幅羽化玻璃反光与细亮边，顶栏与纸面连续；不是标准亚克力的透明度预设，也不是 Win7 系统主题。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
@@ -1528,5 +1528,11 @@
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>标准云母和两种亚克力使用原云母分支的素灰配色。切回其他皮肤会恢复你选的配色，不会覆盖已保存的选择。</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>实时背景折射</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>仅展开纸片使用。实时采样背后的局部桌面，只在本机内存中处理，不保存或上传。为避免自身重影，开启时该纸片会被部分截图、录屏和屏幕共享接口忽略；需要分享时关闭此项。隐藏、收起或切换皮肤后停止，超大窗口或采样失败时回退静态镜片。</value>
   </data>
 </root>

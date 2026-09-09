@@ -48,7 +48,9 @@
 | D-033 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
 | D-034 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
 | D-035 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-036 | 主题 / Window integration |
-| D-036 | 系统材质保留 full glass，清透接法的零边距不通用 | Accepted | 主题 / Window integration |
+| D-036 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-037 | 主题 / Window integration |
+| D-037 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
+| D-038 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1289,10 +1291,37 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-036 — 系统材质保留 full glass，清透接法的零边距不通用
 
-**Status:** Accepted
+**Status:** Partially superseded by D-037（不支持现代 alpha 的系统继续使用此兼容路径）
 
 **Context / Why:** `d36a4f47` 把全部材质的实际 DWM glass margin 归零，同时关闭 legacy alpha。用户反馈云母纯黑、带半透明画刷的亚克力／描图纸／Aero 为深灰：透明 WPF 像素没有系统材质承接，白色覆盖层只能把黑底混成灰底。原生 API 成功、顶栏与正文同色，都不能证明背景已正确合成。独立探针原本使用 full glass，不能据此推导所有接法都应清零。
 
 **Decision:** 恢复系统 Mica/Acrylic 的 full glass，保持清理旧 alpha → 设置对应 glass → 启用系统 backdrop 的顺序；零实际边距只属于 accent 与清透 alpha 接法。caption 颜色仍用默认值，不恢复实色顶栏遮盖。窗口、编辑器、形态动画和 Edge authority 不变。
 
 **Evidence:** `NativeMicaBackdrop.Refresh` 与 `PaperTodo.MicaChecks` 的 full-glass 互斥检查、浅色云母黑底拒绝检查及最终桌面捕获。液态皮肤同时检查背景细节与可见遮色范围，不能再让一扇近乎隐形的窗口通过“有透明效果”检查。Windows Server 无法显示真实 Acrylic 透色时仍记录 SKIP，不冒充 Windows 11 真机验收。
+
+
+---
+
+## D-037 — 显式 redirection alpha 消除材质下方原生 caption
+
+**Status:** Experimental
+
+**Context / Why:** full glass 保住了系统材质，但即使 WPF 顶栏完全透明，原生 extended caption 仍可盖住背景。均匀色的 Server 回退材质会隐藏这个错误；仅比较顶栏与正文同色不够。
+
+**Decision:** Windows 11 26100+ 设置 `DWMWA_REDIRECTIONBITMAP_ALPHA`，成功后才将系统材质的实际 glass margin 归零。API 不支持时保留 D-036 的 full glass，绝不恢复无 alpha 的零 glass 黑底路线。仅改变现有 adapter 的合成参数，不创建第二个内容 HWND、负 margin 或窗口 region。释放时清理自己启用的属性。
+
+**Evidence:** `NativeMicaBackdrop.Refresh`、`DwmMicaApi.SetRedirectionAlpha`；`NativeSurfaceChecks.CheckCaptionSentinel` 故意将原生 caption 设成紫红色并验证最终桌面顶栏像素不变，使用旧 full-glass 路径的紫红色正对照，并避免在取样前泵 UI 消息导致 marker 被刷新重置；另保留黑底／能力失败回退检查。微软 `DWMWINDOWATTRIBUTE` 文档明确 alpha 通道要求 premultiplied 内容、最低 build 26100。旧 OS 的顶栏视觉与真实 Windows 11 多屏效果不能借用 Server 的结果作已验收结论。
+
+---
+
+## D-038 — 局部真实背景折射与截图排除的显式代价
+
+**Status:** Experimental
+
+**Context:** 用户明确要求真实背景折射，拒绝只用透明度、高光或磨砂背景来近似。原 D-035 的不采样选择只继续适用于其他材质，不足以实现此要求。
+
+**Decision:** 仅展开液态纸片启用局部实时桌面采样；通过 WDA_EXCLUDEFROMCAPTURE 排除自身，位移图和 WPF shader 折射真实背景，不影响正文。设置保存独立开关，并说明活跃纸片会被部分截图／录屏／共享接口忽略。采样只在本机内存中存活，不写文件、不上传、不采集历史；多张排除的液态纸片不会相互出现在背景中。
+
+**Why / Consequences:** 排除自己避免了截图递归，不需显隐 HWND 或破坏输入和编辑器。成本是持续局部采样、SDR 色彩和可能的 GPU/CPU 同步开销，以及明确的捕获可见性限制；不是无代价的系统级材质。工作线程、单帧背压、尺寸预算、退出恢复 affinity 和静态回退保持边界可控。不扩展到 Edge、拖动胶囊、主胶囊或设置窗口。
+
+**Evidence:** `DesktopLensCapture`、`LensDisplacement`、`LiquidRefractionEffect`、`SkinBorder.Refraction`；`RefractionChecks` 验证真后窗颜色、同一捕获帧的零位移／折射结果差异、后窗动态更新、移动／缩放／收起与捕获资源生命周期。桌面证据停止 sampler 并保留最后真实帧后恢复截图可见性，不使用合成示意画面冒充实际结果。

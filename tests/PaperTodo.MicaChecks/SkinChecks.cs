@@ -31,7 +31,7 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette").Append("SettingsLiveRefraction").Append("TipLiveRefraction"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
@@ -144,11 +144,11 @@ internal static class SkinChecks
             var store = new StateStore(temp, DurableAtomicFileWriter.Shared); long version = 0;
             foreach (var skin in PaperSkins.All)
             {
-                var state = new AppState { PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true };
+                var state = new AppState { PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiquidGlassRefraction = skin != PaperSkins.LiquidGlass };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive, "independent preferences persist");
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiquidGlassRefraction == state.LiquidGlassRefraction, "independent preferences persist");
                 Program.Assert(restored.Papers.Single().Content == state.Papers.Single().Content, "note payload preserved");
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","papers":[]}""", ++version);

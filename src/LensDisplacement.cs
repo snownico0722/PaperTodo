@@ -30,6 +30,10 @@ internal static class LensDisplacement
         else normal = q.X > q.Y ? new Vector(v.X < 0 ? -1 : 1, 0) : new Vector(0, v.Y < 0 ? -1 : 1);
         var shoulder = Math.Min(24, Math.Min(size.Width, size.Height) * .18);
         if (shoulder <= 0) return (new Vector(), 0);
+        var f0 = Math.Pow((IndexOfRefraction - 1) / (IndexOfRefraction + 1), 2);
+        if (distance >= shoulder)
+            return (new Vector(Math.Clamp(-v.X * .010, -MaxShiftDip, MaxShiftDip),
+                Math.Clamp(-v.Y * .010, -MaxShiftDip, MaxShiftDip)), f0);
         var u = Math.Clamp(1 - distance / shoulder, 0, .9995);
         var slope = .62 * u / Math.Sqrt(Math.Max(.0001, 1 - u * u));
         var nz = 1 / Math.Sqrt(1 + slope * slope);
@@ -44,8 +48,8 @@ internal static class LensDisplacement
         displacement -= v * (.010 * Math.Clamp(distance / shoulder, 0, 1));
         displacement.X = Math.Clamp(displacement.X, -MaxShiftDip, MaxShiftDip);
         displacement.Y = Math.Clamp(displacement.Y, -MaxShiftDip, MaxShiftDip);
-        var f0 = Math.Pow((IndexOfRefraction - 1) / (IndexOfRefraction + 1), 2);
-        var fresnel = f0 + (1 - f0) * Math.Pow(1 - nz, 5);
+        var grazing = 1 - nz;
+        var fresnel = f0 + (1 - f0) * grazing * grazing * grazing * grazing * grazing;
         return (displacement, fresnel);
     }
 

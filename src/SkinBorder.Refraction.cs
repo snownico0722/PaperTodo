@@ -63,7 +63,7 @@ internal sealed partial class SkinBorder
             var origin = PointToScreen(new Point());
             var geometry = new DesktopLensCapture.Region((int)Math.Round(origin.X) - bounds.X,
                 (int)Math.Round(origin.Y) - bounds.Y, (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX),
-                (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY), (int)Math.Ceiling(40 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
+                (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY), (int)Math.Ceiling(64 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
             _refractionEffect ??= new LiquidRefractionEffect();
             var key = (RenderSize, CornerRadius, dpi.DpiScaleX, dpi.DpiScaleY);
             if (_mapKey != key)

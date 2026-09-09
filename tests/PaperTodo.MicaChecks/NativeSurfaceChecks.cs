@@ -112,21 +112,30 @@ internal static class NativeSurfaceChecks
         var hwnd = new WindowInteropHelper(paper).Handle;
         using var baseline = Capture(paper, output, "caption-baseline-" + name);
         var sentinel = 0x00ff00ff;
-        Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "caption sentinel is accepted");
         try
         {
-            Wait();
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 35, out var saved, 4) >= 0 && saved == sentinel,
-                "caption marker remains installed, not reset by an unrelated refresh");
+            // These DWM attributes are documented setters, not guaranteed getters.
+            // Prove the marker is effective with an old-path positive control instead.
+            // Do not pump the UI dispatcher between marker installation and DwmFlush:
+            // queued theme refreshes must not reset the deliberately hostile caption.
+            Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, false) >= 0 &&
+                DwmMicaApi.Instance.ExtendFrame(hwnd, -1) >= 0, "caption positive control installs full glass");
+            Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "caption sentinel is accepted");
+            using var control = Capture(paper, output, "caption-old-path-" + name);
+            var before = baseline.GetPixel(baseline.Width / 2, 8);
+            var exposed = control.GetPixel(control.Width / 2, 8);
+            Program.Assert(Difference(before, exposed) >= 20,
+                $"{name}: positive control exposes the hostile native caption ({before} / {exposed})");
+            Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, true) >= 0 &&
+                DwmMicaApi.Instance.ExtendFrame(hwnd, 0) >= 0, "restoring tested redirection alpha");
+            Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "same caption sentinel reapplied");
             using var marked = Capture(paper, output, "caption-sentinel-" + name);
-            var before = baseline.GetPixel(baseline.Width / 2, 8); var after = marked.GetPixel(marked.Width / 2, 8);
+            var after = marked.GetPixel(marked.Width / 2, 8);
             Program.Assert(Difference(before, after) <= 3,
-                $"{name}: native caption cannot cover the material even with a deliberate magenta caption ({before} / {after})");
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 39, out var alpha, 4) >= 0 && alpha == 1,
-                "zero glass margins are backed by a real redirection alpha channel");
-            Console.WriteLine($"CAPTION SENTINEL {name}: material pixel survives explicit native magenta");
+                $"{name}: native caption cannot cover the material even with deliberate magenta ({before} / {after})");
+            Console.WriteLine($"CAPTION SENTINEL {name}: old={exposed}, alpha={after}, original={before}");
         }
-        finally { sentinel = -1; DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4); }
+        finally { paper.RefreshNativeMica(force: true); }
     }
     private static int Difference(D.Color a, D.Color b) =>
         Math.Max(Math.Abs(a.R - b.R), Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));

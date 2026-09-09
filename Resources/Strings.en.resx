@@ -1457,13 +1457,13 @@ When off, open at the docked edge or remembered position.</value>
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>A visible translucent lens veil with fine edge reflections, continuous across header and body. Rear detail stays sharp. No real refraction; not equivalent to Apple Liquid Glass.</value>
+    <value>Real desktop details refract along curved edges, with subtle dispersion and directional highlights. Text is not distorted. Live refraction is available on expanded papers; capsules and Settings use static material. Not an exact reproduction of Apple Liquid Glass.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>Cream porcelain with a broad glazed highlight and softly rounded light/shade. Opaque, palette-aware, without a thick inset frame.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Icy blue tint, a broad soft diagonal reflection and fine highlights, continuous across header and paper. Not a Windows 7 system theme.</value>
+    <value>Icy blue glass, two wide feathered reflections and fine bright edges continue across the header and paper. Not an Acrylic opacity preset or a Windows 7 system theme.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
@@ -1479,5 +1479,11 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>Standard Mica and both Acrylic skins retain the original neutral palette. Other skins restore your chosen color scheme without overwriting it.</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>Live background refraction</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>Expanded papers only. Samples the local desktop behind the paper in memory, without saving or uploading. To prevent feedback, the paper is excluded from some screenshot, recording and screen-sharing APIs while active; turn this off to share it. Hiding, collapsing or changing skin stops capture. Oversized windows or capture failure use a static lens.</value>
   </data>
 </root>
