@@ -15,7 +15,8 @@ internal static partial class Program
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
         foreach (var size in new[] { new Size(240, 180), new Size(310, 210) })
         {
-            const double extent = 31;
+            // A measured title row ends on a device pixel when layout rounding is enabled.
+            var extent = Math.Round(31 * scale) / scale;
             var chrome = new PaperChromeBorder();
             var (host, body) = Build(chrome, extent, hasTitle: true);
             var (normal, _) = Build(new Border(), extent, hasTitle: true);
@@ -31,6 +32,11 @@ internal static partial class Program
             var hidden = Render(host);
             // Compare against an ordinary shorter Border, including all its corners,
             // stroke and shadow. A flat crop cannot satisfy this reference image.
+            if (scale == 1.25 && size.Width == 240)
+            {
+                Preview(host, "ACTUAL");
+                Preview(shortPaper, "EXPECTED");
+            }
             Compare(hidden, Render(shortPaper), "hidden chrome differs from a complete rounded paper");
             var width = (int)Math.Ceiling(size.Width * scale);
             for (var y = 0; y < (int)((8 + extent - 16) * scale); y++)
@@ -67,6 +73,15 @@ internal static partial class Program
                 using var stream = new MemoryStream();
                 encoder.Save(stream);
                 Console.WriteLine("TITLEBAR_PREVIEW:" + Convert.ToBase64String(stream.ToArray()));
+            }
+
+            void Preview(Grid root, string label)
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(Bitmap(root)));
+                using var stream = new MemoryStream();
+                encoder.Save(stream);
+                Console.WriteLine("TITLEBAR_" + label + ":" + Convert.ToBase64String(stream.ToArray()));
             }
 
             void AssertBodyStable()
