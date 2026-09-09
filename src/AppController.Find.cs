@@ -6,36 +6,49 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    internal readonly record struct MarkdownFindSource(string PaperId, string Text);
+    internal readonly record struct PaperFindSource(string PaperId, string? TodoItemId, string Text);
 
-    internal IReadOnlyList<MarkdownFindSource> GetMarkdownFindSources()
+    internal IReadOnlyList<PaperFindSource> GetBuiltInFindSources()
     {
-        var sources = new List<MarkdownFindSource>();
+        var sources = new List<PaperFindSource>();
         foreach (var paper in State.Papers)
         {
-            if (!IsMarkdownFindPaper(paper))
+            if (!IsBuiltInFindPaper(paper))
             {
                 continue;
             }
 
-            var text = paper.Content ?? string.Empty;
-            if (_windows.TryGetValue(paper.Id, out var window) &&
-                !window.IsClosed &&
-                window.TryGetMarkdownFindText(out var liveText))
+            if (paper.Type == PaperTypes.Todo)
             {
-                text = liveText;
+                foreach (var item in paper.Items.OrderBy(item => item.Order))
+                {
+                    sources.Add(CreateBuiltInFindSource(paper, item.Id, item.Text));
+                }
             }
-
-            sources.Add(new MarkdownFindSource(paper.Id, text));
+            else
+            {
+                sources.Add(CreateBuiltInFindSource(paper, null, paper.Content));
+            }
         }
         return sources;
     }
 
-    internal PaperWindow? OpenMarkdownFindTarget(string paperId)
+    private PaperFindSource CreateBuiltInFindSource(PaperData paper, string? todoItemId, string? text)
+    {
+        if (_windows.TryGetValue(paper.Id, out var window) &&
+            !window.IsClosed &&
+            window.TryGetBuiltInFindText(todoItemId, out var liveText))
+        {
+            text = liveText;
+        }
+        return new PaperFindSource(paper.Id, todoItemId, text ?? string.Empty);
+    }
+
+    internal PaperWindow? OpenBuiltInFindTarget(string paperId)
     {
         var paper = State.Papers.FirstOrDefault(candidate =>
             string.Equals(candidate.Id, paperId, StringComparison.Ordinal));
-        if (paper == null || !IsMarkdownFindPaper(paper))
+        if (paper == null || !IsBuiltInFindPaper(paper))
         {
             return null;
         }
@@ -81,11 +94,12 @@ public sealed partial class AppController
         return window;
     }
 
-    private static bool IsMarkdownFindPaper(PaperData paper) =>
-        paper.Type == PaperTypes.Note &&
-        (string.IsNullOrWhiteSpace(paper.BodyProviderId) ||
-         string.Equals(
-             paper.BodyProviderId,
-             PaperBodyProviderIds.Markdown,
-             StringComparison.Ordinal));
+    private static bool IsBuiltInFindPaper(PaperData paper) =>
+        paper.Type == PaperTypes.Todo ||
+        (paper.Type == PaperTypes.Note &&
+         (string.IsNullOrWhiteSpace(paper.BodyProviderId) ||
+          string.Equals(
+              paper.BodyProviderId,
+              PaperBodyProviderIds.Markdown,
+              StringComparison.Ordinal)));
 }

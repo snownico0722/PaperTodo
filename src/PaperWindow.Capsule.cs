@@ -586,7 +586,7 @@ public sealed partial class PaperWindow
 
         if (collapsed)
         {
-            RestoreExperimentalInactiveTitleBarGeometry();
+            RestoreExperimentalInactiveTitleBarPresentation();
         }
 
         PrepareExperimentalAttachmentForFormTransition(collapsed);

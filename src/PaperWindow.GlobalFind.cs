@@ -1,133 +1,122 @@
 using System;
 using System.Collections.Generic;
+using System.Windows;
 using System.Windows.Threading;
 
 namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private readonly record struct GlobalNoteFindMatch(
+    private readonly record struct GlobalFindMatch(
         string PaperId,
-        int Offset,
-        int Length);
+        PaperFindMatch Match);
 
-    private readonly List<GlobalNoteFindMatch> _globalNoteFindMatches = [];
-    private int _globalNoteFindIndex = -1;
+    private readonly List<GlobalFindMatch> _globalFindMatches = [];
+    private int _globalFindIndex = -1;
 
-    private bool UsesGlobalNoteFind =>
-        _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown;
-
-    internal bool TryGetMarkdownFindText(out string text)
+    internal bool TryGetBuiltInFindText(string? todoItemId, out string text)
     {
-        if (!UsesGlobalNoteFind || _noteBox == null)
+        if (_paper.Type == PaperTypes.Todo &&
+            todoItemId != null &&
+            _todoEditors.TryGetValue(todoItemId, out var editor))
         {
-            text = string.Empty;
-            return false;
+            text = editor.Text ?? string.Empty;
+            return true;
+        }
+        if (_paper.Type == PaperTypes.Note &&
+            todoItemId == null &&
+            IsCurrentBodyProviderMarkdown &&
+            _noteBox != null)
+        {
+            text = _noteBox.Text ?? string.Empty;
+            return true;
         }
 
-        text = _noteBox.Text ?? string.Empty;
-        return true;
+        text = string.Empty;
+        return false;
     }
 
-    private void SynchronizeGlobalNoteFindState(string query)
+    private void SynchronizeGlobalFindState(string query)
     {
-        if (!UsesGlobalNoteFind)
+        if (!CanUseBuiltInFind())
         {
-            _globalNoteFindMatches.Clear();
-            _globalNoteFindIndex = -1;
+            _globalFindMatches.Clear();
+            _globalFindIndex = -1;
             return;
         }
 
-        _globalNoteFindMatches.Clear();
-        _globalNoteFindMatches.AddRange(ScanGlobalNoteFindMatches(query));
-        _globalNoteFindIndex = ResolveCurrentGlobalNoteFindIndex();
+        _globalFindMatches.Clear();
+        _globalFindMatches.AddRange(ScanGlobalFindMatches(query));
+        _globalFindIndex = ResolveCurrentGlobalFindIndex();
     }
 
-    private List<GlobalNoteFindMatch> ScanGlobalNoteFindMatches(string query)
+    private List<GlobalFindMatch> ScanGlobalFindMatches(string query)
     {
-        var matches = new List<GlobalNoteFindMatch>();
+        var matches = new List<GlobalFindMatch>();
         if (string.IsNullOrEmpty(query))
         {
             return matches;
         }
 
-        foreach (var source in _controller.GetMarkdownFindSources())
+        var localMatches = new List<PaperFindMatch>();
+        foreach (var source in _controller.GetBuiltInFindSources())
         {
-            var searchFrom = 0;
-            var text = source.Text ?? string.Empty;
-            while (searchFrom <= text.Length - query.Length)
+            localMatches.Clear();
+            AddFindMatches(localMatches, source.TodoItemId, source.Text, query);
+            foreach (var match in localMatches)
             {
-                var offset = text.IndexOf(
-                    query,
-                    searchFrom,
-                    StringComparison.OrdinalIgnoreCase);
-                if (offset < 0)
-                {
-                    break;
-                }
-
-                matches.Add(new GlobalNoteFindMatch(
-                    source.PaperId,
-                    offset,
-                    query.Length));
-                searchFrom = offset + query.Length;
+                matches.Add(new GlobalFindMatch(source.PaperId, match));
             }
         }
 
         return matches;
     }
 
-    private int ResolveCurrentGlobalNoteFindIndex()
+    private int ResolveCurrentGlobalFindIndex()
     {
-        if (!TryGetCurrentFindMatch(out var local) || !local.IsNote)
+        if (!TryGetCurrentFindMatch(out var local))
         {
             return -1;
         }
 
-        return _globalNoteFindMatches.FindIndex(match =>
+        return _globalFindMatches.FindIndex(match =>
             string.Equals(match.PaperId, _paper.Id, StringComparison.Ordinal) &&
-            match.Offset == local.Offset &&
-            match.Length == local.Length);
+            match.Match == local);
     }
 
-    private bool TryMoveGlobalNoteFindMatch(int direction)
+    private void MoveFindMatch(int direction)
     {
-        if (!UsesGlobalNoteFind ||
+        if (!CanUseBuiltInFind() ||
             _findInput == null ||
             string.IsNullOrEmpty(_findInput.Text))
         {
-            return false;
+            return;
         }
 
         var query = _findInput.Text;
-        _globalNoteFindMatches.Clear();
-        _globalNoteFindMatches.AddRange(ScanGlobalNoteFindMatches(query));
-        _globalNoteFindIndex = ResolveCurrentGlobalNoteFindIndex();
+        SynchronizeGlobalFindState(query);
 
-        if (_globalNoteFindMatches.Count == 0)
+        if (_globalFindMatches.Count == 0)
         {
             _findMatches.Clear();
             _findMatchIndex = -1;
             ClearAppliedFindSelection();
             UpdateFindCount();
-            return true;
+            return;
         }
 
-        var targetIndex = _globalNoteFindIndex < 0
-            ? direction >= 0 ? 0 : _globalNoteFindMatches.Count - 1
-            : (_globalNoteFindIndex + direction + _globalNoteFindMatches.Count) %
-              _globalNoteFindMatches.Count;
-        var target = _globalNoteFindMatches[targetIndex];
+        var targetIndex = _globalFindIndex < 0
+            ? direction >= 0 ? 0 : _globalFindMatches.Count - 1
+            : (_globalFindIndex + direction + _globalFindMatches.Count) %
+              _globalFindMatches.Count;
+        var target = _globalFindMatches[targetIndex];
 
         if (string.Equals(target.PaperId, _paper.Id, StringComparison.Ordinal))
         {
             _findMatches.Clear();
             _findMatches.AddRange(ScanFindMatches(query));
-            _findMatchIndex = _findMatches.FindIndex(match =>
-                match.IsNote &&
-                match.Offset == target.Offset &&
-                match.Length == target.Length);
-            _globalNoteFindIndex = targetIndex;
+            _findMatchIndex = _findMatches.IndexOf(target.Match);
+            _globalFindIndex = targetIndex;
 
             if (_findMatchIndex >= 0)
             {
@@ -138,42 +127,76 @@ public sealed partial class PaperWindow
                 ClearAppliedFindSelection();
             }
             UpdateFindCount();
-            return true;
+            return;
         }
 
-        ClearAppliedFindSelection();
-        HideBuiltInFind(restoreFocus: false);
-        var targetWindow = _controller.OpenMarkdownFindTarget(target.PaperId);
+        var targetWindow = _controller.OpenBuiltInFindTarget(target.PaperId);
         if (targetWindow == null)
-        {
-            return true;
-        }
-
-        targetWindow.ShowBuiltInFindAtGlobalMatch(query, target);
-        if (!IsActive)
-        {
-            ScheduleExperimentalAutoCollapse(blockedAtDeactivation: false);
-        }
-        return true;
-    }
-
-    private void ShowBuiltInFindAtGlobalMatch(
-        string query,
-        GlobalNoteFindMatch target)
-    {
-        EnsureBuiltInFindPopup();
-        if (_findPopup == null || _findInput == null)
         {
             return;
         }
 
-        SetBuiltInFindQuery(
-            query,
-            new PaperFindMatch(null, target.Offset, target.Length));
+        // Keep the source search usable while the target finishes its queued show/layout work.
+        // In particular, a first-show taskbar refresh can leave the target inactive. Transfer
+        // focus only after that refresh, and close this popup only once the target accepts find.
+        _findInput.Focus();
+        _ = targetWindow.Dispatcher.BeginInvoke((Action)(() =>
+        {
+            if (!IsBuiltInFindOpen ||
+                !string.Equals(_findInput.Text, query, StringComparison.Ordinal) ||
+                (!IsActive &&
+                 _findHost?.IsKeyboardFocusWithin != true &&
+                 !targetWindow.IsActive))
+            {
+                return;
+            }
+
+            if (!targetWindow.TryShowBuiltInFindAtGlobalMatch(query, target))
+            {
+                _findInput.Focus();
+                ApplyCurrentFindMatch();
+                return;
+            }
+
+            ClearAppliedFindSelection();
+            HideBuiltInFind(restoreFocus: false);
+            if (!IsActive)
+            {
+                ScheduleExperimentalAutoCollapse(blockedAtDeactivation: false);
+            }
+        }), DispatcherPriority.Background);
+    }
+
+    private bool TryShowBuiltInFindAtGlobalMatch(
+        string query,
+        GlobalFindMatch target)
+    {
+        if (IsClosed ||
+            !IsVisible ||
+            WindowState == WindowState.Minimized ||
+            _paper.IsCollapsed ||
+            !CanUseBuiltInFind() ||
+            IsExperimentalPassive ||
+            _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero)
+        {
+            return false;
+        }
+
+        EnsureBuiltInFindPopup();
+        if (_findPopup == null || _findInput == null || !Activate())
+        {
+            return false;
+        }
+
+        SetBuiltInFindQuery(query, target.Match);
         UpdateBuiltInFindVisuals();
         _findPopup.IsOpen = true;
         SynchronizeBuiltInFindOwnerState(refreshMatches: false);
-        _findInput.Focus();
+        if (!IsBuiltInFindOpen || !_findInput.Focus())
+        {
+            HideBuiltInFind(restoreFocus: false);
+            return false;
+        }
         _findInput.SelectAll();
 
         _ = Dispatcher.BeginInvoke((Action)(() =>
@@ -183,28 +206,19 @@ public sealed partial class PaperWindow
                 return;
             }
             ApplyCurrentFindMatch();
-            SynchronizeGlobalNoteFindState(query);
+            SynchronizeGlobalFindState(query);
             UpdateFindCount();
             RepositionBuiltInFindPopup();
         }), DispatcherPriority.Background);
+        return true;
     }
 
     private string BuiltInFindCountText(int localCurrent, int localTotal)
     {
-        if (!UsesGlobalNoteFind)
-        {
-            return $"{localCurrent} / {localTotal}";
-        }
-
-        var globalCurrent = _globalNoteFindIndex >= 0 &&
-                            _globalNoteFindIndex < _globalNoteFindMatches.Count
-            ? _globalNoteFindIndex + 1
+        var globalCurrent = _globalFindIndex >= 0 &&
+                            _globalFindIndex < _globalFindMatches.Count
+            ? _globalFindIndex + 1
             : 0;
-        return $"{localCurrent}/{localTotal} | {globalCurrent}/{_globalNoteFindMatches.Count}";
+        return $"{localCurrent}/{localTotal} | {globalCurrent}/{_globalFindMatches.Count}";
     }
-
-    private bool HasBuiltInFindNavigationTarget() =>
-        UsesGlobalNoteFind
-            ? _globalNoteFindMatches.Count > 0
-            : _findMatches.Count > 0;
 }

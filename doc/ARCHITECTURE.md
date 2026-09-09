@@ -189,6 +189,8 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸、Aero 与仿液态玻璃复用标准 Acrylic 原生背景，并在 WPF 外壳叠加各自外观；失败时保留不透明底，不进入透色亚克力的 accent 接法。标准云母与标准亚克力使用 full glass 和 `DWMWA_SYSTEMBACKDROP_TYPE`（分别为 `DWMSBT_MAINWINDOW`、`DWMSBT_TRANSIENTWINDOW`）。透色亚克力试用顶部 1 DIP glass 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；仍由同一个 `WindowChrome` 管理 glass（见 D-034）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND 和实色配色，不进入这个适配器，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-033）。
 
+普通浮动纸片的失焦标题栏由 `PaperWindow.ExperimentalFocusPresentation` 管理：保留原始 HWND 和 shell 布局，在阴影外层使用 `InactiveTitleBarMask` 淡出标题栏区域。完全隐藏区的最终像素 alpha 为零，由分层窗口命中机制允许点击穿透；布局变化只更新遮罩边界，窗口位置保存不受失焦状态抑制。此路径仅适用于 `AllowsTransparency` 窗口，折叠、隐藏和 Snap 等边界会移除遮罩。
+
 ### 5.2 Provider / session 分层
 
 Provider 当前分三类：

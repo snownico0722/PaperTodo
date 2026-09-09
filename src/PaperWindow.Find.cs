@@ -373,16 +373,10 @@ public sealed partial class PaperWindow
         var inside = new CustomPopupPlacement(
             new Point(Math.Max(6, targetSize.Width - popupSize.Width - 6), y),
             PopupPrimaryAxis.Horizontal);
-        var right = new CustomPopupPlacement(
-            new Point(targetSize.Width + 6, y),
-            PopupPrimaryAxis.Horizontal);
-        var left = new CustomPopupPlacement(
-            new Point(-popupSize.Width - 6, y),
-            PopupPrimaryAxis.Horizontal);
 
-        return targetSize.Width >= popupSize.Width + 12
-            ? [inside, right, left]
-            : [right, left, inside];
+        // Keep the anchor inside the paper even when the find bar is wider. Popup can overflow
+        // the paper and WPF still adjusts it at the screen edge; no detached side placement.
+        return [inside];
     }
 
     private void UpdateBuiltInFindVisuals()
@@ -549,25 +543,9 @@ public sealed partial class PaperWindow
 
     private void OnBuiltInFindOwnerDeactivated(object? sender, EventArgs e)
     {
-        if (!IsBuiltInFindOpen)
-        {
-            return;
-        }
-
-        _ = Dispatcher.BeginInvoke((Action)(() =>
-        {
-            if (!IsBuiltInFindOpen ||
-                _findHost?.IsKeyboardFocusWithin == true)
-            {
-                return;
-            }
-
-            HideBuiltInFind(restoreFocus: false);
-            if (!IsActive)
-            {
-                ScheduleExperimentalAutoCollapse(blockedAtDeactivation: false);
-            }
-        }), DispatcherPriority.ContextIdle);
+        // Use the same settled focus check as the popup input: a temporary deactivation while
+        // restoring a hidden paper must not dismiss find after its owner has reactivated.
+        QueueBuiltInFindPopupFocusExitCheck();
     }
 
     private void HookBuiltInFindContentChanges()
@@ -674,7 +652,7 @@ public sealed partial class PaperWindow
         {
             _findMatchIndex = -1;
             ClearAppliedFindSelection();
-            SynchronizeGlobalNoteFindState(query);
+            SynchronizeGlobalFindState(query);
             UpdateFindCount();
             return;
         }
@@ -700,7 +678,7 @@ public sealed partial class PaperWindow
             _findAppliedMatch = null;
             ReleaseTodoInactiveFindSelection();
         }
-        SynchronizeGlobalNoteFindState(query);
+        SynchronizeGlobalFindState(query);
         UpdateFindCount();
     }
 
@@ -754,49 +732,6 @@ public sealed partial class PaperWindow
             destination.Add(new PaperFindMatch(todoItemId, offset, query.Length));
             searchFrom = offset + query.Length;
         }
-    }
-
-    private void MoveFindMatch(int direction)
-    {
-        if (_findInput == null || string.IsNullOrEmpty(_findInput.Text))
-        {
-            return;
-        }
-
-        if (TryMoveGlobalNoteFindMatch(direction))
-        {
-            return;
-        }
-
-        var previous = TryGetCurrentFindMatch(out var current)
-            ? current
-            : (PaperFindMatch?)null;
-
-        _findMatches.Clear();
-        _findMatches.AddRange(ScanFindMatches(_findInput.Text));
-        if (_findMatches.Count == 0)
-        {
-            _findMatchIndex = -1;
-            ClearAppliedFindSelection();
-            UpdateFindCount();
-            return;
-        }
-
-        var currentIndex = previous is PaperFindMatch kept
-            ? _findMatches.IndexOf(kept)
-            : -1;
-        if (currentIndex < 0)
-        {
-            _findMatchIndex = direction >= 0 ? 0 : _findMatches.Count - 1;
-        }
-        else
-        {
-            _findMatchIndex =
-                (currentIndex + direction + _findMatches.Count) % _findMatches.Count;
-        }
-
-        ApplyCurrentFindMatch();
-        UpdateFindCount();
     }
 
     private bool TryGetCurrentFindMatch(out PaperFindMatch match)
@@ -931,7 +866,7 @@ public sealed partial class PaperWindow
             : 0;
         _findCountText.Text = BuiltInFindCountText(current, _findMatches.Count);
 
-        var enabled = HasBuiltInFindNavigationTarget();
+        var enabled = _globalFindMatches.Count > 0;
         if (_findPreviousButton != null)
         {
             _findPreviousButton.IsEnabled = enabled;

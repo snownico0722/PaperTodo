@@ -19,7 +19,8 @@ internal static partial class Program
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),
-        ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation)
+        ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation),
+        ("inactive-titlebar-alpha-layout", CheckInactiveTitleBarMask)
     ];
 
     private static void CheckPaperResources() =>
