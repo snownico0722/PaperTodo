@@ -48,7 +48,6 @@ internal static class NativeSurfaceChecks
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
                     X = 50, Y = 50, Width = 400, Height = 340 }, controller);
                 paper.Show(); paper.Activate(); Wait();
-                var chrome = (Border)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)!;
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
                 using (var image = Capture(paper, output, $"desktop-{skin}-{mode}"))
                 {
@@ -56,10 +55,10 @@ internal static class NativeSurfaceChecks
                     {
                         Program.Assert(paper.IsNativeMicaEffective, "real native recipe activated");
                         var y = header.TransformToAncestor(paper).Transform(new Point(0, 8)).Y;
-                        // The vertical backing stripes are identical at every height.
-                        // The chosen X lies away from title/button glyphs and todo controls.
+                        // Rear stripes are identical at every height. Sample the empty lower
+                        // paper, not y+70: that row intersects the tinted new-todo button.
                         var h = image.GetPixel(image.Width / 2, (int)Math.Round(y));
-                        var b = image.GetPixel(image.Width / 2, (int)Math.Round(y + 70));
+                        var b = image.GetPixel(image.Width / 2, image.Height * 7 / 10);
                         Console.WriteLine($"CONTINUITY {skin}/{mode}: header={h} body={b}");
                         if (mode == "light" && skin == PaperSkins.Mica)
                             Program.Assert(Math.Min(b.R, Math.Min(b.G, b.B)) >= 120,
