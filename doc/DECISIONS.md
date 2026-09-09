@@ -44,6 +44,7 @@
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-031 | 主题 / Window integration |
 | D-031 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
+| D-032 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1145,3 +1146,24 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 - `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`、`src/PaperWindow.cs`。
 - `src/AppController.cs` 的显示动画终点，`src/AppController.Settings.cs` 的窗口集成。
 - `tests/PaperTodo.MicaChecks/Program.cs`、`VisualChecks.cs` 与 Release CI 的桌面/WPF 双通道捕获。
+
+
+## D-032 — 透色亚克力试用可调色 accent，保留单窗口边界
+
+**Status:** Experimental（仅透色模式；Windows 11 真机视觉与拖动性能待验）
+
+### Context
+
+标准和透色亚克力原先共享固定的系统 Acrylic；降低 WPF 白色覆盖层强度后，用户反馈透色模式明显发灰。用户授权试用社区 WPF 可调色接法。D-031 的单窗口和形态动画边界继续有效。
+
+### Decision / Why
+
+- 仅透色模式使用 `SetWindowCompositionAttribute` 的 `WCA_ACCENT_POLICY`，直接设置原生混合颜色与 alpha；WPF 外壳不再叠加底色。标准云母/亚克力保留官方系统 backdrop。
+- accent 使用 zero glass，系统 backdrop 使用 full glass；由现有 `WindowChrome` 和适配器统一切换。进入动画、退出透色模式或释放时清除 accent，失败恢复实色。正文、HWND、编辑器和 Edge 胶囊不重建。
+- 这是未公开保证兼容性的 accent policy，有版本与拖动/缩放性能代价；不能以接口成功或 CI 像素正确替代用户机器上的视觉和流畅度确认。暂不引入 Windows App SDK、第二个内容窗口或背景捕获。
+
+### Evidence
+
+- `src/DwmMicaApi.cs` 的 `SetClearAcrylic`、`src/NativeMicaBackdrop.cs` 的材质切换与清理。
+- `tests/PaperTodo.MicaChecks/Program.cs` 的接法互斥/失败回退；`VisualChecks.cs` 的白底/彩色底和形态动画捕获。
+- 社区接法：[SlimeNull 的 WPF 示例](https://slimenull.com/posts/20240530104846/)、[WindowEffectTest 源码](https://github.com/TwilightLemon/WindowEffectTest/blob/master/WindowEffectTest/WindowMaterial.cs)。

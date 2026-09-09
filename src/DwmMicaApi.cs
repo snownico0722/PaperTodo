@@ -15,13 +15,14 @@ internal interface INativeMicaApi
     int ExtendFrame(IntPtr hwnd, bool enabled);
     int SetDarkMode(IntPtr hwnd, bool dark);
     int SetBackdrop(IntPtr hwnd, int backdrop);
+    int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
     void ConfigureFrame(IntPtr hwnd, bool rounded);
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
 
-/// <summary>Documented DWM APIs; no wallpaper decoding, capture or undocumented Mica flag.</summary>
+/// <summary>DWM integration, with an isolated legacy accent policy for Clear Acrylic.</summary>
 internal sealed class DwmMicaApi : INativeMicaApi
 {
     internal static readonly DwmMicaApi Instance = new();
@@ -66,6 +67,27 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int SetBackdrop(IntPtr hwnd, int backdrop) =>
         DwmSetWindowAttribute(hwnd, SystemBackdropAttribute, ref backdrop, sizeof(int));
 
+    public unsafe int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
+    {
+        // WCA_ACCENT_POLICY is undocumented. Keep it exclusive to Clear Acrylic and
+        // report failure so the adapter keeps an opaque surface on unsupported systems.
+        // GradientColor is AABBGGRR; nonzero alpha is required for Acrylic blur.
+        var policy = new AccentPolicy
+        {
+            State = enabled ? 4 : 0, // ACCENT_ENABLE_ACRYLICBLURBEHIND / ACCENT_DISABLED
+            Color = dark ? 0x30282120u : 0x28FFFFFFu
+        };
+        var data = new CompositionAttributeData
+        {
+            Attribute = 19, Data = (IntPtr)(&policy), Size = (nuint)sizeof(AccentPolicy)
+        };
+        try
+        {
+            return SetWindowCompositionAttribute(hwnd, ref data) ? 0 : unchecked((int)0x80004005);
+        }
+        catch (EntryPointNotFoundException) { return unchecked((int)0x80004001); }
+    }
+
     public void SetNonClientActive(IntPtr hwnd, bool active) =>
         // Use the same -1 lParam as WindowChrome to avoid drawing over its custom frame.
         DefWindowProc(hwnd, NonClientActivateMessage, active ? new IntPtr(1) : IntPtr.Zero, new IntPtr(-1));
@@ -103,6 +125,10 @@ internal sealed class DwmMicaApi : INativeMicaApi
     [StructLayout(LayoutKind.Sequential)]
     private struct Margins { internal int Left, Right, Top, Bottom; }
     [StructLayout(LayoutKind.Sequential)]
+    private struct AccentPolicy { internal int State, Flags; internal uint Color; internal int Animation; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CompositionAttributeData { internal int Attribute; internal IntPtr Data; internal nuint Size; }
+    [StructLayout(LayoutKind.Sequential)]
     private struct BlurBehind
     {
         internal uint Flags;
@@ -112,6 +138,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
     }
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowCompositionAttribute(IntPtr hwnd, ref CompositionAttributeData data);
     [DllImport("user32.dll", EntryPoint = "DefWindowProcW")]
     private static extern IntPtr DefWindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     [DllImport("dwmapi.dll")]

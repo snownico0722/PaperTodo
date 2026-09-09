@@ -79,6 +79,7 @@ internal static class VisualChecks
             }
             CheckMaterialActivation(controller, window, other, white, black);
             other.Close(); other = null;
+            CheckClearAcrylicBackground(controller, window, chrome, white, black);
             window.Activate();
             controller.State.MicaAlwaysActive = true;
             window.RefreshNativeMica(force: true);
@@ -158,7 +159,8 @@ internal static class VisualChecks
             Theme.Invalidate(); window.UpdateTheme();
             window.Activate(); Wait();
             Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 &&
-                type == MicaBackdropTypes.ToDwmBackdrop(material), "material selection reaches DWM");
+                type == MicaBackdropTypes.ToDwmBackdrop(material) && window.IsNativeMicaEffective,
+                "selected material is active with the matching system backdrop policy");
             var active = Capture(window, name + "-active", white, black, dark: null);
             other.Activate(); Wait();
             var inactive = Capture(window, name + "-inactive", white, black, dark: null);
@@ -189,7 +191,48 @@ internal static class VisualChecks
         }
     }
 
-    private static void CheckFormFrames(PaperWindow window, Border chrome, bool collapsed)
+    private static void CheckClearAcrylicBackground(AppController controller, PaperWindow window, Border chrome,
+        FrameworkElement white, FrameworkElement black)
+    {
+        var backdrop = new Window
+        {
+            Left = window.Left - 20, Top = window.Top - 20, Width = window.Width + 40, Height = window.Height + 40,
+            WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
+            ShowActivated = false, ShowInTaskbar = false, Background = Brushes.White
+        };
+        try
+        {
+            backdrop.Show(); window.Activate();
+            controller.State.Theme = "light";
+            controller.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
+            Theme.Invalidate(); window.UpdateTheme(); Wait();
+            var whiteSample = Capture(window, "clear-white-background", white, black, dark: null);
+            if (whiteSample is { } w)
+                Program.Assert(w.R >= 245 && w.G >= 245 && w.B >= 245,
+                    $"Clear Acrylic must not gray a white background: {w}");
+            backdrop.Background = new SolidColorBrush(Color.FromRgb(80, 160, 240)); Wait();
+            var clear = Capture(window, "clear-color-background", white, black, dark: null);
+            controller.State.MicaBackdropType = MicaBackdropTypes.Acrylic;
+            window.RefreshNativeMica(); Wait();
+            var standard = Capture(window, "standard-color-background", white, black, dark: null);
+            if (clear is { } c && standard is { } s)
+                Program.Assert(c.B - c.R > s.B - s.R + 20,
+                    $"Clear Acrylic must pass through substantially more background color: clear={c}, standard={s}");
+            controller.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
+            window.RefreshNativeMica(); Wait();
+            CheckFormFrames(window, chrome, collapsed: true, prefix: "clear-");
+            CheckFormFrames(window, chrome, collapsed: false, prefix: "clear-");
+            Program.Assert(window.IsNativeMicaEffective, "Clear Acrylic returns after the capsule transition");
+        }
+        finally
+        {
+            backdrop.Close();
+            controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
+            window.RefreshNativeMica(); Wait();
+        }
+    }
+
+    private static void CheckFormFrames(PaperWindow window, Border chrome, bool collapsed, string prefix = "")
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         window.SetCollapsedState(collapsed, animate: true, saveGeometry: false);
@@ -213,7 +256,7 @@ internal static class VisualChecks
             if (progress == 0.5)
             {
                 Program.Pump();
-                Capture(window, collapsed ? "03a-collapse-mid" : "04a-expand-mid", null, null, dark: null);
+                Capture(window, prefix + (collapsed ? "03a-collapse-mid" : "04a-expand-mid"), null, null, dark: null);
             }
         }
         var width = window.Width;
@@ -278,7 +321,7 @@ internal static class VisualChecks
             typeof(AppController).GetMethod("SetMicaBackdrop", Program.Private)!
                 .Invoke(controller, new object[] { MicaBackdropTypes.ClearAcrylic });
             Wait();
-            Program.Assert(window.Content is Border { Background: SolidColorBrush clear } && clear.Color.A == 32,
+            Program.Assert(window.Content is Border { Background: SolidColorBrush clear } && clear.Color.A == 0,
                 "settings receives Clear Acrylic after rebuilding its root");
             Program.Assert(Descendants(window).OfType<CheckBox>().Single(c =>
                 Equals(c.Content, Strings.Get("SettingsMicaAlwaysActive"))).IsChecked == true,

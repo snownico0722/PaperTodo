@@ -22,6 +22,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly Func<bool> _canPresent;
     private readonly Action<Brush> _setSurface;
     private readonly INativeMicaApi _native;
+    private readonly WindowChrome _windowChrome;
     private readonly DependencyPropertyDescriptor _opacity;
     private HwndSource? _source;
     private Border? _observedChrome;
@@ -33,6 +34,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
+    private bool _clearAcrylicApplied;
 
     internal bool IsActive { get; private set; }
     internal int LastHResult { get; private set; }
@@ -51,14 +53,15 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _native = native ?? DwmMicaApi.Instance;
         // One frame owner, installed before HWND creation. PaperWindow's existing native
         // hit-test still owns resizing; settings/capsules must not acquire resize borders.
-        WindowChrome.SetWindowChrome(window, new WindowChrome
+        _windowChrome = new WindowChrome
         {
             CaptionHeight = 0,
             ResizeBorderThickness = new Thickness(0),
             GlassFrameThickness = new Thickness(-1),
             CornerRadius = new CornerRadius(0),
             UseAeroCaptionButtons = false
-        });
+        };
+        WindowChrome.SetWindowChrome(window, _windowChrome);
         _opacity = DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(UIElement));
         _opacity.AddValueChanged(window, OnOpacityChanged);
         window.SourceInitialized += OnSourceInitialized;
@@ -95,22 +98,38 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var hwnd = _source.Handle;
             var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
+            var clear = _material == MicaBackdropTypes.ClearAcrylic;
             IsActive = false;
             LastHResult = 0;
-            if (enable)
+            if (_clearAcrylicApplied && (!enable || !clear))
+            {
+                LastHResult = _native.SetClearAcrylic(hwnd, false, dark);
+                if (LastHResult >= 0) _clearAcrylicApplied = false;
+            }
+            if (enable && LastHResult >= 0)
             {
                 // Legacy blur-behind alpha is ONLY a fallback. Leaving it enabled when
                 // restoring Mica mixes two composition recipes after the startup fade.
                 LastHResult = _native.DisableAlpha(hwnd);
                 if (LastHResult >= 0)
                 {
-                    LastHResult = _native.ExtendFrame(hwnd, true);
+                    // Accent Acrylic needs zero glass; system backdrops need full glass.
+                    // Update the existing frame owner so later WindowChrome messages agree.
+                    _windowChrome.GlassFrameThickness = new Thickness(clear ? 0 : -1);
+                    LastHResult = _native.ExtendFrame(hwnd, !clear);
                     if (LastHResult >= 0)
                     {
                         LastHResult = _native.SetDarkMode(hwnd, dark);
                         if (LastHResult >= 0)
                         {
                             LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
+                            if (LastHResult >= 0 && clear)
+                            {
+                                LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
+                                // Retain ownership if a later refresh fails: fallback still
+                                // has to remove the accent that was previously installed.
+                                _clearAcrylicApplied |= LastHResult >= 0;
+                            }
                             IsActive = LastHResult >= 0;
                         }
                     }
@@ -127,6 +146,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var alphaReady = false;
             if (!IsActive)
             {
+                if (_clearAcrylicApplied)
+                {
+                    if (_native.SetClearAcrylic(hwnd, false, dark) >= 0) _clearAcrylicApplied = false;
+                }
+                _windowChrome.GlassFrameThickness = new Thickness(-1);
                 if (_native.IsSupported) _native.SetBackdrop(hwnd, DwmMicaApi.None);
                 alphaReady = _native.CompositionEnabled && _native.EnableAlpha(hwnd) >= 0;
             }
@@ -225,6 +249,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         {
             _source.RemoveHook(WindowMessage);
             if (IsActive && _alwaysActive) _native.SetNonClientActive(_source.Handle, _window.IsActive);
+            if (_clearAcrylicApplied) _native.SetClearAcrylic(_source.Handle, false, _dark);
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
         }
         IsActive = false;
@@ -234,20 +259,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     internal static Brush GetActiveSurfaceBrush(string? material, bool dark)
     {
-        if (material is MicaBackdropTypes.Acrylic or MicaBackdropTypes.ClearAcrylic)
+        if (material == MicaBackdropTypes.Acrylic)
         {
             // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
             // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
             // noise and lifts the darkness, producing a clean, luminous frosted glass.
-            // Clear Acrylic uses a faint white wash to lift the native material's dark tint
-            // while keeping much more of the background visible than standard Acrylic.
-            // Only the background tint changes; text and controls stay fully opaque.
-            var clear = material == MicaBackdropTypes.ClearAcrylic;
-            var color = clear
-                ? Color.FromArgb((byte)(dark ? 32 : 56), 255, 255, 255)
-                : dark
-                    ? Color.FromArgb(144, 32, 33, 40)
-                    : Color.FromArgb(152, 255, 255, 255);
+            // Clear Acrylic instead sets its native tint directly, with no WPF wash.
+            // Text and controls stay fully opaque in both modes.
+            var color = dark ? Color.FromArgb(144, 32, 33, 40) : Color.FromArgb(152, 255, 255, 255);
             var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;

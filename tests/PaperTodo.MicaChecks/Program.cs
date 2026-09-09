@@ -44,7 +44,7 @@ internal static class Program
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Mica) == 2, "mica backdrop dwm value");
                 Assert(MicaBackdropTypes.Normalize("micaAlt") == MicaBackdropTypes.Mica, "retired Mica Alt migrates to Mica");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
-                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 3, "clear acrylic uses native acrylic");
+                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 1, "clear Acrylic disables the fixed system backdrop");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
                 long version = 0;
                 foreach (var mode in new[] { "light", "dark", "system" })
@@ -93,19 +93,37 @@ internal static class Program
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
             });
-            Check("Acrylic variants retain opaque content and distinct background tints", () =>
+            Check("Clear Acrylic switches native recipes without recreating content", () =>
             {
                 using var f = new Fixture();
+                var hwnd = new WindowInteropHelper(f.Window).Handle;
                 foreach (var dark in new[] { false, true })
                 {
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
                     var standard = ((SolidColorBrush)f.Chrome.Background).Color;
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.Glass, "standard system Acrylic recipe restored");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     var clear = ((SolidColorBrush)f.Chrome.Background).Color;
                     Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
-                    Assert(clear.A > 0 && clear.A < standard.A / 2, "clear Acrylic is substantially more transparent");
-                    Assert(f.Api.Backdrop == 3 && f.Chrome.Opacity == 1 && f.Window.Opacity == 1, "native blur with opaque content");
+                    Assert(clear.A == 0 && f.Api.ClearAcrylic && !f.Api.Glass, "native tint without a second WPF wash or full glass");
+                    Assert(f.Api.Backdrop == 1 && !f.Api.Alpha && f.Chrome.Opacity == 1 && f.Window.Opacity == 1,
+                        "exclusive accent blur with opaque content");
+                    f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.Glass, "switching back removes the active accent");
+                    f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
+                    f.Eligible = false; f.Apply(true, dark);
+                    Assert(!f.Api.ClearAcrylic && f.Api.Alpha, "collapse removes accent before alpha fallback");
+                    f.Eligible = true; f.Apply(true, dark);
+                    Assert(f.Api.ClearAcrylic && !f.Api.Alpha, "expanded endpoint restores accent");
+                    f.Api.Failure = "accent"; f.Apply(true, dark);
+                    Assert(!f.Backdrop.IsActive && !f.Api.ClearAcrylic && !Transparent(f.Chrome.Background) &&
+                        f.Backdrop.LastHResult < 0, "failed refresh clears the previous accent and restores solid paper");
+                    f.Api.Failure = null;
                 }
+                f.Apply(true, false);
+                Assert(new WindowInteropHelper(f.Window).Handle == hwnd, "material changes retain the same HWND");
+                f.Backdrop.Dispose();
+                Assert(!f.Api.ClearAcrylic, "disposal removes accent");
             });
             Check("active material appearance never prevents real focus changes", () =>
             {
@@ -302,21 +320,27 @@ internal static class Program
         public bool CompositionEnabled { get; set; } = true;
         public bool TransparencyEnabled { get; set; } = true;
         public bool HighContrast { get; set; }
-        internal bool Layered, Dark, Alpha, Rounded, NonClientActive;
+        internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass;
         internal int ActivationCalls;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls;
         public bool IsLayered(IntPtr hwnd) => Layered;
-        public int ExtendFrame(IntPtr hwnd, bool enabled) => Failure == "frame" ? Error : 0;
+        public int ExtendFrame(IntPtr hwnd, bool enabled) { Glass = enabled; return Failure == "frame" ? Error : 0; }
         public int SetDarkMode(IntPtr hwnd, bool dark) { Dark = dark; return Failure == "dark" ? Error : 0; }
         public int SetBackdrop(IntPtr hwnd, int backdrop)
         {
             BackdropCalls++;
             if (backdrop == 2 && Failure == "backdrop") return Error;
-            if (backdrop == 2) Assert(!Alpha, "must disable fallback alpha before native Mica");
+            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic, "system backdrop excludes fallback alpha and accent Acrylic");
             Backdrop = backdrop; return 0;
         }
-        public int EnableAlpha(IntPtr hwnd) { Alpha = true; return 0; }
+        public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
+        {
+            if (enabled && Failure == "accent") return Error;
+            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass, "accent requires a clean zero-glass HWND");
+            ClearAcrylic = enabled; return 0;
+        }
+        public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
         public void ConfigureFrame(IntPtr hwnd, bool rounded) => Rounded = rounded;
         public void SetNonClientActive(IntPtr hwnd, bool active) { NonClientActive = active; ActivationCalls++; }

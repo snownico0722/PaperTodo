@@ -37,7 +37,8 @@ public static class MicaBackdropTypes
 
     public static int ToDwmBackdrop(string? id) => Normalize(id) switch
     {
-        Acrylic or ClearAcrylic => DwmMicaApi.TransientWindow,
+        Acrylic => DwmMicaApi.TransientWindow,
+        ClearAcrylic => DwmMicaApi.None, // Custom accent policy must not overlap a system backdrop.
         _ => DwmMicaApi.MainWindow
     };
 }
