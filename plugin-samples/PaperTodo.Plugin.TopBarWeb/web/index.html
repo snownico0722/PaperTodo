@@ -33,7 +33,12 @@
         actions: [
           {
             id: 'paper-info',
-            icon: { kind: 'character', value: 'i' },
+            icon: {
+              kind: 'svgPath',
+              value: 'M8,2 A6,6 0 1 1 7.999,2 M8,7 V11 M8,4.5 V4.6',
+              renderMode: 'stroke',
+              strokeWidth: 1.4
+            },
             toolTip: '显示这张插件纸片的信息'
           }
         ],

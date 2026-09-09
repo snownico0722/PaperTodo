@@ -154,7 +154,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 MaxWidth = 460,
                 Height = 30,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                DisplayMemberPath = nameof(TodoOption.Label),
+                ItemTemplate = CreateTodoOptionTemplate(),
                 ToolTip = "选择本轮专注对应的 PaperTodo 待办"
             };
             _todoBox.SelectionChanged += OnTodoSelectionChanged;
@@ -204,7 +204,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             center.Children.Add(_statusText);
             center.Children.Add(_progress);
 
-            _minusButton = MakeButton("−");
+            _minusButton = MakeAdjustmentButton(increase: false);
             _durationText = new TextBlock
             {
                 MinWidth = 100,
@@ -212,7 +212,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 VerticalAlignment = VerticalAlignment.Center,
                 TextAlignment = TextAlignment.Center
             };
-            _plusButton = MakeButton("+");
+            _plusButton = MakeAdjustmentButton(increase: true);
 
             var durationRow = new WrapPanel
             {
@@ -493,6 +493,50 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 ? new Thickness(9, 9, 9, 11)
                 : new Thickness(18, 14, 18, 16);
             _todoBox.MaxWidth = compact ? 260 : 460;
+        }
+
+        private static DataTemplate CreateTodoOptionTemplate()
+        {
+            var panel = new FrameworkElementFactory(typeof(StackPanel));
+            panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            var check = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
+            check.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M2,7 L5.5,10.5 L12,3.5"));
+            check.SetValue(System.Windows.Shapes.Shape.StrokeThicknessProperty, 1.4);
+            check.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new System.Windows.Data.Binding
+            {
+                Path = new PropertyPath(System.Windows.Documents.TextElement.ForegroundProperty),
+                RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.Self)
+            });
+            check.SetValue(FrameworkElement.WidthProperty, 16.0);
+            check.SetValue(FrameworkElement.HeightProperty, 14.0);
+            check.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding(nameof(TodoOption.Done))
+            {
+                Converter = new BooleanToVisibilityConverter()
+            });
+            panel.AppendChild(check);
+            var label = new FrameworkElementFactory(typeof(TextBlock));
+            label.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(TodoOption.Label)));
+            panel.AppendChild(label);
+            return new DataTemplate { VisualTree = panel };
+        }
+
+        private static Button MakeAdjustmentButton(bool increase)
+        {
+            var button = MakeButton(string.Empty);
+            var icon = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(increase ? "M2,8 H14 M8,2 V14" : "M2,8 H14"),
+                Width = 16,
+                Height = 16,
+                StrokeThickness = 1.5,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                IsHitTestVisible = false
+            };
+            icon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty,
+                new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
+            button.Content = icon;
+            return button;
         }
 
         private static Button MakeButton(string text) => new()
@@ -958,9 +1002,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             var paper = string.IsNullOrWhiteSpace(item.PaperTitle)
                 ? "待办纸"
                 : Compact(item.PaperTitle, 24);
-            return item.Done
-                ? $"✓ {paper} · {text}"
-                : $"{paper} · {text}";
+            return $"{paper} · {text}";
         }
 
         private TodoOption? CurrentTodo() =>
