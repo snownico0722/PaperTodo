@@ -4,12 +4,12 @@ on:
     branches: [exp/playful-skins-20260909]
 permissions:
   contents: write
-concurrency:
-  group: refraction-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
   validate:
     if: contains(github.event.head_commit.message, '[refraction-ci]')
+    concurrency:
+      group: refraction-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -34,7 +34,7 @@ jobs:
           updates = {}
           for entry in json.loads(Path('.refraction-integrate.json').read_text(encoding='utf-8-sig')):
               name = entry['path']
-              assert name.startswith(('src/','tests/')) and '..' not in Path(name).parts and name not in updates
+              assert (name == 'CHANGELOG.md' or name.startswith(('src/','tests/','Resources/','doc/'))) and '..' not in Path(name).parts and name not in updates
               text = subprocess.check_output(['git','show',f'HEAD:{name}']).decode('utf-8-sig').replace('\r\n','\n')
               assert checksum(text) == entry['before'], 'Source changed: ' + name
               end = 0
@@ -54,7 +54,7 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add -A
             if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
-            git commit -m 'feat: integrate actual background refraction and modern native material headers'
+            git commit -m 'feat: finalize live refraction controls, capture disclosure and native caption verification'
             if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
             git push origin HEAD:refs/heads/exp/playful-skins-20260909
             if ($LASTEXITCODE -ne 0) { throw 'Branch advanced during integration' }
