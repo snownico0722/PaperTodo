@@ -10,15 +10,18 @@ namespace PaperTodo;
 internal sealed class InactiveTitleBarMask
 {
     private readonly SolidColorBrush _headerOpacity = new(Colors.Black);
-    private readonly RectangleGeometry _header = new();
-    private readonly RectangleGeometry _body = new();
+    private readonly RectangleGeometry _fadeRegion = new();
+    private readonly RectangleGeometry _bodyTop = new();
+    private readonly RectangleGeometry _bodyLower = new();
     private int _animationGeneration;
+    private double _headerBottom;
 
     internal InactiveTitleBarMask()
     {
         var drawing = new DrawingGroup();
-        drawing.Children.Add(new GeometryDrawing(_headerOpacity, null, _header));
-        drawing.Children.Add(new GeometryDrawing(Brushes.Black, null, _body));
+        drawing.Children.Add(new GeometryDrawing(_headerOpacity, null, _fadeRegion));
+        drawing.Children.Add(new GeometryDrawing(Brushes.Black, null, _bodyTop));
+        drawing.Children.Add(new GeometryDrawing(Brushes.Black, null, _bodyLower));
         MaskBrush = new DrawingBrush(drawing)
         {
             ViewboxUnits = BrushMappingMode.Absolute,
@@ -30,23 +33,60 @@ internal sealed class InactiveTitleBarMask
 
     internal DrawingBrush MaskBrush { get; }
     internal double HeaderOpacity => _headerOpacity.Opacity;
-    internal double HeaderBottom => _header.Rect.IsEmpty ? 0 : _header.Rect.Bottom;
+    internal double HeaderBottom => _headerBottom;
 
-    internal void UpdateBounds(Size size, double headerBottom)
+    internal void UpdateBounds(
+        Size size,
+        double headerBottom,
+        Rect chromeBounds,
+        double topCornerRadius)
     {
-        if (size.Width <= 0 || size.Height <= 0 || !double.IsFinite(headerBottom))
+        if (size.Width <= 0 || size.Height <= 0 ||
+            !double.IsFinite(headerBottom) ||
+            !double.IsFinite(chromeBounds.Left) ||
+            !double.IsFinite(chromeBounds.Right) ||
+            !double.IsFinite(topCornerRadius))
         {
             return;
         }
+
         headerBottom = Math.Clamp(headerBottom, 0, size.Height);
-        var header = new Rect(0, 0, size.Width, headerBottom);
-        var body = new Rect(0, headerBottom, size.Width, size.Height - headerBottom);
-        if (_header.Rect == header && _body.Rect == body)
+        var chromeLeft = Math.Clamp(chromeBounds.Left, 0, size.Width);
+        var chromeRight = Math.Clamp(chromeBounds.Right, chromeLeft, size.Width);
+        var bodyHeight = size.Height - headerBottom;
+        var maxRadius = Math.Max(0, Math.Min((chromeRight - chromeLeft) / 2, bodyHeight / 2));
+        var radius = Math.Clamp(topCornerRadius, 0, maxRadius);
+        var roundedBandBottom = Math.Min(size.Height, headerBottom + radius);
+
+        // The fading region extends one radius below the title boundary. The opaque rounded
+        // body overlaps its center, so title restore still reconstructs a full rectangular
+        // mask while title hide smoothly exposes a new rounded paper top instead of a hard cut.
+        var fadeRegion = new Rect(0, 0, size.Width, roundedBandBottom);
+        var bodyTop = radius > 0
+            ? new Rect(chromeLeft, headerBottom, chromeRight - chromeLeft, radius * 2)
+            : Rect.Empty;
+        var bodyLower = new Rect(
+            0,
+            roundedBandBottom,
+            size.Width,
+            size.Height - roundedBandBottom);
+
+        if (_fadeRegion.Rect == fadeRegion &&
+            _bodyTop.Rect == bodyTop &&
+            _bodyLower.Rect == bodyLower &&
+            _bodyTop.RadiusX == radius &&
+            _bodyTop.RadiusY == radius &&
+            _headerBottom == headerBottom)
         {
             return;
         }
-        _header.Rect = header;
-        _body.Rect = body;
+
+        _headerBottom = headerBottom;
+        _fadeRegion.Rect = fadeRegion;
+        _bodyTop.Rect = bodyTop;
+        _bodyTop.RadiusX = radius;
+        _bodyTop.RadiusY = radius;
+        _bodyLower.Rect = bodyLower;
         MaskBrush.Viewbox = MaskBrush.Viewport = new Rect(size);
     }
 
