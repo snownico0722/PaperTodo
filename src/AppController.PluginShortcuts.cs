@@ -354,7 +354,7 @@ public sealed partial class AppController
         Grid.SetColumn(keyButton, 0);
         row.Children.Add(keyButton);
 
-        var restore = SettingsIconButton("↺", Strings.Get("ShortcutRestoreDefault"));
+        var restore = SettingsIconButton(VectorPrimitiveIconKind.Reset, Strings.Get("ShortcutRestoreDefault"));
         restore.Margin = new Thickness(4, 0, 0, 0);
         Grid.SetColumn(restore, 1);
         row.Children.Add(restore);

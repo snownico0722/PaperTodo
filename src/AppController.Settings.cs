@@ -1371,15 +1371,13 @@ public sealed partial class AppController
         };
         Grid.SetColumn(valueText, 1);
 
-        Border StepButton(string glyph, int column, int delta)
+        Border StepButton(VectorPrimitiveIconKind kind, int column, int delta)
         {
-            var glyphText = new TextBlock
+            var glyphText = new VectorPrimitiveIconElement(kind)
             {
-                Text = glyph,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
+                IconSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border
@@ -1401,13 +1399,11 @@ public sealed partial class AppController
             return button;
         }
 
-        grid.Children.Add(StepButton(
-            "−",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Minus,
             0,
             -ExperimentalWindowAttachmentOptions.SnapDistanceStep));
         grid.Children.Add(valueText);
-        grid.Children.Add(StepButton(
-            "＋",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Plus,
             2,
             ExperimentalWindowAttachmentOptions.SnapDistanceStep));
         container.Child = grid;
@@ -1483,15 +1479,13 @@ public sealed partial class AppController
         };
         Grid.SetColumn(valueText, 1);
 
-        Border StepButton(string glyph, int column, int delta)
+        Border StepButton(VectorPrimitiveIconKind kind, int column, int delta)
         {
-            var glyphText = new TextBlock
+            var glyphText = new VectorPrimitiveIconElement(kind)
             {
-                Text = glyph,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
+                IconSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border
@@ -1513,13 +1507,11 @@ public sealed partial class AppController
             return button;
         }
 
-        grid.Children.Add(StepButton(
-            "−",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Minus,
             0,
             -ExperimentalWindowTetherOptions.GapStep));
         grid.Children.Add(valueText);
-        grid.Children.Add(StepButton(
-            "＋",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Plus,
             2,
             ExperimentalWindowTetherOptions.GapStep));
         container.Child = grid;
@@ -1620,15 +1612,13 @@ public sealed partial class AppController
         };
         Grid.SetColumn(valueText, 1);
 
-        Border StepButton(string glyph, int column, int delta)
+        Border StepButton(VectorPrimitiveIconKind kind, int column, int delta)
         {
-            var glyphText = new TextBlock
+            var glyphText = new VectorPrimitiveIconElement(kind)
             {
-                Text = glyph,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
+                IconSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border
@@ -1650,13 +1640,11 @@ public sealed partial class AppController
             return button;
         }
 
-        grid.Children.Add(StepButton(
-            "−",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Minus,
             0,
             -ExperimentalTodoReminderOptions.QuickMinutesStep));
         grid.Children.Add(valueText);
-        grid.Children.Add(StepButton(
-            "＋",
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Plus,
             2,
             ExperimentalTodoReminderOptions.QuickMinutesStep));
         container.Child = grid;
@@ -1843,15 +1831,13 @@ public sealed partial class AppController
         };
         Grid.SetColumn(valueText, 1);
 
-        Border StepButton(string glyph, int column, double delta)
+        Border StepButton(VectorPrimitiveIconKind kind, int column, double delta)
         {
-            var glyphText = new TextBlock
+            var glyphText = new VectorPrimitiveIconElement(kind)
             {
-                Text = glyph,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
+                IconSize = AppTypography.Scale(15),
                 Foreground = TrayTextBrush
             };
             var button = new Border
@@ -1872,9 +1858,9 @@ public sealed partial class AppController
             return button;
         }
 
-        grid.Children.Add(StepButton("−", 0, -ExperimentalOpacityLevels.Step));
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Minus, 0, -ExperimentalOpacityLevels.Step));
         grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, ExperimentalOpacityLevels.Step));
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Plus, 2, ExperimentalOpacityLevels.Step));
         container.Child = grid;
         return container;
     }
@@ -2472,12 +2458,10 @@ public sealed partial class AppController
 
     private Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
     {
-        var hintGlyph = new TextBlock
+        var hintGlyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Info)
         {
-            Text = "ⓘ",
             Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(12),
+            IconSize = AppTypography.Scale(12),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };

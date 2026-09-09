@@ -22,7 +22,7 @@ public sealed partial class PaperWindow
     private Border? _findHost;
     private TextBox? _findInput;
     private TextBlock? _findCountText;
-    private TextBlock? _findDragHandle;
+    private VectorPrimitiveIconElement? _findDragHandle;
     private Button? _findPreviousButton;
     private Button? _findNextButton;
     private readonly List<PaperFindMatch> _findMatches = [];
@@ -279,26 +279,23 @@ public sealed partial class PaperWindow
         Grid.SetColumn(count, 1);
         row.Children.Add(count);
 
-        var previous = FindIconButton("↑", "Shift+Enter");
+        var previous = FindIconButton(VectorPrimitiveIconKind.ArrowUp, "Shift+Enter");
         previous.Click += (_, _) => MoveFindMatch(-1);
         Grid.SetColumn(previous, 2);
         row.Children.Add(previous);
 
-        var next = FindIconButton("↓", "Enter");
+        var next = FindIconButton(VectorPrimitiveIconKind.ArrowDown, "Enter");
         next.Click += (_, _) => MoveFindMatch(1);
         Grid.SetColumn(next, 3);
         row.Children.Add(next);
 
-        var close = FindIconButton("×", "Esc");
+        var close = FindIconButton(VectorPrimitiveIconKind.Close, "Esc");
         close.Click += (_, _) => HideBuiltInFind(restoreFocus: true);
         Grid.SetColumn(close, 4);
         row.Children.Add(close);
 
-        var dragHandle = new TextBlock
+        var dragHandle = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.DragGrip)
         {
-            Text = "⠿",
-            FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol"),
-            TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(dragHandle, 5);
@@ -388,9 +385,12 @@ public sealed partial class PaperWindow
         UpdateFindCount();
     }
 
-    private static Button FindIconButton(string glyph, string tooltip)
+    private static Button FindIconButton(VectorPrimitiveIconKind kind, string tooltip)
     {
-        var button = IconButton(glyph, tooltip);
+        var button = IconButton("", tooltip);
+        var icon = new VectorPrimitiveIconElement(kind);
+        icon.SetBinding(VectorPrimitiveIconElement.ForegroundProperty, CreateForegroundBinding(button));
+        button.Content = icon;
         button.Padding = new Thickness(0);
         button.Margin = new Thickness(1, 0, 0, 0);
         button.Focusable = false;
@@ -468,7 +468,7 @@ public sealed partial class PaperWindow
         if (_findDragHandle != null)
         {
             _findDragHandle.Foreground = WeakTextBrush;
-            _findDragHandle.FontSize = AppTypography.Scale(16);
+            _findDragHandle.IconSize = AppTypography.Scale(16);
             _findDragHandle.Width = AppTypography.FitChrome(20);
         }
 
@@ -495,6 +495,10 @@ public sealed partial class PaperWindow
         button.MinWidth = size;
         button.MinHeight = size;
         button.FontSize = AppTypography.Scale(11.5);
+        if (button.Content is VectorPrimitiveIconElement icon)
+        {
+            icon.IconSize = AppTypography.Scale(16);
+        }
     }
 
     private bool BuiltInFindVisualsNeedRefresh()

@@ -14,7 +14,7 @@ public sealed partial class PaperWindow
 
     private sealed record WindowBindingDragFeedback(
         Border Chrome,
-        TextBlock Icon,
+        VectorPrimitiveIconElement Icon,
         TextBlock Label);
 
     private Button? _windowBindingButton;
@@ -171,7 +171,7 @@ public sealed partial class PaperWindow
             {
                 todoVisual.Chrome.BorderBrush = PaperLinkTargetBorderBrush;
                 todoVisual.Chrome.Background = PaperLinkTargetBgBrush;
-                todoVisual.Icon.Text = "⌖";
+                todoVisual.Icon.Kind = VectorPrimitiveIconKind.TargetLocked;
                 todoVisual.Label.Foreground = TextBrush;
                 todoVisual.Label.Text = Strings.Get("AssociationDropTodo");
             }
@@ -285,7 +285,7 @@ public sealed partial class PaperWindow
             visual.Chrome.BorderBrush = Theme.ActiveBrush;
             visual.Chrome.Background = Theme.Tint(
                 (byte)(Theme.IsDark ? 52 : 34));
-            visual.Icon.Text = "◎";
+            visual.Icon.Kind = VectorPrimitiveIconKind.Target;
             visual.Label.Foreground = TextBrush;
             visual.Label.Text = Strings.Format(
                 "WindowBindingDropTargetFormat",
@@ -304,7 +304,7 @@ public sealed partial class PaperWindow
         }
         visual.Chrome.BorderBrush = PaperBorderBrush;
         visual.Chrome.Background = PaperBrush;
-        visual.Icon.Text = "◎";
+        visual.Icon.Kind = VectorPrimitiveIconKind.Target;
         visual.Label.Foreground = WeakTextBrush;
         visual.Label.Text = AssociationDragHint();
     }
@@ -355,13 +355,10 @@ public sealed partial class PaperWindow
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
-        var icon = new TextBlock
+        var icon = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Target)
         {
-            Text = "◎",
             Foreground = Theme.ActiveBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
+            IconSize = AppTypography.Scale(13),
             Margin = new Thickness(0, 0, 7, 0),
             VerticalAlignment = VerticalAlignment.Center
         };

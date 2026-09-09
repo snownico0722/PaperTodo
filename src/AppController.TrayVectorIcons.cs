@@ -6,7 +6,7 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private FrameworkElement CreateTrayAddVectorIcon(string glyph)
+    private FrameworkElement CreateTrayAddVectorIcon(VectorPrimitiveIconKind kind)
     {
         var icon = new Grid
         {
@@ -16,12 +16,9 @@ public sealed partial class AppController
             UseLayoutRounding = true
         };
 
-        var paperGlyph = new VectorGlyphElement(
-            glyph,
-            new FontFamily("Segoe UI Symbol"),
-            AppTypography.Scale(12),
-            FontWeights.SemiBold)
+        var paperGlyph = new VectorPrimitiveIconElement(kind)
         {
+            IconSize = AppTypography.Scale(12),
             Foreground = TrayTextBrush,
             Margin = new Thickness(0, 0, 4.5, 3),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -44,12 +41,9 @@ public sealed partial class AppController
 
     private FrameworkElement CreateTrayPaperTypeVectorIcon(PaperData paper)
     {
-        return new VectorGlyphElement(
-            PaperTypeIcon(paper),
-            new FontFamily("Segoe UI Symbol"),
-            PaperTypeIconFontSize(paper),
-            FontWeights.SemiBold)
+        return new VectorPrimitiveIconElement(PaperTypeIconKind(paper))
         {
+            IconSize = PaperTypeIconFontSize(paper),
             Foreground = TrayTextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center

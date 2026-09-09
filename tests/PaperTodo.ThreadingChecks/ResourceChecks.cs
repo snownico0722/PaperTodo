@@ -2,6 +2,9 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Documents;
 using System.Windows.Threading;
 
 namespace PaperTodo.ThreadingChecks;
@@ -89,6 +92,44 @@ internal static partial class Program
         }
     }
 
+    private static void CheckVectorIcons()
+    {
+        // First initialization off the UI thread must not publish dispatcher-bound paths.
+        Task.Run(() => RuntimeHelpers.RunClassConstructor(typeof(VectorPrimitiveIconElement).TypeHandle))
+            .GetAwaiter().GetResult();
+        foreach (var kind in Enum.GetValues<VectorPrimitiveIconKind>())
+        {
+            var icon = new VectorPrimitiveIconElement(kind);
+            var host = new Border { Child = icon };
+            TextElement.SetForeground(host, Brushes.Blue);
+            host.Measure(new Size(48, 48));
+            host.Arrange(new Rect(0, 0, 48, 48));
+            Assert(ReferenceEquals(icon.Foreground, Brushes.Blue), $"{kind}: inherited foreground lost");
+            var bitmap = new RenderTargetBitmap(48, 48, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(host);
+            var pixels = new byte[48 * 48 * 4];
+            bitmap.CopyPixels(pixels, 48 * 4, 0);
+            Assert(pixels.Where((_, index) => index % 4 == 3).Any(alpha => alpha > 0),
+                $"{kind}: empty vector drawing");
+            icon.IconSize = 24;
+            TextElement.SetForeground(host, Brushes.Red);
+            host.Measure(new Size(48, 48));
+            host.Arrange(new Rect(0, 0, 48, 48));
+            Assert(icon.DesiredSize == new Size(24, 24), $"{kind}: scale change did not resize icon");
+            Assert(ReferenceEquals(icon.Foreground, Brushes.Red), $"{kind}: theme change lost");
+        }
+
+        var label = new TextBlock { FontSize = 14, Foreground = Brushes.Blue };
+        VectorPrimitiveIconElement.SetInlineIcon(label, VectorPrimitiveIconKind.Close);
+        label.Measure(new Size(100, 40));
+        label.Arrange(new Rect(0, 0, 100, 40));
+        var inlineIcon = (VectorPrimitiveIconElement)((InlineUIContainer)label.Inlines.FirstInline).Child;
+        Assert(inlineIcon.IconSize == 14 && ReferenceEquals(inlineIcon.Foreground, Brushes.Blue),
+            "inline operation icon lost label typography or foreground");
+        label.Text = "Cancel";
+        Assert(!label.Inlines.OfType<InlineUIContainer>().Any(), "text state retained the operation icon");
+    }
+
     private static void CheckMenuScaleRefresh()
     {
         AppTypography.Configure(null, 1.0);
@@ -118,11 +159,11 @@ internal static partial class Program
     private static void CheckGlyphSizes(MenuItem item)
     {
         item.ApplyTemplate();
-        var check = (TextBlock)item.Template.FindName("CheckMark", item);
-        var arrow = (TextBlock)item.Template.FindName("SubMenuArrow", item);
+        var check = (VectorPrimitiveIconElement)item.Template.FindName("CheckMark", item);
+        var arrow = (VectorPrimitiveIconElement)item.Template.FindName("SubMenuArrow", item);
         var host = (Border)item.Template.FindName("CheckHost", item);
-        Assert(check.FontSize == AppTypography.Scale(11), "check glyph retained its old font size");
-        Assert(arrow.FontSize == AppTypography.Scale(14), "submenu arrow retained its old font size");
+        Assert(check.IconSize == AppTypography.Scale(11), "check glyph retained its old icon size");
+        Assert(arrow.IconSize == AppTypography.Scale(14), "submenu arrow retained its old icon size");
         Assert(host.Width == AppTypography.Scale(13), "check column retained its old width");
     }
 }

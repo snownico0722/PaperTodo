@@ -135,13 +135,11 @@ public sealed partial class PaperWindow
         PaperItem item,
         TodoVisualMetrics metrics)
     {
-        var glyph = new TextBlock
+        var glyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Clock)
         {
-            Text = "\uE823",
             Foreground = WeakTextBrush,
             Opacity = 0.44,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = Math.Max(
+            IconSize = Math.Max(
                 AppTypography.Scale(10.5),
                 metrics.TextFontSize - AppTypography.Scale(1.5)),
             HorizontalAlignment = HorizontalAlignment.Center,

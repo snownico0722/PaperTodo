@@ -309,15 +309,14 @@ internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePrev
         Grid.SetRow(_status, 1);
         Children.Add(_status);
 
-        var form = new TextBlock
+        var form = new VectorPrimitiveIconElement(
+            Context.PaperExpanded ? VectorPrimitiveIconKind.CircleFilled : VectorPrimitiveIconKind.Circle)
         {
-            Text = Context.PaperExpanded ? "●" : "○",
             Margin = new Thickness(0, 10, 0, 0),
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(10),
+            IconSize = AppTypography.Scale(10),
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        form.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
+        form.SetResourceReference(VectorPrimitiveIconElement.ForegroundProperty, "WeakTextBrushKey");
         Grid.SetRow(form, 2);
         Children.Add(form);
 
@@ -330,6 +329,13 @@ internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePrev
         var status = Context.ReadPluginStatus();
         _title.Text = title;
         _title.ToolTip = title;
-        _status.Text = string.IsNullOrWhiteSpace(status) ? "◇" : status;
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            VectorPrimitiveIconElement.SetInlineIcon(_status, VectorPrimitiveIconKind.Diamond);
+        }
+        else
+        {
+            _status.Text = status;
+        }
     }
 }

@@ -35,7 +35,7 @@ public sealed partial class PaperWindow
             CapsuleBodyHeight,
             CapsuleLeftPadding,
             CapsuleIconGap,
-            CapsuleIconText(),
+            CapsuleIconKind(),
             CapsuleIconFontSizeForCurrentPaper(),
             CapsuleLabelFontSize,
             CapsuleLabelFontWeight,
@@ -48,7 +48,6 @@ public sealed partial class PaperWindow
             TextBrush,
             WeakTextBrush,
             CapsuleLabelFontFamily,
-            AppTypography.SymbolFontFamily,
             AppTypography.Language,
             !_controller.State.ExperimentalDockedCapsulesNonTopmost &&
             _controller.FullscreenAvoidanceWindowForQueue(
@@ -168,7 +167,7 @@ public sealed partial class PaperWindow
             BrightWeakTextBrush,
             TextBrush,
             WeakTextBrush,
-            CapsuleIconText(),
+            CapsuleIconKind(),
             CapsuleIconFontSizeForCurrentPaper(),
             new EdgeCapsulePreviewThemeResources(
                 Theme.LinkBrush,

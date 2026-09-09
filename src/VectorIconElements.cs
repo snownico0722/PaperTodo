@@ -1,6 +1,9 @@
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
 using Brush = System.Windows.Media.Brush;
 
@@ -12,7 +15,31 @@ internal enum VectorPrimitiveIconKind
     Minus,
     AssociationIdle,
     AssociationActive,
-    Settings
+    Settings,
+    Close,
+    Check,
+    ChevronRight,
+    ChevronDown,
+    ArrowUp,
+    ArrowDown,
+    DragGrip,
+    SortGrip,
+    Trash,
+    Note,
+    Script,
+    Link,
+    Clock,
+    Reset,
+    Info,
+    Target,
+    TargetLocked,
+    CheckBox,
+    CheckBoxChecked,
+    Image,
+    ExternalLink,
+    Circle,
+    CircleFilled,
+    Diamond
 }
 
 /// <summary>
@@ -22,24 +49,35 @@ internal enum VectorPrimitiveIconKind
 internal sealed class VectorPrimitiveIconElement : FrameworkElement
 {
     public static readonly DependencyProperty ForegroundProperty =
-        DependencyProperty.Register(
-            nameof(Foreground),
-            typeof(Brush),
+        TextElement.ForegroundProperty.AddOwner(
             typeof(VectorPrimitiveIconElement),
             new FrameworkPropertyMetadata(
                 Brushes.Black,
-                FrameworkPropertyMetadataOptions.AffectsRender));
+                FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
 
-    private readonly VectorPrimitiveIconKind _kind;
+    public static readonly DependencyProperty KindProperty =
+        DependencyProperty.Register(nameof(Kind), typeof(VectorPrimitiveIconKind),
+            typeof(VectorPrimitiveIconElement), new FrameworkPropertyMetadata(
+                VectorPrimitiveIconKind.Plus, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty IconSizeProperty =
+        DependencyProperty.Register(nameof(IconSize), typeof(double),
+            typeof(VectorPrimitiveIconElement), new FrameworkPropertyMetadata(
+                16.0, FrameworkPropertyMetadataOptions.AffectsMeasure));
+
     private readonly double _verticalOffset;
+
+    public VectorPrimitiveIconElement() : this(VectorPrimitiveIconKind.Plus) { }
 
     public VectorPrimitiveIconElement(
         VectorPrimitiveIconKind kind,
         double verticalOffset = 0)
     {
-        _kind = kind;
+        Kind = kind;
         _verticalOffset = verticalOffset;
         IsHitTestVisible = false;
+        HorizontalAlignment = HorizontalAlignment.Center;
+        VerticalAlignment = VerticalAlignment.Center;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
     }
@@ -48,6 +86,35 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
     {
         get => (Brush)GetValue(ForegroundProperty);
         set => SetValue(ForegroundProperty, value);
+    }
+
+    public VectorPrimitiveIconKind Kind
+    {
+        get => (VectorPrimitiveIconKind)GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    public double IconSize
+    {
+        get => (double)GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
+
+    protected override Size MeasureOverride(Size availableSize) => new(IconSize, IconSize);
+
+    // Some controls alternate between an operation icon and a real label (e.g. delete/cancel,
+    // linked-paper icon/name). Keep the text surface and its gestures, using geometry only for
+    // the icon state. The icon follows the same foreground and typography updates as the label.
+    internal static void SetInlineIcon(TextBlock label, VectorPrimitiveIconKind kind, string? text = null)
+    {
+        label.Inlines.Clear();
+        var icon = new VectorPrimitiveIconElement(kind);
+        icon.SetBinding(IconSizeProperty, new Binding(nameof(TextBlock.FontSize)) { Source = label });
+        label.Inlines.Add(new InlineUIContainer(icon) { BaselineAlignment = BaselineAlignment.Center });
+        if (text != null)
+        {
+            label.Inlines.Add(new Run(" " + text));
+        }
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -67,7 +134,7 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
         var centerY = (ActualHeight / 2) + _verticalOffset;
         var deviceOrigin = DevicePixelOrigin();
 
-        switch (_kind)
+        switch (Kind)
         {
             case VectorPrimitiveIconKind.Plus:
                 DrawPlus(drawingContext, centerX, centerY, pixelX, pixelY, deviceOrigin.X, deviceOrigin.Y);
@@ -107,7 +174,78 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
                     deviceOrigin.X,
                     deviceOrigin.Y);
                 break;
+            default:
+                DrawStandardIcon(drawingContext);
+                break;
         }
+    }
+
+    // Fixed 16-DIP drawings, independent of UI fonts. Freeze before publishing so first use
+    // from a different UI thread cannot leave shared dispatcher-bound geometry behind.
+    private static readonly IReadOnlyDictionary<VectorPrimitiveIconKind, Geometry> StandardGeometry =
+        CreateStandardGeometry();
+
+    private static IReadOnlyDictionary<VectorPrimitiveIconKind, Geometry> CreateStandardGeometry()
+    {
+        var paths = new Dictionary<VectorPrimitiveIconKind, string>
+        {
+            [VectorPrimitiveIconKind.Close] = "M4,4 L12,12 M12,4 L4,12",
+            [VectorPrimitiveIconKind.Check] = "M3,8 L6.5,11.5 L13,4.5",
+            [VectorPrimitiveIconKind.ChevronRight] = "M6,3 L11,8 L6,13",
+            [VectorPrimitiveIconKind.ChevronDown] = "M3,6 L8,11 L13,6",
+            [VectorPrimitiveIconKind.ArrowUp] = "M8,13 V3 M4,7 L8,3 L12,7",
+            [VectorPrimitiveIconKind.ArrowDown] = "M8,3 V13 M4,9 L8,13 L12,9",
+            [VectorPrimitiveIconKind.SortGrip] = "M3,4 H13 M3,8 H13 M3,12 H13",
+            [VectorPrimitiveIconKind.Trash] = "M2.5,4 H13.5 M6,4 V2 H10 V4 M4,4 L5,14 H11 L12,4 M7,6.5 V11.5 M9,6.5 V11.5",
+            [VectorPrimitiveIconKind.Note] = "M3,10.5 L10.5,3 L13,5.5 L5.5,13 L2.5,13.5 Z M9,4.5 L11.5,7",
+            [VectorPrimitiveIconKind.Script] = "M9,1.5 L3.5,9 H7 L6,14.5 L12.5,6.5 H9 Z",
+            [VectorPrimitiveIconKind.Link] = "M6.5,10 L5.5,11 A2.5,2.5 0 0 1 2,7.5 L5,4.5 A2.5,2.5 0 0 1 8.5,4.5 M9.5,6 L10.5,5 A2.5,2.5 0 0 1 14,8.5 L11,11.5 A2.5,2.5 0 0 1 7.5,11.5 M5.5,10.5 L10.5,5.5",
+            [VectorPrimitiveIconKind.Clock] = "M8,2 A6,6 0 1 1 7.999,2 M8,4.5 V8 L10.5,9.5",
+            [VectorPrimitiveIconKind.Reset] = "M3,6 A5.5,5.5 0 1 1 3.5,11 M3,2.5 V6.5 H7",
+            [VectorPrimitiveIconKind.Info] = "M8,2 A6,6 0 1 1 7.999,2 M8,7 V11 M8,4.8 V4.9",
+            [VectorPrimitiveIconKind.Target] = "M8,3 A5,5 0 1 1 7.999,3 M8,6 A2,2 0 1 1 7.999,6",
+            [VectorPrimitiveIconKind.TargetLocked] = "M8,3 A5,5 0 1 1 7.999,3 M8,1 V5 M8,11 V15 M1,8 H5 M11,8 H15",
+            [VectorPrimitiveIconKind.CheckBox] = "M3,3 H13 V13 H3 Z",
+            [VectorPrimitiveIconKind.CheckBoxChecked] = "M3,3 H13 V13 H3 Z M5,8 L7,10 L11,5.5",
+            [VectorPrimitiveIconKind.Image] = "M2,3 H14 V13 H2 Z M3,11 L6.5,7.5 L9,10 L11,8 L14,11 M10.5,5.5 H10.6",
+            [VectorPrimitiveIconKind.ExternalLink] = "M9,2.5 H13.5 V7 M13,3 L7,9 M7,3 H3 V13 H13 V9",
+            [VectorPrimitiveIconKind.Circle] = "M8,3 A5,5 0 1 1 7.999,3 Z",
+            [VectorPrimitiveIconKind.CircleFilled] = "M8,3 A5,5 0 1 1 7.999,3 Z",
+            [VectorPrimitiveIconKind.Diamond] = "M8,2 L14,8 L8,14 L2,8 Z"
+        };
+        var result = new Dictionary<VectorPrimitiveIconKind, Geometry>();
+        foreach (var (kind, path) in paths)
+        {
+            var geometry = Geometry.Parse(path);
+            geometry.Freeze();
+            result.Add(kind, geometry);
+        }
+        return result;
+    }
+
+    private void DrawStandardIcon(DrawingContext context)
+    {
+        var scale = Math.Min(ActualWidth, ActualHeight) / 16.0;
+        context.PushTransform(new TranslateTransform(
+            (ActualWidth - 16 * scale) / 2, (ActualHeight - 16 * scale) / 2 + _verticalOffset));
+        context.PushTransform(new ScaleTransform(scale, scale));
+        if (Kind == VectorPrimitiveIconKind.DragGrip)
+        {
+            context.DrawRoundedRectangle(Foreground, null, new Rect(7, 2.5, 2, 11), 1, 1);
+        }
+        else if (StandardGeometry.TryGetValue(Kind, out var geometry))
+        {
+            var pen = new Pen(Foreground, 1.4)
+            {
+                StartLineCap = PenLineCap.Round,
+                EndLineCap = PenLineCap.Round,
+                LineJoin = PenLineJoin.Round
+            };
+            context.DrawGeometry(Kind == VectorPrimitiveIconKind.CircleFilled ? Foreground : null,
+                Kind == VectorPrimitiveIconKind.CircleFilled ? null : pen, geometry);
+        }
+        context.Pop();
+        context.Pop();
     }
 
     private void DrawPlus(
@@ -420,101 +558,5 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
         return Math.Max(
             1,
             (int)Math.Floor(dpiScale + 0.25));
-    }
-}
-
-/// <summary>
-/// Converts a system-font glyph to a fill geometry while keeping the original text
-/// layout box. This preserves the old glyph's proportions, baseline and advance width.
-/// </summary>
-internal sealed class VectorGlyphElement : FrameworkElement
-{
-    public static readonly DependencyProperty ForegroundProperty =
-        DependencyProperty.Register(
-            nameof(Foreground),
-            typeof(Brush),
-            typeof(VectorGlyphElement),
-            new FrameworkPropertyMetadata(
-                Brushes.Black,
-                FrameworkPropertyMetadataOptions.AffectsRender));
-
-    private readonly string _text;
-    private readonly FontFamily _fontFamily;
-    private readonly double _fontSize;
-    private readonly FontWeight _fontWeight;
-    private readonly Size _desiredSize;
-
-    public VectorGlyphElement(
-        string text,
-        FontFamily fontFamily,
-        double fontSize,
-        FontWeight fontWeight)
-    {
-        _text = text ?? "";
-        _fontFamily = fontFamily;
-        _fontSize = fontSize;
-        _fontWeight = fontWeight;
-
-        var formatted = CreateFormattedText(
-            pixelsPerDip: 1.0);
-        _desiredSize = new Size(
-            Math.Max(
-                0.1,
-                formatted.WidthIncludingTrailingWhitespace),
-            Math.Max(
-                0.1,
-                formatted.Height));
-
-        IsHitTestVisible = false;
-        SnapsToDevicePixels = true;
-        UseLayoutRounding = true;
-    }
-
-    public Brush Foreground
-    {
-        get => (Brush)GetValue(ForegroundProperty);
-        set => SetValue(ForegroundProperty, value);
-    }
-
-    protected override Size MeasureOverride(Size availableSize)
-    {
-        return _desiredSize;
-    }
-
-    protected override void OnRender(DrawingContext drawingContext)
-    {
-        base.OnRender(drawingContext);
-        if (Foreground == null ||
-            string.IsNullOrEmpty(_text) ||
-            ActualWidth <= 0 ||
-            ActualHeight <= 0)
-        {
-            return;
-        }
-
-        var formatted = CreateFormattedText(
-            VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        drawingContext.DrawGeometry(
-            Foreground,
-            null,
-            formatted.BuildGeometry(new Point(0, 0)));
-    }
-
-    private FormattedText CreateFormattedText(double pixelsPerDip)
-    {
-        return new FormattedText(
-            _text,
-            UiLanguages.EffectiveUiCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(
-                _fontFamily,
-                FontStyles.Normal,
-                _fontWeight,
-                FontStretches.Normal),
-            _fontSize,
-            Brushes.Black,
-            null,
-            AppTypography.TextFormattingMode,
-            pixelsPerDip);
     }
 }

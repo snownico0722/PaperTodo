@@ -22,13 +22,12 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required double LeftPadding { get; init; }
     public required double IconGap { get; init; }
     public required double RightPadding { get; init; }
-    public required string Icon { get; init; }
+    public required VectorPrimitiveIconKind Icon { get; init; }
     public required string Label { get; init; }
     public required double IconFontSize { get; init; }
     public required double LabelFontSize { get; init; }
     public required FontWeight LabelFontWeight { get; init; }
     public required FontFamily UiFontFamily { get; init; }
-    public required FontFamily SymbolFontFamily { get; init; }
     public required XmlLanguage Language { get; init; }
     public required Brush PaperBrush { get; init; }
     public required Brush PaperBorderBrush { get; init; }
@@ -79,7 +78,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private Border _paperBackground = null!;
     private Grid _shell = null!;
     private Grid _content = null!;
-    private TextBlock _icon = null!;
+    private VectorPrimitiveIconElement _icon = null!;
     private TextBlock _label = null!;
     private Border _contentArea = null!;
     private Border _outline = null!;
@@ -650,10 +649,9 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             options.RightPadding,
             0);
 
-        _icon.Text = options.Icon;
+        _icon.Kind = options.Icon;
         _icon.Foreground = options.IconBrush;
-        _icon.FontFamily = options.SymbolFontFamily;
-        _icon.FontSize = options.IconFontSize;
+        _icon.IconSize = options.IconFontSize;
 
         _label.Text = options.Label;
         _label.Foreground = options.LabelBrush;
@@ -870,9 +868,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
                 Width = new GridLength(1, GridUnitType.Star)
             });
 
-        _icon = new TextBlock
+        _icon = new VectorPrimitiveIconElement
         {
-            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(_icon, 0);

@@ -19,7 +19,7 @@ internal sealed record EdgeCapsuleHostOptions(
     double BodyHeight,
     double LeftPadding,
     double IconGap,
-    string IconText,
+    VectorPrimitiveIconKind IconKind,
     double IconFontSize,
     double LabelFontSize,
     FontWeight LabelFontWeight,
@@ -32,7 +32,6 @@ internal sealed record EdgeCapsuleHostOptions(
     Brush StrongTextBrush,
     Brush TextBrush,
     FontFamily UiFontFamily,
-    FontFamily SymbolFontFamily,
     XmlLanguage Language,
     bool Topmost,
     string DiagnosticId);
@@ -94,9 +93,9 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
     private Border ContentArea { get; }
     private Grid ContentHost { get; }
     private Grid ContentGrid { get; }
-    private TextBlock Icon { get; }
+    private VectorPrimitiveIconElement Icon { get; }
     private Border CloseArea { get; }
-    private TextBlock CloseGlyph { get; }
+    private VectorPrimitiveIconElement CloseGlyph { get; }
     private TextBlock Label { get; }
 
     private EdgeCapsuleHost(
@@ -111,9 +110,9 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Border contentArea,
         Grid contentHost,
         Grid contentGrid,
-        TextBlock icon,
+        VectorPrimitiveIconElement icon,
         Border closeArea,
-        TextBlock closeGlyph,
+        VectorPrimitiveIconElement closeGlyph,
         TextBlock label)
     {
         _options = options;
@@ -864,13 +863,10 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var icon = new TextBlock
+        var icon = new VectorPrimitiveIconElement(options.IconKind)
         {
-            Text = options.IconText,
             Foreground = options.IconBrush,
-            FontFamily = options.SymbolFontFamily,
-            FontSize = options.IconFontSize,
-            FontWeight = FontWeights.SemiBold,
+            IconSize = options.IconFontSize,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(icon, 0);
@@ -894,12 +890,10 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Grid.SetColumn(contentArea, 0);
         shell.Children.Add(contentArea);
 
-        var closeGlyph = new TextBlock
+        var closeGlyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Close)
         {
-            Text = "×",
             Foreground = options.TextBrush,
-            FontFamily = options.SymbolFontFamily,
-            FontSize = AppTypography.Scale(18),
+            IconSize = AppTypography.Scale(18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -1180,7 +1174,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
 
     public void UpdateTypography(
         FontFamily uiFontFamily,
-        FontFamily symbolFontFamily,
         System.Windows.Markup.XmlLanguage language,
         double iconFontSize,
         double labelFontSize,
@@ -1195,12 +1188,11 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Window.Language = language;
         AppTypography.ApplyTextRendering(Window);
         AppTypography.ApplyTextRendering(Label);
-        Icon.FontFamily = symbolFontFamily;
-        Icon.FontSize = iconFontSize;
+        Icon.IconSize = iconFontSize;
         Label.FontFamily = uiFontFamily;
         Label.FontSize = labelFontSize;
         Label.FontWeight = labelFontWeight;
-        CloseGlyph.FontSize = closeGlyphFontSize;
+        CloseGlyph.IconSize = closeGlyphFontSize;
     }
 
     public bool WouldChangeZOrder(bool topmost, IntPtr insertAfter)
@@ -1333,7 +1325,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Brush iconBrush,
         Brush strongTextBrush,
         Brush weakTextBrush,
-        string iconText,
+        VectorPrimitiveIconKind iconKind,
         double iconFontSize,
         EdgeCapsulePreviewThemeResources previewResources)
     {
@@ -1348,8 +1340,8 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Chrome.BorderBrush = paperBorderBrush;
         Outline.BorderBrush = outlineBrush;
         Label.Foreground = weakTextBrush;
-        Icon.Text = iconText;
-        Icon.FontSize = iconFontSize;
+        Icon.Kind = iconKind;
+        Icon.IconSize = iconFontSize;
         Icon.Foreground = iconBrush;
         CloseGlyph.Foreground = weakTextBrush;
         Window.Foreground = strongTextBrush;
@@ -1514,7 +1506,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         }
         Grid.SetColumn(Icon, leftEdge ? 1 : 0);
         Icon.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        Icon.TextAlignment = leftEdge ? TextAlignment.Right : TextAlignment.Left;
         Grid.SetColumn(Label, leftEdge ? 0 : 1);
         Label.Margin = leftEdge
             ? new Thickness(0, 0, options.IconGap, 0)

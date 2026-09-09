@@ -385,22 +385,22 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
 
         if (item.ReminderAt.HasValue || item.ReminderTriggered)
         {
-            markers.Children.Add(CreateMarkerText("◷"));
+            markers.Children.Add(CreateMarkerIcon(VectorPrimitiveIconKind.Clock));
         }
 
-        string? linkedMarker = null;
+        VectorPrimitiveIconKind? linkedMarker = null;
         if (!string.IsNullOrWhiteSpace(item.LinkedPaperId))
         {
-            linkedMarker = "↗";
+            linkedMarker = VectorPrimitiveIconKind.ExternalLink;
         }
         else if (!string.IsNullOrWhiteSpace(item.LinkedPath))
         {
-            linkedMarker = "⌁";
+            linkedMarker = VectorPrimitiveIconKind.Link;
         }
 
         if (linkedMarker != null)
         {
-            var glyph = CreateMarkerText(linkedMarker);
+            var glyph = CreateMarkerIcon(linkedMarker.Value);
             glyph.Margin = new Thickness(0);
             var link = new Button
             {
@@ -425,14 +425,14 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
                     Control.BackgroundProperty,
                     "HoverBrushKey");
                 glyph.SetResourceReference(
-                    TextBlock.ForegroundProperty,
+                    VectorPrimitiveIconElement.ForegroundProperty,
                     "LinkBrushKey");
             };
             link.MouseLeave += (_, _) =>
             {
                 link.Background = Brushes.Transparent;
                 glyph.SetResourceReference(
-                    TextBlock.ForegroundProperty,
+                    VectorPrimitiveIconElement.ForegroundProperty,
                     "WeakTextBrushKey");
             };
             link.Click += (_, e) =>
@@ -446,18 +446,16 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         return markers;
     }
 
-    private static TextBlock CreateMarkerText(string text)
+    private static VectorPrimitiveIconElement CreateMarkerIcon(VectorPrimitiveIconKind kind)
     {
-        var marker = new TextBlock
+        var marker = new VectorPrimitiveIconElement(kind)
         {
-            Text = text,
             Margin = new Thickness(1, 0, 1, 0),
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(10.5),
+            IconSize = AppTypography.Scale(10.5),
             VerticalAlignment = VerticalAlignment.Center
         };
         marker.SetResourceReference(
-            TextBlock.ForegroundProperty,
+            VectorPrimitiveIconElement.ForegroundProperty,
             "WeakTextBrushKey");
         return marker;
     }

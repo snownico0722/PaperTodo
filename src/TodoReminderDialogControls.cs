@@ -26,11 +26,18 @@ internal static class TodoReminderDialogControls
         };
     }
 
-    public static RepeatButton RepeatButton(string text)
+    public static Button IconButton(VectorPrimitiveIconKind kind)
+    {
+        var button = Button(string.Empty, compact: true);
+        button.Content = new VectorPrimitiveIconElement(kind) { IconSize = AppTypography.Scale(14) };
+        return button;
+    }
+
+    public static RepeatButton RepeatButton(VectorPrimitiveIconKind kind)
     {
         return new RepeatButton
         {
-            Content = text,
+            Content = new VectorPrimitiveIconElement(kind) { IconSize = AppTypography.Scale(14) },
             Style = CreateButtonStyle(
                 typeof(RepeatButton),
                 primary: false,

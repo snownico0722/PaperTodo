@@ -358,8 +358,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             var label = imageReference.Label;
             var text = NewTextBlock(
-                string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}",
+                string.Empty,
                 AppTypography.Scale(11.5));
+            VectorPrimitiveIconElement.SetInlineIcon(text, VectorPrimitiveIconKind.Image,
+                string.IsNullOrWhiteSpace(label) ? null : label);
             text.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
             var host = new Border
             {
@@ -406,10 +408,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             var done = !string.Equals(task.Groups[1].Value, " ", StringComparison.Ordinal);
             return BuildListRow(
-                done ? "☑" : "☐",
+                string.Empty,
                 task.Groups[2].Value,
                 openExternal,
-                done);
+                done,
+                done ? VectorPrimitiveIconKind.CheckBoxChecked : VectorPrimitiveIconKind.CheckBox);
         }
 
         var ordered = OrderedListPattern.Match(trimmed);
@@ -442,7 +445,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string marker,
         string content,
         Action<string> openExternal,
-        bool done)
+        bool done,
+        VectorPrimitiveIconKind? markerIcon = null)
     {
         var grid = new Grid
         {
@@ -452,6 +456,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
         var markerText = NewTextBlock(marker, NoteTypography.FontSize - 2.5);
+        if (markerIcon.HasValue)
+        {
+            VectorPrimitiveIconElement.SetInlineIcon(markerText, markerIcon.Value);
+        }
         markerText.Width = marker.Length > 2 ? AppTypography.Scale(28) : AppTypography.Scale(22);
         markerText.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         grid.Children.Add(markerText);
@@ -530,7 +538,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             if (match.Groups[1].Success)
             {
                 var label = MarkdownInlineSyntax.Unescape(Group(1));
-                var image = new Span(new Run(string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}"));
+                var icon = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Image)
+                {
+                    IconSize = NoteTypography.FontSize
+                };
+                var image = new Span(new InlineUIContainer(icon) { BaselineAlignment = BaselineAlignment.Center });
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    image.Inlines.Add(new Run(" " + label));
+                }
                 image.SetResourceReference(TextElement.ForegroundProperty, "WeakTextBrushKey");
                 target.Add(image);
             }

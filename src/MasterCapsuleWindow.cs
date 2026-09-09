@@ -64,7 +64,7 @@ public sealed class MasterCapsuleWindow : Window
 
     private Border _pill = null!;
     private Border _hoverOverlay = null!;
-    private TextBlock _glyph = null!;
+    private VectorPrimitiveIconElement _glyph = null!;
     private TextBlock _label = null!;
     private StackPanel _contentStack = null!;
 
@@ -212,13 +212,10 @@ public sealed class MasterCapsuleWindow : Window
         };
         _contentStack = stack;
 
-        _glyph = new TextBlock
+        _glyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.ChevronDown)
         {
-            Text = "▾",
             Foreground = Theme.TextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = MasterGlyphFontSize,
-            FontWeight = FontWeights.SemiBold,
+            IconSize = MasterGlyphFontSize,
             VerticalAlignment = VerticalAlignment.Center
         };
         stack.Children.Add(_glyph);
@@ -352,8 +349,7 @@ public sealed class MasterCapsuleWindow : Window
         FontSize = AppTypography.Scale(12);
         Language = AppTypography.Language;
         AppTypography.ApplyTextRendering(this);
-        _glyph.FontFamily = AppTypography.SymbolFontFamily;
-        _glyph.FontSize = MasterGlyphFontSize;
+        _glyph.IconSize = MasterGlyphFontSize;
         _label.FontFamily = MasterLabelFontFamily;
         _label.FontSize = MasterLabelFontSize;
         _label.FontWeight = MasterLabelFontWeight;
@@ -441,7 +437,7 @@ public sealed class MasterCapsuleWindow : Window
 
     private void ApplyStateVisuals()
     {
-        _glyph.Text = _active ? "▸" : "▾";
+        _glyph.Kind = _active ? VectorPrimitiveIconKind.ChevronRight : VectorPrimitiveIconKind.ChevronDown;
         _label.Text = _count.ToString(UiLanguages.EffectiveCulture);
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
@@ -503,9 +499,7 @@ public sealed class MasterCapsuleWindow : Window
     {
         // Keep both the arrow slot and the two-digit count slot stable. The master capsule width
         // never changes with collapse state or count.
-        var glyphWidth = Math.Max(
-            MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
-            MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
+        var glyphWidth = MasterGlyphFontSize;
         var twoDigitCountWidth = MeasureText(
             MasterTwoDigitCountSample,
             MasterLabelFontSize,

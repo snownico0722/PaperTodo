@@ -1077,14 +1077,14 @@ public sealed partial class PaperWindow
     private readonly record struct ScriptCapsuleSpec(string Engine, string Script, bool UsePersistentProcess);
     private readonly record struct ScriptCapsuleMarkerSpec(string Engine, bool UsePersistentProcess);
 
-    private string CapsuleIconText()
+    private VectorPrimitiveIconKind CapsuleIconKind()
     {
         if (IsScriptCapsule())
         {
-            return "⚡";
+            return VectorPrimitiveIconKind.Script;
         }
 
-        return _paper.Type == PaperTypes.Note ? "✎" : "✓";
+        return _paper.Type == PaperTypes.Note ? VectorPrimitiveIconKind.Note : VectorPrimitiveIconKind.Check;
     }
 
     private double CapsuleIconFontSizeForCurrentPaper()

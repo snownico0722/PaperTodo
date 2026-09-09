@@ -21,8 +21,7 @@ public sealed partial class PaperWindow
         }
 
         // A resting edge tag owns exactly the pixels it renders: one interior shadow margin plus
-        // icon/title content and its padding. Todo/Note use one shared icon slot so the different
-        // `✓` / `✎` glyph advances cannot change the pill width for otherwise equal titles.
+        // icon/title content and its padding. Todo/Note share the same fixed vector icon slot.
         var bodyWidth = Math.Ceiling(
             CapsuleLeftPadding +
             MeasureDeepCapsuleIconSlotWidth(pixelsPerDip) +

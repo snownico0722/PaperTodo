@@ -108,8 +108,8 @@ public sealed partial class PaperWindow : Window
     private IntPtr _deepCapsuleFloatingFullscreenAvoidanceWindow;
     private DeepCapsuleContextMenuSession _deepCapsuleContextMenuSession = null!;
     private Border? _capsuleCloseArea;
-    private TextBlock? _capsuleIconText;
-    private TextBlock? _capsuleCloseGlyph;
+    private VectorPrimitiveIconElement? _capsuleIconText;
+    private VectorPrimitiveIconElement? _capsuleCloseGlyph;
     private TranslateTransform? _capsuleCloseGlyphOffset;
     private TextBlock _capsuleLabelText = null!;
     private bool _suppressGeometrySave;
@@ -410,10 +410,11 @@ public sealed partial class PaperWindow : Window
         checkHost.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         checkHost.SetValue(Grid.ColumnProperty, 0);
 
-        var checkMark = new FrameworkElementFactory(typeof(TextBlock));
+        var checkMark = new FrameworkElementFactory(typeof(VectorPrimitiveIconElement));
         checkMark.Name = "CheckMark";
-        checkMark.SetValue(TextBlock.TextProperty, "✓");
-        checkMark.SetValue(TextBlock.FontSizeProperty, AppTypography.Scale(11));
+        checkMark.SetValue(VectorPrimitiveIconElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+        checkMark.SetValue(VectorPrimitiveIconElement.KindProperty, VectorPrimitiveIconKind.Check);
+        checkMark.SetValue(VectorPrimitiveIconElement.IconSizeProperty, AppTypography.Scale(11));
         checkMark.SetValue(UIElement.OpacityProperty, 0.0);
         checkMark.SetValue(
             FrameworkElement.HorizontalAlignmentProperty,
@@ -431,10 +432,11 @@ public sealed partial class PaperWindow : Window
         content.SetValue(Grid.ColumnProperty, 1);
         itemGrid.AppendChild(content);
 
-        var arrow = new FrameworkElementFactory(typeof(TextBlock));
+        var arrow = new FrameworkElementFactory(typeof(VectorPrimitiveIconElement));
         arrow.Name = "SubMenuArrow";
-        arrow.SetValue(TextBlock.TextProperty, "›");
-        arrow.SetValue(TextBlock.FontSizeProperty, AppTypography.Scale(14));
+        arrow.SetValue(VectorPrimitiveIconElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+        arrow.SetValue(VectorPrimitiveIconElement.KindProperty, VectorPrimitiveIconKind.ChevronRight);
+        arrow.SetValue(VectorPrimitiveIconElement.IconSizeProperty, AppTypography.Scale(14));
         arrow.SetValue(FrameworkElement.MarginProperty, new Thickness(12, 0, 0, 0));
         arrow.SetValue(
             FrameworkElement.VerticalAlignmentProperty,
@@ -1705,8 +1707,7 @@ public sealed partial class PaperWindow : Window
 
         if (_capsuleIconText != null)
         {
-            _capsuleIconText.FontFamily = AppTypography.SymbolFontFamily;
-            _capsuleIconText.FontSize = CapsuleIconFontSizeForCurrentPaper();
+            _capsuleIconText.IconSize = CapsuleIconFontSizeForCurrentPaper();
         }
 
         if (_capsuleLabelText != null)
@@ -1718,12 +1719,11 @@ public sealed partial class PaperWindow : Window
 
         if (_capsuleCloseGlyph != null)
         {
-            _capsuleCloseGlyph.FontSize = AppTypography.Scale(18);
+            _capsuleCloseGlyph.IconSize = AppTypography.Scale(18);
         }
 
         _edgeCapsuleHost?.UpdateTypography(
             CapsuleLabelFontFamily,
-            AppTypography.SymbolFontFamily,
             AppTypography.Language,
             CapsuleIconFontSizeForCurrentPaper(),
             CapsuleLabelFontSize,
@@ -2480,13 +2480,10 @@ public sealed partial class PaperWindow : Window
             IsHitTestVisible = false
         };
 
-        stack.Children.Add(new TextBlock
+        stack.Children.Add(new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Note)
         {
-            Text = "✎",
             Foreground = TextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
+            IconSize = AppTypography.Scale(13),
             VerticalAlignment = VerticalAlignment.Center
         });
 
@@ -3526,20 +3523,11 @@ public sealed partial class PaperWindow : Window
             pixelsPerDip);
     }
 
-    // The capsule icon glyph (✓ / ✎) is not a fixed box — its rendered advance width depends
-    // on the font and weight. Measure it with the same SemiBold weight it renders at.
-    private double MeasureCapsuleIconWidth(double? pixelsPerDip = null)
-    {
-        return MeasureCapsuleTextWidth(
-            CapsuleIconText(),
-            CapsuleIconFontSizeForCurrentPaper(),
-            FontWeights.SemiBold,
-            AppTypography.SymbolFontFamily,
-            pixelsPerDip);
-    }
+    private double MeasureCapsuleIconWidth(double? pixelsPerDip = null) =>
+        CapsuleIconFontSizeForCurrentPaper();
 
     // Single source of truth for "how wide does this text actually render". Uses the same
-    // font family and weight the capsule icon/label are bound to, so
+    // font family and weight the capsule label is bound to, so
     // measurement and rendering never disagree — digits and halfwidth chars get their true
     // advance width.
     private double MeasureCapsuleTextWidth(

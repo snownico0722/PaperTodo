@@ -33,7 +33,7 @@ public sealed partial class PaperWindow
     {
         return CreateTopBarNewPaperIcon(
             owner,
-            "✓",
+            VectorPrimitiveIconKind.Check,
             width: 21);
     }
 
@@ -41,13 +41,13 @@ public sealed partial class PaperWindow
     {
         return CreateTopBarNewPaperIcon(
             owner,
-            "✎",
+            VectorPrimitiveIconKind.Note,
             width: 22);
     }
 
     private static FrameworkElement CreateTopBarNewPaperIcon(
         Button owner,
-        string glyph,
+        VectorPrimitiveIconKind kind,
         double width)
     {
         var scale = TopBarIconScale();
@@ -73,17 +73,14 @@ public sealed partial class PaperWindow
             CreateForegroundBinding(owner));
         icon.Children.Add(plus);
 
-        var mark = new VectorGlyphElement(
-            glyph,
-            AppTypography.SymbolFontFamily,
-            AppTypography.Scale(13),
-            FontWeights.Normal)
+        var mark = new VectorPrimitiveIconElement(kind)
         {
+            IconSize = AppTypography.Scale(13),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
         mark.SetBinding(
-            VectorGlyphElement.ForegroundProperty,
+            VectorPrimitiveIconElement.ForegroundProperty,
             CreateForegroundBinding(owner));
         icon.Children.Add(mark);
         return icon;
@@ -110,17 +107,14 @@ public sealed partial class PaperWindow
             return minus;
         }
 
-        var close = new VectorGlyphElement(
-            "×",
-            AppTypography.UiFontFamily,
-            AppTypography.Scale(16),
-            FontWeights.Normal)
+        var close = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Close)
         {
+            IconSize = AppTypography.Scale(16),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         close.SetBinding(
-            VectorGlyphElement.ForegroundProperty,
+            VectorPrimitiveIconElement.ForegroundProperty,
             CreateForegroundBinding(owner));
         return close;
     }

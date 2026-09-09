@@ -192,8 +192,8 @@ public sealed partial class PaperWindow
         _capsuleLabelText.ToolTip = _controller.PaperTitleText(_paper);
         if (_capsuleIconText != null)
         {
-            _capsuleIconText.Text = CapsuleIconText();
-            _capsuleIconText.FontSize = CapsuleIconFontSizeForCurrentPaper();
+            _capsuleIconText.Kind = CapsuleIconKind();
+            _capsuleIconText.IconSize = CapsuleIconFontSizeForCurrentPaper();
             _capsuleIconText.Foreground = BrightWeakTextBrush;
         }
         if (_capsuleShell != null)
@@ -327,14 +327,10 @@ public sealed partial class PaperWindow
             Margin = new Thickness(CapsuleLeftPadding, 0, 0, 0)
         };
 
-        var iconText = new TextBlock
+        var iconText = new VectorPrimitiveIconElement(CapsuleIconKind())
         {
-            Text = CapsuleIconText(),
             Foreground = BrightWeakTextBrush,
-            // Explicit font so the rendered glyph matches what MeasureCapsuleTextWidth measures.
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = CapsuleIconFontSizeForCurrentPaper(),
-            FontWeight = FontWeights.SemiBold,
+            IconSize = CapsuleIconFontSizeForCurrentPaper(),
             VerticalAlignment = VerticalAlignment.Center
         };
         _capsuleIconText = iconText;
@@ -442,12 +438,10 @@ public sealed partial class PaperWindow
         _capsuleShell.Children.Add(leftArea);
 
         var closeGlyphOffset = new TranslateTransform(0, 0);
-        var closeGlyph = new TextBlock
+        var closeGlyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Close)
         {
-            Text = "×",
             Foreground = WeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(18),
+            IconSize = AppTypography.Scale(18),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             RenderTransform = closeGlyphOffset
@@ -522,8 +516,8 @@ public sealed partial class PaperWindow
 
         if (ExperimentalCapsuleFollowCloseActivates)
         {
-            _capsuleCloseGlyph.Text = CapsuleIconText();
-            _capsuleCloseGlyph.FontSize =
+            _capsuleCloseGlyph.Kind = CapsuleIconKind();
+            _capsuleCloseGlyph.IconSize =
                 CapsuleIconFontSizeForCurrentPaper();
             _capsuleCloseArea.ToolTip =
                 _controller.PaperTitleText(_paper);
@@ -532,8 +526,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        _capsuleCloseGlyph.Text = "×";
-        _capsuleCloseGlyph.FontSize =
+        _capsuleCloseGlyph.Kind = VectorPrimitiveIconKind.Close;
+        _capsuleCloseGlyph.IconSize =
             AppTypography.Scale(18);
         _capsuleCloseArea.ToolTip =
             Strings.Get("ToolTipHideThisPaper");

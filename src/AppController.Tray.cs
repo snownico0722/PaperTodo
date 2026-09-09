@@ -239,16 +239,23 @@ public sealed partial class AppController
         contentPanel.SetValue(FrameworkElement.MinWidthProperty, 0.0);
         contentPanel.SetValue(DockPanel.LastChildFillProperty, true);
 
-        var arrow = new FrameworkElementFactory(typeof(TextBlock));
+        var arrow = new FrameworkElementFactory(typeof(VectorPrimitiveIconElement));
         arrow.Name = "SubmenuArrow";
-        arrow.SetValue(TextBlock.TextProperty, "›");
-        arrow.SetValue(TextBlock.MarginProperty, new Thickness(10, 0, 0, 0));
-        arrow.SetValue(TextBlock.ForegroundProperty, new DynamicResourceExtension("TrayWeakTextBrushKey"));
-        arrow.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+        arrow.SetValue(VectorPrimitiveIconElement.IconSizeProperty, AppTypography.Scale(14));
+        arrow.SetValue(VectorPrimitiveIconElement.KindProperty, VectorPrimitiveIconKind.ChevronRight);
+        arrow.SetValue(FrameworkElement.MarginProperty, new Thickness(10, 0, 0, 0));
+        arrow.SetValue(VectorPrimitiveIconElement.ForegroundProperty, new DynamicResourceExtension("TrayWeakTextBrushKey"));
         arrow.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         arrow.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         arrow.SetValue(DockPanel.DockProperty, Dock.Right);
         contentPanel.AppendChild(arrow);
+
+        var icon = new FrameworkElementFactory(typeof(ContentPresenter));
+        icon.Name = "ItemIcon";
+        icon.SetValue(ContentPresenter.ContentSourceProperty, "Icon");
+        icon.SetValue(FrameworkElement.WidthProperty, AppTypography.Scale(18));
+        icon.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        contentPanel.AppendChild(icon);
 
         var content = new FrameworkElementFactory(typeof(TextBlock));
         content.SetBinding(TextBlock.TextProperty, new Binding("Header") { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
@@ -310,6 +317,9 @@ public sealed partial class AppController
         };
         hasItems.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "SubmenuArrow"));
 
+        var noIcon = new Trigger { Property = MenuItem.IconProperty, Value = null };
+        noIcon.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Collapsed, "ItemIcon"));
+        template.Triggers.Add(noIcon);
         template.Triggers.Add(hover);
         template.Triggers.Add(disabled);
         template.Triggers.Add(hasItems);
@@ -718,12 +728,12 @@ public sealed partial class AppController
 
         var newTodoButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✓"),
+            CreateTrayAddIcon(VectorPrimitiveIconKind.Check),
             Strings.Get("TrayNewTodo"),
             () => CreatePaper(PaperTypes.Todo, show: true));
         var newNoteButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✎"),
+            CreateTrayAddIcon(VectorPrimitiveIconKind.Note),
             Strings.Get("TrayNewNote"),
             () => CreatePaper(PaperTypes.Note, show: true));
 
@@ -908,9 +918,9 @@ public sealed partial class AppController
         return icon;
     }
 
-    private FrameworkElement CreateTrayAddIcon(string glyph)
+    private FrameworkElement CreateTrayAddIcon(VectorPrimitiveIconKind kind)
     {
-        return CreateTrayAddVectorIcon(glyph);
+        return CreateTrayAddVectorIcon(kind);
     }
 
     private MenuItem TrayPaperItem(ContextMenu menu, PaperData paper)
@@ -987,13 +997,14 @@ public sealed partial class AppController
 
         var deleteText = new TextBlock
         {
-            Text = "×",
             Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
+            FontFamily = AppTypography.UiFontFamily,
             FontSize = AppTypography.Scale(14),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
+
+        VectorPrimitiveIconElement.SetInlineIcon(deleteText, VectorPrimitiveIconKind.Close);
 
         var deleteArea = new Border
         {
@@ -1124,7 +1135,7 @@ public sealed partial class AppController
             label.Text = normalLabelText;
             label.Foreground = TrayTextBrush;
             label.FontWeight = FontWeights.Normal;
-            deleteText.Text = "×";
+            VectorPrimitiveIconElement.SetInlineIcon(deleteText, VectorPrimitiveIconKind.Close);
             deleteArea.Width = 24;
             deleteText.FontSize = AppTypography.Scale(14);
             confirmArea.Visibility = Visibility.Collapsed;
@@ -1259,14 +1270,14 @@ public sealed partial class AppController
         return PaperCapsuleTitle(paper);
     }
 
-    private string PaperTypeIcon(PaperData paper)
+    private VectorPrimitiveIconKind PaperTypeIconKind(PaperData paper)
     {
         if (paper.Type == PaperTypes.Note && IsCurrentScriptCapsule(paper))
         {
-            return "⚡";
+            return VectorPrimitiveIconKind.Script;
         }
 
-        return paper.Type == PaperTypes.Note ? "✎" : "✓";
+        return paper.Type == PaperTypes.Note ? VectorPrimitiveIconKind.Note : VectorPrimitiveIconKind.Check;
     }
 
     private double PaperTypeIconFontSize(PaperData paper)

@@ -1151,13 +1151,15 @@ public sealed partial class PaperWindow
                 ? (text.LineCount > 1
                     ? multilineLinkedPathButtonText
                     : linkedPathButtonText)
-                : "\uE71B";
-            glyph.FontFamily = showName
-                ? AppTypography.UiFontFamily
-                : new FontFamily("Segoe MDL2 Assets");
+                : string.Empty;
+            glyph.FontFamily = AppTypography.UiFontFamily;
             glyph.FontSize = showName
                 ? metrics.LinkedPaperNameFontSize
                 : metrics.LinkedPaperIconFontSize;
+            if (!showName)
+            {
+                VectorPrimitiveIconElement.SetInlineIcon(glyph, VectorPrimitiveIconKind.Link);
+            }
             glyph.Foreground = hovered ? TextBrush : WeakTextBrush;
             glyph.Opacity = hovered ? 1.0 : 0.72;
             button.Background = hovered

@@ -841,7 +841,7 @@ public sealed partial class AppController
         Grid.SetColumn(statusText, 3);
         grid.Children.Add(statusText);
 
-        var restore = SettingsIconButton("↺", Strings.Get("ShortcutRestoreDefault"));
+        var restore = SettingsIconButton(VectorPrimitiveIconKind.Reset, Strings.Get("ShortcutRestoreDefault"));
         restore.Click += (_, _) =>
         {
             EnsureShortcutDraft();
@@ -960,11 +960,12 @@ public sealed partial class AppController
         };
     }
 
-    private Button SettingsIconButton(string glyph, string toolTip)
+    private Button SettingsIconButton(VectorPrimitiveIconKind kind, string toolTip)
     {
-        return new Button
+        var icon = new VectorPrimitiveIconElement(kind) { IconSize = AppTypography.Scale(14) };
+        var button = new Button
         {
-            Content = glyph,
+            Content = icon,
             Width = 26,
             Height = 26,
             Padding = new Thickness(0),
@@ -978,6 +979,9 @@ public sealed partial class AppController
             ToolTip = toolTip,
             Style = BuildSettingsCloseButtonStyle()
         };
+        icon.SetBinding(VectorPrimitiveIconElement.ForegroundProperty,
+            new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
+        return button;
     }
 
     private static string DisplayShortcut(string binding)

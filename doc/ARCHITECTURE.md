@@ -179,6 +179,8 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 `PaperWindow` 是单纸片 UI owner，负责普通 paper shell、Todo/Note 交互、标题/工具栏、窗口行为和各子系统适配。
 
+宿主通用操作和状态图标采用固定矢量几何，由 `VectorPrimitiveIconElement` 统一图形、尺寸与前景色；胶囊宽度按同一图标占位计算，不依赖字体字形宽度。实际文字、计数和用户内容保留文本；插件的自定义 Character 图标协议仍然可用。
+
 Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `PaperWindow` HWND：docked capsule 由 `EdgeCapsuleHost` 提供，跨队列/脱墙拖拽可以临时使用 `EdgeCapsuleDragWindow`；这些 surface 仍引用同一 `PaperData`，不复制业务对象。
 
 内置 Markdown Note 的编辑态和浏览态复用同一个 `MarkdownTextBox`，通过 interaction/presentation 状态切换，而不是维护两套正文 surface。

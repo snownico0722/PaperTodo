@@ -82,17 +82,17 @@ internal static class Program
         using var host = EdgeCapsuleHost.Create(new EdgeCapsuleHostOptions(
             WindowChromeMargin: 4, ChromeCornerRadius: 16, InnerCornerRadius: 15,
             OutlineThickness: 2, OutlineOverlap: 1, BodyHeight: 32,
-            LeftPadding: 6, IconGap: 4, IconText: "✓", IconFontSize: 13,
+            LeftPadding: 6, IconGap: 4, IconKind: VectorPrimitiveIconKind.Check, IconFontSize: 13,
             LabelFontSize: 12, LabelFontWeight: FontWeights.Normal, CloseToolTip: "Close",
             PaperBrush: Brushes.White, PaperBorderBrush: Brushes.Gray, OutlineBrush: Brushes.Blue,
             HoverBrush: Brushes.LightGray, IconBrush: Brushes.Gray,
             StrongTextBrush: Brushes.Black, TextBrush: Brushes.Gray,
-            UiFontFamily: new FontFamily("Segoe UI"), SymbolFontFamily: new FontFamily("Segoe UI Symbol"),
+            UiFontFamily: new FontFamily("Segoe UI"),
             Language: XmlLanguage.GetLanguage("en-US"), Topmost: false, DiagnosticId: "title-checks"));
         T HostPart<T>(string name) where T : class => (T)typeof(EdgeCapsuleHost)
             .GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
         var label = HostPart<TextBlock>("Label");
-        var icon = HostPart<TextBlock>("Icon");
+        var icon = HostPart<VectorPrimitiveIconElement>("Icon");
         var contentGrid = HostPart<Grid>("ContentGrid");
         var window = HostPart<Window>("Window");
         Check(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "Host test monitor");

@@ -39,20 +39,18 @@ public sealed partial class AppController
         };
         Grid.SetColumn(value, 1);
 
-        Border StepButton(string glyph, int column, Action onClick)
+        Border StepButton(VectorPrimitiveIconKind kind, int column, Action onClick)
         {
             var button = new Border
             {
                 Width = 34,
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
-                Child = new TextBlock
+                Child = new VectorPrimitiveIconElement(kind)
                 {
-                    Text = glyph,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    FontFamily = AppTypography.SymbolFontFamily,
-                    FontSize = AppTypography.Scale(15),
+                    IconSize = AppTypography.Scale(15),
                     Foreground = TrayTextBrush
                 }
             };
@@ -68,9 +66,9 @@ public sealed partial class AppController
             return button;
         }
 
-        grid.Children.Add(StepButton("−", 0, decrement));
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Minus, 0, decrement));
         grid.Children.Add(value);
-        grid.Children.Add(StepButton("＋", 2, increment));
+        grid.Children.Add(StepButton(VectorPrimitiveIconKind.Plus, 2, increment));
         container.Child = grid;
         return container;
     }

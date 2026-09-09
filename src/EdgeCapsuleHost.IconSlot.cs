@@ -3,10 +3,7 @@ namespace PaperTodo;
 internal sealed partial class EdgeCapsuleHost
 {
     /// <summary>
-    /// Reserves the actual WPF layout slot used by the default capsule icon. The outer capsule
-    /// width is measured separately by PaperWindow; keeping the TextBlock's MinWidth in sync makes
-    /// the following title start at the same X for the narrower ✓ and wider ✎ glyphs.
-    /// Script capsules pass zero and keep their natural icon width.
+    /// Keeps the vector layout slot in sync with PaperWindow's capsule width calculation.
     /// </summary>
     internal void SetDefaultIconSlotWidth(double widthDip)
     {

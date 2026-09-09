@@ -15,6 +15,7 @@ internal static partial class Program
         ("menu-caches-two-sta-threads", CheckSeparateUiThreads),
         ("shared-easings-worker-first", CheckFrozenEasings),
         ("menu-scale-refresh", CheckMenuScaleRefresh),
+        ("vector-icons-worker-first", CheckVectorIcons),
         ("runtime-expired-queued-calls", CheckExpiredRuntimeCalls),
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),

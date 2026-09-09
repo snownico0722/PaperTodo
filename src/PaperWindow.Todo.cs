@@ -263,13 +263,11 @@ public sealed partial class PaperWindow
 
         _appendArea = area;
 
-        var plus = new TextBlock
+        var plus = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Plus)
         {
-            Text = "＋",
             Foreground = WeakTextBrush,
             Opacity = 0.42,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = metrics.AppendGlyphFontSize,
+            IconSize = metrics.AppendGlyphFontSize,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -320,13 +318,13 @@ public sealed partial class PaperWindow
                 _appendArea.BorderThickness = new Thickness(1);
             }
 
-            if (_appendArea.Child is TextBlock text)
+            if (_appendArea.Child is VectorPrimitiveIconElement text)
             {
                 var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
-                text.Text = "🗑";
+                text.Kind = VectorPrimitiveIconKind.Trash;
                 text.Foreground = TrashTextBrush;
                 text.Opacity = hovered ? 1.0 : 0.65;
-                text.FontSize = metrics.TrashGlyphFontSize;
+                text.IconSize = metrics.TrashGlyphFontSize;
             }
         }
         else
@@ -335,13 +333,13 @@ public sealed partial class PaperWindow
             _appendArea.BorderBrush = AppendBorderBrush;
             _appendArea.BorderThickness = new Thickness(1);
 
-            if (_appendArea.Child is TextBlock text)
+            if (_appendArea.Child is VectorPrimitiveIconElement text)
             {
                 var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
-                text.Text = "＋";
+                text.Kind = VectorPrimitiveIconKind.Plus;
                 text.Foreground = WeakTextBrush;
                 text.Opacity = 0.42;
-                text.FontSize = metrics.AppendGlyphFontSize;
+                text.IconSize = metrics.AppendGlyphFontSize;
             }
         }
     }
@@ -776,7 +774,7 @@ public sealed partial class PaperWindow
                     : isTodoMultiline
                         ? CompactLinkedPaperTitle(linkedPaperTitle, 6, 5)
                         : CompactLinkedPaperTitle(linkedPaperTitle, 3, 3);
-                return runLinkedScriptOnClick ? "⚡ " + title : title;
+                return title;
             }
 
             double LegacyLinkedPaperButtonWidth(bool isTodoMultiline)
@@ -806,7 +804,8 @@ public sealed partial class PaperWindow
                     return legacyWidth;
                 }
 
-                var measuredWidth = MeasureCapsuleTextWidth(label, metrics.LinkedPaperNameFontSize, FontWeights.SemiBold, AppTypography.UiFontFamily) + 10;
+                var measuredWidth = MeasureCapsuleTextWidth(label, metrics.LinkedPaperNameFontSize, FontWeights.SemiBold, AppTypography.UiFontFamily) + 10
+                    + (runLinkedScriptOnClick ? metrics.LinkedPaperNameFontSize + 3 : 0);
                 return Math.Max(legacyWidth, Math.Ceiling(measuredWidth));
             }
 
@@ -822,7 +821,7 @@ public sealed partial class PaperWindow
 
             var linkedPaperButtonText = showLinkedPaperName
                 ? LinkedPaperButtonLabel(isTodoMultiline: false)
-                : runLinkedScriptOnClick ? "⚡" : "\uE71B";
+                : string.Empty;
             var multilineLinkedPaperButtonText = showLinkedPaperName
                 ? LinkedPaperButtonLabel(isTodoMultiline: true)
                 : linkedPaperButtonText;
@@ -836,9 +835,7 @@ public sealed partial class PaperWindow
                 Text = linkedPaperButtonText,
                 Foreground = linkedPaperActive ? LinkedPaperActiveTextBrush : WeakTextBrush,
                 Opacity = linkedPaperActive ? 1.0 : 0.72,
-                FontFamily = showLinkedPaperName
-                    ? AppTypography.UiFontFamily
-                    : runLinkedScriptOnClick ? new FontFamily("Segoe UI Symbol") : new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AppTypography.UiFontFamily,
                 FontSize = showLinkedPaperName
                     ? metrics.LinkedPaperNameFontSize
                     : runLinkedScriptOnClick ? metrics.LinkedPaperIconFontSize + 1 : metrics.LinkedPaperIconFontSize,
@@ -850,6 +847,13 @@ public sealed partial class PaperWindow
                 LineHeight = showLinkedPaperName ? metrics.LinkedPaperNameFontSize + 1 : double.NaN,
                 MaxWidth = showLinkedPaperName ? LinkedPaperTextMaxWidth(isTodoMultiline: false, linkedPaperButtonWidth) : double.PositiveInfinity
             };
+
+            if (!showLinkedPaperName || runLinkedScriptOnClick)
+            {
+                VectorPrimitiveIconElement.SetInlineIcon(linkGlyph,
+                    runLinkedScriptOnClick ? VectorPrimitiveIconKind.Script : VectorPrimitiveIconKind.Link,
+                    showLinkedPaperName ? linkedPaperButtonText : null);
+            }
 
             var linkButton = new Border
             {
@@ -887,7 +891,15 @@ public sealed partial class PaperWindow
                 }
 
                 lastLinkedPaperNameMultiline = isTodoMultiline;
-                linkGlyph.Text = isTodoMultiline ? multilineLinkedPaperButtonText : linkedPaperButtonText;
+                var label = isTodoMultiline ? multilineLinkedPaperButtonText : linkedPaperButtonText;
+                if (runLinkedScriptOnClick)
+                {
+                    VectorPrimitiveIconElement.SetInlineIcon(linkGlyph, VectorPrimitiveIconKind.Script, label);
+                }
+                else
+                {
+                    linkGlyph.Text = label;
+                }
                 linkGlyph.TextWrapping = isTodoMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap;
                 linkGlyph.MaxWidth = LinkedPaperTextMaxWidth(isTodoMultiline, linkedPaperButtonWidth);
             }
@@ -928,7 +940,7 @@ public sealed partial class PaperWindow
                 linkedPaperTitle = refreshedTitle;
                 linkedPaperButtonText = showLinkedPaperName
                     ? LinkedPaperButtonLabel(isTodoMultiline: false)
-                    : runLinkedScriptOnClick ? "⚡" : "\uE71B";
+                    : string.Empty;
                 multilineLinkedPaperButtonText = showLinkedPaperName
                     ? LinkedPaperButtonLabel(isTodoMultiline: true)
                     : linkedPaperButtonText;
@@ -1008,13 +1020,12 @@ public sealed partial class PaperWindow
             grid.Children.Add(reminderHost);
         }
 
-        var handleGlyph = new TextBlock
+        var handleGlyph = new VectorPrimitiveIconElement
         {
-            Text = "≡",
+            Kind = VectorPrimitiveIconKind.SortGrip,
             Foreground = WeakTextBrush,
             Opacity = 0.48,
-            FontSize = Math.Max(AppTypography.Scale(11), metrics.TextFontSize - AppTypography.Scale(1)),
-            FontFamily = AppTypography.SymbolFontFamily,
+            IconSize = Math.Max(AppTypography.Scale(11), metrics.TextFontSize - AppTypography.Scale(1)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -1917,11 +1928,11 @@ public sealed partial class PaperWindow
                 metrics.CheckColumnWidth - AppTypography.Scale(4)))
         });
 
-        var check = new TextBlock
+        var check = new VectorPrimitiveIconElement(
+            done ? VectorPrimitiveIconKind.CheckBoxChecked : VectorPrimitiveIconKind.CheckBox)
         {
-            Text = done ? "☑" : "☐",
             Foreground = done ? BrightWeakTextBrush : TextBrush,
-            FontSize = metrics.GhostTextFontSize,
+            IconSize = metrics.GhostTextFontSize,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Opacity = 0.78
@@ -1953,13 +1964,12 @@ public sealed partial class PaperWindow
         Grid.SetColumn(content, 1);
         grid.Children.Add(content);
 
-        var handle = new TextBlock
+        var handle = new VectorPrimitiveIconElement
         {
-            Text = "≡",
+            Kind = VectorPrimitiveIconKind.SortGrip,
             Foreground = WeakTextBrush,
             Opacity = 0.58,
-            FontSize = Math.Max(AppTypography.Scale(12), metrics.GhostTextFontSize - AppTypography.Scale(1)),
-            FontFamily = AppTypography.SymbolFontFamily,
+            IconSize = Math.Max(AppTypography.Scale(12), metrics.GhostTextFontSize - AppTypography.Scale(1)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };

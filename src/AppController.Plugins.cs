@@ -488,7 +488,7 @@ public sealed partial class AppController
 
         var closeButton = new Button
         {
-            Content = "×",
+            Content = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Close) { IconSize = AppTypography.Scale(16) },
             Width = 28,
             Height = 24,
             Padding = new Thickness(0),
@@ -904,7 +904,13 @@ public sealed partial class AppController
             foreach (var (value, name, row) in optionRows)
             {
                 var active = string.Equals(value, selected, StringComparison.Ordinal);
-                row.Header = active ? $"✓  {name}" : $"   {name}";
+                row.Header = name;
+                row.Icon = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.Check)
+                {
+                    IconSize = AppTypography.Scale(12),
+                    Foreground = Theme.ActiveBrush,
+                    Opacity = active ? 1 : 0
+                };
                 row.Foreground = active ? Theme.ActiveBrush : TrayTextBrush;
                 row.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
                 row.Background = active

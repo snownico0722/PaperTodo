@@ -62,9 +62,7 @@ internal static class TodoReminderDialog
         };
         var content = new StackPanel();
 
-        var close = TodoReminderDialogControls.Button(
-            "×",
-            compact: true);
+        var close = TodoReminderDialogControls.IconButton(VectorPrimitiveIconKind.Close);
         close.IsCancel = true;
         close.Click += (_, _) => dialog.DialogResult = false;
         var title = new TextBlock
@@ -130,9 +128,9 @@ internal static class TodoReminderDialog
                 CultureInfo.InvariantCulture),
             maximumLength: 10);
         var previousDay =
-            TodoReminderDialogControls.RepeatButton("−");
+            TodoReminderDialogControls.RepeatButton(VectorPrimitiveIconKind.Minus);
         var nextDay =
-            TodoReminderDialogControls.RepeatButton("+");
+            TodoReminderDialogControls.RepeatButton(VectorPrimitiveIconKind.Plus);
         var today = CreateQuickDateButton(
             Strings.Get("TodoReminderToday"));
         var tomorrow = CreateQuickDateButton(
@@ -151,9 +149,9 @@ internal static class TodoReminderDialog
                 CultureInfo.InvariantCulture),
             maximumLength: 5);
         var previousMinute =
-            TodoReminderDialogControls.RepeatButton("−");
+            TodoReminderDialogControls.RepeatButton(VectorPrimitiveIconKind.Minus);
         var nextMinute =
-            TodoReminderDialogControls.RepeatButton("+");
+            TodoReminderDialogControls.RepeatButton(VectorPrimitiveIconKind.Plus);
         var timeField = BuildAdjustableField(
             Strings.Get("TodoReminderTime"),
             timeInput,
