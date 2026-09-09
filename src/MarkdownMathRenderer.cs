@@ -281,14 +281,16 @@ internal static class MarkdownMathRenderer
                     break;
 
                 case '{':
-                    if (++depth > MaximumBraceDepth)
+                    // \{ is a literal TeX brace, not a grouping delimiter. Only braces preceded
+                    // by an even number of backslashes participate in the bounded-depth guard.
+                    if (!IsEscapedCharacter(formula, index) && ++depth > MaximumBraceDepth)
                     {
                         return false;
                     }
                     break;
 
                 case '}':
-                    if (--depth < 0)
+                    if (!IsEscapedCharacter(formula, index) && --depth < 0)
                     {
                         return false;
                     }
@@ -297,6 +299,17 @@ internal static class MarkdownMathRenderer
         }
 
         return depth == 0;
+    }
+
+    private static bool IsEscapedCharacter(string source, int offset)
+    {
+        var slashCount = 0;
+        for (var index = offset - 1; index >= 0 && source[index] == '\\'; index--)
+        {
+            slashCount++;
+        }
+
+        return (slashCount & 1) != 0;
     }
 
     private static void AddToCache(CacheKey key, MarkdownMathDrawing? drawing)
