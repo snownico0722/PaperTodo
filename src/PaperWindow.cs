@@ -3428,6 +3428,13 @@ public sealed partial class PaperWindow : Window
         var visualWidth = _startTransitionWidth + (_targetTransitionWidth - _startTransitionWidth) * currentProgress;
         var visualHeight = _startTransitionHeight + (_targetTransitionHeight - _startTransitionHeight) * currentProgress;
         var nativeWindow = _controller.UsesNativeMicaWindows;
+        if (nativeWindow)
+        {
+            // WM_SIZE reports whole physical pixels back to WPF. Round before deriving the
+            // inner bounds, so that callback cannot leave the paper half a pixel behind.
+            visualWidth = RoundToDevicePixelX(visualWidth);
+            visualHeight = RoundToDevicePixelY(visualHeight);
+        }
         var margin = nativeWindow
             ? _startTransitionChromeMargin + (_targetTransitionChromeMargin - _startTransitionChromeMargin) * currentProgress
             : WindowChromeMargin;
