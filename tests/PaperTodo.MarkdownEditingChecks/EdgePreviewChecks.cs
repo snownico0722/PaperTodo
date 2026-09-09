@@ -136,11 +136,16 @@ internal static partial class Program
                     Require(!EdgePreviewElements(view).OfType<ScrollViewer>().Any(), "note preview has no scrolling surface in any mode");
                     var clip = body.Clip.Bounds;
                     var last = (FrameworkElement)body.Children[^1];
-                    Require(last.TranslatePoint(new Point(), viewport).Y >= clip.Bottom, "overflow remains outside the visible excerpt");
+                    Require(last.TranslatePoint(new Point(0, last.ActualHeight), viewport).Y >= clip.Bottom,
+                        "realized content reaches the bottom of the visible excerpt");
+                    Require(body.Children.Count < 40, "invisible tail is not constructed");
                     Equal(1.0, indicator.Opacity, "overflow shows an ellipsis");
                     Require(indicator.TranslatePoint(new Point(), viewport).Y >= clip.Bottom, "ellipsis does not cover visible text");
                     var first = (FrameworkElement)body.Children[0];
                     var top = first.TranslatePoint(new Point(), viewport);
+                    viewport.InvalidateMeasure();
+                    Pump();
+                    Require(ReferenceEquals(first, body.Children[0]), "same-size layout reuses the rendered excerpt");
                     first.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, -120)
                     {
                         RoutedEvent = Mouse.MouseWheelEvent
@@ -165,6 +170,7 @@ internal static partial class Program
                 window.Height = 410;
                 Pump();
                 Equal(0.0, indicator.Opacity, "restoring space removes the overflow indicator");
+                Require(EdgePreviewText(body).Contains("正文 10"), "growing the viewport restores the previously hidden tail");
                 source = "";
                 invalidation.Invalidate();
                 Pump();
@@ -189,6 +195,58 @@ internal static partial class Program
             truncated = MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, source, _ => { });
             Require(EdgePreviewText(panel).Contains("段落之后"), "long paragraph does not discard following text");
             Require(!truncated, "ordinary long paragraph is not truncated before layout");
+        });
+
+        check("Edge note preview builds only a viewport-sized prefix without changing its content", () =>
+        {
+            var source = string.Join("\n\n", Enumerable.Range(1, 200)
+                .Select(i => $"**段落 {i}** [链接](https://example.com)"));
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            {
+                var eager = new StackPanel();
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { }, mode);
+                foreach (var size in new[] { new Size(180, 120), new Size(420, 340) })
+                {
+                    var bounded = new StackPanel();
+                    var truncated = MarkdownEdgeCapsulePreviewRenderer.RenderInto(bounded, source, _ => { }, mode, size);
+                    Require(truncated, "omitted source is reported to the overflow indicator");
+                    Require(bounded.Children.Count < eager.Children.Count / 2, "hidden blocks are not instantiated");
+                    bounded.Measure(new Size(size.Width, double.PositiveInfinity));
+                    Require(bounded.DesiredSize.Height >= size.Height, "actual wrapped content fills the viewport");
+                    for (var i = 0; i < bounded.Children.Count; i++)
+                    {
+                        Equal(EdgePreviewText(eager.Children[i]), EdgePreviewText(bounded.Children[i]),
+                            "visible prefix preserves source order and Markdown semantics");
+                    }
+                    Console.WriteLine($"  Edge preview {mode} {size}: {eager.Children.Count} -> {bounded.Children.Count} blocks");
+                }
+
+                var paragraph = new string('文', 700);
+                var single = new StackPanel();
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(single, paragraph + "\n后续内容", _ => { }, mode, new Size(180, 120));
+                Equal(1, single.Children.Count, "a wrapping paragraph alone can fill the card");
+                Equal(paragraph, EdgePreviewText(single.Children[0]), "viewport budgeting does not reinstate the 512-character cutoff");
+            }
+        });
+
+        check("Edge note preview layout contains render failures and retries on invalidation", () =>
+        {
+            var body = new StackPanel();
+            var viewport = new MarkdownEdgeCapsulePreviewViewport(body);
+            var attempts = 0;
+            viewport.SetContent(_ => { attempts++; throw new InvalidOperationException("optional preview"); });
+            var size = new Size(300, 180);
+            viewport.Measure(size);
+            viewport.Arrange(new Rect(size));
+            viewport.InvalidateMeasure();
+            viewport.Measure(size);
+            Equal(1, attempts, "failed rendering is not repeated on every measure");
+            viewport.SetContent(bounds => MarkdownEdgeCapsulePreviewRenderer.RenderInto(
+                body, "恢复内容", _ => { }, MarkdownRenderModes.Full, bounds));
+            viewport.Measure(size);
+            viewport.Arrange(new Rect(size));
+            Require(EdgePreviewText(body).Contains("恢复内容"), "new content can recover after an optional failure");
+            Equal(0.0, viewport.Children.OfType<TextBlock>().Single().Opacity, "recovery clears stale overflow");
         });
 
         check("Edge note preview still bounds pathological documents", () =>

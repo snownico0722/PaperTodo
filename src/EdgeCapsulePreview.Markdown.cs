@@ -95,12 +95,10 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         var title = Context.Title;
         _title.Text = title;
         _title.ToolTip = title;
-        var truncated = MarkdownEdgeCapsulePreviewRenderer.RenderInto(
-            _body,
-            Context.ReadMarkdownText(),
-            Context.OpenExternal,
-            Context.ReadMarkdownRenderMode());
-        _viewport.SetSourceTruncated(truncated);
+        var markdown = Context.ReadMarkdownText();
+        var renderMode = Context.ReadMarkdownRenderMode();
+        _viewport.SetContent(size => MarkdownEdgeCapsulePreviewRenderer.RenderInto(
+            _body, markdown, Context.OpenExternal, renderMode, size));
     }
 }
 
@@ -110,6 +108,8 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private readonly TextBlock _overflowIndicator;
     private readonly RectangleGeometry _bodyClip = new();
     private bool _sourceTruncated;
+    private Func<Size, bool>? _renderContent;
+    private Size? _renderedSize;
 
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
@@ -129,14 +129,33 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         Children.Add(_overflowIndicator);
     }
 
-    public void SetSourceTruncated(bool truncated)
+    public void SetContent(Func<Size, bool> renderContent)
     {
-        _sourceTruncated = truncated;
-        InvalidateArrange();
+        _renderContent = renderContent;
+        _renderedSize = null;
+        InvalidateMeasure();
     }
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        // The host keeps the content at its final size during the shell animation. Wait for
+        // that real layout constraint, then retain the excerpt until content or size changes.
+        if (_renderContent != null && _renderedSize != availableSize)
+        {
+            _renderedSize = availableSize;
+            try
+            {
+                _sourceTruncated = _renderContent(availableSize);
+            }
+            catch
+            {
+                // Keep an optional preview failure out of the WPF layout boundary. Like the
+                // live view, retry only on a later invalidation, not on every layout pass.
+                _body.Children.Clear();
+                _sourceTruncated = true;
+            }
+        }
+
         var naturalSize = new Size(availableSize.Width, double.PositiveInfinity);
         _body.Measure(naturalSize);
         _overflowIndicator.Measure(naturalSize);
@@ -280,7 +299,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         Panel target,
         string? markdown,
         Action<string> openExternal,
-        string renderMode = MarkdownRenderModes.Full)
+        string renderMode = MarkdownRenderModes.Full,
+        Size? viewportSize = null)
     {
         target.Children.Clear();
         if (string.IsNullOrWhiteSpace(markdown))
@@ -293,10 +313,25 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var fencedCodeState = default(MarkdownFencedCodeState);
         var renderedBlocks = 0;
         var renderedCharacters = 0;
+        var renderedHeight = 0.0;
         var truncated = false;
+
+        void AddBlock(FrameworkElement block)
+        {
+            target.Children.Add(block);
+            if (viewportSize is { } size)
+            {
+                block.Measure(new Size(size.Width, double.PositiveInfinity));
+                renderedHeight += block.DesiredSize.Height;
+            }
+        }
+
         foreach (var previewLine in NormalizeLines(markdown))
         {
-            if (renderedBlocks >= MaximumRenderedBlocks ||
+            // Include the block crossing the bottom edge. Measuring actual wrapped heights
+            // avoids the old fixed-block cutoff without building the invisible document tail.
+            if ((viewportSize is { } size && renderedHeight > size.Height) ||
+                renderedBlocks >= MaximumRenderedBlocks ||
                 renderedCharacters >= MaximumRenderedCharacters)
             {
                 truncated = true;
@@ -321,7 +356,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             renderedCharacters += line.Length + 1;
             if (renderMode != MarkdownRenderModes.Full)
             {
-                target.Children.Add(BuildSourceBlock(
+                AddBlock(BuildSourceBlock(
                     line, renderMode, wasInsideFence, fenceKind, openExternal));
                 renderedBlocks++;
             }
@@ -331,7 +366,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (fenceKind == MarkdownFenceLineKind.Closing)
             {
-                target.Children.Add(BuildCodeBlock(code.ToString()));
+                AddBlock(BuildCodeBlock(code.ToString()));
                 renderedBlocks++;
                 code.Clear();
             }
@@ -345,7 +380,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else
             {
-                target.Children.Add(BuildBlock(line, openExternal));
+                AddBlock(BuildBlock(line, openExternal));
                 renderedBlocks++;
             }
 
@@ -359,7 +394,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             (fencedCodeState.IsInside || code.Length > 0) &&
             renderedBlocks < MaximumRenderedBlocks)
         {
-            target.Children.Add(BuildCodeBlock(code.ToString()));
+            AddBlock(BuildCodeBlock(code.ToString()));
             renderedBlocks++;
         }
         else if (code.Length > 0)
