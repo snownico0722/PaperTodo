@@ -49,6 +49,7 @@ internal static class NativeSurfaceChecks
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
                     X = 50, Y = 50, Width = 400, Height = 340, AlwaysOnTop = true }, controller);
                 paper.Show(); paper.Activate(); Wait();
+                WaitForDesktopInk(paper, output, skin + "-" + mode);
                 if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100) &&
                     skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.Aero or PaperSkins.TracingPaper)
                     CheckCaptionSentinel(paper, output, skin + "-" + mode);
@@ -106,6 +107,28 @@ internal static class NativeSurfaceChecks
                 controller.State.ColorScheme, controller.State.UseCapsuleMode) = saved;
             Theme.Invalidate();
         }
+    }
+    private static void WaitForDesktopInk(PaperWindow paper, string output, string name)
+    {
+        // The compositor may expose its uniform fallback before WPF's first present.
+        // A blank frame is not evidence that the actual header/body material matches.
+        var pin = (Button)typeof(PaperWindow).GetField("_paperIconButton", Program.Private)!.GetValue(paper)!;
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            paper.UpdateLayout();
+            using var image = Capture(paper, output, "ready-" + name);
+            var point = pin.TransformToAncestor(paper).Transform(new Point());
+            var dpi = VisualTreeHelper.GetDpi(paper);
+            var color = ((SolidColorBrush)pin.Foreground).Color;
+            var expected = D.Color.FromArgb(color.R, color.G, color.B);
+            var matches = 0;
+            for (var y = Math.Max(0, (int)(point.Y * dpi.DpiScaleY)); y < Math.Min(image.Height, (point.Y + pin.ActualHeight) * dpi.DpiScaleY); y++)
+            for (var x = Math.Max(0, (int)(point.X * dpi.DpiScaleX)); x < Math.Min(image.Width, (point.X + pin.ActualWidth) * dpi.DpiScaleX); x++)
+                if (Difference(image.GetPixel(x, y), expected) <= 18) matches++;
+            if (matches >= 2) return;
+            Wait();
+        }
+        Program.Assert(false, name + ": actual WPF pin never appeared in the desktop composite");
     }
     private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
     {
