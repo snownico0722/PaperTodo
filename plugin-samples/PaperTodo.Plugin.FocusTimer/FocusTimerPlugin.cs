@@ -157,6 +157,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 ItemTemplate = CreateTodoOptionTemplate(),
                 ToolTip = "选择本轮专注对应的 PaperTodo 待办"
             };
+            TextSearch.SetTextPath(_todoBox, nameof(TodoOption.Label));
             _todoBox.SelectionChanged += OnTodoSelectionChanged;
             _todoStatusText = new TextBlock
             {
