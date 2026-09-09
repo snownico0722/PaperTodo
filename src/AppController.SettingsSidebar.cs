@@ -71,16 +71,17 @@ public sealed partial class AppController
         window.Content = BuildSettingsSidebarWindowContent(window);
         ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: true);
     }
 
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
-        var frame = new Border
+        var frame = new SkinBorder
         {
             Background = TrayPaperBrush,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
+            CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 10),
             SnapsToDevicePixels = true
         };
 

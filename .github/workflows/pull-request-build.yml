@@ -62,3 +62,18 @@ jobs:
 
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
+
+      - name: Native material and skin checks
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
+        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
+
+      - name: Upload material visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-visual-${{ github.sha }}
+          path: ${{ runner.temp }}/material-pixels
+          if-no-files-found: warn
+          retention-days: 7

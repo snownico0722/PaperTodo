@@ -512,7 +512,9 @@ public sealed class StateStore
         }
 
         state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
+        state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
+        state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
 
         if (!MarkdownRenderModes.IsValid(state.MarkdownRenderMode))
         {

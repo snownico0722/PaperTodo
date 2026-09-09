@@ -73,6 +73,7 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
+        RefreshNativeMica();
     }
 
     private void CompletePaperFormTransition(bool collapsed)
@@ -85,6 +86,8 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
+
+        RefreshNativeMica();
 
         // Collapse: release images only after the form transition finishes so the fading shell
         // still shows bitmaps. Expand restores rendering earlier (when the shell becomes visible).
@@ -297,7 +300,6 @@ public sealed partial class PaperWindow
 
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
-        CompletePaperFormTransition(_paper.IsCollapsed);
         ResetTransitionVisuals();
         _shell.Width = double.NaN;
         _shell.Height = double.NaN;
@@ -325,12 +327,18 @@ public sealed partial class PaperWindow
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
             ResizeMode = ResizeMode.CanResizeWithGrip;
-            if (Width <= DesiredCapsuleWindowWidth + 8 ||
+            if (_controller.UsesNativeMicaWindows)
+            {
+                Width = Math.Max(_targetTransitionWidth, PaperLayoutDefaults.MinWidth);
+                Height = Math.Max(_targetTransitionHeight, PaperLayoutDefaults.MinHeight);
+            }
+            else if (Width <= DesiredCapsuleWindowWidth + 8 ||
                 Height <= PaperLayoutDefaults.CapsuleHeight + 8)
             {
                 Width = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
                 Height = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
             }
         });
+        CompletePaperFormTransition(_paper.IsCollapsed);
     }
 }

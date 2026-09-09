@@ -591,6 +591,7 @@ public sealed partial class PaperWindow
 
         PrepareExperimentalAttachmentForFormTransition(collapsed);
 
+        var startChromeMargin = _paperChrome.Margin.Left;
         double? interruptedVisualWidth = null;
         double? interruptedVisualHeight = null;
         if (IsPaperFormTransitioning)
@@ -599,10 +600,10 @@ public sealed partial class PaperWindow
             // collapse the HWND remains expanded while the chrome is scaled toward the capsule;
             // using Window.Width here made a reversed transition jump to an endpoint first.
             interruptedVisualWidth = IsFiniteWindowCoordinate(_paperChrome.Width)
-                ? _paperChrome.Width + WindowChromeInset
+                ? _paperChrome.Width + (_controller.UsesNativeMicaWindows ? startChromeMargin * 2 : WindowChromeInset)
                 : Width;
             interruptedVisualHeight = IsFiniteWindowCoordinate(_paperChrome.Height)
-                ? _paperChrome.Height + WindowChromeInset
+                ? _paperChrome.Height + (_controller.UsesNativeMicaWindows ? startChromeMargin * 2 : WindowChromeInset)
                 : Height;
             double currentShellOpacity = _shell.Opacity;
             double currentCapsuleOpacity = _capsuleShell.Opacity;
@@ -690,6 +691,14 @@ public sealed partial class PaperWindow
         double finalTargetHeight = RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
+        if (_controller.UsesNativeMicaWindows)
+        {
+            // Alpha fallback has a WPF-shaped surface. A resizable native frame can expose
+            // the system accent outline in its transparent gutter while shrinking. Remove
+            // it once at entry; the completion/settle paths restore the final resize mode.
+            ResizeMode = ResizeMode.NoResize;
+            RefreshNativeMica(force: true);
+        }
         RefreshExperimentalOpacity();
         if (!collapsed)
         {
@@ -784,22 +793,30 @@ public sealed partial class PaperWindow
 
         if (animate)
         {
-            var expandedWidth = collapsed ? RoundToDevicePixelX(Width) : finalTargetWidth;
-            var expandedHeight = collapsed ? RoundToDevicePixelY(Height) : finalTargetHeight;
+            var expandedWidth = collapsed
+                ? RoundToDevicePixelX(_controller.UsesNativeMicaWindows && interruptedVisualWidth.HasValue ? _transitionBaseWidth : Width)
+                : finalTargetWidth;
+            var expandedHeight = collapsed
+                ? RoundToDevicePixelY(_controller.UsesNativeMicaWindows && interruptedVisualHeight.HasValue ? _transitionBaseHeight : Height)
+                : finalTargetHeight;
             _transitionBaseWidth = expandedWidth;
             _transitionBaseHeight = expandedHeight;
             _startTransitionWidth = interruptedVisualWidth ?? (collapsed ? expandedWidth : capsuleWidth);
             _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
             _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
             _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
+            _startTransitionChromeMargin = startChromeMargin;
+            _targetTransitionChromeMargin = _paperChrome.Margin.Left;
 
             // Prevent shell content reflow/wrapping by locking its size to the expanded dimensions
-            _shell.Width = Math.Max(0, expandedWidth - WindowChromeInset);
-            _shell.Height = Math.Max(0, expandedHeight - WindowChromeInset);
+            _shell.Width = Math.Max(0, expandedWidth - (_controller.UsesNativeMicaWindows
+                ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : WindowChromeInset));
+            _shell.Height = Math.Max(0, expandedHeight - (_controller.UsesNativeMicaWindows
+                ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : WindowChromeInset));
 
             TransitionProgress = 0.0;
             UpdateTransitionVisuals(0.0);
-            if (!collapsed)
+            if (!collapsed && !_controller.UsesNativeMicaWindows)
             {
                 Width = expandedWidth;
                 Height = expandedHeight;

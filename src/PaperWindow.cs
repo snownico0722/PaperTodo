@@ -51,6 +51,11 @@ public sealed partial class PaperWindow : Window
     private readonly PaperData _paper;
     private readonly AppController _controller;
     private bool _isShellBuilt;
+    private NativeMicaBackdrop? _nativeMica;
+    internal bool IsNativeMicaEffective => _nativeMica?.IsActive == true;
+    // Stable for the session, including solid/opacity fallback; no inset frame may reappear
+    // just because a startup animation temporarily suspends the material.
+    private bool UsesNativePaperChrome => _controller.UsesNativeMicaWindows && !_paper.IsCollapsed;
 
     private Grid _windowHost = null!;
     private Border _paperChrome = null!;
@@ -120,6 +125,8 @@ public sealed partial class PaperWindow : Window
     private double _targetTransitionHeight;
     private double _transitionBaseWidth;
     private double _transitionBaseHeight;
+    private double _startTransitionChromeMargin;
+    private double _targetTransitionChromeMargin;
     private bool _isEditingTitle;
     private bool _suppressTitleEditFromCurrentClick;
     private Rect? _snappedPresentationBoundsForRestore;
@@ -316,7 +323,7 @@ public sealed partial class PaperWindow : Window
     private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
     private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
-    private static Brush TitleBarBrush => Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
+    private Brush TitleBarBrush => Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
@@ -543,7 +550,7 @@ public sealed partial class PaperWindow : Window
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(RadiusControl));
+        border.SetValue(Border.CornerRadiusProperty, new DynamicResourceExtension("SkinButtonRadiusKey"));
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
 
@@ -573,6 +580,7 @@ public sealed partial class PaperWindow : Window
         };
         pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.7));
 
+        pressed.Setters.Add(new Setter(UIElement.RenderTransformProperty, new DynamicResourceExtension("SkinButtonPressedOffsetKey"), "Bd"));
         template.Triggers.Add(mouseOver);
         template.Triggers.Add(pressed);
         style.Setters.Add(new Setter(Control.TemplateProperty, template));
@@ -612,7 +620,7 @@ public sealed partial class PaperWindow : Window
         border.SetValue(FrameworkElement.WidthProperty, checkBoxSize);
         border.SetValue(FrameworkElement.HeightProperty, checkBoxSize);
         border.SetValue(Border.BorderThicknessProperty, new Thickness(AppTypography.Scale(1.5)));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(AppTypography.Scale(RadiusSmall)));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(Theme.IsPixelSkin ? 0 : AppTypography.Scale(RadiusSmall)));
         border.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("CheckBoxBorderBrushKey"));
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
@@ -620,12 +628,13 @@ public sealed partial class PaperWindow : Window
 
         var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
         path.Name = "CheckMark";
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 3,7.5 L 6.5,11 L 13,4"));
+        path.SetValue(RenderOptions.EdgeModeProperty, Theme.IsPixelSkin ? EdgeMode.Aliased : EdgeMode.Unspecified);
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(Theme.IsPixelSkin ? "M 3,7 L 3,9 L 5,9 L 5,11 L 7,11 L 7,9 L 9,9 L 9,7 L 11,7 L 11,5 L 13,5 L 13,3" : "M 3,7.5 L 6.5,11 L 13,4"));
         path.SetValue(System.Windows.Shapes.Path.StrokeProperty, new DynamicResourceExtension("PaperBrushKey"));
         path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
-        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, Theme.IsPixelSkin ? PenLineJoin.Miter : PenLineJoin.Round);
         path.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         path.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         path.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -689,6 +698,13 @@ public sealed partial class PaperWindow : Window
         InitializePaperPresentationState();
 
         ConfigureWindow();
+        if (_controller.UsesNativeMicaWindows)
+        {
+            _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
+                () => !_paper.IsCollapsed && !IsPaperFormTransitioning,
+                brush => Resources["PaperSurfaceBrushKey"] = brush);
+            RefreshNativeMica();
+        }
         if (deferShellConstruction)
         {
             UpdateToolTipSetting();
@@ -888,7 +904,7 @@ public sealed partial class PaperWindow : Window
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
     {
         hitTest = 0;
-        if (ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden ||
+        if ((!_controller.UsesNativeMicaWindows && ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden) ||
             _paper.IsCollapsed ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
@@ -921,7 +937,9 @@ public sealed partial class PaperWindow : Window
         {
             return false;
         }
-        var resizeBorder = Math.Max(1.0, WindowChromeMargin * dpiScale);
+        // Native expanded papers fill the HWND; resizing is inside the visible edge.
+        // Legacy paper/capsule geometry retains its existing transparent shadow margin.
+        var resizeBorder = Math.Max(1.0, (UsesNativePaperChrome ? 5 : WindowChromeMargin) * dpiScale);
         var nearLeft = pointerX < bounds.Left + resizeBorder;
         var nearRight = pointerX >= bounds.Right - resizeBorder;
         var nearTop = pointerY < bounds.Top + resizeBorder;
@@ -1132,7 +1150,13 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
+        if (_controller.UsesNativeMicaWindows && _topBarHost != null)
+        {
+            var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+            _topBarHost.CornerRadius = new CornerRadius(innerRadius, innerRadius, 0, 0);
+        }
 
         // Snapped presentation: make the paper fill the tile edge-to-edge (no shadow, no
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
@@ -1143,6 +1167,7 @@ public sealed partial class PaperWindow : Window
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
             RefreshPluginBodyClip();
+            RefreshNativeMica();
             RefreshExperimentalFocusPresentation(animate: false);
             return;
         }
@@ -1151,12 +1176,15 @@ public sealed partial class PaperWindow : Window
         var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
-        _paperChrome.Margin = new Thickness(WindowChromeMargin);
+        _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        _paperChrome.Effect = isCapsule
+        // Native expanded papers use the system frame, even during solid fallback.
+        // Applying an Effect to a transparent content ancestor also shadows its glyphs.
+        _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         RefreshPluginBodyClip();
+        RefreshNativeMica();
         RefreshExperimentalFocusPresentation(animate: false);
     }
 
@@ -1454,12 +1482,7 @@ public sealed partial class PaperWindow : Window
         double opacity = 0.22,
         double shadowDepth = 2)
     {
-        return new DropShadowEffect
-        {
-            BlurRadius = blurRadius,
-            ShadowDepth = shadowDepth,
-            Opacity = opacity
-        };
+        return SkinBorder.CreateShadow(blurRadius, shadowDepth, opacity);
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -1518,7 +1541,7 @@ public sealed partial class PaperWindow : Window
 
         RefreshEffectiveTopmost();
         WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
+        AllowsTransparency = !_controller.UsesNativeMicaWindows;
         Background = Brushes.Transparent;
         FontFamily = AppTypography.UiFontFamily;
         FontSize = AppTypography.Scale(12);
@@ -1530,7 +1553,12 @@ public sealed partial class PaperWindow : Window
 
     private void InitializeThemeResources()
     {
+        Resources["SkinButtonRadiusKey"] = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
+        Resources["SkinButtonPressedOffsetKey"] = new TranslateTransform(0, Theme.IsPixelSkin ? 1 : 0);
         Resources["PaperBrushKey"] = PaperBrush;
+        Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective
+            ? NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(Theme.Skin), Theme.IsDark)
+            : PaperBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
         Resources["WeakTextBrushKey"] = WeakTextBrush;
@@ -1551,6 +1579,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTheme()
     {
+        RefreshSkin();
         var oldPaperColor = TryGetSolidColor(_paperChrome?.Background, out var capturedPaperColor)
             ? capturedPaperColor
             : (Color?)null;
@@ -1565,7 +1594,7 @@ public sealed partial class PaperWindow : Window
         _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
-        var canAnimateTheme = _controller.State.EnableAnimations &&
+        var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
             _paperChrome != null &&
             oldPaperColor.HasValue &&
             oldBorderColor.HasValue &&
@@ -1612,6 +1641,8 @@ public sealed partial class PaperWindow : Window
             RestorePaperChromeThemeReferences();
         }
 
+        RefreshNativeMica(force: true);
+        if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
@@ -1789,6 +1820,10 @@ public sealed partial class PaperWindow : Window
         transitionBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
     }
 
+    internal void RefreshNativeMica(bool force = false) =>
+        _nativeMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin),
+            _controller.State.MicaAlwaysActive, force);
+
     private void RestorePaperChromeThemeReferences()
     {
         if (_paperChrome == null)
@@ -1796,7 +1831,7 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
     }
 
@@ -1809,15 +1844,15 @@ public sealed partial class PaperWindow : Window
         };
         Content = _windowHost;
 
-        _paperChrome = new Border
+        _paperChrome = new SkinBorder
         {
-            Margin = new Thickness(WindowChromeMargin),
+            Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
             Effect = CreatePaperChromeShadow()
         };
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
 
         // Chrome-level drag gesture: when users click the chrome background itself (top margin
@@ -3167,6 +3202,9 @@ public sealed partial class PaperWindow : Window
 
     private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (Theme.IsPixelSkin) return pinned
+            ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
+            : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
         var canvas = new Canvas
         {
             Width = 24,
@@ -3426,17 +3464,42 @@ public sealed partial class PaperWindow : Window
 
         var visualWidth = _startTransitionWidth + (_targetTransitionWidth - _startTransitionWidth) * currentProgress;
         var visualHeight = _startTransitionHeight + (_targetTransitionHeight - _startTransitionHeight) * currentProgress;
-        var visualChromeWidth = Math.Max(1.0, visualWidth - WindowChromeInset);
-        var visualChromeHeight = Math.Max(1.0, visualHeight - WindowChromeInset);
-        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - WindowChromeInset);
-        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - WindowChromeInset);
+        var nativeWindow = _controller.UsesNativeMicaWindows;
+        if (nativeWindow)
+        {
+            // WM_SIZE reports whole physical pixels back to WPF. Round before deriving the
+            // inner bounds, so that callback cannot leave the paper half a pixel behind.
+            visualWidth = RoundToDevicePixelX(visualWidth);
+            visualHeight = RoundToDevicePixelY(visualHeight);
+        }
+        var margin = nativeWindow
+            ? _startTransitionChromeMargin + (_targetTransitionChromeMargin - _startTransitionChromeMargin) * currentProgress
+            : WindowChromeMargin;
+        var expandedInset = nativeWindow ? 0 : WindowChromeInset;
+        var visualChromeWidth = Math.Max(1.0, visualWidth - margin * 2);
+        var visualChromeHeight = Math.Max(1.0, visualHeight - margin * 2);
+        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - expandedInset);
+        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - expandedInset);
+
+        if (nativeWindow)
+        {
+            // Apply one frame from the same progress value. The backdrop must never infer
+            // HWND bounds from LayoutUpdated/inner Width callbacks or lower our minimum size.
+            _paperChrome.Margin = new Thickness(margin);
+            MinWidth = Math.Min(PaperLayoutDefaults.MinWidth, visualWidth);
+            MinHeight = Math.Min(PaperLayoutDefaults.MinHeight, visualHeight);
+            Width = visualWidth;
+            Height = visualHeight;
+        }
 
         _paperChrome.HorizontalAlignment = HorizontalAlignment.Left;
         _paperChrome.VerticalAlignment = VerticalAlignment.Top;
         _paperChrome.Width = visualChromeWidth;
         _paperChrome.Height = visualChromeHeight;
-        _shellScale.ScaleX = Math.Max(0.01, visualChromeWidth / baseChromeWidth);
-        _shellScale.ScaleY = Math.Max(0.01, visualChromeHeight / baseChromeHeight);
+        var borderX = nativeWindow ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : 0;
+        var borderY = nativeWindow ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : 0;
+        _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
+        _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);
     }
 
@@ -3469,14 +3532,16 @@ public sealed partial class PaperWindow : Window
         var compactRange = Math.Max(1.0, expandedChromeMin - capsuleChromeMin);
         var compactness = Math.Clamp((expandedChromeMin - visualChromeMin) / compactRange, 0.0, 1.0);
         var compactVisualRadius = Math.Min(CapsuleChromeCornerRadius, visualChromeMin / 2.0);
-        var desiredVisualRadius = ExpandedChromeCornerRadius + (compactVisualRadius - ExpandedChromeCornerRadius) * compactness;
+        var expandedRadius = PaperChromeCornerRadiusForState(collapsed: false).TopLeft;
+        var desiredVisualRadius = expandedRadius + (compactVisualRadius - expandedRadius) * compactness;
 
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
     }
 
-    private static CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
+    private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
-        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius : ExpandedChromeCornerRadius);
+        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
+            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()

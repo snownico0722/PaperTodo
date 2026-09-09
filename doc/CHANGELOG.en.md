@@ -18,6 +18,9 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased (4.0.0-preview)
 
+- **Experimental skins**: Settings → Appearance → Skin separates surface material from color scheme. Keep default paper, native Mica and the two Acrylic options, or try pearl/holographic foil, tracing paper, liquid-glass approximation, ceramic glaze, Aero glass and pixel styling. Standard Mica and both Acrylic skins keep their original neutral palette; decorative skins restore the independently saved color choice. Legacy Mica settings retain their appearance. Pearl sheen follows movement without an idle loop; pixel borders, shadows and buttons keep the normal body font. Liquid glass does not perform real refraction. Paper and capsule shells share painting without changing docking or transition ownership. Headers keep the main branch's subtle tint rather than system accent highlighting; quieter glass highlights and host-owned focus/open-edge borders preserve readability.
+- **Native backdrops**: Expanded papers and Settings use native backdrops for Mica, Acrylic, tracing paper, Aero and liquid glass, with an optional always-active appearance. First activation requires an application restart on Windows 11 22H2 or later. Capsules, shape transitions, partial opacity and unsupported/disabled transparency retain solid bases; high contrast disables decoration. Switching preserves editors and undo history. No wallpaper sampling or runtime desktop capture.
+
 **Edge Preview Cards (Edge Browse)**
 
 - **Real-Time Hover Preview Cards**: Hover over any edge capsule to smoothly slide out a lightweight, interactive preview card without opening the full paper.

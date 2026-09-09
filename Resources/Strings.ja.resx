@@ -1389,4 +1389,101 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>マイカ</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Windows 11 22H2 以降のネイティブ DWM Mica を使用します。壁紙を読み込んだり模倣したりせず、Windows が背景を合成します。展開した紙片と設定画面が対象です。カプセル、折りたたみアニメーション、半透明状態では単色描画を維持します。透明効果がオフ、高コントラストがオン、またはネイティブ API が利用できない場合は単色になります。他のスキンから初めて切り替えた後は PaperTodo を終了して開き直してください。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>マイカの選択を保存しました。トレイから PaperTodo を終了して開き直すと、ネイティブ Mica が有効になります。現在のウィンドウは単色のままです。スキン変更で編集画面や元に戻す履歴は作り直しません。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>ネイティブ Mica には Windows 11 22H2（ビルド 22621）以降が必要です。このシステムではマイカ配色の単色背景を使用します。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>ネイティブ Mica は展開した紙片と設定画面に適用されます。カプセル、折りたたみアニメーション、半透明状態では単色背景を使用します。Windows の透明効果や省電力設定によっても単色表示になります。</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>背景効果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>標準マイカ、標準アクリル、透色アクリルから選べます。標準アクリルは柔らかなすりガラス効果、透色アクリルは薄い色の重ね合わせで背後の色をより透かします。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>標準マイカ</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>標準アクリル</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色アクリル</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>常にアクティブ時の素材を表示</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>展開したペーパーと設定ウィンドウは、フォーカスを失ってもアクティブ時の素材の見た目を保ちます。</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>ニュートラル</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>スキン（実験）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>スキンは素材、配色は文字と操作部の色を決めます。変更時にエディターは作り直しません。ハイコントラストでは装飾を隠します。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>標準の紙</value>
+  </data>
+  <data name="SkinPearl" xml:space="preserve">
+    <value>パール／ホログラム</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明トレーシングペーパー</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>リキッドガラス風</value>
+  </data>
+  <data name="SkinCeramic" xml:space="preserve">
+    <value>陶器／クリーム釉</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero ガラス</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>ピクセル</value>
+  </data>
+  <data name="TipSkinPearl" xml:space="preserve">
+    <value>淡いピンク・シアン・紫の光沢が移動に合わせて変化します。アニメーション無効時は静止し、待機中の連続描画は行いません。</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>ハイライトと厚い縁でレンズのような見た目を再現し、カプセルは水滴風になります。背景の実際の屈折は行いません。</value>
+  </data>
+  <data name="TipSkinCeramic" xml:space="preserve">
+    <value>選択した配色に合わせた不透明な陶器風の表面に、柔らかな陰影と釉薬の光沢を加えます。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>既存のぼかし背景に明るい縁、青い光沢、斜めの反射を重ねます。Windows 7 のシステムテーマではありません。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>階段状の縁、くっきりした影、ピクセル風ボタン。本文は読みやすい通常のフォントを使います。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>スキンを保存しました。トレイから終了し再起動するとネイティブ背景が有効になります。それまでは単色で表示し、編集内容や取り消し履歴は作り直しません。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>ネイティブ背景には Windows 11 22H2（22621）以降が必要です。この環境では不透明な外観を使用します。</value>
+  </data>
+  <data name="SkinNativeScope" xml:space="preserve">
+    <value>ネイティブ背景は展開した紙と設定に適用されます。カプセル・形状アニメーション・半透明状態では単色の下地を使い、システムの透明効果が無効な場合も単色に戻ります。</value>
+  </data>
+  <data name="SkinSystemPalette" xml:space="preserve">
+    <value>標準のマイカと2種類のアクリルは従来のニュートラル配色を使います。他のスキンに戻すと保存した配色が復元され、選択は上書きされません。</value>
+  </data>
 </root>

@@ -44,6 +44,9 @@
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
+| D-032 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-033 | 主题 / Window integration |
+| D-033 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
+| D-034 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1178,3 +1181,87 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `src/WebPluginPopupContent.cs`。
 - 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
 - 当前合同与用法见 `plugin-samples/README.md`。
+
+---
+
+## D-032 — 普通窗口原生 Mica 与 layered 胶囊边界
+
+**Status:** Superseded by D-033（替代外框/裁切实现，保留原生材质与 Edge 边界）
+
+### Context
+
+PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云母的背景。用户随后明确要求原生 DWM Mica，壁纸模拟不再满足本次皮肤需求。与此同时，Edge bounded HWND 仍依赖 WPF alpha/shape 和 DComp translation-only 的已确定边界，不能为了皮肤把胶囊改成整窗原生背景，覆盖容量空白或打断 handoff。
+
+### Decision
+
+- 展开的普通纸片与设置窗口在 Windows 11 22H2+ 使用官方 `DWMWA_SYSTEMBACKDROP_TYPE` / `DWMSBT_MAINWINDOW`，不使用 undocumented 22000 属性，不引入 Windows App SDK 运行时。
+- 普通窗口的 non-layered 模式只在启动时根据已保存的配色确定。由其他皮肤切入时提示重启，并先显示实色；不关闭重建正在编辑的窗口，不迁移光标或撤销栈。退出保存仍经过现有生命周期。
+- DWM、glass、dark-mode 和窗口区域设置都成功后才让 WPF chrome 透明。正文和插件仍获得实色 `Theme.PaperBrush`，原生背景失败时不留透明正文壳。
+- 原生背景区域取自既有 chrome 的最终布局，按当前 DPI 更新裁切；同一几何不重复设置。裁切期间不使用会给文字投影的 WPF 外壳阴影，也不承诺自定义窗口区域具有系统阴影。
+- 折叠形态、形态动画与部分透明时关闭原生背景并恢复 WPF alpha 绘制；完成边界恢复 Mica。所有贴边、拖动、主和系绳胶囊保留原 layered 路线和实色背景，不接入原生适配器。
+- 移除壁纸采样、模拟模糊、异步材质缓存。无后台 HWND 或逐帧截图。关闭透明效果、高对比度和接口失败使用实色；系统的材质节能/非活动回退仍由 DWM 决定。
+
+### Why / Consequences
+
+原生材质属于 HWND 合成，不是一个可放进所有 WPF Brush 槽位的画刷。把非矩形动态 Edge surface 强行挂到 full-HWND Mica 上会改变既有 shape authority；一次性重启普通窗口比重建用户正在编辑的所有对象更简单，也不会丢失未持久化的撤销状态。代价是首次换肤需要重启，胶囊不具备原生材质，真机视觉、跨 DPI 与 alpha fallback 仍需人工确认；这些限制在设置说明和 PR 中明确呈现。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
+- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
+- `tests/PaperTodo.MicaChecks/Program.cs`。
+- PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。
+
+
+---
+
+## D-033 — 原生云母使用单一窗口外框，验证最终桌面像素
+
+**Status:** Accepted
+
+### Context
+
+用户报告展开纸片出现白色外圈、内层纸面压暗，且明确未开启失焦半透明。旧适配器把带 8 DIP 阴影留白的 WPF Border 与全 HWND 原生背景并置，手动处理 NCCALCSIZE 并按内层圆角裁切；启动/形态动画又在 legacy blur-behind alpha 和系统背景之间切换。仅检查 HRESULT、背景属性与裁切坐标无法证明最终桌面图像正确，不能据此把压暗归因于用户设置或正常失焦行为。
+
+### Decision
+
+- 保留官方 DWM Mica 与启动时选择 non-layered 普通窗口的策略，不引入 Windows App SDK，不重建窗口、编辑器、光标或撤销栈。
+- `WindowChrome` 是普通原生窗口唯一 non-client/glass 集成入口，移除适配器自己的 NCCALCSIZE 和 SetWindowRgn 路线。展开纸片在整个会话中填满 HWND，实色或动画回退时也不重新出现阴影外边距；圆角/外框由 DWM 处理，缩放命中保留现有实现。
+- legacy blur-behind alpha 只用于折叠、形态动画和显式透明的 WPF 回退；恢复系统背景前明确停用它。启动淡入提交终值并清除 opacity 时钟，过期显示回调不得覆盖后续隐藏状态。
+- 原生形态动画的系统缩放外框必须在动画入口关闭、目标形态完成或中断时恢复。不要在材质类的布局/宽高监听中反复设置 `ResizeMode` 或推算 HWND 尺寸：前者会覆盖结束状态，后者让旧的 16 DIP 外边距与原生展开态零外边距产生第二套尺寸口径。窗口动画直接应用同一进度对应的内外尺寸和外边距，反转与中断继续走同一个结束路径。
+- 不把截图中的灰色直接判定为 DWM 非活动色。系统允许的材质回退仍由 DWM 管理；测试同时验证激活/失焦、浅/深色、启动淡入、折叠展开、隐藏显示、缩放和正文黑白色块的最终桌面像素。
+- Edge、drag、master、tether 的 layered shape/translation-only ownership、数据持久化和正文编辑行为不变。
+
+### Rejected / Why
+
+在 Windows CI 上试验 `MicaController.SetTarget(WindowId, DesktopWindowTarget)` 直接挂到现有 WPF HWND：接口成功并不代表兼容，捕获到的结果是背景覆盖 WPF 正文。没有把这条试验路线或额外 SDK 运行时留在产品中；要避免再次为了一个皮肤增加平行内容宿主、窗口和打包路径。
+
+原生系统圆角不承诺复刻旧皮肤的 16 DIP 轮廓。桌面捕获只属于测试，不是运行时生成材质的输入。CI 的 Windows Server 图形会话也不能替代用户 Windows 11 显卡、多屏 DPI 和系统材质策略的真机验证。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`、`src/PaperWindow.cs`。
+- `src/AppController.cs` 的显示动画终点，`src/AppController.Settings.cs` 的窗口集成。
+- `tests/PaperTodo.MicaChecks/Program.cs`、`VisualChecks.cs` 与 Release CI 的桌面/WPF 双通道捕获。
+
+
+## D-034 — 透色亚克力试用可调色 accent，保留单窗口边界
+
+**Status:** Experimental（仅透色模式；Windows 11 真机视觉与拖动性能待验）
+
+### Context
+
+标准和透色亚克力原先共享固定的系统 Acrylic；降低 WPF 白色覆盖层强度后，用户反馈透色模式明显发灰。用户授权试用社区 WPF 可调色接法。D-033 的单窗口和形态动画边界继续有效。
+
+### Decision / Why
+
+- 仅透色模式使用 `SetWindowCompositionAttribute` 的 `WCA_ACCENT_POLICY`，直接设置原生混合颜色与 alpha；WPF 外壳不再叠加底色。标准云母/亚克力保留官方系统 backdrop。
+- accent 只保留顶部 1 DIP glass，系统 backdrop 使用 full glass；由现有 `WindowChrome` 和适配器统一切换。不能直接设为 zero glass：WPF 会在缩放时安装窗口 region，破坏系统圆角和阴影。 顶部 glass 必须显式使用纸片边框色；`DWMWA_COLOR_NONE` 只适用于边框，不能用它隐藏 caption，否则该区域可能露出系统强调色。进入动画、退出透色模式或释放时清除 accent，失败恢复实色。正文、HWND、编辑器和 Edge 胶囊不重建。
+- 这是未公开保证兼容性的 accent policy，有版本与拖动/缩放性能代价；不能以接口成功或 CI 像素正确替代用户机器上的视觉和流畅度确认。暂不引入 Windows App SDK、第二个内容窗口或背景捕获。
+
+### Evidence
+
+- `src/DwmMicaApi.cs` 的 `SetClearAcrylic`、`src/NativeMicaBackdrop.cs` 的材质切换与清理。
+- `tests/PaperTodo.MicaChecks/Program.cs` 的接法互斥/失败回退；`VisualChecks.cs` 的白底/彩色底和形态动画捕获。
+- 社区接法：[SlimeNull 的 WPF 示例](https://slimenull.com/posts/20240530104846/)、[WindowEffectTest 源码](https://github.com/TwilightLemon/WindowEffectTest/blob/master/WindowEffectTest/WindowMaterial.cs)。

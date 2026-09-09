@@ -13,12 +13,36 @@ public static class ColorSchemes
     public const string Ink = "ink";
     public const string Forest = "forest";
     public const string Rose = "rose";
+    // Keep the stored ID so older Mica settings retain their original neutral palette.
+    public const string Neutral = "mica";
+    public const string Mica = Neutral;
 
-    public static readonly string[] All = { Warm, Ink, Forest, Rose };
+    public static readonly string[] All = { Warm, Ink, Forest, Rose, Mica };
 
-    public static bool IsValid(string? id) => id is Warm or Ink or Forest or Rose;
+    public static bool IsValid(string? id) => id is Warm or Ink or Forest or Rose or Mica;
 
     public static string Normalize(string? id) => IsValid(id) ? id! : Warm;
+}
+
+public static class MicaBackdropTypes
+{
+    public const string Mica = "mica";
+    public const string Acrylic = "acrylic";
+    public const string ClearAcrylic = "clearAcrylic";
+
+    public static readonly string[] All = { Mica, Acrylic, ClearAcrylic };
+
+    public static bool IsValid(string? id) => id is Mica or Acrylic or ClearAcrylic;
+
+    // Retired "micaAlt" selections migrate to standard Mica, as do unknown values.
+    public static string Normalize(string? id) => IsValid(id) ? id! : Mica;
+
+    public static int ToDwmBackdrop(string? id) => Normalize(id) switch
+    {
+        Acrylic => DwmMicaApi.TransientWindow,
+        ClearAcrylic => DwmMicaApi.None, // Custom accent policy must not overlap a system backdrop.
+        _ => DwmMicaApi.MainWindow
+    };
 }
 
 public static class Theme
@@ -73,7 +97,8 @@ public static class Theme
         }
     }
 
-    private static string CurrentScheme => _schemeCache ??= ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
+    private static string CurrentScheme => _schemeCache ??= PaperSkins.UsesSystemPalette(Skin)
+        ? ColorSchemes.Neutral : ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
 
     private static Palette Current
     {
@@ -84,6 +109,19 @@ public static class Theme
                 return _paletteCache;
             }
 
+            if (SystemParameters.HighContrast && (Skin != PaperSkins.Paper || CurrentScheme == ColorSchemes.Neutral))
+            {
+                _paletteCache = new Palette
+                {
+                    Paper = SystemColors.WindowColor, PaperBorder = SystemColors.WindowTextColor,
+                    Text = SystemColors.WindowTextColor, WeakText = SystemColors.WindowTextColor,
+                    Active = SystemColors.HighlightColor, Code = SystemColors.WindowColor,
+                    QuoteBorder = SystemColors.WindowTextColor, Link = SystemColors.HotTrackColor,
+                    CheckBox = SystemColors.WindowTextColor, Tint = SystemColors.WindowTextColor,
+                    Danger = SystemColors.WindowTextColor
+                };
+                return _paletteCache;
+            }
             var pair = Schemes.TryGetValue(CurrentScheme, out var s) ? s : Schemes[ColorSchemes.Warm];
             _paletteCache = IsDark ? pair.Dark : pair.Light;
             return _paletteCache;
@@ -106,6 +144,10 @@ public static class Theme
         }
         return false;
     }
+
+    public static string Skin => PaperSkins.Resolve(AppController.Current?.State);
+    public static bool UsesNativeBackdrop => PaperSkins.UsesNativeBackdrop(Skin);
+    public static bool IsPixelSkin => Skin == PaperSkins.Pixel && !SystemParameters.HighContrast;
 
     // ---- 基色画刷 ----
     public static Brush PaperBrush => Solid(Current.Paper);
@@ -139,6 +181,12 @@ public static class Theme
             _ => Solid(tone)
         };
     }
+
+    // Match main's faint title tint. A native HWND also needs an opaque custom header;
+    // otherwise the system accent caption can show through the WPF title controls.
+    internal static Brush TitleBarBrush(bool opaque) => opaque
+        ? Solid(Mix(Current.Paper, Current.Tint, (IsDark ? 18 : 12) / 255.0))
+        : Tint((byte)(IsDark ? 18 : 12));
 
     public static Brush HoverBrush => Tint((byte)(IsDark ? 48 : 32));
     public static Brush CapsuleFocusBorderBrush => Solid(Mix(Current.Active, Current.Text, IsDark ? 0.38 : 0.08));
@@ -207,6 +255,28 @@ public static class Theme
     {
         return new Dictionary<string, (Palette, Palette)>
         {
+            // Native Mica's semantic/fallback palette stays opaque. Only an HWND whose
+            // DWM setup succeeded gets a transparent shell brush; plugins/menus keep colors.
+            [ColorSchemes.Mica] = (
+                new Palette
+                {
+                    Paper = Color.FromRgb(243, 243, 243), PaperBorder = Color.FromRgb(199, 203, 214),
+                    Text = Color.FromRgb(28, 30, 36), WeakText = Color.FromRgb(76, 80, 93),
+                    Active = Color.FromRgb(49, 71, 144), Code = Color.FromRgb(230, 231, 239),
+                    QuoteBorder = Color.FromRgb(164, 174, 205), Link = Color.FromRgb(27, 72, 140),
+                    CheckBox = Color.FromRgb(118, 128, 157), Tint = Color.FromRgb(76, 91, 142),
+                    Danger = Color.FromRgb(161, 47, 65)
+                },
+                new Palette
+                {
+                    Paper = Color.FromRgb(32, 32, 32), PaperBorder = Color.FromRgb(68, 73, 88),
+                    Text = Color.FromRgb(245, 246, 250), WeakText = Color.FromRgb(190, 194, 205),
+                    Active = Color.FromRgb(155, 177, 255), Code = Color.FromRgb(46, 48, 59),
+                    QuoteBorder = Color.FromRgb(101, 115, 161), Link = Color.FromRgb(163, 193, 255),
+                    CheckBox = Color.FromRgb(130, 140, 173), Tint = Color.FromRgb(199, 210, 255),
+                    Danger = Color.FromRgb(255, 151, 155)
+                }),
+
             // 暖纸 — 经典奶白纸张焕新：去掉旧版偏冷的紫蓝链接，换暖陶土；弱文字略降饱和。
             [ColorSchemes.Warm] = (
                 new Palette
