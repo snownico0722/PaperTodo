@@ -22,9 +22,6 @@
     <InformationalVersion>4.0Preview</InformationalVersion>
     <!-- Keep tray header "PaperTodo v4.0Preview" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <!-- All restores, including ordinary `dotnet build`, must use the repository source mapping.
-         This is required by the pinned XAML-Math source project and keeps clean CI/dev machines deterministic. -->
-    <RestoreConfigFile>$(MSBuildProjectDirectory)\NuGet.Config</RestoreConfigFile>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
