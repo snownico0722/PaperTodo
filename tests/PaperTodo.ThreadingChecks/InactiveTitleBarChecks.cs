@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -10,7 +9,7 @@ namespace PaperTodo.ThreadingChecks;
 
 internal static partial class Program
 {
-    private static void CheckInactiveTitleBarMask()
+    private static void CheckInactiveTitleBarChrome()
     {
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
         foreach (var size in new[] { new Size(240, 180), new Size(310, 210) })
@@ -32,12 +31,9 @@ internal static partial class Program
             var hidden = Render(host);
             // Compare against an ordinary shorter Border, including all its corners,
             // stroke and shadow. A flat crop cannot satisfy this reference image.
-            if (scale == 1.25 && size.Width == 240)
-            {
-                Preview(host, "ACTUAL");
-                Preview(shortPaper, "EXPECTED");
-            }
             Compare(hidden, Render(shortPaper), "hidden chrome differs from a complete rounded paper");
+            Assert(ReferenceEquals(host.InputHitTest(new Point(size.Width / 2, 8 + extent + 0.5)), chrome),
+                "the new outline lost its border drag/menu hit target");
             var width = (int)Math.Ceiling(size.Width * scale);
             for (var y = 0; y < (int)((8 + extent - 16) * scale); y++)
             for (var x = 0; x < width; x++)
@@ -65,24 +61,6 @@ internal static partial class Program
             expectedChrome.Background = chrome.Background;
             expectedChrome.BorderBrush = chrome.BorderBrush;
             Compare(Render(host), Render(shortPaper), "hidden chrome retained old theme brushes");
-
-            if (scale == 1 && size.Width == 310)
-            {
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(Bitmap(host)));
-                using var stream = new MemoryStream();
-                encoder.Save(stream);
-                Console.WriteLine("TITLEBAR_PREVIEW:" + Convert.ToBase64String(stream.ToArray()));
-            }
-
-            void Preview(Grid root, string label)
-            {
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(Bitmap(root)));
-                using var stream = new MemoryStream();
-                encoder.Save(stream);
-                Console.WriteLine("TITLEBAR_" + label + ":" + Convert.ToBase64String(stream.ToArray()));
-            }
 
             void AssertBodyStable()
             {

@@ -41,6 +41,15 @@ internal sealed class PaperChromeBorder : Border
             base.OnRender(drawingContext);
     }
 
+    protected override HitTestResult? HitTestCore(PointHitTestParameters parameters)
+    {
+        if (_surface.Visibility != Visibility.Visible) return base.HitTestCore(parameters);
+        // The helper is not an input element: keep border drag/menu gestures on this owner.
+        var point = parameters.HitPoint - VisualTreeHelper.GetOffset(_surface);
+        return VisualTreeHelper.HitTest(_surface, point) != null
+            ? new PointHitTestResult(this, parameters.HitPoint) : null;
+    }
+
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
@@ -91,8 +100,8 @@ internal sealed class PaperChromeBorder : Border
         var bottom = child.RenderSize.Height;
         var top = Math.Min(inset, bottom);
         var maxRadius = Math.Min(width / 2, Math.Max(0, bottom - top));
-        var left = Math.Clamp(CornerRadius.TopLeft - Math.Max(BorderThickness.Top, BorderThickness.Left), 0, maxRadius);
-        var right = Math.Clamp(CornerRadius.TopRight - Math.Max(BorderThickness.Top, BorderThickness.Right), 0, maxRadius);
+        var left = Math.Clamp(CornerRadius.TopLeft - Math.Max(BorderThickness.Top, BorderThickness.Left) / 2, 0, maxRadius);
+        var right = Math.Clamp(CornerRadius.TopRight - Math.Max(BorderThickness.Top, BorderThickness.Right) / 2, 0, maxRadius);
         var clip = new StreamGeometry();
         using (var context = clip.Open())
         {
