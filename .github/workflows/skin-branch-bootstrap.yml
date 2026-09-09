@@ -20,27 +20,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git merge --no-commit --no-ff e074d84084921a2c3d16e7d0448e725706bf8779; then
-            if test -f .skin-bootstrap.py; then
-              python3 .skin-bootstrap.py
-            else
-              python3 - <<'PY'
-          import pathlib, subprocess, re
-          blocks = []
-          paths = subprocess.check_output(['git','diff','--name-only','--diff-filter=U'], text=True).splitlines()
-          for path in paths:
-              text = pathlib.Path(path).read_text(encoding='utf-8-sig')
-              blocks.append('\n### ' + path + '\n')
-              blocks.extend(re.findall(r'<<<<<<<.*?>>>>>>>[^\n]*', text, flags=re.S))
-          pathlib.Path('/tmp/skin-conflicts.txt').write_text('\n'.join(blocks), encoding='utf-8')
-          PY
-              git merge --abort
-              cp /tmp/skin-conflicts.txt .skin-conflicts.txt
-              git add .skin-conflicts.txt
-              git commit -m "chore: record temporary merge context"
-              git push origin HEAD:refs/heads/exp/playful-skins-20260909
-              exit 0
-            fi
+            python3 .skin-bootstrap.py
           fi
+          # Workflow edits are applied separately through the authorized GitHub connector.
+          # The Actions token has contents-write, not workflows-write.
+          git restore --source=HEAD --staged --worktree .github/workflows
           git add -u
           git commit -m "chore: sync main before playful skin implementation"
           git push origin HEAD:refs/heads/exp/playful-skins-20260909
+          # Git bundle carries source objects only, never checkout credentials or git config.
+          git bundle create "$RUNNER_TEMP/papertodo.bundle" HEAD refs/remotes/origin/main refs/remotes/origin/exp/mica-materials-20260907
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skin-development-source
+          path: ${{ runner.temp }}/papertodo.bundle
+          retention-days: 1
