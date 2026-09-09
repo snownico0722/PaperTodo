@@ -39,8 +39,11 @@ internal static partial class Program
             host.UpdateLayout();
             var bodyPosition = body.TranslatePoint(new Point(), host);
             var bodySize = body.RenderSize;
+            var paperPosition = paper.TranslatePoint(new Point(), host);
+            var paperBounds = new Rect(paperPosition, paper.RenderSize);
             var cutoff = Math.Round(bodyPosition.Y * scale) / scale;
-            mask.UpdateBounds(size, cutoff);
+            var cornerRadius = paper.CornerRadius.TopLeft;
+            mask.UpdateBounds(size, cutoff, paperBounds, cornerRadius);
             host.OpacityMask = null;
             var original = Render();
             host.OpacityMask = mask.MaskBrush;
@@ -53,11 +56,22 @@ internal static partial class Program
             for (var x = 0; x < width; x++)
                 Assert(hidden[(y * width + x) * 4 + 3] == 0, "hidden title/background/shadow still has alpha");
 
-            // During the fade, body and shadow pixels stay exactly fixed. Attaching the
-            // extra mask surface may round a translucent edge by one alpha/color unit at
-            // fractional pixel sizes; fully opaque body content must still match exactly.
-            var start = ((int)Math.Round(cutoff * scale) + 1) * width * 4;
-            Assert(hidden.AsSpan(start).SequenceEqual(shown.AsSpan(start)), "body pixels changed during the fade");
+            // The hidden body now owns a rounded top aligned to the paper chrome rather than
+            // exposing a full-width rectangular cross-section at the title boundary.
+            Assert(mask.HeaderBottom == cutoff, "title hit-test boundary moved with rounded mask");
+            var cornerX = (int)Math.Round((paperBounds.Left + 1) * scale);
+            var topY = (int)Math.Round((cutoff + 1) * scale);
+            var centerX = (int)Math.Round(size.Width * scale / 2);
+            Assert(hidden[(topY * width + cornerX) * 4 + 3] == 0,
+                "hidden title left a square paper corner");
+            Assert(hidden[(topY * width + centerX) * 4 + 3] > 0,
+                "rounded hidden paper top removed body center pixels");
+
+            // Only the new rounded-corner band is allowed to differ. Below one corner radius,
+            // body and side/bottom shadow pixels remain exactly fixed, and layout never moves.
+            var stableY = (int)Math.Round((cutoff + cornerRadius + 1) * scale);
+            var start = Math.Min(stableY, (int)Math.Ceiling(size.Height * scale) - 1) * width * 4;
+            Assert(hidden.AsSpan(start).SequenceEqual(shown.AsSpan(start)), "body pixels changed below rounded title cutout");
             for (var index = start; index < hidden.Length; index++)
             {
                 var alpha = original[index - index % 4 + 3];
