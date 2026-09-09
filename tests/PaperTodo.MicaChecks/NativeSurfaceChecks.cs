@@ -124,7 +124,11 @@ internal static class NativeSurfaceChecks
             using var control = Capture(paper, output, "caption-old-path-" + name);
             var before = baseline.GetPixel(baseline.Width / 2, 8);
             var exposed = control.GetPixel(control.Width / 2, 8);
-            Program.Assert(Difference(before, exposed) >= 20,
+            // Opaque tracing-paper tint attenuates the marker. Test its magenta
+            // chroma, not an arbitrary brightness jump through every different skin.
+            var markerChroma = (exposed.R + exposed.B - 2 * exposed.G) -
+                (before.R + before.B - 2 * before.G);
+            Program.Assert(Difference(before, exposed) >= 8 && markerChroma >= 24,
                 $"{name}: positive control exposes the hostile native caption ({before} / {exposed})");
             Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, true) >= 0 &&
                 DwmMicaApi.Instance.ExtendFrame(hwnd, 0) >= 0, "restoring tested redirection alpha");
