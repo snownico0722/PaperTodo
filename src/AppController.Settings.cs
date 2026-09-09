@@ -1103,7 +1103,7 @@ public sealed partial class AppController
                 () => true, brush =>
                 {
                     if (window.Content is Border chrome) chrome.Background = brush;
-                }, () => { });
+                });
         }
         RefreshSettingsWindowContent();
         // Resolve the final fitted size before the first frame, then switch to manual positioning.

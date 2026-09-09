@@ -80,35 +80,19 @@ internal static class VisualChecks
             other.Close(); other = null;
             window.Activate();
 
-            var expandedWidth = window.ActualWidth;
-            var expandedHeight = window.ActualHeight;
+            // Sample exact progress values independently of dispatcher/CI timing, then also
+            // exercise the real animation completion callbacks below.
+            CheckFormFrames(window, chrome, collapsed: true);
+            CheckFormFrames(window, chrome, collapsed: false);
+            CheckReversedExpansion(window, chrome);
             window.SetCollapsedState(true, animate: true, saveGeometry: false);
-            Wait(150); // 70 ms shell fade + part of the 150 ms size transition.
-            Program.Assert(!window.IsNativeMicaEffective, "collapse animation uses WPF alpha fallback");
-            Program.Assert(window.ActualWidth < expandedWidth - 20 && window.ActualHeight < expandedHeight - 20,
-                "native HWND must shrink during collapse instead of staying at expanded bounds");
-            Program.Assert(double.IsFinite(chrome.Width) && double.IsFinite(chrome.Height),
-                "form animation owns explicit visual chrome bounds");
-            Program.Assert(window.ActualWidth - chrome.Width <= 24 && window.ActualHeight - chrome.Height <= 24,
-                "native HWND must stay aligned with the animated paper instead of exposing an outer frame");
-            Capture(window, "03a-collapse-mid", null, null, dark: null);
-            Wait();
-            Program.Assert(!window.IsNativeMicaEffective, "capsule stays on WPF alpha fallback");
+            WaitUntil(() => double.IsNaN(chrome.Width));
+            Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
+                "completed capsule has no native resize frame");
             swatches.Visibility = Visibility.Collapsed;
             Capture(window, "03-collapsed", null, null, dark: null);
-
-            var capsuleWidth = window.ActualWidth;
-            var capsuleHeight = window.ActualHeight;
             window.SetCollapsedState(false, animate: true, saveGeometry: false);
-            Wait(90);
-            Program.Assert(window.ActualWidth > capsuleWidth + 20 && window.ActualHeight > capsuleHeight + 20,
-                "native HWND must grow during expansion rather than jump only at the endpoint");
-            Program.Assert(double.IsFinite(chrome.Width) && double.IsFinite(chrome.Height),
-                "expand animation owns explicit visual chrome bounds");
-            Program.Assert(window.ActualWidth - chrome.Width <= 24 && window.ActualHeight - chrome.Height <= 24,
-                "expanding native HWND must remain aligned with the visible paper");
-            Capture(window, "04a-expand-mid", null, null, dark: null);
-            Wait();
+            WaitUntil(() => double.IsNaN(chrome.Width));
             swatches.Visibility = Visibility.Visible; Wait();
             AssertExpanded(window, chrome, hwnd, body);
             Capture(window, "04-expanded-after-animation", white, black, dark: false);
@@ -153,6 +137,66 @@ internal static class VisualChecks
         }
     }
 
+    private static void CheckFormFrames(PaperWindow window, Border chrome, bool collapsed)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        window.SetCollapsedState(collapsed, animate: true, saveGeometry: false);
+        window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
+        foreach (var progress in new[] { 0.0, 0.5, 1.0 })
+        {
+            window.TransitionProgress = progress;
+            window.UpdateLayout();
+            Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
+                "form transition suspends the native material and resize frame");
+            Program.Assert((GetWindowLong(hwnd, -16) & 0x00C40000) == 0,
+                "no native caption/border/THICKFRAME may outline the transparent animation gutter");
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 1,
+                "form transition clears the full-window system backdrop");
+            Program.Assert(Math.Abs(chrome.Width + chrome.Margin.Left + chrome.Margin.Right - window.Width) < 0.01 &&
+                Math.Abs(chrome.Height + chrome.Margin.Top + chrome.Margin.Bottom - window.Height) < 0.01,
+                "one progress value owns the inner surface, gutter and outer window");
+            Program.Assert(Math.Abs(window.ActualWidth - window.Width) <= 1 && Math.Abs(window.ActualHeight - window.Height) <= 1,
+                "native HWND follows the presented size without minimum-size clamping");
+            if (progress == 0.5)
+            {
+                Program.Pump();
+                Capture(window, collapsed ? "03a-collapse-mid" : "04a-expand-mid", null, null, dark: null);
+            }
+        }
+        var width = window.Width;
+        var height = window.Height;
+        var paperWidth = chrome.Width;
+        var paperHeight = chrome.Height;
+        window.SettleAnimationsForDisabledSetting();
+        window.UpdateLayout();
+        Program.Assert(Math.Abs(window.Width - width) < 0.01 && Math.Abs(window.Height - height) < 0.01 &&
+            Math.Abs(chrome.ActualWidth - paperWidth) <= 1 && Math.Abs(chrome.ActualHeight - paperHeight) <= 1,
+            "clearing the final animation frame must not introduce the old 16 DIP size jump");
+        Program.Assert(window.ResizeMode == (collapsed ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip),
+            "settling an interrupted animation restores its final resize policy");
+    }
+
+    private static void CheckReversedExpansion(PaperWindow window, Border chrome)
+    {
+        var expandedWidth = window.Width;
+        var expandedHeight = window.Height;
+        window.SetCollapsedState(true, animate: true, saveGeometry: false);
+        window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
+        window.TransitionProgress = 0.5;
+        var width = window.Width;
+        var height = window.Height;
+        var margin = chrome.Margin;
+        window.SetCollapsedState(false, animate: true, saveGeometry: false);
+        window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
+        Program.Assert(Math.Abs(window.Width - width) < 0.01 && Math.Abs(window.Height - height) < 0.01 && chrome.Margin == margin,
+            "reversing a native transition starts from its presented bounds and margin");
+        window.TransitionProgress = 0.5;
+        window.SettleAnimationsForDisabledSetting();
+        Program.Assert(window.Width == expandedWidth && window.Height == expandedHeight &&
+            window.ResizeMode == ResizeMode.CanResizeWithGrip,
+            "interrupting reversed expansion restores full paper bounds and resizing");
+    }
+
     private static void CheckSettings(AppController controller)
     {
         var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, Type.EmptyTypes, null)!;
@@ -179,6 +223,8 @@ internal static class VisualChecks
     private static void AssertExpanded(PaperWindow window, Border chrome, IntPtr hwnd, object? body)
     {
         AssertNoSystemCaption(hwnd);
+        Program.Assert(window.ResizeMode == ResizeMode.CanResizeWithGrip && (GetWindowLong(hwnd, -16) & 0x00040000) != 0,
+            "expanded paper restores the native resize frame");
         Program.Assert(window.IsNativeMicaEffective, "real DWM must be active, not silently fallback");
         Program.Assert(!window.AllowsTransparency && !DwmMicaApi.Instance.IsLayered(hwnd), "opaque endpoint uses non-layered HWND");
         Program.Assert(window.Opacity == 1 && chrome.Opacity == 1, "no accidental whole-UI translucency");
@@ -243,6 +289,13 @@ internal static class VisualChecks
         if (dark is false) Program.Assert(sample.R > 200 && sample.G > 200 && sample.B > 200, name + ": light body is not a gray overlay");
         if (dark is true) Program.Assert(sample.R < 90 && sample.G < 90 && sample.B < 90, name + ": dark mode actually reaches the compositor");
         return sample;
+    }
+
+    private static void WaitUntil(Func<bool> complete)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!complete() && DateTime.UtcNow < deadline) Wait(16);
+        Program.Assert(complete(), "form animation reaches its completed state before the deadline");
     }
 
     private static void Wait(int milliseconds = 650)

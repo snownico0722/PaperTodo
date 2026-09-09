@@ -62,7 +62,7 @@ internal static class Program
                 try
                 {
                     var rejected = false;
-                    try { using var adapter = new NativeMicaBackdrop(window, () => null, () => true, _ => { }, () => { }); }
+                    try { using var adapter = new NativeMicaBackdrop(window, () => null, () => true, _ => { }); }
                     catch (ArgumentException) { rejected = true; }
                     Assert(rejected && window.AllowsTransparency, "unchanged layered policy");
                 }
@@ -242,7 +242,7 @@ internal static class Program
         {
             Api = api ?? new FakeNative(); Chrome = NewChrome();
             Window = new Window { Content = Chrome, Width = 300, Height = 230, Left = 40, Top = 40, WindowStyle = WindowStyle.SingleBorderWindow, AllowsTransparency = false, ShowInTaskbar = false };
-            Backdrop = new NativeMicaBackdrop(Window, () => Chrome, () => Eligible, b => Chrome.Background = b, () => { }, Api);
+            Backdrop = new NativeMicaBackdrop(Window, () => Chrome, () => Eligible, b => Chrome.Background = b, Api);
             Window.Show(); Pump();
         }
         internal static Border NewChrome() => new() { CornerRadius = new CornerRadius(8), Background = Brushes.White };

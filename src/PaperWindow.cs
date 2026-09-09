@@ -125,6 +125,8 @@ public sealed partial class PaperWindow : Window
     private double _targetTransitionHeight;
     private double _transitionBaseWidth;
     private double _transitionBaseHeight;
+    private double _startTransitionChromeMargin;
+    private double _targetTransitionChromeMargin;
     private bool _isEditingTitle;
     private bool _suppressTitleEditFromCurrentClick;
     private Rect? _snappedPresentationBoundsForRestore;
@@ -685,8 +687,7 @@ public sealed partial class PaperWindow : Window
         {
             _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
                 () => !_paper.IsCollapsed && !IsPaperFormTransitioning,
-                brush => Resources["PaperSurfaceBrushKey"] = brush,
-                ApplyPaperChromePresentation);
+                brush => Resources["PaperSurfaceBrushKey"] = brush);
             RefreshNativeMica();
         }
         if (deferShellConstruction)
@@ -1138,6 +1139,7 @@ public sealed partial class PaperWindow : Window
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
             RefreshPluginBodyClip();
+            RefreshNativeMica();
             return;
         }
 
@@ -1153,6 +1155,7 @@ public sealed partial class PaperWindow : Window
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         RefreshPluginBodyClip();
+        RefreshNativeMica();
     }
 
     private bool LooksSnappedNow()
@@ -3424,17 +3427,35 @@ public sealed partial class PaperWindow : Window
 
         var visualWidth = _startTransitionWidth + (_targetTransitionWidth - _startTransitionWidth) * currentProgress;
         var visualHeight = _startTransitionHeight + (_targetTransitionHeight - _startTransitionHeight) * currentProgress;
-        var visualChromeWidth = Math.Max(1.0, visualWidth - WindowChromeInset);
-        var visualChromeHeight = Math.Max(1.0, visualHeight - WindowChromeInset);
-        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - WindowChromeInset);
-        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - WindowChromeInset);
+        var nativeWindow = _controller.UsesNativeMicaWindows;
+        var margin = nativeWindow
+            ? _startTransitionChromeMargin + (_targetTransitionChromeMargin - _startTransitionChromeMargin) * currentProgress
+            : WindowChromeMargin;
+        var expandedInset = nativeWindow ? 0 : WindowChromeInset;
+        var visualChromeWidth = Math.Max(1.0, visualWidth - margin * 2);
+        var visualChromeHeight = Math.Max(1.0, visualHeight - margin * 2);
+        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - expandedInset);
+        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - expandedInset);
+
+        if (nativeWindow)
+        {
+            // Apply one frame from the same progress value. The backdrop must never infer
+            // HWND bounds from LayoutUpdated/inner Width callbacks or lower our minimum size.
+            _paperChrome.Margin = new Thickness(margin);
+            MinWidth = Math.Min(PaperLayoutDefaults.MinWidth, visualWidth);
+            MinHeight = Math.Min(PaperLayoutDefaults.MinHeight, visualHeight);
+            Width = visualWidth;
+            Height = visualHeight;
+        }
 
         _paperChrome.HorizontalAlignment = HorizontalAlignment.Left;
         _paperChrome.VerticalAlignment = VerticalAlignment.Top;
         _paperChrome.Width = visualChromeWidth;
         _paperChrome.Height = visualChromeHeight;
-        _shellScale.ScaleX = Math.Max(0.01, visualChromeWidth / baseChromeWidth);
-        _shellScale.ScaleY = Math.Max(0.01, visualChromeHeight / baseChromeHeight);
+        var borderX = nativeWindow ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : 0;
+        var borderY = nativeWindow ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : 0;
+        _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
+        _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);
     }
 
@@ -3467,7 +3488,8 @@ public sealed partial class PaperWindow : Window
         var compactRange = Math.Max(1.0, expandedChromeMin - capsuleChromeMin);
         var compactness = Math.Clamp((expandedChromeMin - visualChromeMin) / compactRange, 0.0, 1.0);
         var compactVisualRadius = Math.Min(CapsuleChromeCornerRadius, visualChromeMin / 2.0);
-        var desiredVisualRadius = ExpandedChromeCornerRadius + (compactVisualRadius - ExpandedChromeCornerRadius) * compactness;
+        var expandedRadius = PaperChromeCornerRadiusForState(collapsed: false).TopLeft;
+        var desiredVisualRadius = expandedRadius + (compactVisualRadius - expandedRadius) * compactness;
 
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
     }

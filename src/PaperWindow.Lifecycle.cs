@@ -300,7 +300,6 @@ public sealed partial class PaperWindow
 
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
-        CompletePaperFormTransition(_paper.IsCollapsed);
         ResetTransitionVisuals();
         _shell.Width = double.NaN;
         _shell.Height = double.NaN;
@@ -328,12 +327,18 @@ public sealed partial class PaperWindow
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
             ResizeMode = ResizeMode.CanResizeWithGrip;
-            if (Width <= DesiredCapsuleWindowWidth + 8 ||
+            if (_controller.UsesNativeMicaWindows)
+            {
+                Width = Math.Max(_targetTransitionWidth, PaperLayoutDefaults.MinWidth);
+                Height = Math.Max(_targetTransitionHeight, PaperLayoutDefaults.MinHeight);
+            }
+            else if (Width <= DesiredCapsuleWindowWidth + 8 ||
                 Height <= PaperLayoutDefaults.CapsuleHeight + 8)
             {
                 Width = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
                 Height = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
             }
         });
+        CompletePaperFormTransition(_paper.IsCollapsed);
     }
 }
