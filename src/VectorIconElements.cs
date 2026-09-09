@@ -100,7 +100,12 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
         set => SetValue(IconSizeProperty, value);
     }
 
-    protected override Size MeasureOverride(Size availableSize) => new(IconSize, IconSize);
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        // WPF includes explicit Width/Height in this constraint. Exceeding it retains
+        // an oversized render surface that WPF later clips instead of scaling down.
+        return new Size(Math.Min(IconSize, availableSize.Width), Math.Min(IconSize, availableSize.Height));
+    }
 
     // Some controls alternate between an operation icon and a real label (e.g. delete/cancel,
     // linked-paper icon/name). Keep the text surface and its gestures, using geometry only for

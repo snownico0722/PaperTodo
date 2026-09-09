@@ -119,6 +119,8 @@ internal static partial class Program
             Assert(ReferenceEquals(icon.Foreground, Brushes.Red), $"{kind}: theme change lost");
         }
 
+        CheckSmallVectorIcons();
+
         var label = new TextBlock { FontSize = 14, Foreground = Brushes.Blue };
         VectorPrimitiveIconElement.SetInlineIcon(label, VectorPrimitiveIconKind.Close);
         label.Measure(new Size(100, 40));
@@ -128,6 +130,54 @@ internal static partial class Program
             "inline operation icon lost label typography or foreground");
         label.Text = "Cancel";
         Assert(!label.Inlines.OfType<InlineUIContainer>().Any(), "text state retained the operation icon");
+    }
+
+    private static void CheckSmallVectorIcons()
+    {
+        foreach (var (kind, width, height) in new[]
+        {
+            (VectorPrimitiveIconKind.Plus, 8, 8),
+            (VectorPrimitiveIconKind.Plus, 9, 9),
+            (VectorPrimitiveIconKind.Minus, 16, 10)
+        })
+        foreach (var explicitSize in new[] { true, false })
+        {
+            var size = new Size(width, height);
+            var name = $"{kind} {size} ({(explicitSize ? "explicit size" : "available space")})";
+            var icon = new VectorPrimitiveIconElement(kind)
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            if (explicitSize) { icon.Width = width; icon.Height = height; }
+            var host = new Border { Child = icon };
+            var hostSize = explicitSize ? new Size(48, 48) : size;
+            host.Measure(hostSize);
+            host.Arrange(new Rect(hostSize));
+            Assert(icon.DesiredSize == size && icon.RenderSize == size,
+                $"{name}: expected {size}, desired {icon.DesiredSize}, rendered {icon.RenderSize}");
+
+            var bitmap = new RenderTargetBitmap(48, 48, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(host);
+            var pixels = new byte[48 * 48 * 4];
+            bitmap.CopyPixels(pixels, 48 * 4, 0);
+            bool HasPixel(int x, int y) => pixels[(y * 48 + x) * 4 + 3] > 0;
+            var centerX = width / 2;
+            var centerY = height / 2;
+            Assert(HasPixel(centerX, centerY) && HasPixel(centerX - 2, centerY) && HasPixel(centerX + 2, centerY),
+                $"{name}: horizontal stroke is clipped or off center");
+            if (kind == VectorPrimitiveIconKind.Plus)
+                Assert(HasPixel(centerX, centerY - 2) && HasPixel(centerX, centerY + 2)
+                    && !HasPixel(centerX - 2, centerY - 2) && !HasPixel(centerX + 2, centerY + 2),
+                    $"{name}: plus is incomplete");
+            else
+                Assert(!HasPixel(centerX, centerY - 1) && !HasPixel(centerX, centerY + 1),
+                    $"{name}: minus is not a single centered stroke");
+            for (var y = 0; y < 48; y++)
+                for (var x = 0; x < 48; x++)
+                    if (x == 0 || y == 0 || x >= width - 1 || y >= height - 1)
+                        Assert(!HasPixel(x, y), $"{name}: drawing touches or exceeds the layout edge");
+        }
     }
 
     private static void CheckMenuScaleRefresh()
