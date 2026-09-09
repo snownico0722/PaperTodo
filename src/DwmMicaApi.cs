@@ -18,7 +18,7 @@ internal interface INativeMicaApi
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
-    void ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic);
+    int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic);
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
 
@@ -113,15 +113,17 @@ internal sealed class DwmMicaApi : INativeMicaApi
         return DwmEnableBlurBehindWindow(hwnd, ref blur);
     }
 
-    public void ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
+    public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
     {
         var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
         // COLOR_NONE is supported for BORDER_COLOR, not CAPTION_COLOR. The accent path's
         // small glass strip otherwise inherits the system accent (a bright blue top line).
         var captionColor = clearAcrylic ? borderColor : unchecked((int)0xffffffff); // COLOR_DEFAULT
-        DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
-        DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref borderColor, sizeof(int));
-        DwmSetWindowAttribute(hwnd, 35 /* CAPTION_COLOR */, ref captionColor, sizeof(int));
+        var result = DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
+        if (result < 0) return result;
+        result = DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref borderColor, sizeof(int));
+        if (result < 0) return result;
+        return DwmSetWindowAttribute(hwnd, 35 /* CAPTION_COLOR */, ref captionColor, sizeof(int));
     }
 
     [StructLayout(LayoutKind.Sequential)]

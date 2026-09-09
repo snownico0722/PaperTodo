@@ -162,13 +162,11 @@ internal static class VisualChecks
                 type == MicaBackdropTypes.ToDwmBackdrop(material) && window.IsNativeMicaEffective,
                 "selected material is active with the matching system backdrop policy");
             AssertNoWindowRegion(hwnd);
-            var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
-            var expectedEdge = edge.R | edge.G << 8 | edge.B << 16;
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 34, out var borderColor, 4) >= 0 && borderColor == expectedEdge,
-                "native outline uses the paper palette, independent of system accent");
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 35, out var captionColor, 4) >= 0 &&
-                captionColor == (material == MicaBackdropTypes.ClearAcrylic ? expectedEdge : -1),
-                "Clear Acrylic glass uses the frame color; system materials retain their default caption");
+            // Border/caption colors are documented for DwmSetWindowAttribute only; querying
+            // them is not a supported readback. Check the setter result and desktop image.
+            var adapter = (NativeMicaBackdrop)typeof(PaperWindow).GetField("_nativeMica", Program.Private)!.GetValue(window)!;
+            Program.Assert(adapter.LastFrameHResult >= 0,
+                $"native corner and palette settings succeed: 0x{adapter.LastFrameHResult:X8}");
             var active = Capture(window, name + "-active", white, black, dark: null);
             other.Activate(); Wait();
             var inactive = Capture(window, name + "-inactive", white, black, dark: null);

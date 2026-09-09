@@ -95,6 +95,9 @@ internal static class Program
                     "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
+                f.Api.Failure = "frame-colors"; f.Apply(true, false);
+                Assert(f.Backdrop.IsActive && f.Backdrop.LastFrameHResult < 0 && !Transparent(f.Chrome.BorderBrush),
+                    "rejected native frame settings retain a visible WPF outline");
             });
             Check("Clear Acrylic switches native recipes without recreating content", () =>
             {
@@ -345,8 +348,8 @@ internal static class Program
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
-        public void ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
-        { Rounded = rounded; BorderColor = borderColor; }
+        public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
+        { Rounded = rounded; BorderColor = borderColor; return Failure == "frame-colors" ? Error : 0; }
         public void SetNonClientActive(IntPtr hwnd, bool active) { NonClientActive = active; ActivationCalls++; }
     }
 }
