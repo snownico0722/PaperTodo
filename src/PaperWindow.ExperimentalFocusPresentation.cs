@@ -140,9 +140,17 @@ public sealed partial class PaperWindow
 
         var boundary = _shell.TransformToAncestor(_windowHost).Transform(
             new Point(0, _shell.RowDefinitions[0].ActualHeight)).Y;
+        var chromeBounds = _paperChrome.TransformToAncestor(_windowHost).TransformBounds(
+            new Rect(_paperChrome.RenderSize));
+        var topCornerRadius = Math.Min(
+            _paperChrome.CornerRadius.TopLeft,
+            _paperChrome.CornerRadius.TopRight);
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleY;
         _inactiveTitleBarMask.UpdateBounds(
-            _windowHost.RenderSize, Math.Round(boundary * dpi) / dpi);
+            _windowHost.RenderSize,
+            Math.Round(boundary * dpi) / dpi,
+            chromeBounds,
+            topCornerRadius);
         _windowHost.OpacityMask = _inactiveTitleBarMask.MaskBrush;
     }
 }
