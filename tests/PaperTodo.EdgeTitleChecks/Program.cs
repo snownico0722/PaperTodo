@@ -135,7 +135,7 @@ internal static class Program
         }
 
         // The fixed slot must affect the real WPF layout, not only the outer width calculation.
-        // Measure the following label after switching between the two default glyphs.
+        // Measure the following label after switching between the two default icons.
         var visibleFrame = EdgeCapsuleTargetPlanner.Calculate(
             model with { State = model.State with { Visual = EdgeCapsuleVisualState.Hovered } },
             layout with { HideRestingTitle = false }).Docked.ToFrame();
@@ -145,17 +145,17 @@ internal static class Program
             "Host accepts a real default icon slot width");
         Check(host.Apply(visibleFrame), "Apply host frame for icon-slot alignment");
         host.SetLabel("Title", "Title");
-        icon.Text = "✓";
+        icon.Kind = VectorPrimitiveIconKind.Check;
         window.UpdateLayout();
         var todoLabelX = label.TranslatePoint(new Point(0, 0), contentGrid).X;
-        icon.Text = "✎";
+        icon.Kind = VectorPrimitiveIconKind.Note;
         window.UpdateLayout();
         var noteLabelX = label.TranslatePoint(new Point(0, 0), contentGrid).X;
         Check(Math.Abs(todoLabelX - noteLabelX) < 0.01,
-            "Todo and note glyphs share the same real layout slot");
+            "Todo and note icons share the same real layout slot");
         host.SetDefaultIconSlotWidth(0);
         Check(host.DefaultIconSlotWidthForChecks < 0.01,
-            "Script/natural icon layout can release the default slot");
+            "Icon layout can release an explicitly reserved slot");
     }
 
     private static void Geometry()
