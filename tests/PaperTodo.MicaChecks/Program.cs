@@ -103,7 +103,7 @@ internal static class Program
             });
             Check("unsupported modern alpha retains full-glass composition", () =>
             {
-                using var f = new Fixture(); f.Api.Failure = "redirection-unsupported";
+                using var f = new Fixture(new FakeNative { Failure = "redirection-unsupported" });
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && f.Api.Glass && f.Api.FrameTop == -1 && !f.Api.RedirectionAlpha,
                     "old Windows must never be forced into zero-margin black output");

@@ -1,1 +1,0 @@
-[{"path":"tests/PaperTodo.MicaChecks/Program.cs","before":"1e6050856596af45e40d44a0cbcf4c72b0b3b769d73c2ac2acb4264ef2091933","after":"ca23f9ffce27f86ee00481508409c037645291448932f3d280b6515a7f143079","edits":[[6876,6963,"                using var f = new Fixture(new FakeNative { Failure = \"redirection-unsupported\" });"]]}]
