@@ -116,7 +116,7 @@ internal static class Program
                 {
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
                     var standard = ((SolidColorBrush)f.Chrome.Background).Color;
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == -1, "standard system Acrylic recipe restored");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0 && f.Api.RedirectionAlpha, "standard system Acrylic recipe restored");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     var clear = ((SolidColorBrush)f.Chrome.Background).Color;
                     Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
@@ -124,7 +124,7 @@ internal static class Program
                     Assert(f.Api.Backdrop == 1 && !f.Api.Alpha && f.Chrome.Opacity == 1 && f.Window.Opacity == 1,
                         "exclusive accent blur with opaque content");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
-                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == -1, "switching back removes the active accent");
+                    Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0 && f.Api.RedirectionAlpha, "switching back removes the active accent");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     f.Eligible = false; f.Apply(true, dark);
                     Assert(!f.Api.ClearAcrylic && f.Api.Alpha, "collapse removes accent before alpha fallback");
