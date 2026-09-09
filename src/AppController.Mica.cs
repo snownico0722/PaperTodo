@@ -12,18 +12,19 @@ public sealed partial class AppController
     private NativeMicaBackdrop? _settingsMica;
     private bool _nativeMicaPreferenceRefreshQueued;
 
+    // Also refresh decorated skins in fixed light/dark mode when accessibility changes.
     private void QueueNativeMicaPreferenceRefresh()
     {
         var dispatcher = Application.Current.Dispatcher;
         if (dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(new Action(() =>
         {
-            if (IsExiting || State.ColorScheme != ColorSchemes.Mica || _nativeMicaPreferenceRefreshQueued) return;
+            if (IsExiting || _nativeMicaPreferenceRefreshQueued) return;
             _nativeMicaPreferenceRefreshQueued = true;
             dispatcher.BeginInvoke(new Action(() =>
             {
                 _nativeMicaPreferenceRefreshQueued = false;
-                if (IsExiting || State.ColorScheme != ColorSchemes.Mica) return;
+                if (IsExiting) return;
                 // Refresh semantic foreground colors too, including fixed light/dark in HC.
                 RefreshThemeSurfaces();
             }), DispatcherPriority.Background);

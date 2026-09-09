@@ -1425,4 +1425,62 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TipMicaAlwaysActive" xml:space="preserve">
     <value>Keep the active material appearance on expanded papers and Settings when they lose focus.</value>
   </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>Neutral</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>Skin (experimental)</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>Skins change the surface; color schemes control text and controls. Switching preserves editors. High contrast disables decoration.</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>Default paper</value>
+  </data>
+  <data name="SkinPearl" xml:space="preserve">
+    <value>Pearl / holographic foil</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>Tracing paper</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>Liquid glass (approximation)</value>
+  </data>
+  <data name="SkinCeramic" xml:space="preserve">
+    <value>Ceramic / cream glaze</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero glass</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>Pixel</value>
+  </data>
+  <data name="TipSkinPearl" xml:space="preserve">
+    <value>Pink, cyan and violet sheen shifts with movement. Disabling animations freezes it; there is no idle animation loop.</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>A visual approximation with highlights and thick lens-like edges. Capsules resemble water droplets. No real background refraction.</value>
+  </data>
+  <data name="TipSkinCeramic" xml:space="preserve">
+    <value>Opaque, softly shaded ceramic with a glazed highlight, following your chosen palette.</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>Bright rims, a cool sheen and diagonal reflections over the existing blurred backdrop. Not a Windows 7 system theme.</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>Stepped borders, hard shadows and pixel buttons. Body text keeps its normal font for readability.</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>Skin saved. Exit from the tray and reopen to enable the native backdrop. Existing windows use a solid approximation without rebuilding editors or undo history.</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>Native backdrops require Windows 11 22H2 (22621) or later. This system uses an opaque approximation.</value>
+  </data>
+  <data name="SkinNativeScope" xml:space="preserve">
+    <value>Native backdrops apply to expanded papers and Settings. Capsules, shape transitions and partial opacity use solid bases; disabling system transparency also falls back.</value>
+  </data>
 </root>

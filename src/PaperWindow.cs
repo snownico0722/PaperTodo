@@ -325,7 +325,8 @@ public sealed partial class PaperWindow : Window
     private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
     private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
-    private static Brush TitleBarBrush => Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
+    private static Brush TitleBarBrush => PaperSkins.IsDecorated(Theme.Skin) && !SystemParameters.HighContrast
+        ? Brushes.Transparent : Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
@@ -552,7 +553,7 @@ public sealed partial class PaperWindow : Window
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(RadiusControl));
+        border.SetValue(Border.CornerRadiusProperty, new DynamicResourceExtension("SkinButtonRadiusKey"));
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
 
@@ -582,6 +583,7 @@ public sealed partial class PaperWindow : Window
         };
         pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.7));
 
+        pressed.Setters.Add(new Setter(UIElement.RenderTransformProperty, new DynamicResourceExtension("SkinButtonPressedOffsetKey"), "Bd"));
         template.Triggers.Add(mouseOver);
         template.Triggers.Add(pressed);
         style.Setters.Add(new Setter(Control.TemplateProperty, template));
@@ -621,7 +623,7 @@ public sealed partial class PaperWindow : Window
         border.SetValue(FrameworkElement.WidthProperty, checkBoxSize);
         border.SetValue(FrameworkElement.HeightProperty, checkBoxSize);
         border.SetValue(Border.BorderThicknessProperty, new Thickness(AppTypography.Scale(1.5)));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(AppTypography.Scale(RadiusSmall)));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(Theme.IsPixelSkin ? 0 : AppTypography.Scale(RadiusSmall)));
         border.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("CheckBoxBorderBrushKey"));
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
@@ -629,12 +631,13 @@ public sealed partial class PaperWindow : Window
 
         var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
         path.Name = "CheckMark";
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 3,7.5 L 6.5,11 L 13,4"));
+        path.SetValue(RenderOptions.EdgeModeProperty, Theme.IsPixelSkin ? EdgeMode.Aliased : EdgeMode.Unspecified);
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(Theme.IsPixelSkin ? "M 3,7 L 3,9 L 5,9 L 5,11 L 7,11 L 7,9 L 9,9 L 9,7 L 11,7 L 11,5 L 13,5 L 13,3" : "M 3,7.5 L 6.5,11 L 13,4"));
         path.SetValue(System.Windows.Shapes.Path.StrokeProperty, new DynamicResourceExtension("PaperBrushKey"));
         path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
-        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, Theme.IsPixelSkin ? PenLineJoin.Miter : PenLineJoin.Round);
         path.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         path.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         path.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -1143,6 +1146,7 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
         if (_controller.UsesNativeMicaWindows && _topBarHost != null)
         {
@@ -1472,12 +1476,7 @@ public sealed partial class PaperWindow : Window
         double opacity = 0.22,
         double shadowDepth = 2)
     {
-        return new DropShadowEffect
-        {
-            BlurRadius = blurRadius,
-            ShadowDepth = shadowDepth,
-            Opacity = opacity
-        };
+        return SkinBorder.CreateShadow(blurRadius, shadowDepth, opacity);
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -1548,9 +1547,11 @@ public sealed partial class PaperWindow : Window
 
     private void InitializeThemeResources()
     {
+        Resources["SkinButtonRadiusKey"] = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
+        Resources["SkinButtonPressedOffsetKey"] = new TranslateTransform(0, Theme.IsPixelSkin ? 1 : 0);
         Resources["PaperBrushKey"] = PaperBrush;
         Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective
-            ? NativeMicaBackdrop.GetActiveSurfaceBrush(_controller.State.MicaBackdropType, Theme.IsDark)
+            ? NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(Theme.Skin), Theme.IsDark)
             : PaperBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
@@ -1572,6 +1573,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTheme()
     {
+        RefreshSkin();
         var oldPaperColor = TryGetSolidColor(_paperChrome?.Background, out var capturedPaperColor)
             ? capturedPaperColor
             : (Color?)null;
@@ -1586,7 +1588,7 @@ public sealed partial class PaperWindow : Window
         _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
-        var canAnimateTheme = _nativeMica == null && _controller.State.EnableAnimations &&
+        var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
             _paperChrome != null &&
             oldPaperColor.HasValue &&
             oldBorderColor.HasValue &&
@@ -1634,6 +1636,7 @@ public sealed partial class PaperWindow : Window
         }
 
         RefreshNativeMica(force: true);
+        if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
@@ -1816,7 +1819,7 @@ public sealed partial class PaperWindow : Window
     }
 
     internal void RefreshNativeMica(bool force = false) =>
-        _nativeMica?.Refresh(Theme.IsMica, Theme.IsDark, _controller.State.MicaBackdropType,
+        _nativeMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin),
             _controller.State.MicaAlwaysActive, force);
 
     private void RestorePaperChromeThemeReferences()
@@ -1839,7 +1842,7 @@ public sealed partial class PaperWindow : Window
         };
         Content = _windowHost;
 
-        _paperChrome = new Border
+        _paperChrome = new SkinBorder
         {
             Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
@@ -3197,6 +3200,9 @@ public sealed partial class PaperWindow : Window
 
     private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (Theme.IsPixelSkin) return pinned
+            ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
+            : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
         var canvas = new Canvas
         {
             Width = 24,

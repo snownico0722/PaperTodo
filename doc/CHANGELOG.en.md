@@ -18,7 +18,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased (4.0.0-preview)
 
-- **Native Mica skin**: Choose Mica under Settings → Visual → Color scheme, then exit and reopen PaperTodo. Expanded papers and Settings use native Windows DWM Mica in light, dark or system mode, without reading or simulating the wallpaper. Requires Windows 11 22H2 or later; unsupported systems, disabled transparency and high contrast use solid colors. Capsules, folding animations and translucent states keep solid rendering without changing the edge capsule animation architecture.
+- **Experimental skins**: Settings → Appearance → Skin separates surface material from color scheme. Keep default paper, native Mica and the two Acrylic options, or try pearl/holographic foil, tracing paper, liquid-glass approximation, ceramic glaze, Aero glass and pixel styling. Legacy Mica settings retain their appearance. Pearl sheen follows movement without an idle loop; pixel borders, shadows and buttons keep the normal body font. Liquid glass does not perform real refraction. Paper and capsule shells share painting without changing docking or transition ownership.
+- **Native backdrops**: Expanded papers and Settings use native backdrops for Mica, Acrylic, tracing paper, Aero and liquid glass, with an optional always-active appearance. First activation requires an application restart on Windows 11 22H2 or later. Capsules, shape transitions, partial opacity and unsupported/disabled transparency retain solid bases; high contrast disables decoration. Switching preserves editors and undo history. No wallpaper sampling or runtime desktop capture.
 
 **Edge Preview Cards (Edge Browse)**
 

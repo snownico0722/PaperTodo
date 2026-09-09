@@ -1474,4 +1474,62 @@
   <data name="TipMicaAlwaysActive" xml:space="preserve">
     <value>勾选后，展开纸片和设置窗口失去焦点时仍保持激活时的材质外观。</value>
   </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>素灰</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>皮肤（实验）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>皮肤决定表面材质，配色决定正文和控件颜色。换肤不重建编辑器；高对比度时隐藏装饰。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>默认纸片</value>
+  </data>
+  <data name="SkinPearl" xml:space="preserve">
+    <value>珠光／镭射膜</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明描图纸</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>仿液态玻璃</value>
+  </data>
+  <data name="SkinCeramic" xml:space="preserve">
+    <value>陶瓷／奶油釉面</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero 玻璃</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>像素风</value>
+  </data>
+  <data name="TipSkinPearl" xml:space="preserve">
+    <value>淡粉、青、紫偏光。拖动时反光缓慢变化；关闭动画后保持静态，不在空闲时持续刷新。</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>高光、厚边和透镜感的外观近似，胶囊更有水滴感；不包含真实背景折射。</value>
+  </data>
+  <data name="TipSkinCeramic" xml:space="preserve">
+    <value>不透明的温润底色、柔和渐变和釉面高光，跟随当前配色。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>亮边、淡蓝光泽和斜向反光的怀旧玻璃；使用现有模糊背景，不是 Win7 系统主题。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>阶梯边框、硬边阴影和像素按钮；正文继续使用正常字体，避免中文难读。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>皮肤已保存。请从托盘退出并重新打开，启用原生背景；当前先显示实色外观，不重建编辑内容或撤销记录。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>原生背景需要 Windows 11 22H2（22621）及以上；当前使用不透明外观。</value>
+  </data>
+  <data name="SkinNativeScope" xml:space="preserve">
+    <value>原生背景用于展开纸片和设置窗口。胶囊、形态动画和半透明状态使用实色底；关闭系统透明效果时也会回退。</value>
+  </data>
 </root>

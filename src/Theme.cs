@@ -13,7 +13,9 @@ public static class ColorSchemes
     public const string Ink = "ink";
     public const string Forest = "forest";
     public const string Rose = "rose";
-    public const string Mica = "mica";
+    // Keep the stored ID so older Mica settings retain their original neutral palette.
+    public const string Neutral = "mica";
+    public const string Mica = Neutral;
 
     public static readonly string[] All = { Warm, Ink, Forest, Rose, Mica };
 
@@ -106,7 +108,7 @@ public static class Theme
                 return _paletteCache;
             }
 
-            if (IsMica && SystemParameters.HighContrast)
+            if (SystemParameters.HighContrast && (Skin != PaperSkins.Paper || CurrentScheme == ColorSchemes.Neutral))
             {
                 _paletteCache = new Palette
                 {
@@ -142,7 +144,9 @@ public static class Theme
         return false;
     }
 
-    public static bool IsMica => CurrentScheme == ColorSchemes.Mica;
+    public static string Skin => PaperSkins.Resolve(AppController.Current?.State);
+    public static bool UsesNativeBackdrop => PaperSkins.UsesNativeBackdrop(Skin);
+    public static bool IsPixelSkin => Skin == PaperSkins.Pixel && !SystemParameters.HighContrast;
 
     // ---- 基色画刷 ----
     public static Brush PaperBrush => Solid(Current.Paper);

@@ -71,12 +71,12 @@ public sealed partial class AppController
         window.Content = BuildSettingsSidebarWindowContent(window);
         ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
-        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: true);
     }
 
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
-        var frame = new Border
+        var frame = new SkinBorder
         {
             Background = TrayPaperBrush,
             BorderBrush = TrayBorderBrush,

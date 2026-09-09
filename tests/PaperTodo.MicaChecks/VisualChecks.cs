@@ -29,6 +29,7 @@ internal static class VisualChecks
             Console.WriteLine("SKIP real DWM desktop checks: system Mica is unavailable; fake-API fallback checks still run.");
             return;
         }
+        controller.State.PaperSkin = null; // Material permutations below cover legacy settings.
         controller.State.ColorScheme = ColorSchemes.Mica;
         controller.State.Theme = "light";
         controller.State.ExperimentalInactivePaperOpacity = false;

@@ -143,7 +143,8 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         State = _store.Load();
-        UsesNativeMicaWindows = State.ColorScheme == ColorSchemes.Mica && NativeMicaBackdrop.IsSupported;
+        State.PaperSkin = PaperSkins.Resolve(State);
+        UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;

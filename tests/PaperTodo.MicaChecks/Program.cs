@@ -225,6 +225,7 @@ internal static class Program
             using (var controller = new AppController())
             {
                 typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
+                controller.State.PaperSkin = null; // Exercise the pre-skin Mica settings format.
                 controller.State.EnableAnimations = false;
                 controller.State.UseCapsuleMode = true;
                 controller.State.UseDeepCapsuleMode = false;
@@ -279,6 +280,7 @@ internal static class Program
                     try { Assert(window.AllowsTransparency && !window.IsNativeMicaEffective, "unchanged legacy window"); }
                     finally { window.CloseForReal(); }
                 });
+                Check("experimental skins", () => SkinChecks.Run(controller));
             }
             Console.WriteLine($"Native Mica behavior checks passed: {_passed}.");
             return 0;

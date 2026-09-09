@@ -121,24 +121,10 @@ public sealed partial class AppController
             (ColorSchemes.Ink, Strings.Get("ColorSchemeInk")),
             (ColorSchemes.Forest, Strings.Get("ColorSchemeForest")),
             (ColorSchemes.Rose, Strings.Get("ColorSchemeRose")),
-            (ColorSchemes.Mica, Strings.Get("ColorSchemeMica"))
+            (ColorSchemes.Neutral, Strings.Get("ColorSchemeNeutral"))
         };
 
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
-    }
-
-    private void SetMicaBackdrop(string type)
-    {
-        var normalized = MicaBackdropTypes.Normalize(type);
-        if (State.MicaBackdropType == normalized)
-        {
-            return;
-        }
-
-        State.MicaBackdropType = normalized;
-        SaveNow();
-        RefreshMicaSettings();
-        RefreshSettingsWindowContent();
     }
 
     private void ToggleMicaAlwaysActive()
@@ -154,19 +140,7 @@ public sealed partial class AppController
         {
             window.RefreshNativeMica(force: true);
         }
-        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
-    }
-
-    private UIElement CreateMicaBackdropSegmentSelector()
-    {
-        var segments = new[]
-        {
-            (MicaBackdropTypes.Mica, Strings.Get("MicaBackdropMica")),
-            (MicaBackdropTypes.Acrylic, Strings.Get("MicaBackdropAcrylic")),
-            (MicaBackdropTypes.ClearAcrylic, Strings.Get("MicaBackdropClearAcrylic"))
-        };
-
-        return CreateSegmentSelector(segments, MicaBackdropTypes.Normalize(State.MicaBackdropType), SetMicaBackdrop);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: true);
     }
 
     private void SetUiFontPreset(string preset)
@@ -2008,27 +1982,9 @@ public sealed partial class AppController
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDisplay")));
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayThemeMode")), "TipThemeMode"));
         leftColumn.Children.Add(CreateThemeSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")),
-            State.ColorScheme == ColorSchemes.Mica ? "TipColorSchemeMica" : "TipColorScheme"));
+        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
-        if (State.ColorScheme == ColorSchemes.Mica)
-        {
-            leftColumn.Children.Add(new TextBlock
-            {
-                Text = Strings.Get(!NativeMicaBackdrop.IsSupported ? "MicaUnsupported" :
-                    !UsesNativeMicaWindows ? "MicaRestartRequired" : "MicaScope"),
-                TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
-                FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 3, 2, 5)
-            });
-            if (NativeMicaBackdrop.IsSupported)
-            {
-                leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMicaBackdrop")), "TipMicaBackdrop"));
-                leftColumn.Children.Add(CreateMicaBackdropSegmentSelector());
-                leftColumn.Children.Add(WrapWithHint(SettingsToggle(
-                    Strings.Get("SettingsMicaAlwaysActive"), State.MicaAlwaysActive, ToggleMicaAlwaysActive),
-                    "TipMicaAlwaysActive"));
-            }
-        }
+        leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
             "TipResizeGripMode"));
@@ -2172,6 +2128,7 @@ public sealed partial class AppController
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;
+        State.PaperSkin = PaperSkins.Paper;
         State.MicaBackdropType = MicaBackdropTypes.Mica;
         State.MicaAlwaysActive = false;
         State.UiFontPreset = UiFontPresets.Default;
@@ -2877,20 +2834,6 @@ public sealed partial class AppController
         {
             QueueNativeMicaPreferenceRefresh();
         }
-
-        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color)
-        {
-            if (State.Theme == "system" && State.ColorScheme != ColorSchemes.Mica)
-            {
-                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    if (State.Theme == "system")
-                    {
-                        RefreshThemeSurfaces();
-                    }
-                }));
-            }
-        }
     }
 
     private void ToggleStartup()
@@ -2919,6 +2862,7 @@ public sealed partial class AppController
             ArrangeDeepCapsules(animate: false);
         }
         SaveNow();
+        RefreshSkinSurfaces();
     }
 
     private void SetResizeGripMode(string mode)

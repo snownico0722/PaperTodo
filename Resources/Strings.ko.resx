@@ -1425,4 +1425,62 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TipMicaAlwaysActive" xml:space="preserve">
     <value>펼친 페이퍼와 설정 창이 포커스를 잃어도 활성 상태의 재질 모양을 유지합니다.</value>
   </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>중성</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>스킨 (실험)</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>스킨은 표면 재질을, 색상 테마는 텍스트와 컨트롤 색을 바꿉니다. 편집기는 유지되며 고대비에서는 장식이 꺼집니다.</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>기본 메모</value>
+  </data>
+  <data name="SkinPearl" xml:space="preserve">
+    <value>진주 / 홀로그램</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>반투명 트레이싱지</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>리퀴드 글래스 스타일</value>
+  </data>
+  <data name="SkinCeramic" xml:space="preserve">
+    <value>도자기 / 크림 유약</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero 유리</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>픽셀</value>
+  </data>
+  <data name="TipSkinPearl" xml:space="preserve">
+    <value>분홍·청록·보라 광택이 창 이동에 따라 변합니다. 애니메이션을 끄면 정지하며 유휴 상태에서는 계속 갱신하지 않습니다.</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>하이라이트와 두꺼운 테두리로 렌즈 느낌을 내고 캡슐은 물방울처럼 표현합니다. 실제 배경 굴절은 지원하지 않습니다.</value>
+  </data>
+  <data name="TipSkinCeramic" xml:space="preserve">
+    <value>선택한 색상에 맞춘 불투명한 도자기 표면에 부드러운 명암과 유약 광택을 더합니다.</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>기존 흐린 배경에 밝은 테두리와 푸른 광택, 사선 반사를 더합니다. Windows 7 시스템 테마는 아닙니다.</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>계단형 테두리, 선명한 그림자와 픽셀 버튼을 적용합니다. 본문은 가독성을 위해 일반 글꼴을 유지합니다.</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>스킨이 저장되었습니다. 트레이에서 종료한 뒤 다시 실행하면 네이티브 배경이 켜집니다. 현재 창은 단색으로 표시하며 편집 내용과 실행 취소 기록은 유지합니다.</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>네이티브 배경에는 Windows 11 22H2 (22621) 이상이 필요합니다. 현재 환경에서는 불투명하게 표시됩니다.</value>
+  </data>
+  <data name="SkinNativeScope" xml:space="preserve">
+    <value>네이티브 배경은 펼친 메모와 설정에 적용됩니다. 캡슐, 형태 전환, 부분 투명 상태에서는 단색 바탕을 사용하며 시스템 투명 효과가 꺼져도 단색으로 전환됩니다.</value>
+  </data>
 </root>
