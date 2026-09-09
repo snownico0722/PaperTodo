@@ -1,0 +1,130 @@
+[
+  {
+    "path": "CHANGELOG.md",
+    "before": "3e59ef0147b381efb21079817f403e3bca1df21645b9752a673e3131955b2b75",
+    "after": "c24fb081d5606511578eb70b5768278a9358a8b526b724fd5b261183c7946ea4",
+    "edits": [[386,513,"六种装饰皮肤可独立配色；标准云母和两种亚克力保留原生素灰配色，不覆盖其他皮肤的配色选择。旧云母配置自动保留。珠光随拖动轻微偏光，关闭动画后静止；像素风使用阶梯边框、硬边阴影和像素按钮，正文保留正常字体。仿液态玻璃仅近似高光与厚边，不包含真实折射。纸片、普通和贴边胶囊、拖动胶囊、主胶囊与系绳胶囊共用外壳绘制，不改变停靠或动画结构。顶栏沿用主线的轻底色，不随系统强调色整条高亮；玻璃高光收敛到边缘，贴边胶囊不额外绘制靠屏幕一侧的边线"]]
+  },
+  {
+    "path": "Resources/Strings.en.resx",
+    "before": "950cb815100448fa233d7f8cc54a9a8dbe30ed6d46e51766129a2fe1125503ed",
+    "after": "9bb8775ab4f79f01261028dcb0ab3b172f93c6744af51b3816cea2006b2b2e4c",
+    "edits": [[66333,66333,"  <data name=\"SkinSystemPalette\" xml:space=\"preserve\">\n    <value>Standard Mica and both Acrylic skins retain the original neutral palette. Other skins restore your chosen color scheme without overwriting it.</value>\n  </data>\n"]]
+  },
+  {
+    "path": "Resources/Strings.ja.resx",
+    "before": "aa21e85e9148cf058cd4e5ac5985d94efff04eef9477b66ec927c9ba62c7bfb0",
+    "after": "756be570f814e3a458ecdcdf188401e644d1208c35d6ff0537a4ef43a02d8dd2",
+    "edits": [[56216,56216,"  <data name=\"SkinSystemPalette\" xml:space=\"preserve\">\n    <value>標準のマイカと2種類のアクリルは従来のニュートラル配色を使います。他のスキンに戻すと保存した配色が復元され、選択は上書きされません。</value>\n  </data>\n"]]
+  },
+  {
+    "path": "Resources/Strings.ko.resx",
+    "before": "60fa31aa7b35e3b35eb1448472ea9fdbb01f9381b053efc344c90bf4569cb9fd",
+    "after": "7360dc52ddb2704a7894a02a0b4e75a66891473c0734f20ebad5b3e86ebb76d3",
+    "edits": [[56859,56859,"  <data name=\"SkinSystemPalette\" xml:space=\"preserve\">\n    <value>표준 마이카와 두 아크릴 스킨은 기존 중성 색상을 유지합니다. 다른 스킨으로 돌아가면 저장된 색상 선택이 복원되며 덮어쓰지 않습니다.</value>\n  </data>\n"]]
+  },
+  {
+    "path": "Resources/Strings.resx",
+    "before": "7b10b2deb8bc4e4a7cb34219dad78e8689dec962e9ec94c2efd90ffb1e502b1a",
+    "after": "8f5476b14fac7aca6274a84917b24def011c3729322b071013a7fc7eabe14ee2",
+    "edits": [[52664,52664,"  <data name=\"SkinSystemPalette\" xml:space=\"preserve\">\n    <value>标准云母和两种亚克力使用原云母分支的素灰配色。切回其他皮肤会恢复你选的配色，不会覆盖已保存的选择。</value>\n  </data>\n"]]
+  },
+  {
+    "path": "doc/ARCHITECTURE.md",
+    "before": "b0896a43173af966b366ec7f3ee6a44d7a2478c3073cc5a570aa9117bd6972bd",
+    "after": "fa248b5be8018ff6064ec195fe8bb7364dafa71632621c19e679ae264a78257d",
+    "edits": [
+      [10041,10041,"标准云母和两种亚克力使用原生分支的 Neutral 语义配色，其他皮肤继续读取保存的 `ColorScheme`；这是显示策略，不改写用户的配色选择。"],
+      [10317,10317,"外轮廓和材质内高光由当前尺寸／圆角／DPI 缓存几何，反光变化只重画画刷；实际 `BorderBrush` 与四边 `BorderThickness` 保留 host 的焦点和贴边开口语义，不另画一圈替代描边。"],
+      [10948,10948,"原生 HWND 的 caption 使用显式主题色，WPF 顶栏使用与主线轻 tint 合成结果相同的不透明底，避免系统强调色从自定义顶栏透出；不改真实激活状态。"]
+    ]
+  },
+  {
+    "path": "doc/CHANGELOG.en.md",
+    "before": "8d40880808408d595f2849fd199c3bbd258365bc670f5f18db7e2fa66e1f64b0",
+    "after": "ce223c9cd2d8614e3dfd0de33c81a940478068bd0083ed42892ca98b9d880a84",
+    "edits": [[938,1232,"Standard Mica and both Acrylic skins keep their original neutral palette; decorative skins restore the independently saved color choice. Legacy Mica settings retain their appearance. Pearl sheen follows movement without an idle loop; pixel borders, shadows and buttons keep the normal body font. Liquid glass does not perform real refraction. Paper and capsule shells share painting without changing docking or transition ownership. Headers keep the main branch's subtle tint rather than system accent highlighting; quieter glass highlights and host-owned focus/open-edge borders preserve readability"]]
+  },
+  {
+    "path": "src/AppController.Settings.Skins.cs",
+    "before": "31b0bbfad44425b3a56ef706354a07ce8f469b12a56ba7b87310ac14c0b80bbe",
+    "after": "06034118477b0a730a269d4b4625c3c3e5fec4538858731586b4613752ab686f",
+    "edits": [[1548,1548,"        if (PaperSkins.UsesSystemPalette(skin))\n            panel.Children.Add(new TextBlock\n            {\n                Text = Strings.Get(\"SkinSystemPalette\"), TextWrapping = TextWrapping.Wrap,\n                Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11),\n                Margin = new Thickness(2, 0, 2, 5)\n            });\n"]]
+  },
+  {
+    "path": "src/AppController.Settings.cs",
+    "before": "96972ee4973a4f9bf7592d45185a594d057ccfdcae1d7abd2f962ba456089c5a",
+    "after": "63a61ed5834aa5b853f97dc29efc1ee5793d03cc0b4988f81c3462463da47018",
+    "edits": [[3786,3883,"var systemPalette = PaperSkins.UsesSystemPalette(Theme.Skin);\n        var selector = CreateSegmentSelector(segments,\n            systemPalette ? ColorSchemes.Neutral : ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);\n        selector.IsEnabled = !systemPalette;\n        selector.Opacity = systemPalette ? 0.65 : 1;\n        return selector"]]
+  },
+  {
+    "path": "src/DwmMicaApi.cs",
+    "before": "ffaf524d8df1f075a00afc5021e432b96e83da57bce728a3d893df9d60f678a0",
+    "after": "7a7cf4deae97eb0ffd756d36a37a6236c698adf1f61c76d795dead7f2053213e",
+    "edits": [
+      [664,681,"int captionColor"],
+      [4944,4961,"int captionColor"],
+      [5055,5326,"PaperTodo draws its own title bar. Never restore COLOR_DEFAULT here: with\n        // Windows accent captions enabled that lets a blue active caption bleed through.\n        // COLOR_NONE suppresses borders only, not captions; use the explicit paper tone."]
+    ]
+  },
+  {
+    "path": "src/NativeMicaBackdrop.cs",
+    "before": "a72e6e74c9621ff615dd7e26179205514140bdb07fe0eced03e139c1d75f503c",
+    "after": "ef1b4103cc8f8a3ec811e652cd562c9d9b5fe731d33a5a1ab50f79b1984264da",
+    "edits": [
+      [7080,7080,"            var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;\n            var captionColor = caption.R | caption.G << 8 | caption.B << 16;\n"],
+      [7228,7244,"captionColo"]
+    ]
+  },
+  {
+    "path": "src/PaperSkins.cs",
+    "before": "42259cb75648956b61c621a893207c15bfa16f9611b4d44418d90f4d3c2757d0",
+    "after": "dffe8d6a43210d7e46db4d4d72158c22331216eb2f7c997908e50314fd7f8e9c",
+    "edits": [[1593,1593,"    public static bool UsesSystemPalette(string? id) => id is Mica or Acrylic or ClearAcrylic;\n"]]
+  },
+  {
+    "path": "src/PaperWindow.cs",
+    "before": "85d2dfd206d521104b8665e20d4bf5f2a38e144e92dc0491b9f7d4cd6726da32",
+    "after": "71aa5e4d9b2d3a98299ff6855b070441bd8bfbfd6f0455f4bcb1a1b1bf64d557",
+    "edits": [[15616,15788,"Brush TitleBarBrush => Theme.TitleBarBrush(_controller.UsesNativeMicaWindows"]]
+  },
+  {
+    "path": "src/Theme.cs",
+    "before": "edd743b6d1c03778528dd5231c2b3dc84443725f634c1c80741449ade1ca6aaa",
+    "after": "c546dbca7c79f08eecb75f8d134914c767b70e0d33c81495a5569bae9a247602",
+    "edits": [
+      [3322,3322,"PaperSkins.UsesSystemPalette(Skin)\n        ? ColorSchemes.Neutral : "],
+      [6963,6963,"\n    // Match main's faint title tint. A native HWND also needs an opaque custom header;\n    // otherwise the system accent caption can show through the WPF title controls.\n    internal static Brush TitleBarBrush(bool opaque) => opaque\n        ? Solid(Mix(Current.Paper, Current.Tint, (IsDark ? 18 : 12) / 255.0))\n        : Tint((byte)(IsDark ? 18 : 12));\n"]
+    ]
+  },
+  {
+    "path": "tests/PaperTodo.MicaChecks/Program.cs",
+    "before": "a30ca1ae9b8cabd53aed983a2ff0cfcdb5535f9ea683eebb86ac3ae21aa8df6e",
+    "after": "54ef473c97ae6d69630e6d4866a06fd145237087dd6f9c00bdf4f293f60d85ef",
+    "edits": [
+      [6266,6266,"                var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;\n                Assert(f.Api.CaptionColor == (caption.R | caption.G << 8 | caption.B << 16),\n                    \"custom header uses its own color, never the OS active accent\");\n"],
+      [22002,22002,", CaptionColor"],
+      [23310,23378,"int captionColor)\n        { Rounded = rounded; BorderColor = borderColor; CaptionColor = caption"]
+    ]
+  },
+  {
+    "path": "tests/PaperTodo.MicaChecks/SkinChecks.cs",
+    "before": "85a79e979befd00e13b6afc4c2e47256b85c2b829f112be6342f3ddfa4dfdf8b",
+    "after": "1910c2ebf9a1274d9b560639b718e3531e966638cf59658da8cf1a3ebbd18835",
+    "edits": [
+      [2032,2032,".Append(\"SkinSystemPalette\")"],
+      [2316,2316,"            CheckOriginalNativeRendering(controller);\n"],
+      [3650,3650,"                    var readable = (SolidColorBrush)Theme.WeakTextBrush;\n                    var litPixel = ((int)(image.PixelHeight * .12) * image.PixelWidth + image.PixelWidth / 3) * 4;\n                    var litColor = Color.FromRgb(bytes[litPixel + 2], bytes[litPixel + 1], bytes[litPixel]);\n                    Program.Assert(Contrast(readable.Color, litColor) >= 3,\n                        $\"surface glare must not wash out secondary text: {skin}/{mode}/{scale}\");\n"],
+      [4400,4531,"DockedOutline(controller); CheckLiveSwitch(controller);\n            Console.WriteLine($\"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders"],
+      [4774,4774,"    }\n    private static void CheckOriginalNativeRendering(AppController controller)\n    {\n        controller.State.ColorScheme = ColorSchemes.Warm;\n        foreach (var mode in new[] { \"light\", \"dark\" })\n        foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })\n        {\n            controller.State.Theme = mode; controller.State.PaperSkin = skin; Theme.Invalidate();\n            var expected = mode == \"light\" ? Color.FromRgb(243, 243, 243) : Color.FromRgb(32, 32, 32);\n            Program.Assert(((SolidColorBrush)Theme.PaperBrush).Color == expected, \"native palette matches the original Mica branch\");\n            foreach (var background in new[] { Theme.PaperBrush, NativeMicaBackdrop.GetActiveSurfaceBrush(skin, mode == \"dark\") })\n            {\n                var original = new Border { Width = 180, Height = 100, CornerRadius = new CornerRadius(8),\n                    Background = background, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1) };\n                var current = new SkinBorder { Width = original.Width, Height = original.Height, CornerRadius = original.CornerRadius,\n                    Background = background, BorderBrush = original.BorderBrush, BorderThickness = original.BorderThickness };\n                Program.Assert(Pixels(Render(original, 1)).SequenceEqual(Pixels(Render(current, 1))),\n                    \"native skins add no decorative wash or replacement border pixels\");\n            }\n        }\n        controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = \"light\"; Theme.Invalidate();\n        Program.Assert(controller.State.ColorScheme == ColorSchemes.Warm &&\n            ((SolidColorBrush)Theme.PaperBrush).Color == Color.FromRgb(255, 249, 234),\n            \"leaving a native skin restores the independent saved color choice\");\n    }\n    private static void CheckDockedOutline(AppController controller)\n    {\n        foreach (var skin in Decorated)\n        foreach (var left in new[] { true, false })\n        {\n            controller.State.PaperSkin = skin; Theme.Invalidate();\n            var outline = new SkinBorder { IsOutline = true, IsCapsule = true, Width = 120, Height = 40,\n                CornerRadius = left ? new CornerRadius(0, 16, 16, 0) : new CornerRadius(16, 0, 0, 16),\n                BorderThickness = left ? new Thickness(0, 2, 2, 2) : new Thickness(2, 2, 0, 2), BorderBrush = Brushes.Red };\n            var image = Render(outline, 1); var pixels = Pixels(image);\n            var open = (20 * image.PixelWidth + (left ? 0 : image.PixelWidth - 1)) * 4;\n            var closed = (20 * image.PixelWidth + (left ? image.PixelWidth - 1 : 0)) * 4;\n            Program.Assert(pixels[open + 3] == 0 && pixels[closed + 2] == 255 && pixels[closed + 3] == 255,\n                \"the host owns focus color and the docked zero-width edge stays open\");\n            outline.BorderThickness = new Thickness();\n            Program.Assert(Pixels(Render(outline, 1)).All(b => b == 0), \"zero-width outline paints nothing\");\n        }\n    }\n    private static double Contrast(Color a, Color b)\n    {\n        static double Linear(byte v) => v <= 10 ? v / 3294.6 : Math.Pow((v / 255.0 + .055) / 1.055, 2.4);\n        static double Light(Color c) => .2126 * Linear(c.R) + .7152 * Linear(c.G) + .0722 * Linear(c.B);\n        var x = Light(a); var y = Light(b);\n        return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);\n"],
+      [8483,8517,"PaperSkins.All"],
+      [8865,8865,"                var header = (Border)typeof(PaperWindow).GetField(\"_topBarHost\", Program.Private)!.GetValue(window)!;\n                Program.Assert(header.Background is SolidColorBrush { Color.A: 255 } &&\n                    ((SolidColorBrush)header.Background).Color == ((SolidColorBrush)Theme.TitleBarBrush(true)).Color,\n                    \"native-session title bar stays on main's own tint, not active caption blue\");\n"]
+    ]
+  },
+  {
+    "path": "tests/PaperTodo.MicaChecks/VisualChecks.cs",
+    "before": "e2f1af8677dad7614dd910c4d9fd907c52bf568b01a161587fa6795b53f0c1ca",
+    "after": "55e97112065bfa773c6abdd038e25f7758c9d1eca370c3c3f1e41a0e1faa1511",
+    "edits": [[25977,25977,"        if (window is PaperWindow { IsNativeMicaEffective: true, HasExpandedPaperSurface: true } paper && paper.Opacity == 1)\n        {\n            var header = (Border)typeof(PaperWindow).GetField(\"_topBarHost\", Program.Private)!.GetValue(paper)!;\n            var p = header.PointToScreen(new Point(header.ActualWidth / 2, 2));\n            var actual = bitmap.GetPixel((int)Math.Round(p.X) - bounds.Left, (int)Math.Round(p.Y) - bounds.Top);\n            var expected = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;\n            Program.Assert(Math.Abs(actual.R - expected.R) <= 3 && Math.Abs(actual.G - expected.G) <= 3 &&\n                Math.Abs(actual.B - expected.B) <= 3, $\"{name}: desktop header must not acquire a system selection/activation tint ({actual})\");\n        }\n"]]
+  }
+]
