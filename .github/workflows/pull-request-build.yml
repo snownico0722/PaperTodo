@@ -51,19 +51,29 @@ jobs:
       - name: Markdown semantic checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownSemanticChecks\PaperTodo.MarkdownSemanticChecks.csproj -c Release
 
+      - name: Markdown editing checks
+        run: dotnet run --project .\tests\PaperTodo.MarkdownEditingChecks\PaperTodo.MarkdownEditingChecks.csproj -c Release
+
       - name: Todo navigation checks
         run: dotnet run --project .\tests\PaperTodo.TodoNavigationChecks\PaperTodo.TodoNavigationChecks.csproj -c Release
 
-      - name: Native Mica checks
+      - name: Edge title checks
+        run: dotnet run --project .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
+
+      - name: Threading regression checks
+        run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
+
+      - name: Native material and skin checks
         env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/mica-pixels
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
         run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
 
-      - name: Upload native Mica desktop evidence
+      - name: Upload material visual evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: native-mica-visual-${{ github.sha }}
-          path: ${{ runner.temp }}/mica-pixels
+          name: material-visual-${{ github.sha }}
+          path: ${{ runner.temp }}/material-pixels
           if-no-files-found: warn
           retention-days: 7
