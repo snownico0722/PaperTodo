@@ -154,8 +154,66 @@ internal static class MarkdownMathIncremental
             }
         }
 
+        // A delimiter can change meaning even when the delimiter character itself was untouched:
+        // the parity of the contiguous backslash run immediately before it decides whether it is
+        // escaped. An edit anywhere in that run can therefore re-pair with a distant delimiter.
+        if (TouchesEscapeRunBeforeMathDelimiter(source, from) ||
+            TouchesEscapeRunBeforeMathDelimiter(source, to))
+        {
+            return true;
+        }
+
+        for (var index = from; index < to; index++)
+        {
+            if (source[index] != '\\')
+            {
+                continue;
+            }
+
+            var runEnd = index + 1;
+            while (runEnd < source.Length && source[runEnd] == '\\')
+            {
+                runEnd++;
+            }
+
+            if (runEnd < source.Length && IsMathDelimiterFollower(source[runEnd]))
+            {
+                return true;
+            }
+
+            index = runEnd - 1;
+        }
+
         return false;
     }
+
+    private static bool TouchesEscapeRunBeforeMathDelimiter(string source, int point)
+    {
+        if (source.Length == 0)
+        {
+            return false;
+        }
+
+        var normalized = Math.Clamp(point, 0, source.Length);
+        var runStart = normalized;
+        while (runStart > 0 && source[runStart - 1] == '\\')
+        {
+            runStart--;
+        }
+
+        var runEnd = normalized;
+        while (runEnd < source.Length && source[runEnd] == '\\')
+        {
+            runEnd++;
+        }
+
+        return runEnd > runStart &&
+            runEnd < source.Length &&
+            IsMathDelimiterFollower(source[runEnd]);
+    }
+
+    private static bool IsMathDelimiterFollower(char character) =>
+        character is '$' or '(' or ')' or '[' or ']';
 
     private static bool HasNearbyDelimiter(string source, int start, int end)
     {
