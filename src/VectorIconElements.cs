@@ -18,14 +18,18 @@ internal enum VectorPrimitiveIconKind
     Settings,
     Close,
     Check,
+    CheckBold,
     ChevronRight,
     ChevronDown,
+    TriangleRight,
+    TriangleDown,
     ArrowUp,
     ArrowDown,
     DragGrip,
     SortGrip,
     Trash,
     Note,
+    NoteBold,
     Script,
     Link,
     Clock,
@@ -194,15 +198,21 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
     {
         var paths = new Dictionary<VectorPrimitiveIconKind, string>
         {
-            [VectorPrimitiveIconKind.Close] = "M4,4 L12,12 M12,4 L4,12",
-            [VectorPrimitiveIconKind.Check] = "M3,8 L6.5,11.5 L13,4.5",
+            [VectorPrimitiveIconKind.Close] = "M4.7,4.7 L11.3,11.3 M11.3,4.7 L4.7,11.3",
+            // Preserve the tall check and lower-right pencil silhouettes. Capsule text
+            // formerly used a heavier mark than the toolbar's font-outline drawing.
+            [VectorPrimitiveIconKind.Check] = "M1.3,8.8 L2.2,8.1 L5.8,12.1 L13.7,0.8 L14.7,0.3 L6.1,14.9 Q5.7,15.5 5.2,14.9 Z",
+            [VectorPrimitiveIconKind.CheckBold] = "M1.1,8.6 Q1.5,8.1 2.2,8.4 L3.3,8.6 L5.6,11.5 L12.8,1 Q13.4,0.2 15,0.4 L6.9,14.9 Q6.5,15.7 5.6,15.2 L4.7,14.9 Z",
             [VectorPrimitiveIconKind.ChevronRight] = "M6,3 L11,8 L6,13",
             [VectorPrimitiveIconKind.ChevronDown] = "M3,6 L8,11 L13,6",
+            [VectorPrimitiveIconKind.TriangleRight] = "M5.5,4 L11,8 L5.5,12 Z",
+            [VectorPrimitiveIconKind.TriangleDown] = "M4,5.5 L12,5.5 L8,11 Z",
             [VectorPrimitiveIconKind.ArrowUp] = "M8,13 V3 M4,7 L8,3 L12,7",
             [VectorPrimitiveIconKind.ArrowDown] = "M8,3 V13 M4,9 L8,13 L12,9",
-            [VectorPrimitiveIconKind.SortGrip] = "M3,4 H13 M3,8 H13 M3,12 H13",
+            [VectorPrimitiveIconKind.SortGrip] = "M4,4 H12 M4,8 H12 M4,12 H12",
             [VectorPrimitiveIconKind.Trash] = "M2.5,4 H13.5 M6,4 V2 H10 V4 M4,4 L5,14 H11 L12,4 M7,6.5 V11.5 M9,6.5 V11.5",
-            [VectorPrimitiveIconKind.Note] = "M3,10.5 L10.5,3 L13,5.5 L5.5,13 L2.5,13.5 Z M9,4.5 L11.5,7",
+            [VectorPrimitiveIconKind.Note] = "M0.8,2.7 L2.7,0.8 Q3.2,0.3 3.8,0.9 L5.2,2.3 L2.3,5.2 L0.9,3.8 Q0.3,3.2 0.8,2.7 Z M2.8,6.2 L6.2,2.8 L13.2,9.8 L9.8,13.2 Z M13.5,10.5 L15.5,15.5 L10.5,13.5 L11.4,12.9 L14,14 L12.9,11.4 Z",
+            [VectorPrimitiveIconKind.NoteBold] = "M0.6,2.6 L2.6,0.6 Q3.3,0 4.1,0.8 L5.8,2.5 L2.5,5.8 L0.8,4.1 Q0,3.3 0.6,2.6 Z M2.5,6.8 L6.8,2.5 L13.9,9.6 L9.6,13.9 Z M14.3,10.4 L15.7,15.7 L10.4,14.3 L11.2,13.3 L14.1,14.1 L13.3,11.2 Z",
             [VectorPrimitiveIconKind.Script] = "M9,1.5 L3.5,9 H7 L6,14.5 L12.5,6.5 H9 Z",
             [VectorPrimitiveIconKind.Link] = "M6.5,10 L5.5,11 A2.5,2.5 0 0 1 2,7.5 L5,4.5 A2.5,2.5 0 0 1 8.5,4.5 M9.5,6 L10.5,5 A2.5,2.5 0 0 1 14,8.5 L11,11.5 A2.5,2.5 0 0 1 7.5,11.5 M5.5,10.5 L10.5,5.5",
             [VectorPrimitiveIconKind.Clock] = "M8,2 A6,6 0 1 1 7.999,2 M8,4.5 V8 L10.5,9.5",
@@ -240,14 +250,18 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
         }
         else if (StandardGeometry.TryGetValue(Kind, out var geometry))
         {
-            var pen = new Pen(Foreground, 1.4)
+            var filled = Kind is VectorPrimitiveIconKind.Check or VectorPrimitiveIconKind.CheckBold
+                or VectorPrimitiveIconKind.Note or VectorPrimitiveIconKind.NoteBold
+                or VectorPrimitiveIconKind.TriangleRight or VectorPrimitiveIconKind.TriangleDown
+                or VectorPrimitiveIconKind.CircleFilled;
+            var pen = filled ? null : new Pen(Foreground,
+                Kind is VectorPrimitiveIconKind.Close or VectorPrimitiveIconKind.SortGrip ? 1.2 : 1.4)
             {
                 StartLineCap = PenLineCap.Round,
                 EndLineCap = PenLineCap.Round,
                 LineJoin = PenLineJoin.Round
             };
-            context.DrawGeometry(Kind == VectorPrimitiveIconKind.CircleFilled ? Foreground : null,
-                Kind == VectorPrimitiveIconKind.CircleFilled ? null : pen, geometry);
+            context.DrawGeometry(filled ? Foreground : null, pen, geometry);
         }
         context.Pop();
         context.Pop();

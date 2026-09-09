@@ -1084,7 +1084,7 @@ public sealed partial class PaperWindow
             return VectorPrimitiveIconKind.Script;
         }
 
-        return _paper.Type == PaperTypes.Note ? VectorPrimitiveIconKind.Note : VectorPrimitiveIconKind.Check;
+        return _paper.Type == PaperTypes.Note ? VectorPrimitiveIconKind.NoteBold : VectorPrimitiveIconKind.CheckBold;
     }
 
     private double CapsuleIconFontSizeForCurrentPaper()

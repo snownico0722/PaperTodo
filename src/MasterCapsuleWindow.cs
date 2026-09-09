@@ -212,7 +212,7 @@ public sealed class MasterCapsuleWindow : Window
         };
         _contentStack = stack;
 
-        _glyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.ChevronDown)
+        _glyph = new VectorPrimitiveIconElement(VectorPrimitiveIconKind.TriangleDown)
         {
             Foreground = Theme.TextBrush,
             IconSize = MasterGlyphFontSize,
@@ -437,7 +437,7 @@ public sealed class MasterCapsuleWindow : Window
 
     private void ApplyStateVisuals()
     {
-        _glyph.Kind = _active ? VectorPrimitiveIconKind.ChevronRight : VectorPrimitiveIconKind.ChevronDown;
+        _glyph.Kind = _active ? VectorPrimitiveIconKind.TriangleRight : VectorPrimitiveIconKind.TriangleDown;
         _label.Text = _count.ToString(UiLanguages.EffectiveCulture);
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
