@@ -154,7 +154,8 @@ internal static class VisualChecks
                 "form transition clears the full-window system backdrop");
             Program.Assert(Math.Abs(chrome.Width + chrome.Margin.Left + chrome.Margin.Right - window.Width) < 0.01 &&
                 Math.Abs(chrome.Height + chrome.Margin.Top + chrome.Margin.Bottom - window.Height) < 0.01,
-                "one progress value owns the inner surface, gutter and outer window");
+                $"form bounds: collapsed={collapsed}, progress={progress}, window={window.Width}x{window.Height}, " +
+                $"actual={window.ActualWidth}x{window.ActualHeight}, chrome={chrome.Width}x{chrome.Height}, margin={chrome.Margin}");
             Program.Assert(Math.Abs(window.ActualWidth - window.Width) <= 1 && Math.Abs(window.ActualHeight - window.Height) <= 1,
                 "native HWND follows the presented size without minimum-size clamping");
             if (progress == 0.5)
