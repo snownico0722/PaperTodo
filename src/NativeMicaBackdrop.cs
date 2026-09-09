@@ -224,8 +224,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
             // noise and lifts the darkness, producing a clean, luminous frosted glass.
             var color = dark
-                ? Color.FromArgb(160, 32, 33, 40)
-                : Color.FromArgb(168, 255, 255, 255);
+                ? Color.FromArgb(144, 32, 33, 40)
+                : Color.FromArgb(152, 255, 255, 255);
             var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;
