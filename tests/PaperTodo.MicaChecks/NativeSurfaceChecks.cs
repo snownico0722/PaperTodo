@@ -74,15 +74,6 @@ internal static class NativeSurfaceChecks
                         // A frosted Acrylic wash cannot pass this high-frequency contrast check.
                         var row = image.Height - 90;
                         var values = Enumerable.Range(image.Width / 2 - 32, 64).Select(x => image.GetPixel(x, row).R).ToArray();
-                        if (values.Max() - values.Min() is < 35 or > 150)
-                        {
-                            // Diagnostic only: keep the assertion on the unmodified recipe.
-                            var handle = new WindowInteropHelper(paper).Handle;
-                            DwmMicaApi.Instance.ExtendFrame(handle, -1); Wait();
-                            using var probe = Capture(paper, output, $"diagnostic-fullglass-{mode}");
-                            var samples = Enumerable.Range(probe.Width / 2 - 32, 64).Select(x => probe.GetPixel(x, row).R).ToArray();
-                            Console.WriteLine($"LENS DIAGNOSTIC {mode}: fullglass range={samples.Min()}..{samples.Max()}, visible={paper.IsVisible}, active={paper.IsActive}, topmost={paper.Topmost}, opacity={paper.Opacity}");
-                        }
                         Program.Assert(values.Max() - values.Min() is >= 35 and <= 150,
                             $"{mode}: glass must retain rear detail AND a visible veil, neither opaque nor invisible ({values.Min()}..{values.Max()})");
                         Console.WriteLine($"CLEAR GLASS {mode}: sharp rear stripe range {values.Min()}..{values.Max()}");
