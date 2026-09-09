@@ -2,7 +2,7 @@ name: Skin branch validation
 on:
   push:
     branches: [exp/playful-skins-20260909]
-    paths: [.github/workflows/skin-branch-bootstrap.yml, '.skin-payload.*.b64']
+    paths: [.github/workflows/skin-branch-bootstrap.yml, .skin-wire.py, .skin-locale.py]
 permissions:
   contents: write
 jobs:
@@ -18,31 +18,29 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Apply reviewed source patch on the experiment only
+      - name: Apply integration on the isolated experiment only
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           if ((git branch --show-current) -ne 'exp/playful-skins-20260909') { throw 'Unexpected branch' }
-          @'
-          import pathlib, gzip, base64, hashlib, subprocess
-          payload = ''.join(p.read_text().strip() for p in sorted(pathlib.Path('.').glob('.skin-payload.*.b64')))
-          patch = gzip.decompress(base64.b64decode(payload, validate=True))
-          assert hashlib.sha256(patch).hexdigest() == 'aaf43d2a687661ad165f500acc63f3277f5eecb32acf64157dcd34e6a2bfd3e1'
-          subprocess.run(['git','apply','--check','--whitespace=error','-'], input=patch, check=True)
-          subprocess.run(['git','apply','-'], input=patch, check=True)
-          for name in ['.skin-bootstrap.py','.skin-conflicts.txt','.skin-context.txt']:
-              pathlib.Path(name).unlink(missing_ok=True)
-          for p in pathlib.Path('.').glob('.skin-payload.*.b64'): p.unlink()
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'Patch validation failed' }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          if (git diff --cached --name-only -- .github/workflows) { throw 'Workflow changes must use the authorized connector' }
-          git commit -m 'feat: add six experimental paper and capsule skins'
-          if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
-          git push origin HEAD:refs/heads/exp/playful-skins-20260909
-          if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+          if (Test-Path .skin-wire.py) {
+            python .skin-wire.py
+            if ($LASTEXITCODE -ne 0) { throw 'Surface integration failed' }
+            python .skin-locale.py
+            if ($LASTEXITCODE -ne 0) { throw 'Resource integration failed' }
+            Remove-Item .skin-wire.py, .skin-locale.py, .skin-bootstrap.py, .skin-conflicts.txt, .skin-context.txt, .skin-payload.1.b64 -ErrorAction SilentlyContinue
+            git diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed' }
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -A
+            if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow edit' }
+            git commit -m 'feat: integrate six skins with existing paper, capsule and settings surfaces'
+            if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+            git push origin HEAD:refs/heads/exp/playful-skins-20260909
+            if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+          }
+          git bundle create "$env:RUNNER_TEMP/skin-implemented.bundle" HEAD
       - name: Build Release
         shell: pwsh
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
@@ -51,7 +49,7 @@ jobs:
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/skin-evidence/native
           PAPER_SKIN_CAPTURE: ${{ runner.temp }}/skin-evidence/skins
-        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release --no-restore
+        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -59,3 +57,10 @@ jobs:
           path: ${{ runner.temp }}/skin-evidence
           if-no-files-found: ignore
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: skin-implemented-source
+          path: ${{ runner.temp }}/skin-implemented.bundle
+          if-no-files-found: ignore
+          retention-days: 1
