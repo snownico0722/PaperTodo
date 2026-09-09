@@ -2,79 +2,118 @@ name: Refraction integration
 on:
   push:
     branches: [exp/playful-skins-20260909]
-    paths: [.github/workflows/refraction-check.yml]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: refraction-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  probe:
+  validate:
+    if: contains(github.event.head_commit.message, '[refraction-ci]')
     runs-on: windows-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Verify exclusion and native caption independently
+      - name: Commit verified integration to actual source
+        id: source
         shell: pwsh
         run: |
-          New-Item -ItemType Directory probe | Out-Null
-          Set-Location probe
-          '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><OutputType>Exe</OutputType><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/></ItemGroup></Project>' | Set-Content probe.csproj
-          @'
-          using System.IO;
-          using System.Runtime.InteropServices;
-          using System.Windows;
-          using System.Windows.Controls;
-          using System.Windows.Interop;
-          using System.Windows.Media;
-          using System.Windows.Shell;
-          using System.Windows.Threading;
-          using D=System.Drawing;
-          class Probe {
-            [STAThread] static void Main(){
-              new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown}; Directory.CreateDirectory("evidence");
-              var rear=new Window{Left=30,Top=30,Width=500,Height=360,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Lime,ShowInTaskbar=false};rear.Show();Wait();
-              var front=new Window{Left=80,Top=80,Width=300,Height=200,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Background=Brushes.Magenta,Topmost=true,ShowInTaskbar=false};front.Show();Wait();var fh=new WindowInteropHelper(front).Handle;
-              using(var included=Capture(front,"included"))Console.WriteLine("INCLUDED "+included.GetPixel(100,100));
-              Console.WriteLine("EXCLUDE "+SetWindowDisplayAffinity(fh,0x11)+" error="+Marshal.GetLastWin32Error());Wait();
-              using(var excluded=Capture(front,"excluded"))Console.WriteLine("EXCLUDED "+excluded.GetPixel(100,100));
-              SetWindowDisplayAffinity(fh,0);front.Close();Wait();
-              foreach(var recipe in new[]{2,3})foreach(var mode in new[]{"baseline","no-caption-style","no-nc","theme-options","alpha-zero"}){
-                var w=new Window{WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.CanResizeWithGrip,ShowInTaskbar=false,Topmost=true,Left=60,Top=50,Width=340,Height=230,Background=Brushes.Transparent};
-                WindowChrome.SetWindowChrome(w,new WindowChrome{CaptionHeight=0,ResizeBorderThickness=new Thickness(),GlassFrameThickness=new Thickness(-1),UseAeroCaptionButtons=false});
-                w.Content=new Border{Background=Brushes.Transparent};w.Show();Wait();var h=new WindowInteropHelper(w).Handle;
-                HwndSource.FromHwnd(h).CompositionTarget.BackgroundColor=Colors.Transparent;
-                Set(h,38,recipe);Set(h,35,0x00ff00ff);Set(h,34,unchecked((int)0xfffffffe));
-                if(mode=="no-caption-style"){var st=GetWindowLong(h,-16);SetWindowLong(h,-16,st&~0x00c00000);SetWindowPos(h,IntPtr.Zero,0,0,0,0,0x0037);}
-                if(mode=="no-nc")Set(h,2,1);
-                if(mode=="theme-options"){var o=new Options{Flags=3,Mask=3};Console.WriteLine("THEME "+SetWindowThemeAttribute(h,1,ref o,8));}
-                if(mode=="alpha-zero"){Set(h,39,1);var m=new Margins();Extend(h,ref m);}
-                Wait();using(var b=Capture(w,$"caption-{recipe}-{mode}"))Console.WriteLine($"CAPTION {recipe}/{mode} style={GetWindowLong(h,-16):x} top={b.GetPixel(b.Width/2,8)} body={b.GetPixel(b.Width/2,100)}");w.Close();Wait();
-              }rear.Close();
-            }
-            static D.Bitmap Capture(Window w,string name){DwmFlush();GetWindowRect(new WindowInteropHelper(w).Handle,out var r);var b=new D.Bitmap(r.R-r.L,r.B-r.T);using(var g=D.Graphics.FromImage(b))g.CopyFromScreen(r.L,r.T,0,0,b.Size);b.Save($"evidence/{name}.png");return b;}
-            static void Wait(){var f=new DispatcherFrame();var t=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(200)};t.Tick+=(_,_)=>{t.Stop();f.Continue=false;};t.Start();Dispatcher.PushFrame(f);}
-            static void Set(IntPtr h,int a,int v)=>Console.WriteLine($"DWM {a}={v}: {DwmSetWindowAttribute(h,a,ref v,4):x}");
-            [StructLayout(LayoutKind.Sequential)]struct Margins{public int L,R,T,B;}
-            [StructLayout(LayoutKind.Sequential)]struct Rect{public int L,T,R,B;}
-            [StructLayout(LayoutKind.Sequential)]struct Options{public uint Flags,Mask;}
-            [DllImport("user32.dll",SetLastError=true)]static extern bool SetWindowDisplayAffinity(IntPtr h,uint a);
-            [DllImport("user32.dll")]static extern bool GetWindowRect(IntPtr h,out Rect r);
-            [DllImport("user32.dll",EntryPoint="GetWindowLongW")]static extern int GetWindowLong(IntPtr h,int n);
-            [DllImport("user32.dll",EntryPoint="SetWindowLongW")]static extern int SetWindowLong(IntPtr h,int n,int v);
-            [DllImport("user32.dll")]static extern bool SetWindowPos(IntPtr h,IntPtr a,int x,int y,int w,int z,uint flags);
-            [DllImport("uxtheme.dll")]static extern int SetWindowThemeAttribute(IntPtr h,int a,ref Options o,int n);
-            [DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int s);
-            [DllImport("dwmapi.dll",EntryPoint="DwmExtendFrameIntoClientArea")]static extern int Extend(IntPtr h,ref Margins m);
-            [DllImport("dwmapi.dll")]static extern int DwmFlush();
+          $ErrorActionPreference = 'Stop'
+          if ((git branch --show-current) -ne 'exp/playful-skins-20260909') { throw 'Wrong branch' }
+          if (Test-Path .refraction-integrate.json) {
+            @'
+          from pathlib import Path
+          import json, hashlib, subprocess
+          checksum = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
+          updates = {}
+          for entry in json.loads(Path('.refraction-integrate.json').read_text(encoding='utf-8-sig')):
+              name = entry['path']
+              assert name.startswith(('src/','tests/')) and '..' not in Path(name).parts and name not in updates
+              text = subprocess.check_output(['git','show',f'HEAD:{name}']).decode('utf-8-sig').replace('\r\n','\n')
+              assert checksum(text) == entry['before'], 'Source changed: ' + name
+              end = 0
+              for a,b,value in entry['edits']:
+                  assert end <= a <= b <= len(text)
+                  end = b
+              for a,b,value in reversed(entry['edits']): text = text[:a] + value + text[b:]
+              assert checksum(text) == entry['after'], 'Transfer mismatch: ' + name
+              updates[name] = text
+          for name,text in updates.items(): Path(name).write_text(text, encoding='utf-8', newline='\n')
+          Path('.refraction-integrate.json').unlink()
+          '@ | python -
+            if ($LASTEXITCODE -ne 0) { throw 'Integration failed' }
+            git diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'Diff validation failed' }
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -A
+            if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
+            git commit -m 'feat: integrate actual background refraction and modern native material headers'
+            if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+            git push origin HEAD:refs/heads/exp/playful-skins-20260909
+            if ($LASTEXITCODE -ne 0) { throw 'Branch advanced during integration' }
           }
-          '@ | Set-Content Program.cs
-          dotnet run --project probe.csproj -c Release | Tee-Object evidence-log.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Probe failed' }
+          $sha = git rev-parse HEAD
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "short=$($sha.Substring(0,8))" >> $env:GITHUB_OUTPUT
+          git bundle create "$env:RUNNER_TEMP/refraction-source.bundle" HEAD
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
+      - name: Actual refraction, native sentinel, materials and lifecycle
+        shell: pwsh
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/refraction-evidence/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/refraction-evidence/skins
+        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+      - name: Existing interaction and persistence checks
+        shell: pwsh
+        run: |
+          foreach ($project in @('MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
+            dotnet run --project "./tests/PaperTodo.$project/PaperTodo.$project.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { throw "Failed: $project" }
+          }
+      - name: Publish the same tested source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sha = '${{ steps.source.outputs.sha }}'
+          $short = '${{ steps.source.outputs.short }}'
+          $destination = Join-Path $env:RUNNER_TEMP 'refraction-package'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          foreach ($kind in @('self-contained','no-runtime')) {
+            $contained = if ($kind -eq 'self-contained') { 'true' } else { 'false' }
+            $out = Join-Path $env:RUNNER_TEMP "refraction-publish-$kind"
+            dotnet publish ./PaperTodo.csproj -c Release -r win-x64 --self-contained $contained -o $out /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true "/p:EnableCompressionInSingleFile=$contained" /p:PublishTrimmed=false /p:PublishReadyToRun=false /p:DebugType=none /p:DebugSymbols=false /p:EmbedAllSources=false /p:EmbedUntrackedSources=false "/p:InformationalVersion=4.0.0-preview+$sha"
+            if ($LASTEXITCODE -ne 0) { throw "Publish failed: $kind" }
+            Copy-Item (Join-Path $out 'PaperTodo.exe') (Join-Path $destination "PaperTodo-refraction-$short-win-x64-$kind.exe")
+          }
+          $hashes = Get-ChildItem $destination -Filter *.exe | Get-FileHash -Algorithm SHA256 | Select-Object @{n='File';e={Split-Path $_.Path -Leaf}},Hash
+          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; capture='local memory only; active lens excluded from OS screen capture'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: refraction-native-probe
-          path: |
-            probe/evidence
-            probe/evidence-log.txt
+          name: refraction-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/refraction-evidence
+          if-no-files-found: ignore
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: refraction-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/refraction-source.bundle
+          if-no-files-found: ignore
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: refraction-package-${{ steps.source.outputs.short }}
+          path: ${{ runner.temp }}/refraction-package
+          if-no-files-found: error
           retention-days: 2
