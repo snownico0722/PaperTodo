@@ -1,0 +1,36 @@
+name: Skin branch bootstrap
+on:
+  push:
+    branches: [exp/playful-skins-20260909]
+    paths: [.github/workflows/skin-branch-bootstrap.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge main into the isolated experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "exp/playful-skins-20260909"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git merge --no-commit --no-ff e074d84084921a2c3d16e7d0448e725706bf8779; then
+            python3 - <<'PY'
+          import pathlib, subprocess
+          paths = subprocess.check_output(['git','diff','--name-only','--diff-filter=U'], text=True).splitlines()
+          for path in paths:
+              text = pathlib.Path(path).read_text(encoding='utf-8-sig')
+              import re
+              for block in re.findall(r'<<<<<<<.*?>>>>>>>[^\n]*', text, flags=re.S):
+                  message = block.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                  print(f'::error file={path}::{message}')
+          PY
+            exit 1
+          fi
+          git commit -m "chore: sync main before playful skin implementation"
+          git push origin HEAD:refs/heads/exp/playful-skins-20260909
