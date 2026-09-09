@@ -42,19 +42,28 @@ internal static class Program
                 Assert(MicaBackdropTypes.Normalize(null) == MicaBackdropTypes.Mica, "null mica backdrop default");
                 Assert(MicaBackdropTypes.Normalize("future") == MicaBackdropTypes.Mica, "unknown mica backdrop default");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Mica) == 2, "mica backdrop dwm value");
-                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.MicaAlt) == 4, "mica alt backdrop dwm value");
+                Assert(MicaBackdropTypes.Normalize("micaAlt") == MicaBackdropTypes.Mica, "retired Mica Alt migrates to Mica");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
+                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 3, "clear acrylic uses native acrylic");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
                 long version = 0;
                 foreach (var mode in new[] { "light", "dark", "system" })
+                foreach (var material in MicaBackdropTypes.All)
+                foreach (var alwaysActive in new[] { false, true })
                 {
-                    var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = mode, MicaBackdropType = MicaBackdropTypes.MicaAlt };
+                    var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = mode,
+                        MicaBackdropType = material, MicaAlwaysActive = alwaysActive };
                     state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# Mica\n保留笔记" });
                     store.SaveJsonSync(store.SerializeState(state), ++version);
                     var restored = store.Load();
-                    Assert(restored.ColorScheme == "mica" && restored.Theme == mode && restored.MicaBackdropType == "micaAlt", "saved selection");
+                    Assert(restored.ColorScheme == "mica" && restored.Theme == mode && restored.MicaBackdropType == material &&
+                        restored.MicaAlwaysActive == alwaysActive, "saved material and activation preference");
                     Assert(restored.Papers[0].Content == state.Papers[0].Content, "preserved body");
                 }
+                store.SaveJsonSync("""{"ColorScheme":"mica","MicaBackdropType":"micaAlt","Papers":[]}""", ++version);
+                var legacy = store.Load();
+                Assert(legacy.MicaBackdropType == MicaBackdropTypes.Mica && !legacy.MicaAlwaysActive,
+                    "old data migrates retired material and defaults to real activation");
             });
             Check("layered Edge HWNDs are never accepted", () =>
             {
@@ -74,9 +83,7 @@ internal static class Program
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && Transparent(f.Chrome.Background), "transparent native surface");
                 Assert(!f.Api.Alpha && f.Api.Backdrop == 2 && f.Api.Rounded, "native recipe and corners");
-                f.Backdrop.Refresh(true, false, backdrop: DwmMicaApi.TabbedWindow, force: true);
-                Assert(f.Api.Backdrop == 4, "Mica Alt backdrop");
-                f.Backdrop.Refresh(true, false, backdrop: DwmMicaApi.TransientWindow, force: true);
+                f.Backdrop.Refresh(true, false, material: MicaBackdropTypes.Acrylic, force: true);
                 Assert(f.Api.Backdrop == 3, "Acrylic backdrop");
                 f.Apply(true, true);
                 Assert(f.Api.Dark, "explicit dark mode");
@@ -85,6 +92,46 @@ internal static class Program
                 Assert(f.Api.Alpha && f.Api.Backdrop == 1 && !f.Api.Rounded, "fallback recipe");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
+            });
+            Check("Acrylic variants retain opaque content and distinct background tints", () =>
+            {
+                using var f = new Fixture();
+                foreach (var dark in new[] { false, true })
+                {
+                    f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
+                    var standard = ((SolidColorBrush)f.Chrome.Background).Color;
+                    f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
+                    var clear = ((SolidColorBrush)f.Chrome.Background).Color;
+                    Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
+                    Assert(clear.A > 0 && clear.A < standard.A / 3, "clear Acrylic is substantially more transparent");
+                    Assert(clear.R == standard.R && clear.G == standard.G && clear.B == standard.B, "same tint hue");
+                    Assert(f.Api.Backdrop == 3 && f.Chrome.Opacity == 1 && f.Window.Opacity == 1, "native blur with opaque content");
+                }
+            });
+            Check("active material appearance never prevents real focus changes", () =>
+            {
+                using var f = new Fixture();
+                var other = new Window { Left = 450, Top = 40, Width = 120, Height = 120 };
+                try
+                {
+                    f.Backdrop.Refresh(true, false, alwaysActive: true);
+                    f.Window.Activate(); Pump();
+                    var calls = f.Api.ActivationCalls;
+                    other.Show(); other.Activate(); Pump();
+                    Assert(other.IsActive && !f.Window.IsActive, "focus leaves the paper normally");
+                    Assert(f.Api.ActivationCalls > calls && f.Api.NonClientActive, "inactive message preserves active material appearance");
+                    f.Backdrop.Refresh(true, false, alwaysActive: false);
+                    Assert(!f.Api.NonClientActive && !f.Window.IsActive, "unchecking restores real inactive appearance immediately");
+                    f.Backdrop.Refresh(true, false, alwaysActive: true);
+                    Assert(f.Api.NonClientActive && !f.Window.IsActive, "checking an inactive paper does not activate it");
+                    f.Eligible = false; f.Apply(true, false);
+                    Assert(!f.Api.NonClientActive && !f.Backdrop.IsActive, "animation fallback suspends the appearance override");
+                    f.Eligible = true; f.Apply(true, false);
+                    Assert(f.Api.NonClientActive && !f.Window.IsActive, "native endpoint restores the appearance override");
+                    f.Backdrop.Dispose();
+                    Assert(!f.Api.NonClientActive, "disposal restores actual activation appearance");
+                }
+                finally { other.Close(); }
             });
             Check("setup failures never publish a transparent shell", () =>
             {
@@ -256,7 +303,8 @@ internal static class Program
         public bool CompositionEnabled { get; set; } = true;
         public bool TransparencyEnabled { get; set; } = true;
         public bool HighContrast { get; set; }
-        internal bool Layered, Dark, Alpha, Rounded;
+        internal bool Layered, Dark, Alpha, Rounded, NonClientActive;
+        internal int ActivationCalls;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls;
         public bool IsLayered(IntPtr hwnd) => Layered;
@@ -272,5 +320,6 @@ internal static class Program
         public int EnableAlpha(IntPtr hwnd) { Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
         public void ConfigureFrame(IntPtr hwnd, bool rounded) => Rounded = rounded;
+        public void SetNonClientActive(IntPtr hwnd, bool active) { NonClientActive = active; ActivationCalls++; }
     }
 }

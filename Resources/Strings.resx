@@ -1448,15 +1448,21 @@
     <value>材质效果</value>
   </data>
   <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>选择系统原生背景材质：标准云母（低透光壁纸微染）、变体云母（更浓郁的壁纸染色）或亚克力（强磨砂透光）。</value>
+    <value>选择标准云母、标准亚克力或透色亚克力。标准亚克力保留柔和磨砂效果；透色亚克力使用更轻的底色，让背后的颜色更明显。</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
     <value>标准云母</value>
   </data>
-  <data name="MicaBackdropMicaAlt" xml:space="preserve">
-    <value>变体云母</value>
-  </data>
   <data name="MicaBackdropAcrylic" xml:space="preserve">
-    <value>亚克力</value>
+    <value>标准亚克力</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色亚克力</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>材质始终显示激活效果</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>勾选后，展开纸片和设置窗口失去焦点时仍保持激活时的材质外观。</value>
   </data>
 </root>

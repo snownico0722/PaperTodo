@@ -1530,7 +1530,7 @@ public sealed partial class PaperWindow : Window
     {
         Resources["PaperBrushKey"] = PaperBrush;
         Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective
-            ? NativeMicaBackdrop.GetActiveSurfaceBrush(MicaBackdropTypes.ToDwmBackdrop(_controller.State.MicaBackdropType), Theme.IsDark)
+            ? NativeMicaBackdrop.GetActiveSurfaceBrush(_controller.State.MicaBackdropType, Theme.IsDark)
             : PaperBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
@@ -1796,7 +1796,8 @@ public sealed partial class PaperWindow : Window
     }
 
     internal void RefreshNativeMica(bool force = false) =>
-        _nativeMica?.Refresh(Theme.IsMica, Theme.IsDark, MicaBackdropTypes.ToDwmBackdrop(_controller.State.MicaBackdropType), force);
+        _nativeMica?.Refresh(Theme.IsMica, Theme.IsDark, _controller.State.MicaBackdropType,
+            _controller.State.MicaAlwaysActive, force);
 
     private void RestorePaperChromeThemeReferences()
     {

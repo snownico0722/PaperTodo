@@ -135,13 +135,24 @@ public sealed partial class AppController
 
         State.MicaBackdropType = normalized;
         SaveNow();
-        var dwmBackdrop = MicaBackdropTypes.ToDwmBackdrop(normalized);
+        RefreshMicaSettings();
+        RefreshSettingsWindowContent();
+    }
+
+    private void ToggleMicaAlwaysActive()
+    {
+        State.MicaAlwaysActive = !State.MicaAlwaysActive;
+        SaveNow();
+        RefreshMicaSettings();
+    }
+
+    private void RefreshMicaSettings()
+    {
         foreach (var window in _windows.Values)
         {
             window.RefreshNativeMica(force: true);
         }
-        _settingsMica?.Refresh(UsesNativeMicaWindows && State.ColorScheme == ColorSchemes.Mica, Theme.IsDark, dwmBackdrop, force: true);
-        RefreshSettingsWindowContent();
+        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
     }
 
     private UIElement CreateMicaBackdropSegmentSelector()
@@ -149,8 +160,8 @@ public sealed partial class AppController
         var segments = new[]
         {
             (MicaBackdropTypes.Mica, Strings.Get("MicaBackdropMica")),
-            (MicaBackdropTypes.MicaAlt, Strings.Get("MicaBackdropMicaAlt")),
-            (MicaBackdropTypes.Acrylic, Strings.Get("MicaBackdropAcrylic"))
+            (MicaBackdropTypes.Acrylic, Strings.Get("MicaBackdropAcrylic")),
+            (MicaBackdropTypes.ClearAcrylic, Strings.Get("MicaBackdropClearAcrylic"))
         };
 
         return CreateSegmentSelector(segments, MicaBackdropTypes.Normalize(State.MicaBackdropType), SetMicaBackdrop);
@@ -1183,7 +1194,7 @@ public sealed partial class AppController
         }
 
         ApplyToolTipSetting(window);
-        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, MicaBackdropTypes.ToDwmBackdrop(State.MicaBackdropType), force: true);
+        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
     }
 
     private void RefreshTypography()
@@ -2665,6 +2676,9 @@ public sealed partial class AppController
             {
                 leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMicaBackdrop")), "TipMicaBackdrop"));
                 leftColumn.Children.Add(CreateMicaBackdropSegmentSelector());
+                leftColumn.Children.Add(WrapWithHint(SettingsToggle(
+                    Strings.Get("SettingsMicaAlwaysActive"), State.MicaAlwaysActive, ToggleMicaAlwaysActive),
+                    "TipMicaAlwaysActive"));
             }
         }
         leftColumn.Children.Add(WrapWithHint(
@@ -2860,6 +2874,7 @@ public sealed partial class AppController
         State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;
         State.MicaBackdropType = MicaBackdropTypes.Mica;
+        State.MicaAlwaysActive = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;

@@ -25,19 +25,19 @@ public static class ColorSchemes
 public static class MicaBackdropTypes
 {
     public const string Mica = "mica";
-    public const string MicaAlt = "micaAlt";
     public const string Acrylic = "acrylic";
+    public const string ClearAcrylic = "clearAcrylic";
 
-    public static readonly string[] All = { Mica, MicaAlt, Acrylic };
+    public static readonly string[] All = { Mica, Acrylic, ClearAcrylic };
 
-    public static bool IsValid(string? id) => id is Mica or MicaAlt or Acrylic;
+    public static bool IsValid(string? id) => id is Mica or Acrylic or ClearAcrylic;
 
+    // Retired "micaAlt" selections migrate to standard Mica, as do unknown values.
     public static string Normalize(string? id) => IsValid(id) ? id! : Mica;
 
     public static int ToDwmBackdrop(string? id) => Normalize(id) switch
     {
-        MicaAlt => DwmMicaApi.TabbedWindow,
-        Acrylic => DwmMicaApi.TransientWindow,
+        Acrylic or ClearAcrylic => DwmMicaApi.TransientWindow,
         _ => DwmMicaApi.MainWindow
     };
 }

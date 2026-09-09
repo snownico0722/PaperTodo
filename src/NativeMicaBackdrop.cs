@@ -25,10 +25,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly DependencyPropertyDescriptor _opacity;
     private HwndSource? _source;
     private Border? _observedChrome;
-    private (bool Requested, bool Dark, bool Eligible, bool Rounded, int Backdrop)? _applied;
+    private (bool Requested, bool Dark, bool Eligible, bool Rounded, string Material, bool AlwaysActive)? _applied;
     private bool _requested;
     private bool _dark;
-    private int _backdrop = DwmMicaApi.MainWindow;
+    private string _material = MicaBackdropTypes.Mica;
+    private bool _alwaysActive;
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
@@ -66,13 +67,15 @@ internal sealed class NativeMicaBackdrop : IDisposable
         window.Closed += OnClosed;
     }
 
-    internal void Refresh(bool requested, bool dark, int? backdrop = null, bool force = false)
+    internal void Refresh(bool requested, bool dark, string? material = null, bool? alwaysActive = null, bool force = false)
     {
         if (_disposed) return;
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (backdrop.HasValue) _backdrop = backdrop.Value;
+        if (material != null) _material = MicaBackdropTypes.Normalize(material);
+        var wasForcedActive = IsActive && _alwaysActive;
+        if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
         if (_updating) return;
         var chrome = _getChrome();
         ObserveChrome(chrome);
@@ -82,7 +85,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
-        var state = (requested, dark, eligible, rounded, _backdrop);
+        var state = (requested, dark, eligible, rounded, _material, _alwaysActive);
         if (!force && _applied == state) return;
 
         _updating = true;
@@ -107,7 +110,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                         LastHResult = _native.SetDarkMode(hwnd, dark);
                         if (LastHResult >= 0)
                         {
-                            LastHResult = _native.SetBackdrop(hwnd, _backdrop);
+                            LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
                             IsActive = LastHResult >= 0;
                         }
                     }
@@ -117,6 +120,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // DWM owns the outer corners and border. No SetWindowRgn: it invalidates native
             // rounding/shadow and used to turn the paper's shadow margin into a second frame.
             _native.ConfigureFrame(hwnd, IsActive && rounded);
+            // WM_NCACTIVATE controls appearance only. Never synthesize WM_ACTIVATE or
+            // change keyboard focus. Restore real activation when the override ends.
+            if (IsActive && _alwaysActive || wasForcedActive)
+                _native.SetNonClientActive(hwnd, IsActive && _alwaysActive || _window.IsActive);
             var alphaReady = false;
             if (!IsActive)
             {
@@ -126,7 +133,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
                 ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
             _window.Background = IsActive || alphaReady ? Brushes.Transparent : Theme.PaperBrush;
-            _setSurface(IsActive ? GetActiveSurfaceBrush(_backdrop, dark) : Theme.PaperBrush);
+            _setSurface(IsActive ? GetActiveSurfaceBrush(_material, dark) : Theme.PaperBrush);
             if (enable && !IsActive)
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }
@@ -175,6 +182,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     private IntPtr WindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == DwmMicaApi.NonClientActivateMessage && IsActive && _alwaysActive &&
+            _window.WindowState != WindowState.Minimized)
+        {
+            _native.SetNonClientActive(hwnd, true);
+            handled = true;
+            // TRUE lets Windows complete the actual activation change to another window.
+            return new IntPtr(1);
+        }
         if (message is 0x031E /* WM_DWMCOMPOSITIONCHANGED */ or 0x0320 /* WM_DWMCOLORIZATIONCOLORCHANGED */ or
             0x031A /* WM_THEMECHANGED */ or 0x001A /* WM_SETTINGCHANGE */ or 0x02E0 /* WM_DPICHANGED */)
             QueueRefresh();
@@ -209,6 +224,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         if (_source != null && !_source.IsDisposed)
         {
             _source.RemoveHook(WindowMessage);
+            if (IsActive && _alwaysActive) _native.SetNonClientActive(_source.Handle, _window.IsActive);
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
         }
         IsActive = false;
@@ -216,16 +232,19 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _observedChrome = null;
     }
 
-    internal static Brush GetActiveSurfaceBrush(int backdrop, bool dark)
+    internal static Brush GetActiveSurfaceBrush(string? material, bool dark)
     {
-        if (backdrop == DwmMicaApi.TransientWindow)
+        if (material is MicaBackdropTypes.Acrylic or MicaBackdropTypes.ClearAcrylic)
         {
             // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
             // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
             // noise and lifts the darkness, producing a clean, luminous frosted glass.
+            // Clear Acrylic keeps the same native blur with a much lighter tint wash.
+            // Only the background tint changes; text and controls stay fully opaque.
+            var clear = material == MicaBackdropTypes.ClearAcrylic;
             var color = dark
-                ? Color.FromArgb(144, 32, 33, 40)
-                : Color.FromArgb(152, 255, 255, 255);
+                ? Color.FromArgb((byte)(clear ? 32 : 144), 32, 33, 40)
+                : Color.FromArgb((byte)(clear ? 40 : 152), 255, 255, 255);
             var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;

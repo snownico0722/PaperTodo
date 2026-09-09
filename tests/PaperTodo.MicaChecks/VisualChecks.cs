@@ -77,8 +77,11 @@ internal static class VisualChecks
                 Program.Assert(inactive.Value.R > 200 && inactive.Value.G > 200 && inactive.Value.B > 200,
                     "light inactive Mica must not acquire a dark overlay in the desktop fixture");
             }
+            CheckMaterialActivation(controller, window, other, white, black);
             other.Close(); other = null;
             window.Activate();
+            controller.State.MicaAlwaysActive = true;
+            window.RefreshNativeMica(force: true);
 
             // Sample exact progress values independently of dispatcher/CI timing, then also
             // exercise the real animation completion callbacks below.
@@ -121,6 +124,8 @@ internal static class VisualChecks
             chrome.Opacity = 1; Wait();
             AssertExpanded(window, chrome, hwnd, body);
             Capture(window, "09-opacity-restored", white, black, dark: false);
+            controller.State.MicaAlwaysActive = false;
+            window.RefreshNativeMica(force: true);
 
             host.Children.Remove(swatches);
             controller.HidePaper(paper); Wait();
@@ -132,8 +137,55 @@ internal static class VisualChecks
             window?.CloseForReal();
             controller.State.Papers.Remove(paper);
             controller.State.EnableAnimations = false;
+            controller.State.MicaAlwaysActive = false;
+            controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
             if (!string.IsNullOrWhiteSpace(_output))
                 File.WriteAllText(Path.Combine(_output, "samples.json"), JsonSerializer.Serialize(Samples, new JsonSerializerOptions { WriteIndented = true }));
+        }
+    }
+
+    private static void CheckMaterialActivation(AppController controller, PaperWindow window, Window other,
+        FrameworkElement white, FrameworkElement black)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        foreach (var dark in new[] { false, true })
+        foreach (var material in MicaBackdropTypes.All)
+        {
+            var name = $"material-{material}-{(dark ? "dark" : "light")}";
+            controller.State.Theme = dark ? "dark" : "light";
+            controller.State.MicaBackdropType = material;
+            controller.State.MicaAlwaysActive = false;
+            Theme.Invalidate(); window.UpdateTheme();
+            window.Activate(); Wait();
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 &&
+                type == MicaBackdropTypes.ToDwmBackdrop(material), "material selection reaches DWM");
+            var active = Capture(window, name + "-active", white, black, dark: null);
+            other.Activate(); Wait();
+            var inactive = Capture(window, name + "-inactive", white, black, dark: null);
+            controller.State.MicaAlwaysActive = true;
+            window.RefreshNativeMica(); Wait();
+            AssertOtherHasFocus();
+            SameMaterial(active, Capture(window, name + "-forced", white, black, dark: null));
+            window.Activate(); Wait(); other.Activate(); Wait();
+            AssertOtherHasFocus();
+            SameMaterial(active, Capture(window, name + "-forced-after-focus", white, black, dark: null));
+            controller.State.MicaAlwaysActive = false;
+            window.RefreshNativeMica(); Wait();
+            AssertOtherHasFocus();
+            SameMaterial(inactive, Capture(window, name + "-unforced", white, black, dark: null));
+        }
+        controller.State.Theme = "light";
+        controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
+        Theme.Invalidate(); window.UpdateTheme(); Wait();
+
+        void AssertOtherHasFocus() => Program.Assert(!window.IsActive && other.IsActive &&
+            GetForegroundWindow() == new WindowInteropHelper(other).Handle,
+            "material override must preserve both WPF and OS focus on the other window");
+        static void SameMaterial(Drawing.Color? expected, Drawing.Color? actual)
+        {
+            if (expected is not { } a || actual is not { } b) return;
+            Program.Assert(Math.Abs(a.R - b.R) <= 8 && Math.Abs(a.G - b.G) <= 8 && Math.Abs(a.B - b.B) <= 8,
+                $"activation override restores the expected desktop material: expected={a}, actual={b}");
         }
     }
 
@@ -202,6 +254,8 @@ internal static class VisualChecks
     {
         var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, Type.EmptyTypes, null)!;
         var refresh = typeof(AppController).GetMethod("RefreshSettingsWindowContent", Program.Private)!;
+        var page = typeof(AppController).GetField("_settingsPage", Program.Private)!;
+        page.SetValue(controller, Enum.Parse(page.FieldType, "Visual"));
         show.Invoke(controller, null); Wait();
         var window = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
         try
@@ -217,8 +271,38 @@ internal static class VisualChecks
             Program.Assert(window.Content is Border { Background: SolidColorBrush brush } && brush.Color.A == 0,
                 "rebuilt settings root exposes native material");
             Capture(window, "11-settings-dark", null, null, dark: null);
+            var checkbox = Descendants(window).OfType<CheckBox>().Single(c =>
+                Equals(c.Content, Strings.Get("SettingsMicaAlwaysActive")));
+            checkbox.IsChecked = true;
+            checkbox.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Program.Assert(controller.State.MicaAlwaysActive, "settings checkbox updates the shared preference");
+            typeof(AppController).GetMethod("SetMicaBackdrop", Program.Private)!
+                .Invoke(controller, new object[] { MicaBackdropTypes.ClearAcrylic });
+            Wait();
+            Program.Assert(window.Content is Border { Background: SolidColorBrush clear } && clear.Color.A == 32,
+                "settings receives Clear Acrylic after rebuilding its root");
+            Program.Assert(Descendants(window).OfType<CheckBox>().Single(c =>
+                Equals(c.Content, Strings.Get("SettingsMicaAlwaysActive"))).IsChecked == true,
+                "material switching retains the checkbox state");
+            Capture(window, "12-settings-clear-acrylic", null, null, dark: null);
         }
-        finally { window.Close(); controller.State.Theme = "light"; Theme.Invalidate(); }
+        finally
+        {
+            window.Close(); controller.State.Theme = "light";
+            controller.State.MicaAlwaysActive = false;
+            controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
+            Theme.Invalidate();
+        }
+
+        static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+        {
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                yield return child;
+                foreach (var descendant in Descendants(child)) yield return descendant;
+            }
+        }
     }
 
     private static void AssertExpanded(PaperWindow window, Border chrome, IntPtr hwnd, object? body)
@@ -309,6 +393,7 @@ internal static class VisualChecks
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] private static extern int GetWindowRgn(IntPtr hwnd, IntPtr region);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);

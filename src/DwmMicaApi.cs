@@ -18,6 +18,7 @@ internal interface INativeMicaApi
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
     void ConfigureFrame(IntPtr hwnd, bool rounded);
+    void SetNonClientActive(IntPtr hwnd, bool active);
 }
 
 /// <summary>Documented DWM APIs; no wallpaper decoding, capture or undocumented Mica flag.</summary>
@@ -27,7 +28,7 @@ internal sealed class DwmMicaApi : INativeMicaApi
     internal const int None = 1;
     internal const int MainWindow = 2;      // DWMSBT_MAINWINDOW: Windows 11 Mica
     internal const int TransientWindow = 3; // DWMSBT_TRANSIENTWINDOW: Acrylic
-    internal const int TabbedWindow = 4;    // DWMSBT_TABBEDWINDOW: Mica Alt
+    internal const int NonClientActivateMessage = 0x0086; // WM_NCACTIVATE
     internal const int SystemBackdropAttribute = 38;
     public bool IsSupported => NativeMicaBackdrop.IsSupported;
     public bool HighContrast => System.Windows.SystemParameters.HighContrast;
@@ -64,6 +65,10 @@ internal sealed class DwmMicaApi : INativeMicaApi
     }
     public int SetBackdrop(IntPtr hwnd, int backdrop) =>
         DwmSetWindowAttribute(hwnd, SystemBackdropAttribute, ref backdrop, sizeof(int));
+
+    public void SetNonClientActive(IntPtr hwnd, bool active) =>
+        // Use the same -1 lParam as WindowChrome to avoid drawing over its custom frame.
+        DefWindowProc(hwnd, NonClientActivateMessage, active ? new IntPtr(1) : IntPtr.Zero, new IntPtr(-1));
 
     public int EnableAlpha(IntPtr hwnd)
     {
@@ -107,6 +112,8 @@ internal sealed class DwmMicaApi : INativeMicaApi
     }
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    private static extern IntPtr DefWindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     [DllImport("dwmapi.dll")]
     private static extern int DwmIsCompositionEnabled([MarshalAs(UnmanagedType.Bool)] out bool enabled);
     [DllImport("dwmapi.dll")]

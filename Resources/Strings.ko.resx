@@ -1399,15 +1399,21 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>배경 효과</value>
   </data>
   <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>시스템 기본 배경 효과를 선택합니다. Mica는 은은한 배경화면 색상, Mica Alt는 더 짙은 색상, 아크릴은 강한 반투명 블러 효과를 제공합니다.</value>
+    <value>표준 운모, 표준 아크릴, 투명 아크릴 중에서 선택합니다. 표준 아크릴은 부드러운 반투명 유리 효과를, 투명 아크릴은 옅은 색상을 사용해 배경색이 더 잘 비치는 효과를 제공합니다.</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
-    <value>Mica</value>
-  </data>
-  <data name="MicaBackdropMicaAlt" xml:space="preserve">
-    <value>Mica Alt</value>
+    <value>표준 운모</value>
   </data>
   <data name="MicaBackdropAcrylic" xml:space="preserve">
-    <value>아크릴</value>
+    <value>표준 아크릴</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>투명 아크릴</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>항상 활성 상태의 재질 표시</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>펼친 페이퍼와 설정 창이 포커스를 잃어도 활성 상태의 재질 모양을 유지합니다.</value>
   </data>
 </root>

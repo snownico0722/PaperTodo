@@ -1399,15 +1399,21 @@ When off, open at the docked edge or remembered position.</value>
     <value>Backdrop material</value>
   </data>
   <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>Choose the system native backdrop material: Mica provides subtle wallpaper tinting, Mica Alt provides deeper tinting, and Acrylic provides a strong frosted translucent effect.</value>
+    <value>Choose Mica, standard Acrylic or Clear Acrylic. Standard Acrylic has a soft frosted finish; Clear Acrylic uses a lighter tint to reveal more background color.</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
     <value>Mica</value>
   </data>
-  <data name="MicaBackdropMicaAlt" xml:space="preserve">
-    <value>Mica Alt</value>
-  </data>
   <data name="MicaBackdropAcrylic" xml:space="preserve">
     <value>Acrylic</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>Clear Acrylic</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>Always show active material</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>Keep the active material appearance on expanded papers and Settings when they lose focus.</value>
   </data>
 </root>

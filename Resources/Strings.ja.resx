@@ -1399,15 +1399,21 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>背景効果</value>
   </data>
   <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>システムネイティブの背景効果を選択します。Mica は控えめな壁紙色、Mica Alt はより濃い壁紙色、アクリルは強いすりガラス半透明効果を提供します。</value>
+    <value>標準マイカ、標準アクリル、透色アクリルから選べます。標準アクリルは柔らかなすりガラス効果、透色アクリルは薄い色の重ね合わせで背後の色をより透かします。</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
-    <value>Mica</value>
-  </data>
-  <data name="MicaBackdropMicaAlt" xml:space="preserve">
-    <value>Mica Alt</value>
+    <value>標準マイカ</value>
   </data>
   <data name="MicaBackdropAcrylic" xml:space="preserve">
-    <value>アクリル</value>
+    <value>標準アクリル</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色アクリル</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>常にアクティブ時の素材を表示</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>展開したペーパーと設定ウィンドウは、フォーカスを失ってもアクティブ時の素材の見た目を保ちます。</value>
   </data>
 </root>
