@@ -1483,4 +1483,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinNativeScope" xml:space="preserve">
     <value>네이티브 배경은 펼친 메모와 설정에 적용됩니다. 캡슐, 형태 전환, 부분 투명 상태에서는 단색 바탕을 사용하며 시스템 투명 효과가 꺼져도 단색으로 전환됩니다.</value>
   </data>
+  <data name="SkinSystemPalette" xml:space="preserve">
+    <value>표준 마이카와 두 아크릴 스킨은 기존 중성 색상을 유지합니다. 다른 스킨으로 돌아가면 저장된 색상 선택이 복원되며 덮어쓰지 않습니다.</value>
+  </data>
 </root>

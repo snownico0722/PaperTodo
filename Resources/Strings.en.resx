@@ -1483,4 +1483,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinNativeScope" xml:space="preserve">
     <value>Native backdrops apply to expanded papers and Settings. Capsules, shape transitions and partial opacity use solid bases; disabling system transparency also falls back.</value>
   </data>
+  <data name="SkinSystemPalette" xml:space="preserve">
+    <value>Standard Mica and both Acrylic skins retain the original neutral palette. Other skins restore your chosen color scheme without overwriting it.</value>
+  </data>
 </root>

@@ -97,7 +97,8 @@ public static class Theme
         }
     }
 
-    private static string CurrentScheme => _schemeCache ??= ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
+    private static string CurrentScheme => _schemeCache ??= PaperSkins.UsesSystemPalette(Skin)
+        ? ColorSchemes.Neutral : ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
 
     private static Palette Current
     {
@@ -180,6 +181,12 @@ public static class Theme
             _ => Solid(tone)
         };
     }
+
+    // Match main's faint title tint. A native HWND also needs an opaque custom header;
+    // otherwise the system accent caption can show through the WPF title controls.
+    internal static Brush TitleBarBrush(bool opaque) => opaque
+        ? Solid(Mix(Current.Paper, Current.Tint, (IsDark ? 18 : 12) / 255.0))
+        : Tint((byte)(IsDark ? 18 : 12));
 
     public static Brush HoverBrush => Tint((byte)(IsDark ? 48 : 32));
     public static Brush CapsuleFocusBorderBrush => Solid(Mix(Current.Active, Current.Text, IsDark ? 0.38 : 0.08));

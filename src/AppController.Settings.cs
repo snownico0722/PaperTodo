@@ -124,7 +124,12 @@ public sealed partial class AppController
             (ColorSchemes.Neutral, Strings.Get("ColorSchemeNeutral"))
         };
 
-        return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
+        var systemPalette = PaperSkins.UsesSystemPalette(Theme.Skin);
+        var selector = CreateSegmentSelector(segments,
+            systemPalette ? ColorSchemes.Neutral : ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
+        selector.IsEnabled = !systemPalette;
+        selector.Opacity = systemPalette ? 0.65 : 1;
+        return selector;
     }
 
     private void ToggleMicaAlwaysActive()

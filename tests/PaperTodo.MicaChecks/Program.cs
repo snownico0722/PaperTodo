@@ -95,6 +95,9 @@ internal static class Program
                     "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
+                var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
+                Assert(f.Api.CaptionColor == (caption.R | caption.G << 8 | caption.B << 16),
+                    "custom header uses its own color, never the OS active accent");
                 f.Api.Failure = "frame-colors"; f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && f.Backdrop.LastFrameHResult < 0 && !Transparent(f.Chrome.BorderBrush),
                     "rejected native frame settings retain a visible WPF outline");
@@ -331,7 +334,7 @@ internal static class Program
         internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass;
         internal int ActivationCalls;
         internal string? Failure;
-        internal int Backdrop = 1, BackdropCalls, BorderColor;
+        internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor;
         public bool IsLayered(IntPtr hwnd) => Layered;
         public int ExtendFrame(IntPtr hwnd, int top) { Glass = top < 0; return Failure == "frame" ? Error : 0; }
         public int SetDarkMode(IntPtr hwnd, bool dark) { Dark = dark; return Failure == "dark" ? Error : 0; }
@@ -350,8 +353,8 @@ internal static class Program
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
-        public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
-        { Rounded = rounded; BorderColor = borderColor; return Failure == "frame-colors" ? Error : 0; }
+        public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
+        { Rounded = rounded; BorderColor = borderColor; CaptionColor = captionColor; return Failure == "frame-colors" ? Error : 0; }
         public void SetNonClientActive(IntPtr hwnd, bool active) { NonClientActive = active; ActivationCalls++; }
     }
 }

@@ -323,8 +323,7 @@ public sealed partial class PaperWindow : Window
     private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
     private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
-    private static Brush TitleBarBrush => PaperSkins.IsDecorated(Theme.Skin) && !SystemParameters.HighContrast
-        ? Brushes.Transparent : Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
+    private Brush TitleBarBrush => Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";

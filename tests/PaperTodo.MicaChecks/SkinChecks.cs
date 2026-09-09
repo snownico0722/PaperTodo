@@ -29,12 +29,13 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
         try
         {
+            CheckOriginalNativeRendering(controller);
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
             var samples = 0;
@@ -56,6 +57,11 @@ internal static class SkinChecks
                     var center = (image.PixelHeight / 2 * image.PixelWidth + image.PixelWidth / 2) * 4;
                     Program.Assert(bytes[center + 3] == 255, $"opaque fallback {skin}/{mode}/{scale}");
                     Program.Assert(bytes[3] == 0, "corner does not paint transparent capacity");
+                    var readable = (SolidColorBrush)Theme.WeakTextBrush;
+                    var litPixel = ((int)(image.PixelHeight * .12) * image.PixelWidth + image.PixelWidth / 3) * 4;
+                    var litColor = Color.FromRgb(bytes[litPixel + 2], bytes[litPixel + 1], bytes[litPixel]);
+                    Program.Assert(Contrast(readable.Color, litColor) >= 3,
+                        $"surface glare must not wash out secondary text: {skin}/{mode}/{scale}");
                     hashes.Add(Convert.ToHexString(SHA256.HashData(bytes)));
                     Save(image, $"{skin}-{mode}-{(capsule ? "capsule" : "paper")}-{scale:0.##}");
                     if (PaperSkins.UsesNativeBackdrop(skin))
@@ -67,14 +73,63 @@ internal static class SkinChecks
                 }
                 Program.Assert(hashes.Count == 6, "six different surfaces, not renamed presets");
             }
-            CheckPixelGeometry(); CheckLiveSwitch(controller);
-            Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster cases, DPI geometry and editor identity.");
+            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller);
+            Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders and editor identity.");
         }
         finally
         {
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations) = before;
             Theme.Invalidate();
         }
+    }
+    private static void CheckOriginalNativeRendering(AppController controller)
+    {
+        controller.State.ColorScheme = ColorSchemes.Warm;
+        foreach (var mode in new[] { "light", "dark" })
+        foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
+        {
+            controller.State.Theme = mode; controller.State.PaperSkin = skin; Theme.Invalidate();
+            var expected = mode == "light" ? Color.FromRgb(243, 243, 243) : Color.FromRgb(32, 32, 32);
+            Program.Assert(((SolidColorBrush)Theme.PaperBrush).Color == expected, "native palette matches the original Mica branch");
+            foreach (var background in new[] { Theme.PaperBrush, NativeMicaBackdrop.GetActiveSurfaceBrush(skin, mode == "dark") })
+            {
+                var original = new Border { Width = 180, Height = 100, CornerRadius = new CornerRadius(8),
+                    Background = background, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1) };
+                var current = new SkinBorder { Width = original.Width, Height = original.Height, CornerRadius = original.CornerRadius,
+                    Background = background, BorderBrush = original.BorderBrush, BorderThickness = original.BorderThickness };
+                Program.Assert(Pixels(Render(original, 1)).SequenceEqual(Pixels(Render(current, 1))),
+                    "native skins add no decorative wash or replacement border pixels");
+            }
+        }
+        controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = "light"; Theme.Invalidate();
+        Program.Assert(controller.State.ColorScheme == ColorSchemes.Warm &&
+            ((SolidColorBrush)Theme.PaperBrush).Color == Color.FromRgb(255, 249, 234),
+            "leaving a native skin restores the independent saved color choice");
+    }
+    private static void CheckDockedOutline(AppController controller)
+    {
+        foreach (var skin in Decorated)
+        foreach (var left in new[] { true, false })
+        {
+            controller.State.PaperSkin = skin; Theme.Invalidate();
+            var outline = new SkinBorder { IsOutline = true, IsCapsule = true, Width = 120, Height = 40,
+                CornerRadius = left ? new CornerRadius(0, 16, 16, 0) : new CornerRadius(16, 0, 0, 16),
+                BorderThickness = left ? new Thickness(0, 2, 2, 2) : new Thickness(2, 2, 0, 2), BorderBrush = Brushes.Red };
+            var image = Render(outline, 1); var pixels = Pixels(image);
+            var open = (20 * image.PixelWidth + (left ? 0 : image.PixelWidth - 1)) * 4;
+            var closed = (20 * image.PixelWidth + (left ? image.PixelWidth - 1 : 0)) * 4;
+            Program.Assert(pixels[open + 3] == 0 && pixels[closed + 2] == 255 && pixels[closed + 3] == 255,
+                "the host owns focus color and the docked zero-width edge stays open");
+            outline.BorderThickness = new Thickness();
+            Program.Assert(Pixels(Render(outline, 1)).All(b => b == 0), "zero-width outline paints nothing");
+        }
+    }
+    private static double Contrast(Color a, Color b)
+    {
+        static double Linear(byte v) => v <= 10 ? v / 3294.6 : Math.Pow((v / 255.0 + .055) / 1.055, 2.4);
+        static double Light(Color c) => .2126 * Linear(c.R) + .7152 * Linear(c.G) + .0722 * Linear(c.B);
+        var x = Light(a); var y = Light(b);
+        return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
     }
     private static void CheckPersistence()
     {
@@ -134,11 +189,15 @@ internal static class SkinChecks
             var editor = noteProperty.GetValue(window);
             Program.Assert(editor != null, "real note editor mounted");
             foreach (var mode in new[] { "light", "dark" })
-            foreach (var skin in Decorated.Append(PaperSkins.Paper))
+            foreach (var skin in PaperSkins.All)
             {
                 controller.State.Theme = mode; controller.State.PaperSkin = skin;
                 Theme.Invalidate(); window.UpdateTheme(); Program.Pump();
                 Program.Assert(ReferenceEquals(editor, noteProperty.GetValue(window)) && new WindowInteropHelper(window).Handle == handle, "actual editor and HWND preserved");
+                var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(window)!;
+                Program.Assert(header.Background is SolidColorBrush { Color.A: 255 } &&
+                    ((SolidColorBrush)header.Background).Color == ((SolidColorBrush)Theme.TitleBarBrush(true)).Color,
+                    "native-session title bar stays on main's own tint, not active caption blue");
                 Save(Render(window, 1), $"window-{skin}-{mode}");
                 window.SetCollapsedState(true, animate: false, saveGeometry: false); Program.Pump();
                 Program.Assert(!window.IsNativeMicaEffective, "capsule remains on the solid path");

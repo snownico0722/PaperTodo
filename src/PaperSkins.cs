@@ -26,6 +26,7 @@ public static class PaperSkins
         Resolve(state?.PaperSkin, state?.ColorScheme, state?.MicaBackdropType);
     public static bool UsesNativeBackdrop(string? id) => id is Mica or Acrylic or ClearAcrylic or
         TracingPaper or LiquidGlass or Aero;
+    public static bool UsesSystemPalette(string? id) => id is Mica or Acrylic or ClearAcrylic;
     public static bool IsDecorated(string? id) => id is Pearl or TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
     public static bool Decorate(string? id, bool highContrast) => !highContrast && IsDecorated(id);
     // New glass skins use supported system Acrylic, not the experimental accent policy.

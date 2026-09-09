@@ -1483,4 +1483,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinNativeScope" xml:space="preserve">
     <value>ネイティブ背景は展開した紙と設定に適用されます。カプセル・形状アニメーション・半透明状態では単色の下地を使い、システムの透明効果が無効な場合も単色に戻ります。</value>
   </data>
+  <data name="SkinSystemPalette" xml:space="preserve">
+    <value>標準のマイカと2種類のアクリルは従来のニュートラル配色を使います。他のスキンに戻すと保存した配色が復元され、選択は上書きされません。</value>
+  </data>
 </root>

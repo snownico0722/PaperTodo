@@ -33,6 +33,13 @@ public sealed partial class AppController
             TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 4, 2, 5)
         });
+        if (PaperSkins.UsesSystemPalette(skin))
+            panel.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("SkinSystemPalette"), TextWrapping = TextWrapping.Wrap,
+                Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11),
+                Margin = new Thickness(2, 0, 2, 5)
+            });
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             panel.Children.Add(new TextBlock

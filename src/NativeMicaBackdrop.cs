@@ -144,8 +144,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // rounding/shadow and used to turn the paper's shadow margin into a second frame.
             var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
             var edgeColor = edge.R | edge.G << 8 | edge.B << 16; // COLORREF, no alpha
+            var caption = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
+            var captionColor = caption.R | caption.G << 8 | caption.B << 16;
             LastFrameHResult = _native.ConfigureFrame(hwnd, IsActive && rounded,
-                IsActive ? edgeColor : unchecked((int)0xfffffffe), IsActive && clear);
+                IsActive ? edgeColor : unchecked((int)0xfffffffe), captionColor);
             // Let DWM draw the one outer stroke along its own rounded clip. Drawing a WPF
             // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
             // thickness for layout; restore the WPF stroke when the native frame is suspended.

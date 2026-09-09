@@ -18,7 +18,7 @@ internal interface INativeMicaApi
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
-    int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic);
+    int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor);
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
 
@@ -113,12 +113,12 @@ internal sealed class DwmMicaApi : INativeMicaApi
         return DwmEnableBlurBehindWindow(hwnd, ref blur);
     }
 
-    public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, bool clearAcrylic)
+    public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
     {
         var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
-        // COLOR_NONE is supported for BORDER_COLOR, not CAPTION_COLOR. The accent path's
-        // small glass strip otherwise inherits the system accent (a bright blue top line).
-        var captionColor = clearAcrylic ? borderColor : unchecked((int)0xffffffff); // COLOR_DEFAULT
+        // PaperTodo draws its own title bar. Never restore COLOR_DEFAULT here: with
+        // Windows accent captions enabled that lets a blue active caption bleed through.
+        // COLOR_NONE suppresses borders only, not captions; use the explicit paper tone.
         var result = DwmSetWindowAttribute(hwnd, 33 /* WINDOW_CORNER_PREFERENCE */, ref corners, sizeof(int));
         if (result < 0) return result;
         result = DwmSetWindowAttribute(hwnd, 34 /* BORDER_COLOR */, ref borderColor, sizeof(int));

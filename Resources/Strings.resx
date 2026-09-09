@@ -1532,4 +1532,7 @@
   <data name="SkinNativeScope" xml:space="preserve">
     <value>原生背景用于展开纸片和设置窗口。胶囊、形态动画和半透明状态使用实色底；关闭系统透明效果时也会回退。</value>
   </data>
+  <data name="SkinSystemPalette" xml:space="preserve">
+    <value>标准云母和两种亚克力使用原云母分支的素灰配色。切回其他皮肤会恢复你选的配色，不会覆盖已保存的选择。</value>
+  </data>
 </root>

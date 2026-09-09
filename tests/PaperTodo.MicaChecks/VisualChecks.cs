@@ -425,6 +425,15 @@ internal static class VisualChecks
         using (var graphics = Drawing.Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bitmap.Size);
         bitmap.Save(Path.Combine(_output, name + ".png"), Drawing.Imaging.ImageFormat.Png);
+        if (window is PaperWindow { IsNativeMicaEffective: true, HasExpandedPaperSurface: true } paper && paper.Opacity == 1)
+        {
+            var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
+            var p = header.PointToScreen(new Point(header.ActualWidth / 2, 2));
+            var actual = bitmap.GetPixel((int)Math.Round(p.X) - bounds.Left, (int)Math.Round(p.Y) - bounds.Top);
+            var expected = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
+            Program.Assert(Math.Abs(actual.R - expected.R) <= 3 && Math.Abs(actual.G - expected.G) <= 3 &&
+                Math.Abs(actual.B - expected.B) <= 3, $"{name}: desktop header must not acquire a system selection/activation tint ({actual})");
+        }
         var point = window.PointToScreen(new Point(window.ActualWidth / 2, Math.Max(1, window.ActualHeight - 65)));
         var sample = bitmap.GetPixel((int)Math.Round(point.X) - bounds.Left, (int)Math.Round(point.Y) - bounds.Top);
         Samples.Add(new { name, active = window.IsActive, opacity = window.Opacity, R = sample.R, G = sample.G, B = sample.B });
