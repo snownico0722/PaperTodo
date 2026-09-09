@@ -60,7 +60,7 @@ internal static class Program
                         restored.MicaAlwaysActive == alwaysActive, "saved material and activation preference");
                     Assert(restored.Papers[0].Content == state.Papers[0].Content, "preserved body");
                 }
-                store.SaveJsonSync("""{"ColorScheme":"mica","MicaBackdropType":"micaAlt","Papers":[]}""", ++version);
+                store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"micaAlt","papers":[]}""", ++version);
                 var legacy = store.Load();
                 Assert(legacy.MicaBackdropType == MicaBackdropTypes.Mica && !legacy.MicaAlwaysActive,
                     "old data migrates retired material and defaults to real activation");
