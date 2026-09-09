@@ -1,5 +1,7 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
@@ -10,87 +12,153 @@ internal static partial class Program
 {
     private static void CheckInactiveTitleBarMask()
     {
-        // Render a real WPF paper background, border, title, body and shadow. Checking only
-        // the mask brush would miss the original bug: a visible ancestor behind the title.
-        var host = new Grid { Background = Brushes.Transparent };
-        var paper = new Border
-        {
-            Margin = new Thickness(8), Background = Brushes.White,
-            BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 2, Opacity = 0.3 }
-        };
-        var shell = new Grid();
-        shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(31) });
-        shell.RowDefinitions.Add(new RowDefinition());
-        shell.Children.Add(new Border { Background = Brushes.SteelBlue });
-        var body = new Border { Background = Brushes.Bisque };
-        Grid.SetRow(body, 1);
-        shell.Children.Add(body);
-        paper.Child = shell;
-        host.Children.Add(paper);
-        var mask = new InactiveTitleBarMask();
-
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
         foreach (var size in new[] { new Size(240, 180), new Size(310, 210) })
         {
-            host.Measure(size);
-            host.Arrange(new Rect(size));
-            host.UpdateLayout();
+            const double extent = 31;
+            var chrome = new PaperChromeBorder();
+            var (host, body) = Build(chrome, extent, hasTitle: true);
+            var (normal, _) = Build(new Border(), extent, hasTitle: true);
+            var (shortPaper, _) = Build(new Border(), extent, hasTitle: false);
+            var original = Render(host);
+            Compare(original, Render(normal), "normal chrome changed");
             var bodyPosition = body.TranslatePoint(new Point(), host);
             var bodySize = body.RenderSize;
-            var cutoff = Math.Round(bodyPosition.Y * scale) / scale;
-            mask.UpdateBounds(size, cutoff);
-            host.OpacityMask = null;
-            var original = Render();
-            host.OpacityMask = mask.MaskBrush;
-            mask.SetOpacity(1, 0);
-            var shown = Render();
-            mask.SetOpacity(0, 0);
-            var hidden = Render();
+            var bodyArrangeCount = body.ArrangeCount;
+
+            chrome.SetHeaderExtent(extent);
+            chrome.SetHeaderOpacity(0, 0);
+            var hidden = Render(host);
+            // Compare against an ordinary shorter Border, including all its corners,
+            // stroke and shadow. A flat crop cannot satisfy this reference image.
+            Compare(hidden, Render(shortPaper), "hidden chrome differs from a complete rounded paper");
             var width = (int)Math.Ceiling(size.Width * scale);
-            for (var y = 0; y < (int)Math.Round(cutoff * scale); y++)
+            for (var y = 0; y < (int)((8 + extent - 16) * scale); y++)
             for (var x = 0; x < width; x++)
-                Assert(hidden[(y * width + x) * 4 + 3] == 0, "hidden title/background/shadow still has alpha");
+                Assert(hidden[(y * width + x) * 4 + 3] == 0, "hidden title still occupies transparent pixels");
+            AssertBodyStable();
 
-            // During the fade, body and shadow pixels stay exactly fixed. Attaching the
-            // extra mask surface may round a translucent edge by one alpha/color unit at
-            // fractional pixel sizes; fully opaque body content must still match exactly.
-            var start = ((int)Math.Round(cutoff * scale) + 1) * width * 4;
-            Assert(hidden.AsSpan(start).SequenceEqual(shown.AsSpan(start)), "body pixels changed during the fade");
-            for (var index = start; index < hidden.Length; index++)
+            chrome.SetHeaderOpacity(0.5, 0);
+            var middle = Render(host);
+            var start = (int)Math.Ceiling((bodyPosition.Y + 24) * scale) * width * 4;
+            Compare(middle[start..], original[start..], "body pixels changed during the transition");
+            AssertBodyStable();
+
+            chrome.SetHeaderOpacity(1, 0);
+            chrome.SetHeaderExtent(0);
+            Compare(Render(host), original, "restoring the title changed the paper");
+            Assert(chrome.Child.Clip == null, "restoring left a content clip behind");
+            AssertBodyStable();
+
+            // Theme resources must remain live while the short background is showing.
+            chrome.SetHeaderExtent(extent);
+            chrome.SetHeaderOpacity(0, 0);
+            chrome.Background = Brushes.LemonChiffon;
+            chrome.BorderBrush = Brushes.DarkGoldenrod;
+            var expectedChrome = (Border)shortPaper.Children[0];
+            expectedChrome.Background = chrome.Background;
+            expectedChrome.BorderBrush = chrome.BorderBrush;
+            Compare(Render(host), Render(shortPaper), "hidden chrome retained old theme brushes");
+
+            if (scale == 1 && size.Width == 310)
             {
-                var alpha = original[index - index % 4 + 3];
-                var tolerance = alpha == 255 ? 0 : 1;
-                Assert(Math.Abs(hidden[index] - original[index]) <= tolerance,
-                    $"body rendering changed at scale {scale}, byte {index}");
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(Bitmap(host)));
+                using var stream = new MemoryStream();
+                encoder.Save(stream);
+                Console.WriteLine("TITLEBAR_PREVIEW:" + Convert.ToBase64String(stream.ToArray()));
             }
-            Assert(body.TranslatePoint(new Point(), host) == bodyPosition && body.RenderSize == bodySize,
-                "title hiding changed body layout");
-            mask.SetOpacity(0.5, 0);
-            var middle = Render();
-            var titlePixel = ((int)(20 * scale) * width + (int)(80 * scale)) * 4 + 3;
-            Assert(middle[titlePixel] is >= 126 and <= 129, "whole title strip did not fade uniformly");
-            mask.SetOpacity(1, 0, () => host.OpacityMask = null);
-            Assert(Render().AsSpan().SequenceEqual(original), "restoring the title changed the paper pixels");
 
-            byte[] Render()
+            void AssertBodyStable()
             {
+                Assert(body.TranslatePoint(new Point(), host) == bodyPosition && body.RenderSize == bodySize,
+                    "title hiding moved or resized the body");
+                Assert(body.ArrangeCount == bodyArrangeCount, "title hiding rearranged the body");
+            }
+
+            void Compare(byte[] actual, byte[] expected, string reason)
+            {
+                Assert(actual.Length == expected.Length, reason);
+                for (var i = 0; i < actual.Length; i++)
+                {
+                    var alpha = expected[i - i % 4 + 3];
+                    var tolerance = alpha == 255 ? 0 : 1;
+                    Assert(Math.Abs(actual[i] - expected[i]) <= tolerance,
+                        $"{reason}: scale={scale} size={size} byte={i} actual={actual[i]} expected={expected[i]}");
+                }
+            }
+
+            RenderTargetBitmap Bitmap(Grid root)
+            {
+                root.Measure(size);
+                root.Arrange(new Rect(size));
+                root.UpdateLayout();
                 var bitmap = new RenderTargetBitmap((int)Math.Ceiling(size.Width * scale),
                     (int)Math.Ceiling(size.Height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
-                bitmap.Render(host);
+                bitmap.Render(root);
+                return bitmap;
+            }
+
+            byte[] Render(Grid root)
+            {
+                var bitmap = Bitmap(root);
                 var pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
                 bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
                 return pixels;
             }
         }
 
-        // Reversing/settling a fade must cancel its old completion callback.
+        var fading = new PaperChromeBorder();
         var staleCompletion = false;
-        mask.SetOpacity(0, 0);
-        mask.SetOpacity(1, 120, () => staleCompletion = true);
-        mask.SetOpacity(0, 0);
+        fading.SetHeaderOpacity(0, 0);
+        fading.SetHeaderOpacity(1, 120, () => staleCompletion = true);
+        fading.SetHeaderOpacity(0, 0);
         Drain(Task.Delay(180));
-        Assert(mask.HeaderOpacity == 0 && !staleCompletion, "cancelled fade restored an invisible title");
+        Assert(fading.HeaderOpacity == 0 && !staleCompletion, "cancelled fade restored an invisible title");
+
+        static (Grid Host, TitleBarBodyProbe Body) Build(Border chrome, double extent, bool hasTitle)
+        {
+            var host = new Grid { Background = Brushes.Transparent };
+            chrome.Margin = new Thickness(8, 8 + (hasTitle ? 0 : extent), 8, 8);
+            chrome.Background = Brushes.White;
+            chrome.BorderBrush = Brushes.Gray;
+            chrome.BorderThickness = new Thickness(1);
+            chrome.CornerRadius = new CornerRadius(20);
+            chrome.Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = 0.22 };
+            var shell = new Grid();
+            shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(hasTitle ? extent : 0) });
+            shell.RowDefinitions.Add(new RowDefinition());
+            if (hasTitle)
+            {
+                var title = new Border { Margin = new Thickness(20, 4, 20, 4), Background = Brushes.SteelBlue };
+                if (chrome is PaperChromeBorder)
+                    title.SetBinding(UIElement.OpacityProperty, new Binding
+                    {
+                        Source = chrome, Path = new PropertyPath(PaperChromeBorder.HeaderOpacityProperty)
+                    });
+                shell.Children.Add(title);
+            }
+            var body = new TitleBarBodyProbe();
+            body.Children.Add(new Border
+            {
+                Background = Brushes.Bisque, Height = 24, Margin = new Thickness(16, 12, 16, 0),
+                VerticalAlignment = VerticalAlignment.Top, CornerRadius = new CornerRadius(5)
+            });
+            Grid.SetRow(body, 1);
+            shell.Children.Add(body);
+            chrome.Child = shell;
+            host.Children.Add(chrome);
+            return (host, body);
+        }
+    }
+
+    private sealed class TitleBarBodyProbe : Grid
+    {
+        internal int ArrangeCount { get; private set; }
+        protected override Size ArrangeOverride(Size arrangeSize)
+        {
+            ArrangeCount++;
+            return base.ArrangeOverride(arrangeSize);
+        }
     }
 }

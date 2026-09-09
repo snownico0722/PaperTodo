@@ -76,7 +76,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Window Tethering**: Drag the tether button from the top bar to attach a paper to any third-party desktop window, smoothly following the target window through moving, minimizing, and restoring.
 - **Magnetic Edge Snapping**: Floating capsules automatically snap to screen edges or external window boundaries when dragged nearby, sliding out on hover and retracting on leave.
 - **Scheduled Todo Reminders**: Set custom countdown timers on todo items (presets, this evening, tomorrow morning, etc.) with tray notifications and alert sounds upon expiration.
-- **Inactive Appearance & Topmost Customization**: On focus loss, papers can hide only top-bar buttons or fade the whole title-bar region so the fully hidden area becomes click-through while body position and window size stay unchanged; docked and master capsules can also be configured not to remain system-topmost.
+- **Inactive Appearance & Topmost Customization**: On focus loss, papers can hide only top-bar buttons or fade the title bar while retaining a complete rounded outline and shadow; the fully hidden area becomes click-through while body position and window size stay unchanged; docked and master capsules can also be configured not to remain system-topmost.
 - **Desktop Sinking & Mouse Click-Through**: Hotkeys can send papers or capsules behind normal windows and enable mouse click-through so they behave like part of the desktop background.
 
 **Optimizations & Fixes**
