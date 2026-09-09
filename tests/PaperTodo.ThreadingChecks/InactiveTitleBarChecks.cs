@@ -32,8 +32,6 @@ internal static partial class Program
             // Compare against an ordinary shorter Border, including all its corners,
             // stroke and shadow. A flat crop cannot satisfy this reference image.
             Compare(hidden, Render(shortPaper), "hidden chrome differs from a complete rounded paper");
-            Assert(ReferenceEquals(host.InputHitTest(new Point(size.Width / 2, 8 + extent + 0.5)), chrome),
-                "the new outline lost its border drag/menu hit target");
             var width = (int)Math.Ceiling(size.Width * scale);
             for (var y = 0; y < (int)((8 + extent - 16) * scale); y++)
             for (var x = 0; x < width; x++)
@@ -100,6 +98,35 @@ internal static partial class Program
                 return pixels;
             }
         }
+
+        // InputHitTest obeys IsVisible, so exercise input in a real shown window,
+        // not the disconnected visuals used by RenderTargetBitmap above.
+        var inputChrome = new PaperChromeBorder();
+        var (inputHost, inputBody) = Build(inputChrome, 31, hasTitle: true);
+        var window = new Window
+        {
+            Content = inputHost, Width = 240, Height = 180,
+            WindowStyle = WindowStyle.None, AllowsTransparency = true,
+            Background = Brushes.Transparent, ResizeMode = ResizeMode.NoResize,
+            ShowActivated = false, ShowInTaskbar = false
+        };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var bounds = new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
+            var position = inputBody.TranslatePoint(new Point(), inputHost);
+            var bodySize = inputBody.RenderSize;
+            inputChrome.SetHeaderExtent(31);
+            inputChrome.SetHeaderOpacity(0, 0);
+            window.UpdateLayout();
+            Assert(ReferenceEquals(inputHost.InputHitTest(new Point(120, 39.5)), inputChrome),
+                "the new outline lost its border drag/menu hit target");
+            Assert(new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight) == bounds &&
+                inputBody.TranslatePoint(new Point(), inputHost) == position && inputBody.RenderSize == bodySize,
+                "hiding the title changed the live window or body geometry");
+        }
+        finally { window.Close(); }
 
         var fading = new PaperChromeBorder();
         var staleCompletion = false;
