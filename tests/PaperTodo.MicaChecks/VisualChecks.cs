@@ -217,14 +217,29 @@ internal static class VisualChecks
             if (whiteSample is { } w)
                 Program.Assert(w.R >= 245 && w.G >= 245 && w.B >= 245,
                     $"Clear Acrylic must not gray a white background: {w}");
+            controller.State.MicaBackdropType = MicaBackdropTypes.Acrylic;
+            window.RefreshNativeMica(); Wait();
+            var standardWhite = Capture(window, "standard-white-background", white, black, dark: null);
+            controller.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
+            window.RefreshNativeMica(); Wait();
             backdrop.Background = new SolidColorBrush(Color.FromRgb(80, 160, 240)); Wait();
+            Capture(backdrop, "color-background-placement", null, null, dark: null);
             var clear = Capture(window, "clear-color-background", white, black, dark: null);
             controller.State.MicaBackdropType = MicaBackdropTypes.Acrylic;
             window.RefreshNativeMica(); Wait();
             var standard = Capture(window, "standard-color-background", white, black, dark: null);
-            if (clear is { } c && standard is { } s)
-                Program.Assert(c.B - c.R > s.B - s.R + 20,
-                    $"Clear Acrylic must pass through substantially more background color: clear={c}, standard={s}");
+            if (clear is { } c && standard is { } s && standardWhite is { } sw)
+            {
+                // Windows Server/remote compositors can force both Acrylic paths to a solid
+                // tint. Confirm that with the unchanged system-Acrylic control, not an OS
+                // name or the custom effect's result. This is missing coverage, not a pass.
+                if (Math.Abs(s.R - sw.R) <= 2 && Math.Abs(s.G - sw.G) <= 2 && Math.Abs(s.B - sw.B) <= 2)
+                    Console.WriteLine($"SKIP Clear Acrylic transparency comparison: system Acrylic control ignores background color " +
+                        $"(white={sw}, blue={s}); real Windows 11 transparency remains unverified.");
+                else
+                    Program.Assert(c.B - c.R > s.B - s.R + 20,
+                        $"Clear Acrylic must pass through substantially more background color: clear={c}, standard={s}");
+            }
             controller.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
             window.RefreshNativeMica(); Wait();
             CheckFormFrames(window, chrome, collapsed: true, prefix: "clear-");
