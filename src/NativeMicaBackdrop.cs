@@ -170,6 +170,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 _windowChrome.GlassFrameThickness = new Thickness(-1);
                 if (_native.IsSupported) _native.SetBackdrop(hwnd, DwmMicaApi.None);
                 alphaReady = _native.CompositionEnabled && _native.EnableAlpha(hwnd) >= 0;
+                // A solid/decorated paper in a native session still uses transparent
+                // corner pixels. Keep its redirection mode consistent with active glass,
+                // rather than leaving an inherited extended frame around an empty bitmap.
+                if (alphaReady && _native.SetRedirectionAlpha(hwnd, true) >= 0)
+                {
+                    UsesRedirectionAlpha = true;
+                    alphaReady = _native.ExtendFrame(hwnd, 0) >= 0;
+                }
             }
             _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
                 ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
@@ -180,11 +188,28 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // a full native WM_PAINT so existing text/controls are copied into the new bitmap.
             // Once per actual native refresh, never on movement or stable layout.
             _native.InvalidateContent(hwnd);
+            QueueContentRepaint();
             if (enable && !IsActive)
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }
         finally { _updating = false; }
         if (chrome is SkinBorder skin) skin.RefreshRefraction();
+    }
+
+    private bool _contentRepaintQueued;
+    private void QueueContentRepaint()
+    {
+        if (_contentRepaintQueued || _disposed || _window.Dispatcher.HasShutdownStarted) return;
+        _contentRepaintQueued = true;
+        _window.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _contentRepaintQueued = false;
+            // Startup WindowChrome and shell registration can discard the bitmap again
+            // after the synchronous refresh. Re-copy the complete retained scene after
+            // their first layout/present, without rebuilding controls or polling frames.
+            if (!_disposed && _source is { IsDisposed: false } && _window.IsVisible)
+                _native.InvalidateContent(_source.Handle);
+        }));
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
