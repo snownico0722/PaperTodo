@@ -43,7 +43,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore .\PaperTodo.csproj
+        run: dotnet restore .\PaperTodo.csproj --configfile .\NuGet.Config
 
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore

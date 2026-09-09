@@ -65,7 +65,7 @@ jobs:
           "framework_dependent_exe=PaperTodo-v$version-debug-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
 
       - name: Restore
-        run: dotnet restore .\PaperTodo.csproj -r win-x64
+        run: dotnet restore .\PaperTodo.csproj -r win-x64 --configfile .\NuGet.Config
 
       - name: Publish Debug executables
         env:

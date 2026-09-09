@@ -43,7 +43,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore persistence checks
-        run: dotnet restore .\tests\PaperTodo.PersistenceChecks\PaperTodo.PersistenceChecks.csproj -r win-x64
+        run: dotnet restore .\tests\PaperTodo.PersistenceChecks\PaperTodo.PersistenceChecks.csproj -r win-x64 --configfile .\NuGet.Config
 
       - name: Run persistence fault injection checks
         run: dotnet run --project .\tests\PaperTodo.PersistenceChecks\PaperTodo.PersistenceChecks.csproj -c Release -r win-x64 --no-restore
