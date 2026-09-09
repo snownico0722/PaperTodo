@@ -115,6 +115,11 @@ jobs:
           }
 
           Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -Destination (Join-Path $releaseDir $env:SELF_CONTAINED_EXE)
+          $noticePath = Join-Path $selfContainedOut "THIRD-PARTY-NOTICES.md"
+          if (-not (Test-Path -LiteralPath $noticePath -PathType Leaf)) {
+            throw "Published third-party notices not found: $noticePath"
+          }
+          Copy-Item -LiteralPath $noticePath -Destination (Join-Path $releaseDir "THIRD-PARTY-NOTICES.md")
 
           dotnet publish .\PaperTodo.csproj `
             -c Release `
@@ -146,6 +151,7 @@ jobs:
           path: |
             release/${{ steps.meta.outputs.self_contained_exe }}
             release/${{ steps.meta.outputs.framework_dependent_exe }}
+            release/THIRD-PARTY-NOTICES.md
 
       - name: Resolve release tag
         id: release
@@ -230,7 +236,8 @@ jobs:
             "下载:",
             "",
             "- 完整版（含 .NET 运行库）：${selfContained}",
-            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}"
+            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}",
+            "- 第三方许可：THIRD-PARTY-NOTICES.md"
           )
 
           Set-Content -LiteralPath (Join-Path $releaseDir "RELEASE_NOTES.md") -Value ($notesLines -join "`n") -Encoding utf8
@@ -269,15 +276,18 @@ jobs:
 
           $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
           $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
+          $notice = "THIRD-PARTY-NOTICES.md"
           $assets = @(
             (Join-Path $releaseDir $selfContained),
-            (Join-Path $releaseDir $frameworkDependent)
+            (Join-Path $releaseDir $frameworkDependent),
+            (Join-Path $releaseDir $notice)
           )
           $notes = Join-Path $releaseDir "RELEASE_NOTES.md"
           $isPrerelease = ("${{ inputs.prerelease }}" -eq "true") -or ($tag -match '(?i)(alpha|beta|preview|rc)')
           $expectedAssetNames = @(
             $selfContained,
-            $frameworkDependent
+            $frameworkDependent,
+            $notice
           )
 
           gh release view $tag *> $null
