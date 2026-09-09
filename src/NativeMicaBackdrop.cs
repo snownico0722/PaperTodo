@@ -175,11 +175,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
             _window.Background = IsActive || alphaReady ? Brushes.Transparent : Theme.PaperBrush;
             _setSurface(IsActive ? GetActiveSurfaceBrush(_material, dark) : Theme.PaperBrush);
-            // Changing DWM's alpha/frame mode may discard the existing redirection
-            // bitmap without invalidating WPF's retained scene. A stable transparent
-            // brush can otherwise leave only the native backdrop visible until input.
-            // Repaint once per real native refresh, never on location/steady layout.
-            chrome.InvalidateVisual();
+            // DWM may discard the redirected bitmap when its alpha/frame mode changes.
+            // Invalidating a retained WPF Visual only updates its dirty subregion; request
+            // a full native WM_PAINT so existing text/controls are copied into the new bitmap.
+            // Once per actual native refresh, never on movement or stable layout.
+            _native.InvalidateContent(hwnd);
             if (enable && !IsActive)
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }

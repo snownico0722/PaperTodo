@@ -19,6 +19,7 @@ internal interface INativeMicaApi
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
     int SetRedirectionAlpha(IntPtr hwnd, bool enabled);
+    void InvalidateContent(IntPtr hwnd);
     int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor);
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
@@ -123,6 +124,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
         return DwmSetWindowAttribute(hwnd, 39 /* REDIRECTIONBITMAP_ALPHA */, ref value, sizeof(int));
     }
 
+    public void InvalidateContent(IntPtr hwnd) =>
+        RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero, 0x0081 /* INVALIDATE | ALLCHILDREN */);
+
     public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
     {
         var corners = rounded ? 2 : 1; // DWMWCP_ROUND / DWMWCP_DONOTROUND
@@ -149,6 +153,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
         internal IntPtr Region;
         [MarshalAs(UnmanagedType.Bool)] internal bool TransitionOnMaximized;
     }
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")]

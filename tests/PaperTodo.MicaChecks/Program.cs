@@ -378,6 +378,7 @@ internal static class Program
             ClearAcrylic = enabled; return 0;
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
+        public void InvalidateContent(IntPtr hwnd) { }
         public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) { if (Failure == "redirection-unsupported") return Error; RedirectionAlpha = enabled; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
         public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)

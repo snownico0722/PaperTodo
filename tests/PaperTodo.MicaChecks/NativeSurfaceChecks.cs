@@ -52,7 +52,10 @@ internal static class NativeSurfaceChecks
                 WaitForDesktopInk(paper, output, skin + "-" + mode);
                 if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100) &&
                     skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.Aero or PaperSkins.TracingPaper)
+                {
                     CheckCaptionSentinel(paper, output, skin + "-" + mode);
+                    WaitForDesktopInk(paper, output, skin + "-" + mode + "-after-alpha");
+                }
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
                 using (var image = Capture(paper, output, $"desktop-{skin}-{mode}"))
                 {
@@ -128,29 +131,6 @@ internal static class NativeSurfaceChecks
             if (matches >= 2) return;
             Wait();
         }
-        var hwnd = new WindowInteropHelper(paper).Handle;
-        var chrome = (Border)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)!;
-        var content = (FrameworkElement)chrome.Child;
-        var where = pin.PointToScreen(new Point(pin.ActualWidth / 2, pin.ActualHeight / 2));
-        var top = GetAncestor(WindowFromPoint(new PointI { X = (int)where.X, Y = (int)where.Y }), 2);
-        Console.WriteLine($"INK DIAG {name}: hwnd={hwnd:X} topAtPin={top:X}, window={paper.IsVisible}/{paper.IsActive}/{paper.Opacity}/{paper.ActualWidth}x{paper.ActualHeight}, chrome={chrome.Visibility}/{chrome.Opacity}/{chrome.ActualWidth}x{chrome.ActualHeight}, content={content.Visibility}/{content.Opacity}/{content.ActualWidth}x{content.ActualHeight}, pin={pin.IsVisible}/{pin.Opacity}/{pin.ActualWidth}x{pin.ActualHeight}@{where}, affinity={DesktopLensCapture.ReadAffinity(hwnd)}");
-        foreach (Window w in Application.Current.Windows)
-            Console.WriteLine($"INK WINDOW {new WindowInteropHelper(w).Handle:X} {w.GetType().Name} visible={w.IsVisible} active={w.IsActive} topmost={w.Topmost} rect={w.Left},{w.Top},{w.ActualWidth},{w.ActualHeight}");
-        var wpf = new System.Windows.Media.Imaging.RenderTargetBitmap((int)paper.ActualWidth, (int)paper.ActualHeight, 96,96,PixelFormats.Pbgra32);
-        wpf.Render(paper);
-        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(wpf));
-        using (var stream=File.Create(Path.Combine(output,"diag-wpf-"+name+".png"))) encoder.Save(stream);
-        using (Capture(paper,output,"diag-after-wpf-"+name)) { }
-        var mark=new Border { Background=Brushes.Magenta,Width=40,Height=40,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center };
-        ((Panel)content).Children.Add(mark); Wait();
-        using (Capture(paper,output,"diag-new-child-"+name)) { }
-        RedrawWindow(hwnd,IntPtr.Zero,IntPtr.Zero,0x581); Wait();
-        using (Capture(paper,output,"diag-win32-redraw-"+name)) { }
-        DwmMicaApi.Instance.SetRedirectionAlpha(hwnd,false); DwmMicaApi.Instance.ExtendFrame(hwnd,-1); Wait();
-        using (Capture(paper,output,"diag-old-glass-"+name)) { }
-        paper.RefreshNativeMica(force:true); Wait();
-        using (Capture(paper,output,"diag-modern-again-"+name)) { }
-        ((Panel)content).Children.Remove(mark);
         Program.Assert(false, name + ": actual WPF pin never appeared in the desktop composite");
     }
     private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
@@ -209,10 +189,6 @@ internal static class NativeSurfaceChecks
         timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
         timer.Start(); Dispatcher.PushFrame(frame);
     }
-    [StructLayout(LayoutKind.Sequential)] private struct PointI { public int X, Y; }
-    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(PointI point);
-    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
-    [DllImport("user32.dll")] private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
     [StructLayout(LayoutKind.Sequential)] private struct RectI { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI rect);
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
