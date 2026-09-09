@@ -13,10 +13,11 @@ internal sealed partial class SkinBorder : Border
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),
         new FrameworkPropertyMetadata(PaperSkins.Paper, FrameworkPropertyMetadataOptions.AffectsRender,
-            (d, _) => ((SkinBorder)d).SyncLensLight()));
+            (d, _) => { var border = (SkinBorder)d; border.SyncLensLight(); border.RefreshRefraction(); }));
     public static readonly DependencyProperty IsCapsuleProperty = DependencyProperty.Register(
         nameof(IsCapsule), typeof(bool), typeof(SkinBorder),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, _) => ((SkinBorder)d).RefreshRefraction()));
     public string Skin { get => (string)GetValue(SkinProperty); set => SetValue(SkinProperty, value); }
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
     internal bool IsOutline { get; init; }
@@ -36,6 +37,7 @@ internal sealed partial class SkinBorder : Border
 
     internal SkinBorder()
     {
+        InitializeRefraction();
         Loaded += (_, _) => SyncLensLight();
         Unloaded += (_, _) => DetachLensLight();
         IsVisibleChanged += (_, _) => SyncLensLight();
@@ -53,6 +55,7 @@ internal sealed partial class SkinBorder : Border
         RenderOptions.SetEdgeMode(this, PaperSkins.Decorate(Skin, _highContrast) && Skin == PaperSkins.Pixel
             ? EdgeMode.Aliased : EdgeMode.Unspecified);
         SyncLensLight();
+        RefreshRefraction();
         InvalidateVisual();
     }
     internal static void Refresh(Border? border)

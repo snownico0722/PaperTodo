@@ -95,11 +95,18 @@ internal static class Program
                     "fallback restores the WPF stroke and removes the native stroke");
                 f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && !f.Api.Alpha, "no residual legacy blur after fallback");
-                Assert(f.Api.CaptionColor == unchecked((int)0xffffffff) && f.Api.FrameTop == -1,
-                    "system material requires full glass but no solid caption override");
+                Assert(f.Api.CaptionColor == unchecked((int)0xffffffff) && f.Api.FrameTop == 0 && f.Api.RedirectionAlpha,
+                    "modern system material uses explicit redirection alpha without extended caption");
                 f.Api.Failure = "frame-colors"; f.Apply(true, false);
                 Assert(f.Backdrop.IsActive && f.Backdrop.LastFrameHResult < 0 && !Transparent(f.Chrome.BorderBrush),
                     "rejected native frame settings retain a visible WPF outline");
+            });
+            Check("unsupported modern alpha retains full-glass composition", () =>
+            {
+                using var f = new Fixture(); f.Api.Failure = "redirection-unsupported";
+                f.Apply(true, false);
+                Assert(f.Backdrop.IsActive && f.Api.Glass && f.Api.FrameTop == -1 && !f.Api.RedirectionAlpha,
+                    "old Windows must never be forced into zero-margin black output");
             });
             Check("Clear Acrylic switches native recipes without recreating content", () =>
             {
@@ -292,6 +299,7 @@ internal static class Program
                     }
                 });
                 Check("experimental skins", () => SkinChecks.Run(controller));
+                Check("real background refraction and capture lifecycle", () => RefractionChecks.Run(controller));
                 Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
                 Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));
                 Check("non-Mica startup keeps the original layered paper", () =>
@@ -349,7 +357,7 @@ internal static class Program
         public bool CompositionEnabled { get; set; } = true;
         public bool TransparencyEnabled { get; set; } = true;
         public bool HighContrast { get; set; }
-        internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass;
+        internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass, RedirectionAlpha;
         internal int ActivationCalls;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor, FrameTop;
@@ -360,7 +368,7 @@ internal static class Program
         {
             BackdropCalls++;
             if (backdrop == 2 && Failure == "backdrop") return Error;
-            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && Glass, "system backdrop needs full glass and excludes alpha/accent");
+            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && (Glass || RedirectionAlpha), "system backdrop needs full glass or explicit bitmap alpha, and excludes legacy alpha/accent");
             Backdrop = backdrop; return 0;
         }
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
@@ -370,6 +378,7 @@ internal static class Program
             ClearAcrylic = enabled; return 0;
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
+        public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) { if (Failure == "redirection-unsupported") return Error; RedirectionAlpha = enabled; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
         public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
         { Rounded = rounded; BorderColor = borderColor; CaptionColor = captionColor; return Failure == "frame-colors" ? Error : 0; }

@@ -39,5 +39,6 @@ internal sealed partial class SkinBorder
         var point = new Point(Math.Clamp(pointer.X / ActualWidth, 0, 1), Math.Clamp(pointer.Y / ActualHeight, 0, 1));
         if ((point - _lensLight.Center).LengthSquared < .0004) return;
         _lensLight.Center = _lensLight.GradientOrigin = point;
+        if (_refractionEffect != null) _refractionEffect.Light = point;
     }
 }

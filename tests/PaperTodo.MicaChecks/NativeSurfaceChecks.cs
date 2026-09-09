@@ -9,7 +9,7 @@ using PaperTodo;
 using D = System.Drawing;
 
 // These are final DWM desktop pixels, not RenderTargetBitmap's WPF-only image.
-// No wallpaper/registry edits and no screen sampling in the application itself.
+// No wallpaper/registry edits. Refraction capture is frozen for final desktop evidence.
 internal static class NativeSurfaceChecks
 {
     internal static void Run(AppController controller)
@@ -49,6 +49,9 @@ internal static class NativeSurfaceChecks
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
                     X = 50, Y = 50, Width = 400, Height = 340, AlwaysOnTop = true }, controller);
                 paper.Show(); paper.Activate(); Wait();
+                if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100) &&
+                    skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.Aero or PaperSkins.TracingPaper)
+                    CheckCaptionSentinel(paper, output, skin + "-" + mode);
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
                 using (var image = Capture(paper, output, $"desktop-{skin}-{mode}"))
                 {
@@ -104,10 +107,35 @@ internal static class NativeSurfaceChecks
             Theme.Invalidate();
         }
     }
+    private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
+    {
+        var hwnd = new WindowInteropHelper(paper).Handle;
+        using var baseline = Capture(paper, output, "caption-baseline-" + name);
+        var sentinel = 0x00ff00ff;
+        Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "caption sentinel is accepted");
+        try
+        {
+            Wait();
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 35, out var saved, 4) >= 0 && saved == sentinel,
+                "caption marker remains installed, not reset by an unrelated refresh");
+            using var marked = Capture(paper, output, "caption-sentinel-" + name);
+            var before = baseline.GetPixel(baseline.Width / 2, 8); var after = marked.GetPixel(marked.Width / 2, 8);
+            Program.Assert(Difference(before, after) <= 3,
+                $"{name}: native caption cannot cover the material even with a deliberate magenta caption ({before} / {after})");
+            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 39, out var alpha, 4) >= 0 && alpha == 1,
+                "zero glass margins are backed by a real redirection alpha channel");
+            Console.WriteLine($"CAPTION SENTINEL {name}: material pixel survives explicit native magenta");
+        }
+        finally { sentinel = -1; DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4); }
+    }
     private static int Difference(D.Color a, D.Color b) =>
         Math.Max(Math.Abs(a.R - b.R), Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));
     private static D.Bitmap Capture(Window window, string output, string name)
     {
+        var surface = window is PaperWindow paper
+            ? (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)! : null;
+        using var frozen = surface?.IsRefractionActive == true ? surface.FreezeRefractionForEvidence() : null;
+        if (frozen != null) Wait();
         DwmFlush();
         Program.Assert(GetWindowRect(new WindowInteropHelper(window).Handle, out var r), "native bounds available");
         var image = new D.Bitmap(r.Right - r.Left, r.Bottom - r.Top);
@@ -125,4 +153,5 @@ internal static class NativeSurfaceChecks
     [StructLayout(LayoutKind.Sequential)] private struct RectI { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI rect);
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 }

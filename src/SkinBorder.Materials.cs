@@ -24,7 +24,7 @@ internal sealed partial class SkinBorder
         byte alpha = opaque ? (byte)255 : Skin switch
         {
             PaperSkins.TracingPaper => (byte)(_dark ? 226 : 211),
-            PaperSkins.Aero => (byte)(_dark ? 168 : 112),
+            PaperSkins.Aero => (byte)(_dark ? 174 : 146),
             // A visible lens veil, not a near-empty transparent window. The rear
             // detail remains sharp; opacity is independent of background blur.
             _ => (byte)(_dark ? 196 : 152)
@@ -34,19 +34,25 @@ internal sealed partial class SkinBorder
         switch (Skin)
         {
             case PaperSkins.Aero:
-                var glass = Mix(paper, _dark ? Color.FromRgb(25, 45, 62) : Color.FromRgb(185, 220, 243), .38);
-                _fill = Gradient(0, WithAlpha(Mix(glass, Colors.White, _dark ? .025 : .12), alpha),
-                    1, WithAlpha(glass, alpha));
-                // One broad, soft light reflection. Closely spaced, discontinuous stops
-                // looked like diagonal tape pasted across the editor rather than glass.
+                var glassBlue = Mix(paper, _dark ? Color.FromRgb(28, 81, 113) : Color.FromRgb(113, 183, 218), .64);
+                _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
+                {
+                    new(WithAlpha(Mix(glassBlue, Colors.White, _dark ? .07 : .27), alpha), 0),
+                    new(WithAlpha(glassBlue, alpha), .20),
+                    new(WithAlpha(Mix(glassBlue, paper, .26), alpha), .72),
+                    new(WithAlpha(Mix(glassBlue, Colors.Black, .06), alpha), 1)
+                }, new Point(0, 0), new Point(0, 1)));
+                // Two broad reflected light sources, feathered on both sides. The lower
+                // blue glass remains visible: neither a uniform Acrylic wash nor white tape.
                 _shine = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
-                    new(White(_dark ? 4 : 10), 0), new(White(_dark ? 9 : 28), .17),
-                    new(White(_dark ? 20 : 66), .32), new(White(_dark ? 13 : 40), .43),
-                    new(White(_dark ? 5 : 12), .59), new(Colors.Transparent, .78),
-                    new(White(_dark ? 4 : 12), 1)
-                }, new Point(0, 0), new Point(1, .55)));
-                _glint = Gradient(0, White(_dark ? 60 : 154), 1, White(_dark ? 4 : 12));
+                    new(White(_dark ? 8 : 15), 0), new(White(_dark ? 12 : 25), .10),
+                    new(White(_dark ? 48 : 125), .19), new(White(_dark ? 51 : 134), .25),
+                    new(White(_dark ? 8 : 18), .36), new(Colors.Transparent, .45),
+                    new(White(_dark ? 7 : 12), .66), new(White(_dark ? 29 : 76), .80),
+                    new(White(_dark ? 13 : 30), .89), new(Colors.Transparent, 1)
+                }, new Point(0, 0), new Point(1, .48)));
+                _glint = Gradient(0, White(_dark ? 80 : 192), 1, White(_dark ? 8 : 32));
                 break;
             case PaperSkins.LiquidGlass:
                 // A translucent, neutral lens with a readable center; no frosted Acrylic.

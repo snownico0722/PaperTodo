@@ -407,6 +407,7 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
     public string? PaperSkin { get; set; }
+    public bool LiquidGlassRefraction { get; set; } = true;
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;

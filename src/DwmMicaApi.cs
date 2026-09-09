@@ -18,6 +18,7 @@ internal interface INativeMicaApi
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
+    int SetRedirectionAlpha(IntPtr hwnd, bool enabled);
     int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor);
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
@@ -111,6 +112,15 @@ internal sealed class DwmMicaApi : INativeMicaApi
     {
         var blur = new BlurBehind { Flags = 1 /* ENABLE */, Enabled = false };
         return DwmEnableBlurBehindWindow(hwnd, ref blur);
+    }
+
+    public int SetRedirectionAlpha(IntPtr hwnd, bool enabled)
+    {
+        // Windows 11 24H2's documented alpha channel replaces the extended NC glass
+        // surface. Older systems must retain full glass; zero margins alone produce black.
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100)) return unchecked((int)0x80004001);
+        var value = enabled ? 1 : 0;
+        return DwmSetWindowAttribute(hwnd, 39 /* REDIRECTIONBITMAP_ALPHA */, ref value, sizeof(int));
     }
 
     public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)

@@ -1826,9 +1826,12 @@ public sealed partial class PaperWindow : Window
         transitionBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
     }
 
-    internal void RefreshNativeMica(bool force = false) =>
+    internal void RefreshNativeMica(bool force = false)
+    {
         _nativeMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin),
             _controller.State.MicaAlwaysActive, force);
+        (_paperChrome as SkinBorder)?.RefreshRefraction();
+    }
 
     private void RestorePaperChromeThemeReferences()
     {

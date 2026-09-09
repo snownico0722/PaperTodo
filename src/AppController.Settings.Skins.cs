@@ -33,6 +33,19 @@ public sealed partial class AppController
             TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 4, 2, 5)
         });
+        if (skin == PaperSkins.LiquidGlass)
+        {
+            panel.Children.Add(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
+            {
+                State.LiquidGlassRefraction = !State.LiquidGlassRefraction;
+                SaveNow(); RefreshSkinSurfaces();
+            }));
+            panel.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("TipLiveRefraction"), TextWrapping = TextWrapping.Wrap,
+                Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
+            });
+        }
         if (PaperSkins.UsesSystemPalette(skin))
             panel.Children.Add(new TextBlock
             {

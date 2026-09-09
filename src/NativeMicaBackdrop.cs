@@ -35,6 +35,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _disposed;
     private bool _refreshQueued;
     private bool _clearAcrylicApplied;
+    internal bool UsesRedirectionAlpha { get; private set; }
 
     internal bool IsActive { get; private set; }
     internal int LastHResult { get; private set; }
@@ -113,10 +114,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
             }
             if (enable && LastHResult >= 0)
             {
-                // First leave the old alpha recipe. Mica/system Acrylic then need a
-                // full glass composition surface (-1). Setting this to zero turns WPF's
-                // transparent pixels black; a white material wash merely disguises it.
-                // Only accent Acrylic and the unblurred lens use zero physical margins.
+                // Modern redirection alpha removes DWM's separate extended caption, while
+                // retaining system Mica/Acrylic under *all* WPF content. Capability failure
+                // keeps the older full-glass path; never force zero margins without alpha.
                 LastHResult = _native.DisableAlpha(hwnd);
                 if (LastHResult >= 0)
                 {
@@ -132,6 +132,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 {
                     LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
                     _clearAcrylicApplied |= LastHResult >= 0;
+                }
+                if (LastHResult >= 0)
+                {
+                    // Apply after the material recipe: this is the final alpha/margin writer.
+                    UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
+                    if (UsesRedirectionAlpha && !clear && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
                 }
                 IsActive = LastHResult >= 0;
             }
@@ -173,6 +179,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }
         finally { _updating = false; }
+        if (chrome is SkinBorder skin) skin.RefreshRefraction();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -262,7 +269,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
             if (IsActive && _alwaysActive) _native.SetNonClientActive(_source.Handle, _window.IsActive);
             if (_clearAcrylicApplied) _native.SetClearAcrylic(_source.Handle, false, _dark);
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
+            if (UsesRedirectionAlpha) _native.SetRedirectionAlpha(_source.Handle, false);
         }
+        UsesRedirectionAlpha = false;
         IsActive = false;
         _source = null;
         _observedChrome = null;
