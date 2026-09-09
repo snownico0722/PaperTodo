@@ -252,11 +252,10 @@ internal static class VisualChecks
 
     private static void CheckSettings(AppController controller)
     {
-        var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, Type.EmptyTypes, null)!;
+        var pageType = typeof(AppController).GetField("_settingsPage", Program.Private)!.FieldType;
+        var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, new[] { pageType }, null)!;
         var refresh = typeof(AppController).GetMethod("RefreshSettingsWindowContent", Program.Private)!;
-        var page = typeof(AppController).GetField("_settingsPage", Program.Private)!;
-        page.SetValue(controller, Enum.Parse(page.FieldType, "Visual"));
-        show.Invoke(controller, null); Wait();
+        show.Invoke(controller, new[] { Enum.Parse(pageType, "Visual") }); Wait();
         var window = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
         try
         {
