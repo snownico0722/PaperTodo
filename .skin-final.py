@@ -32,3 +32,11 @@ replace('tests/PaperTodo.MicaChecks/SkinChecks.cs',
 replace('tests/PaperTodo.MicaChecks/SkinChecks.cs',
     '''                        $"surface glare must not wash out secondary text: {skin}/{mode}/{scale}");''',
     '''                        $"surface glare must not wash out secondary text: {skin}/{mode}/{scale}, text={readable.Color}, surface={litColor}");''')
+
+# The old 12%-height sample landed at y=4 in a 40px capsule: inside the 5px
+# empty lens rim, not behind a glyph. Expanded headers still sample their text zone.
+replace('tests/PaperTodo.MicaChecks/SkinChecks.cs',
+    '                    var litPixel = ((int)(image.PixelHeight * .12) * image.PixelWidth + image.PixelWidth / 3) * 4;',
+    '''                    // Text occupies the central capsule band, not its specular outer edge.
+                    var textHeight = capsule ? .5 : .12;
+                    var litPixel = ((int)(image.PixelHeight * textHeight) * image.PixelWidth + image.PixelWidth / 3) * 4;''')
