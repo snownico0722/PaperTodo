@@ -1457,22 +1457,22 @@ When off, open at the docked edge or remembered position.</value>
     <value>Pixel</value>
   </data>
   <data name="TipSkinPearl" xml:space="preserve">
-    <value>Pink, cyan and violet sheen shifts with movement. Disabling animations freezes it; there is no idle animation loop.</value>
+    <value>Pearl foil flows slowly on a 28-second cycle, with additional reflections while moving. Animation off, high contrast, hiding or minimizing stops motion.</value>
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>A visual approximation with highlights and thick lens-like edges. Capsules resemble water droplets. No real background refraction.</value>
+    <value>Convex lens edges, inner/outer highlights and pointer-directed reflections continue across header and body. This remains a visual approximation, without live desktop refraction.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>Opaque, softly shaded ceramic with a glazed highlight, following your chosen palette.</value>
+    <value>Raised glazed edges, a creamy porcelain face and shaded lower bevel; opaque and palette-aware.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Bright rims, a cool sheen and diagonal reflections over the existing blurred backdrop. Not a Windows 7 system theme.</value>
+    <value>Icy blue tint, distinct diagonal reflection bands and double glass rims continue through the header. Not a Windows 7 system theme.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>Stepped borders, hard shadows and pixel buttons. Body text keeps its normal font for readability.</value>
+    <value>A retro quest panel with compact stepped corners, a double frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>Skin saved. Exit from the tray and reopen to enable the native backdrop. Existing windows use a solid approximation without rebuilding editors or undo history.</value>

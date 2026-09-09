@@ -1506,22 +1506,22 @@
     <value>像素风</value>
   </data>
   <data name="TipSkinPearl" xml:space="preserve">
-    <value>淡粉、青、紫偏光。拖动时反光缓慢变化；关闭动画后保持静态，不在空闲时持续刷新。</value>
+    <value>珠光膜在静止时约 28 秒缓慢往返流动，拖动时偏光也会变化。关闭动画、高对比度、隐藏或最小化时停止。</value>
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>高光、厚边和透镜感的外观近似，胶囊更有水滴感；不包含真实背景折射。</value>
+    <value>凸透镜厚边、内外高光与鼠标方向反光；顶栏和纸面连成一体。仍是外观近似，不包含桌面背景的实时折射。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>不透明的温润底色、柔和渐变和釉面高光，跟随当前配色。</value>
+    <value>凸起的釉面边缘、奶油色瓷面和底部厚度阴影；不透明，跟随配色。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>亮边、淡蓝光泽和斜向反光的怀旧玻璃；使用现有模糊背景，不是 Win7 系统主题。</value>
+    <value>冰蓝染色、明显的斜向反射带、内外亮边，顶栏与纸面共用玻璃表面。不是 Win7 系统主题。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>阶梯边框、硬边阴影和像素按钮；正文继续使用正常字体，避免中文难读。</value>
+    <value>复古任务面板：紧凑阶梯角、双层边框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>皮肤已保存。请从托盘退出并重新打开，启用原生背景；当前先显示实色外观，不重建编辑内容或撤销记录。</value>

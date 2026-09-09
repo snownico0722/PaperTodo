@@ -1457,22 +1457,22 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>픽셀</value>
   </data>
   <data name="TipSkinPearl" xml:space="preserve">
-    <value>분홍·청록·보라 광택이 창 이동에 따라 변합니다. 애니메이션을 끄면 정지하며 유휴 상태에서는 계속 갱신하지 않습니다.</value>
+    <value>진주 필름이 정지 중에도 약 28초 주기로 천천히 흐르고, 창을 움직이면 반사가 달라집니다. 애니메이션 끄기, 고대비, 숨김, 최소화 시 정지합니다.</value>
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>하이라이트와 두꺼운 테두리로 렌즈 느낌을 내고 캡슐은 물방울처럼 표현합니다. 실제 배경 굴절은 지원하지 않습니다.</value>
+    <value>볼록 렌즈 테두리와 안팎의 하이라이트, 포인터 방향 반사가 제목과 본문을 연결합니다. 외관을 흉내 낸 효과이며 데스크톱의 실시간 굴절은 포함하지 않습니다.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>선택한 색상에 맞춘 불투명한 도자기 표면에 부드러운 명암과 유약 광택을 더합니다.</value>
+    <value>도톰한 유약 테두리, 크림색 도자기 표면과 아래쪽 입체 음영을 적용합니다. 불투명하며 선택한 색상을 따릅니다.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>기존 흐린 배경에 밝은 테두리와 푸른 광택, 사선 반사를 더합니다. Windows 7 시스템 테마는 아닙니다.</value>
+    <value>얼음빛 파랑, 사선 반사 띠와 이중 유리 테두리가 제목까지 이어집니다. Windows 7 시스템 테마는 아닙니다.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>계단형 테두리, 선명한 그림자와 픽셀 버튼을 적용합니다. 본문은 가독성을 위해 일반 글꼴을 유지합니다.</value>
+    <value>레트로 퀘스트 패널 스타일로 작은 계단형 모서리, 이중 프레임, 픽셀 정렬 아이콘과 사각 컨트롤을 사용합니다. 본문 글꼴은 유지됩니다.</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>스킨이 저장되었습니다. 트레이에서 종료한 뒤 다시 실행하면 네이티브 배경이 켜집니다. 현재 창은 단색으로 표시하며 편집 내용과 실행 취소 기록은 유지합니다.</value>

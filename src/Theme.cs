@@ -153,8 +153,10 @@ public static class Theme
     public static Brush PaperBrush => Solid(Current.Paper);
     public static Brush PaperBorderBrush => Solid(Current.PaperBorder);
     public static Brush TextBrush => Solid(Current.Text);
-    public static Brush WeakTextBrush => Solid(Current.WeakText);
-    public static Brush BrightWeakTextBrush => Solid(IsDark ? Lighten(Current.WeakText, 0.22) : Current.WeakText);
+    private static Color SurfaceWeakText => PaperSkins.Decorate(Skin, SystemParameters.HighContrast)
+        ? Mix(Current.WeakText, Current.Text, 0.36) : Current.WeakText;
+    public static Brush WeakTextBrush => Solid(SurfaceWeakText);
+    public static Brush BrightWeakTextBrush => Solid(IsDark ? Lighten(SurfaceWeakText, 0.22) : SurfaceWeakText);
     public static Brush ActiveBrush => Solid(Current.Active);
     public static Brush CodeBrush => Solid(Current.Code);
     public static Brush QuoteBorderBrush => Solid(Current.QuoteBorder);

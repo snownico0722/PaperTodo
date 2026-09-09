@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 /// <summary>Surface paint only. The existing host still owns layout, input, shape transitions
 /// and the native/solid Background decision. Never replace its focus border with a skin rim.</summary>
-internal sealed class SkinBorder : Border
+internal sealed partial class SkinBorder : Border
 {
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),
@@ -22,13 +22,17 @@ internal sealed class SkinBorder : Border
     internal bool IsOutline { get; init; }
     private bool _dark, _highContrast, _animateReflection;
     private Window? _reflectionWindow;
-    private int _reflectionBand;
-    private (string Skin, bool Dark, bool Capsule, Color Paper, int Band)? _brushKey;
+    private (string Skin, bool Dark, bool Capsule, Color Paper)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private Brush _glint = Brushes.Transparent, _depth = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
     private Geometry _shape = Geometry.Empty, _borderRing = Geometry.Empty;
     private Geometry _glintRing = Geometry.Empty, _depthRing = Geometry.Empty;
+    private Geometry _bevelRing = Geometry.Empty, _innerRing = Geometry.Empty;
+    public static readonly DependencyProperty HeaderHeightProperty = DependencyProperty.Register(
+        nameof(HeaderHeight), typeof(double), typeof(SkinBorder),
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double HeaderHeight { get => (double)GetValue(HeaderHeightProperty); set => SetValue(HeaderHeightProperty, value); }
     private static readonly Brush LightFibers = CreateFibers(false);
     private static readonly Brush DarkFibers = CreateFibers(true);
 
@@ -37,12 +41,14 @@ internal sealed class SkinBorder : Border
         Loaded += (_, _) => SyncReflectionSubscription();
         Unloaded += (_, _) => DetachReflection();
         IsVisibleChanged += (_, _) => SyncReflectionSubscription();
+        InitializeReflection();
         RefreshSkin();
     }
 
     internal void RefreshSkin()
     {
         _brushKey = null;
+        _geometryKey = null;
         _dark = Theme.IsDark;
         _highContrast = SystemParameters.HighContrast;
         _animateReflection = AppController.Current?.State.EnableAnimations == true;
@@ -55,40 +61,6 @@ internal sealed class SkinBorder : Border
     internal static void Refresh(Border? border)
     {
         if (border is SkinBorder skin) skin.RefreshSkin();
-    }
-
-    private void SyncReflectionSubscription()
-    {
-        var window = !IsOutline && IsLoaded && IsVisible && Skin == PaperSkins.Pearl &&
-            !_highContrast && _animateReflection ? Window.GetWindow(this) : null;
-        if (!ReferenceEquals(window, _reflectionWindow))
-        {
-            DetachReflection();
-            _reflectionWindow = window;
-            if (window != null) window.LocationChanged += OnReflectionLocationChanged;
-        }
-        if (window != null) OnReflectionLocationChanged(window, EventArgs.Empty);
-        else if (_reflectionBand != 0)
-        {
-            _reflectionBand = 0;
-            InvalidateVisual();
-        }
-    }
-    private void DetachReflection()
-    {
-        if (_reflectionWindow != null) _reflectionWindow.LocationChanged -= OnReflectionLocationChanged;
-        _reflectionWindow = null;
-    }
-    private void OnReflectionLocationChanged(object? sender, EventArgs e)
-    {
-        if (_reflectionWindow is not { IsVisible: true } window || !IsVisible ||
-            !double.IsFinite(window.Left) || !double.IsFinite(window.Top)) return;
-        // One bounded position sample, no idle timer or desktop capture. Movement invalidates
-        // brushes only; cached geometry survives reflection/activation/foreground changes.
-        var band = (int)Math.Round(Math.Sin((window.Left + window.Top * .35) / 850) * 16);
-        if (_reflectionBand == band) return;
-        _reflectionBand = band;
-        InvalidateVisual();
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -111,8 +83,7 @@ internal sealed class SkinBorder : Border
         if (Skin == PaperSkins.TracingPaper)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
-        if (Skin is PaperSkins.LiquidGlass or PaperSkins.Ceramic)
-            dc.DrawGeometry(_depth, null, _depthRing);
+        PaintMaterialDetails(dc);
         if (Skin != PaperSkins.TracingPaper)
             dc.DrawGeometry(_glint, null, _glintRing);
         // The owner's stroke wins. Transparent/zero-width borders really disappear, and
@@ -130,9 +101,12 @@ internal sealed class SkinBorder : Border
         _geometryKey = key;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
         _borderRing = Ring(new Thickness(), BorderThickness);
-        var unit = pixel ? 1 / dpi.DpiScaleX : IsCapsule ? 1.2 : 1;
-        _glintRing = Ring(Sides(pixel ? 1 : 1.5), Sides(unit));
-        _depthRing = Ring(Sides(3), Sides(1));
+        var unit = pixel ? 1 / dpi.DpiScaleX : 1;
+        _glintRing = Ring(Sides(1), Sides(unit));
+        var bevel = Skin == PaperSkins.LiquidGlass ? (IsCapsule ? 4 : 7) : Skin == PaperSkins.Ceramic ? 5 : 3;
+        _bevelRing = Ring(Sides(1), Sides(bevel));
+        _innerRing = Ring(Sides(1 + bevel), Sides(unit));
+        _depthRing = Ring(Sides(2 + bevel), Sides(1));
 
         Thickness Sides(double width) => new(
             BorderThickness.Left > 0 ? width : 0, BorderThickness.Top > 0 ? width : 0,
@@ -169,83 +143,6 @@ internal sealed class SkinBorder : Border
         }
     }
 
-    private void EnsureBrushes(Color background)
-    {
-        var key = (Skin, _dark, IsCapsule, background, _reflectionBand);
-        if (_brushKey == key) return;
-        _brushKey = key;
-        var palette = ((SolidColorBrush)Theme.PaperBrush).Color;
-        var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
-        var alpha = opaque ? (byte)255 : Skin switch
-        {
-            PaperSkins.TracingPaper => (byte)(_dark ? 232 : 224),
-            PaperSkins.Aero => (byte)(_dark ? 224 : 192),
-            _ => (byte)(_dark ? 228 : 208)
-        };
-        var lift = Skin switch
-        {
-            PaperSkins.TracingPaper => _dark ? .025 : .48,
-            PaperSkins.Ceramic => _dark ? .022 : .30,
-            PaperSkins.LiquidGlass => _dark ? .028 : .40,
-            _ => _dark ? .018 : .20
-        };
-        var top = Mix(palette, Colors.White, lift);
-        var bottom = Mix(palette, Colors.Black, _dark ? .015 : .012);
-        _fill = Gradient(0, WithAlpha(top, alpha), 1, WithAlpha(bottom, alpha));
-        _glint = Gradient(0, Color.FromArgb(_dark ? (byte)42 : (byte)152, 255, 255, 255),
-            1, Color.FromArgb(_dark ? (byte)8 : (byte)30, 255, 255, 255));
-        _depth = Gradient(0, Color.FromArgb(_dark ? (byte)20 : (byte)18, 0, 0, 0), 1, Colors.Transparent);
-        switch (Skin)
-        {
-            case PaperSkins.Pearl:
-                _shine = new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(Color.FromArgb(_dark ? (byte)18 : (byte)48, 244, 157, 219), 0),
-                    new(Color.FromArgb(_dark ? (byte)8 : (byte)14, 255, 255, 255), .26),
-                    new(Color.FromArgb(_dark ? (byte)20 : (byte)46, 122, 218, 226), .50),
-                    new(Color.FromArgb(_dark ? (byte)18 : (byte)44, 185, 147, 239), .80),
-                    new(Color.FromArgb(_dark ? (byte)10 : (byte)22, 255, 218, 158), 1)
-                }, new Point(-.12 + _reflectionBand / 80.0, 0), new Point(1.12 + _reflectionBand / 80.0, 1));
-                break;
-            case PaperSkins.Aero:
-                _shine = new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(Color.FromArgb(_dark ? (byte)8 : (byte)24, 210, 237, 255), 0),
-                    new(Colors.Transparent, .27),
-                    new(Color.FromArgb(_dark ? (byte)10 : (byte)38, 255, 255, 255), .37),
-                    new(Color.FromArgb(_dark ? (byte)3 : (byte)10, 255, 255, 255), .49),
-                    new(Colors.Transparent, .53), new(Color.FromArgb(_dark ? (byte)6 : (byte)20, 160, 210, 250), 1)
-                }, new Point(0, 0), new Point(1, .65));
-                break;
-            case PaperSkins.LiquidGlass:
-                _shine = new RadialGradientBrush(
-                    Color.FromArgb(_dark ? (byte)10 : (byte)30, 255, 255, 255), Colors.Transparent)
-                {
-                    Center = new Point(.22, 0), GradientOrigin = new Point(.22, 0),
-                    RadiusX = .8, RadiusY = IsCapsule ? .8 : .24
-                };
-                _glint = Gradient(0, Color.FromArgb(_dark ? (byte)76 : (byte)226, 255, 255, 255),
-                    1, Color.FromArgb(_dark ? (byte)22 : (byte)70, 220, 242, 255));
-                break;
-            case PaperSkins.Ceramic:
-                _shine = Gradient(0, Color.FromArgb(_dark ? (byte)8 : (byte)36, 255, 255, 255), .18, Colors.Transparent);
-                break;
-            case PaperSkins.Pixel:
-                _fill = Frozen(new SolidColorBrush(palette));
-                _shine = Brushes.Transparent;
-                _glint = new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(Color.FromArgb(_dark ? (byte)32 : (byte)110, 255, 255, 255), 0),
-                    new(Color.FromArgb(_dark ? (byte)32 : (byte)110, 255, 255, 255), .5),
-                    new(Color.FromArgb(_dark ? (byte)32 : (byte)36, 0, 0, 0), .5),
-                    new(Color.FromArgb(_dark ? (byte)32 : (byte)36, 0, 0, 0), 1)
-                }, new Point(0, 0), new Point(1, 1));
-                break;
-            default: _shine = Brushes.Transparent; break;
-        }
-        if (_shine.CanFreeze) _shine.Freeze();
-        if (_glint.CanFreeze) _glint.Freeze();
-    }
     internal static Geometry CreateShape(Size size, CornerRadius corners, double inset, bool pixel, DpiScale dpi)
     {
         var rect = new Rect(inset, inset, Math.Max(0, size.Width - inset * 2), Math.Max(0, size.Height - inset * 2));
@@ -259,7 +156,8 @@ internal sealed class SkinBorder : Border
         }
         if (rect.Width <= 0 || rect.Height <= 0) return Geometry.Empty;
         var limit = Math.Min(rect.Width, rect.Height) / 2;
-        double Radius(double r) => Math.Clamp(r - inset, 0, limit);
+        // A small three-step chamfer, not a coarse staircase around a whole semicircle.
+        double Radius(double r) => Math.Clamp((pixel ? Math.Min(r, 6) : r) - inset, 0, limit);
         var radii = new[] { Radius(corners.TopRight), Radius(corners.BottomRight), Radius(corners.BottomLeft), Radius(corners.TopLeft) };
         var centers = new[]
         {

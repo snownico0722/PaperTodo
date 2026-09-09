@@ -430,9 +430,11 @@ internal static class VisualChecks
             var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
             var p = header.PointToScreen(new Point(header.ActualWidth / 2, 2));
             var actual = bitmap.GetPixel((int)Math.Round(p.X) - bounds.Left, (int)Math.Round(p.Y) - bounds.Top);
-            var expected = ((SolidColorBrush)Theme.TitleBarBrush(opaque: true)).Color;
-            Program.Assert(Math.Abs(actual.R - expected.R) <= 3 && Math.Abs(actual.G - expected.G) <= 3 &&
-                Math.Abs(actual.B - expected.B) <= 3, $"{name}: desktop header must not acquire a system selection/activation tint ({actual})");
+            // Native controls no longer sit on an opaque WPF strip. The fake API
+            // test still verifies an explicit caption color (never OS accent default).
+            Program.Assert(header.Background is SolidColorBrush { Color.A: 0 } && header.Margin.Bottom == 0 &&
+                header.BorderThickness == new Thickness(), $"{name}: native header uses the same material as the body");
+            Console.WriteLine($"HEADER {name}: final desktop material pixel {actual}");
         }
         var point = window.PointToScreen(new Point(window.ActualWidth / 2, Math.Max(1, window.ActualHeight - 65)));
         var sample = bitmap.GetPixel((int)Math.Round(point.X) - bounds.Left, (int)Math.Round(point.Y) - bounds.Top);

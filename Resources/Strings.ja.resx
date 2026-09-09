@@ -1457,22 +1457,22 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ピクセル</value>
   </data>
   <data name="TipSkinPearl" xml:space="preserve">
-    <value>淡いピンク・シアン・紫の光沢が移動に合わせて変化します。アニメーション無効時は静止し、待機中の連続描画は行いません。</value>
+    <value>パール膜は静止中も約28秒周期でゆっくり流れ、移動時にも偏光が変わります。アニメーション無効・ハイコントラスト・非表示・最小化で停止します。</value>
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>ハイライトと厚い縁でレンズのような見た目を再現し、カプセルは水滴風になります。背景の実際の屈折は行いません。</value>
+    <value>凸レンズ風の厚い縁、内外のハイライト、ポインターに応じた反射がヘッダーと本文をつなぎます。見た目の近似であり、デスクトップ背景のリアルタイム屈折は行いません。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>選択した配色に合わせた不透明な陶器風の表面に、柔らかな陰影と釉薬の光沢を加えます。</value>
+    <value>盛り上がった釉薬の縁、クリーム色の磁器面、厚みを感じる下部の陰影。不透明で配色に追従します。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>既存のぼかし背景に明るい縁、青い光沢、斜めの反射を重ねます。Windows 7 のシステムテーマではありません。</value>
+    <value>氷青色、斜めの反射帯、二重の光る縁がヘッダーまで続くガラス面です。Windows 7のシステムテーマではありません。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
-    <value>階段状の縁、くっきりした影、ピクセル風ボタン。本文は読みやすい通常のフォントを使います。</value>
+    <value>レトロなクエストパネル風。小さな段状の角、二重枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントを保ちます。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
     <value>スキンを保存しました。トレイから終了し再起動するとネイティブ背景が有効になります。それまでは単色で表示し、編集内容や取り消し履歴は作り直しません。</value>

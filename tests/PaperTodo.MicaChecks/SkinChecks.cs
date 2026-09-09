@@ -58,10 +58,12 @@ internal static class SkinChecks
                     Program.Assert(bytes[center + 3] == 255, $"opaque fallback {skin}/{mode}/{scale}");
                     Program.Assert(bytes[3] == 0, "corner does not paint transparent capacity");
                     var readable = (SolidColorBrush)Theme.WeakTextBrush;
-                    var litPixel = ((int)(image.PixelHeight * .12) * image.PixelWidth + image.PixelWidth / 3) * 4;
+                    // Text occupies the central capsule band, not its specular outer edge.
+                    var textHeight = capsule ? .5 : .12;
+                    var litPixel = ((int)(image.PixelHeight * textHeight) * image.PixelWidth + image.PixelWidth / 3) * 4;
                     var litColor = Color.FromRgb(bytes[litPixel + 2], bytes[litPixel + 1], bytes[litPixel]);
                     Program.Assert(Contrast(readable.Color, litColor) >= 3,
-                        $"surface glare must not wash out secondary text: {skin}/{mode}/{scale}");
+                        $"surface glare must not wash out secondary text: {skin}/{mode}/{scale}, text={readable.Color}, surface={litColor}");
                     hashes.Add(Convert.ToHexString(SHA256.HashData(bytes)));
                     Save(image, $"{skin}-{mode}-{(capsule ? "capsule" : "paper")}-{scale:0.##}");
                     if (PaperSkins.UsesNativeBackdrop(skin))
@@ -73,7 +75,7 @@ internal static class SkinChecks
                 }
                 Program.Assert(hashes.Count == 6, "six different surfaces, not renamed presets");
             }
-            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller);
+            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckReflectionLifecycle(controller);
             Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders and editor identity.");
         }
         finally
@@ -195,9 +197,15 @@ internal static class SkinChecks
                 Theme.Invalidate(); window.UpdateTheme(); Program.Pump();
                 Program.Assert(ReferenceEquals(editor, noteProperty.GetValue(window)) && new WindowInteropHelper(window).Handle == handle, "actual editor and HWND preserved");
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(window)!;
-                Program.Assert(header.Background is SolidColorBrush { Color.A: 255 } &&
-                    ((SolidColorBrush)header.Background).Color == ((SolidColorBrush)Theme.TitleBarBrush(true)).Color,
-                    "native-session title bar stays on main's own tint, not active caption blue");
+                if (skin == PaperSkins.Paper)
+                    Program.Assert(header.Background is SolidColorBrush { Color.A: 255 }, "default header keeps main behavior");
+                else
+                {
+                    Program.Assert(header.Background is SolidColorBrush { Color.A: 0 } &&
+                        header.BorderThickness == new Thickness() && header.Margin.Bottom == 0,
+                        "one material continues under the header with no separator or white gap");
+                    if (skin != PaperSkins.Pixel) CheckHeaderSeam(window, header);
+                }
                 Save(Render(window, 1), $"window-{skin}-{mode}");
                 window.SetCollapsedState(true, animate: false, saveGeometry: false); Program.Pump();
                 Program.Assert(!window.IsNativeMicaEffective, "capsule remains on the solid path");
@@ -205,6 +213,81 @@ internal static class SkinChecks
             }
         }
         finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
+        var todo = new PaperData { Type = PaperTypes.Todo, Title = "材质与控件", Width = 360, Height = 260 };
+        todo.Items.Add(new PaperItem { Text = "普通中文保持清晰", Done = false });
+        todo.Items.Add(new PaperItem { Text = "完成项目", Done = true });
+        var todoWindow = new PaperWindow(todo, controller);
+        try
+        {
+            todoWindow.Show(); Program.Pump();
+            foreach (var mode in new[] { "light", "dark" })
+            foreach (var skin in Decorated)
+            {
+                controller.State.Theme = mode; controller.State.PaperSkin = skin; Theme.Invalidate();
+                todoWindow.UpdateTheme(); Program.Pump();
+                Save(Render(todoWindow, 1), $"todo-{skin}-{mode}");
+            }
+        }
+        finally { todoWindow.CloseForReal(); }
+    }
+    private static void CheckHeaderSeam(Window window, Border header)
+    {
+        var image = Render(window, 1); var bytes = Pixels(image);
+        var edge = header.TransformToAncestor(window).Transform(new Point(header.ActualWidth / 2, header.ActualHeight));
+        var x = (int)Math.Round(edge.X); var y = (int)Math.Round(edge.Y);
+        if (x < 0 || x >= image.PixelWidth || y < 2 || y + 2 >= image.PixelHeight) return;
+        var above = ((y - 2) * image.PixelWidth + x) * 4;
+        for (var row = y - 1; row <= y + 1; row++)
+        for (var c = 0; c < 4; c++)
+            Program.Assert(Math.Abs(bytes[(row * image.PixelWidth + x) * 4 + c] - bytes[above + c]) < 18,
+                "rendered header boundary has no bright strip or restarted texture");
+    }
+    private static void CheckReflectionLifecycle(AppController controller)
+    {
+        var enabled = controller.State.EnableAnimations;
+        controller.State.PaperSkin = PaperSkins.Pearl; controller.State.Theme = "light";
+        controller.State.EnableAnimations = true; Theme.Invalidate();
+        var window = new PaperWindow(new PaperData { Title = "珠光 · 慢速流动", X = 60, Y = 60, Width = 360, Height = 280 }, controller);
+        try
+        {
+            window.Show(); Wait(120);
+            var surface = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            Program.Assert(surface.IsReflectionRunning && surface.HasReflectionWindow, "visible pearl has an idle clock and movement listener");
+            var first = surface.IdleReflectionOffset;
+            var pixels = Pixels(Render(window, 1));
+            for (var frame = 0; frame < 64; frame++)
+            {
+                Save(Render(window, 1), $"pearl-motion-{frame:D3}");
+                Wait(125);
+            }
+            Program.Assert(Math.Abs(first - surface.IdleReflectionOffset) > .02 && !pixels.SequenceEqual(Pixels(Render(window, 1))),
+                "actual WPF film pixels change without dragging");
+            var moved = surface.MovementReflectionOffset;
+            window.Left += 160; Program.Pump();
+            Program.Assert(Math.Abs(moved - surface.MovementReflectionOffset) > .02, "drag position changes reflection independently of idle movement");
+            Save(Render(window, 1), "pearl-motion-drag");
+            window.Hide(); Program.Pump();
+            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "hidden surface owns no animation or window listener");
+            window.Show(); Wait(80);
+            Program.Assert(surface.IsReflectionRunning, "show resumes pearl motion");
+            window.WindowState = WindowState.Minimized; Program.Pump();
+            Program.Assert(!surface.IsReflectionRunning, "minimized surface stops motion");
+            window.WindowState = WindowState.Normal; Wait(80);
+            Program.Assert(surface.IsReflectionRunning, "restore resumes pearl motion");
+            controller.State.EnableAnimations = false; window.RefreshSkin();
+            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "animation toggle removes clocks and listeners");
+            controller.State.EnableAnimations = true; controller.State.PaperSkin = PaperSkins.Ceramic;
+            Theme.Invalidate(); window.UpdateTheme();
+            Program.Assert(!surface.IsReflectionRunning && !surface.HasReflectionWindow, "leaving pearl releases motion");
+        }
+        finally { window.CloseForReal(); controller.State.EnableAnimations = enabled; }
+    }
+    private static void Wait(int milliseconds)
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
     private static RenderTargetBitmap Render(FrameworkElement element, double scale)
     {

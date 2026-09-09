@@ -305,8 +305,8 @@ public sealed partial class PaperWindow : Window
     private static Brush DropIndicatorBgBrush => Theme.Tint(12);
     private static Brush DropIndicatorBrush => Theme.Tint(180);
     private static Brush AppendDropBrush => Theme.Tint(34);
-    private static Brush AppendBorderBrush => Theme.Tint(45);
-    private static Brush AppendBgBrush => Theme.Tint(12);
+    private static Brush AppendBorderBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 100 : 45));
+    private static Brush AppendBgBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 24 : 12));
     private static Brush AppendHoverBgBrush => Theme.Tint(26);
     private static Brush PaperLinkTargetBgBrush => Theme.Tint((byte)(Theme.IsDark ? 36 : 28));
     private static Brush PaperLinkTargetBorderBrush => Theme.Tint(150);
@@ -323,7 +323,9 @@ public sealed partial class PaperWindow : Window
     private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
     private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
-    private Brush TitleBarBrush => Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
+    // The single skin surface continues behind the controls. Native caption color is
+    // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
+    private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
@@ -629,9 +631,11 @@ public sealed partial class PaperWindow : Window
         var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
         path.Name = "CheckMark";
         path.SetValue(RenderOptions.EdgeModeProperty, Theme.IsPixelSkin ? EdgeMode.Aliased : EdgeMode.Unspecified);
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(Theme.IsPixelSkin ? "M 3,7 L 3,9 L 5,9 L 5,11 L 7,11 L 7,9 L 9,9 L 9,7 L 11,7 L 11,5 L 13,5 L 13,3" : "M 3,7.5 L 6.5,11 L 13,4"));
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(Theme.IsPixelSkin ? "M 2,7 H 4 V 9 H 6 V 7 H 8 V 5 H 10 V 3 H 12 V 5 H 10 V 7 H 8 V 9 H 6 V 11 H 4 V 9 H 2 Z" : "M 3,7.5 L 6.5,11 L 13,4"));
         path.SetValue(System.Windows.Shapes.Path.StrokeProperty, new DynamicResourceExtension("PaperBrushKey"));
-        path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
+        if (Theme.IsPixelSkin)
+            path.SetValue(System.Windows.Shapes.Path.FillProperty, new DynamicResourceExtension("PaperBrushKey"));
+        path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, Theme.IsPixelSkin ? 0.0 : 2.0);
         path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
         path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
         path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, Theme.IsPixelSkin ? PenLineJoin.Miter : PenLineJoin.Round);
@@ -1567,6 +1571,8 @@ public sealed partial class PaperWindow : Window
         Resources["DropIndicatorBrushKey"] = DropIndicatorBrush;
         Resources["AppendDropBrushKey"] = AppendDropBrush;
         Resources["MenuHoverBrushKey"] = MenuHoverBrush;
+        Resources["SkinTopBarMarginKey"] = HasMaterialHeader ? new Thickness() : new Thickness(0, 0, 0, 1.5);
+        Resources["SkinTopBarBorderKey"] = HasMaterialHeader ? new Thickness() : new Thickness(0, 0, 0, 1);
         Resources["TitleBarBrushKey"] = TitleBarBrush;
         Resources["TitleBarDividerBrushKey"] = TitleBarDividerBrush;
 
@@ -2189,6 +2195,7 @@ public sealed partial class PaperWindow : Window
             MaxWidth = 86,
             ToolTip = Strings.Get("ToolTipEditTitle")
         };
+        titleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
         titleHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
 
         var titleEditLayer = new Grid
@@ -2349,7 +2356,11 @@ public sealed partial class PaperWindow : Window
             CornerRadius = new CornerRadius(RadiusShell, RadiusShell, 0, 0),
             Child = top
         };
+        topHost.SetResourceReference(FrameworkElement.MarginProperty, "SkinTopBarMarginKey");
+        topHost.SetResourceReference(Border.BorderThicknessProperty, "SkinTopBarBorderKey");
         topHost.SetResourceReference(Border.BackgroundProperty, "TitleBarBrushKey");
+        _paperChrome.SetBinding(SkinBorder.HeaderHeightProperty,
+            new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = topHost });
         topHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
         topHost.MouseLeftButtonDown += (_, e) => BeginTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseMove += (_, e) => UpdateTitleBarDragGesture(topHost, e);
