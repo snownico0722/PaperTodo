@@ -1,4 +1,4 @@
-name: Validate skin frame fixes
+name: Validate repaired material composition
 on:
   push:
     branches: [exp/playful-skins-20260909]
@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
-    if: contains(github.event.head_commit.message, '[skin-check]')
+    if: contains(github.event.head_commit.message, '[skin-repair]')
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -20,76 +20,59 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Commit actual source changes on the experiment only
+      - name: Apply reviewed repair to actual source
         id: source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          @'
-          import pathlib, subprocess, hashlib, json
-          def git(*args): return subprocess.check_output(['git', *args])
-          assert git('branch','--show-current').decode().strip() == 'exp/playful-skins-20260909'
-          payloads = sorted(pathlib.Path('.').glob('.skin-frame-fix.*.json'))
-          if payloads:
-              assert len(payloads) == 3
-              outputs = {}
-              h = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
-              for payload in payloads:
-                  for entry in json.loads(payload.read_text(encoding='utf-8-sig')):
-                      name = entry['path']
-                      assert name not in outputs and '..' not in pathlib.Path(name).parts
-                      assert name == 'CHANGELOG.md' or name.startswith(('src/','tests/','Resources/','doc/'))
-                      before = pathlib.Path(name).read_text(encoding='utf-8-sig') if pathlib.Path(name).exists() else ''
-                      assert h(before) == entry['before'], 'Changed source: '+name
-                      s = before
-                      previous = 0
-                      for start,end,value in entry['edits']:
-                          assert previous <= start <= end <= len(before)
-                          previous = end
-                      for start,end,value in reversed(entry['edits']): s = s[:start] + value + s[end:]
-                      assert h(s) == entry['after'], 'Transfer mismatch: '+name
-                      outputs[name] = s
-              assert len(outputs) == 19
-              for name,s in outputs.items(): pathlib.Path(name).write_text(s,encoding='utf-8',newline='\n')
-              for payload in payloads: payload.unlink()
-              git('diff','--check')
-              git('config','user.name','github-actions[bot]')
-              git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com')
-              git('add','-A')
-              assert not git('diff','--cached','--name-only','--','.github/workflows').strip()
-              print(git('commit','-m','fix: remove native caption plates and nested skin frames; use clear glass composition').decode())
-              print(git('push','origin','HEAD:refs/heads/exp/playful-skins-20260909').decode())
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'Source integration failed' }
+          if ((git branch --show-current) -ne 'exp/playful-skins-20260909') { throw 'Wrong branch' }
+          if (Test-Path .repair-skins.py) {
+            git diff --exit-code d36a4f473d02ba6a88bd105fe2bce573c8868dc8 -- src tests Resources doc CHANGELOG.md
+            if ($LASTEXITCODE -ne 0) { throw 'Product source changed; reconcile before applying' }
+            python .repair-skins.py
+            if ($LASTEXITCODE -ne 0) { throw 'Repair application failed' }
+            Remove-Item .repair-skins.py
+            git diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'Diff validation failed' }
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -A
+            if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
+            git commit -m 'fix: restore system glass composition, remove foil skin and refine lens/porcelain'
+            if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+            git push origin HEAD:refs/heads/exp/playful-skins-20260909
+            if ($LASTEXITCODE -ne 0) { throw 'Branch advanced during repair' }
+          }
           $sha = git rev-parse HEAD
           "sha=$sha" >> $env:GITHUB_OUTPUT
           "short=$($sha.Substring(0,8))" >> $env:GITHUB_OUTPUT
-          git bundle create "$env:RUNNER_TEMP/skin-frame-source.bundle" HEAD
+          git bundle create "$env:RUNNER_TEMP/repaired-skins-source.bundle" HEAD
       - name: Release build
         shell: pwsh
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
-      - name: Material, native caption, clear background and reflection checks
+      - name: Native materials, visible lens, porcelain and lifecycle checks
         shell: pwsh
         env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/skin-frame-evidence/native
-          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/skin-frame-evidence/skins
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/repaired-skins-evidence/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/repaired-skins-evidence/skins
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
-      - name: Existing interaction and persistence regression checks
+      - name: Existing interaction and persistence checks
         shell: pwsh
         run: |
           foreach ($name in @('MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
             dotnet run --project "./tests/PaperTodo.$name/PaperTodo.$name.csproj" -c Release
             if ($LASTEXITCODE -ne 0) { throw "Failed: $name" }
           }
-      - name: Publish the tested source with embedded commit identity
+      - name: Publish exactly the tested source
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $sha = '${{ steps.source.outputs.sha }}'
-          if ((git rev-parse HEAD) -ne $sha) { throw 'Source changed after validation' }
+          if ((git rev-parse HEAD) -ne $sha) { throw 'Source changed after tests' }
           $short = '${{ steps.source.outputs.short }}'
           $xml = [xml](Get-Content PaperTodo.csproj -Raw)
           $version = $xml.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
-          $destination = Join-Path $env:RUNNER_TEMP 'skin-frame-package'
+          $destination = Join-Path $env:RUNNER_TEMP 'repaired-skins-package'
           New-Item -ItemType Directory -Force $destination | Out-Null
           foreach ($kind in @('self-contained','no-runtime')) {
             $out = Join-Path $env:RUNNER_TEMP "publish-$kind"
@@ -103,21 +86,21 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: skin-frame-evidence-${{ steps.source.outputs.short }}
-          path: ${{ runner.temp }}/skin-frame-evidence
+          name: repaired-skins-evidence-${{ steps.source.outputs.short }}
+          path: ${{ runner.temp }}/repaired-skins-evidence
           if-no-files-found: ignore
           retention-days: 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: skin-frame-source-${{ steps.source.outputs.short }}
-          path: ${{ runner.temp }}/skin-frame-source.bundle
+          name: repaired-skins-source-${{ steps.source.outputs.short }}
+          path: ${{ runner.temp }}/repaired-skins-source.bundle
           if-no-files-found: ignore
           retention-days: 1
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: skin-frame-package-${{ steps.source.outputs.short }}
-          path: ${{ runner.temp }}/skin-frame-package
+          name: repaired-skins-package-${{ steps.source.outputs.short }}
+          path: ${{ runner.temp }}/repaired-skins-package
           if-no-files-found: error
           retention-days: 2
