@@ -16,6 +16,27 @@ internal static class PluginContributionPolicy
     private const double MinimumSvgStrokeWidth = 0.1;
     private const double MaximumSvgStrokeWidth = 4.0;
 
+    internal static PaperAction[] NormalizePaperActions(IReadOnlyList<PaperAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        if (actions.Count > 32)
+            throw new PaperTodoPluginException("too_many_paper_actions", "At most 32 actions may target one paper per plugin.");
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return actions.Select(action =>
+        {
+            if (action == null)
+                throw new PaperTodoPluginException("invalid_paper_action", "Actions cannot be null.");
+            var id = NormalizeIdentifier(action.Id, "invalid_paper_action_id", "Paper action");
+            if (!seen.Add(id))
+                throw new PaperTodoPluginException("invalid_paper_action_id", "Action ids must be unique per paper.");
+            return action with
+            {
+                Id = id,
+                Text = NormalizeText(action.Text, 64, true, "invalid_paper_action_text", "Action text")
+            };
+        }).ToArray();
+    }
+
     internal static PaperTodoAction[] NormalizeTodoActions(
         IReadOnlyList<PaperTodoAction>? actions)
     {

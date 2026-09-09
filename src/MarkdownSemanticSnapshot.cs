@@ -76,14 +76,25 @@ internal readonly record struct MarkdownSemanticLink(
     public int End => Start + Length;
     public int LabelEnd => LabelStart + LabelLength;
     public int DestinationEnd => DestinationStart + DestinationLength;
+
+    /// <summary>
+    /// 链接 label 之外是否带有可见语法控制符（显式链接的 `[`/`](url)`、autolink 的两侧
+    /// `&lt;`/`&gt;`、HTML &lt;a&gt; 的开闭标签）。裸链（label 即全文）为 false：无语法可塌缩。
+    /// </summary>
+    public bool HasVisibleSyntax => Start < LabelStart || LabelEnd < End;
 }
 
 internal readonly record struct MarkdownSemanticLine(
     MarkdownSemanticLineTraits Traits,
-    int HeadingLevel)
+    int HeadingLevel,
+    int QuoteLevel)
 {
+    /// <summary>
+    /// 是否属于某个引用块（含惰性续行：物理行可无 <c>&gt;</c>，只要被 Markdig 判为引用段内容）。
+    /// QuoteLevel 与 Traits.Quote 由同一批引用 span 推导，二者一致（见 Blocks.ApplySpanToLines）。
+    /// </summary>
     public bool IsQuoted =>
-        (Traits & MarkdownSemanticLineTraits.Quote) != 0;
+        (Traits & MarkdownSemanticLineTraits.Quote) != 0 || QuoteLevel > 0;
 
     public bool IsCode =>
         (Traits & MarkdownSemanticLineTraits.Code) != 0;
@@ -153,12 +164,14 @@ internal sealed partial class MarkdownSemanticSnapshot
     }
 
     public static MarkdownSemanticSnapshot Empty { get; } = new(
+        Array.Empty<int>(),
         Array.Empty<MarkdownSemanticLine>(),
         Array.Empty<MarkdownSemanticSpan>(),
         Array.Empty<MarkdownSemanticLink>(),
         MarkdownLineIndex<MarkdownSemanticSpan>.Empty,
         MarkdownLineIndex<MarkdownSemanticLink>.Empty);
 
+    private readonly int[] _lineStarts;
     private readonly MarkdownSemanticLine[] _lines;
     private readonly MarkdownSemanticSpan[] _spans;
     private readonly MarkdownSemanticLink[] _links;
@@ -166,7 +179,11 @@ internal sealed partial class MarkdownSemanticSnapshot
     private readonly MarkdownLineIndex<MarkdownSemanticLink> _linksByLine;
     private readonly bool _hasReferenceDefinitions;
 
+    /// <summary>该快照源版本的行起点表（下标=零基行号）。解析/增量路径都已算过，直接携带供折叠等复用，避免再次逐字符扫行。</summary>
+    internal int[] LineStarts => _lineStarts;
+
     private MarkdownSemanticSnapshot(
+        int[] lineStarts,
         MarkdownSemanticLine[] lines,
         MarkdownSemanticSpan[] spans,
         MarkdownSemanticLink[] links,
@@ -174,6 +191,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         MarkdownLineIndex<MarkdownSemanticLink> linksByLine,
         bool hasReferenceDefinitions = false)
     {
+        _lineStarts = lineStarts;
         _lines = lines;
         _spans = spans;
         _links = links;
@@ -255,6 +273,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         var spanArray = spans.ToArray();
         var linkArray = links.ToArray();
         return new MarkdownSemanticSnapshot(
+            lineStarts,
             lines,
             spanArray,
             linkArray,

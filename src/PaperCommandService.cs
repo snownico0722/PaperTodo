@@ -13,7 +13,7 @@ internal sealed class PaperCommandException : Exception
     public string Code { get; }
 }
 
-internal sealed class PaperCommandService
+internal sealed partial class PaperCommandService
 {
     private readonly AppController _controller;
 
@@ -203,6 +203,7 @@ internal sealed class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -243,6 +244,7 @@ internal sealed class PaperCommandService
                 "text");
         var textChanged = text != null &&
             !string.Equals(item.Text, text, StringComparison.Ordinal);
+        var originalLinkedPaperId = item.LinkedPaperId;
         var linkedPaperId = NormalizeLinkedPaperUpdate(request);
         var doneChanged = request.Done.HasValue &&
             request.Done.Value != item.Done;
@@ -333,8 +335,16 @@ internal sealed class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RunExternalPostCommitUi(
-                () => _controller.RefreshExternalTodoPaper(paper));
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RunExternalPostCommitUi(() =>
+            {
+                _controller.RefreshExternalTodoPaper(paper);
+                if (linkedPaperChanged)
+                {
+                    _controller.RefreshCapsuleEligibilityForLinkedPapers(
+                        [originalLinkedPaperId, linkedPaperId]);
+                }
+            });
         }
 
         _controller.PublishExternalPaperOperation(context);
@@ -387,6 +397,7 @@ internal sealed class PaperCommandService
                 throw SaveFailed();
             }
 
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -476,6 +487,7 @@ internal sealed class PaperCommandService
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
+        var originalLinkedPaperId = item.LinkedPaperId;
         var snapshot = TodoPaperSnapshot.Capture(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
@@ -494,8 +506,16 @@ internal sealed class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RunExternalPostCommitUi(
-                () => _controller.RefreshExternalTodoPaper(paper));
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RunExternalPostCommitUi(() =>
+            {
+                _controller.RefreshExternalTodoPaper(paper);
+                if (!string.IsNullOrWhiteSpace(originalLinkedPaperId))
+                {
+                    _controller.RefreshCapsuleEligibilityForLinkedPapers(
+                        [originalLinkedPaperId]);
+                }
+            });
         }
 
         _controller.PublishExternalPaperOperation(context);
@@ -891,6 +911,9 @@ internal sealed class PaperCommandService
         public static TodoPaperSnapshot Capture(PaperData paper) =>
             new(paper.Items.Select(PaperItemSnapshot.Capture).ToList());
 
+        public IReadOnlyList<PaperItem> ToItems() =>
+            _items.Select(item => item.ToItem()).ToArray();
+
         public void Restore(PaperData paper)
         {
             paper.Items.Clear();
@@ -909,6 +932,7 @@ internal sealed class PaperCommandService
         int Order,
         string? LinkedPaperId,
         string? LinkedPath,
+        bool? LinkedPathIsDirectory,
         DateTimeOffset? ReminderAt,
         bool ReminderTriggered)
     {
@@ -920,15 +944,37 @@ internal sealed class PaperCommandService
                 item.Order,
                 item.LinkedPaperId,
                 item.LinkedPath,
+                item.LinkedPathIsDirectory,
                 item.ReminderAt,
                 item.ReminderTriggered);
+
+        public PaperItem ToItem()
+        {
+            var copy = new PaperItem
+            {
+                Id = Item.Id,
+                Text = Text,
+                Done = Done,
+                Order = Order,
+                ReminderAt = ReminderAt,
+                ReminderTriggered = ReminderTriggered
+            };
+            copy.RestoreQuickLaunch(
+                LinkedPaperId,
+                LinkedPath,
+                LinkedPathIsDirectory);
+            return copy;
+        }
 
         public void Restore()
         {
             Item.Text = Text;
             Item.Done = Done;
             Item.Order = Order;
-            Item.RestoreQuickLaunch(LinkedPaperId, LinkedPath);
+            Item.RestoreQuickLaunch(
+                LinkedPaperId,
+                LinkedPath,
+                LinkedPathIsDirectory);
             Item.ReminderAt = ReminderAt;
             Item.ReminderTriggered = ReminderTriggered;
         }

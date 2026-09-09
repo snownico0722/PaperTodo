@@ -4,23 +4,30 @@ namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticSnapshot
 {
+    /// <summary>
+    /// 递归收集块级语义。quoteDepth 为「当前容器内的引用嵌套深度」（0=文档根）；遇 QuoteBlock
+    /// 子块时其自身层级 = quoteDepth+1，其内容继续 +1。引用 span 的 Level 即引用层级，供
+    /// ApplySpanToLines 推导每行 QuoteLevel——惰性续行/嵌套行都不依赖物理 `&gt;`。
+    /// </summary>
     private static void CollectBlocks(
         ContainerBlock container,
         string source,
         int[] lineStarts,
         List<MarkdownSemanticSpan> spans,
-        List<MarkdownSemanticLink> links)
+        List<MarkdownSemanticLink> links,
+        int quoteDepth = 0)
     {
         foreach (var block in container)
         {
-            CollectBlock(block, source, lineStarts, spans);
+            var childQuoteDepth = block is QuoteBlock ? quoteDepth + 1 : quoteDepth;
+            CollectBlock(block, source, lineStarts, spans, childQuoteDepth);
             if (block is LeafBlock { Inline: { } inlineRoot })
             {
                 CollectInlines(inlineRoot, source, spans, links);
             }
             if (block is ContainerBlock nested)
             {
-                CollectBlocks(nested, source, lineStarts, spans, links);
+                CollectBlocks(nested, source, lineStarts, spans, links, childQuoteDepth);
             }
         }
     }
@@ -29,7 +36,8 @@ internal sealed partial class MarkdownSemanticSnapshot
         Block block,
         string source,
         int[] lineStarts,
-        List<MarkdownSemanticSpan> spans)
+        List<MarkdownSemanticSpan> spans,
+        int quoteDepth)
     {
         switch (block)
         {
@@ -38,7 +46,7 @@ internal sealed partial class MarkdownSemanticSnapshot
                 break;
 
             case QuoteBlock quote:
-                AddSpan(spans, MarkdownSemanticSpanKind.Quote, quote, source.Length);
+                AddSpan(spans, MarkdownSemanticSpanKind.Quote, quote, source.Length, quoteDepth);
                 break;
 
             case ListBlock list:
@@ -333,6 +341,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         };
         var isHeading = span.Kind is
             MarkdownSemanticSpanKind.Heading or MarkdownSemanticSpanKind.SetextHeading;
+        var isQuote = span.Kind == MarkdownSemanticSpanKind.Quote;
         if (trait == MarkdownSemanticLineTraits.None && !isHeading)
         {
             return;
@@ -347,13 +356,19 @@ internal sealed partial class MarkdownSemanticSnapshot
             var headingLevel = isHeading
                 ? Math.Clamp(span.Level, 1, 6)
                 : current.HeadingLevel;
+            // 引用层级取「覆盖该行的最深引用 span」：外层 span 先遍历设 1，内层随后 max 到 2。
+            // Heading/其它 span 只写各自的 Level，不触碰 QuoteLevel。
+            var quoteLevel = isQuote
+                ? Math.Max(current.QuoteLevel, span.Level)
+                : current.QuoteLevel;
             lines[line] = new MarkdownSemanticLine(
                 current.Traits | trait,
-                headingLevel);
+                headingLevel,
+                quoteLevel);
         }
     }
 
-    private static int[] BuildLineStarts(string source)
+    internal static int[] BuildLineStarts(string source)
     {
         var starts = new List<int>(Math.Max(1, source.Length / 32)) { 0 };
         for (var index = 0; index < source.Length; index++)

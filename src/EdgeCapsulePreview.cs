@@ -151,9 +151,11 @@ internal sealed record EdgeCapsulePreviewLayoutSession(
     IReadOnlyDictionary<string, double> TopOffsetsDip);
 
 /// <summary>
-/// Pure preview placement policy. The compact queue remains the base plan. During one browsing
-/// session only the owner has a non-standard height; transfers reuse the old preview space and keep
-/// the newly hovered capsule anchored on the pointer side. Full compaction happens only on exit.
+/// Preview placement policy. The compact queue remains the base plan. During one browsing session
+/// only the owner has a non-standard height. Downward transfers keep the newly hovered capsule at
+/// its current pointer-side position whenever that preview itself still fits the monitor; only a
+/// space-constrained target falls back to filling the released preview region. Full compaction
+/// happens on exit.
 /// </summary>
 internal static class EdgeCapsulePreviewLayoutCoordinator
 {
@@ -209,10 +211,9 @@ internal static class EdgeCapsulePreviewLayoutCoordinator
         var newHeight = Math.Max(compactHeight, size.HeightDip);
         var tops = currentTops.ToArray();
 
-        // Preview browsing deliberately keeps queue-relative motion even if a tall card or its
-        // followers extend beyond the monitor work area. Do not clamp the card height or shrink the
-        // whole corridor here; the important invariant is that a transfer does not move the target
-        // out from under a stationary pointer.
+        // Preview browsing deliberately keeps queue-relative motion even if followers extend below
+        // the monitor work area. Only the target preview itself decides whether its pointer-side top
+        // can be retained; overflow followers are allowed by the normal queue policy.
         if (oldIndex < 0)
         {
             tops[newIndex] = baseTops[newIndex];
@@ -224,11 +225,34 @@ internal static class EdgeCapsulePreviewLayoutCoordinator
                 compactHeight,
                 gap);
         }
+        else if (newIndex > oldIndex &&
+                 CanKeepPointerSideTopOnDownwardTransfer(
+                     papers,
+                     newIndex,
+                     newHeight))
+        {
+            // Prefer interaction continuity over packing density while the target card itself has
+            // room. The newly hovered capsule is already under the pointer, so leave its top exactly
+            // where it is and let the preview grow downward. Followers may overflow just as a long
+            // compact queue may; the released upper region stays empty until the session ends.
+            for (var index = 0; index < newIndex; index++)
+            {
+                tops[index] = baseTops[index];
+            }
+            tops[newIndex] = currentTops[newIndex];
+            PushFollowingMembers(
+                tops,
+                currentTops,
+                newIndex,
+                newHeight,
+                compactHeight,
+                gap);
+        }
         else if (newIndex > oldIndex)
         {
-            // Moving downward: compact only the released upper side. Keep the lower anchor of the
-            // newly hovered capsule (and everything below it) where it already is, then grow the new
-            // preview upward into the space released by the old owner.
+            // Space-constrained downward transfer: compact only the released upper side. Keep the
+            // lower anchor of the newly hovered capsule (and everything below it) where it already
+            // is, then grow the new preview upward into the space released by the old owner.
             for (var index = 0; index < newIndex; index++)
             {
                 tops[index] = baseTops[index];
@@ -313,6 +337,21 @@ internal static class EdgeCapsulePreviewLayoutCoordinator
         }
 
         return new EdgeCapsuleQueuePlan(basePlan.Queues, placements);
+    }
+
+    private static bool CanKeepPointerSideTopOnDownwardTransfer(
+        IReadOnlyList<PaperData> papers,
+        int ownerIndex,
+        double ownerHeight)
+    {
+        if (ownerIndex < 0 || ownerIndex >= papers.Count)
+        {
+            return false;
+        }
+
+        return EdgeCapsulePreviewViewportPolicy.CanKeepCurrentTop(
+            papers[ownerIndex],
+            ownerHeight);
     }
 
     private static void PushFollowingMembers(

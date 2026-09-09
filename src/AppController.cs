@@ -261,6 +261,10 @@ public sealed partial class AppController : IDisposable
         RefreshTodoReminderSchedule();
         RefreshExperimentalWindowRuntime();
 
+        // Keep the shell responsive while Windows finishes enumerating startup displays. The
+        // wait still precedes any coordinate rescue, so a late secondary monitor keeps its papers.
+        await WaitForStartupDisplayTopologyAsync();
+
         if (State.Papers.Count == 0)
         {
             if (createDefaultPaper)

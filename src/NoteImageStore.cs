@@ -42,6 +42,9 @@ public sealed class NoteImageStore : IDisposable
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
 
+    public NoteImageStore() { }
+    internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);
+
     public bool IsWriteDisabled => _writeDisabled;
 
     public bool AutoCompressLargeImages { get; set; } = true;
@@ -132,6 +135,30 @@ public sealed class NoteImageStore : IDisposable
             }
 
             return TryReadImageBytesLocked(asset, out bytes);
+        }
+    }
+
+    // Validate ownership and the bounded read under the same lock as the encoded read. Callers
+    // never receive a live asset object or an LMDB span from this operation.
+    internal bool TryReadOwnedImage(string noteId, string imageId, int maximumBytes,
+        out string mime, out byte[] bytes, out bool tooLarge)
+    {
+        lock (_gate)
+        {
+            mime = string.Empty;
+            bytes = [];
+            tooLarge = false;
+            if (_disposed || _corruptedImageIds.Contains(imageId) ||
+                !_images.TryGetValue(imageId, out var asset) ||
+                !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal)) return false;
+            if (asset.ByteLength > maximumBytes)
+            {
+                tooLarge = true;
+                return false;
+            }
+            if (asset.ByteLength <= 0 || !TryReadImageBytesLocked(asset, out bytes)) return false;
+            mime = asset.Mime;
+            return true;
         }
     }
 

@@ -30,10 +30,11 @@ public static class MarkdownRenderModes
     public const string Off = "off";
     public const string Basic = "basic";
     public const string Enhanced = "enhanced";
+    public const string Full = "full";
 
     public static bool IsValid(string? mode)
     {
-        return mode is Off or Basic or Enhanced;
+        return mode is Off or Basic or Enhanced or Full;
     }
 }
 
@@ -408,6 +409,8 @@ public sealed class AppState
     public bool MicaAlwaysActive { get; set; }
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
+    /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
+    public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
@@ -506,6 +509,7 @@ public sealed class AppState
     public bool UsePersistentPowerShellProcess { get; set; }
     public bool PreferPowerShell7 { get; set; } = true;
     public bool HideScriptRunWindow { get; set; } = true;
+    // Wire values: 0 = unlimited (legacy/default), -1 = show zero title characters.
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();

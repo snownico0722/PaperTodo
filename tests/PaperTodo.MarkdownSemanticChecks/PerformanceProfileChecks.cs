@@ -75,6 +75,7 @@ internal sealed partial class MarkdownSemanticSnapshot
 
         stageStart = Stopwatch.GetTimestamp();
         var snapshot = new MarkdownSemanticSnapshot(
+            lineStarts,
             lines,
             spans.ToArray(),
             links.ToArray(),

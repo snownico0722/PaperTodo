@@ -18,6 +18,7 @@ internal static class IncrementalSnapshotChecks
         CheckOrdinaryReferenceDocumentEditStaysLocal();
         CheckNewReferenceDefinitionFallsBack();
         CheckNewLongFenceExpandsByStateScan();
+        CheckLargeEditPreservesQuoteLevelLocally();
     }
 
     private static void CheckSmallDocumentsUseFullParse()
@@ -243,6 +244,40 @@ internal static class IncrementalSnapshotChecks
             throw new InvalidOperationException($"FAIL {name}: local path should decline global reference work");
         }
         Console.WriteLine($"PASS {name} falls back to full parse");
+    }
+
+    /// <summary>编辑点远离引用块时，局部解析拼接的 span 需保留每行 QuoteLevel（含惰性续行）。</summary>
+    private static void CheckLargeEditPreservesQuoteLevelLocally()
+    {
+        var builder = new StringBuilder();
+        for (var index = 0; index < 900; index++)
+        {
+            builder.Append("plain row ").Append(index).Append(" with ordinary words\n\n");
+        }
+
+        // 引用簇放文档末尾，与编辑点远离：外层 + 内层 + 空行 + 外层层内深度1 惰性续行。
+        builder.Append("\n> outer one\n>\n> > inner two\n>\n> outer three\nlazy depth1\n");
+
+        var oldSource = builder.ToString();
+        var editAt = oldSource.IndexOf("plain row 450", StringComparison.Ordinal) + 10;
+        var newSource = oldSource.Insert(editAt, "Z");
+        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
+
+        if (!MarkdownSemanticSnapshot.TryParseIncremental(
+                oldSource,
+                oldSnapshot,
+                newSource,
+                out var incremental))
+        {
+            throw new InvalidOperationException(
+                "FAIL large quote-preserving edit: unexpectedly fell back to full parse");
+        }
+
+        var expected = MarkdownSemanticSnapshot.Parse(newSource);
+        AssertEquivalent(expected, incremental, "large edit preserves quote level");
+
+        // 全量语义里关键行必须带正确层级（若局部路径丢了 QuoteLevel，等价断言会先于此处暴露）。
+        Console.WriteLine("PASS large edit preserves quote level locally");
     }
 
     private static void AssertEquivalent(

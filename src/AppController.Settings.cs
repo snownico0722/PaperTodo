@@ -20,6 +20,8 @@ public sealed partial class AppController
     private enum SettingsPage
     {
         General,
+        Todo,
+        Note,
         Visual,
         Shortcuts,
         Plugins,
@@ -393,7 +395,6 @@ public sealed partial class AppController
         {
             master.RefreshEffectiveTopmost();
         }
-        RefreshSettingsRegions("labs.dockedCapsule");
     }
 
     private void ToggleExperimentalEdgeCapsuleHoverPreview()
@@ -403,8 +404,9 @@ public sealed partial class AppController
         SaveNow();
         if (!State.ExperimentalEdgeCapsuleHoverPreview)
         {
-            CloseEdgeCapsulePreview(animate: false, arrange: true);
+            CloseEdgeCapsulePreview(animate: false, arrange: false);
         }
+        ArrangeDeepCapsules(animate: false);
         RefreshEdgeCapsuleHoverIntentRuntime();
         RefreshSettingsRegions("labs.edgePreviewIntent");
     }
@@ -586,18 +588,6 @@ public sealed partial class AppController
         RebuildTrayMenu();
     }
 
-    private UIElement CreateMarkdownRenderSegmentSelector()
-    {
-        var segments = new[]
-        {
-            (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
-            (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced"))
-        };
-
-        return CreateSegmentSelector(segments, State.MarkdownRenderMode, SetMarkdownRenderMode);
-    }
-
     private void SetImageReferenceTextMode(string mode)
     {
         var normalized = ImageReferenceTextModes.Normalize(mode);
@@ -666,70 +656,11 @@ public sealed partial class AppController
         ApplyTypographySettingsChange();
     }
 
-    private UIElement CreateOverallFontScaleStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = OverallFontScaleText(),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, double delta)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                SetOverallFontScale(State.Zoom + delta);
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, -OverallFontScales.Step));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, OverallFontScales.Step));
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateOverallFontScaleStepper() =>
+        CreateSettingsStepper(
+            OverallFontScaleText,
+            () => SetOverallFontScale(State.Zoom - OverallFontScales.Step),
+            () => SetOverallFontScale(State.Zoom + OverallFontScales.Step));
 
     private string OverallFontScaleText()
     {
@@ -912,72 +843,11 @@ public sealed partial class AppController
         return container;
     }
 
-    private UIElement CreateMaxTitleLengthStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, Action onClick)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                onClick();
-                valueText.Text = State.MaxTitleLength.ToString(CultureInfo.InvariantCulture);
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, () => SetMaxTitleLength(State.MaxTitleLength - 1)));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, () => SetMaxTitleLength(State.MaxTitleLength + 1)));
-
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateMaxTitleLengthStepper() =>
+        CreateSettingsStepper(
+            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
+            () => SetMaxTitleLength(State.MaxTitleLength - 1),
+            () => SetMaxTitleLength(State.MaxTitleLength + 1));
 
     private void SetMaxTitleLength(int value)
     {
@@ -1028,6 +898,7 @@ public sealed partial class AppController
         }
 
         var previousPage = _settingsPage;
+        CommitSettingsExternalMarkdownEditor();
         _settingsPage = page;
         if (previousPage != page && SupportsShortcutRecording(previousPage))
         {
@@ -1056,8 +927,6 @@ public sealed partial class AppController
         var window = new Window
         {
             Title = Strings.Get("TraySettings"),
-            Width = SettingsWindowWidth(),
-            // Height is fitted from measured page content in RefreshSettingsWindowContent.
             SizeToContent = SizeToContent.Manual,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.NoResize,
@@ -1102,6 +971,10 @@ public sealed partial class AppController
             _settingsCapsuleCollapseAllCheckBox = null;
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
+            _settingsPageScrollOffsets.Clear();
+            _settingsPage = SettingsPage.General;
+            _settingsRegionRefreshers.Clear();
+            _pluginStatusRefreshers.Clear();
             DiscardShortcutDraft();
             _settingsMica?.Dispose();
             _settingsMica = null;
@@ -1117,84 +990,8 @@ public sealed partial class AppController
                 });
         }
         RefreshSettingsWindowContent();
-        // Resolve the final fitted size before the first frame, then switch to manual positioning.
-        // Later typography changes keep this top-left anchor and grow only toward the bottom.
-        window.WindowStartupLocation = WindowStartupLocation.Manual;
-        CenterSettingsWindow(window);
         window.Show();
         window.Activate();
-    }
-
-    private void RefreshSettingsWindowContent()
-    {
-        if (_settingsWindow == null)
-        {
-            return;
-        }
-
-        var window = _settingsWindow;
-        var previousScrollOffset = _settingsPageScrollViewerPage == _settingsPage
-            ? _settingsPageScrollViewer?.VerticalOffset ?? 0
-            : 0;
-        var preserveAnchor = window.IsVisible &&
-            double.IsFinite(window.Left) &&
-            double.IsFinite(window.Top);
-        var anchoredLeft = window.Left;
-        var anchoredTop = window.Top;
-
-        InvalidateSystemThemeCacheIfNeeded();
-        var width = SettingsWindowWidth();
-
-        // Keep the frame based on the original three settings pages. Labs uses that same
-        // viewport and scrolls inside it, so adding experiments never grows the window.
-        var naturalHeight = MeasureRequiredSettingsWindowHeight(width);
-        var maxHeight = SettingsWindowMaxHeight();
-        var needsScroll = naturalHeight > maxHeight + 0.5 ||
-            _settingsPage is SettingsPage.Labs or SettingsPage.Plugins;
-        var fittedHeight = Math.Min(naturalHeight, maxHeight);
-        // Pin border height only when scrolling (viewport must be capped). When content fits,
-        // leave the border unconstrained so a slightly short measure cannot clip the last rows;
-        // the window height still uses the fitted value (with slack) as the outer frame.
-        var content = BuildSettingsWindowContent(
-            window,
-            fittedHeight: needsScroll ? fittedHeight : null,
-            enableScroll: needsScroll);
-        if (_settingsPageScrollViewer is { } scrollViewer && previousScrollOffset > 0)
-        {
-            scrollViewer.Loaded += (_, _) => scrollViewer.Dispatcher.BeginInvoke(
-                (Action)(() => scrollViewer.ScrollToVerticalOffset(
-                    Math.Min(previousScrollOffset, scrollViewer.ScrollableHeight))),
-                DispatcherPriority.ContextIdle);
-        }
-
-        if (preserveAnchor)
-        {
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Left = anchoredLeft;
-            window.Top = anchoredTop;
-        }
-
-        // Replace the content before resizing the native window. With a manual top-left anchor,
-        // a larger fitted height extends downward instead of recentering around the old bounds.
-        window.Title = Strings.Get("TraySettings");
-        window.SizeToContent = SizeToContent.Manual;
-        window.FontFamily = AppTypography.UiFontFamily;
-        window.FontSize = AppTypography.Scale(12);
-        window.Language = AppTypography.Language;
-        AppTypography.ApplyTextRendering(window);
-        window.Content = content;
-        window.Width = width;
-        window.Height = fittedHeight;
-
-        if (preserveAnchor)
-        {
-            // WPF/Win32 may round the new bounds to device pixels; explicitly restore the anchor.
-            window.Left = anchoredLeft;
-            window.Top = anchoredTop;
-        }
-
-        ApplyToolTipSetting(window);
-        _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
     }
 
     private void RefreshTypography()
@@ -1211,124 +1008,6 @@ public sealed partial class AppController
             masterCapsule.UpdateTypography();
         }
         ArrangeDeepCapsules(animate: false);
-    }
-
-    private UIElement BuildSettingsWindowContent(
-        Window window,
-        double? fittedHeight = null,
-        bool enableScroll = false)
-    {
-        _settingsRegionRefreshers.Clear();
-        _pluginStatusRefreshers.Clear();
-        var root = new DockPanel
-        {
-            Width = SettingsContentWidth(),
-            LastChildFill = true
-        };
-
-        var titleRow = new Grid
-        {
-            Margin = new Thickness(0, 0, 0, 10),
-            Background = Brushes.Transparent,
-            Cursor = System.Windows.Input.Cursors.SizeAll
-        };
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.MouseLeftButtonDown += (_, e) =>
-        {
-            if (e.ChangedButton == MouseButton.Left)
-            {
-                var previousWorkArea = WindowWorkAreaHelper.WorkAreaFor(window);
-                try { window.DragMove(); } catch { }
-                if (!previousWorkArea.Equals(WindowWorkAreaHelper.WorkAreaFor(window)))
-                {
-                    window.Dispatcher.BeginInvoke(
-                        (Action)RefreshSettingsWindowContent,
-                        DispatcherPriority.Background);
-                }
-            }
-        };
-
-        var title = new TextBlock
-        {
-            Text = Strings.Get("TraySettings"),
-            Foreground = TrayTextBrush,
-            FontSize = AppTypography.Scale(15),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(title, 0);
-        titleRow.Children.Add(title);
-
-        var pageSelector = (FrameworkElement)CreateSettingsPageSelector();
-        pageSelector.HorizontalAlignment = HorizontalAlignment.Left;
-        pageSelector.VerticalAlignment = VerticalAlignment.Center;
-        pageSelector.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(pageSelector, 1);
-        titleRow.Children.Add(pageSelector);
-
-        var advancedModeToggle = SettingsToggle(
-            Strings.Get("SettingsAdvancedMode"),
-            State.AdvancedSettingsMode,
-            ToggleAdvancedSettingsMode);
-        advancedModeToggle.FontSize = AppTypography.Scale(11.5);
-        advancedModeToggle.Margin = new Thickness(8, 0, 8, 0);
-        advancedModeToggle.VerticalAlignment = VerticalAlignment.Center;
-        advancedModeToggle.ToolTip = BuildSettingsHintTooltip(Strings.Get("TipAdvancedSettingsMode"));
-        Grid.SetColumn(advancedModeToggle, 2);
-        titleRow.Children.Add(advancedModeToggle);
-
-        var closeButton = new Button
-        {
-            Content = "×",
-            Width = 28,
-            Height = 24,
-            Padding = new Thickness(0),
-            BorderThickness = new Thickness(1),
-            Background = Brushes.Transparent,
-            Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(16),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            Focusable = false,
-            Style = BuildSettingsCloseButtonStyle()
-        };
-        closeButton.Click += (_, _) => window.Close();
-        Grid.SetColumn(closeButton, 3);
-        titleRow.Children.Add(closeButton);
-
-        DockPanel.SetDock(titleRow, Dock.Top);
-        root.Children.Add(titleRow);
-
-        if (_settingsPage == SettingsPage.Shortcuts)
-        {
-            root.Children.Add(WrapSettingsPageContent(BuildShortcutSettingsPage(), enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
-        }
-
-        if (_settingsPage == SettingsPage.Visual)
-        {
-            root.Children.Add(WrapSettingsPageContent(BuildVisualSettingsPage(), enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
-        }
-
-        if (_settingsPage == SettingsPage.Labs)
-        {
-            root.Children.Add(WrapSettingsPageContent(BuildLabsSettingsPage(), enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
-        }
-
-        if (_settingsPage == SettingsPage.Plugins)
-        {
-            var pluginsPage = BuildPluginsSettingsPage();
-            root.Children.Add(WrapSettingsPageContent(pluginsPage, enableScroll));
-            return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
-        }
-
-        root.Children.Add(WrapSettingsPageContent(BuildGeneralSettingsPage(), enableScroll));
-        return WrapSettingsWindowContent(root, fittedHeight, enableScroll);
     }
 
     private UIElement BuildLabsSettingsPage()
@@ -1381,16 +1060,6 @@ public sealed partial class AppController
 
         AddLabsMajorSection(
             rightColumn,
-            Strings.Get("LabsDockedCapsuleBehavior"),
-            BuildSettingsLiveRegion(
-                "labs.dockedCapsule",
-                BuildLabsDockedCapsuleBehaviorSettings));
-        AddLabsMajorSection(
-            rightColumn,
-            Strings.Get("LabsTodoReminders"),
-            BuildSettingsLiveRegion("labs.reminders", BuildLabsTodoReminderSettings));
-        AddLabsMajorSection(
-            rightColumn,
             Strings.Get("LabsMcp"),
             BuildSettingsLiveRegion("labs.mcp", BuildLabsMcpSettings));
         AddLabsMajorSection(
@@ -1437,95 +1106,12 @@ public sealed partial class AppController
         column.Children.Add(content);
     }
 
-    private static void MovePluginMoreSettingsButtonsToTail(DependencyObject root)
-    {
-        if (root is Panel panel)
-        {
-            Button? moreButton = null;
-            for (var index = panel.Children.Count - 1; index >= 0; index--)
-            {
-                var child = panel.Children[index];
-                if (child is Button directButton && IsPluginMoreSettingsButton(directButton))
-                {
-                    moreButton = directButton;
-                    panel.Children.RemoveAt(index);
-                    continue;
-                }
-
-                if (child is WrapPanel wrap)
-                {
-                    var nestedButton = wrap.Children
-                        .OfType<Button>()
-                        .FirstOrDefault(IsPluginMoreSettingsButton);
-                    if (nestedButton != null)
-                    {
-                        wrap.Children.Remove(nestedButton);
-                        moreButton = nestedButton;
-                        if (wrap.Children.Count == 1)
-                        {
-                            var remaining = wrap.Children[0];
-                            wrap.Children.RemoveAt(0);
-                            panel.Children.RemoveAt(index);
-                            panel.Children.Insert(index, remaining);
-                        }
-                        else if (wrap.Children.Count == 0)
-                        {
-                            panel.Children.RemoveAt(index);
-                        }
-                    }
-                }
-            }
-
-            foreach (UIElement child in panel.Children)
-            {
-                MovePluginMoreSettingsButtonsToTail(child);
-            }
-
-            if (moreButton != null)
-            {
-                moreButton.Margin = new Thickness(0, 8, 0, 0);
-                moreButton.HorizontalAlignment = HorizontalAlignment.Left;
-                panel.Children.Add(moreButton);
-            }
-            return;
-        }
-
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var index = 0; index < count; index++)
-        {
-            MovePluginMoreSettingsButtonsToTail(VisualTreeHelper.GetChild(root, index));
-        }
-    }
-
-    private static bool IsPluginMoreSettingsButton(Button button) =>
-        string.Equals(
-            button.Content?.ToString(),
-            Strings.Get("PluginsMoreSettings"),
-            StringComparison.Ordinal);
-
     private UIElement BuildLabsWindowCoordinationSettings()
     {
         var content = new StackPanel();
         content.Children.Add(BuildLabsWindowTetherSettings());
         content.Children.Add(BuildLabsCapsuleMagnetSettings());
         return content;
-    }
-
-    private UIElement BuildLabsDockedCapsuleBehaviorSettings()
-    {
-        var card = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(0, 3, 0, 5),
-            Margin = new Thickness(0, 1, 0, 3)
-        };
-        card.Child = WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsDockedCapsulesNonTopmost"),
-                State.ExperimentalDockedCapsulesNonTopmost,
-                ToggleExperimentalDockedCapsulesNonTopmost),
-            "TipLabsDockedCapsulesNonTopmost");
-        return card;
     }
 
     private UIElement BuildLabsFocusBehaviorSettings()
@@ -2359,7 +1945,6 @@ public sealed partial class AppController
         State.ExperimentalCollapsePaperOnDeactivate = false;
         State.ExperimentalHideInactiveTopBarButtons = false;
         State.ExperimentalHideInactiveTitleBar = false;
-        State.ExperimentalDockedCapsulesNonTopmost = false;
         State.ExperimentalEdgeCapsuleHoverPreview = true;
         State.ExperimentalEdgeCapsuleHoverIntent = true;
         State.ExperimentalEdgeCapsuleHoverIntentSensitivity =
@@ -2367,13 +1952,6 @@ public sealed partial class AppController
         State.ExperimentalAllowLockIconUnlock = true;
         State.ExperimentalShortcutOpacityLevel = 0.35;
         ClearAdvancedShortcutRuntimeState();
-        State.ExperimentalTodoReminders = false;
-        State.ExperimentalTodoReminderShowButton = true;
-        State.ExperimentalTodoReminderQuickMinutes =
-            ExperimentalTodoReminderOptions.DefaultQuickMinutes;
-        State.ExperimentalTodoReminderSoundEnabled = false;
-        State.ExperimentalTodoReminderSound =
-            TodoReminderSoundOptions.Asterisk;
         State.McpEnabled = false;
         State.McpAllowBlankWrites = false;
         State.McpAllowFullWrites = false;
@@ -2395,14 +1973,9 @@ public sealed partial class AppController
 
         foreach (var window in _windows.Values.ToList())
         {
-            window.RefreshDeepCapsuleSlotTopmost();
             window.DisableExperimentalCapsuleMagnet();
             window.DisableExperimentalTetherVisibilityLink();
             window.DisableExperimentalWindowTether();
-        }
-        foreach (var master in _masterCapsules.Values.ToList())
-        {
-            master.RefreshEffectiveTopmost();
         }
         RefreshExperimentalWindowRuntime();
         RefreshEdgeCapsuleHoverIntentRuntime();
@@ -2410,232 +1983,7 @@ public sealed partial class AppController
         SaveNow();
         RefreshExperimentalOpacitySurfaces(animate: false);
         RefreshExperimentalFocusPresentationSurfaces();
-        RefreshTodoReminderFeature();
         RefreshSettingsWindowContent();
-    }
-
-    private UIElement BuildGeneralSettingsPage()
-    {
-        _settingsExternalMarkdownTextBox = null;
-        _settingsHidePapersFromTaskbarCheckBox = null;
-        _settingsHidePapersFromWindowSwitcherCheckBox = null;
-        _settingsCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleExpandedSlotCheckBox = null;
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
-        _settingsCapsuleCollapseAllCheckBox = null;
-
-        var columns = new Grid
-        {
-            Margin = new Thickness(0, 0, 4, 0)
-        };
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var leftColumn = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 14, 0)
-        };
-        var rightColumn = new StackPanel
-        {
-            Margin = new Thickness(14, 0, 0, 0)
-        };
-
-        var advanced = State.AdvancedSettingsMode;
-
-        // Left: everyday desktop / window behavior. Right: paper features, capsule first.
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
-        leftColumn.Children.Add(CreateUiLanguageSettingsRow());
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
-        if (advanced)
-        {
-            _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromTaskbar"), State.HidePapersFromTaskbar, ToggleHidePapersFromTaskbar));
-            _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHidePapersFromWindowSwitcher"), State.HidePapersFromWindowSwitcher, ToggleHidePapersFromWindowSwitcher));
-            leftColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(_settingsHidePapersFromTaskbarCheckBox, "TipHidePapersFromTaskbar"),
-                WrapWithHint(_settingsHidePapersFromWindowSwitcherCheckBox, "TipHidePapersFromWindowSwitcher"),
-                CompactSettingsField(
-                    Strings.Get("SettingsFullscreenTopmostMode"),
-                    CreateFullscreenTopmostModeSegmentSelector(),
-                    editorWidth: 156,
-                    tipKey: "TipFullscreenTopmostMode",
-                    topMargin: 8)));
-        }
-
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("TrayMarkdownRenderMode"), topMargin: 8), "TipMarkdownRender"));
-        leftColumn.Children.Add(CreateMarkdownRenderSegmentSelector());
-
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewTodoButton"), State.ShowTopBarNewTodoButton, ToggleTopBarNewTodoButton), "TipNewTodoButton"));
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarNewNoteButton"), State.ShowTopBarNewNoteButton, ToggleTopBarNewNoteButton), "TipNewNoteButton"));
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsShowTopBarExternalOpenButton"), State.ShowTopBarExternalOpenButton, ToggleTopBarExternalOpenButton), "TipExternalOpenButton"));
-
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsExternalOpen")));
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsExternalMarkdownExtension")), "TipExternalExtension"));
-        leftColumn.Children.Add(CreateExternalMarkdownExtensionEditor());
-
-        if (advanced)
-        {
-            // Keep script options on the shorter left column so they stay visible without scrolling.
-            leftColumn.Children.Add(AdvancedSettingsBlock(
-                SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
-                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPersistentPowerShellProcess"), State.UsePersistentPowerShellProcess, TogglePersistentPowerShellProcess)), "TipPersistentPowerShellProcess"),
-                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsPreferPowerShell7"), State.PreferPowerShell7, TogglePreferPowerShell7)), "TipPreferPowerShell7"),
-                WrapWithHint(MarkAdvancedSetting(SettingsToggle(Strings.Get("SettingsHideScriptRunWindow"), State.HideScriptRunWindow, ToggleHideScriptRunWindow)), "TipHideScriptRunWindow")));
-        }
-
-        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
-        _settingsCapsuleModeCheckBox = SettingsToggle(Strings.Get("TrayCapsuleMode"), State.UseCapsuleMode, ToggleCapsuleMode);
-        _settingsDeepCapsuleModeCheckBox = SettingsToggle(Strings.Get("TrayDeepCapsuleMode"), State.UseDeepCapsuleMode, ToggleDeepCapsuleMode);
-        _settingsDeepCapsuleExpandedSlotCheckBox = SettingsToggle(Strings.Get("SettingsShowDeepCapsuleWhileExpanded"), State.ShowDeepCapsuleWhileExpanded, ToggleDeepCapsuleExpandedSlot);
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = SettingsToggle(Strings.Get("SettingsRememberDeepCapsuleExpandedPosition"), State.RememberDeepCapsuleExpandedPosition, ToggleRememberDeepCapsuleExpandedPosition);
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"), State.CollapseExpandedDeepCapsuleOnClick, ToggleCollapseExpandedDeepCapsuleOnClick);
-        _settingsCapsuleCollapseAllCheckBox = SettingsToggle(Strings.Get("SettingsCapsuleCollapseAll"), State.UseCapsuleCollapseAll, ToggleCapsuleCollapseAll);
-        rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleExpandedSlotCheckBox, "TipShowDeepCapsuleWhileExpanded"));
-        rightColumn.Children.Add(WrapWithHint(_settingsRememberDeepCapsuleExpandedPositionCheckBox, "TipRememberDeepCapsuleExpandedPosition"));
-        // Master-capsule control sits one slot above "collapse expanded on click".
-        rightColumn.Children.Add(WrapWithHint(_settingsCapsuleCollapseAllCheckBox, "TipCapsuleCollapseAll"));
-        rightColumn.Children.Add(WrapWithHint(_settingsCollapseExpandedDeepCapsuleOnClickCheckBox, "TipCollapseExpandedDeepCapsuleOnClick"));
-        RefreshSettingsCapsuleToggleStates();
-        if (advanced)
-        {
-            rightColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
-                        State.HideEdgeCapsuleCloseButtonOnHover,
-                        ToggleHideEdgeCapsuleCloseButtonOnHover)),
-                    "TipHideEdgeCapsuleCloseButtonOnHover"),
-                CompactSettingsField(
-                    Strings.Get("SettingsMaxTitleLength"),
-                    CreateMaxTitleLengthStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipMaxTitleLength",
-                    topMargin: 8),
-                CompactSettingsField(
-                    Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"),
-                    CreateDeepCapsuleTitleMeasureLimitStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipDeepCapsuleTitleMeasureLimit",
-                    topMargin: 8)));
-        }
-
-        rightColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.todos",
-            BuildGeneralTodoPaperSettings));
-        var separator = new Border
-        {
-            Width = 1,
-            Margin = new Thickness(0, 10, 0, 4),
-            Background = TrayBorderBrush,
-            Opacity = 0.65
-        };
-
-        Grid.SetColumn(leftColumn, 0);
-        Grid.SetColumn(separator, 1);
-        Grid.SetColumn(rightColumn, 2);
-        columns.Children.Add(leftColumn);
-        columns.Children.Add(separator);
-        columns.Children.Add(rightColumn);
-
-        return WithSettingsPageRestoreFooter(columns, RestoreGeneralSettingsPageDefaults);
-    }
-
-    private UIElement BuildGeneralTodoPaperSettings()
-    {
-        var content = new StackPanel();
-        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoPaper")));
-        if (State.AdvancedSettingsMode)
-        {
-            content.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsAutoCompressLargeImages"),
-                        State.AutoCompressLargeImages,
-                        ToggleAutoCompressLargeImages)),
-                    "TipAutoCompressLargeImages")));
-        }
-
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsAutoClearCompletedTodos"),
-                State.AutoClearCompletedTodos,
-                ToggleAutoClearCompletedTodos),
-            "TipAutoClearCompletedTodos"));
-
-        var autoMoveCompletedToggle = SettingsToggle(
-            Strings.Get("SettingsAutoMoveCompletedTodosToBottom"),
-            State.AutoMoveCompletedTodosToBottom,
-            ToggleAutoMoveCompletedTodosToBottom);
-        autoMoveCompletedToggle.IsEnabled = !State.AutoClearCompletedTodos;
-        autoMoveCompletedToggle.Opacity =
-            autoMoveCompletedToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            autoMoveCompletedToggle,
-            "TipAutoMoveCompletedTodosToBottom"));
-
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableTodoPaperLinks"),
-                State.EnableTodoPaperLinks,
-                ToggleTodoPaperLinks),
-            "TipEnableTodoPaperLinks"));
-
-        var showLinkedPaperNameToggle = SettingsToggle(
-            Strings.Get("SettingsShowLinkedPaperName"),
-            State.ShowLinkedPaperName,
-            ToggleLinkedPaperNameDisplay);
-        showLinkedPaperNameToggle.IsEnabled = State.EnableTodoPaperLinks;
-        content.Children.Add(WrapWithHint(
-            showLinkedPaperNameToggle,
-            "TipShowLinkedPaperName"));
-
-        var allowLongLinkedPaperTitlesToggle = SettingsToggle(
-            Strings.Get("SettingsAllowLongLinkedPaperTitles"),
-            State.AllowLongLinkedPaperTitles,
-            ToggleLongLinkedPaperTitles);
-        allowLongLinkedPaperTitlesToggle.IsEnabled =
-            State.EnableTodoPaperLinks && State.ShowLinkedPaperName;
-        content.Children.Add(WrapWithHint(
-            allowLongLinkedPaperTitlesToggle,
-            "TipAllowLongLinkedPaperTitles"));
-
-        var linkedPathExtensionOnlyToggle = SettingsToggle(
-            Strings.Get("SettingsShowLinkedPathExtensionOnly"),
-            State.ShowLinkedPathExtensionOnly,
-            ToggleLinkedPathExtensionOnly);
-        linkedPathExtensionOnlyToggle.IsEnabled =
-            State.EnableTodoPaperLinks &&
-            State.ShowLinkedPaperName &&
-            !State.AllowLongLinkedPaperTitles;
-        content.Children.Add(WrapWithHint(
-            linkedPathExtensionOnlyToggle,
-            "TipShowLinkedPathExtensionOnly"));
-
-        var hideLinkedPapersFromCapsulesToggle = SettingsToggle(
-            Strings.Get("SettingsHideLinkedPapersFromCapsules"),
-            State.HideLinkedPapersFromCapsules,
-            ToggleHideLinkedPapersFromCapsules);
-        hideLinkedPapersFromCapsulesToggle.IsEnabled = State.EnableTodoPaperLinks;
-        content.Children.Add(WrapWithHint(
-            hideLinkedPapersFromCapsulesToggle,
-            "TipHideLinkedPapersFromCapsules"));
-
-        var runLinkedScriptCapsulesToggle = SettingsToggle(
-            Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"),
-            State.RunLinkedScriptCapsulesOnClick,
-            ToggleRunLinkedScriptCapsulesOnClick);
-        runLinkedScriptCapsulesToggle.IsEnabled = State.EnableTodoPaperLinks;
-        content.Children.Add(WrapWithHint(
-            runLinkedScriptCapsulesToggle,
-            "TipRunLinkedScriptCapsulesOnClick"));
-        return content;
     }
 
     private UIElement BuildVisualSettingsPage()
@@ -2819,55 +2167,6 @@ public sealed partial class AppController
         return root;
     }
 
-    private void RestoreGeneralSettingsPageDefaults()
-    {
-        // Only fields on the Behavior page; does not touch visual/theme or hotkeys.
-        State.HidePapersFromTaskbar = true;
-        State.HidePapersFromWindowSwitcher = true;
-        State.EnableToolTips = true;
-        State.EnableAnimations = true;
-        State.UiLanguage = UiLanguages.Default;
-        State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
-        State.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
-        State.ShowTopBarNewTodoButton = true;
-        State.ShowTopBarNewNoteButton = true;
-        State.ShowTopBarExternalOpenButton = true;
-        State.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Default;
-        State.UsePersistentPowerShellProcess = false;
-        State.PreferPowerShell7 = true;
-        State.HideScriptRunWindow = true;
-        State.UseCapsuleMode = true;
-        State.UseDeepCapsuleMode = true;
-        State.ShowDeepCapsuleWhileExpanded = true;
-        State.HideEdgeCapsuleCloseButtonOnHover = false;
-        State.RememberDeepCapsuleExpandedPosition = true;
-        State.UseCapsuleCollapseAll = true;
-        State.CollapseExpandedDeepCapsuleOnClick = false;
-        State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
-        State.DeepCapsuleTitleMeasureCharacterLimit = 0;
-        State.AutoCompressLargeImages = true;
-        State.AutoClearCompletedTodos = false;
-        State.AutoMoveCompletedTodosToBottom = false;
-        State.EnableTodoPaperLinks = true;
-        State.ShowLinkedPaperName = false;
-        State.AllowLongLinkedPaperTitles = false;
-        State.ShowLinkedPathExtensionOnly = false;
-        State.HideLinkedPapersFromCapsules = false;
-        State.RunLinkedScriptCapsulesOnClick = false;
-        NormalizePaperSystemVisibilitySettings();
-        ClampPaperTitlesToMaxLength(State.MaxTitleLength);
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-
-        if (!State.UsePersistentPowerShellProcess)
-        {
-            PaperWindow.StopPersistentScriptProcesses();
-        }
-
-        SaveNow();
-        ApplyGeneralSettingsAfterRestore();
-        RefreshSettingsWindowContent();
-    }
-
     private void RestoreVisualSettingsPageDefaults()
     {
         // Theme lives on the visual page with color scheme / fonts.
@@ -2903,7 +2202,8 @@ public sealed partial class AppController
         }
 
         SaveNow();
-        ApplyTypographySettingsChange();
+        // Typography was configured above; the theme refresh rebuilds settings once.
+        RefreshTypography();
         RefreshThemeSurfaces();
     }
 
@@ -2936,232 +2236,7 @@ public sealed partial class AppController
         RefreshToolTipSetting();
     }
 
-    private UIElement CreateSettingsPageSelector()
-    {
-        const string generalKey = "general";
-        const string visualKey = "visual";
-        const string shortcutsKey = "shortcuts";
-        const string pluginsKey = "plugins";
-        const string labsKey = "labs";
-        var segments = new List<(string Key, string Label)>
-        {
-            (Key: generalKey, Label: Strings.Get("SettingsBehavior")),
-            (Key: visualKey, Label: Strings.Get("SettingsVisual")),
-            (Key: shortcutsKey, Label: Strings.Get("SettingsShortcuts")),
-            (Key: pluginsKey, Label: Strings.Get("SettingsPlugins"))
-        };
-        if (State.AdvancedSettingsMode)
-        {
-            segments.Add((Key: labsKey, Label: Strings.Get("SettingsLabs")));
-        }
-
-        var activeKey = _settingsPage switch
-        {
-            SettingsPage.Visual => visualKey,
-            SettingsPage.Shortcuts => shortcutsKey,
-            SettingsPage.Plugins => pluginsKey,
-            SettingsPage.Labs when State.AdvancedSettingsMode => labsKey,
-            _ => generalKey
-        };
-
-        // Premium main segmented capsule container
-        var container = new Border
-        {
-            CornerRadius = new CornerRadius(5),
-            Background = TrayHoverBrush, // Sunken tab track background
-            Margin = new Thickness(0),
-            Height = 24,
-            Width = segments.Count * (segments.Count >= 5 ? 68 : 76),
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-
-        var grid = new Grid();
-        foreach (var _ in segments)
-        {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        }
-
-        for (int i = 0; i < segments.Count; i++)
-        {
-            var key = segments[i].Key;
-            var label = segments[i].Label;
-            var isActive = activeKey == key;
-
-            // Segment item card
-            var segmentBorder = new Border
-            {
-                CornerRadius = new CornerRadius(3.5),
-                Margin = new Thickness(1.5), // Micro margin for inline capsule
-                Background = isActive ? Theme.ActiveBrush : Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-
-            var textBlock = new TextBlock
-            {
-                Text = label,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = AppTypography.Scale(11),
-                FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
-                Foreground = isActive ? TrayPaperBrush : TrayWeakTextBrush,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-
-            segmentBorder.Child = textBlock;
-
-            // Micro-interaction hover behavior
-            if (!isActive)
-            {
-                segmentBorder.MouseEnter += (_, _) =>
-                {
-                    textBlock.Foreground = TrayTextBrush; // Elevate text readability on hover
-                };
-                segmentBorder.MouseLeave += (_, _) =>
-                {
-                    textBlock.Foreground = TrayWeakTextBrush;
-                };
-            }
-
-            segmentBorder.MouseLeftButtonDown += (_, e) =>
-            {
-                e.Handled = true;
-                if (activeKey == key)
-                {
-                    return;
-                }
-                ShowSettingsWindow(key switch
-                {
-                    visualKey => SettingsPage.Visual,
-                    shortcutsKey => SettingsPage.Shortcuts,
-                    pluginsKey => SettingsPage.Plugins,
-                    labsKey => SettingsPage.Labs,
-                    _ => SettingsPage.General
-                });
-            };
-
-            Grid.SetColumn(segmentBorder, i);
-            grid.Children.Add(segmentBorder);
-        }
-
-        container.Child = grid;
-        return container;
-    }
-
-    private UIElement WrapSettingsPageContent(UIElement content, bool enableScroll)
-    {
-        // Overlay signature sits on the bottom-right; keep bottom inset so the last row is not
-        // hidden under it. Only use ScrollViewer when the window is capped by the work area.
-        var body = new Border
-        {
-            Padding = new Thickness(0, 0, enableScroll ? 4 : 0, enableScroll ? 28 : 24),
-            Child = content
-        };
-
-        if (!enableScroll)
-        {
-            _settingsPageScrollViewer = null;
-            _settingsPageScrollViewerPage = _settingsPage;
-            return body;
-        }
-
-        var scrollViewer = new ScrollViewer
-        {
-            Content = body,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            CanContentScroll = false,
-            PanningMode = PanningMode.VerticalOnly
-        };
-        _settingsPageScrollViewer = scrollViewer;
-        _settingsPageScrollViewerPage = _settingsPage;
-        return scrollViewer;
-    }
-
-    private Border WrapSettingsWindowContent(
-        DockPanel root,
-        double? fittedHeight = null,
-        bool reserveScrollBar = false)
-    {
-        var overlay = new Grid();
-        overlay.Children.Add(root);
-
-        var signature = BuildSettingsSignature(reserveScrollBar);
-        Panel.SetZIndex(signature, 10);
-        overlay.Children.Add(signature);
-
-        var border = new Border
-        {
-            Background = TrayPaperBrush,
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 12),
-            Width = SettingsWindowWidth(),
-            Padding = new Thickness(14, 12, 14, 14),
-            // Fill the window client area so shorter pages keep a stable frame without clipping
-            // when the outer window is sized to the tallest measured page.
-            VerticalAlignment = VerticalAlignment.Stretch,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Child = overlay
-        };
-        if (fittedHeight is > 0)
-        {
-            // Only when scrolling: pin the chrome so the ScrollViewer gets a finite viewport.
-            border.Height = fittedHeight.Value;
-        }
-
-        return border;
-    }
-
-    private double MeasureRequiredSettingsWindowHeight(double windowWidth)
-    {
-        if (_settingsWindow == null)
-        {
-            return Math.Min(660, SettingsWindowMaxHeight());
-        }
-
-        var previousPage = _settingsPage;
-        var maxHeight = 0.0;
-        try
-        {
-            // Preserve the pre-Labs sizing rule: only the original three pages
-            // determine the settings-window frame. Labs receives this fixed viewport.
-            var pages = new[]
-            {
-                SettingsPage.General,
-                SettingsPage.Visual,
-                SettingsPage.Shortcuts
-            };
-            foreach (var page in pages)
-            {
-                _settingsPage = page;
-                if (page == SettingsPage.Shortcuts)
-                {
-                    EnsureShortcutDraft();
-                }
-
-                // Probe without ScrollViewer / fixed height so DesiredSize is true content chrome.
-                var probe = BuildSettingsWindowContent(_settingsWindow, fittedHeight: null, enableScroll: false);
-                probe.Measure(new Size(windowWidth, double.PositiveInfinity));
-                maxHeight = Math.Max(maxHeight, probe.DesiredSize.Height);
-            }
-        }
-        finally
-        {
-            _settingsPage = previousPage;
-        }
-
-        if (maxHeight < 1)
-        {
-            maxHeight = 400;
-        }
-
-        // Generous slack for DPI rounding, UseLayoutRounding, and font metric variance after the
-        // live tree is attached — too little here clips the last settings rows without a scrollbar.
-        // Do not clamp to work-area here — caller decides scroll vs grow.
-        return Math.Ceiling(maxHeight + 16);
-    }
-
-    private UIElement BuildSettingsSignature(bool reserveScrollBar)
+    private UIElement BuildSettingsSignature()
     {
         var signatureText = new TextBlock
         {
@@ -3176,14 +2251,8 @@ public sealed partial class AppController
         {
             Background = TrayPaperBrush,
             Cursor = System.Windows.Input.Cursors.Hand,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            // Keep the overlay clear of the vertical scrollbar when the page is capped.
-            Margin = new Thickness(
-                0,
-                0,
-                reserveScrollBar ? SystemParameters.VerticalScrollBarWidth + 4 : 4,
-                0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(2, 10, 0, 0),
             Padding = new Thickness(6, 2, 0, 2),
             Child = signatureText,
             ToolTip = AuthorGithubUrl
@@ -3217,21 +2286,11 @@ public sealed partial class AppController
         }
     }
 
-    private double SettingsWindowWidth()
-    {
-        return SettingsContentWidth() + 32;
-    }
-
     private double SettingsContentWidth()
     {
         var availableWidth = WindowWorkAreaHelper.WorkAreaFor(_settingsWindow).Width - 96;
-        // Slightly under the previous 540–640 frame for a denser settings window.
+        // Preserve usable control widths; the page host scrolls on narrower work areas.
         return Math.Clamp(availableWidth, 520, 620);
-    }
-
-    private double SettingsWindowMaxHeight()
-    {
-        return Math.Max(260, WindowWorkAreaHelper.WorkAreaFor(_settingsWindow).Height - 48);
     }
 
     private static TextBlock SettingsSectionLabel(string text)
@@ -3460,7 +2519,10 @@ public sealed partial class AppController
     // Lays the option out as: [option .....stretch.....] [ⓘ]. The trailing ⓘ shows a themed
     // tooltip with the detailed explanation on hover, so every row stays short while the full
     // description is one hover away. tipKey is a Strings resource key.
-    private UIElement WrapWithHint(FrameworkElement option, string tipKey)
+    private UIElement WrapWithHint(FrameworkElement option, string tipKey) =>
+        WrapWithHint(option, BuildSettingsHintTooltip(Strings.Get(tipKey)));
+
+    private UIElement WrapWithHint(FrameworkElement option, ToolTip tooltip)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -3472,14 +2534,17 @@ public sealed partial class AppController
         Grid.SetColumn(option, 0);
         grid.Children.Add(option);
 
-        var hint = CreateSettingsHintGlyph(tipKey, margin: new Thickness(6, 0, 0, 0));
+        var hint = CreateSettingsHintGlyph(tooltip, margin: new Thickness(6, 0, 0, 0));
         Grid.SetColumn(hint, 1);
         grid.Children.Add(hint);
 
         return grid;
     }
 
-    private Border CreateSettingsHintGlyph(string tipKey, Thickness margin)
+    private Border CreateSettingsHintGlyph(string tipKey, Thickness margin) =>
+        CreateSettingsHintGlyph(BuildSettingsHintTooltip(Strings.Get(tipKey)), margin);
+
+    private Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
     {
         var hintGlyph = new TextBlock
         {
@@ -3500,7 +2565,7 @@ public sealed partial class AppController
             Cursor = System.Windows.Input.Cursors.Help,
             VerticalAlignment = VerticalAlignment.Center,
             Child = hintGlyph,
-            ToolTip = BuildSettingsHintTooltip(Strings.Get(tipKey))
+            ToolTip = tooltip
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
         ToolTipService.SetInitialShowDelay(hint, 200);
@@ -3698,7 +2763,11 @@ public sealed partial class AppController
 
         var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
         path.Name = "CheckMark";
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 4,8.1 L 7,11 L 12,5"));
+        // Keep the original layout box stable so changing the geometry is a real one-DIP shift
+        // instead of being partly cancelled by Path natural-size re-centering at some DPI scales.
+        path.SetValue(FrameworkElement.WidthProperty, 13.0);
+        path.SetValue(FrameworkElement.HeightProperty, 12.0);
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 3,7.1 L 6,10 L 11,4"));
         path.SetValue(System.Windows.Shapes.Path.StrokeProperty, TrayPaperBrush);
         path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
         path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
@@ -3791,36 +2860,10 @@ public sealed partial class AppController
         return style;
     }
 
-    private static void CenterSettingsWindow(Window? window)
-    {
-        if (window == null)
-        {
-            return;
-        }
-
-        var area = SystemParameters.WorkArea;
-        var width = window.ActualWidth > 1 ? window.ActualWidth : window.Width;
-        var height = window.ActualHeight > 1
-            ? window.ActualHeight
-            : double.IsFinite(window.Height) && window.Height > 1
-                ? window.Height
-                : 280;
-        var minLeft = area.Left + 16;
-        var minTop = area.Top + 16;
-        var maxLeft = area.Right - width - 16;
-        var maxTop = area.Bottom - height - 16;
-        var centeredLeft = area.Left + (area.Width - width) / 2;
-        var centeredTop = area.Top + (area.Height - height) / 2;
-
-        window.Left = ClampWindowCoordinate(centeredLeft, minLeft, maxLeft);
-        window.Top = ClampWindowCoordinate(centeredTop, minTop, maxTop);
-    }
-
     private static double ClampWindowCoordinate(double value, double min, double max)
     {
         return max < min ? min : Math.Clamp(value, min, max);
     }
-
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {

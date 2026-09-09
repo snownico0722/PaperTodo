@@ -432,7 +432,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 done: false);
         }
 
-        var normal = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var normal = NewTextBlock(string.Empty, NoteTypography.FontSize);
         normal.Margin = new Thickness(0, 2, 0, 3);
         AddInlineContent(normal.Inlines, trimmed, openExternal);
         return normal;
@@ -451,12 +451,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-        var markerText = NewTextBlock(marker, AppTypography.Scale(11.5));
+        var markerText = NewTextBlock(marker, NoteTypography.FontSize - 2.5);
         markerText.Width = marker.Length > 2 ? AppTypography.Scale(28) : AppTypography.Scale(22);
         markerText.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         grid.Children.Add(markerText);
 
-        var body = NewTextBlock(string.Empty, AppTypography.Scale(12));
+        var body = NewTextBlock(string.Empty, NoteTypography.FontSize);
         AddInlineContent(body.Inlines, content, openExternal);
         if (done)
         {
@@ -470,7 +470,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static FrameworkElement BuildCodeBlock(string code)
     {
-        var text = NewTextBlock(code, AppTypography.Scale(10.8));
+        var text = NewTextBlock(code, NoteTypography.CodeFontSize);
         text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
         text.LineHeight = AppTypography.Scale(16);
         var host = new Border
@@ -564,10 +564,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (match.Groups[10].Success)
             {
+                // CodeFontSize 已含全局缩放,直接用作字号:与下方代码块(BuildCodeBlock)及编辑器
+                // "行内代码与代码块同字号"约定一致。切勿再套 AppTypography.Scale,否则会二次缩放。
                 var code = new Span(new Run(Group(10)))
                 {
                     FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-                    FontSize = AppTypography.Scale(10.8)
+                    FontSize = NoteTypography.CodeFontSize
                 };
                 code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
                 target.Add(code);

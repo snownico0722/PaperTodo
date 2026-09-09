@@ -373,23 +373,7 @@ public sealed partial class AppController
         var resetAll = SettingsTextButton(Strings.Get("SettingsRestorePageDefaults"));
         resetAll.MinWidth = 108;
         resetAll.Padding = new Thickness(18, 0, 18, 0);
-        resetAll.Click += (_, _) =>
-        {
-            EnsureShortcutDraft();
-            foreach (var definition in GlobalShortcutCatalog.Definitions
-                         .Where(item => item.Group != GlobalShortcutGroup.Labs))
-            {
-                _shortcutDraft![definition.Id] = definition.DefaultGesture;
-                _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
-            }
-
-            State.OpenEdgeCapsuleShortcutAtCursor = true;
-            State.DistinguishNumpadShortcutDigits = false;
-            State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
-            ClearVisibilityShortcutRestoreSnapshot();
-            _shortcutRecordingCommandId = null;
-            ApplyShortcutDraft();
-        };
+        resetAll.Click += (_, _) => RestoreShortcutSettingsPageDefaults();
         Grid.SetColumn(resetAll, 1);
         actions.Children.Add(resetAll);
 
@@ -476,6 +460,52 @@ public sealed partial class AppController
         root.Children.Add(rows);
 
         return root;
+    }
+
+    private void RestoreShortcutSettingsPageDefaults()
+    {
+        EnsureShortcutDraft();
+        foreach (var definition in GlobalShortcutCatalog.Definitions
+                     .Where(item => item.Group != GlobalShortcutGroup.Labs))
+        {
+            _shortcutDraft![definition.Id] = definition.DefaultGesture;
+            _shortcutEnabledDraft![definition.Id] = definition.DefaultEnabled;
+        }
+
+        var previousOpenAtCursor = State.OpenEdgeCapsuleShortcutAtCursor;
+        var previousDistinguishNumpad = State.DistinguishNumpadShortcutDigits;
+        var previousPreserveLinkedHidden =
+            State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts;
+        var previousVisibilitySnapshot = _visibilityShortcutVisibleLinkedPaperIds == null
+            ? null
+            : new HashSet<string>(
+                _visibilityShortcutVisibleLinkedPaperIds,
+                StringComparer.Ordinal);
+
+        // Plugin digit aliases share the same OS registration space. Release them before changing
+        // the digit mode so built-in defaults are applied atomically against the desired mode.
+        SuspendPluginShortcutRegistrations();
+        State.OpenEdgeCapsuleShortcutAtCursor = true;
+        State.DistinguishNumpadShortcutDigits = false;
+        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts = true;
+        ClearVisibilityShortcutRestoreSnapshot();
+        _shortcutRecordingCommandId = null;
+        ApplyShortcutDraft();
+
+        if (_shortcutApplyFailure == GlobalShortcutRegistrationFailure.None &&
+            !_shortcutApplyFailureStatus.HasValue)
+        {
+            RefreshPluginShortcuts();
+            return;
+        }
+
+        State.OpenEdgeCapsuleShortcutAtCursor = previousOpenAtCursor;
+        State.DistinguishNumpadShortcutDigits = previousDistinguishNumpad;
+        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts =
+            previousPreserveLinkedHidden;
+        _visibilityShortcutVisibleLinkedPaperIds = previousVisibilitySnapshot;
+        RefreshPluginShortcuts();
+        RefreshShortcutSettingsUi();
     }
 
     private static bool SupportsShortcutRecording(SettingsPage page)
@@ -1431,91 +1461,25 @@ public sealed partial class AppController
         return ordered;
     }
 
-    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = DeepCapsuleTitleMeasureLimitText(),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, Action onClick)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                onClick();
-                valueText.Text = DeepCapsuleTitleMeasureLimitText();
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? PaperTitles.MaxConfigurableTitleLength : current - 1);
-        }));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? 0 : current >= PaperTitles.MaxConfigurableTitleLength ? 0 : current + 1);
-        }));
-
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
 
     private string DeepCapsuleTitleMeasureLimitText()
     {
-        return State.DeepCapsuleTitleMeasureCharacterLimit == 0
+        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
+        return limit == EdgeCapsuleTitleLimit.Unlimited
             ? Strings.Get("SettingsAllCharacters")
-            : State.DeepCapsuleTitleMeasureCharacterLimit.ToString(CultureInfo.InvariantCulture);
+            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
     }
 
     private void SetDeepCapsuleTitleMeasureCharacterLimit(int value)
     {
-        var normalized = Math.Clamp(value, 0, PaperTitles.MaxConfigurableTitleLength);
+        var normalized = EdgeCapsuleTitleLimit.Normalize(value);
         if (State.DeepCapsuleTitleMeasureCharacterLimit == normalized)
         {
             return;

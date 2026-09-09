@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
@@ -151,7 +150,7 @@ public sealed partial class AppController
         {
             content.ColumnDefinitions.Add(new ColumnDefinition
             {
-                Width = new GridLength(Math.Min(255, SettingsWindowWidth() * 0.34))
+                Width = new GridLength(Math.Min(255, (SettingsContentWidth() + 32) * 0.34))
             });
         }
 
@@ -453,13 +452,7 @@ public sealed partial class AppController
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14),
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 20,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
+            Padding = new Thickness(14)
         };
         var root = new DockPanel();
         var titleRow = new Grid

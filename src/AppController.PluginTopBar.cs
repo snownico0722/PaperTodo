@@ -266,7 +266,7 @@ public sealed partial class AppController
                 binding.Scope,
                 targetPaperId,
                 targetPaperType,
-                targetBodyProviderId));
+                targetBodyProviderId) { Position = PluginPopupHost.CapturePosition() });
         }
         catch (Exception ex)
         {

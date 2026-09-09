@@ -136,7 +136,8 @@ internal static class EdgeCapsuleTransitionPolicy
             Lerp(start.ContentOpacity, target.ContentOpacity, progress),
             target.OutlineVisible,
             hitTestVisible,
-            target.CloseSegmentActsAsContent);
+            target.CloseSegmentActsAsContent,
+            start.TitleVisible || target.TitleVisible);
 #if DEBUG
         if (outgoingPreview &&
             Math.Abs(bounds.Width - target.Bounds.Width) <= 2 &&
@@ -185,7 +186,8 @@ internal static class EdgeCapsuleTransitionPolicy
         Math.Abs(applied.ContentOpacity - target.ContentOpacity) < 0.001 &&
         applied.OutlineVisible == target.OutlineVisible &&
         applied.IsHitTestVisible == target.IsHitTestVisible &&
-        applied.CloseSegmentActsAsContent == target.CloseSegmentActsAsContent;
+        applied.CloseSegmentActsAsContent == target.CloseSegmentActsAsContent &&
+        applied.TitleVisible == target.TitleVisible;
 
 #if DEBUG
     private static void TracePreviewTerminalSample(

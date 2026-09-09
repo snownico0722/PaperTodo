@@ -338,11 +338,26 @@ public sealed partial class PaperWindow : Window
     private static ControlTemplate? _sharedContextMenuTemplate;
     [ThreadStatic]
     private static Style? _sharedCompactMenuItemStyle;
+    [ThreadStatic]
+    private static double _sharedCompactMenuItemStyleScale;
 
     private static ControlTemplate SharedContextMenuTemplate =>
         _sharedContextMenuTemplate ??= BuildContextMenuTemplate();
-    private static Style SharedCompactMenuItemStyle =>
-        _sharedCompactMenuItemStyle ??= BuildCompactMenuItemStyle();
+    private static Style SharedCompactMenuItemStyle
+    {
+        get
+        {
+            var scale = AppTypography.ScaleFactor;
+            if (_sharedCompactMenuItemStyle == null || _sharedCompactMenuItemStyleScale != scale)
+            {
+                // Sealed styles cannot be edited. Replace the thread's cache when its baked-in
+                // glyph metrics change; live menus replace their resource during typography refresh.
+                _sharedCompactMenuItemStyle = BuildCompactMenuItemStyle();
+                _sharedCompactMenuItemStyleScale = scale;
+            }
+            return _sharedCompactMenuItemStyle;
+        }
+    }
     private Style? _todoCheckBoxStyle;
     private double _todoCheckBoxStyleScale = double.NaN;
 
@@ -2632,6 +2647,8 @@ public sealed partial class PaperWindow : Window
             }
         }
 
+        AttachPluginPaperMenuActions(menu);
+
         if (CanDisplayAsCapsule())
         {
             menu.Items.Add(_paper.IsCollapsed
@@ -3327,19 +3344,25 @@ public sealed partial class PaperWindow : Window
             if (_themedContextMenus[i].TryGetTarget(out var menu))
             {
                 UpdateContextMenuTheme(menu);
-                menu.FontFamily = AppTypography.UiFontFamily;
-                menu.FontSize = AppTypography.Scale(13);
-                menu.Language = AppTypography.Language;
-                AppTypography.ApplyTextRendering(menu);
-                foreach (var header in menu.Items.OfType<MenuItem>().Where(item => !item.IsEnabled))
-                {
-                    header.FontSize = AppTypography.Scale(12);
-                }
+                RefreshContextMenuTypography(menu);
             }
             else
             {
                 _themedContextMenus.RemoveAt(i);
             }
+        }
+    }
+
+    private static void RefreshContextMenuTypography(ContextMenu menu)
+    {
+        menu.Resources[typeof(MenuItem)] = SharedCompactMenuItemStyle;
+        menu.FontFamily = AppTypography.UiFontFamily;
+        menu.FontSize = AppTypography.Scale(13);
+        menu.Language = AppTypography.Language;
+        AppTypography.ApplyTextRendering(menu);
+        foreach (var header in menu.Items.OfType<MenuItem>().Where(item => !item.IsEnabled))
+        {
+            header.FontSize = AppTypography.Scale(12);
         }
     }
 
@@ -3549,7 +3572,7 @@ public sealed partial class PaperWindow : Window
         var title = _controller.PaperCapsuleTitle(_paper);
         if (limitForDeepCapsule)
         {
-            title = LimitTextElements(title, _controller.State.DeepCapsuleTitleMeasureCharacterLimit);
+            title = EdgeCapsuleTitleLimit.TextForMeasure(title, _controller.State.DeepCapsuleTitleMeasureCharacterLimit);
         }
 
         return MeasureCapsuleTextWidth(
@@ -3558,17 +3581,6 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             CapsuleLabelFontFamily,
             pixelsPerDip);
-    }
-
-    private static string LimitTextElements(string text, int limit)
-    {
-        if (limit <= 0 || string.IsNullOrEmpty(text))
-        {
-            return text;
-        }
-
-        var indexes = StringInfo.ParseCombiningCharacters(text);
-        return indexes.Length <= limit ? text : text[..indexes[limit]];
     }
 
     // The capsule icon glyph (✓ / ✎) is not a fixed box — its rendered advance width depends

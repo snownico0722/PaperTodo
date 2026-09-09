@@ -1,18 +1,10 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
 internal static class WebPluginWorkspaceRequests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
     public static object? Execute(
         IPaperTodoHostApi host,
         string method,
@@ -24,6 +16,9 @@ internal static class WebPluginWorkspaceRequests
             OptionalString(parameters, "paperId"),
             OptionalBoolean(parameters, "includeBlank") ?? false),
         "notes.get" => host.GetNote(RequiredString(parameters, "paperId")),
+        "noteAssets.readImage" => (host as IPaperNoteAssetsApi
+            ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable."))
+            .ReadImage(RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
         "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters)),
         "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters)),
         "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters)),
@@ -41,7 +36,7 @@ internal static class WebPluginWorkspaceRequests
     {
         try
         {
-            return payload.Deserialize<T>(JsonOptions)
+            return payload.Deserialize<T>(WebPluginRuntimeInfrastructure.JsonOptions)
                 ?? throw new JsonException("Payload deserialized to null.");
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)

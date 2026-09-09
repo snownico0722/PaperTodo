@@ -297,7 +297,16 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
               const runtime = Object.freeze({
                 post(message) { return request('runtime.post', { message: message ?? null }); }
               });
+              const noteAssets = Object.freeze({
+                readImage(paperId, imageId) { return request('noteAssets.readImage', {paperId, imageId}); }
+              });
+              const popups = Object.freeze({
+                open(position, options) { return request('popups.open', {...options, position}); },
+                close() { return request('popups.close'); }
+              });
               window.papertodo = Object.freeze({
+                noteAssets,
+                popups,
                 surface: 'body',
                 paper,
                 body,
@@ -788,6 +797,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             OptionalPayloadString(parameters, "paperId"),
             OptionalPayloadBoolean(parameters, "includeBlank") ?? false),
         "notes.get" => _context.Host.GetNote(PayloadString(parameters, "paperId")),
+        "noteAssets.readImage" => WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+        "popups.open" or "popups.close" => WebPluginPopupRequests.Execute(
+            _context.Popups, _context.Host, _manifest, method, parameters, message => Send(message)),
         "papers.create" => _context.Host.CreatePaper(
             DeserializePayload<CreatePaperRequest>(parameters)),
         "todos.append" => _context.Host.AppendTodos(
@@ -873,6 +885,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
     private void ClearHostSubscriptions()
     {
+        (_context.Host as PaperBodyPluginHostApi)?.ResetExtensionUi();
         foreach (var subscription in _hostSubscriptions.Values)
         {
             try { subscription.Dispose(); } catch { }
@@ -996,6 +1009,12 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
+        if (!ShouldResetExtensionUiOnProcessFailure(e.ProcessFailedKind))
+        {
+            Trace.TraceWarning("Web body recoverable process failure: {0}", e.ProcessFailedKind);
+            return;
+        }
+
         _hasDocumentNavigation = false;
         _activeDocumentToken = null;
         _departingDocumentToken = null;
@@ -1003,6 +1022,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         ClearHostSubscriptions();
         ShowFailure(Strings.Format("PluginsWebProcessFailedFormat", e.ProcessFailedKind));
     }
+
+    internal static bool ShouldResetExtensionUiOnProcessFailure(CoreWebView2ProcessFailedKind kind) =>
+        WebPluginProcessFailurePolicy.Classify(kind) != WebPluginProcessFailurePolicy.Recovery.None;
 
     private static string ReadPayloadString(JsonElement payload) =>
         payload.ValueKind == JsonValueKind.String

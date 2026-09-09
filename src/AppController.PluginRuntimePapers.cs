@@ -293,7 +293,7 @@ public sealed partial class AppController
     private static string PluginRuntimeProviderId(string? providerId) =>
         providerId?.Trim() ?? string.Empty;
 
-    private PaperData RequirePluginRuntimePaper(string providerId, string paperId) =>
+    internal PaperData RequirePluginRuntimePaper(string providerId, string paperId) =>
         FindPluginRuntimePaper(providerId, paperId)
         ?? throw new PaperTodoPluginException(
             "paper_not_owned",

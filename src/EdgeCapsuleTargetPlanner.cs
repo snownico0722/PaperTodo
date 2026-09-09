@@ -34,13 +34,16 @@ internal static class EdgeCapsuleTargetPlanner
             EdgeCapsuleGestureState.FloatingTransfer or
             EdgeCapsuleGestureState.FloatingReordering or
             EdgeCapsuleGestureState.DockingHandoff;
+        var keepPermanentEndpointCompact = model.State.Gesture is
+            EdgeCapsuleGestureState.FloatingTransfer or
+            EdgeCapsuleGestureState.FloatingReordering;
         var preview = !retracted &&
             !dockedSuppressed &&
             model.Preview == EdgeCapsulePreviewState.Open;
-        // The detached floating HWND owns every visible drag pixel. Keep the suppressed permanent
-        // docked endpoint compact so Hovered/Active cannot continue hidden width mutations behind
-        // that cover.
-        var expanded = !ownsFloatingHost &&
+        // Free floating drag keeps the hidden permanent endpoint compact. Once docking hand-off
+        // begins, that endpoint becomes the authoritative physical target even while suppressed,
+        // so Handoff, Reveal and the final interactive frame must share one Hovered/Active geometry.
+        var expanded = !keepPermanentEndpointCompact &&
             !preview &&
             !retracted &&
             (model.State.Visual is
@@ -48,16 +51,28 @@ internal static class EdgeCapsuleTargetPlanner
                 EdgeCapsuleVisualState.Active);
         var top = model.DockedDragTopDipOverride ??
             (retracted ? layout.MasterTopDip : layout.NormalTopDip);
-        var closeWidth =
-            preview || expanded
-                ? layout.MaximumCloseWidthDip
-                : 0;
+
+        // Preview is its own surface and keeps its close control. For the ordinary hover/active
+        // surface, "hide close button" means there is no close segment at all — not an invisible
+        // reserved strip that still makes the pill longer.
+        var closeSegmentVisible =
+            preview ||
+            (expanded && !layout.CloseSegmentActsAsContent);
+        var closeWidth = closeSegmentVisible
+            ? layout.MaximumCloseWidthDip
+            : 0;
         var visibleHeight = preview
             ? layout.PreviewHeightDip
             : layout.HeightDip;
+        var expandedWidth = Math.Max(layout.RestingWidthDip, layout.ExpandedWidthDip);
+        // PreviewWidthDip remains the total preview envelope, so its body always excludes the
+        // preview close strip. Ordinary hover width uses ExpandedWidthDip as the body directly.
+        var previewBodyWidth = Math.Max(
+            1,
+            layout.PreviewWidthDip - layout.MaximumCloseWidthDip);
         var bodyWidth = preview
-            ? Math.Max(1, layout.PreviewWidthDip - closeWidth)
-            : layout.RestingWidthDip;
+            ? previewBodyWidth
+            : expanded ? expandedWidth : layout.RestingWidthDip;
         var geometry = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             layout.Monitor,
             layout.Edge,
@@ -70,8 +85,7 @@ internal static class EdgeCapsuleTargetPlanner
         // current monitor/DPI/edge and never shrinks it during that host
         // generation.
         var hostVisibleWidth = Math.Max(
-            layout.RestingWidthDip +
-                layout.MaximumCloseWidthDip,
+            expandedWidth + layout.MaximumCloseWidthDip,
             Math.Max(
                 layout.PreviewWidthDip,
                 layout.HostCapacityWidthDip));
@@ -122,7 +136,8 @@ internal static class EdgeCapsuleTargetPlanner
             !retracted && !dockedSuppressed &&
                 model.State.Visual == EdgeCapsuleVisualState.Active,
             hitTest,
-            preview ? false : layout.CloseSegmentActsAsContent);
+            false,
+            !layout.HideRestingTitle || (expanded && expandedWidth > layout.RestingWidthDip));
 
         var floatingShape = ownsFloatingHost
             ? CreateFloatingShape(layout, model.State.Visual == EdgeCapsuleVisualState.Active)

@@ -130,7 +130,12 @@ public sealed record PaperTopBarActionInvocation(
     PaperTopBarActionScope Scope,
     string TargetPaperId,
     string TargetPaperType,
-    string TargetBodyProviderId);
+    string TargetBodyProviderId)
+{
+    // Add a property rather than changing the positional constructor/deconstruction used by
+    // already compiled 2.1 plugins. No WPF control or persistent source relationship is exposed.
+    public PaperPopupPosition? Position { get; init; }
+}
 
 /// <summary>
 /// Paper-session-scoped Top Bar capability. It can contribute actions only to the paper carrying
@@ -333,6 +338,10 @@ public sealed class PaperBodyContext
     public required PaperBodySurfaceContext Body { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
     public required IPaperPluginRuntimeClient Runtime { get; init; }
+    public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
+        ?? throw new InvalidOperationException("This host does not expose note image reads.");
+    public IPaperPluginPopups Popups => Workspace as IPaperPluginPopups
+        ?? throw new InvalidOperationException("This host does not expose plugin popups.");
     public IPaperTopBarApi TopBar => Workspace as IPaperTopBarApi
         ?? throw new InvalidOperationException(
             "This PaperTodo host does not expose the Protocol 2.1 paper top-bar capability.");

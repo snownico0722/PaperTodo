@@ -20,6 +20,30 @@ Run("Lazy block quote", () =>
     var snapshot = MarkdownSemanticSnapshot.Parse("> quoted\nlazy continuation");
     True(snapshot.GetLine(0).IsQuoted, "quote opening line");
     True(snapshot.GetLine(1).IsQuoted, "lazy continuation remains in quote");
+    Equal(1, snapshot.GetLine(0).QuoteLevel, "quote opening level");
+    Equal(1, snapshot.GetLine(1).QuoteLevel, "lazy continuation level");
+});
+
+Run("Quote level", () =>
+{
+    var snapshot = MarkdownSemanticSnapshot.Parse("> a\n> b");
+    Equal(1, snapshot.GetLine(0).QuoteLevel, "first quote row");
+    Equal(1, snapshot.GetLine(1).QuoteLevel, "second quote row");
+});
+
+Run("Nested quote level", () =>
+{
+    var snapshot = MarkdownSemanticSnapshot.Parse("> a\n> \n> > b\n> \n> c");
+    Equal(1, snapshot.GetLine(0).QuoteLevel, "outer row before nest");
+    Equal(2, snapshot.GetLine(2).QuoteLevel, "inner nested row");
+    Equal(1, snapshot.GetLine(4).QuoteLevel, "outer row after nest");
+});
+
+Run("Lazy continuation inside nested quote", () =>
+{
+    var snapshot = MarkdownSemanticSnapshot.Parse("> a\n> > b\nlazy");
+    True(snapshot.GetLine(2).IsQuoted, "deep lazy line stays quoted");
+    Equal(2, snapshot.GetLine(2).QuoteLevel, "deep lazy line keeps inner level");
 });
 
 Run("Indented code", () =>

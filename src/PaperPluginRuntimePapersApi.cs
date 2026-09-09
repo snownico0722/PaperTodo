@@ -46,29 +46,32 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     public IReadOnlyList<PaperPluginRuntimePaper> List()
     {
         EnsureUsable();
-        var snapshot = OnUi(() => _controller.GetPluginRuntimePapers(_providerId));
-        var completeStartupPresentation = false;
-        lock (_gate)
+        return OnUi(() =>
         {
-            EnsureUsableLocked();
-            if (!_startupSnapshotCaptured)
+            var snapshot = _controller.GetPluginRuntimePapers(_providerId);
+            var completeStartupPresentation = false;
+            lock (_gate)
             {
-                _knownPaperIds.Clear();
-                _knownPaperIds.UnionWith(snapshot.Select(paper => paper.PaperId));
-                _startupSnapshotCaptured = true;
-                completeStartupPresentation = true;
+                EnsureUsableLocked();
+                if (!_startupSnapshotCaptured)
+                {
+                    _knownPaperIds.Clear();
+                    _knownPaperIds.UnionWith(snapshot.Select(paper => paper.PaperId));
+                    _startupSnapshotCaptured = true;
+                    completeStartupPresentation = true;
+                }
             }
-        }
 
-        if (completeStartupPresentation &&
-            !_dispatcher.HasShutdownStarted &&
-            !_dispatcher.HasShutdownFinished)
-        {
-            _ = _dispatcher.BeginInvoke(
-                (Action)CompleteStartupPresentation,
-                DispatcherPriority.Background);
-        }
-        return snapshot;
+            if (completeStartupPresentation &&
+                !_dispatcher.HasShutdownStarted &&
+                !_dispatcher.HasShutdownFinished)
+            {
+                _ = _dispatcher.BeginInvoke(
+                    (Action)CompleteStartupPresentation,
+                    DispatcherPriority.Background);
+            }
+            return snapshot;
+        });
     }
 
     public PaperPluginRuntimePaper? Get(string paperId)
@@ -92,15 +95,16 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     {
         EnsureUsable();
         var normalized = NormalizePaperId(paperId);
-        lock (_gate)
+        OnUi(() =>
         {
-            EnsureUsableLocked();
-            _publishedHeaderPaperIds.Add(normalized);
-        }
-        OnUi(() => _controller.SetPluginRuntimePaperHeader(
-            _providerId,
-            normalized,
-            text ?? string.Empty));
+            _ = _controller.RequirePluginRuntimePaper(_providerId, normalized);
+            lock (_gate)
+            {
+                EnsureUsableLocked();
+                _publishedHeaderPaperIds.Add(normalized);
+            }
+            _controller.SetPluginRuntimePaperHeader(_providerId, normalized, text ?? string.Empty);
+        });
     }
 
     public void SetCapsulePresentation(
@@ -110,23 +114,26 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         EnsureUsable();
         var paperIdNormalized = NormalizePaperId(paperId);
         var presentationNormalized = PaperWindow.NormalizePluginCapsulePresentation(presentation);
-        lock (_gate)
+        OnUi(() =>
         {
-            EnsureUsableLocked();
-            _publishedCapsulePaperIds.Add(paperIdNormalized);
-            if (presentationNormalized == null)
+            _ = _controller.RequirePluginRuntimePaper(_providerId, paperIdNormalized);
+            // Cache publication and UI application use the same dispatcher order. A worker must
+            // not publish a future value that an earlier queued UI update can overwrite visually.
+            lock (_gate)
             {
-                _capsulePresentations.Remove(paperIdNormalized);
+                EnsureUsableLocked();
+                _publishedCapsulePaperIds.Add(paperIdNormalized);
+                if (presentationNormalized == null)
+                {
+                    _capsulePresentations.Remove(paperIdNormalized);
+                }
+                else
+                {
+                    _capsulePresentations[paperIdNormalized] = presentationNormalized;
+                }
             }
-            else
-            {
-                _capsulePresentations[paperIdNormalized] = presentationNormalized;
-            }
-        }
-        OnUi(() => _controller.SetPluginRuntimePaperCapsule(
-            _providerId,
-            paperIdNormalized,
-            presentationNormalized));
+            _controller.SetPluginRuntimePaperCapsule(_providerId, paperIdNormalized, presentationNormalized);
+        });
     }
 
     internal bool TryGetCapsulePresentation(
@@ -153,14 +160,17 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     internal void ResetWebDocumentPresentation()
     {
         EnsureUsable();
-        lock (_gate)
+        OnUi(() =>
         {
-            EnsureUsableLocked();
-            _publishedHeaderPaperIds.Clear();
-            _publishedCapsulePaperIds.Clear();
-            _capsulePresentations.Clear();
-        }
-        OnUi(() => _controller.ClearPluginRuntimePresentation(_providerId));
+            lock (_gate)
+            {
+                EnsureUsableLocked();
+                _publishedHeaderPaperIds.Clear();
+                _publishedCapsulePaperIds.Clear();
+                _capsulePresentations.Clear();
+            }
+            _controller.ClearPluginRuntimePresentation(_providerId);
+        });
     }
 
     public bool PostToBody(string paperId, JsonElement message)
@@ -317,19 +327,27 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         }
     }
 
-    private T OnUi<T>(Func<T> action) =>
-        _dispatcher.CheckAccess()
-            ? action()
-            : _dispatcher.Invoke(action);
+    private T OnUi<T>(Func<T> action)
+    {
+        T InvokeWhenUsable()
+        {
+            // The lease can end after a worker queues its call but before the UI executes it.
+            // Never hold _gate across dispatcher waits or controller/plugin callbacks.
+            EnsureUsable();
+            return action();
+        }
+        return _dispatcher.CheckAccess()
+            ? InvokeWhenUsable()
+            : _dispatcher.Invoke(InvokeWhenUsable);
+    }
 
     private void OnUi(Action action)
     {
-        if (_dispatcher.CheckAccess())
+        OnUi(() =>
         {
             action();
-            return;
-        }
-        _dispatcher.Invoke(action);
+            return true;
+        });
     }
 
     private void Unsubscribe(long id)

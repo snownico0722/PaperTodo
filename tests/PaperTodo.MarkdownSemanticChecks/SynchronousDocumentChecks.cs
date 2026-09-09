@@ -22,7 +22,7 @@ internal static class SynchronousDocumentChecks
         var document = new TextDocument("title\nplain");
         using var semantics = new MarkdownSemanticDocument(document);
         var publications = 0;
-        semantics.SnapshotChanged += () => publications++;
+        semantics.SnapshotChanged += _ => publications++;
 
         document.Insert(0, "# ");
 
@@ -42,7 +42,7 @@ internal static class SynchronousDocumentChecks
         var document = new TextDocument("item");
         using var semantics = new MarkdownSemanticDocument(document);
         var publications = 0;
-        semantics.SnapshotChanged += () => publications++;
+        semantics.SnapshotChanged += _ => publications++;
 
         document.BeginUpdate();
         try
@@ -84,7 +84,7 @@ internal static class SynchronousDocumentChecks
         var document = new TextDocument(source);
         using var semantics = new MarkdownSemanticDocument(document);
         var publications = 0;
-        semantics.SnapshotChanged += () => publications++;
+        semantics.SnapshotChanged += _ => publications++;
 
         var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
         var started = Stopwatch.GetTimestamp();

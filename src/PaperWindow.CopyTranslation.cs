@@ -13,13 +13,80 @@ public sealed partial class PaperWindow
         EventManager.RegisterClassHandler(
             typeof(PaperWindow),
             UIElement.PreviewKeyDownEvent,
-            new KeyEventHandler(OnCopyTranslationPreviewKeyDown),
+            new KeyEventHandler(OnPaperWindowPreviewKeyDown),
+            handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(TextBox),
+            Keyboard.LostKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler(OnAnyTextBoxLostKeyboardFocus),
             handledEventsToo: true);
         EventManager.RegisterClassHandler(
             typeof(PaperWindow),
             ContextMenuService.ContextMenuOpeningEvent,
             new ContextMenuEventHandler(OnCopyTranslationContextMenuOpening),
             handledEventsToo: true);
+    }
+
+    private static void OnPaperWindowPreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (e.Handled || sender is not PaperWindow window)
+        {
+            return;
+        }
+
+        // Search is a transient PaperWindow-owned interaction. When focus has returned to the
+        // paper while its popup is still open, Esc must dismiss find before the ordinary
+        // window-level Esc handler gets a chance to collapse the entire paper.
+        if (window.TryHandleBuiltInFindPreviewKeyDown(e))
+        {
+            return;
+        }
+
+        // The Todo window also owns list-level undo/redo. While the title TextBox has focus,
+        // keep Ctrl+Z/Ctrl+Y inside that editor so an empty title undo stack cannot fall through
+        // and unexpectedly replay Todo-list history.
+        if (window._isEditingTitle &&
+            window._titleEditBox is { IsKeyboardFocusWithin: true } titleEditBox &&
+            Keyboard.Modifiers == ModifierKeys.Control &&
+            e.Key is Key.Z or Key.Y)
+        {
+            var command = e.Key == Key.Z
+                ? ApplicationCommands.Undo
+                : ApplicationCommands.Redo;
+            if (command.CanExecute(null, titleEditBox))
+            {
+                command.Execute(null, titleEditBox);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        OnCopyTranslationPreviewKeyDown(window, e);
+    }
+
+    private static void OnAnyTextBoxLostKeyboardFocus(
+        object sender,
+        KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox textBox || Application.Current == null)
+        {
+            return;
+        }
+
+        // Popup content lives in a separate HWND, so the owner Window can already be inactive
+        // before focus later leaves the search box for another application. Match only the
+        // host-owned find input and let that PaperWindow settle the final focus state.
+        foreach (Window candidate in Application.Current.Windows)
+        {
+            if (candidate is PaperWindow window &&
+                ReferenceEquals(window._findInput, textBox))
+            {
+                window.QueueBuiltInFindPopupFocusExitCheck();
+                return;
+            }
+        }
     }
 
     private static void OnCopyTranslationPreviewKeyDown(

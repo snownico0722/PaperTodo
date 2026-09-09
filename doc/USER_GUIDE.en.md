@@ -374,7 +374,7 @@ Right-click the tray icon and choose "Settings" to enter the configuration panel
 - **Todo Logic**: Auto-clear / auto-sink completed items, file drop linking, long title truncation.
 - **Full-Screen Yield** (Advanced): Automatically lowers window tier when full-screen games, video players, or presentations are active.
 - **Clean Desktop Mode** (Advanced): Hides expanded papers from the Windows taskbar and Alt+Tab switcher.
-- **Markdown Rendering**: 3 levels (Plain text / Moderate / Enhanced).
+- **Markdown Rendering**: Four levels (Plain text / Basic / Enhanced / Full Render). With **Full Render**, headings, lists, blockquotes, code fences, images, and inline styles are shown in their final layout directly inside the editor — **while editing too**: most Markdown markers (`#`, `>`, list bullets, code fences) are hidden, and among them heading, bold, and link markers no longer occupy width so the text is compactly reflowed to its final layout; the block under the caret reveals its markers so you can adjust heading levels, lists, or blockquotes directly. Blurring the paper returns to read-only whole-note rendering.
 
 ### 8.2 Visual Styling (Custom Fonts)
 

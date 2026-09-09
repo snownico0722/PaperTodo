@@ -19,7 +19,9 @@ public sealed partial class PaperWindow
         return false;
     }
 
-    private static bool IsScrollBarInteractionSource(DependencyObject? current, DependencyObject scope)
+    private static bool IsScrollBarInteractionSource(
+        DependencyObject? current,
+        DependencyObject scope)
     {
         while (current != null)
         {

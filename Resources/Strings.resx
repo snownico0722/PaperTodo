@@ -104,6 +104,9 @@
   <data name="MarkdownRenderEnhanced" xml:space="preserve">
     <value>增强</value>
   </data>
+  <data name="MarkdownRenderFull" xml:space="preserve">
+    <value>完全渲染</value>
+  </data>
   <data name="MarkdownRenderOff" xml:space="preserve">
     <value>关闭</value>
   </data>
@@ -580,7 +583,14 @@
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础：为md渲染轻量高亮。
-增强：标题、列表和强调更美观。</value>
+增强：标题、列表和强调更美观。
+完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记（不占宽度、内容紧凑重排）；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
+  </data>
+  <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
+    <value>Markdown 渲染动画</value>
+  </data>
+  <data name="TipMarkdownEditAnimation" xml:space="preserve">
+    <value>光标进入块级编辑态、控制符时，用淡入动画呈现源码标记。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；
@@ -1116,11 +1126,10 @@
     <value>边缘标题最大长度</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>仅用标题前 N 个字符计算边缘胶囊宽度；标题本身不截断，普通胶囊不受影响。
-「全部」保持原有宽度。</value>
+    <value>限制静止时边缘胶囊显示的标题长度，0 隐藏标题文字但保留图标，不修改真实标题。加减可在「无限制、0、1…20」之间循环。关闭悬停预览时，鼠标移入会展开被截短的标题，移出后收回。</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
-    <value>全部</value>
+    <value>无限制</value>
   </data>
   <data name="ShortcutEnabledHeader" xml:space="preserve">
     <value>启用</value>

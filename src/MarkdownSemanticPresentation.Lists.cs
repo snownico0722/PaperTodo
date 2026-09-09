@@ -7,21 +7,60 @@ namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
-    private static bool HasTaskMarkerOnLine(
+    private static bool TryGetTaskMarkerContext(
         MarkdownSemanticSnapshot snapshot,
-        DocumentLine line)
+        DocumentLine line,
+        out MarkdownSemanticSpan task,
+        out MarkdownSemanticSpan ownerList,
+        out bool hasOwnerList)
     {
+        task = default;
+        ownerList = default;
+        hasOwnerList = false;
+        var hasTask = false;
         foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
         {
-            if (span.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
-                span.Start < line.EndOffset &&
-                span.End > line.Offset)
+            if (!hasTask &&
+                span.Kind == MarkdownSemanticSpanKind.TaskListMarker &&
+                span.Start >= line.Offset &&
+                span.End <= line.EndOffset)
             {
-                return true;
+                task = span;
+                hasTask = true;
             }
         }
-        return false;
+
+        if (!hasTask)
+        {
+            return false;
+        }
+
+        foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
+        {
+            if (span.Kind is not (
+                    MarkdownSemanticSpanKind.UnorderedListMarker or
+                    MarkdownSemanticSpanKind.OrderedListMarker) ||
+                span.Start < line.Offset ||
+                span.End > line.EndOffset ||
+                span.Start >= task.Start)
+            {
+                continue;
+            }
+
+            if (!hasOwnerList || span.Start > ownerList.Start)
+            {
+                ownerList = span;
+                hasOwnerList = true;
+            }
+        }
+
+        return true;
     }
+
+    private static bool HasTaskMarkerOnLine(
+        MarkdownSemanticSnapshot snapshot,
+        DocumentLine line) =>
+        TryGetTaskMarkerContext(snapshot, line, out _, out _, out _);
 
     private sealed partial class SemanticColorizer
     {
@@ -31,27 +70,35 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             ApplyTaskMarkerSemantics(line, snapshot);
 
-            if (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line))
+            // 有序编号始终使用原生文字；仅无序列表 marker 需要在源码和圆点之间切换。
+            if (!_owner.IsFullMode &&
+                (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line)))
             {
                 return;
             }
 
             foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
             {
-                if (marker.Kind is not (
-                        MarkdownSemanticSpanKind.UnorderedListMarker or
-                        MarkdownSemanticSpanKind.OrderedListMarker) ||
+                if (marker.Kind != MarkdownSemanticSpanKind.UnorderedListMarker ||
                     marker.End <= line.Offset ||
                     marker.Start >= line.EndOffset)
                 {
                     continue;
                 }
 
+                var revealed = _owner.IsRevealed(
+                    line.LineNumber,
+                    marker.Start,
+                    marker.Length,
+                    marker.Kind);
+                var brush = _owner.IsFullMode
+                    ? _owner.RevealColor(Theme.ActiveBrush, revealed)
+                    : Brushes.Transparent;
                 ApplyAbsolute(
                     line,
                     marker.Start,
                     marker.End,
-                    element => element.TextRunProperties.SetForegroundBrush(Brushes.Transparent));
+                    element => element.TextRunProperties.SetForegroundBrush(brush));
             }
         }
 
@@ -69,12 +116,19 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
+                var revealTask = !_owner.IsFullMode ||
+                    _owner.IsRevealed(
+                        line.LineNumber,
+                        marker.Start,
+                        marker.Length,
+                        MarkdownSemanticSpanKind.TaskListMarker);
                 ApplyAbsolute(
                     line,
                     marker.Start,
                     marker.End,
-                    element => element.TextRunProperties.SetForegroundBrush(Theme.ActiveBrush));
-                if (marker.Checked)
+                    element => element.TextRunProperties.SetForegroundBrush(
+                        _owner.RevealColor(Theme.ActiveBrush, revealTask)));
+                if (marker.Checked && revealTask)
                 {
                     ApplyAbsolute(
                         line,
@@ -89,35 +143,6 @@ internal sealed partial class MarkdownSemanticPresentation
     private sealed class SemanticListRenderer : IBackgroundRenderer
     {
         private readonly MarkdownSemanticPresentation _owner;
-        private Typeface? _listMarkerTypeface;
-        private string? _listMarkerFontFamily;
-        private FontStyle _listMarkerFontStyle;
-        private FontWeight _listMarkerFontWeight;
-        private FontStretch _listMarkerFontStretch;
-
-        private Typeface ListMarkerTypeface
-        {
-            get
-            {
-                var family = NoteTypography.FontFamily;
-                var style = NoteTypography.FontStyle;
-                var weight = NoteTypography.FontWeight;
-                var stretch = NoteTypography.FontStretch;
-                if (_listMarkerTypeface == null ||
-                    !string.Equals(_listMarkerFontFamily, family.Source, StringComparison.Ordinal) ||
-                    _listMarkerFontStyle != style ||
-                    _listMarkerFontWeight != weight ||
-                    _listMarkerFontStretch != stretch)
-                {
-                    _listMarkerTypeface = new Typeface(family, style, weight, stretch);
-                    _listMarkerFontFamily = family.Source;
-                    _listMarkerFontStyle = style;
-                    _listMarkerFontWeight = weight;
-                    _listMarkerFontStretch = stretch;
-                }
-                return _listMarkerTypeface;
-            }
-        }
 
         public SemanticListRenderer(MarkdownSemanticPresentation owner)
         {
@@ -141,32 +166,111 @@ internal sealed partial class MarkdownSemanticPresentation
                      line != null && line.LineNumber <= visualLine.LastDocumentLine.LineNumber;
                      line = line.NextLine)
                 {
-                    if (HasTaskMarkerOnLine(snapshot, line))
+                    var hasTask = TryGetTaskMarkerContext(
+                        snapshot,
+                        line,
+                        out var task,
+                        out var taskOwnerList,
+                        out var hasTaskOwnerList);
+                    var taskRevealed = hasTask && IsTaskRevealed(line, task);
+
+                    // Enhanced/Off 档或 Full 已显灵任务行：源码即所见，不补画任何图形。
+                    if (hasTask && (!_owner.IsFullMode || taskRevealed))
                     {
                         continue;
                     }
 
+                    if (hasTask)
+                    {
+                        DrawTaskCheckBox(textView, drawingContext, line, task);
+                    }
+
                     foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
                     {
-                        if (marker.Kind is not (
-                                MarkdownSemanticSpanKind.UnorderedListMarker or
-                                MarkdownSemanticSpanKind.OrderedListMarker) ||
+                        if (marker.Kind != MarkdownSemanticSpanKind.UnorderedListMarker ||
                             marker.End <= line.Offset ||
                             marker.Start >= line.EndOffset)
                         {
                             continue;
                         }
 
-                        DrawMarker(textView, drawingContext, document, line, marker);
+                        // 任务框只替代与 [ ]/[x] 最近的那一个无序列表 marker；外层列表圆点继续画。
+                        if (hasTaskOwnerList &&
+                            marker.Equals(taskOwnerList) &&
+                            marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
+                        {
+                            continue;
+                        }
+
+                        // Full 档已把该 marker 还原成源码（活动行），跳过图形覆盖。
+                        if (_owner.IsFullMode &&
+                            _owner.IsRevealed(
+                                line.LineNumber,
+                                marker.Start,
+                                marker.Length,
+                                marker.Kind))
+                        {
+                            continue;
+                        }
+
+                        DrawMarker(textView, drawingContext, line, marker);
                     }
                 }
+            }
+        }
+
+        private bool IsTaskRevealed(DocumentLine line, MarkdownSemanticSpan task) =>
+            _owner.IsRevealed(
+                line.LineNumber,
+                task.Start,
+                task.Length,
+                MarkdownSemanticSpanKind.TaskListMarker);
+
+        private static void DrawTaskCheckBox(
+            TextView textView,
+            DrawingContext drawingContext,
+            DocumentLine line,
+            MarkdownSemanticSpan task)
+        {
+            if (!MarkdownTaskCheckBoxGeometry.TryGetRect(textView, line, task, out var rect))
+            {
+                return;
+            }
+
+            var boxSize = rect.Width;
+            drawingContext.DrawRectangle(Theme.PaperBrush, null, rect);
+            var penWidth = Math.Max(1.0, boxSize * 0.09);
+            var pen = new Pen(Theme.PaperBorderBrush, penWidth);
+            if (task.Checked)
+            {
+                drawingContext.DrawRectangle(Theme.ActiveBrush, null, rect);
+                var checkPen = new Pen(Theme.PaperBrush, Math.Max(penWidth, boxSize * 0.14));
+                drawingContext.DrawLine(
+                    checkPen,
+                    new Point(rect.Left + boxSize * 0.22, rect.Top + boxSize * 0.5),
+                    new Point(rect.Left + boxSize * 0.45, rect.Top + boxSize * 0.72));
+                drawingContext.DrawLine(
+                    checkPen,
+                    new Point(rect.Left + boxSize * 0.45, rect.Top + boxSize * 0.72),
+                    new Point(rect.Left + boxSize * 0.8, rect.Top + boxSize * 0.3));
+            }
+            else
+            {
+                var inset = penWidth / 2;
+                drawingContext.DrawRectangle(
+                    null,
+                    pen,
+                    new Rect(
+                        rect.Left + inset,
+                        rect.Top + inset,
+                        Math.Max(0, rect.Width - penWidth),
+                        Math.Max(0, rect.Height - penWidth)));
             }
         }
 
         private void DrawMarker(
             TextView textView,
             DrawingContext drawingContext,
-            IDocument document,
             DocumentLine line,
             MarkdownSemanticSpan marker)
         {
@@ -206,34 +310,15 @@ internal sealed partial class MarkdownSemanticPresentation
                 null,
                 new Rect(markerLeft - 1, markerTop.Y - 1, markerWidth + 2, markerHeight + 2));
 
-            if (marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
-            {
-                var radius = Math.Max(
-                    2.0,
-                    Math.Min(3.2, _owner.ScaledFontSize(NoteTypography.FontSize) * 0.16));
-                drawingContext.DrawEllipse(
-                    Theme.TextBrush,
-                    null,
-                    new Point(markerLeft + markerWidth / 2, markerMiddle.Y),
-                    radius,
-                    radius);
-                return;
-            }
-
-            var markerText = document.GetText(marker.Start, marker.Length);
-            var formatted = new FormattedText(
-                markerText,
-                UiLanguages.EffectiveUiCulture,
-                FlowDirection.LeftToRight,
-                ListMarkerTypeface,
-                _owner.ScaledFontSize(NoteTypography.FontSize),
+            var radius = Math.Max(
+                0.5,
+                _owner.ScaledFontSize(NoteTypography.FontSize) * 0.16);
+            drawingContext.DrawEllipse(
                 Theme.TextBrush,
                 null,
-                AppTypography.TextFormattingMode,
-                VisualTreeHelper.GetDpi(textView).PixelsPerDip);
-            drawingContext.DrawText(
-                formatted,
-                new Point(markerLeft, markerMiddle.Y - formatted.Height / 2));
+                new Point(markerLeft + markerWidth / 2, markerMiddle.Y),
+                radius,
+                radius);
         }
     }
 }

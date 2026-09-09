@@ -23,10 +23,11 @@ This log is written for general and power users alike. It focuses on user-facing
 **Edge Preview Cards (Edge Browse)**
 
 - **Real-Time Hover Preview Cards**: Hover over any edge capsule to smoothly slide out a lightweight, interactive preview card without opening the full paper.
-  - **Todo Preview**: Displays a simplified task list directly in the hover card. Supports mouse wheel scrolling, checking/unchecking items to mark complete or undo, and clicking the background to expand the full paper window.
+  - **Todo Preview**: Displays a simplified task list directly in the hover card. Supports mouse wheel scrolling, checking/unchecking items to mark complete or undo, and clicking the background to expand the full paper window. Association and quick-launch actions use a more reliable click target and reserve their actual rendered width to avoid unnecessarily wrapping short text.
   - **Note Preview**: Lightweight real-time rendering of Markdown formatting, including headings, bold/italics, strikethrough, code blocks, lists, and image placeholders.
-  - **Intent Prediction & Seamless Handoff**: Built-in mouse motion intent prediction ensures smooth, continuous transitions when gliding between adjacent capsules, retracting cleanly when leaving the dock corridor.
+  - **Intent Prediction & Seamless Handoff**: Built-in mouse motion intent prediction ensures smooth, continuous transitions when gliding between adjacent capsules. When browsing downward, the next card stays near the current cursor position whenever it can still fit on screen instead of jumping upward to fill free space; previews retract cleanly when leaving the dock corridor.
   - **Unified Geometry & Drag Protection**: Preview cards automatically hide during capsule drag-and-drop reordering; empty todo and note papers display in a clean, ultra-compact card size.
+- **Repeat-Click Retrieve / Retract**: Clicking an edge capsule again retracts its expanded paper when that paper is still clearly visible; if the paper is substantially covered by other windows, the same click brings it back to the foreground instead of folding it out of sight.
 
 - **Plugin System & Desktop Micro-Apps**
   - **Desktop Micro-App Container**: Note papers can be transformed on demand into dedicated desktop micro-apps (such as Pomodoro timers, analog clocks, review pools, or system monitors). Added a dedicated "Plugins" management center in Settings, with data safely isolated and stored under `plugins/data/`.
@@ -38,6 +39,7 @@ This log is written for general and power users alike. It focuses on user-facing
       - **Custom Capsules & Dedicated Mini Views**: Plugins can customize collapsed capsule appearances (supporting icons, text, dynamic progress rings/bars, or pure WPF custom rendering) and provide lightweight mini card views for edge hover.
       - **Deep Todo Integration**: Plugins can contribute right-side action icons and context-menu actions to todo items.
       - **Top Bar & Key Capture**: Plugins can add action buttons and status tags to the paper's top bar, register dedicated global hotkeys, and declare exclusive capture of the <kbd>Esc</kbd> key and context menus.
+      - **Paper Menus & Lightweight Popups**: Plugins can add text entries to paper context menus, read permitted note images, and open lightweight interfaces near a clicked button or menu action that automatically close when focus leaves them.
       - **Managed State & Advanced Settings Panel**: The host manages isolated settings and versioned JSON states (with 10MB/20MB capacity caps and migration support); supports declaring `advancedSettings` to automatically generate categorized settings pages, and `startupPaper` to automatically restore dedicated papers on app launch.
     - **Notes & Samples**:
       - **Security**: No artificial security sandbox is enforced; only install third-party plugins from trusted sources.
@@ -47,8 +49,11 @@ This log is written for general and power users alike. It focuses on user-facing
 
 **Todo & Markdown Enhancements**
 
+- **Continuous Todo Keyboard Editing**: Up/Down first move within the current todo and only cross into adjacent items after reaching a boundary and pressing again, while preserving the horizontal caret position. Left/Right can likewise cross todo items at full-text boundaries, and key repeat will not race through multiple items.
+- **Copy Format Conversion**: Multi-selected todos can be copied with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> or "Copy as Markdown" to produce Markdown task-list text with completion states preserved. Note selections can use the same shortcut or "Copy as plain text" to strip Markdown formatting. Normal <kbd>Ctrl</kbd>+<kbd>C</kbd> keeps the existing copy behavior.
 - **Unified Markdown Parsing & Consistency**: Headings, blockquotes, lists, code fences, links, basic HTML, escape sequences, and image codes now share unified Markdown semantics across both edit and read modes.
 - **Real-Time Markdown Rendering**: Full Markdown visual rendering is now also displayed live during editing.
+- **Full Render Is Now WYSIWYG Block Editing**: With the “Full Render” mode selected, blocks (headings, lists, blockquotes, code fences, images, inline styles) are shown directly in their final layout while editing, and most Markdown markers are hidden — those markers no longer occupy width, so headings, bold text, and links are compactly reflowed to their final layout. The block under the caret reveals its markers so you can adjust heading levels, lists, blockquotes, or code directly. The editor stays a single text control, returning to read-only whole-note rendering on blur with caret, selection, undo stack, and copy/paste fully preserved. Rendering, marker hiding, and marker reveal only affect presentation and do not automatically rewrite the Markdown source. Marker reveal can use a short fade controlled by the “Markdown rendering animation” setting, which is shown only while Full Render is selected.
 - **Continuous Swipe Multi-Selection**: Click and drag across the left side of todo items to continuously select multiple rows. Supports batch check/uncheck, batch copying, right-click batch deletion, or dragging the whole group to the trash bin.
 - **Enhanced Markdown Formatting**: Supports bold-italic syntax (`***text***` / `___text___`), natural combinations of bold, italic, strikethrough, and links, as well as backslash escaping for Markdown punctuation.
 - **Incremental Note Rendering**: Standard note editing only refreshes affected local Markdown blocks. Multi-line code fence edits track actual ranges before refreshing, eliminating full-document re-parsing and IME typing lag.
@@ -60,6 +65,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Auto-Collapse on Focus Loss**: Papers can automatically collapse to capsules when losing focus, with protections against accidental collapse during editing, dragging, context menus, or passive interactions.
 - **Instant Paper Dismissal**: Added <kbd>Ctrl</kbd> + <kbd>W</kbd> support for active papers; middle-clicking the top bar executes the same collapse/close action as the top-right button.
 - **Post-Expand Focus Reliability**: Restoring papers from capsules reliably grabs foreground keyboard focus, preventing hotkeys from acting on previously active third-party windows.
+- **Settings Sidebar Reorganization**: Settings now use a left navigation sidebar for General, Todo, Note, Appearance, Shortcuts, Plugins, and Labs. Window and capsule options are consolidated into General; General, Todo, and Note can restore their own defaults; each page remembers its scroll position; Advanced mode stays at the bottom of the sidebar; and “Help improve” is simplified and moved into General. Small work areas, high scaling, and cross-DPI monitor moves are re-fitted to the active work area.
 - **Smooth Settings UI**: Switches and key recording now use localized element rendering, eliminating flicker.
 
 **Experimental Labs Features**
@@ -73,6 +79,7 @@ This log is written for general and power users alike. It focuses on user-facing
 **Optimizations & Fixes**
 
 - **Enhanced Data Persistence Reliability**: Hardened primary state saving logic to prevent file loss under extreme conditions. Optimized backup cadence and added pre-update availability checks.
+- **Input Limit Notices**: Todo batch paste that exceeds count/text limits, and notes that reach the editor protection limit, now show an explicit notice instead of silently dropping or rejecting input.
 - Optimized animation fluidity, multi-monitor switching, and window tracking in high-refresh (120Hz/144Hz+) and multi-DPI environments.
 - Fixed an issue where dragging an edge capsule to a secondary monitor could cause it to mistakenly snap back to the primary display when clicked.
 - Fixed select dropdown menus in Settings not fully adapting to the active theme palette.

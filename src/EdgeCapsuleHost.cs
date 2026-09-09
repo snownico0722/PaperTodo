@@ -399,6 +399,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             ApplyCloseSegmentMode(frame);
         }
+        ApplyDefaultContentVisibility(frame.TitleVisible);
         if (segmentLayoutChanged)
         {
             var closeWidth = EdgeCapsuleGeometry.CloseWidthForAppliedDeviceWidth(

@@ -1,27 +1,48 @@
 namespace PaperTodo;
 
+/// <summary>
+/// 一次局部增量解析实际用于 splice 的语义密封窗口：[OldStart,OldEnd) 是旧源上被替换的区间，
+/// [NewStart,NewEnd) 是新源上替换成的区间（NewStart==OldStart）。窗口扩张稳定后无任何旧
+/// snapshot 的 span/link 与窗口部分重叠；后缀平移量 = NewEnd-OldEnd = 新旧全文长度差。
+/// </summary>
+internal readonly record struct MarkdownSemanticIncrementalWindow(
+    int OldStart,
+    int OldEnd,
+    int NewStart,
+    int NewEnd);
+
 internal sealed partial class MarkdownSemanticSnapshot
 {
     private const int IncrementalWindowChars = 1024;
+
+    /// <summary>同 <see cref="TryParseIncrementalLocal"/>，丢弃语义窗口（历史调用方用）。</summary>
+    internal static bool TryParseIncremental(
+        string oldSource,
+        MarkdownSemanticSnapshot oldSnapshot,
+        string newSource,
+        out MarkdownSemanticSnapshot snapshot) =>
+        TryParseIncrementalLocal(oldSource, oldSnapshot, newSource, out snapshot, out _);
 
     /// <summary>
     /// Re-parses one local window around an edit. The 1K target may expand to complete semantics
     /// already known by the previous full snapshot. Fence-marker edits cheaply propagate the
     /// window until old/new fenced-code state converges. Other long-range Markdown constructs
     /// remain best-effort. Obvious global reference dependencies decline the local path so the
-    /// caller can synchronously parse the full document.
+    /// caller can synchronously parse the full document. 成功时 out 语义窗口供折叠表做局部 rebase。
     /// </summary>
-    internal static bool TryParseIncremental(
+    internal static bool TryParseIncrementalLocal(
         string oldSource,
         MarkdownSemanticSnapshot oldSnapshot,
         string newSource,
-        out MarkdownSemanticSnapshot snapshot)
+        out MarkdownSemanticSnapshot snapshot,
+        out MarkdownSemanticIncrementalWindow window)
     {
         ArgumentNullException.ThrowIfNull(oldSource);
         ArgumentNullException.ThrowIfNull(oldSnapshot);
         ArgumentNullException.ThrowIfNull(newSource);
 
         snapshot = null!;
+        window = default;
 
         if (ReferenceEquals(oldSource, newSource))
         {
@@ -95,6 +116,7 @@ internal sealed partial class MarkdownSemanticSnapshot
             newStart == 0 &&
             newEnd == newSource.Length)
         {
+            window = new MarkdownSemanticIncrementalWindow(oldStart, oldEnd, newStart, newEnd);
             snapshot = local;
             return true;
         }
@@ -122,12 +144,14 @@ internal sealed partial class MarkdownSemanticSnapshot
         }
 
         snapshot = new MarkdownSemanticSnapshot(
+            lineStarts,
             lines,
             spans,
             links,
             BuildSpanLineIndex(newSource, lineStarts, spans),
             BuildLinkLineIndex(newSource, lineStarts, links),
             oldSnapshot._hasReferenceDefinitions);
+        window = new MarkdownSemanticIncrementalWindow(oldStart, oldEnd, newStart, newEnd);
         return true;
     }
 
@@ -533,12 +557,12 @@ internal sealed partial class MarkdownSemanticSnapshot
         return low;
     }
 
-    private static MarkdownSemanticSpan ShiftSpan(MarkdownSemanticSpan span, int delta) =>
+    internal static MarkdownSemanticSpan ShiftSpan(MarkdownSemanticSpan span, int delta) =>
         delta == 0
             ? span
             : span with { Start = span.Start + delta };
 
-    private static MarkdownSemanticLink ShiftLink(MarkdownSemanticLink link, int delta)
+    internal static MarkdownSemanticLink ShiftLink(MarkdownSemanticLink link, int delta)
     {
         if (delta == 0)
         {

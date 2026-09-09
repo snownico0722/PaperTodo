@@ -156,6 +156,10 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public string MarkdownRenderMode => _markdownRenderMode;
 
+    /// <summary>当前渲染档位是否为 Full（所见即所得块级编辑态）。</summary>
+    public bool RenderModeIsFull =>
+        string.Equals(_markdownRenderMode, MarkdownRenderModes.Full, StringComparison.Ordinal);
+
     private string _markdownRenderMode = MarkdownRenderModes.Enhanced;
 
     public void SetPreviewMode(bool isPreviewMode)
@@ -174,6 +178,61 @@ public sealed partial class MarkdownTextBox : TextEditor
             ? mode
             : MarkdownRenderModes.Enhanced;
         RefreshVisualStyle();
+    }
+
+    /// <summary>Full 档控制符显灵时是否启用短淡入动画（供语义渲染层实时读取）。</summary>
+    public bool MarkdownEditAnimationEnabled => _markdownEditAnimationEnabled;
+
+    private bool _markdownEditAnimationEnabled = true;
+
+    public void SetMarkdownEditAnimationEnabled(bool enabled)
+    {
+        if (_markdownEditAnimationEnabled == enabled)
+        {
+            return;
+        }
+
+        _markdownEditAnimationEnabled = enabled;
+        RefreshVisualStyle();
+    }
+
+    /// <summary>一次鼠标左键手势（按下→松开/捕获丢失）期间是否冻结 caret 驱动的控制符显灵。</summary>
+    internal bool IsCaretRevealGestureActive { get; private set; }
+
+    internal event Action? CaretRevealGestureStarted;
+    internal event Action? CaretRevealGestureEnded;
+
+    /// <summary>
+    /// 标记一次鼠标左键手势开始。宿主在 PreviewMouseLeftButtonDown / MouseLeftButtonUp 成对调用，
+    /// 语义呈现层据此在整段手势内冻结控制符显灵，使 AvalonEdit 的命中测试全程使用同一塌缩布局，
+    /// 消除「点击进入编辑态」时布局重排造成的幽灵选区。
+    /// </summary>
+    internal void BeginCaretRevealGesture()
+    {
+        if (IsCaretRevealGestureActive)
+        {
+            EndCaretRevealGesture(); // 自愈：上一手势异常未收尾时先按旧手势收尾，再以当前布局起新快照
+        }
+
+        IsCaretRevealGestureActive = true;
+        CaretRevealGestureStarted?.Invoke();
+    }
+
+    internal void EndCaretRevealGesture()
+    {
+        if (!IsCaretRevealGestureActive)
+        {
+            return;
+        }
+
+        IsCaretRevealGestureActive = false;
+        CaretRevealGestureEnded?.Invoke();
+        // 预览点入等由宿主显式捕获的分支：手势结束即归还捕获，避免残留捕获吞掉后续鼠标输入。
+        // 仅外层编辑器自身持捕获才释放；in-edit 态由内层 TextArea 持有的捕获不属于本层，不受影响。
+        if (IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+        }
     }
 
     public void SetImageReferenceTextMode(string mode)
@@ -246,6 +305,10 @@ public sealed partial class MarkdownTextBox : TextEditor
             textView.EnsureVisualLines();
         }
 
+        // CaretLayer 等子层只有在布局之后显式失效才会重绘：只读预览态下 caret 隐藏，
+        // 缩放/重排不会自动刷新这些子层（列表圆点/勾选框、分隔线会停留在旧帧）。
+        InvalidateTextViewChildLayers(textView);
+
         textView.InvalidateLayer(KnownLayer.Background);
         textView.InvalidateLayer(KnownLayer.Text);
         textView.InvalidateLayer(KnownLayer.Caret);
@@ -255,6 +318,23 @@ public sealed partial class MarkdownTextBox : TextEditor
         textView.InvalidateVisual();
         TextArea.InvalidateVisual();
         InvalidateVisual();
+    }
+
+    /// <summary>
+    /// 显式失效 TextView 的所有视觉子层（CaretLayer/TextLayer 等）。AvalonEdit 的
+    /// InvalidateLayer 只转成 InvalidateMeasure，无法让子层重绘；此处用于任何布局/字号变化
+    /// 后确保装饰层（画在 Caret 层上的圆点/勾选框/分隔线）跟随刷新。
+    /// </summary>
+    private static void InvalidateTextViewChildLayers(TextView textView)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(textView);
+        for (var index = 0; index < count; index++)
+        {
+            if (VisualTreeHelper.GetChild(textView, index) is UIElement childLayer)
+            {
+                childLayer.InvalidateVisual();
+            }
+        }
     }
 
     public void WrapSelection(string prefix, string suffix)
@@ -856,11 +936,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public bool ValidateTextDrop(IDataObject dataObject)
     {
-        if (IsReadOnly)
-        {
-            return true;
-        }
-
         string? text;
         try
         {
@@ -1267,7 +1342,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsReturn &&
             e.Key == System.Windows.Input.Key.Enter &&
-            !CanApplyTextReplacement(NewLineTextAtCaret()))
+            !CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
         {
             e.Handled = true;
             return;
@@ -1276,7 +1351,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsTab &&
             e.Key == System.Windows.Input.Key.Tab &&
-            !CanApplyTextReplacement("\t"))
+            !CanApplyTextReplacementWithNotice("\t"))
         {
             e.Handled = true;
             return;
@@ -1294,7 +1369,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (!IsReadOnly &&
             !string.IsNullOrEmpty(e.Text) &&
-            !CanApplyTextReplacement(e.Text))
+            !CanApplyTextReplacementWithNotice(e.Text))
         {
             e.Handled = true;
             return;
@@ -1820,13 +1895,19 @@ public sealed partial class MarkdownTextBox : TextEditor
         _imageStore != null &&
         !_imageRenderingSuspended &&
         !string.Equals(_markdownRenderMode, MarkdownRenderModes.Off, StringComparison.Ordinal);
+    /// <summary>
+    /// 是否将图片对应 Markdown 标记(整行)的前景设为透明。
+    /// 完全受"图片标记显示"设置项控制,在所有渲染档位(含 Full)统一生效;
+    /// 隐藏时仍占字形宽度,可被选中、可复制粘贴,布局不跳变。
+    /// </summary>
     private bool ShouldHideImageReferenceText =>
-        ShouldRenderImages && (_imageReferenceTextMode switch
+        ShouldRenderImages &&
+        _imageReferenceTextMode switch
         {
             ImageReferenceTextModes.Hidden => true,
             ImageReferenceTextModes.Editing => _isPreviewMode,
             _ => false
-        });
+        };
 
     private FrameworkElement CreateImageBlock(
         MarkdownImageReference reference,

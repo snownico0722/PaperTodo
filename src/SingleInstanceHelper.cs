@@ -10,21 +10,35 @@ namespace PaperTodo;
 
 public sealed class SingleInstanceHelper : IDisposable
 {
-    private const int SignalRetryCount = 6;
+    // Outlast the primary's two-second stalled-read deadline, including retry delays:
+    // 12 * 180 + 11 * 70 = 2930 ms. Successful connections still return immediately.
+    private const int SignalRetryCount = 12;
     private const int SignalConnectTimeoutMs = 180;
     private const int SignalRetryDelayMs = 70;
 
     private readonly string _mutexName;
     private readonly string _pipeName;
+    private readonly TimeSpan _commandReadTimeout;
     private Mutex? _mutex;
     private bool _ownsMutex;
     private CancellationTokenSource? _listenerCts;
+    private Task? _listenerTask;
     private bool _disposed;
 
     public SingleInstanceHelper(string mutexName, string pipeName)
+        : this(mutexName, pipeName, TimeSpan.FromSeconds(2))
     {
+    }
+
+    internal SingleInstanceHelper(string mutexName, string pipeName, TimeSpan commandReadTimeout)
+    {
+        if (commandReadTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(commandReadTimeout));
+        }
         _mutexName = mutexName;
         _pipeName = pipeName;
+        _commandReadTimeout = commandReadTimeout;
     }
 
     public bool TryAcquire()
@@ -94,7 +108,7 @@ public sealed class SingleInstanceHelper : IDisposable
         _listenerCts = new CancellationTokenSource();
         var token = _listenerCts.Token;
 
-        _ = Task.Run(async () =>
+        _listenerTask = Task.Run(async () =>
         {
             while (!token.IsCancellationRequested)
             {
@@ -109,11 +123,25 @@ public sealed class SingleInstanceHelper : IDisposable
 
                     await server.WaitForConnectionAsync(token);
 
+                    // One tiny local command per connection. A stalled peer must not monopolize
+                    // the listener, and shutdown must cancel a peer already connected to the pipe.
+                    using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    readTimeout.CancelAfter(_commandReadTimeout);
                     using var reader = new StreamReader(server);
-                    var message = await reader.ReadLineAsync();
+                    string? message;
+                    try
+                    {
+                        message = await reader.ReadLineAsync(readTimeout.Token);
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    {
+                        // Only this peer timed out. Dispose its pipe and accept the next client.
+                        continue;
+                    }
+                    token.ThrowIfCancellationRequested();
                     onCommandSignal?.Invoke(DecodeArgs(message));
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     break;
                 }
@@ -163,8 +191,25 @@ public sealed class SingleInstanceHelper : IDisposable
 
         try
         {
-            _listenerCts?.Cancel();
-            _listenerCts?.Dispose();
+            var listenerCts = _listenerCts;
+            _listenerCts = null;
+            listenerCts?.Cancel();
+            if (listenerCts != null)
+            {
+                if (_listenerTask == null)
+                {
+                    listenerCts.Dispose();
+                }
+                else
+                {
+                    // Do not join here: a completed command can itself be waiting on the UI.
+                    _ = _listenerTask.ContinueWith(completed =>
+                    {
+                        _ = completed.Exception;
+                        listenerCts.Dispose();
+                    }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                }
+            }
         }
         catch
         {

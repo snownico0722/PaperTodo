@@ -13,11 +13,8 @@ internal sealed partial class MarkdownSemanticPresentation
             DocumentLine line,
             MarkdownSemanticSnapshot snapshot)
         {
-            var markerBrush = _owner.FadeSyntax
-                ? Theme.SyntaxFadeBrush
-                : Theme.ActiveBrush;
-
-            foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
+            var lineSpans = snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1));
+            foreach (var span in lineSpans)
             {
                 if (span.End <= line.Offset || span.Start >= line.EndOffset)
                 {
@@ -27,6 +24,8 @@ internal sealed partial class MarkdownSemanticPresentation
                 switch (span.Kind)
                 {
                     case MarkdownSemanticSpanKind.HtmlMarker:
+                        var markerBrush = _owner.ControlBrush(
+                            HtmlMarkerRevealed(line, span, lineSpans));
                         ApplyAbsolute(line, span.Start, span.End, element =>
                         {
                             element.TextRunProperties.SetTypeface(NormalTypeface);
@@ -94,6 +93,32 @@ internal sealed partial class MarkdownSemanticPresentation
             }
         }
 
+        /// <summary>
+        /// HtmlMarker 是否显灵：按所属 HtmlContainer 的成对区间判定（与塌缩一致——开/闭标签整对显隐，
+        /// 不按“光标是否越过单枚标签起点”）。
+        /// </summary>
+        private bool HtmlMarkerRevealed(
+            DocumentLine line,
+            MarkdownSemanticSpan marker,
+            ReadOnlySpan<MarkdownSemanticSpan> lineSpans)
+        {
+            foreach (var candidate in lineSpans)
+            {
+                if (candidate.Kind == MarkdownSemanticSpanKind.HtmlContainer &&
+                    (candidate.Start == marker.Start || candidate.End == marker.End))
+                {
+                    return _owner.IsRangeRevealed(candidate.Start, candidate.End);
+                }
+            }
+
+            // 防御：找不到 container（理论上不发生）时回退原行边界显灵判定，避免退化成不可见。
+            return _owner.IsRevealed(
+                line.LineNumber,
+                marker.Start,
+                marker.Length,
+                MarkdownSemanticSpanKind.HtmlMarker);
+        }
+
         private void ApplyEscapeSemantics(
             DocumentLine line,
             MarkdownSemanticSnapshot snapshot)
@@ -103,6 +128,7 @@ internal sealed partial class MarkdownSemanticPresentation
                 return;
             }
 
+            var source = _owner._editor.Text ?? string.Empty;
             foreach (var span in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
             {
                 if (span.Kind != MarkdownSemanticSpanKind.EscapeMarker ||
@@ -112,13 +138,30 @@ internal sealed partial class MarkdownSemanticPresentation
                     continue;
                 }
 
+                if (_owner.IsFullMode &&
+                    MarkdownLinkEscapeOwnership.TryGetOwningLink(
+                        span,
+                        snapshot,
+                        source,
+                        out _))
+                {
+                    // Full 中地址、标题、引用编号等 label 外链接语法由整条链接统一取色和显灵；
+                    // 其他渲染档仍沿用原有独立转义符取色。
+                    continue;
+                }
+
                 ApplyAbsolute(line, span.Start, span.End, element =>
                 {
                     element.TextRunProperties.SetTypeface(NormalTypeface);
                     var size = _owner.ScaledFontSize(NoteTypography.FontSize);
                     element.TextRunProperties.SetFontRenderingEmSize(size);
                     element.TextRunProperties.SetFontHintingEmSize(size);
-                    element.TextRunProperties.SetForegroundBrush(Theme.ActiveBrush);
+                    element.TextRunProperties.SetForegroundBrush(_owner.ControlBrush(
+                        _owner.IsRevealed(
+                            line.LineNumber,
+                            span.Start,
+                            span.Length,
+                            MarkdownSemanticSpanKind.EscapeMarker)));
                 });
             }
         }

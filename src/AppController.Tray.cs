@@ -142,14 +142,32 @@ public sealed partial class AppController
         return bitmap;
     }
 
-    private static readonly ControlTemplate SharedTrayMenuTemplate = BuildTrayMenuTemplate();
-    private static readonly ControlTemplate SharedSeparatorTemplate = BuildSeparatorTemplate();
-    private static readonly ControlTemplate SharedTrayMenuItemTemplate = BuildTrayMenuItemTemplate();
-    private static readonly ControlTemplate SharedSegmentMenuItemTemplate = BuildSegmentMenuItemTemplate();
-    private static readonly ControlTemplate SharedTrayContentMenuItemTemplate = BuildTrayContentMenuItemTemplate();
-    private static readonly Style SharedTrayMenuItemStyle = BuildTrayMenuItemStyle();
-    private static readonly Style SharedTrayContentMenuItemStyle = BuildTrayContentMenuItemStyle();
-    private static readonly Style SharedTrayToolbarItemStyle = BuildTrayToolbarItemStyle();
+    // AppController has non-UI helpers too. First type access must not create global
+    // dispatcher-owned resources. No ThreadStatic field may have an initializer.
+    [ThreadStatic]
+    private static ControlTemplate? _sharedTrayMenuTemplate;
+    private static ControlTemplate SharedTrayMenuTemplate => _sharedTrayMenuTemplate ??= BuildTrayMenuTemplate();
+    [ThreadStatic]
+    private static ControlTemplate? _sharedSeparatorTemplate;
+    private static ControlTemplate SharedSeparatorTemplate => _sharedSeparatorTemplate ??= BuildSeparatorTemplate();
+    [ThreadStatic]
+    private static ControlTemplate? _sharedTrayMenuItemTemplate;
+    private static ControlTemplate SharedTrayMenuItemTemplate => _sharedTrayMenuItemTemplate ??= BuildTrayMenuItemTemplate();
+    [ThreadStatic]
+    private static ControlTemplate? _sharedSegmentMenuItemTemplate;
+    private static ControlTemplate SharedSegmentMenuItemTemplate => _sharedSegmentMenuItemTemplate ??= BuildSegmentMenuItemTemplate();
+    [ThreadStatic]
+    private static ControlTemplate? _sharedTrayContentMenuItemTemplate;
+    private static ControlTemplate SharedTrayContentMenuItemTemplate => _sharedTrayContentMenuItemTemplate ??= BuildTrayContentMenuItemTemplate();
+    [ThreadStatic]
+    private static Style? _sharedTrayMenuItemStyle;
+    private static Style SharedTrayMenuItemStyle => _sharedTrayMenuItemStyle ??= BuildTrayMenuItemStyle();
+    [ThreadStatic]
+    private static Style? _sharedTrayContentMenuItemStyle;
+    private static Style SharedTrayContentMenuItemStyle => _sharedTrayContentMenuItemStyle ??= BuildTrayContentMenuItemStyle();
+    [ThreadStatic]
+    private static Style? _sharedTrayToolbarItemStyle;
+    private static Style SharedTrayToolbarItemStyle => _sharedTrayToolbarItemStyle ??= BuildTrayToolbarItemStyle();
 
     private static ControlTemplate BuildSegmentMenuItemTemplate()
     {

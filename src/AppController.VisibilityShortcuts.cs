@@ -73,6 +73,14 @@ public sealed partial class AppController
             return;
         }
 
+        // A repeated Hide belongs to the same hide/show cycle. Keep the first snapshot so a
+        // second shortcut press while everything is already hidden cannot replace the original
+        // visible linked-paper set with an empty one.
+        if (_visibilityShortcutVisibleLinkedPaperIds != null)
+        {
+            return;
+        }
+
         _visibilityShortcutVisibleLinkedPaperIds = State.Papers
             .Where(paper =>
                 IsLinkedPaperProtectedFromVisibilityShortcutRestore(paper) &&

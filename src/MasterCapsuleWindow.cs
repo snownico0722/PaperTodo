@@ -38,7 +38,7 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDpiChanged = 0x02E0;
     private const int WmNcHitTest = 0x0084;
     private static readonly IntPtr HtTransparent = new(-1);
-    // Compact internal metrics controlling how tightly the glyph + label sit inside the pill.
+    // Compact internal metrics controlling how tightly the glyph + optional count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
     private const double MasterLeftPadding = 5;
@@ -224,7 +224,8 @@ public sealed class MasterCapsuleWindow : Window
 
         _label = new TextBlock
         {
-            Text = Strings.Get("CapsuleCollapseAllLabel"),
+            Text = string.Empty,
+            Visibility = Visibility.Collapsed,
             Foreground = Theme.WeakTextBrush,
             FontFamily = MasterLabelFontFamily,
             FontSize = MasterLabelFontSize,
@@ -441,8 +442,11 @@ public sealed class MasterCapsuleWindow : Window
     {
         _glyph.Text = _active ? "▸" : "▾";
         _label.Text = _active
-            ? string.Format(UiLanguages.EffectiveCulture, Strings.Get("CapsuleCollapseAllCountFormat"), _count)
-            : Strings.Get("CapsuleCollapseAllLabel");
+            ? _count.ToString(UiLanguages.EffectiveCulture)
+            : string.Empty;
+        _label.Visibility = _active
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
             : Strings.Get("CapsuleCollapseAllExpandedTip");
@@ -501,27 +505,25 @@ public sealed class MasterCapsuleWindow : Window
 
     private double MasterDockedWidth(double pixelsPerDip)
     {
+        // Keep the arrow slot stable across ▾/▸ so toggling does not introduce a one-glyph width
+        // wobble. The optional count is the only content allowed to extend the master pill.
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
             MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
-        var expandedLabelWidth = MeasureText(
-            Strings.Get("CapsuleCollapseAllLabel"),
-            MasterLabelFontSize,
-            MasterLabelFontWeight,
-            MasterLabelFontFamily,
-            pixelsPerDip);
-        var currentLabelWidth = MeasureText(
-            _label.Text,
-            MasterLabelFontSize,
-            MasterLabelFontWeight,
-            MasterLabelFontFamily,
-            pixelsPerDip);
-        var textWidth = Math.Max(expandedLabelWidth, currentLabelWidth);
+        var countWidth = _active
+            ? MeasureText(
+                _count.ToString(UiLanguages.EffectiveCulture),
+                MasterLabelFontSize,
+                MasterLabelFontWeight,
+                MasterLabelFontFamily,
+                pixelsPerDip)
+            : 0;
+        var countGap = _active ? MasterGlyphGap : 0;
         var bodyWidth = Math.Ceiling(
             MasterLeftPadding +
             glyphWidth +
-            MasterGlyphGap +
-            textWidth +
+            countGap +
+            countWidth +
             MasterRightPadding +
             MasterInteriorBorderThickness);
         return Math.Max(1, bodyWidth + WindowChromeMargin);

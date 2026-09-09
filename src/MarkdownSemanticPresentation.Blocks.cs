@@ -20,12 +20,11 @@ internal sealed partial class MarkdownSemanticPresentation
             }
             ApplyCodeBlockSemantics(line, semantic);
             ApplyBlockMarkerSemantics(line, semantic);
-            // Quote marker visibility is the final block-level override. Nested fenced code or
-            // headings may style the same source line, but must never make the reserved `>` cells
-            // visible again in enhanced preview.
+            // 引用 marker 最后覆盖块级取色。统一容器前缀能识别 `- >`、`> - >` 等组合，
+            // 不再只看物理行最开头的连续 `>`。
             if (semantic.IsQuoted)
             {
-                ApplyQuoteMarkerSemantics(line, text);
+                ApplyQuoteMarkerSemantics(line, snapshot, text);
             }
         }
 
@@ -49,20 +48,34 @@ internal sealed partial class MarkdownSemanticPresentation
 
         private void ApplyQuoteMarkerSemantics(
             DocumentLine line,
+            MarkdownSemanticSnapshot snapshot,
             string text)
         {
-            // The mature enhanced-preview renderer made explicit quote markers fully transparent
-            // (while retaining their original character width), which is distinct from generic syntax fade.
-            var markerBrush = _owner.FadeSyntax
-                ? Brushes.Transparent
-                : Theme.ActiveBrush;
-            foreach (var marker in ExplicitQuoteMarkers(text))
+            var container = MarkdownContainerPrefix.Parse(
+                text,
+                snapshot,
+                line.Offset,
+                line.EndOffset);
+            foreach (var token in container.Tokens)
             {
+                if (!token.IsQuote)
+                {
+                    continue;
+                }
+
+                var start = line.Offset + token.MarkerStart;
+                var end = line.Offset + token.ContentStart;
+                var brush = _owner.QuoteControlBrush(
+                    _owner.IsRevealed(
+                        line.LineNumber,
+                        start,
+                        end - start,
+                        MarkdownSemanticSpanKind.Quote));
                 ApplyAbsolute(
                     line,
-                    line.Offset + marker.Start,
-                    line.Offset + marker.End,
-                    element => element.TextRunProperties.SetForegroundBrush(markerBrush));
+                    start,
+                    end,
+                    element => element.TextRunProperties.SetForegroundBrush(brush));
             }
         }
 
@@ -121,12 +134,17 @@ internal sealed partial class MarkdownSemanticPresentation
                     markerEnd++;
                 }
 
-                var markerBrush = _owner.FadeSyntax
-                    ? Theme.SyntaxFadeBrush
-                    : Theme.ActiveBrush;
+                var openingStart = line.Offset + localStart;
+                var openingLength = Math.Max(1, markerEnd - localStart);
+                var markerBrush = _owner.ControlBrush(
+                    _owner.IsRevealed(
+                        line.LineNumber,
+                        openingStart,
+                        openingLength,
+                        MarkdownSemanticSpanKind.Heading));
                 ApplyAbsolute(
                     line,
-                    line.Offset + localStart,
+                    openingStart,
                     line.Offset + markerEnd,
                     element => element.TextRunProperties.SetForegroundBrush(markerBrush));
                 ApplyClosingAtxMarkerSemantics(line, text, markerEnd, markerBrush);
@@ -175,7 +193,13 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var foreground = semantic.IsFencedCodeMarker
-                ? (_owner.FadeSyntax ? Theme.SyntaxFadeBrush : Theme.ActiveBrush)
+                ? _owner.ControlBrush(_owner.IsRevealed(
+                    line.LineNumber,
+                    line.Offset,
+                    Math.Max(1, line.Length),
+                    semantic.IsFencedCodeOpening
+                        ? MarkdownSemanticSpanKind.FencedCodeOpening
+                        : MarkdownSemanticSpanKind.FencedCodeClosing))
                 : Theme.TextBrush;
             ApplyAbsolute(
                 line,
@@ -190,41 +214,20 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             if (semantic.IsSetextMarker || semantic.IsHorizontalRule)
             {
-                var markerBrush = _owner.FadeSyntax
-                    ? Theme.SyntaxFadeBrush
-                    : Theme.ActiveBrush;
+                var kind = semantic.IsSetextMarker
+                    ? MarkdownSemanticSpanKind.SetextMarker
+                    : MarkdownSemanticSpanKind.HorizontalRule;
+                var brush = _owner.ControlBrush(
+                    _owner.IsRevealed(
+                        line.LineNumber,
+                        line.Offset,
+                        Math.Max(1, line.Length),
+                        kind));
                 ApplyAbsolute(
                     line,
                     line.Offset,
                     line.EndOffset,
-                    element => element.TextRunProperties.SetForegroundBrush(markerBrush));
-            }
-        }
-
-        private static IEnumerable<(int Start, int End)> ExplicitQuoteMarkers(string text)
-        {
-            var index = 0;
-            while (index < text.Length)
-            {
-                var spaces = 0;
-                while (index < text.Length && spaces < 3 && text[index] == ' ')
-                {
-                    index++;
-                    spaces++;
-                }
-
-                if (index >= text.Length || text[index] != '>')
-                {
-                    yield break;
-                }
-
-                var start = index;
-                index++;
-                if (index < text.Length && text[index] is ' ' or '\t')
-                {
-                    index++;
-                }
-                yield return (start, index);
+                    element => element.TextRunProperties.SetForegroundBrush(brush));
             }
         }
     }

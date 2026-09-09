@@ -20,8 +20,7 @@ internal sealed partial class EdgeCapsuleHost
         {
             _pluginContentLayer.Child = null;
             _pluginContentLayer.Visibility = Visibility.Collapsed;
-            Icon.Visibility = Visibility.Visible;
-            Label.Visibility = Visibility.Visible;
+            ApplyDefaultContentVisibility(_appliedFrame.TitleVisible);
             ContentArea.ToolTip = null;
             return;
         }
@@ -36,8 +35,6 @@ internal sealed partial class EdgeCapsuleHost
 
         content.IsHitTestVisible = false;
         content.Focusable = false;
-        Icon.Visibility = Visibility.Collapsed;
-        Label.Visibility = Visibility.Collapsed;
         if (!ReferenceEquals(_pluginContentLayer.Child, content))
         {
             _pluginContentLayer.Child = content;
@@ -47,7 +44,17 @@ internal sealed partial class EdgeCapsuleHost
         // to ContentGrid so built-in icon/title and custom capsule content always share the exact
         // same 35 ms compact fade clock.
         _pluginContentLayer.Visibility = Visibility.Visible;
+        ApplyDefaultContentVisibility(_appliedFrame.TitleVisible);
         ContentArea.ToolTip = toolTip;
+    }
+
+    private void ApplyDefaultContentVisibility(bool titleVisible)
+    {
+        // Frame updates and content refreshes must agree: plugin content replaces both defaults,
+        // while restoring ordinary content must retain the last applied title visibility.
+        var hasPluginContent = _pluginContentLayer?.Child != null;
+        Icon.Visibility = hasPluginContent ? Visibility.Collapsed : Visibility.Visible;
+        Label.Visibility = !hasPluginContent && titleVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private Border CreatePluginContentLayer()

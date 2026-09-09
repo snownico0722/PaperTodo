@@ -183,7 +183,7 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 内置 Markdown Note 的编辑态和浏览态复用同一个 `MarkdownTextBox`，通过 interaction/presentation 状态切换，而不是维护两套正文 surface。
 
-配色由 `Theme` 提供实色语义；云母只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的云母选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。纸片缩放命中仍由原有窗口消息逻辑处理。标准云母与标准亚克力使用 full glass 和 `DWMWA_SYSTEMBACKDROP_TYPE`（分别为 `DWMSBT_MAINWINDOW`、`DWMSBT_TRANSIENTWINDOW`）。透色亚克力试用顶部 1 DIP glass 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；仍由同一个 `WindowChrome` 管理 glass（见 D-032）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND 和实色配色，不进入这个适配器，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-031）。
+配色由 `Theme` 提供实色语义；云母只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的云母选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。纸片缩放命中仍由原有窗口消息逻辑处理。标准云母与标准亚克力使用 full glass 和 `DWMWA_SYSTEMBACKDROP_TYPE`（分别为 `DWMSBT_MAINWINDOW`、`DWMSBT_TRANSIENTWINDOW`）。透色亚克力试用顶部 1 DIP glass 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；仍由同一个 `WindowChrome` 管理 glass（见 D-034）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND 和实色配色，不进入这个适配器，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-033）。
 
 ### 5.2 Provider / session 分层
 
@@ -245,6 +245,16 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 具体 fallback 次序、尺寸和 ready 时序属于当前 contract/代码实现；为什么形成这些边界见 D-018。
 
+### 5.6 插件右键入口、图片读取与临时弹窗
+
+`PluginPaperActionRegistry` 只拥有 Runtime 对指定纸片的文字菜单贡献；`PaperWindow` 在既有右键菜单中呈现并分发，注册替换、目标删除与 Runtime 结束撤销旧回调。它不构建第二套顶栏，也不改变胶囊呈现或命中机制。
+
+图片读取由 session / Runtime facade 检查 `notes.read`，进入 `PaperCommandService.ReadNoteImage` → `NoteImageStore.TryReadOwnedImage`，在既有存储锁内检查笔记归属与编码大小并返回独立字节，不复制持久化 authority。
+
+`PluginPopupHost` 为既有 session / Runtime 承载一个临时、可交互窗口。右键与原有顶栏点击传递一次性的屏幕位置；宿主只在显示时约束到工作区，以窗口失活作为关闭边界，不监视原控件或来源窗口的位置。窗口内容与主题由插件处理，壳和释放由宿主处理；它不是 Paper，不延长 provider Runtime 存活，也没有常驻独立窗口入口。
+
+Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。
@@ -275,7 +285,7 @@ EdgeCapsuleHost.Apply(frame)
 
 `EdgeCapsuleReducer` 决定单纸片业务状态；`EdgeCapsulePresenter` 是该纸 desired model、target、transition、applied presentation 和 dirty/deferred work 的唯一 presentation authority。
 
-`EdgeCapsuleTargetPlanner` 是纯 desired-model → shape/layout planner，一次生成完整 `EdgeCapsulePresentationPlan`。Docked surface 与 `FloatingFree` 是互斥外形；floating 的宽度、圆角、关闭区和其他 shape 语义不由窗口构造参数或拖拽路径另行拼装。
+`EdgeCapsuleTargetPlanner` 是纯 desired-model → shape/layout planner，一次生成完整 `EdgeCapsulePresentationPlan`。关闭悬停预览时的完整标题宽度和零字标题可见性也进入同一 layout/target/frame 合同；host capacity 提前覆盖标题展开宽度，普通悬停不反复缩放 HWND。Docked surface 与 `FloatingFree` 是互斥外形；floating 的宽度、圆角、关闭区和其他 shape 语义不由窗口构造参数或拖拽路径另行拼装。
 
 `AppController` 可以协调跨纸片 session、向多张纸 dispatch intent、捕获事务 frame，但不维护第二份 per-paper desired model。
 
@@ -424,6 +434,8 @@ same AvalonEdit TextView
 - `MarkdownSemanticDocument` 与 AvalonEdit `TextDocument` 保持同线程、单一当前语义。初次建立总是同步全文 Markdig parse；正文少于 2000 字符时，每次完整 `TextChanged` 也直接同步全文 parse。较大 Note 的普通编辑先取一次约 1K 的行对齐局部窗口，并依据上一份 snapshot 中已知的跨行 span/link 自动扩到必要的已有 semantic container。若本次修改可能新建、删除或改变顶层 ``` / ~~~ fenced-code 状态，则只用轻量 `MarkdownFencedCodeScanner` 比较旧/新状态，并沿未修改后缀扩窗直到状态重新一致或到达 EOF，再把最终窗口交给 Markdig；scanner 只发现边界，不发布正文语义。明显涉及 reference definition / reference use 的全局依赖直接拒绝局部路径，由 caller 同步全文 parse。其他新产生的超远距离 Markdown 结构仍属于编辑期 best-effort，不承诺每个按键后整个文档立即与一次全文 Markdig parse 全局等价。没有 guard proof、1K→16K retry、per-editor parser worker、pending/stale generation 或并发 publication。
 - Markdig AST 解析后立即压平为 PaperTodo 自己的 `MarkdownSemanticSnapshot`；snapshot 持有当前 lines / spans / links 和连续 buffer + per-line range 的 compact span/link 行索引。`lineStarts` 只在 parse / derived-index 重建时临时生成并使用，不再作为 snapshot 长期状态；live editor 也不长期持有 AST。
 - pipeline 刻意保持最小：precise source location + strikethrough + task list；PaperTodo 既有 bare HTTP(S)、inline HTML 白名单、图片协议等兼容边界在 snapshot/host 层显式处理，不直接启用整包 advanced extensions。
-- syntax fading 不删除源码字符，也不创建 source/rendered offset mapping；`#`、`**`、`[]()` 等 marker 仍占据原布局，只改变 presentation。
+- syntax fading 不修改源码或撤销记录。Basic/Enhanced 保持源码布局；Full 的布局由元素层控制，普通正文仍走 AvalonEdit 原生文本排版。
+- **Full 档 = 编辑器内 WYSIWYG 块级编辑态**：`MarkdownSemanticPresentation` 在 Full 下把块级装饰「常开」与控制符「按活动块显灵」结合。无需留白/缩进的控制符（ATX 标题 `#`、行内 `**`/`*`/`~~`/反引号、链接 `[]()` 非 label 部分、HTML 标签、转义反斜杠）由 `SyntaxCollapseElementGenerator` 在元素层塌缩为 ~0 宽单列（源码仍留在 Document/undo，不参与排版、内容紧凑重排）；任务 `[ ]`/`[x]`、无序列表 `-`/`*`/`+`、引用 `>` 由 `MarkerSlotElementGenerator` 持有稳定槽位，前缀空白和有序列表仍按原生文本排版；围栏等整行标记保留行高。光标所在块的控制符依 `MarkdownSemanticReveal` 纯判定显灵供源编辑；失焦进入整篇只读渲染。不建第二份 rendered document、不做 HTML/DOM/WebView，也不建 source→rendered offset mapping，仍受 D-019 / D-026 约束。Markdown 表格不在当前语法面内。
+- Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。

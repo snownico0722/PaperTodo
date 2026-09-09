@@ -1,0 +1,194 @@
+
+### src/PaperWindow.cs (3693 lines)
+54:     private NativeMicaBackdrop? _nativeMica;
+61:     private Border _paperChrome = null!;
+703:             _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
+705:                 brush => Resources["PaperSurfaceBrushKey"] = brush);
+706:             RefreshNativeMica();
+1089:         if (_paperChrome == null)
+1141:         if (_paperChrome == null)
+1149:             var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+1162:             RefreshNativeMica();
+1167:         var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+1175:             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
+1176:             : CreatePaperChromeShadow();
+1178:         RefreshNativeMica();
+1470:     private static DropShadowEffect CreatePaperChromeShadow(
+1493:                 _controller.State.UseCapsuleMode &&
+1520:         if (_paper.IsCollapsed && _controller.State.UseCapsuleMode)
+1552:         Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective
+1553:             ? NativeMicaBackdrop.GetActiveSurfaceBrush(_controller.State.MicaBackdropType, Theme.IsDark)
+1573:     public void UpdateTheme()
+1586:         _experimentalTetherCapsule?.UpdateTheme();
+1636:         RefreshNativeMica(force: true);
+1818:     internal void RefreshNativeMica(bool force = false) =>
+1819:         _nativeMica?.Refresh(Theme.IsMica, Theme.IsDark, _controller.State.MicaBackdropType,
+1820:             _controller.State.MicaAlwaysActive, force);
+1824:         if (_paperChrome == null)
+1829:         _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
+1842:         _paperChrome = new Border
+1845:             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
+1848:             Effect = CreatePaperChromeShadow()
+1850:         _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
+1900:         if (_paper.IsCollapsed && _controller.State.UseCapsuleMode)
+2173:         var titleHost = _topBarTitleHost = new Border
+2340:         var topHost = _topBarHost = new Border
+2535:         var root = new Border
+2577:         var zoomHost = new Border
+2694:              (_controller.State.UseCapsuleMode &&
+3008:         var root = new Border
+3536:             _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
+
+### src/PaperWindow.Capsule.cs (1102 lines)
+312:         var leftArea = new Border
+458:         var capsuleClose = new Border
+638:         var usesDeepCapsuleMode = _paper.IsVisible && _controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode;
+700:             RefreshNativeMica(force: true);
+
+### src/PaperWindow.VisualTree.cs (43 lines)
+
+### src/EdgeCapsuleHost.cs (1562 lines)
+816:         var chrome = new Border
+846:         var contentArea = new Border
+906:         var closeArea = new Border
+925:         var outline = new Border
+1328:     public void UpdateTheme(
+
+### src/EdgeCapsuleDragWindow.cs (910 lines)
+841:         _paperBackground = new Border
+891:         _contentArea = new Border
+900:         _outline = new Border
+
+### src/MasterCapsuleWindow.cs (864 lines)
+174:         _pill = new Border
+196:         _hoverOverlay = new Border
+338:     public void UpdateTheme()
+
+### src/AppController.cs (3717 lines)
+146:         UsesNativeMicaWindows = State.ColorScheme == ColorSchemes.Mica && NativeMicaBackdrop.IsSupported;
+310:             !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
+423:         return State.UseCapsuleMode &&
+641:             !State.UseCapsuleMode ||
+676:             !State.UseCapsuleMode ||
+970:         if (!State.UseCapsuleMode)
+1320:         var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed;
+1345:             if (paper.IsCollapsed && State.UseCapsuleMode)
+1410:                         window.RefreshNativeMica(force: true);
+1431:             State.UseCapsuleMode &&
+1941:                 !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
+2105:             !State.UseCapsuleMode)
+2168:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2190:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2232:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2283:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2337:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2635:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+2805:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
+2836:         if (State.UseCapsuleCollapseAll && (!State.UseCapsuleMode || !State.UseDeepCapsuleMode))
+2838:             State.UseCapsuleMode = true;
+2856:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+3105:                 var border = new Border
+3190:         var root = new Border
+3537:         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+
+### src/AppController.Settings.cs (3415 lines)
+68:     private void SetColorScheme(string scheme)
+70:         if (!ColorSchemes.IsValid(scheme))
+75:         State.ColorScheme = scheme;
+86:             window.UpdateTheme();
+88:         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+116:     private UIElement CreateColorSchemeSegmentSelector()
+120:             (ColorSchemes.Warm, Strings.Get("ColorSchemeWarm")),
+121:             (ColorSchemes.Ink, Strings.Get("ColorSchemeInk")),
+122:             (ColorSchemes.Forest, Strings.Get("ColorSchemeForest")),
+123:             (ColorSchemes.Rose, Strings.Get("ColorSchemeRose")),
+124:             (ColorSchemes.Mica, Strings.Get("ColorSchemeMica"))
+127:         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
+130:     private void SetMicaBackdrop(string type)
+132:         var normalized = MicaBackdropTypes.Normalize(type);
+133:         if (State.MicaBackdropType == normalized)
+138:         State.MicaBackdropType = normalized;
+144:     private void ToggleMicaAlwaysActive()
+146:         State.MicaAlwaysActive = !State.MicaAlwaysActive;
+155:             window.RefreshNativeMica(force: true);
+157:         _settingsMica?.Refresh(Theme.IsMica, Theme.IsDark, State.MicaBackdropType, State.MicaAlwaysActive, force: true);
+160:     private UIElement CreateMicaBackdropSegmentSelector()
+164:             (MicaBackdropTypes.Mica, Strings.Get("MicaBackdropMica")),
+165:             (MicaBackdropTypes.Acrylic, Strings.Get("MicaBackdropAcrylic")),
+166:             (MicaBackdropTypes.ClearAcrylic, Strings.Get("MicaBackdropClearAcrylic"))
+169:         return CreateSegmentSelector(segments, MicaBackdropTypes.Normalize(State.MicaBackdropType), SetMicaBackdrop);
+753:         var container = new Border
+777:             var segmentBorder = new Border
+986:             _settingsMica = new NativeMicaBackdrop(window, () => window.Content as Border,
+1070:         var separator = new Border
+1096:             column.Children.Add(new Border
+1119:         var card = new Border
+1134:         autoCollapse.IsEnabled = State.UseCapsuleMode;
+1135:         autoCollapse.Opacity = State.UseCapsuleMode ? 1.0 : 0.55;
+1205:             State.UseCapsuleMode && State.UseDeepCapsuleMode;
+1210:         var card = new Border
+1260:         var card = new Border
+1331:         var card = new Border
+1395:         var container = new Border
+1438:             var button = new Border
+1473:         var card = new Border
+1509:         var container = new Border
+1550:             var button = new Border
+1584:         var card = new Border
+1645:         var container = new Border
+1687:             var button = new Border
+1774:         var card = new Border
+1870:         var container = new Border
+1910:             var button = new Border
+1989:     private UIElement BuildVisualSettingsPage()
+2011:         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")),
+2012:             State.ColorScheme == ColorSchemes.Mica ? "TipColorSchemeMica" : "TipColorScheme"));
+2013:         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+2014:         if (State.ColorScheme == ColorSchemes.Mica)
+2018:                 Text = Strings.Get(!NativeMicaBackdrop.IsSupported ? "MicaUnsupported" :
+2023:             if (NativeMicaBackdrop.IsSupported)
+2025:                 leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMicaBackdrop")), "TipMicaBackdrop"));
+2026:                 leftColumn.Children.Add(CreateMicaBackdropSegmentSelector());
+2028:                     Strings.Get("SettingsMicaAlwaysActive"), State.MicaAlwaysActive, ToggleMicaAlwaysActive),
+2029:                     "TipMicaAlwaysActive"));
+2125:         var separator = new Border
+2174:         State.ColorScheme = ColorSchemes.Warm;
+2175:         State.MicaBackdropType = MicaBackdropTypes.Mica;
+2176:         State.MicaAlwaysActive = false;
+2250:         var signature = new Border
+2337:         return new Border
+2559:         var hint = new Border
+2605:             _settingsCapsuleModeCheckBox.IsChecked = State.UseCapsuleMode;
+2610:             _settingsDeepCapsuleModeCheckBox.IsEnabled = State.UseCapsuleMode;
+2615:             _settingsDeepCapsuleExpandedSlotCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+2620:             _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+2625:             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode &&
+2631:             _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+2883:             if (State.Theme == "system" && State.ColorScheme != ColorSchemes.Mica)
+3112:         State.UseCapsuleMode = !State.UseCapsuleMode;
+3114:         if (!State.UseCapsuleMode)
+3130:         if (!State.UseCapsuleMode)
+3262:         if (State.UseDeepCapsuleMode && !State.UseCapsuleMode)
+3264:             State.UseCapsuleMode = true;
+3382:         if (paper.IsCollapsed && State.UseCapsuleMode)
+
+### src/AppController.Settings.GeneralPage.cs (232 lines)
+101:             State.UseCapsuleMode,
+170:         var separator = new Border
+207:         State.UseCapsuleMode = true;
+
+### src/Models.cs (666 lines)
+407:     public string ColorScheme { get; set; } = ColorSchemes.Warm;
+408:     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
+409:     public bool MicaAlwaysActive { get; set; }
+435:     public bool UseCapsuleMode { get; set; } = true;
+
+### src/StateStore.cs (925 lines)
+515:         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
+516:         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
+575:         if (!state.UseCapsuleMode)
+585:         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
+607:         var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
+697:             if (!state.UseCapsuleMode)
+
+### src/Strings.cs (103 lines)
