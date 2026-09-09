@@ -153,7 +153,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     /// <summary>当前字号缩放系数（0.5..1.5）。图形元素的像素度量乘它后与文本同步缩放。</summary>
     internal double ZoomFactor() => ComputeScale();
 
-    private static bool TryGetTextPoint(
+    internal static bool TryGetTextPoint(
         TextView textView,
         DocumentLine line,
         int absoluteOffset,

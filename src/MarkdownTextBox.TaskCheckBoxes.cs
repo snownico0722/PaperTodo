@@ -64,9 +64,8 @@ public sealed partial class MarkdownTextBox
     }
 
     /// <summary>
-    /// Activates the rendered task checkbox at a TextView-local point. Keeping hit testing and the
-    /// source mutation behind one narrow method lets interaction checks exercise the same path as
-    /// the mouse handler without synthesizing an OS mouse device.
+    /// Activates the rendered task checkbox at a TextView-local point. Interaction checks use this
+    /// same source mutation path as the real mouse handler without synthesizing an OS mouse device.
     /// </summary>
     internal bool TryToggleRenderedTaskCheckBoxAtPoint(Point textViewPoint)
     {
@@ -88,62 +87,54 @@ public sealed partial class MarkdownTextBox
             return false;
         }
 
+        var textView = TextArea.TextView;
+        Point editorPoint;
         try
         {
-            EnsureVisualLines();
+            editorPoint = textView.TranslatePoint(textViewPoint, this);
         }
         catch
         {
             return false;
         }
 
-        var textView = TextArea.TextView;
-        if (!textView.VisualLinesValid)
+        if (!TryGetCharacterIndexFromPoint(editorPoint, out var offset) ||
+            !textView.VisualLinesValid)
         {
             return false;
         }
 
-        foreach (var visualLine in textView.VisualLines)
+        DocumentLine line;
+        try
         {
-            var visualTop = textView.GetVisualTopByDocumentLine(
-                    visualLine.FirstDocumentLine.LineNumber) -
-                textView.VerticalOffset;
-            var visualBottom = visualTop + visualLine.Height;
-            if (textViewPoint.Y < visualTop - TaskCheckBoxHitPadding ||
-                textViewPoint.Y > visualBottom + TaskCheckBoxHitPadding)
+            line = Document.GetLineByOffset(Math.Clamp(offset, 0, Document.TextLength));
+        }
+        catch
+        {
+            return false;
+        }
+
+        foreach (var candidate in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
+        {
+            if (candidate.Kind != MarkdownSemanticSpanKind.TaskListMarker ||
+                candidate.Length < 3 ||
+                candidate.Start < line.Offset ||
+                candidate.End > line.EndOffset ||
+                IsTaskMarkerRevealed(line, candidate) ||
+                !MarkdownTaskCheckBoxGeometry.TryGetRect(
+                    textView,
+                    line,
+                    candidate,
+                    out var rect))
             {
                 continue;
             }
 
-            for (var line = visualLine.FirstDocumentLine;
-                 line != null && line.LineNumber <= visualLine.LastDocumentLine.LineNumber;
-                 line = line.NextLine)
+            rect.Inflate(TaskCheckBoxHitPadding, TaskCheckBoxHitPadding);
+            if (rect.Contains(textViewPoint))
             {
-                foreach (var candidate in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
-                {
-                    if (candidate.Kind != MarkdownSemanticSpanKind.TaskListMarker ||
-                        candidate.Length < 3 ||
-                        candidate.Start < line.Offset ||
-                        candidate.End > line.EndOffset ||
-                        IsTaskMarkerRevealed(line, candidate) ||
-                        !MarkdownTaskCheckBoxGeometry.TryGetRect(
-                            textView,
-                            line,
-                            candidate,
-                            out var rect))
-                    {
-                        continue;
-                    }
-
-                    rect.Inflate(TaskCheckBoxHitPadding, TaskCheckBoxHitPadding);
-                    if (!rect.Contains(textViewPoint))
-                    {
-                        continue;
-                    }
-
-                    task = candidate;
-                    return true;
-                }
+                task = candidate;
+                return true;
             }
         }
 
@@ -186,23 +177,15 @@ public sealed partial class MarkdownTextBox
             return false;
         }
 
-        var state = marker[1];
-        string replacement;
-        if (task.Checked)
+        var replacement = marker[1] switch
         {
-            if (state is not ('x' or 'X'))
-            {
-                return false;
-            }
-            replacement = " ";
-        }
-        else
+            ' ' => "x",
+            'x' or 'X' => " ",
+            _ => null
+        };
+        if (replacement == null)
         {
-            if (state != ' ')
-            {
-                return false;
-            }
-            replacement = "x";
+            return false;
         }
 
         // One source-character replacement is one normal AvalonEdit undo operation and flows through
@@ -221,13 +204,13 @@ internal static class MarkdownTaskCheckBoxGeometry
         out Rect rect)
     {
         rect = Rect.Empty;
-        if (!TryGetTextPoint(
+        if (!MarkdownSemanticPresentation.TryGetTextPoint(
                 textView,
                 line,
                 task.Start,
                 VisualYPosition.TextTop,
                 out var topLeft) ||
-            !TryGetTextPoint(
+            !MarkdownSemanticPresentation.TryGetTextPoint(
                 textView,
                 line,
                 task.End,
@@ -247,29 +230,5 @@ internal static class MarkdownTaskCheckBoxGeometry
             boxSize,
             boxSize);
         return true;
-    }
-
-    private static bool TryGetTextPoint(
-        TextView textView,
-        DocumentLine line,
-        int absoluteOffset,
-        VisualYPosition yPosition,
-        out Point point)
-    {
-        point = default;
-        try
-        {
-            var indexInLine = Math.Clamp(absoluteOffset - line.Offset, 0, line.Length);
-            point = textView.GetVisualPosition(
-                new TextViewPosition(line.LineNumber, indexInLine + 1),
-                yPosition);
-            point.X -= textView.HorizontalOffset;
-            point.Y -= textView.VerticalOffset;
-            return double.IsFinite(point.X) && double.IsFinite(point.Y);
-        }
-        catch
-        {
-            return false;
-        }
     }
 }

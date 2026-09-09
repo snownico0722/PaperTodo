@@ -61,7 +61,7 @@ public sealed partial class MarkdownTextBox
                     else
                     {
                         var insertion = NewLineTextFor(line) + plan.Continuation;
-                        if (MaxLength > 0 && Text.Length + insertion.Length > MaxLength)
+                        if (!CanApplyTextReplacementWithNotice(insertion))
                         {
                             return true;
                         }
@@ -84,7 +84,7 @@ public sealed partial class MarkdownTextBox
             }
         }
 
-        if (!CanApplyTextReplacement(NewLineTextAtCaret()))
+        if (!CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
         {
             return true;
         }

@@ -944,11 +944,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public bool ValidateTextDrop(IDataObject dataObject)
     {
-        if (IsReadOnly)
-        {
-            return true;
-        }
-
         string? text;
         try
         {
@@ -1355,7 +1350,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsReturn &&
             e.Key == System.Windows.Input.Key.Enter &&
-            !CanApplyTextReplacement(NewLineTextAtCaret()))
+            !CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
         {
             e.Handled = true;
             return;
@@ -1364,7 +1359,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsTab &&
             e.Key == System.Windows.Input.Key.Tab &&
-            !CanApplyTextReplacement("\t"))
+            !CanApplyTextReplacementWithNotice("\t"))
         {
             e.Handled = true;
             return;
@@ -1382,7 +1377,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (!IsReadOnly &&
             !string.IsNullOrEmpty(e.Text) &&
-            !CanApplyTextReplacement(e.Text))
+            !CanApplyTextReplacementWithNotice(e.Text))
         {
             e.Handled = true;
             return;

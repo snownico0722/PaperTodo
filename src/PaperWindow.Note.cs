@@ -541,34 +541,17 @@ public sealed partial class PaperWindow
             return true;
         }
 
-        static bool HasTextDropData(IDataObject data)
-        {
-            try
-            {
-                return data.GetDataPresent(DataFormats.UnicodeText) ||
-                    data.GetDataPresent(DataFormats.Text);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         box.AllowDrop = true;
         box.PreviewDragOver += (_, e) =>
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
-                if (!isPreviewing || !HasTextDropData(e.Data))
+                if (!isPreviewing || !MarkdownTextBox.HasTextDropData(e.Data))
                 {
                     return;
                 }
 
-                e.Effects = (e.AllowedEffects & DragDropEffects.Copy) != 0
-                    ? DragDropEffects.Copy
-                    : (e.AllowedEffects & DragDropEffects.Move) != 0
-                        ? DragDropEffects.Move
-                        : DragDropEffects.None;
+                e.Effects = MarkdownTextBox.ResolveTextDropEffect(e);
                 e.Handled = e.Effects != DragDropEffects.None;
                 return;
             }
@@ -580,7 +563,7 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
-                if (!HasTextDropData(e.Data))
+                if (!MarkdownTextBox.HasTextDropData(e.Data))
                 {
                     return;
                 }
@@ -757,6 +740,12 @@ public sealed partial class PaperWindow
 
         MouseButtonEventHandler noteMouseDown = (_, e) =>
         {
+            if (box.RenderedTaskCheckBoxMouseDownHandled)
+            {
+                TraceNoteRender($"PreviewMouseLeftButtonDown ignored: rendered task checkbox isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
+                return;
+            }
+
             if (IsScrollBarInteractionSource(e.OriginalSource as DependencyObject, box))
             {
                 TraceNoteRender($"PreviewMouseLeftButtonDown ignored: scrollbar isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");

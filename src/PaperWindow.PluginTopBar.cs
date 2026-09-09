@@ -24,24 +24,10 @@ public sealed partial class PaperWindow
     private bool _reconcilingPluginHostActionVisibility;
     private bool _reconcilingPluginTopBarCapacity;
 
-    internal static void EnsurePluginTopBarLoadedHandler()
-    {
-        if (_pluginTopBarLoadedHandlerRegistered)
-        {
-            return;
-        }
-        _pluginTopBarLoadedHandlerRegistered = true;
-        EventManager.RegisterClassHandler(
-            typeof(PaperWindow),
-            LoadedEvent,
-            new RoutedEventHandler((sender, _) =>
-            {
-                if (sender is PaperWindow window && !window.IsClosed)
-                {
-                    window.RefreshPluginTopBarActions();
-                }
-            }));
-    }
+    internal static void EnsurePluginTopBarLoadedHandler() =>
+        EnsurePluginLoadedRefreshHandler(
+            ref _pluginTopBarLoadedHandlerRegistered,
+            static window => window.RefreshPluginTopBarActions());
 
     internal void RefreshPluginTopBarActions()
     {

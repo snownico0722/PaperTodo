@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 
 namespace PaperTodo;
@@ -150,22 +151,46 @@ public sealed partial class AppController
         };
         AttachSettingsSidebarDragBehavior(closeRow, window);
 
+        var closeGlyph = new Path
+        {
+            Data = Geometry.Parse("M 1,1 L 7,7 M 7,1 L 1,7"),
+            StrokeThickness = 1.2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Width = 8,
+            Height = 8,
+            Stretch = Stretch.None,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        closeGlyph.SetBinding(
+            Shape.StrokeProperty,
+            new System.Windows.Data.Binding(nameof(Control.Foreground))
+            {
+                RelativeSource = new System.Windows.Data.RelativeSource(
+                    System.Windows.Data.RelativeSourceMode.FindAncestor,
+                    typeof(Button),
+                    1)
+            });
+
         var closeButton = new Button
         {
-            Content = "×",
-            Width = 28,
+            Content = closeGlyph,
+            Width = 26,
             Height = 20,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 4, 0),
+            Margin = new Thickness(0, 0, 1, 0),
             BorderThickness = new Thickness(1),
             Background = Brushes.Transparent,
             Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(16),
             Cursor = Cursors.Hand,
             Focusable = false,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsCloseButtonStyle()
         };
         closeButton.Click += (_, _) => window.Close();
@@ -351,16 +376,15 @@ public sealed partial class AppController
         var root = new DockPanel
         {
             LastChildFill = true,
-            Margin = new Thickness(16, 0, 10, 14)
+            Margin = new Thickness(16, 0, 4, 14)
         };
 
-        // Advanced blocks extend their backgrounds 8 DIPs beyond the aligned controls.
-        // Keep that space inside the viewport, plus a small inset on the scroll edge so
-        // rounded right borders do not land on the clipping boundary.
+        // Keep the page width static. Use the already-empty host edge as clipping room
+        // instead of changing width after the page has been shown.
         var content = new Border
         {
-            Width = SettingsContentWidth() + 16,
-            Padding = new Thickness(8, 0, 10, 0),
+            Width = SettingsContentWidth() + 18,
+            Padding = new Thickness(8, 0, 8, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = BuildSettingsPage()
         };
