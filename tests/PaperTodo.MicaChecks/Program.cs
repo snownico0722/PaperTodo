@@ -271,6 +271,7 @@ internal static class Program
                         finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
                     }
                 });
+                Check("experimental skins", () => SkinChecks.Run(controller));
                 Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
                 Check("non-Mica startup keeps the original layered paper", () =>
                 {
@@ -280,7 +281,6 @@ internal static class Program
                     try { Assert(window.AllowsTransparency && !window.IsNativeMicaEffective, "unchanged legacy window"); }
                     finally { window.CloseForReal(); }
                 });
-                Check("experimental skins", () => SkinChecks.Run(controller));
             }
             Console.WriteLine($"Native Mica behavior checks passed: {_passed}.");
             return 0;

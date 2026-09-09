@@ -346,8 +346,8 @@ internal static class VisualChecks
             checkbox.IsChecked = true;
             checkbox.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Program.Assert(controller.State.MicaAlwaysActive, "settings checkbox updates the shared preference");
-            typeof(AppController).GetMethod("SetMicaBackdrop", Program.Private)!
-                .Invoke(controller, new object[] { MicaBackdropTypes.ClearAcrylic });
+            typeof(AppController).GetMethod("SetPaperSkin", Program.Private)!
+                .Invoke(controller, new object[] { PaperSkins.ClearAcrylic });
             Wait();
             Program.Assert(window.Content is Border { Background: SolidColorBrush clear } && clear.Color.A == 0,
                 "settings receives Clear Acrylic after rebuilding its root");
@@ -359,6 +359,7 @@ internal static class VisualChecks
         finally
         {
             window.Close(); controller.State.Theme = "light";
+            controller.State.PaperSkin = null; // Restore the legacy fixture for the following checks.
             controller.State.MicaAlwaysActive = false;
             controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
             Theme.Invalidate();
