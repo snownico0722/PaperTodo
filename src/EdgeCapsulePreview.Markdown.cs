@@ -20,18 +20,17 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
 
     public EdgeCapsulePreviewDescriptor Describe(EdgeCapsulePreviewContext context)
     {
-        var text = context.ReadMarkdownText();
-        var renderMode = context.ReadMarkdownRenderMode();
+        var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+            context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
-            MarkdownEdgeCapsulePreviewRenderer.MeasureText(text, renderMode),
+            MarkdownEdgeCapsulePreviewRenderer.MeasureText(content),
             minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
             maximum: 460);
         var lines = MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(
-            text,
-            Math.Max(72, width - 36),
-            renderMode);
-        var empty = string.IsNullOrWhiteSpace(text);
+            content,
+            Math.Max(72, width - 36));
+        var empty = content.IsEmpty;
         var height = empty
             ? 120
             : Math.Clamp(
@@ -46,7 +45,7 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
         MarkdownEdgeCapsulePreviewView? view = null;
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, height),
-            size => view = new MarkdownEdgeCapsulePreviewView(context, size),
+            size => view = new MarkdownEdgeCapsulePreviewView(context, size, content),
             visible => view?.SetPreviewActive(visible));
     }
 }
@@ -55,12 +54,15 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
 {
     private readonly TextBlock _title;
     private readonly MarkdownEdgeCapsulePreviewViewport _viewport;
+    private MarkdownEdgeCapsulePreviewRenderer.PreviewContent? _initialContent;
 
     public MarkdownEdgeCapsulePreviewView(
         EdgeCapsulePreviewContext context,
-        EdgeCapsulePreviewSize size)
+        EdgeCapsulePreviewSize size,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent initialContent)
         : base(context, size)
     {
+        _initialContent = initialContent;
         Margin = new Thickness(10, 9, 9, 10);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition());
@@ -101,11 +103,12 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         _title.ToolTip = title;
         // Capture once on the owning Dispatcher. Deferred work never rereads a different paper
         // or mutable editor halfway through a build, and never touches WPF on a worker thread.
-        var markdown = Context.ReadMarkdownText();
-        var renderMode = Context.ReadMarkdownRenderMode();
+        var content = _initialContent ?? MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+            Context.ReadMarkdownText(), Context.ReadMarkdownRenderMode());
+        _initialContent = null;
         var textZoom = Context.Paper.TextZoom;
         _viewport.SetContent((target, size) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
-            target, markdown, Context.OpenExternal, renderMode, size, textZoom));
+            target, content, Context.OpenExternal, size, textZoom));
     }
 }
 
@@ -290,16 +293,67 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 {
     // The preview is a navigation surface, not a second document renderer. Bound both visual
     // nodes and source text so one pathological note cannot stall the hover transition.
-    private const int MaximumMeasuredLines = 24;
-    // Empty source lines also produce blocks. A twelve-block budget could end an ordinary
-    // note before the card was filled; these are safety limits, not a visible line count.
-    private const int MaximumRenderedBlocks = 128;
-    private const int MaximumRenderedCharacters = 16384;
-    private const int MaximumBlockCharacters = 4096;
-    private const int MaximumCodeCharacters = 8192;
+    private const int MaximumRenderedBlocks = 16;
+    private const int MaximumRenderedCharacters = 6000;
+    private const int MaximumBlockCharacters = MaximumRenderedCharacters;
+    private const int MaximumCodeCharacters = MaximumRenderedCharacters;
     private const int MaximumInlineDepth = 6;
 
     private readonly record struct PreviewLine(string Text, bool Truncated);
+
+    internal sealed record PreviewContent(
+        IReadOnlyList<ContentLine> Lines,
+        string RenderMode,
+        bool Truncated)
+    {
+        public bool IsEmpty => Lines.All(line => string.IsNullOrWhiteSpace(line.Text));
+    }
+
+    internal readonly record struct ContentLine(
+        string Text,
+        bool WasInsideFence,
+        MarkdownFenceLineKind FenceKind);
+
+    // Select the source once, before requesting card geometry. Measuring and rendering consume
+    // this same excerpt; text beyond either budget must not reserve empty card space. In Full,
+    // a fenced code block consumes one block, while its source still shares the character cap.
+    public static PreviewContent CaptureContent(string? markdown, string renderMode)
+    {
+        var lines = new List<ContentLine>();
+        var fencedCodeState = default(MarkdownFencedCodeState);
+        var blocks = 0;
+        var characters = 0;
+        var truncated = false;
+        foreach (var previewLine in NormalizeLines(markdown))
+        {
+            var startsBlock = renderMode != MarkdownRenderModes.Full || !fencedCodeState.IsInside;
+            var separatorLength = lines.Count == 0 ? 0 : 1;
+            var remaining = MaximumRenderedCharacters - characters - separatorLength;
+            if ((startsBlock && blocks >= MaximumRenderedBlocks) || remaining < 0 ||
+                (remaining == 0 && previewLine.Text.Length > 0))
+            {
+                truncated = true;
+                break;
+            }
+
+            var line = LimitText(previewLine.Text, remaining, out var limitedLine);
+            var wasInsideFence = fencedCodeState.IsInside;
+            var fenceKind = MarkdownFencedCodeScanner.ClassifyLine(
+                line, fencedCodeState, out fencedCodeState);
+            lines.Add(new ContentLine(line, wasInsideFence, fenceKind));
+            characters += separatorLength + line.Length;
+            if (startsBlock)
+            {
+                blocks++;
+            }
+            if (previewLine.Truncated || limitedLine)
+            {
+                truncated = true;
+                break;
+            }
+        }
+        return new PreviewContent(lines, renderMode, truncated);
+    }
 
     private static readonly Regex InlinePattern = new(
         @"!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|\*\*\*(.+?)\*\*\*|___(.+?)___|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`]+)`|\*(.+?)\*|_([^_]+)_",
@@ -320,86 +374,77 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         @"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    public static string MeasureText(string? markdown, string renderMode)
+    public static string MeasureText(PreviewContent content)
     {
         var measured = new List<string>();
-        var fencedCodeState = default(MarkdownFencedCodeState);
-        foreach (var previewLine in NormalizeLines(markdown).Take(MaximumMeasuredLines))
+        foreach (var line in content.Lines)
         {
-            var original = previewLine.Text;
-            if (renderMode != MarkdownRenderModes.Full)
+            var original = line.Text;
+            if (content.RenderMode != MarkdownRenderModes.Full)
             {
                 measured.Add(CompactText(original));
                 continue;
             }
-            var wasInsideFence = fencedCodeState.IsInside;
-            var fenceKind = MarkdownFencedCodeScanner.ClassifyLine(
-                original,
-                fencedCodeState,
-                out fencedCodeState);
-            if (fenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing ||
+            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing ||
                 string.IsNullOrWhiteSpace(original))
             {
                 continue;
             }
 
-            var text = wasInsideFence
+            var text = line.WasInsideFence
                 ? original.TrimEnd()
                 : PrepareInlineTextForMeasurement(StripBlockPrefix(original));
             measured.Add(CompactText(text));
         }
 
-        return string.Join(Environment.NewLine, measured);
+        // The shared width helper samples only 32 lines. Supply the widest admitted line so
+        // a long Full-mode code block has no second, unrelated measurement cutoff.
+        return measured.MaxBy(EdgeCapsulePreviewMeasure.DisplayWidth) ?? string.Empty;
     }
 
-    public static int EstimateVisualLines(string? markdown, double widthDip, string renderMode)
+    public static int EstimateVisualLines(PreviewContent content, double widthDip)
     {
         var estimate = 0;
-        var measuredCharacters = 0;
-        var fencedCodeState = default(MarkdownFencedCodeState);
-        foreach (var previewLine in NormalizeLines(markdown).Take(MaximumMeasuredLines))
+        var emptyCodeBlock = false;
+        foreach (var line in content.Lines)
         {
-            var original = previewLine.Text;
-            var wasInsideFence = fencedCodeState.IsInside;
-            var fenceKind = MarkdownFencedCodeScanner.ClassifyLine(
-                original,
-                fencedCodeState,
-                out fencedCodeState);
-            var raw = LimitText(
-                original,
-                Math.Min(
-                    MaximumBlockCharacters,
-                    MaximumRenderedCharacters - measuredCharacters),
-                out var limitedLine);
-            var lineTruncated = previewLine.Truncated || limitedLine;
-            measuredCharacters += raw.Length + 1;
+            var raw = line.Text;
             var trimmed = raw.Trim();
-            if (fenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
+            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
             {
-                estimate += 1;
+                if (content.RenderMode != MarkdownRenderModes.Full)
+                {
+                    estimate += 1;
+                }
+                else if (line.FenceKind == MarkdownFenceLineKind.Opening)
+                {
+                    emptyCodeBlock = true;
+                }
+                else if (emptyCodeBlock)
+                {
+                    estimate += 1;
+                    emptyCodeBlock = false;
+                }
             }
             else if (trimmed.Length == 0 ||
-                     (!wasInsideFence && HorizontalRulePattern.IsMatch(trimmed)))
+                     (!line.WasInsideFence && HorizontalRulePattern.IsMatch(trimmed)))
             {
+                emptyCodeBlock = false;
                 estimate += 1;
             }
             else
             {
-                var measurementText = wasInsideFence || renderMode != MarkdownRenderModes.Full
+                emptyCodeBlock = false;
+                var measurementText = line.WasInsideFence || content.RenderMode != MarkdownRenderModes.Full
                     ? raw.TrimEnd()
                     : PrepareInlineTextForMeasurement(StripBlockPrefix(trimmed));
                 var lines = EdgeCapsulePreviewMeasure.EstimateWrappedLines(
                     measurementText,
                     widthDip);
-                estimate += wasInsideFence ? Math.Min(3, lines) : Math.Min(4, lines);
-            }
-
-            if (lineTruncated || measuredCharacters >= MaximumRenderedCharacters)
-            {
-                break;
+                estimate += line.WasInsideFence ? Math.Min(3, lines) : Math.Min(4, lines);
             }
         }
-        return Math.Max(1, estimate);
+        return Math.Max(1, estimate + (emptyCodeBlock ? 1 : 0));
     }
 
     public static bool RenderInto(
@@ -426,21 +471,28 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         Action<string> openExternal,
         string renderMode = MarkdownRenderModes.Full,
         Size? viewportSize = null,
+        double textZoom = 1.0) =>
+        RenderSteps(target, CaptureContent(markdown, renderMode), openExternal, viewportSize, textZoom);
+
+    public static IEnumerable<bool> RenderSteps(
+        Panel target,
+        PreviewContent content,
+        Action<string> openExternal,
+        Size? viewportSize = null,
         double textZoom = 1.0)
     {
         target.Children.Clear();
-        if (string.IsNullOrWhiteSpace(markdown))
+        if (content.IsEmpty)
         {
             AddEmptyState(target);
-            yield return false;
+            yield return content.Truncated;
             yield break;
         }
 
         var zoom = double.IsFinite(textZoom) ? Math.Clamp(textZoom, 0.5, 1.5) : 1.0;
+        var renderMode = content.RenderMode;
         var code = new StringBuilder();
-        var fencedCodeState = default(MarkdownFencedCodeState);
-        var renderedBlocks = 0;
-        var renderedCharacters = 0;
+        var insideFence = false;
         var renderedHeight = 0.0;
         var truncated = false;
 
@@ -455,49 +507,37 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
         }
 
-        foreach (var previewLine in NormalizeLines(markdown))
+        foreach (var previewLine in content.Lines)
         {
             // Include the block crossing the bottom edge. Measuring actual wrapped heights
-            // avoids the old fixed-block cutoff without building the invisible document tail.
-            if ((viewportSize is { } size && renderedHeight > size.Height) ||
-                renderedBlocks >= MaximumRenderedBlocks ||
-                renderedCharacters >= MaximumRenderedCharacters)
+            // avoids building admitted content that cannot be seen. The source budget was
+            // already applied before sizing, so it cannot diverge here from the geometry input.
+            if (viewportSize is { } size && renderedHeight > size.Height)
             {
                 truncated = true;
                 break;
             }
 
-            var sourceLine = renderMode == MarkdownRenderModes.Full
+            var line = renderMode == MarkdownRenderModes.Full
                 ? previewLine.Text.TrimEnd()
                 : previewLine.Text;
-            var wasInsideFence = fencedCodeState.IsInside;
-            var fenceKind = MarkdownFencedCodeScanner.ClassifyLine(
-                sourceLine,
-                fencedCodeState,
-                out fencedCodeState);
-            var line = LimitText(
-                sourceLine,
-                Math.Min(
-                    MaximumBlockCharacters,
-                    MaximumRenderedCharacters - renderedCharacters),
-                out var limitedLine);
-            var lineTruncated = previewLine.Truncated || limitedLine;
-            renderedCharacters += line.Length + 1;
+            var wasInsideFence = previewLine.WasInsideFence;
+            var fenceKind = previewLine.FenceKind;
             if (renderMode != MarkdownRenderModes.Full)
             {
                 AddBlock(BuildSourceBlock(
                     line, renderMode, wasInsideFence, fenceKind, openExternal));
-                renderedBlocks++;
             }
             else if (fenceKind == MarkdownFenceLineKind.Opening)
             {
                 code.Clear();
+                insideFence = true;
             }
             else if (fenceKind == MarkdownFenceLineKind.Closing)
             {
                 AddBlock(BuildCodeBlock(code.ToString()));
-                renderedBlocks++;
                 code.Clear();
+                insideFence = false;
             }
             else if (wasInsideFence)
             {
@@ -510,32 +550,24 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             else
             {
                 AddBlock(BuildBlock(line, openExternal));
-                renderedBlocks++;
             }
 
-            if (lineTruncated || truncated)
+            if (truncated)
             {
-                truncated = true;
                 break;
             }
             yield return false;
         }
         if (renderMode == MarkdownRenderModes.Full &&
-            (fencedCodeState.IsInside || code.Length > 0) &&
-            renderedBlocks < MaximumRenderedBlocks)
+            insideFence)
         {
             AddBlock(BuildCodeBlock(code.ToString()));
-            renderedBlocks++;
-        }
-        else if (code.Length > 0)
-        {
-            truncated = true;
         }
         if (target.Children.Count == 0)
         {
             AddEmptyState(target);
         }
-        yield return truncated;
+        yield return truncated || content.Truncated;
     }
 
     private static void AddEmptyState(Panel target)
@@ -1053,7 +1085,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static bool AppendCodeLine(StringBuilder target, string line)
     {
-        var separatorLength = target.Length > 0 ? Environment.NewLine.Length : 0;
+        var separatorLength = target.Length > 0 ? 1 : 0;
         var remaining = MaximumCodeCharacters - target.Length - separatorLength;
         if (remaining <= 0)
         {
@@ -1063,7 +1095,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var value = LimitText(line, remaining, out var truncated);
         if (separatorLength > 0)
         {
-            target.AppendLine();
+            target.Append('\n');
         }
         target.Append(value);
         return truncated;

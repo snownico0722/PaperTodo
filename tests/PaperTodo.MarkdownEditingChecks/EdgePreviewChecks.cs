@@ -110,7 +110,7 @@ internal static partial class Program
             }
         });
 
-        check("Edge note preview clips overflow without scrolling and fills available space", () =>
+        check("Edge note preview clips bounded content without scrolling", () =>
         {
             var source = string.Join("\n", Enumerable.Range(1, 40).Select(i => $"正文 {i}"));
             var mode = MarkdownRenderModes.Off;
@@ -138,8 +138,9 @@ internal static partial class Program
                     Require(!EdgePreviewElements(view).OfType<ScrollViewer>().Any(), "note preview has no scrolling surface in any mode");
                     var clip = body.Clip.Bounds;
                     var last = (FrameworkElement)body.Children[^1];
-                    Require(last.TranslatePoint(new Point(0, last.ActualHeight), viewport).Y >= clip.Bottom,
-                        "realized content reaches the bottom of the visible excerpt");
+                    Require(last.TranslatePoint(new Point(0, last.ActualHeight), viewport).Y >= clip.Bottom ||
+                        body.Children.Count == 16,
+                        "rendering stops at the visible bottom or the hard content budget");
                     Require(body.Children.Count < 40, "invisible tail is not constructed");
                     Equal(1.0, indicator.Opacity, "overflow shows an ellipsis");
                     Require(indicator.TranslatePoint(new Point(), viewport).Y >= clip.Bottom, "ellipsis does not cover visible text");
@@ -192,10 +193,10 @@ internal static partial class Program
 
         check("Edge note preview does not discard ordinary source before layout", () =>
         {
-            var source = string.Join("\n\n", Enumerable.Range(1, 10).Select(i => $"正文 {i}"));
+            var source = string.Join("\n\n", Enumerable.Range(1, 8).Select(i => $"正文 {i}"));
             var panel = new StackPanel();
             var truncated = MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, source, _ => { });
-            Require(EdgePreviewText(panel).Contains("正文 10"), "later paragraphs remain available for layout");
+            Require(EdgePreviewText(panel).Contains("正文 8"), "all paragraphs within the budget remain available for layout");
             Require(!truncated, "ordinary note is not truncated");
 
             source = new string('文', 700) + "\n段落之后";
@@ -217,9 +218,14 @@ internal static partial class Program
                     var bounded = new StackPanel();
                     var truncated = MarkdownEdgeCapsulePreviewRenderer.RenderInto(bounded, source, _ => { }, mode, size);
                     Require(truncated, "omitted source is reported to the overflow indicator");
-                    Require(bounded.Children.Count < eager.Children.Count / 2, "hidden blocks are not instantiated");
+                    Require(bounded.Children.Count <= eager.Children.Count, "viewport never expands the source budget");
+                    if (size.Height == 120)
+                    {
+                        Require(bounded.Children.Count < eager.Children.Count, "hidden blocks are not instantiated in a short viewport");
+                    }
                     bounded.Measure(new Size(size.Width, double.PositiveInfinity));
-                    Require(bounded.DesiredSize.Height >= size.Height, "actual wrapped content fills the viewport");
+                    Require(bounded.DesiredSize.Height >= size.Height || bounded.Children.Count == eager.Children.Count,
+                        "rendering stops at the viewport or after all budgeted content");
                     for (var i = 0; i < bounded.Children.Count; i++)
                     {
                         Equal(EdgePreviewText(eager.Children[i]), EdgePreviewText(bounded.Children[i]),
@@ -234,6 +240,51 @@ internal static partial class Program
                 Equal(1, single.Children.Count, "a wrapping paragraph alone can fill the card");
                 Equal(paragraph, EdgePreviewText(single.Children[0]), "viewport budgeting does not reinstate the 512-character cutoff");
             }
+        });
+
+        check("Edge note sizing and rendering share the 16-block and 6000-character budget", () =>
+        {
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            {
+                EdgeCapsulePreviewDescriptor Describe(string source) =>
+                    MarkdownEdgeCapsulePreviewProvider.Instance.Describe(new EdgeCapsulePreviewContext(
+                        new PaperData(), () => "笔记", false, () => source, () => mode,
+                        (_, _) => false, _ => false, () => new Style(), () => "", _ => { },
+                        new EdgeCapsulePreviewInvalidationSource()));
+
+                var prefix = string.Join("\n", Enumerable.Repeat("短行", 16));
+                var panel = new StackPanel();
+                Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, prefix, _ => { }, mode),
+                    "exactly sixteen blocks fit without source truncation");
+                var extra = prefix + "\n" + new string('宽', 300) + "\n预算外内容";
+                Equal(Describe(prefix).Size, Describe(extra).Size, "a seventeenth block cannot widen or heighten the card");
+                Require(MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, extra, _ => { }, mode), "omitted tail is reported");
+                Equal(16, panel.Children.Count, "rendered block count stays at sixteen");
+                Require(!EdgePreviewText(panel).Contains("宽"), "sizing-only tail is not silently rendered");
+
+                prefix = new string('文', 6000);
+                Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, prefix, _ => { }, mode),
+                    "exactly six thousand characters fit");
+                Equal(6000, EdgePreviewText(panel).Length, "single paragraphs do not retain the old 4096-character cap");
+                extra = prefix + "\n后续\n更多\n内容";
+                Equal(Describe(prefix).Size, Describe(extra).Size, "character-budget tail cannot reserve extra height");
+                Require(MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, extra, _ => { }, mode), "character overflow is reported");
+                Equal(prefix, EdgePreviewText(panel), "the admitted character prefix is unchanged");
+
+                extra = new string('a', 3500) + "\r\n" + new string('b', 3500);
+                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(extra, mode);
+                Equal(6000, content.Lines.Sum(line => line.Text.Length) + content.Lines.Count - 1,
+                    "normalized line separators share the character budget");
+                Require(content.Truncated, "cross-line character overflow is reported");
+            }
+
+            var fence = "```\n" + string.Join("\n", Enumerable.Repeat("code", 40)) + "\n```";
+            var full = new StackPanel();
+            var source = fence + "\n" + string.Join("\n", Enumerable.Repeat("正文", 15));
+            Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(full, source, _ => { }), "Full counts a fenced block once");
+            Equal(16, full.Children.Count, "fence and fifteen paragraphs consume sixteen blocks");
+            Require(MarkdownEdgeCapsulePreviewRenderer.RenderInto(full, source + "\n预算外", _ => { }), "block budget still applies after a fence");
+            Require(!EdgePreviewText(full).Contains("预算外"), "post-fence tail stays excluded");
         });
 
         check("Edge note preview layout contains render failures and retries on invalidation", () =>
