@@ -1,4 +1,4 @@
-name: Rim material validation
+name: Material optics validation
 on:
   push:
     branches: [exp/playful-skins-20260909]
@@ -11,7 +11,7 @@ jobs:
   validate:
     if: contains(github.event.head_commit.message, '[rim-ci]')
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Apply checksummed source changes and commit before validation
+      - name: Commit checked material integration to actual source
         id: source
         shell: pwsh
         run: |
@@ -29,7 +29,7 @@ jobs:
           @'
           from pathlib import Path
           import subprocess, hashlib, json
-          files = sorted(Path('.').glob('.rim-transfer.*.json'))
+          files = sorted(Path('.').glob('.material-transfer.*.json'))
           digest = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
           outputs = {}
           for payload in files:
@@ -52,7 +52,7 @@ jobs:
                   assert digest(text) == entry['after'], 'Transfer mismatch: '+name
                   outputs[name] = text
           if files:
-              assert len(files) == 4 and len(outputs) == 18, (len(files),len(outputs))
+              assert len(files) == 4 and len(outputs) == 23, (len(files),len(outputs))
               for name,text in outputs.items(): Path(name).write_text(text, encoding='utf-8', newline='\n')
               for payload in files: payload.unlink()
               print('Verified and applied',len(outputs),'source updates')
@@ -65,7 +65,7 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add -A
             if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
-            git commit -m 'perf: refract narrow glass rims without full-window capture or UI lock waits'
+            git commit -m 'feat: model curved glass optics, clean Aero blur and layered ceramic glaze'
             if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
             git push origin HEAD:refs/heads/exp/playful-skins-20260909
             if ($LASTEXITCODE -ne 0) { throw 'Branch advanced; stop rather than overwrite' }
@@ -78,7 +78,7 @@ jobs:
       - name: Release build
         shell: pwsh
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
-      - name: Actual optics, idle uploads, input timing, material pixels and lifecycle
+      - name: Actual optics, idle composition, material pixels and lifecycle
         shell: pwsh
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/rim-evidence/native
@@ -114,25 +114,25 @@ jobs:
             Copy-Item (Join-Path $out 'PaperTodo.exe') (Join-Path $destination "PaperTodo-skins-$short-win-x64-$kind.exe")
           }
           $hashes = Get-ChildItem $destination -Filter *.exe | Get-FileHash -Algorithm SHA256 | Select-Object @{n='File';e={Split-Path $_.Path -Leaf}},Hash
-          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; optics='edge-only local GDI capture; direct-alpha center; capture-exclusion tradeoff unchanged'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
+          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; optics='shared Snell/squircle LUT, edge-only SDR capture, idle Rendering detached; clean accent Aero, cached clear-coat relief'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rim-evidence-${{ github.run_id }}
+          name: material-evidence-${{ github.run_id }}
           path: ${{ runner.temp }}/rim-evidence
           if-no-files-found: ignore
           retention-days: 3
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rim-source-${{ github.run_id }}
+          name: material-source-${{ github.run_id }}
           path: ${{ runner.temp }}/rim-source.bundle
           if-no-files-found: ignore
           retention-days: 2
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: rim-package-${{ steps.source.outputs.short }}
+          name: material-package-${{ steps.source.outputs.short }}
           path: ${{ runner.temp }}/rim-package
           if-no-files-found: error
           retention-days: 3
