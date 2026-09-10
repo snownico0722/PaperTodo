@@ -17,7 +17,7 @@ internal static partial class Program
                 foreach (var larger in new[] { false, true })
                 {
                     AppTypography.Configure(larger ? UiFontPresets.YaHei : UiFontPresets.Default,
-                        larger ? 1.25 : 1.0, textRenderingProfile: larger ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
+                        larger ? 1.2 : 1.0, textRenderingProfile: larger ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
                     NoteTypography.Configure(larger ? VisualTextSizes.Large : VisualTextSizes.Medium, larger);
                     foreach (var zoom in new[] { 1.0, 1.3 })
                     foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
@@ -27,53 +27,74 @@ internal static partial class Program
                         editor.Box.SetTextZoom(zoom);
                         editor.Box.SetMarkdownRenderMode(mode);
                         editor.Box.SetPreviewMode(true);
-                        Pump();
-                        // Editor is deliberately detached. As in the other editing checks,
-                        // explicitly lay out the editor and text view before querying its lines.
-                        editor.Box.ApplyTemplate();
-                        editor.Box.Measure(new Size(800, 600));
-                        editor.Box.Arrange(new Rect(0, 0, 800, 600));
-                        editor.Box.UpdateLayout();
-                        var textView = editor.Box.TextArea.TextView;
-                        textView.Measure(new Size(800, 600));
-                        textView.Arrange(new Rect(0, 0, 800, 600));
-                        textView.EnsureVisualLines();
-                        Equal(4, textView.VisualLines.Count, "reference editor lays out all four source lines");
-                        var panel = new StackPanel();
-                        MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, source, _ => { }, mode, textZoom: zoom);
-                        panel.Measure(new Size(textView.ActualWidth, double.PositiveInfinity));
-                        var noteHeight = textView.VisualLines.Sum(line => line.Height);
-                        Console.WriteLine($"  Edge line metrics {mode} large={larger} zoom={zoom}: note={noteHeight:F3}, preview={panel.DesiredSize.Height:F3}");
-                        Require(Math.Abs(noteHeight - panel.DesiredSize.Height) <= 2,
-                            "natural lines including the empty line match the note within pixel rounding");
-                        foreach (var text in panel.Children.OfType<TextBlock>())
+                        editor.Box.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                        editor.Box.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                        var panel = new StackPanel
                         {
-                            Equal(editor.Box.FontSize, text.FontSize, "body size includes the same paper zoom");
-                            Equal(editor.Box.FontFamily.Source, text.FontFamily.Source, "same content font");
-                            Equal(editor.Box.FontWeight, text.FontWeight, "same body weight");
-                            Equal(editor.Box.Language, text.Language, "same language fallback");
-                            Equal(TextOptions.GetTextFormattingMode(editor.Box), TextOptions.GetTextFormattingMode(text), "same text formatting profile");
-                            Require(double.IsNaN(text.LineHeight) && text.Margin.Top == 0 && text.Margin.Bottom == 0,
-                                "no additional preview line height or paragraph gap");
-                        }
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            VerticalAlignment = VerticalAlignment.Top
+                        };
+                        var host = new Grid();
+                        host.ColumnDefinitions.Add(new ColumnDefinition());
+                        host.ColumnDefinitions.Add(new ColumnDefinition());
+                        host.Children.Add(editor.Box);
+                        Grid.SetColumn(panel, 1);
+                        host.Children.Add(panel);
+                        var window = new Window { Content = host, Width = 900, Height = 650, ShowInTaskbar = false };
+                        try
+                        {
+                            // The editor's template must be attached: manually measuring its detached
+                            // TextView can retain the default 12pt instead of the configured body size.
+                            // Compare both surfaces in the same real window/DPI, at equal text widths.
+                            window.Show();
+                            Pump();
+                            var textView = editor.Box.TextArea.TextView;
+                            Equal(editor.Box.FontSize, textView.FontSize, "reference view receives the editor's font size");
+                            Require(textView.ActualWidth > 100, "reference text lane has a real layout");
+                            panel.Width = textView.ActualWidth;
+                            foreach (var sample in new[] { source, new string('文', 75) + " ABC\n\n最后一行" })
+                            {
+                                editor.Box.Text = sample;
+                                MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, sample, _ => { }, mode, textZoom: zoom);
+                                Pump();
+                                host.UpdateLayout();
+                                textView.EnsureVisualLines();
+                                Equal(editor.Box.Document.LineCount, textView.VisualLines.Count, "all reference source lines are visible");
+                                var noteHeight = textView.VisualLines.Sum(line => line.Height);
+                                Console.WriteLine($"  Edge line metrics {mode} large={larger} zoom={zoom}: note={noteHeight:F3}, preview={panel.DesiredSize.Height:F3}");
+                                Require(Math.Abs(noteHeight - panel.DesiredSize.Height) <= 2,
+                                    "natural lines, wrapping and empty lines match the note within pixel rounding");
+                                foreach (var text in panel.Children.OfType<TextBlock>())
+                                {
+                                    Equal(editor.Box.FontSize, text.FontSize, "body size includes the same paper zoom");
+                                    Equal(editor.Box.FontFamily.Source, text.FontFamily.Source, "same content font");
+                                    Equal(editor.Box.FontWeight, text.FontWeight, "same body weight");
+                                    Equal(editor.Box.Language, text.Language, "same language fallback");
+                                    Equal(TextOptions.GetTextFormattingMode(editor.Box), TextOptions.GetTextFormattingMode(text), "same text formatting profile");
+                                    Require(double.IsNaN(text.LineHeight) && text.Margin.Top == 0 && text.Margin.Bottom == 0,
+                                        "no additional preview line height or paragraph gap");
+                                }
+                            }
 
-                        MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, "## 标题\n`code` **strong**", _ => { }, mode, textZoom: zoom);
-                        var heading = (TextBlock)panel.Children[0];
-                        Equal(Math.Round((mode == MarkdownRenderModes.Off ? NoteTypography.FontSize : NoteTypography.Heading2FontSize) * zoom, 1),
-                            heading.FontSize, "heading uses the note's level-specific size");
-                        if (mode != MarkdownRenderModes.Off)
-                        {
-                            var expectedWeight = AppTypography.UsesCustomBoldFace(true)
-                                ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight;
-                            Equal(expectedWeight, heading.FontWeight, "same heading weight");
-                            var row = (TextBlock)panel.Children[1];
-                            var bold = row.Inlines.OfType<Bold>().Single();
-                            Equal(expectedWeight, bold.FontWeight, "same semantic strong weight");
-                            Equal(AppTypography.FontFamilyFor(content: true, bold: true).Source, bold.FontFamily.Source, "same semantic bold face");
-                            var code = row.Inlines.OfType<Span>().First(span => span is not Bold);
-                            Equal(NoteTypography.CodeFontFamily.Source, code.FontFamily.Source, "same inline code family");
-                            Equal(Math.Round(NoteTypography.CodeFontSize * zoom, 1), code.FontSize, "inline code zoom is composed once");
+                            MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, "## 标题\n`code` **strong**", _ => { }, mode, textZoom: zoom);
+                            var heading = (TextBlock)panel.Children[0];
+                            Equal(Math.Round((mode == MarkdownRenderModes.Off ? NoteTypography.FontSize : NoteTypography.Heading2FontSize) * zoom, 1),
+                                heading.FontSize, "heading uses the note's level-specific size");
+                            if (mode != MarkdownRenderModes.Off)
+                            {
+                                var expectedWeight = AppTypography.UsesCustomBoldFace(true)
+                                    ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight;
+                                Equal(expectedWeight, heading.FontWeight, "same heading weight");
+                                var row = (TextBlock)panel.Children[1];
+                                var bold = row.Inlines.OfType<Bold>().Single();
+                                Equal(expectedWeight, bold.FontWeight, "same semantic strong weight");
+                                Equal(AppTypography.FontFamilyFor(content: true, bold: true).Source, bold.FontFamily.Source, "same semantic bold face");
+                                var code = row.Inlines.OfType<Span>().First(span => span is not Bold);
+                                Equal(NoteTypography.CodeFontFamily.Source, code.FontFamily.Source, "same inline code family");
+                                Equal(Math.Round(NoteTypography.CodeFontSize * zoom, 1), code.FontSize, "inline code zoom is composed once");
+                            }
                         }
+                        finally { window.Close(); Pump(); }
                     }
                 }
             }
