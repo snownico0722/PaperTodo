@@ -43,13 +43,13 @@ internal static partial class Program
                         var window = new Window { Content = host, Width = 900, Height = 650, ShowInTaskbar = false };
                         try
                         {
-                            // The editor's template must be attached: manually measuring its detached
-                            // TextView can retain the default 12pt instead of the configured body size.
-                            // Compare both surfaces in the same real window/DPI, at equal text widths.
+                            // Attach the editor's template before comparing inherited typography.
+                            // Both surfaces use the same real window/DPI and equal text widths.
                             window.Show();
                             Pump();
                             var textView = editor.Box.TextArea.TextView;
-                            Equal(editor.Box.FontSize, textView.FontSize, "reference view receives the editor's font size");
+                            Equal(editor.Box.FontSize, (double)textView.GetValue(Control.FontSizeProperty),
+                                "reference view receives the editor's font size");
                             Require(textView.ActualWidth > 100, "reference text lane has a real layout");
                             panel.Width = textView.ActualWidth;
                             foreach (var sample in new[] { source, new string('文', 75) + " ABC\n\n最后一行" })
