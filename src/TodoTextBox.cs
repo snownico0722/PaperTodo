@@ -63,6 +63,15 @@ public sealed class TodoTextBox : TextBox
             DrawSweepSelection(drawingContext);
         }
 
+        if (IsInactiveSelectionHighlightEnabled &&
+            !IsKeyboardFocusWithin &&
+            SelectionLength > 0 &&
+            ActualWidth > 0 &&
+            ActualHeight > 0)
+        {
+            DrawInactiveSelectionHighlight(drawingContext);
+        }
+
         base.OnRender(drawingContext);
 
         if (!IsDone || ActualWidth <= 0 || ActualHeight <= 0)
@@ -149,6 +158,106 @@ public sealed class TodoTextBox : TextBox
 
                 var startRect = CharacterRectOrEmpty(start, trailingEdge: false);
                 var endRect = CharacterRectOrEmpty(endExclusive - 1, trailingEdge: true);
+                if (!IsUsableRect(startRect) || !IsUsableRect(endRect))
+                {
+                    continue;
+                }
+
+                var left = Math.Max(0, startRect.Left);
+                var top = Math.Max(0, Math.Min(startRect.Top, endRect.Top));
+                var right = Math.Min(ActualWidth, endRect.Right);
+                var bottom = Math.Min(ActualHeight, Math.Max(startRect.Bottom, endRect.Bottom));
+                if (right > left && bottom > top)
+                {
+                    drawingContext.DrawRectangle(
+                        selectionBrush,
+                        null,
+                        new Rect(left, top, right - left, bottom - top));
+                }
+            }
+        }
+        finally
+        {
+            drawingContext.Pop();
+        }
+    }
+
+    private void DrawInactiveSelectionHighlight(DrawingContext drawingContext)
+    {
+        var text = Text ?? "";
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        var selectionStart = Math.Clamp(SelectionStart, 0, text.Length);
+        var selectionEnd = Math.Clamp(
+            selectionStart + SelectionLength,
+            selectionStart,
+            text.Length);
+        if (selectionEnd <= selectionStart)
+        {
+            return;
+        }
+
+        var selectionBrush = SelectionBrush ?? SystemColors.HighlightBrush;
+        var opacity = IsFinite(SelectionOpacity)
+            ? Math.Clamp(SelectionOpacity, 0, 1)
+            : 1;
+        if (opacity <= 0)
+        {
+            return;
+        }
+
+        int lineCount;
+        try
+        {
+            lineCount = Math.Max(1, LineCount);
+        }
+        catch
+        {
+            return;
+        }
+
+        drawingContext.PushOpacity(opacity);
+        try
+        {
+            for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
+            {
+                int lineStart;
+                int lineLength;
+                try
+                {
+                    lineStart = GetCharacterIndexFromLineIndex(lineIndex);
+                    lineLength = GetLineLength(lineIndex);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (lineStart < 0 || lineStart >= text.Length)
+                {
+                    continue;
+                }
+
+                var visibleLineEnd = Math.Min(
+                    lineStart + Math.Max(0, lineLength),
+                    text.Length);
+                while (visibleLineEnd > lineStart && IsLineBreak(text[visibleLineEnd - 1]))
+                {
+                    visibleLineEnd--;
+                }
+
+                var segmentStart = Math.Max(selectionStart, lineStart);
+                var segmentEnd = Math.Min(selectionEnd, visibleLineEnd);
+                if (segmentEnd <= segmentStart)
+                {
+                    continue;
+                }
+
+                var startRect = CharacterRectOrEmpty(segmentStart, trailingEdge: false);
+                var endRect = CharacterRectOrEmpty(segmentEnd - 1, trailingEdge: true);
                 if (!IsUsableRect(startRect) || !IsUsableRect(endRect))
                 {
                     continue;
