@@ -539,6 +539,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             ((TextBlock)codeBlock.Child).Text = code.ToString();
             if (viewportSize is { } size)
             {
+                // The child's text invalidation has not propagated through a layout pass yet.
+                // Explicitly invalidate the parent so same-width Measure cannot reuse old bounds.
+                codeBlock.InvalidateMeasure();
                 codeBlock.Measure(new Size(size.Width, double.PositiveInfinity));
                 renderedHeight += codeBlock.DesiredSize.Height;
             }
