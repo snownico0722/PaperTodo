@@ -52,7 +52,7 @@ jobs:
                   assert digest(text) == entry['after'], 'Transfer mismatch: '+name
                   outputs[name] = text
           if files:
-              assert len(files) == 4 and len(outputs) == 23, (len(files),len(outputs))
+              assert 1 <= len(files) <= 4 and 1 <= len(outputs) <= 32, (len(files),len(outputs))
               for name,text in outputs.items(): Path(name).write_text(text, encoding='utf-8', newline='\n')
               for payload in files: payload.unlink()
               print('Verified and applied',len(outputs),'source updates')
@@ -65,7 +65,7 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add -A
             if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
-            git commit -m 'feat: model curved glass optics, clean Aero blur and layered ceramic glaze'
+            git commit -m 'fix: complete material optics and controlled desktop validation'
             if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
             git push origin HEAD:refs/heads/exp/playful-skins-20260909
             if ($LASTEXITCODE -ne 0) { throw 'Branch advanced; stop rather than overwrite' }
@@ -121,7 +121,7 @@ jobs:
           name: material-evidence-${{ github.run_id }}
           path: ${{ runner.temp }}/rim-evidence
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -135,4 +135,4 @@ jobs:
           name: material-package-${{ steps.source.outputs.short }}
           path: ${{ runner.temp }}/rim-package
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 2
