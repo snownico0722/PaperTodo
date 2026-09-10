@@ -28,8 +28,17 @@ internal static partial class Program
                         editor.Box.SetMarkdownRenderMode(mode);
                         editor.Box.SetPreviewMode(true);
                         Pump();
+                        // Editor is deliberately detached. As in the other editing checks,
+                        // explicitly lay out the editor and text view before querying its lines.
+                        editor.Box.ApplyTemplate();
+                        editor.Box.Measure(new Size(800, 600));
+                        editor.Box.Arrange(new Rect(0, 0, 800, 600));
+                        editor.Box.UpdateLayout();
                         var textView = editor.Box.TextArea.TextView;
+                        textView.Measure(new Size(800, 600));
+                        textView.Arrange(new Rect(0, 0, 800, 600));
                         textView.EnsureVisualLines();
+                        Equal(4, textView.VisualLines.Count, "reference editor lays out all four source lines");
                         var panel = new StackPanel();
                         MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, source, _ => { }, mode, textZoom: zoom);
                         panel.Measure(new Size(textView.ActualWidth, double.PositiveInfinity));
