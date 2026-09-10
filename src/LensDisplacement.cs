@@ -5,40 +5,25 @@ using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
-/// <summary>A rounded, finite-thickness optical shoulder. The one-dimensional Snell
-/// profile is shared by every size: no full-window displacement map or resize-time rays.
-/// The center remains a direct view of the desktop, not a sampled magnifying sheet.</summary>
+/// <summary>A monotone optical shoulder inspired by index-main. The displacement joins
+/// the flat body with zero slope; no interior peak/fold or full-size displacement map.</summary>
 internal static class LensDisplacement
 {
-    internal const double BezelDip = 18;
-    internal const double MaxShiftDip = 18;
     private const int ProfileSamples = 512;
     private static readonly Lazy<Brush> Profile = new(CreateProfile);
     internal static Brush ProfileBrush => Profile.Value;
 
-    // Convex squircle cross-section: h(t) = (1 - (1-t)^4)^(1/4).
-    // Ray travels air -> glass (IOR 1.5), then to a plane below the rounded shoulder.
-    // This is an optical UI model, not a full multi-interface physical renderer.
+    // A controlled UI lens, not a physical multi-interface ray tracer. A monotone
+    // falloff avoids the old bright, folded band a few pixels inside the edge.
     internal static (double Shift, double Slope, double Fresnel, double Coverage) ProfileAt(double t)
     {
         t = Math.Clamp(t, 0, 1);
         if (t >= 1) return (0, 0, 0, 0);
         var u = 1 - t;
-        var height = Math.Pow(Math.Max(0, 1 - u * u * u * u), .25);
-        var derivative = u * u * u / Math.Max(.000001, height * height * height);
-        var nz = 1 / Math.Sqrt(1 + derivative * derivative);
-        var nx = derivative * nz;
-        const double eta = 1 / 1.5;
-        var k = eta * nz - Math.Sqrt(1 - eta * eta * (1 - nz * nz));
-        var tx = k * nx;
-        var tz = -eta + k * nz;
-        // A small base thickness makes the edge visibly refractive, but without the
-        // old discontinuous maximum-offset wall. The profile joins the center flat.
-        var shift = (height + .12) * Math.Abs(tx / tz) * 1.55;
-        var grazing = Math.Pow(1 - nz, 5);
+        var shift = u * Math.Sqrt(u);
         var coverage = Math.Clamp((1 - t) * 6, 0, 1);
         coverage = coverage * coverage * (3 - 2 * coverage);
-        return (Math.Min(1, shift), nx, .04 + .96 * grazing, coverage);
+        return (shift, Math.Sqrt(u), u * u * u * u, coverage);
     }
 
     private static Brush CreateProfile()
@@ -69,18 +54,23 @@ internal static class LensDisplacement
         var outside = new Vector(Math.Max(q.X, 0), Math.Max(q.Y, 0));
         var length = outside.Length;
         var distance = radius - length - Math.Min(Math.Max(q.X, q.Y), 0);
+        // Smooth the inner corner bisector instead of abruptly choosing a side.
+        var blend = Math.Clamp((q.X - q.Y) * .5 + .5, 0, 1);
+        var flatNormal = new Vector(blend, 1 - blend);
+        flatNormal.Normalize();
         var normal = length > .0001
             ? new Vector(outside.X / length * (v.X < 0 ? -1 : 1), outside.Y / length * (v.Y < 0 ? -1 : 1))
-            : q.X > q.Y ? new Vector(v.X < 0 ? -1 : 1, 0) : new Vector(0, v.Y < 0 ? -1 : 1);
+            : new Vector(flatNormal.X * (v.X < 0 ? -1 : 1), flatNormal.Y * (v.Y < 0 ? -1 : 1));
         return (distance, normal);
     }
 
     internal static (Vector Offset, double Coverage) Sample(Point p, Size size, double radius)
     {
         var (distance, normal) = Surface(p, size, radius);
-        var bezel = Math.Min(BezelDip, Math.Min(size.Width, size.Height) / 2);
+        var metrics = GlassMetrics.For(size, false);
+        var bezel = metrics.Bezel;
         if (bezel <= 0 || distance < 0 || distance >= bezel) return (new Vector(), 0);
         var profile = ProfileAt(distance / bezel);
-        return (-normal * (MaxShiftDip * bezel / BezelDip * profile.Shift), profile.Coverage);
+        return (-normal * (metrics.Displacement * profile.Shift), profile.Coverage);
     }
 }

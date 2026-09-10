@@ -10,12 +10,12 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
-/// <summary>Local edge-only background sampling. Worker owns GDI, dispatcher owns WPF.
+/// <summary>Bounded local background sampling. Worker owns GDI, dispatcher owns WPF.
 /// One latest-frame mailbox; no Render-priority queue and no UI-thread capture/wait.
 /// Samples are neither saved nor uploaded. A changed exclusion lease stops capture.</summary>
 internal sealed class DesktopLensCapture : IDisposable
 {
-    internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding, int Rim = 0);
+    internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
     internal sealed record Tile(LensCaptureLayout.Tile Layout, byte[] Pixels);
     internal sealed class Frame : IDisposable
     {
@@ -79,7 +79,7 @@ internal sealed class DesktopLensCapture : IDisposable
     private void CaptureLoop()
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
-        var surfaces = new CaptureSurface[4];
+        var surfaces = new CaptureSurface[1];
         try
         {
             var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
@@ -91,7 +91,7 @@ internal sealed class DesktopLensCapture : IDisposable
             {
                 var now = Environment.TickCount64;
                 var moving = now < Interlocked.Read(ref _motionUntil);
-                if (moving) next = Math.Min(next, now + 16);
+                if (moving) next = Math.Min(next, now + 33);
                 if (now < next)
                 {
                     if (WaitHandle.WaitAny(waits, (int)Math.Min(125, next - now)) == 0) break;
@@ -113,7 +113,7 @@ internal sealed class DesktopLensCapture : IDisposable
                     surfaces[i].Capture(layout[i]);
                     Interlocked.Add(ref _sampledPixels, (long)layout[i].PixelWidth * layout[i].PixelHeight);
                 }
-                GdiFlush(); // One completion point for all four small strips, off the UI thread.
+                GdiFlush(); // One readback/completion, never four separately sampled edges.
                 for (var i = 0; i < layout.Length; i++) changed |= surfaces[i].RememberChangedPixels();
                 Interlocked.Increment(ref _captures);
                 if (_cancel.IsCancellationRequested) break;
@@ -140,7 +140,9 @@ internal sealed class DesktopLensCapture : IDisposable
                 // low-rate change detection; motion wakes it. Expensive GDI drivers also
                 // get breathing room rather than a continuous GPU-readback loop.
                 var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                var interval = moving ? 16 : quiet >= 10 ? 125 : 33;
+                // Motion reprojects the texture on WPF's render cadence. Do not double
+                // readback pressure during the interaction that most needs headroom.
+                var interval = !moving && quiet >= 10 ? 125 : 33;
                 next = Environment.TickCount64 + Math.Max(1, (long)Math.Max(interval - elapsed, elapsed * .5));
             }
         }
@@ -214,6 +216,8 @@ internal sealed class DesktopLensCapture : IDisposable
                 if (_previous == IntPtr.Zero || _previous == new IntPtr(-1))
                 { DeleteObject(_bitmap); _bitmap = _bits = IntPtr.Zero; throw new Win32Exception(Marshal.GetLastWin32Error()); }
                 _width = tile.PixelWidth; _height = tile.PixelHeight;
+                SetStretchBltMode(_dc, 4 /* HALFTONE */);
+                SetBrushOrgEx(_dc, 0, 0, IntPtr.Zero);
             }
             var b = tile.Bounds;
             var ok = b.Width == _width && b.Height == _height
@@ -247,6 +251,8 @@ internal sealed class DesktopLensCapture : IDisposable
         }
     }
     [StructLayout(LayoutKind.Sequential)] private struct RectI { internal int Left, Top, Right, Bottom; }
+    [DllImport("gdi32.dll")] private static extern int SetStretchBltMode(IntPtr dc, int mode);
+    [DllImport("gdi32.dll")] private static extern bool SetBrushOrgEx(IntPtr dc, int x, int y, IntPtr previous);
     [StructLayout(LayoutKind.Sequential)] private struct BitmapInfo
     {
         internal uint Size; internal int Width, Height; internal ushort Planes, Bits;

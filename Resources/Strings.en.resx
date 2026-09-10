@@ -1457,13 +1457,13 @@ When off, open at the docked edge or remembered position.</value>
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>Clear lens: the center reveals the live desktop directly, with inward refraction at narrow edges and pointer highlights. Text is not distorted. Text contrast depends on the backdrop; use an opaque skin on busy backgrounds. Only expanded papers use live refraction; capsules and Settings remain static. Not an exact reproduction of Apple Liquid Glass.</value>
+    <value>A softly scattered background with gentle edge refraction and localized highlights. Blur, thickness and tint adapt to paper size while text stays sharp. Text contrast still varies on busy backdrops. Live optics apply only to expanded papers; capsules and Settings stay static. An approximation of Liquid Glass.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>Opaque ivory porcelain with localized clear-coat reflections and continuously rounded edge lighting. Dark mode uses a deep glaze. Palette-aware, without a paper-like wash or nested frames.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Low-tint native blur, a blue glass surface and glass reflections with movement parallax. Reflection width does not stretch with the window; the header is continuous. Uses an undocumented system blur API with an opaque fallback on failure. Not standard Acrylic or a Windows 7 system theme.</value>
+    <value>Light blue transmitted color with defined diagonal reflections and movement parallax. Reflection widths stay fixed as the paper resizes; larger papers gain a little tint. The header and body share one surface. Falls back to an opaque surface when system blur is unavailable.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>

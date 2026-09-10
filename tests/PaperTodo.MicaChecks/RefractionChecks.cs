@@ -52,7 +52,7 @@ internal static class RefractionChecks
                 for (var y = 180; y < 290; y++)
                     Program.Assert(a.AsSpan((y * bent.PixelWidth + 32) * 4, (bent.PixelWidth - 64) * 4)
                         .SequenceEqual(b.AsSpan((y * flat.PixelWidth + 32) * 4, (flat.PixelWidth - 64) * 4)),
-                        "refraction strength never warps or repaints the clear center");
+                        "changing shoulder strength leaves the scattered body and text unchanged");
                 Program.Assert(DesktopLensCapture.ReadAffinity(hwnd) == 0, "evidence uses last genuine frame with screenshot visibility restored");
             }
             var count = surface.RefractionFrameCount;
@@ -66,7 +66,7 @@ internal static class RefractionChecks
             using var red = NativeSurfaceChecks.Capture(window, Output, "lens-live-red");
             var c = cyan.GetPixel(210, 240); var r = red.GetPixel(210, 240);
             Program.Assert(r.R > c.R + 30 && c.G > r.G + 20,
-                "unmodified center follows desktop composition, not a cached capture or wallpaper");
+                "the coherent glass body follows actual changing desktop content");
             Wait(800); count = surface.RefractionFrameCount;
             var uploaded = surface.RefractionUploadedPixels;
             Wait(500);
@@ -81,8 +81,7 @@ internal static class RefractionChecks
                 window.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input,
                     new Action(() => inputDelays.Add(Stopwatch.GetElapsedTime(inputQueued).TotalMilliseconds)));
                 rear.Background = Grid(i * 2); Wait(100);
-                // Raster frames exercise the optics. Desktop composites are saved separately:
-                // the center deliberately does not exist in a WPF capture bitmap any more.
+                // The body and shoulder now share one captured source and one timestamp.
                 Save(Render(window), $"lens-live-{i:D3}");
             }
             Program.Assert(inputDelays.Count == 48, "input callbacks are not starved by background publication");
@@ -163,32 +162,47 @@ internal static class RefractionChecks
         var profile = LensDisplacement.ProfileBrush;
         Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBrush),
             "all lens sizes share a frozen one-dimensional optical profile");
-        var strongest = 0d;
+        var previous = 1d;
         for (var i = 0; i <= 512; i++)
         {
             var p = LensDisplacement.ProfileAt(i / 512d);
             Program.Assert(double.IsFinite(p.Shift) && p.Shift is >= 0 and <= 1 &&
                 p.Slope is >= 0 and <= 1 && p.Fresnel is >= 0 and <= 1 && p.Coverage is >= 0 and <= 1,
-                "finite Snell/Fresnel lookup coefficients");
-            strongest = Math.Max(strongest, p.Shift);
+                "finite optical lookup coefficients");
+            Program.Assert(p.Shift <= previous, "no secondary peak or folded inner rim");
+            previous = p.Shift;
         }
-        Program.Assert(strongest > LensDisplacement.ProfileAt(0).Shift * 2 &&
-            LensDisplacement.ProfileAt(.99).Shift < .0001,
-            "curved shoulder has an interior refractive peak and a flat join, not a constant inset wall");
+        Program.Assert(LensDisplacement.ProfileAt(0).Shift == 1 &&
+            LensDisplacement.ProfileAt(.999).Shift < .0001,
+            "monotone shoulder joins the flat body with zero displacement and slope");
         var size = new Size(430, 350);
         for (var y = 1; y < 350; y += 13) for (var x = 1; x < 430; x += 13)
         {
             var (a, f) = LensDisplacement.Sample(new Point(x, y), size, 8);
             var (b, _) = LensDisplacement.Sample(new Point(430-x, y), size, 8);
             Program.Assert(double.IsFinite(a.X) && double.IsFinite(a.Y) && f is >= 0 and <= 1 &&
-                Math.Abs(a.X) <= 18 && Math.Abs(a.Y) <= 18 && Math.Abs(a.X+b.X) < .001,
+                Math.Abs(a.X) <= 7 && Math.Abs(a.Y) <= 7 && Math.Abs(a.X+b.X) < .001,
                 "finite symmetric inward optical shoulder");
         }
-        Program.Assert(LensDisplacement.Sample(new Point(2, 175), size, 8).Offset.X > 10,
+        Program.Assert(LensDisplacement.Sample(new Point(2, 175), size, 8).Offset.X is > 2 and < 5,
             "reference inward edge profile displaces actual source pixels");
         foreach (var point in new[] { new Point(215,175), new Point(24,100), new Point(406,100) })
             Program.Assert(LensDisplacement.Sample(point, size, 8) == (new Vector(), 0d),
-                "clear center has exactly zero displacement and zero sampled coverage");
+                "the body has exactly zero displacement and shoulder coverage");
+        var small = GlassMetrics.For(new Size(240, 160), false);
+        var large = GlassMetrics.For(new Size(1000, 800), false);
+        var narrow = GlassMetrics.For(new Size(160, 1000), false);
+        Program.Assert(large.Bezel > small.Bezel && large.Blur > small.Blur && large.Tint > small.Tint &&
+            narrow.Bezel < large.Bezel && narrow.Blur < large.Blur,
+            "large reading surfaces gain depth/scattering, long narrow surfaces stay light");
+        var last = GlassMetrics.For(new Size(200, 180), false);
+        for (var width = 201; width <= 1600; width++)
+        {
+            var next = GlassMetrics.For(new Size(width, width * .9), false);
+            Program.Assert(next.Bezel >= last.Bezel && next.Bezel - last.Bezel < .04 &&
+                next.Blur - last.Blur < .012, "resize changes optical dimensions continuously, without breakpoints");
+            last = next;
+        }
     }
     private static void CheckCaptureLayout()
     {
@@ -196,16 +210,12 @@ internal static class RefractionChecks
         foreach (var size in new[] { new Size(430,350), new Size(1024,768), new Size(2400,1200), new Size(12,8) })
         {
             var width = (int)Math.Ceiling(size.Width*dpi); var height = (int)Math.Ceiling(size.Height*dpi);
-            var region = new DesktopLensCapture.Region(1,1,width,height,(int)Math.Ceiling(24*dpi),(int)Math.Ceiling(19*dpi));
+            var region = new DesktopLensCapture.Region(1,1,width,height,(int)Math.Ceiling(48*dpi));
             var layout = LensCaptureLayout.Create(new Int32Rect(-700,50,width,height), region, new Int32Rect(-8192,-2160,16384,8640));
-            Program.Assert(layout.Length is >= 1 and <= 4 && layout.Sum(t => (long)t.PixelWidth*t.PixelHeight) <= LensCaptureLayout.PixelBudget,
+            Program.Assert(layout.Length == 1 && layout.Sum(t => (long)t.PixelWidth*t.PixelHeight) <= LensCaptureLayout.PixelBudget,
                 "negative screen origins / DPI / large surfaces retain bounded physical capture budget");
-            for (var i = 0; i < layout.Length; i++) for (var j = i+1; j < layout.Length; j++)
-            {
-                var a = layout[i].Target; var b = layout[j].Target;
-                Program.Assert(Math.Min(a.X+a.Width,b.X+b.Width) <= Math.Max(a.X,b.X) ||
-                    Math.Min(a.Y+a.Height,b.Y+b.Height) <= Math.Max(a.Y,b.Y), "optical strips never overlap or double-tint seams");
-            }
+            Program.Assert(layout[0].Target == new Int32Rect(0,0,width,height),
+                "body and edge come from one time-coherent source, without tile seams");
             if (size.Width >= 1024)
             {
                 var pixels = layout.Sum(t => (long)t.PixelWidth*t.PixelHeight);
@@ -224,8 +234,7 @@ internal static class RefractionChecks
         {
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(235, 245, 251)), null, new Rect(0, 0, 680, 510));
             var pen = new Pen(new SolidColorBrush(Color.FromRgb(24, 97, 150)), 2);
-            // Twelve-pixel cells exercise a curved 18-DIP shoulder at multiple distances;
-            // the earlier 24px grid could place both sides entirely inside flat cells.
+            // Twelve-pixel cells exercise both the optical shoulder and body scattering.
             for (var x = -18 + phase % 12; x < 680; x += 12) dc.DrawLine(pen, new Point(x, 0), new Point(x, 510));
             for (var y = -18 + phase % 12; y < 510; y += 12) dc.DrawLine(pen, new Point(0, y), new Point(680, y));
         }

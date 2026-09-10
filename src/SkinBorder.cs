@@ -22,7 +22,7 @@ internal sealed partial class SkinBorder : Border
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
     internal bool IsOutline { get; init; }
     private bool _dark, _highContrast, _animateReflection;
-    private (string Skin, bool Dark, bool Capsule, Color Paper)? _brushKey;
+    private (string Skin, bool Dark, bool Capsule, Color Paper, Size Size)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private Brush _glint = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;

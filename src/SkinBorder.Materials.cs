@@ -11,7 +11,7 @@ internal sealed partial class SkinBorder
     private readonly LinearGradientBrush _aeroReflection = new()
     {
         MappingMode = BrushMappingMode.Absolute,
-        StartPoint = new Point(-160, -120), EndPoint = new Point(700, 420),
+        StartPoint = new Point(-120, -80), EndPoint = new Point(400, 250),
         SpreadMethod = GradientSpreadMethod.Reflect
     };
     private readonly RadialGradientBrush _lensLight = new(Colors.White, Colors.Transparent)
@@ -23,7 +23,7 @@ internal sealed partial class SkinBorder
 
     private void EnsureBrushes(Color background)
     {
-        var key = (Skin, _dark, IsCapsule, background);
+        var key = (Skin, _dark, IsCapsule, background, RenderSize);
         if (_brushKey == key) return;
         _brushKey = key;
         var paper = ((SolidColorBrush)Theme.PaperBrush).Color;
@@ -34,25 +34,25 @@ internal sealed partial class SkinBorder
         switch (Skin)
         {
             case PaperSkins.Aero:
-                // Transparent blue glass, not system Acrylic underneath a pale paint layer.
-                // Reflections have world-space scale/parallax; they are not resized with
-                // the paper into enormous diagonal white ribbons.
-                var glass = Mix(paper, _dark ? Color.FromRgb(25, 53, 73) : Color.FromRgb(111, 171, 205), .70);
-                var top = Mix(glass, Colors.White, _dark ? .035 : .19);
-                var low = Mix(glass, _dark ? Colors.Black : Color.FromRgb(48, 94, 121), .17);
-                byte a = opaque ? (byte)255 : (byte)(_dark ? 124 : 76);
+                // Aero needs colored transmission and bounded specular bands. Mixing
+                // blue into opaque white paper and stacking a broad white wash made milk.
+                var glass = Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(30, 103, 156), .90);
+                var top = Mix(glass, Colors.White, .10);
+                var low = Mix(glass, Color.FromRgb(12, 39, 66), .25);
+                var density = GlassMetrics.For(RenderSize, _dark).Tint;
+                byte a = opaque ? (byte)255 : (byte)Math.Round((_dark ? 72 : 32) + (density - (_dark ? .32 : .17)) * 120);
                 _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
-                    new(WithAlpha(top, a), 0), new(WithAlpha(glass, a), .18),
-                    new(WithAlpha(Mix(glass, paper, .24), a), .74), new(WithAlpha(low, a), 1)
+                    new(WithAlpha(top, a), 0), new(WithAlpha(glass, a), .15),
+                    new(WithAlpha(glass, a), .82), new(WithAlpha(low, a), 1)
                 }, new Point(0, 0), new Point(0, 1)));
                 _aeroReflection.GradientStops = new GradientStopCollection
                 {
-                    new(White(0), 0), new(White(_dark ? 3 : 8), .08),
-                    new(White(_dark ? 22 : 68), .18), new(White(_dark ? 30 : 88), .25),
-                    new(White(_dark ? 8 : 24), .39), new(White(0), .49),
-                    new(White(0), .67), new(White(_dark ? 12 : 32), .79),
-                    new(White(_dark ? 4 : 12), .89), new(White(0), 1)
+                    new(White(0), 0), new(White(0), .14),
+                    new(White(_dark ? 24 : 46), .155), new(White(_dark ? 11 : 20), .28),
+                    new(White(0), .295), new(White(0), .48),
+                    new(White(_dark ? 8 : 18), .50), new(White(_dark ? 3 : 6), .60),
+                    new(White(0), .615), new(White(0), 1)
                 };
                 _aeroReflection.Transform = _reflectionShift;
                 _shine = _aeroReflection;
@@ -61,8 +61,7 @@ internal sealed partial class SkinBorder
                 var lens = LiquidTint;
                 var clear = Color.FromRgb((byte)Math.Round(lens.X * 255), (byte)Math.Round(lens.Y * 255), (byte)Math.Round(lens.Z * 255));
                 _fill = Frozen(new SolidColorBrush(WithAlpha(clear, opaque ? (byte)255 : (byte)Math.Round(lens.W * 255))));
-                // A direct-alpha center, no stale captured center or faux milk gradient.
-                // Actual curved-edge reflectance is part of the same refraction shader.
+                // Same tint in the live optical layer and its non-capturing fallback.
                 _glint = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
                     new(White(_dark ? 92 : 170), 0), new(White(18), .25),

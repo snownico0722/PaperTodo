@@ -87,6 +87,23 @@ internal static class MaterialStudyChecks
                     controller.State.EnableAnimations = false; window.RefreshSkin(); Wait(30);
                     Program.Assert(!surface.HasLensLightSubscription, "disabling animation detaches Aero parallax");
                 }
+                if (skin is PaperSkins.LiquidGlass or PaperSkins.Aero)
+                {
+                    window.Left = 60; window.Top = 60;
+                    foreach (var size in new[] { new Size(280,240), new Size(640,450), new Size(640,210), new Size(280,450) })
+                    {
+                        window.Width = size.Width; window.Height = size.Height;
+                        var count = surface.RefractionFrameCount;
+                        Wait(200);
+                        if (skin == PaperSkins.LiquidGlass)
+                        {
+                            var timer = Stopwatch.StartNew();
+                            while (surface.RefractionFrameCount <= count && timer.ElapsedMilliseconds < 4000) Wait(30);
+                            Program.Assert(surface.RefractionFrameCount > count, "resized study uses its own geometry and fresh background");
+                        }
+                        using (NativeSurfaceChecks.Capture(window, output, $"study-{skin}-{mode}-{size.Width}x{size.Height}")) { }
+                    }
+                }
                 window.Hide(); Wait(30);
                 Program.Assert(!surface.HasLensLightSubscription && !surface.HasRefractionWorker,
                     "hidden study surface has no optical subscription/capture worker");

@@ -20,7 +20,7 @@ internal sealed partial class SkinBorder
         internal LensSlice() => Visual.Effect = Effect;
     }
     private ContainerVisual? _refractionVisual;
-    private readonly System.Collections.Generic.List<LensSlice> _slices = new(4);
+    private readonly System.Collections.Generic.List<LensSlice> _slices = new(1);
     private DesktopLensCapture? _capture;
     private DesktopLensCapture.Frame? _pendingFrame;
     private Window? _captureWindow;
@@ -35,8 +35,8 @@ internal sealed partial class SkinBorder
     internal int RefractionBusyFrames { get; private set; }
     internal string? RefractionFailure { get; private set; }
 
-    // Paint-only container before Border.Child. Effects belong to four small strips,
-    // not the parent or the text/editor. Center pixels never pass through our sampler.
+    // Paint-only container before Border.Child. One background source supplies body and
+    // shoulder; the parent/editor never receives an effect or a captured text bitmap.
     protected override int VisualChildrenCount => base.VisualChildrenCount + (_refractionVisual == null ? 0 : 1);
     protected override Visual GetVisualChild(int index)
     {
@@ -74,8 +74,7 @@ internal sealed partial class SkinBorder
             var scale = Math.Max(dpi.DpiScaleX, dpi.DpiScaleY);
             var geometry = new DesktopLensCapture.Region((int)Math.Round(origin.X) - bounds.X,
                 (int)Math.Round(origin.Y) - bounds.Y, (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX),
-                (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY), (int)Math.Ceiling(24 * scale),
-                (int)Math.Ceiling((LensDisplacement.BezelDip + 1) * scale));
+                (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY), (int)Math.Ceiling(48 * scale));
             if (_capture == null)
             {
                 _capture = new DesktopLensCapture(hwnd, geometry, Dispatcher, FailRefraction, RequestRefractionRender);
@@ -193,22 +192,29 @@ internal sealed partial class SkinBorder
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
             slice.Effect.Viewport = new Point4D(target.Width / (ActualWidth * dpi.DpiScaleX), target.Height / (ActualHeight * dpi.DpiScaleY),
                 target.X / (ActualWidth * dpi.DpiScaleX), target.Y / (ActualHeight * dpi.DpiScaleY));
-            var bezel = Math.Min(LensDisplacement.BezelDip, Math.Min(ActualWidth, ActualHeight) * .5);
-            slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, bezel), bezel / LensDisplacement.BezelDip);
+            var metrics = GlassMetrics.For(RenderSize, _dark);
+            slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel), 1);
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
             slice.Effect.Radii = new Point4D(Math.Min(limit, CornerRadius.TopLeft), Math.Min(limit, CornerRadius.TopRight),
                 Math.Min(limit, CornerRadius.BottomRight), Math.Min(limit, CornerRadius.BottomLeft));
             slice.Effect.Crop = new Point4D(target.Width / (double)bounds.Width, target.Height / (double)bounds.Height,
                 (window.X + geometry.OffsetX + target.X - bounds.X) / (double)bounds.Width,
                 (window.Y + geometry.OffsetY + target.Y - bounds.Y) / (double)bounds.Height);
-            slice.Effect.Shift = new Point(LensDisplacement.MaxShiftDip * dpi.DpiScaleX * _refractionStrength / bounds.Width,
-                LensDisplacement.MaxShiftDip * dpi.DpiScaleY * _refractionStrength / bounds.Height);
+            slice.Effect.Shift = new Point(metrics.Displacement * dpi.DpiScaleX * _refractionStrength / bounds.Width,
+                metrics.Displacement * dpi.DpiScaleY * _refractionStrength / bounds.Height);
+            // Never sharpen an upscaled low-resolution sample into a pixel grid on a
+            // very large paper. Scattering has a floor of one source texel.
+            slice.Effect.Scattering = new Point4D(
+                Math.Max(metrics.Blur * dpi.DpiScaleX * 1.8 / bounds.Width, 1d / tile.PixelWidth),
+                Math.Max(metrics.Blur * dpi.DpiScaleY * 1.8 / bounds.Height, 1d / tile.PixelHeight), metrics.Saturation, 0);
             slice.Effect.Tint = LiquidTint;
             slice.Effect.Light = _lensLight.Center;
         }
         _cropDirty = false;
     }
-    private Point4D LiquidTint => _dark ? new Point4D(.085, .10, .13, .32) : new Point4D(.965, .98, 1, .18);
+    private Point4D LiquidTint => _dark
+        ? new Point4D(.085, .10, .13, GlassMetrics.For(RenderSize, true).Tint)
+        : new Point4D(.965, .98, 1, GlassMetrics.For(RenderSize, false).Tint);
     private void OnLensLocation(object? sender, EventArgs e)
     { _cropDirty = true; _capture?.MarkMoving(); RequestRefractionRender(); }
     private void OnLensWindowState(object? sender, EventArgs e) => RefreshRefraction();
@@ -222,8 +228,9 @@ internal sealed partial class SkinBorder
             var bounds = slice.Layout?.Bounds;
             if (bounds == null) continue;
             var dpi = VisualTreeHelper.GetDpi(this);
-            slice.Effect.Shift = new Point(LensDisplacement.MaxShiftDip * dpi.DpiScaleX * value / bounds.Value.Width,
-                LensDisplacement.MaxShiftDip * dpi.DpiScaleY * value / bounds.Value.Height);
+            var displacement = GlassMetrics.For(RenderSize, _dark).Displacement;
+            slice.Effect.Shift = new Point(displacement * dpi.DpiScaleX * value / bounds.Value.Width,
+                displacement * dpi.DpiScaleY * value / bounds.Value.Height);
         }
     }
     internal IDisposable FreezeRefractionForEvidence()

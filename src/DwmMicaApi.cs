@@ -77,7 +77,7 @@ internal sealed class DwmMicaApi : INativeMicaApi
     // Use the compatible accent-blur path with a minimal neutral tint instead of the
     // standard system Acrylic recipe. Colored glass and reflections belong to WPF.
     public int SetAeroGlass(IntPtr hwnd, bool dark) =>
-        SetAccent(hwnd, 4, dark ? 0x08000000u : 0x08FFFFFFu);
+        SetAccent(hwnd, 4, 0x01000000u); // Smallest nonzero tint; WPF owns theme/color.
 
     private unsafe int SetAccent(IntPtr hwnd, int state, uint color)
     {

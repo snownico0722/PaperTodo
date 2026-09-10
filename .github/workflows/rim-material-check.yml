@@ -3,7 +3,7 @@ on:
   push:
     branches: [exp/playful-skins-20260909]
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: rim-material-validation
   cancel-in-progress: true
@@ -20,56 +20,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Commit checked material integration to actual source
+      - name: Record exactly the checked source
         id: source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if ((git branch --show-current) -ne 'exp/playful-skins-20260909') { throw 'Wrong branch' }
-          @'
-          from pathlib import Path
-          import subprocess, hashlib, json
-          files = sorted(Path('.').glob('.material-transfer.*.json'))
-          digest = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
-          outputs = {}
-          for payload in files:
-              for entry in json.loads(payload.read_text(encoding='utf-8-sig')):
-                  name = entry['path']
-                  assert (name == 'CHANGELOG.md' or name.startswith(('src/','tests/','Resources/','doc/'))) and '..' not in Path(name).parts and name not in outputs
-                  result = subprocess.run(['git','show','HEAD:'+name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                  if entry['before'] is None:
-                      assert result.returncode != 0 and not Path(name).exists(), name
-                      text = ''
-                  else:
-                      assert result.returncode == 0, name
-                      text = result.stdout.decode('utf-8-sig').replace('\r\n','\n')
-                      assert digest(text) == entry['before'], 'Source changed: '+name
-                  end = 0
-                  for a,b,value in entry['edits']:
-                      assert end <= a <= b <= len(text) and isinstance(value,str), name
-                      end = b
-                  for a,b,value in reversed(entry['edits']): text = text[:a]+value+text[b:]
-                  assert digest(text) == entry['after'], 'Transfer mismatch: '+name
-                  outputs[name] = text
-          if files:
-              assert 1 <= len(files) <= 4 and 1 <= len(outputs) <= 32, (len(files),len(outputs))
-              for name,text in outputs.items(): Path(name).write_text(text, encoding='utf-8', newline='\n')
-              for payload in files: payload.unlink()
-              print('Verified and applied',len(outputs),'source updates')
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'Integration failed' }
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { throw 'Diff failed' }
-          if (git status --porcelain) {
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add -A
-            if (git diff --cached --name-only -- .github/workflows) { throw 'Unexpected workflow change' }
-            git commit -m 'fix: complete material optics and controlled desktop validation'
-            if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
-            git push origin HEAD:refs/heads/exp/playful-skins-20260909
-            if ($LASTEXITCODE -ne 0) { throw 'Branch advanced; stop rather than overwrite' }
-          }
+          if (git status --porcelain) { throw 'Source is not clean' }
           $sha = git rev-parse HEAD
           "sha=$sha" >> $env:GITHUB_OUTPUT
           "short=$($sha.Substring(0,8))" >> $env:GITHUB_OUTPUT
@@ -114,25 +70,25 @@ jobs:
             Copy-Item (Join-Path $out 'PaperTodo.exe') (Join-Path $destination "PaperTodo-skins-$short-win-x64-$kind.exe")
           }
           $hashes = Get-ChildItem $destination -Filter *.exe | Get-FileHash -Algorithm SHA256 | Select-Object @{n='File';e={Split-Path $_.Path -Leaf}},Hash
-          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; optics='shared Snell/squircle LUT, edge-only SDR capture, idle Rendering detached; clean accent Aero, cached clear-coat relief'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
+          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; optics='coherent bounded background scattering, monotone edge refraction, continuous size adaptation; low-tint Aero with defined reflections'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: material-evidence-${{ github.run_id }}
           path: ${{ runner.temp }}/rim-evidence
           if-no-files-found: ignore
-          retention-days: 2
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: material-source-${{ github.run_id }}
           path: ${{ runner.temp }}/rim-source.bundle
           if-no-files-found: ignore
-          retention-days: 2
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: material-package-${{ steps.source.outputs.short }}
           path: ${{ runner.temp }}/rim-package
           if-no-files-found: error
-          retention-days: 2
+          retention-days: 7

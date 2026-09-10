@@ -51,8 +51,9 @@
 | D-036 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-037 | 主题 / Window integration |
 | D-037 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
 | D-038 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental; sampling superseded by D-039 | 主题 / Rendering |
-| D-039 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Experimental | 主题 / Rendering |
+| D-039 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Superseded by D-041 | 主题 / Rendering |
 | D-040 | Aero 独立模糊与材质光照分层 | Experimental | 主题 / Rendering |
+| D-041 | 统一液态背景、连续尺寸适配与清透 Aero | Experimental | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1333,7 +1334,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-039 — 清透中心由桌面合成，窄边缘采样与非阻塞呈现
 
-**Status:** Experimental
+**Status:** Superseded by D-041
 
 **Context:** 用户在实机反馈整面折射非常卡，重底色和中心放大不符合其 index-main 清透玻璃参考。已有单工作线程与单帧背压没有消除整面 GDI 回读、全尺寸位图上传和 UI 等待渲染锁的开销。
 
@@ -1357,3 +1358,20 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Rejected:** 在受控白色后窗上，旧 state=3 纯模糊 API 返回成功但最终桌面为固定黑底；不能以 HRESULT 成功认定有效。不将这条接法作为当前 Aero 后端。CI 若所有透明模糊均被系统抑制，只有独立的标准 Acrylic 后窗对照也失败时，才跳过透色比较；浅色不得黑底的检查始终执行。
 
 **Evidence / Limits:** `Program` 验证 Aero／Acrylic 双向切换、失败清理和 alpha 互斥；`MaterialStudyChecks` 检查曲面数据、开口、视差生命周期和最终桌面截图。`RefractionChecks` 验证 LUT 系数、真实后窗曲面位移和静止解绑。参考 Apple WWDC25 “Meet Liquid Glass”、Kube 的 Snell/squircle 原创演示、Google Filament clear-coat 分层以及 DWMBlurGlass 的 Aero 反射／视差描述；实现为独立编写，未复制第三方材质纹理或代码，不声称 Apple 或 Windows 7 像素级复现。
+
+
+---
+
+## D-041 — 统一液态背景、连续尺寸适配与清透 Aero
+
+**Status:** Experimental
+
+**Context:** 用户实机反馈 D-039 仍像一圈卡顿的扭曲，Aero 截图是乳白蓝色板。中心原生透明、边缘单独采样造成空间和时间不一致；Snell 曲线的内侧峰值、固定 18 DIP 厚度和四次 GDI 同步放大了问题。Aero 的浅蓝白底色与宽反光重复遮住背景。
+
+**Decision:** 液态使用同一有限分辨率背景源完成整面轻散射／透色，只有温和的边缘位移，正文不进入 shader。借鉴 index-main 的单调 1.5 次方肩部，平滑内角法线，去掉内侧位移峰值与色散。尺寸由 DIP 短边和面积共同约束，厚度、模糊和遮色连续调整。只做一次 GDI 回读，总纹理上限 196,608 像素，抗锯齿降采样并留 48 DIP world-space 移动余量；保留最新帧背压、零等待 TryLock、未变帧不上传和空闲解绑。Aero 保留 D-040 的兼容合成路径，原生染色降至最小非零值，WPF 改用较低 alpha 的蓝色透光层和有明确边界的固定宽度反射，不新增截图排除。
+
+**Trade-offs:** 不恢复旧全分辨率整窗捕获；上传预算比 D-039 的上限低，但 WPF 背景 shader 覆盖整面。它仍依赖 GDI SDR 回读，不能声称解决所有驱动／HDR／高刷新率延迟。D-038 的截图排除限制保留。Aero 的系统 blur 半径仍由 Windows 管理，不冒充 Windows 7 原生主题。文字对比度仍依赖背景，高对比度和失败路径保持实色回退。
+
+**Validation:** `RefractionChecks` 检查同帧折射差异、中心不变形、真实背景变化、尺寸连续性、单次采样与预算、静止解绑及资源生命周期。`MaterialStudyChecks` 输出实际纸片在明暗主题与小／大／窄／宽尺寸上的桌面画面；Aero 保留白色／蓝色后窗对照和视差检查。Windows CI 的合成器与输入延迟仅作诊断，最终外观和拖动流畅度仍需 Windows 11 实机验收。
+
+**References:** [Apple — Meet Liquid Glass, adaptivity](https://developer.apple.com/videos/play/wwdc2025/219/)、[用户提供的 index-main](https://github.com/snownico0722/index-main/blob/ebf5583ef4980845ee1a0148af46cbe6bae941ea/js/liquid-glass.js)。尺寸策略是本项目的实现选择，不是 Apple 公布的数值公式。

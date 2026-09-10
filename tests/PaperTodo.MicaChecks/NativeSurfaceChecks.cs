@@ -77,8 +77,8 @@ internal static class NativeSurfaceChecks
                     }
                     if (skin == PaperSkins.LiquidGlass)
                     {
-                        // At 100% DPI, adjacent 8px black/white stripes must stay sharp.
-                        // A frosted Acrylic wash cannot pass this high-frequency contrast check.
+                        // Gentle body scattering should retain broad stripe contrast while
+                        // softening transitions; neither opaque Acrylic nor bare transparency.
                         var row = image.Height - 90;
                         var values = Enumerable.Range(image.Width / 2 - 32, 64).Select(x => image.GetPixel(x, row).R).ToArray();
                         Program.Assert(values.Max() - values.Min() is >= 120 and <= 225,
