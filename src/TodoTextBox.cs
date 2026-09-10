@@ -84,6 +84,15 @@ public sealed class TodoTextBox : TextBox
         }
     }
 
+    protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnIsKeyboardFocusWithinChanged(e);
+        if (_transientFindHighlightEnabled)
+        {
+            InvalidateVisual();
+        }
+    }
+
     protected override void OnRender(DrawingContext drawingContext)
     {
         if (ActualWidth > 0 && ActualHeight > 0)
