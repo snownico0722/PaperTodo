@@ -1336,8 +1336,21 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 **Context:** 用户在实机反馈整面折射非常卡，重底色和中心放大不符合其 index-main 清透玻璃参考。已有单工作线程与单帧背压没有消除整面 GDI 回读、全尺寸位图上传和 UI 等待渲染锁的开销。
 
-**Decision:** 中心直接使用原生透明通道，只在四个非重叠窄边缘中采样和折射。参考 index-main 的向内 `(1-d/bezel)^1.5` 曲线，但在 shader 中解析计算，避免拖动尺寸时主线程生成位移贴图。源图显式绑定 sampler，避免先缩放进整面再二次裁切。最新帧由呈现节拍消费并零等待锁定；未变帧不上传，移动只调整 crop 并唤醒后台。不改 HWND、编辑器或 Edge 归属。
+**Decision:** 中心直接使用原生透明通道，只在四个非重叠窄边缘中采样和折射。最初参考 index-main 的向内 `(1-d/bezel)^1.5` 曲线；后续使用曲面厚度与 Snell 折射率生成一次性 512×1 系数表，距离和法线仍解析计算，避免拖动尺寸时主线程生成整张位移贴图。源图显式绑定 sampler，避免先缩放进整面再二次裁切。最新帧经合并 Background 通知挂接一次呈现节拍并零等待锁定；处理完立即解绑 Rendering，未变帧不上传也不维持界面动画节拍，移动只调整 crop 并唤醒后台。不改 HWND、编辑器或 Edge 归属。
 
 **Trade-offs:** GDI 并未变成零拷贝 GPU capture；驱动慢时窄边缘仍可能滞后，但中心不再等待采样。保留 D-038 的截图排除限制。清透变体降低遮色，不再声称任意黑白背景都满足固定文字对比度；实色／高对比度回退保持可读性验证。HDR、多屏实机和高速拖动仍需真人验证。没有用降低整个 UI 帧率或冻结整张背景冒充优化。
 
 **Evidence:** `LensCaptureLayout`、`DesktopLensCapture`、`SkinBorder.Refraction`；`RefractionChecks` 检查边缘预算、中心零位移、同帧折射、静止不重复上传、真实背景更新和生命周期，并记录 CI 输入回调延迟（不当作实机 FPS）。`SkinChecks` 保留实色回退对比度检查，清透材质单独检查透明范围及主题参考背景。
+
+
+---
+
+## D-040 — Aero 独立清透模糊 recipe 与材质光照分层
+
+**Status:** Experimental
+
+**Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
+
+**Decision:** Aero 的内部 `aeroGlass` recipe 在现有 adapter 内使用 accent clean blur（state=3），不叠加 system backdrop，由 WPF 染色一次并绘制固定逻辑尺寸、轻微位置视差的反光。与 Clear Acrylic 的 state=4 共享低层接口和清理，不复制状态 owner。接口不公开，任一步失败仍回退不透明表面；原标准云母／亚克力接法不改。陶瓷用不透明漫反射底、局部清釉反光和缓存的法线边缘照明，不新增采样或材质定时器。
+
+**Evidence / Limits:** `Program` 验证 Aero／Acrylic 双向切换、失败清理和 alpha 互斥；`MaterialStudyChecks` 检查曲面数据、开口、视差生命周期和最终桌面截图。`RefractionChecks` 验证 LUT 系数、真实后窗曲面位移和静止解绑。参考 Apple WWDC25 “Meet Liquid Glass”、Kube 的 Snell/squircle 原创演示、Google Filament clear-coat 分层以及 DWMBlurGlass 的 Aero 反射／视差描述；实现为独立编写，未复制第三方材质纹理或代码，不声称 Apple 或 Windows 7 像素级复现。

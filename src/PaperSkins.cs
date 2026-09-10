@@ -28,10 +28,11 @@ public static class PaperSkins
     public static bool UsesSystemPalette(string? id) => id is Mica or Acrylic or ClearAcrylic;
     public static bool IsDecorated(string? id) => id is TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
     public static bool Decorate(string? id, bool highContrast) => !highContrast && IsDecorated(id);
-    // Tracing/Aero reuse system Acrylic; the clear lens uses unblurred alpha composition.
+    // Tracing retains system Acrylic. Aero uses clean accent blur; liquid uses unblurred alpha.
     public static string NativeBackdrop(string? id) => id switch
     {
-        Acrylic or TracingPaper or Aero => MicaBackdropTypes.Acrylic,
+        Acrylic or TracingPaper => MicaBackdropTypes.Acrylic,
+        Aero => NativeMicaBackdrop.AeroGlassMaterial,
         ClearAcrylic => MicaBackdropTypes.ClearAcrylic,
         LiquidGlass => NativeMicaBackdrop.ClearGlassMaterial,
         _ => MicaBackdropTypes.Mica

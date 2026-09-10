@@ -15,6 +15,7 @@ namespace PaperTodo;
 internal sealed class LiquidRefractionEffect : ShaderEffect
 {
     internal static readonly DependencyProperty SceneProperty = RegisterPixelShaderSamplerProperty(nameof(Scene), typeof(LiquidRefractionEffect), 0, SamplingMode.Bilinear);
+    internal static readonly DependencyProperty ProfileProperty = RegisterPixelShaderSamplerProperty(nameof(Profile), typeof(LiquidRefractionEffect), 1, SamplingMode.Bilinear);
     internal static readonly DependencyProperty CropProperty = Constant(nameof(Crop), typeof(Point4D), new Point4D(1, 1, 0, 0), 0);
     internal static readonly DependencyProperty ShiftProperty = Constant(nameof(Shift), typeof(Point), new Point(), 1);
     internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.965, .98, 1, .18), 2);
@@ -25,6 +26,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     private static DependencyProperty Constant(string name, Type type, object value, int register) =>
         DependencyProperty.Register(name, type, typeof(LiquidRefractionEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
     public Brush Scene { get => (Brush)GetValue(SceneProperty); set => SetValue(SceneProperty, value); }
+    public Brush Profile { get => (Brush)GetValue(ProfileProperty); set => SetValue(ProfileProperty, value); }
     public Point4D Crop { get => (Point4D)GetValue(CropProperty); set => SetValue(CropProperty, value); }
     public Point Shift { get => (Point)GetValue(ShiftProperty); set => SetValue(ShiftProperty, value); }
     public Point4D Tint { get => (Point4D)GetValue(TintProperty); set => SetValue(TintProperty, value); }
@@ -39,16 +41,19 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         var shader = new PixelShader();
         using (var stream = new MemoryStream(Bytecode.Value, false)) shader.SetStreamSource(stream);
         shader.Freeze(); PixelShader = shader;
-        foreach (var property in new[] { SceneProperty, CropProperty, ShiftProperty, TintProperty,
+        Profile = LensDisplacement.ProfileBrush;
+        foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty, TintProperty,
                      LightProperty, ViewportProperty, ExtentProperty, RadiiProperty }) UpdateShaderValue(property);
     }
 
-    // Same inward (1-d/bezel)^1.5 profile as the reference, evaluated analytically.
+    // A shared Snell/squircle shoulder profile supplies displacement, slope and Fresnel.
+    // Rounded-rectangle distance/normals remain analytic; the tiny LUT is size invariant.
     // No animated displacement map, central magnification, or broad white frame.
     // Alpha is premultiplied. Samples outside overscan become transparent instead of
     // stretching stale pixels when dragging faster than the capture source can follow.
     private const string Source = """
         sampler2D scene : register(s0);
+        sampler2D opticalProfile : register(s1);
         float4 crop : register(c0);
         float2 shift : register(c1);
         float4 tint : register(c2);
@@ -65,19 +70,24 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float2 outside = max(q, 0);
             float len = length(outside);
             float distance = radius - len - min(max(q.x, q.y), 0);
-            float rim = saturate(1 - distance * extent.z);
+            float t = saturate(distance * extent.z);
+            float3 optical = tex2D(opticalProfile, float2(t * (511.0/512.0) + .5/512.0, .5)).rgb;
+            float rim = 1-t;
             float horizontal = step(q.y, q.x);
             float2 normal = lerp(float2(horizontal, 1-horizontal), outside / max(len, .0001), step(.0001, len)) * (side*2-1);
-            float2 delta = -normal * (rim * sqrt(rim)) * shift * extent.w;
+            float2 delta = -normal * optical.r * shift * extent.w;
             float2 at = uv * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
-            float coverage = saturate(rim * 5);
+            float coverage = saturate(rim * 6);
             coverage = coverage * coverage * (3 - 2 * coverage);
+            // Subpixel dispersion follows the bend, not an unrelated rainbow outline.
             float3 color = tex2D(scene, saturate(at)).rgb;
+            color.r = tex2D(scene, saturate(at + delta * .012)).r;
+            color.b = tex2D(scene, saturate(at - delta * .012)).b;
             color = lerp(color, tint.rgb, tint.a);
-            float sheen = rim * rim; sheen *= sheen;
-            float lightness = saturate(dot(-normal, light-global) + .25);
-            color = color * (1 - sheen * .10) + sheen * (.07 + .19 * lightness);
+            float lightness = saturate(dot(-normal, light-global) + .35);
+            float sheen = optical.b * (.18 + .62 * lightness);
+            color = color * (1 - optical.g * .08) + sheen;
             return float4(saturate(color) * coverage, coverage);
         }
         """;

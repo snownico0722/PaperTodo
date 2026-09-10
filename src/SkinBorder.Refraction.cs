@@ -29,6 +29,7 @@ internal sealed partial class SkinBorder
     private double _refractionStrength = 1;
     internal bool IsRefractionActive => _capture != null && _presentedGeometry != null;
     internal bool HasRefractionWorker => _capture != null;
+    internal bool HasRefractionRenderSubscription => _renderingSubscribed;
     internal int RefractionFrameCount { get; private set; }
     internal long RefractionUploadedPixels { get; private set; }
     internal int RefractionBusyFrames { get; private set; }
@@ -77,16 +78,17 @@ internal sealed partial class SkinBorder
                 (int)Math.Ceiling((LensDisplacement.BezelDip + 1) * scale));
             if (_capture == null)
             {
-                _capture = new DesktopLensCapture(hwnd, geometry, Dispatcher, FailRefraction);
+                _capture = new DesktopLensCapture(hwnd, geometry, Dispatcher, FailRefraction, RequestRefractionRender);
                 _captureWindow = window;
                 window!.LocationChanged += OnLensLocation;
                 window.StateChanged += OnLensWindowState;
                 window.Closed += OnLensWindowClosed;
-                CompositionTarget.Rendering += OnRefractionRendering; _renderingSubscribed = true;
+                RequestRefractionRender();
             }
             else _capture.SetRegion(geometry);
             _captureGeometry = geometry;
             _cropDirty = true;
+            RequestRefractionRender();
             if (_refractionVisual != null && _presentedGeometry != geometry) _refractionVisual.Opacity = 0;
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or System.Runtime.InteropServices.ExternalException or DllNotFoundException or EntryPointNotFoundException)
@@ -97,6 +99,12 @@ internal sealed partial class SkinBorder
         RefractionFailure = error.Message;
         Debug.WriteLine("Liquid refraction unavailable; keeping material fallback: " + error.Message);
         _refractionFailed = true; StopRefraction();
+    }
+    private void RequestRefractionRender()
+    {
+        if (_capture == null || _renderingSubscribed) return;
+        CompositionTarget.Rendering += OnRefractionRendering;
+        _renderingSubscribed = true;
     }
     private void OnRefractionRendering(object? sender, EventArgs e)
     {
@@ -111,6 +119,13 @@ internal sealed partial class SkinBorder
                 { _pendingFrame.Dispose(); _pendingFrame = null; }
             }
             if (_cropDirty) UpdateRefractionCrop();
+            // New frames wake us via one coalesced Background-priority notification.
+            // An idle Rendering handler otherwise keeps WPF composition awake forever.
+            if (_pendingFrame == null && !_cropDirty && _renderingSubscribed)
+            {
+                CompositionTarget.Rendering -= OnRefractionRendering;
+                _renderingSubscribed = false;
+            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
         { FailRefraction(ex); }
@@ -192,7 +207,8 @@ internal sealed partial class SkinBorder
         _cropDirty = false;
     }
     private Point4D LiquidTint => _dark ? new Point4D(.085, .10, .13, .32) : new Point4D(.965, .98, 1, .18);
-    private void OnLensLocation(object? sender, EventArgs e) { _cropDirty = true; _capture?.MarkMoving(); }
+    private void OnLensLocation(object? sender, EventArgs e)
+    { _cropDirty = true; _capture?.MarkMoving(); RequestRefractionRender(); }
     private void OnLensWindowState(object? sender, EventArgs e) => RefreshRefraction();
     private void OnLensWindowClosed(object? sender, EventArgs e) => StopRefraction();
 

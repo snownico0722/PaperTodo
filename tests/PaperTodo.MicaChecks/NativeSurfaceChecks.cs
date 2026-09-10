@@ -144,6 +144,9 @@ internal static class NativeSurfaceChecks
             // Prove the marker is effective with an old-path positive control instead.
             // Do not pump the UI dispatcher between marker installation and DwmFlush:
             // queued theme refreshes must not reset the deliberately hostile caption.
+            if (Theme.Skin == PaperSkins.Aero)
+                Program.Assert(DwmMicaApi.Instance.SetClearAcrylic(hwnd, false, Theme.IsDark) >= 0,
+                    "caption positive control removes the separate Aero accent layer");
             Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, false) >= 0 &&
                 DwmMicaApi.Instance.ExtendFrame(hwnd, -1) >= 0, "caption positive control installs full glass");
             Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "caption sentinel is accepted");
@@ -156,6 +159,9 @@ internal static class NativeSurfaceChecks
                 (before.R + before.B - 2 * before.G);
             Program.Assert(Difference(before, exposed) >= 8 && markerChroma >= 24,
                 $"{name}: positive control exposes the hostile native caption ({before} / {exposed})");
+            if (Theme.Skin == PaperSkins.Aero)
+                Program.Assert(DwmMicaApi.Instance.SetAeroGlass(hwnd, Theme.IsDark) >= 0,
+                    "restore the actual clean-blur Aero recipe for the negative control");
             Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, true) >= 0 &&
                 DwmMicaApi.Instance.ExtendFrame(hwnd, 0) >= 0, "restoring tested redirection alpha");
             Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "same caption sentinel reapplied");

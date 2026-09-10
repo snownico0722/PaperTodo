@@ -22,10 +22,11 @@ internal static class SkinChecks
             Program.Assert(PaperSkins.Resolve(id, "mica", "acrylic") == PaperSkins.Paper, "explicit choice wins over legacy palette");
         foreach (var id in PaperSkins.All)
             Program.Assert(PaperSkins.IsValid(id) && PaperSkins.Normalize(id) == id && !PaperSkins.Decorate(id, true), "valid IDs / high contrast");
-        foreach (var id in new[] { PaperSkins.TracingPaper, PaperSkins.Aero })
+        foreach (var id in new[] { PaperSkins.TracingPaper })
             Program.Assert(PaperSkins.UsesNativeBackdrop(id) && PaperSkins.NativeBackdrop(id) == MicaBackdropTypes.Acrylic, "supported Acrylic recipe");
         Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.LiquidGlass) == NativeMicaBackdrop.ClearGlassMaterial,
             "liquid glass no longer maps to frosted Acrylic");
+        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero uses clean native blur rather than system Acrylic");
         CheckPersistence();
         var resources = new ResourceManager("PaperTodo.Resources.Strings", typeof(Strings).Assembly);
         foreach (var culture in new[] { "", "en", "ja", "ko" })

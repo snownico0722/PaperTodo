@@ -33,6 +33,8 @@ internal sealed class DesktopLensCapture : IDisposable
     private readonly uint _oldAffinity;
     private readonly Dispatcher _dispatcher;
     private readonly Action<Exception> _failed;
+    private readonly Action? _frameReady;
+    private int _notificationQueued;
     private readonly CancellationTokenSource _cancel = new();
     private readonly AutoResetEvent _wake = new(false);
     private readonly Task _worker;
@@ -46,13 +48,13 @@ internal sealed class DesktopLensCapture : IDisposable
     internal long SampledPixels => Interlocked.Read(ref _sampledPixels);
     internal Frame? TakeLatest() => Interlocked.Exchange(ref _latest, null);
 
-    internal DesktopLensCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed)
+    internal DesktopLensCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed, Action? frameReady = null)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             throw new PlatformNotSupportedException("Background exclusion requires Windows 10 2004 or later.");
         if (!GetWindowDisplayAffinity(hwnd, out _oldAffinity) || !SetWindowDisplayAffinity(hwnd, 0x11))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot exclude the lens from its own background.");
-        _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _failed = failed;
+        _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _failed = failed; _frameReady = frameReady;
         try
         {
             _worker = Task.Factory.StartNew(CaptureLoop, CancellationToken.None,
@@ -124,6 +126,7 @@ internal sealed class DesktopLensCapture : IDisposable
                         var frame = new Frame(tiles, geometry);
                         Interlocked.Exchange(ref _latest, frame)?.Dispose();
                         Interlocked.Increment(ref _published);
+                        NotifyFrameReady();
                     }
                     catch
                     {
@@ -156,6 +159,20 @@ internal sealed class DesktopLensCapture : IDisposable
             if (IsStopped) Interlocked.Exchange(ref _latest, null)?.Dispose();
             if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
         }
+    }
+    private void NotifyFrameReady()
+    {
+        if (_frameReady == null || IsStopped || _dispatcher.HasShutdownStarted ||
+            Interlocked.Exchange(ref _notificationQueued, 1) != 0) return;
+        try
+        {
+            _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                Interlocked.Exchange(ref _notificationQueued, 0);
+                if (!IsStopped) _frameReady();
+            }));
+        }
+        catch (InvalidOperationException) { Interlocked.Exchange(ref _notificationQueued, 0); }
     }
     public void Dispose()
     {

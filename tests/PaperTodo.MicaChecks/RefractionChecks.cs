@@ -72,6 +72,7 @@ internal static class RefractionChecks
             Wait(500);
             Program.Assert(surface.RefractionFrameCount == count && surface.RefractionUploadedPixels == uploaded,
                 "unchanged desktop produces no WPF uploads or presentation frames");
+            Program.Assert(!surface.HasRefractionRenderSubscription, "an unchanged desktop releases the WPF composition subscription");
             var inputDelays = new List<double>();
             var pixelsBefore = surface.RefractionUploadedPixels; var framesBefore = surface.RefractionFrameCount;
             for (var i = 0; i < 48; i++)
@@ -159,6 +160,21 @@ internal static class RefractionChecks
     }
     private static void CheckOptics()
     {
+        var profile = LensDisplacement.ProfileBrush;
+        Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBrush),
+            "all lens sizes share a frozen one-dimensional optical profile");
+        var strongest = 0d;
+        for (var i = 0; i <= 512; i++)
+        {
+            var p = LensDisplacement.ProfileAt(i / 512d);
+            Program.Assert(double.IsFinite(p.Shift) && p.Shift is >= 0 and <= 1 &&
+                p.Slope is >= 0 and <= 1 && p.Fresnel is >= 0 and <= 1 && p.Coverage is >= 0 and <= 1,
+                "finite Snell/Fresnel lookup coefficients");
+            strongest = Math.Max(strongest, p.Shift);
+        }
+        Program.Assert(strongest > LensDisplacement.ProfileAt(0).Shift * 2 &&
+            LensDisplacement.ProfileAt(.99).Shift < .0001,
+            "curved shoulder has an interior refractive peak and a flat join, not a constant inset wall");
         var size = new Size(430, 350);
         for (var y = 1; y < 350; y += 13) for (var x = 1; x < 430; x += 13)
         {

@@ -34,7 +34,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
-    private bool _clearAcrylicApplied;
+    private string? _accentMaterial;
     internal bool UsesRedirectionAlpha { get; private set; }
 
     internal bool IsActive { get; private set; }
@@ -44,6 +44,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     internal const double CornerRadius = 8;
     // Internal composition recipe, never a saved MicaBackdropType / UI choice.
     internal const string ClearGlassMaterial = "clearGlass";
+    internal const string AeroGlassMaterial = "aeroGlass";
 
     internal NativeMicaBackdrop(Window window, Func<Border?> getChrome,
         Func<bool> canPresent, Action<Brush> setSurface,
@@ -81,7 +82,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (material != null) _material = material == ClearGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
+        if (material != null) _material = material is ClearGlassMaterial or AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
         var wasForcedActive = IsActive && _alwaysActive;
         if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
         if (_updating) return;
@@ -105,12 +106,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
             var glass = _material == ClearGlassMaterial;
+            var aero = _material == AeroGlassMaterial;
+            var accent = clear || aero;
             IsActive = false;
             LastHResult = 0;
-            if (_clearAcrylicApplied && (!enable || !clear))
+            if (_accentMaterial != null && (!enable || _accentMaterial != _material))
             {
                 LastHResult = _native.SetClearAcrylic(hwnd, false, dark);
-                if (LastHResult >= 0) _clearAcrylicApplied = false;
+                if (LastHResult >= 0) _accentMaterial = null;
             }
             if (enable && LastHResult >= 0)
             {
@@ -122,22 +125,22 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 {
                     // Keep WindowChrome on its glass-managed, no-window-region path.
                     _windowChrome.GlassFrameThickness = new Thickness(-1);
-                    LastHResult = _native.ExtendFrame(hwnd, clear || glass ? 0 : -1);
+                    LastHResult = _native.ExtendFrame(hwnd, accent || glass ? 0 : -1);
                 }
                 if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
                 if (LastHResult >= 0) LastHResult = _native.SetBackdrop(hwnd,
-                    glass ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
+                    glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
                 if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
-                if (LastHResult >= 0 && clear)
+                if (LastHResult >= 0 && accent)
                 {
-                    LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
-                    _clearAcrylicApplied |= LastHResult >= 0;
+                    LastHResult = aero ? _native.SetAeroGlass(hwnd, dark) : _native.SetClearAcrylic(hwnd, true, dark);
+                    if (LastHResult >= 0) _accentMaterial = _material;
                 }
                 if (LastHResult >= 0)
                 {
                     // Apply after the material recipe: this is the final alpha/margin writer.
                     UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                    if (UsesRedirectionAlpha && !clear && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
+                    if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
                 }
                 IsActive = LastHResult >= 0;
             }
@@ -150,7 +153,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // COLOR_DEFAULT allows the system material to continue below the WPF header.
             var captionColor = unchecked((int)0xffffffff);
             LastFrameHResult = _native.ConfigureFrame(hwnd, IsActive && rounded,
-                IsActive && !glass && !clear ? edgeColor : unchecked((int)0xfffffffe), captionColor);
+                IsActive && !glass && !accent ? edgeColor : unchecked((int)0xfffffffe), captionColor);
             // Let DWM draw the one outer stroke along its own rounded clip. Drawing a WPF
             // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
             // thickness for layout; restore the WPF stroke when the native frame is suspended.
@@ -163,9 +166,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var alphaReady = false;
             if (!IsActive)
             {
-                if (_clearAcrylicApplied)
+                if (_accentMaterial != null)
                 {
-                    if (_native.SetClearAcrylic(hwnd, false, dark) >= 0) _clearAcrylicApplied = false;
+                    if (_native.SetClearAcrylic(hwnd, false, dark) >= 0) _accentMaterial = null;
                 }
                 _windowChrome.GlassFrameThickness = new Thickness(-1);
                 if (_native.IsSupported) _native.SetBackdrop(hwnd, DwmMicaApi.None);
@@ -297,7 +300,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         {
             _source.RemoveHook(WindowMessage);
             if (IsActive && _alwaysActive) _native.SetNonClientActive(_source.Handle, _window.IsActive);
-            if (_clearAcrylicApplied) _native.SetClearAcrylic(_source.Handle, false, _dark);
+            if (_accentMaterial != null) _native.SetClearAcrylic(_source.Handle, false, _dark);
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
             if (UsesRedirectionAlpha) _native.SetRedirectionAlpha(_source.Handle, false);
         }
