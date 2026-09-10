@@ -427,13 +427,13 @@ public sealed partial class PaperWindow
             return [new CustomPopupPlacement(new Point(), PopupPrimaryAxis.None)];
         }
 
-        var y = TitleBarHeight + 4;
+        var y = TitleBarHeight + 33;
         var inside = new CustomPopupPlacement(
-            new Point(Math.Max(6, targetSize.Width - popupSize.Width - 6), y),
+            new Point(Math.Max(6, targetSize.Width - popupSize.Width + 20), y),
             PopupPrimaryAxis.Horizontal);
 
-        // Keep the anchor inside the paper even when the find bar is wider. Popup can overflow
-        // the paper and WPF still adjusts it at the screen edge; no detached side placement.
+        // Default slightly below the title row and let the right edge overhang the paper.
+        // WPF still nudges the popup back when it approaches a screen boundary.
         return [inside];
     }
 
