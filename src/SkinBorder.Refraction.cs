@@ -176,7 +176,8 @@ internal sealed partial class SkinBorder
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
             slice.Effect.Viewport = new Point4D(target.Width / (ActualWidth * dpi.DpiScaleX), target.Height / (ActualHeight * dpi.DpiScaleY),
                 target.X / (ActualWidth * dpi.DpiScaleX), target.Y / (ActualHeight * dpi.DpiScaleY));
-            slice.Effect.Extent = new Point(ActualWidth, ActualHeight);
+            var bezel = Math.Min(LensDisplacement.BezelDip, Math.Min(ActualWidth, ActualHeight) * .5);
+            slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, bezel), bezel / LensDisplacement.BezelDip);
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
             slice.Effect.Radii = new Point4D(Math.Min(limit, CornerRadius.TopLeft), Math.Min(limit, CornerRadius.TopRight),
                 Math.Min(limit, CornerRadius.BottomRight), Math.Min(limit, CornerRadius.BottomLeft));
