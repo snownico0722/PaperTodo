@@ -536,7 +536,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 renderedHeight -= codeBlock.DesiredSize.Height;
             }
-            ((TextBlock)codeBlock.Child).Text = code.ToString();
+            // TextBlock.Text can discard an all-whitespace replacement in rich content mode.
+            // Keep the explicit Run created by BuildCodeBlock, including when its text is empty.
+            var codeText = (TextBlock)codeBlock.Child;
+            ((Run)codeText.Inlines.FirstInline!).Text = code.ToString();
             if (viewportSize is { } size)
             {
                 // The child's text invalidation has not propagated through a layout pass yet.
@@ -870,8 +873,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static Border BuildCodeBlock(string code)
     {
-        var text = NewTextBlock(code, NoteTypography.CodeFontSize);
+        var text = NewTextBlock(string.Empty, NoteTypography.CodeFontSize);
         text.FontFamily = NoteTypography.CodeFontFamily;
+        text.Inlines.Add(new Run(code));
         var host = new Border
         {
             Child = text
