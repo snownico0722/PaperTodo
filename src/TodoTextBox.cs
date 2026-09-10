@@ -15,6 +15,7 @@ public sealed class TodoTextBox : TextBox
     private const double StrikeInset = 3;
     private const double StrikeThickness = 1.35;
     private const double StrikeVerticalRatio = 0.56;
+    private bool _transientFindHighlightEnabled;
 
     public static readonly DependencyProperty IsDoneProperty =
         DependencyProperty.Register(
@@ -42,6 +43,24 @@ public sealed class TodoTextBox : TextBox
         set => SetValue(IsSweepSelectedProperty, value);
     }
 
+    // PaperWindow.Find uses this flag only for its transient search selection. Keep the
+    // state on TodoTextBox instead of enabling WPF's native inactive selection renderer,
+    // which is unreliable across the separate search Popup HWND and can double-paint.
+    internal new bool IsInactiveSelectionHighlightEnabled
+    {
+        get => _transientFindHighlightEnabled;
+        set
+        {
+            if (_transientFindHighlightEnabled == value)
+            {
+                return;
+            }
+
+            _transientFindHighlightEnabled = value;
+            InvalidateVisual();
+        }
+    }
+
     protected override void OnPreviewMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseLeftButtonDown(e);
@@ -56,11 +75,39 @@ public sealed class TodoTextBox : TextBox
         e.Handled = true;
     }
 
+    protected override void OnSelectionChanged(RoutedEventArgs e)
+    {
+        base.OnSelectionChanged(e);
+        if (_transientFindHighlightEnabled)
+        {
+            InvalidateVisual();
+        }
+    }
+
+    protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnIsKeyboardFocusWithinChanged(e);
+        if (_transientFindHighlightEnabled)
+        {
+            InvalidateVisual();
+        }
+    }
+
     protected override void OnRender(DrawingContext drawingContext)
     {
-        if (IsSweepSelected && ActualWidth > 0 && ActualHeight > 0)
+        if (ActualWidth > 0 && ActualHeight > 0)
         {
-            DrawSweepSelection(drawingContext);
+            if (IsSweepSelected)
+            {
+                DrawSelectionRange(drawingContext, 0, (Text ?? "").Length);
+            }
+
+            if (_transientFindHighlightEnabled &&
+                !IsKeyboardFocusWithin &&
+                SelectionLength > 0)
+            {
+                DrawSelectionRange(drawingContext, SelectionStart, SelectionLength);
+            }
         }
 
         base.OnRender(drawingContext);
@@ -88,10 +135,20 @@ public sealed class TodoTextBox : TextBox
             new Point(Math.Max(StrikeInset, ActualWidth - StrikeInset), y));
     }
 
-    private void DrawSweepSelection(DrawingContext drawingContext)
+    private void DrawSelectionRange(DrawingContext drawingContext, int requestedStart, int requestedLength)
     {
         var text = Text ?? "";
-        if (text.Length == 0)
+        if (text.Length == 0 || requestedLength <= 0)
+        {
+            return;
+        }
+
+        var selectionStart = Math.Clamp(requestedStart, 0, text.Length);
+        var selectionEnd = Math.Clamp(
+            selectionStart + requestedLength,
+            selectionStart,
+            text.Length);
+        if (selectionEnd <= selectionStart)
         {
             return;
         }
@@ -120,35 +177,40 @@ public sealed class TodoTextBox : TextBox
         {
             for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
             {
-                int start;
-                int length;
+                int lineStart;
+                int lineLength;
                 try
                 {
-                    start = GetCharacterIndexFromLineIndex(lineIndex);
-                    length = GetLineLength(lineIndex);
+                    lineStart = GetCharacterIndexFromLineIndex(lineIndex);
+                    lineLength = GetLineLength(lineIndex);
                 }
                 catch
                 {
                     continue;
                 }
 
-                if (start < 0 || start >= text.Length)
+                if (lineStart < 0 || lineStart >= text.Length)
                 {
                     continue;
                 }
 
-                var endExclusive = Math.Min(start + Math.Max(0, length), text.Length);
-                while (endExclusive > start && IsLineBreak(text[endExclusive - 1]))
+                var visibleLineEnd = Math.Min(
+                    lineStart + Math.Max(0, lineLength),
+                    text.Length);
+                while (visibleLineEnd > lineStart && IsLineBreak(text[visibleLineEnd - 1]))
                 {
-                    endExclusive--;
+                    visibleLineEnd--;
                 }
-                if (endExclusive <= start)
+
+                var segmentStart = Math.Max(selectionStart, lineStart);
+                var segmentEnd = Math.Min(selectionEnd, visibleLineEnd);
+                if (segmentEnd <= segmentStart)
                 {
                     continue;
                 }
 
-                var startRect = CharacterRectOrEmpty(start, trailingEdge: false);
-                var endRect = CharacterRectOrEmpty(endExclusive - 1, trailingEdge: true);
+                var startRect = CharacterRectOrEmpty(segmentStart, trailingEdge: false);
+                var endRect = CharacterRectOrEmpty(segmentEnd - 1, trailingEdge: true);
                 if (!IsUsableRect(startRect) || !IsUsableRect(endRect))
                 {
                     continue;
