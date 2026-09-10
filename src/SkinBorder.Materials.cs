@@ -11,7 +11,7 @@ internal sealed partial class SkinBorder
     private readonly LinearGradientBrush _aeroReflection = new()
     {
         MappingMode = BrushMappingMode.Absolute,
-        StartPoint = new Point(-120, -80), EndPoint = new Point(400, 250),
+        StartPoint = new Point(-180, -100), EndPoint = new Point(680, 430),
         SpreadMethod = GradientSpreadMethod.Reflect
     };
     private readonly RadialGradientBrush _lensLight = new(Colors.White, Colors.Transparent)
@@ -23,9 +23,10 @@ internal sealed partial class SkinBorder
 
     private void EnsureBrushes(Color background)
     {
-        var key = (Skin, _dark, IsCapsule, background, RenderSize);
+        var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background, RenderSize);
         if (_brushKey == key) return;
         _brushKey = key;
+        _surfaceVersion++;
         var paper = ((SolidColorBrush)Theme.PaperBrush).Color;
         var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
         byte alpha = opaque ? (byte)255 : (byte)(_dark ? 226 : 211);
@@ -33,16 +34,24 @@ internal sealed partial class SkinBorder
         _shine = _glint = _header = Brushes.Transparent;
         switch (Skin)
         {
+            case PaperSkins.Mica:
+            case PaperSkins.Acrylic:
+            case PaperSkins.ClearAcrylic:
+                // Layered auxiliary surfaces cannot host system backdrops. Use the same
+                // selected palette and a quiet material finish without changing HWNDs.
+                var nativeHighlight = Skin == PaperSkins.Mica ? .035 : .075;
+                _fill = Gradient(0, Mix(paper, Colors.White, nativeHighlight), 1, paper);
+                _shine = Gradient(0, White(_dark ? 16 : 28), 1, White(0));
+                break;
             case PaperSkins.Aero:
                 // Aero needs colored transmission and bounded specular bands. Mixing
                 // blue into opaque white paper and stacking a broad white wash made milk.
                 var glass = opaque
                     ? Mix(paper, _dark ? Color.FromRgb(25, 53, 73) : Color.FromRgb(111, 171, 205), .18)
-                    : Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(30, 103, 156), .90);
-                var top = Mix(glass, Colors.White, .10);
+                    : Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(42, 113, 164), .84);
+                var top = Mix(glass, Colors.White, .035);
                 var low = Mix(glass, Color.FromRgb(12, 39, 66), opaque ? .06 : .25);
-                var density = GlassMetrics.For(RenderSize, _dark).Tint;
-                byte a = opaque ? (byte)255 : (byte)Math.Round((_dark ? 72 : 32) + (density - (_dark ? .32 : .17)) * 120);
+                byte a = opaque ? (byte)255 : (byte)(_dark ? 54 : 27);
                 _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
                     new(WithAlpha(top, a), 0), new(WithAlpha(glass, a), .15),
@@ -50,11 +59,11 @@ internal sealed partial class SkinBorder
                 }, new Point(0, 0), new Point(0, 1)));
                 _aeroReflection.GradientStops = new GradientStopCollection
                 {
-                    new(White(0), 0), new(White(0), .14),
-                    new(White(_dark ? 24 : 46), .155), new(White(_dark ? 11 : 20), .28),
-                    new(White(0), .295), new(White(0), .48),
-                    new(White(_dark ? 8 : 18), .50), new(White(_dark ? 3 : 6), .60),
-                    new(White(0), .615), new(White(0), 1)
+                    new(White(0), 0), new(White(0), .12),
+                    new(White(_dark ? 8 : 15), .17), new(White(_dark ? 24 : 42), .21),
+                    new(White(_dark ? 10 : 18), .29), new(White(0), .38),
+                    new(White(0), .49), new(White(_dark ? 9 : 18), .56),
+                    new(White(_dark ? 4 : 8), .63), new(White(0), .72), new(White(0), 1)
                 };
                 _aeroReflection.Transform = _reflectionShift;
                 _shine = _aeroReflection;
@@ -63,7 +72,13 @@ internal sealed partial class SkinBorder
                 var lens = LiquidTint;
                 var clear = Color.FromRgb((byte)Math.Round(lens.X * 255), (byte)Math.Round(lens.Y * 255), (byte)Math.Round(lens.Z * 255));
                 _fill = Frozen(new SolidColorBrush(WithAlpha(clear, opaque ? (byte)255 : (byte)Math.Round(lens.W * 255))));
-                // Same tint in the live optical layer and its non-capturing fallback.
+                // A soft clear-coat reflection gives the whole face depth; the shoulder
+                // is not the only cue. It sits over the captured scene, never the editor.
+                _shine = Frozen(new LinearGradientBrush(new GradientStopCollection
+                {
+                    new(White(_dark ? 12 : 24), 0), new(White(0), .34),
+                    new(White(0), .72), new(White(_dark ? 5 : 10), 1)
+                }, new Point(0, 0), new Point(.35, 1)));
                 _glint = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
                     new(White(_dark ? 92 : 170), 0), new(White(18), .25),

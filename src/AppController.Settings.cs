@@ -124,12 +124,7 @@ public sealed partial class AppController
             (ColorSchemes.Neutral, Strings.Get("ColorSchemeNeutral"))
         };
 
-        var systemPalette = PaperSkins.UsesSystemPalette(Theme.Skin);
-        var selector = CreateSegmentSelector(segments,
-            systemPalette ? ColorSchemes.Neutral : ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
-        selector.IsEnabled = !systemPalette;
-        selector.Opacity = systemPalette ? 0.65 : 1;
-        return selector;
+        return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
     }
 
     private void ToggleMicaAlwaysActive()
@@ -2136,6 +2131,8 @@ public sealed partial class AppController
         State.PaperSkin = PaperSkins.Paper;
         State.MicaBackdropType = MicaBackdropTypes.Mica;
         State.MicaAlwaysActive = false;
+        State.LiquidGlassRefraction = true;
+        State.MatchAuxiliaryMaterialStrength = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;

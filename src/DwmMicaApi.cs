@@ -16,7 +16,6 @@ internal interface INativeMicaApi
     int SetDarkMode(IntPtr hwnd, bool dark);
     int SetBackdrop(IntPtr hwnd, int backdrop);
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
-    int SetAeroGlass(IntPtr hwnd, bool dark);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
     int SetRedirectionAlpha(IntPtr hwnd, bool enabled);
@@ -73,17 +72,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark) =>
         SetAccent(hwnd, enabled ? 4 : 0, dark ? 0x30282120u : 0x28FFFFFFu);
 
-    // State 3 can return success yet render solid black on current Windows builds.
-    // Use the compatible accent-blur path with a minimal neutral tint instead of the
-    // standard system Acrylic recipe. Colored glass and reflections belong to WPF.
-    public int SetAeroGlass(IntPtr hwnd, bool dark) =>
-        // Preserve the theme's neutral color if system policy suppresses transmission.
-        // The smallest nonzero alpha keeps accent blur enabled on supporting desktops.
-        SetAccent(hwnd, 4, dark ? 0x01000000u : 0x01FFFFFFu);
-
     private unsafe int SetAccent(IntPtr hwnd, int state, uint color)
     {
-        // WCA_ACCENT_POLICY is undocumented. Keep it exclusive to Clear Acrylic/Aero and
+        // WCA_ACCENT_POLICY is undocumented. Keep it exclusive to Clear Acrylic and
         // report failure so the adapter keeps an opaque surface on unsupported systems.
         // GradientColor is AABBGGRR; nonzero alpha is required for Acrylic blur.
         var policy = new AccentPolicy

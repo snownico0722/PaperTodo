@@ -25,10 +25,11 @@ public static class PaperSkins
         Resolve(state?.PaperSkin, state?.ColorScheme, state?.MicaBackdropType);
     public static bool UsesNativeBackdrop(string? id) => id is Mica or Acrylic or ClearAcrylic or
         TracingPaper or LiquidGlass or Aero;
-    public static bool UsesSystemPalette(string? id) => id is Mica or Acrylic or ClearAcrylic;
+    public static bool IsSystemMaterial(string? id) => id is Mica or Acrylic or ClearAcrylic;
     public static bool IsDecorated(string? id) => id is TracingPaper or LiquidGlass or Ceramic or Aero or Pixel;
     public static bool Decorate(string? id, bool highContrast) => !highContrast && IsDecorated(id);
-    // Tracing retains system Acrylic. Aero uses low-tint accent blur; liquid uses unblurred alpha.
+    // Tracing retains system Acrylic. Aero and liquid use clear alpha without Acrylic blur;
+    // only expanded liquid papers opt into the bounded sampled optical background.
     public static string NativeBackdrop(string? id) => id switch
     {
         Acrylic or TracingPaper => MicaBackdropTypes.Acrylic,

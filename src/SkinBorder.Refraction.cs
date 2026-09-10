@@ -20,6 +20,9 @@ internal sealed partial class SkinBorder
         internal LensSlice() => Visual.Effect = Effect;
     }
     private ContainerVisual? _refractionVisual;
+    private DrawingVisual? _opticalFinish;
+    private int _finishVersion = -1;
+    private Brush? _finishBorderBrush;
     private readonly System.Collections.Generic.List<LensSlice> _slices = new(1);
     private DesktopLensCapture? _capture;
     private DesktopLensCapture.Frame? _pendingFrame;
@@ -55,7 +58,7 @@ internal sealed partial class SkinBorder
         if (_evidenceFrozen) return;
         var window = Window.GetWindow(this) as PaperWindow;
         var enabled = AppController.Current?.State.LiquidGlassRefraction != false;
-        var active = enabled && !IsOutline && !IsCapsule && IsLoaded && IsVisible && !_highContrast &&
+        var active = enabled && !IsOutline && !IsAuxiliary && IsLoaded && IsVisible && !_highContrast &&
             Skin == PaperSkins.LiquidGlass && window is { IsVisible: true, IsNativeMicaEffective: true, HasExpandedPaperSurface: true } &&
             window.WindowState != WindowState.Minimized && window.Opacity >= 1 && Opacity >= 1 && ActualWidth >= 8 && ActualHeight >= 8;
         if (!active)
@@ -96,7 +99,7 @@ internal sealed partial class SkinBorder
     private void FailRefraction(Exception error)
     {
         RefractionFailure = error.Message;
-        Debug.WriteLine("Liquid refraction unavailable; keeping material fallback: " + error.Message);
+        Debug.WriteLine("Glass background unavailable; keeping material fallback: " + error.Message);
         _refractionFailed = true; StopRefraction();
     }
     private void RequestRefractionRender()
@@ -165,11 +168,16 @@ internal sealed partial class SkinBorder
             }
         }
         finally { for (var i = 0; i < locked; i++) _slices[i].Bitmap!.Unlock(); }
-        if (_refractionVisual == null) { _refractionVisual = new ContainerVisual(); AddVisualChild(_refractionVisual); }
-        if (_refractionVisual.Children.Count != frame.Tiles.Length)
+        if (_refractionVisual == null)
+        {
+            _refractionVisual = new ContainerVisual(); _opticalFinish = new DrawingVisual();
+            _finishVersion = -1; AddVisualChild(_refractionVisual);
+        }
+        if (_refractionVisual.Children.Count != frame.Tiles.Length + 1)
         {
             _refractionVisual.Children.Clear();
             for (var i = 0; i < frame.Tiles.Length; i++) _refractionVisual.Children.Add(_slices[i].Visual);
+            _refractionVisual.Children.Add(_opticalFinish!);
         }
         EnsureGeometry(); _refractionVisual.Clip = _shape;
         _refractionVisual.Opacity = 1;
@@ -183,7 +191,8 @@ internal sealed partial class SkinBorder
         if (!DesktopLensCapture.TryGetBounds(new WindowInteropHelper(_captureWindow).Handle, out var window)) return;
         var geometry = _presentedGeometry;
         var dpi = VisualTreeHelper.GetDpi(this);
-        for (var i = 0; i < _refractionVisual.Children.Count; i++)
+        EnsureGeometry(); EnsureBrushes(Colors.Transparent);
+        for (var i = 0; i < _refractionVisual.Children.Count - 1; i++)
         {
             var slice = _slices[i]; var tile = slice.Layout!; var target = tile.Target; var bounds = tile.Bounds;
             // The capture rectangle rounds out to physical pixels, but the optical
@@ -193,25 +202,42 @@ internal sealed partial class SkinBorder
             if (slice.Visual.ContentBounds.Size != size)
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
             var metrics = GlassMetrics.For(RenderSize, _dark);
-            slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel), 1);
+            slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel),
+                1 - metrics.Magnification * _refractionStrength);
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
             slice.Effect.Radii = new Point4D(Math.Min(limit, CornerRadius.TopLeft), Math.Min(limit, CornerRadius.TopRight),
                 Math.Min(limit, CornerRadius.BottomRight), Math.Min(limit, CornerRadius.BottomLeft));
             slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
                 (window.X + geometry.OffsetX + target.X - bounds.X) / (double)bounds.Width,
                 (window.Y + geometry.OffsetY + target.Y - bounds.Y) / (double)bounds.Height);
-            slice.Effect.Shift = new Point(metrics.Displacement * dpi.DpiScaleX * _refractionStrength / bounds.Width,
-                metrics.Displacement * dpi.DpiScaleY * _refractionStrength / bounds.Height);
+            var bend = metrics.Displacement * _refractionStrength;
+            slice.Effect.Shift = new Point(bend * dpi.DpiScaleX / bounds.Width, bend * dpi.DpiScaleY / bounds.Height);
             // Never sharpen an upscaled low-resolution sample into a pixel grid on a
-            // very large paper. Scattering has a floor of one source texel.
+            // very large paper. Scattering has a half-source-texel floor in addition to bilinear sampling.
+            var blur = metrics.Blur;
             slice.Effect.Scattering = new Point4D(
-                Math.Max(metrics.Blur * dpi.DpiScaleX * 1.8 / bounds.Width, 1d / tile.PixelWidth),
-                Math.Max(metrics.Blur * dpi.DpiScaleY * 1.8 / bounds.Height, 1d / tile.PixelHeight), metrics.Saturation, 0);
-            var tint = LiquidTint;
-            slice.Effect.Tint = new Point4D(tint.X * tint.W, tint.Y * tint.W, tint.Z * tint.W, 1 - tint.W);
+                Math.Max(blur * dpi.DpiScaleX / bounds.Width, .5 / tile.PixelWidth),
+                Math.Max(blur * dpi.DpiScaleY / bounds.Height, .5 / tile.PixelHeight),
+                metrics.Saturation, 1);
+            // The same paint as the static fallback goes ABOVE this opaque scene.
+            // Otherwise it disappears under the DrawingVisual, leaving just a bright rim.
             slice.Effect.Light = _lensLight.Center;
         }
+        RefreshOpticalFinish();
         _cropDirty = false;
+    }
+    private void RefreshOpticalFinish()
+    {
+        if (_opticalFinish != null && (_finishVersion != _surfaceVersion || !ReferenceEquals(_finishBorderBrush, BorderBrush)))
+        {
+            using var dc = _opticalFinish.RenderOpen();
+            dc.DrawGeometry(_fill, null, _shape);
+            dc.DrawRectangle(_shine, null, new Rect(RenderSize));
+            PaintMaterialDetails(dc);
+            // The native owner may hide this stroke, but never let a live scene cover it.
+            dc.DrawGeometry(BorderBrush, null, _borderRing);
+            _finishVersion = _surfaceVersion; _finishBorderBrush = BorderBrush;
+        }
     }
     private Point4D LiquidTint => _dark
         ? new Point4D(.085, .10, .13, GlassMetrics.For(RenderSize, true).Tint)
@@ -229,9 +255,13 @@ internal sealed partial class SkinBorder
             var bounds = slice.Layout?.Bounds;
             if (bounds == null) continue;
             var dpi = VisualTreeHelper.GetDpi(this);
-            var displacement = GlassMetrics.For(RenderSize, _dark).Displacement;
+            var metrics = GlassMetrics.For(RenderSize, _dark);
+            var displacement = metrics.Displacement;
             slice.Effect.Shift = new Point(displacement * dpi.DpiScaleX * value / bounds.Value.Width,
                 displacement * dpi.DpiScaleY * value / bounds.Value.Height);
+            var extent = slice.Effect.Extent;
+            slice.Effect.Extent = new Point4D(extent.X, extent.Y, extent.Z,
+                1 - metrics.Magnification * value);
         }
     }
     internal IDisposable FreezeRefractionForEvidence()
@@ -267,7 +297,8 @@ internal sealed partial class SkinBorder
         _pendingFrame?.Dispose(); _pendingFrame = null;
         UnhookCaptureWindow();
         if (_refractionVisual != null)
-        { _refractionVisual.Children.Clear(); RemoveVisualChild(_refractionVisual); _refractionVisual = null; }
+        { _refractionVisual.Children.Clear(); RemoveVisualChild(_refractionVisual); _refractionVisual = null; InvalidateVisual(); }
+        _opticalFinish = null; _finishVersion = -1; _finishBorderBrush = null;
         _slices.Clear(); _captureGeometry = _presentedGeometry = null;
     }
 }

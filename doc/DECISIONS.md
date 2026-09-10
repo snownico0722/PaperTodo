@@ -1349,7 +1349,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-040 — Aero 低染色模糊 recipe 与材质光照分层
 
-**Status:** Experimental
+**Status:** Partially superseded by D-042（Aero 后端；陶瓷分层和 state=3 黑底禁区保留）
 
 **Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
 
@@ -1364,7 +1364,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-041 — 统一液态背景、连续尺寸适配与清透 Aero
 
-**Status:** Experimental
+**Status:** Partially superseded by D-042（光学曲线、表面绘制顺序和 Aero 后端；采样预算与生命周期保留）
 
 **Context:** 用户实机反馈 D-039 仍像一圈卡顿的扭曲，Aero 截图是乳白蓝色板。中心原生透明、边缘单独采样造成空间和时间不一致；Snell 曲线的内侧峰值、固定 18 DIP 厚度和四条独立区域的回读开销放大了问题。Aero 的浅蓝白底色与宽反光重复遮住背景。
 
@@ -1375,3 +1375,18 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Validation:** `RefractionChecks` 检查同帧折射差异、中心不变形、真实背景变化、尺寸连续性、单次采样与预算、静止解绑及资源生命周期。`MaterialStudyChecks` 输出实际纸片在明暗主题与小／大／窄／宽尺寸上的桌面画面；Aero 保留白色／蓝色后窗对照和视差检查。Windows CI 的合成器与输入延迟仅作诊断，最终外观和拖动流畅度仍需 Windows 11 实机验收。
 
 **References:** [Apple — Meet Liquid Glass, adaptivity](https://developer.apple.com/videos/play/wwdc2025/219/)、[用户提供的 index-main](https://github.com/snownico0722/index-main/blob/ebf5583ef4980845ee1a0148af46cbe6bae941ea/js/liquid-glass.js)。尺寸策略是本项目的实现选择，不是 Apple 公布的数值公式。
+
+
+---
+
+## D-042 — 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度
+
+**Status:** Experimental
+
+**Context:** 用户反复反馈液态像一圈扭曲、Aero 仍过度磨砂。父 Border 的反光绘制位于不透明采样 DrawingVisual 之下，会被真正背景盖住；降低 state=4 的染色 alpha 也不能降低系统 Acrylic 的模糊半径。
+
+**Decision:** 液态保留统一有预算的背景源，用更宽但浅的五次平滑肩部、轻微背景放大和较轻散射。采样背景上增加缓存的表面绘制视觉，但仍位于现有正文 Child 之前；外轮廓继续服从 owner。只有背景进入 shader，不创建第二个编辑器或更改布局。Aero 复用现有清透 alpha 接法，去掉 Acrylic 模糊，保留蓝色透光、柔化斜反光和移动视差；不恢复已失败的 state=3，也不为 Aero 新增采样和截图排除。代价是当前 Aero 不模拟 Windows 7 原生的模糊半径，并非其逐像素复现。
+
+**Auxiliary surfaces / color:** 所有配色对云母和亚克力开放，Neutral 不改变原系统色，其他配色只增加外壳轻染色并保留不透明语义颜色。胶囊、右键菜单及子菜单复用材质绘制，`MatchAuxiliaryMaterialStrength` 关闭时为 0.4、打开为 1；普通主表面恒为 1。胶囊和菜单保留原有 layered/static 实色基底，不为了原生效果换 HWND 或扩展采样，完整强度指材质绘制强度而非这些表面开始使用原生背景。文字、图标、host 描边与命中不衰减。JSON 字段、恢复默认值和四语言提示归既有设置路径。
+
+**Validation / limits:** 原生互斥与失败回退、配色选择与旧配置、辅助表面强度及前景像素、菜单模板实例化、真实背景变化／清漆叠层和编辑器身份检查进入 `PaperTodo.MicaChecks`。Aero 必须响应真实后窗白／蓝对照且不占用 sampler，不再通过系统 Acrylic 也失败来跳过。Windows CI 不代替用户对真实 Windows 11、HDR、混合 DPI 和高刷新率流畅度的验收。

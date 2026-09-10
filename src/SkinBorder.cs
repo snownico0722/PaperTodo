@@ -20,9 +20,17 @@ internal sealed partial class SkinBorder : Border
             (d, _) => ((SkinBorder)d).RefreshRefraction()));
     public string Skin { get => (string)GetValue(SkinProperty); set => SetValue(SkinProperty, value); }
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
+    public static readonly DependencyProperty IsMenuProperty = DependencyProperty.Register(
+        nameof(IsMenu), typeof(bool), typeof(SkinBorder),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool IsMenu { get => (bool)GetValue(IsMenuProperty); set => SetValue(IsMenuProperty, value); }
+    internal bool IsAuxiliary => IsCapsule || IsMenu;
+    internal double MaterialStrength => IsAuxiliary &&
+        AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
     internal bool IsOutline { get; init; }
+    private int _surfaceVersion;
     private bool _dark, _highContrast, _animateReflection;
-    private (string Skin, bool Dark, bool Capsule, Color Paper, Size Size)? _brushKey;
+    private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Paper, Size Size)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private Brush _glint = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
@@ -35,10 +43,10 @@ internal sealed partial class SkinBorder : Border
     private static readonly Brush LightFibers = CreateFibers(false);
     private static readonly Brush DarkFibers = CreateFibers(true);
 
-    internal SkinBorder()
+    public SkinBorder()
     {
         InitializeRefraction();
-        Loaded += (_, _) => SyncLensLight();
+        Loaded += (_, _) => RefreshSkin();
         Unloaded += (_, _) => DetachLensLight();
         IsVisibleChanged += (_, _) => SyncLensLight();
         RefreshSkin();
@@ -65,9 +73,20 @@ internal sealed partial class SkinBorder : Border
 
     protected override void OnRender(DrawingContext dc)
     {
-        // In particular, original Mica and Acrylic must go through the original Border
-        // renderer without any decorative fill, alpha wash, glint or texture.
-        if (!PaperSkins.Decorate(Skin, _highContrast)) { base.OnRender(dc); return; }
+        var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
+        if (_highContrast || !PaperSkins.IsDecorated(Skin) && !(systemMaterial && IsAuxiliary))
+        {
+            base.OnRender(dc);
+            // Original neutral Mica/Acrylic pixels remain unchanged. Only a successfully
+            // transparent native shell receives color; the solid fallback already has it.
+            if (!_highContrast && !IsOutline && systemMaterial &&
+                Background is SolidColorBrush { Color.A: < 255 } && ActualWidth > 0 && ActualHeight > 0)
+            {
+                EnsureGeometry();
+                dc.DrawGeometry(Theme.NativeMaterialTint, null, _shape);
+            }
+            return;
+        }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         EnsureGeometry();
         if (IsOutline)
@@ -79,15 +98,21 @@ internal sealed partial class SkinBorder : Border
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
         EnsureBrushes(background);
         dc.PushClip(_shape);
+        // Attenuate material paint, never the controls, window opacity or hit region.
+        // Auxiliary layered HWNDs retain their opaque, readable base and ownership.
+        if (IsAuxiliary) dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
+        dc.PushOpacity(MaterialStrength);
         dc.DrawGeometry(_fill, null, _shape);
         if (Skin == PaperSkins.TracingPaper)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
         PaintMaterialDetails(dc);
+        dc.Pop();
         // The owner's stroke wins. Transparent/zero-width borders really disappear, and
         // left/right docked open edges stay open instead of acquiring a white seam.
         dc.DrawGeometry(BorderBrush, null, _borderRing);
         dc.Pop();
+        RefreshOpticalFinish();
     }
 
     private void EnsureGeometry()
@@ -97,6 +122,7 @@ internal sealed partial class SkinBorder : Border
         var key = (RenderSize, CornerRadius, BorderThickness, pixel, IsCapsule, dpi.DpiScaleX, dpi.DpiScaleY);
         if (_geometryKey == key) return;
         _geometryKey = key;
+        _surfaceVersion++;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
         _borderRing = Ring(new Thickness(), BorderThickness);
         // Only a hairline optical reflection, never the old nested 3-9 DIP bezel.

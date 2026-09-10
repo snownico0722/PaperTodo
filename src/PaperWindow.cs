@@ -363,7 +363,8 @@ public sealed partial class PaperWindow : Window
 
     private static ControlTemplate BuildContextMenuTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border));
+        var border = new FrameworkElementFactory(typeof(SkinBorder));
+        border.SetValue(SkinBorder.IsMenuProperty, true);
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
@@ -465,7 +466,8 @@ public sealed partial class PaperWindow : Window
         popup.SetValue(Popup.FocusableProperty, false);
         popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.Fade);
 
-        var popupBorder = new FrameworkElementFactory(typeof(Border));
+        var popupBorder = new FrameworkElementFactory(typeof(SkinBorder));
+        popupBorder.SetValue(SkinBorder.IsMenuProperty, true);
         popupBorder.SetValue(
             Border.BackgroundProperty,
             new DynamicResourceExtension("PaperBrushKey"));

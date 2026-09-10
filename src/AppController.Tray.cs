@@ -188,7 +188,8 @@ public sealed partial class AppController
 
     private static ControlTemplate BuildTrayMenuTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border));
+        var border = new FrameworkElementFactory(typeof(SkinBorder));
+        border.SetValue(SkinBorder.IsMenuProperty, true);
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
@@ -270,7 +271,8 @@ public sealed partial class AppController
         popup.SetBinding(Popup.IsOpenProperty, new Binding("IsSubmenuOpen") { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
         popup.SetBinding(Popup.PlacementTargetProperty, new Binding { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
 
-        var popupBorder = new FrameworkElementFactory(typeof(Border));
+        var popupBorder = new FrameworkElementFactory(typeof(SkinBorder));
+        popupBorder.SetValue(SkinBorder.IsMenuProperty, true);
         popupBorder.SetValue(Border.BackgroundProperty, new DynamicResourceExtension("TrayPaperBrushKey"));
         popupBorder.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("TrayBorderBrushKey"));
         popupBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));

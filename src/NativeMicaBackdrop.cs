@@ -105,9 +105,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
-            var glass = _material == ClearGlassMaterial;
-            var aero = _material == AeroGlassMaterial;
-            var accent = clear || aero;
+            var glass = _material is ClearGlassMaterial or AeroGlassMaterial;
+            var accent = clear;
             IsActive = false;
             LastHResult = 0;
             if (_accentMaterial != null && (!enable || _accentMaterial != _material))
@@ -133,7 +132,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
                 if (LastHResult >= 0 && accent)
                 {
-                    LastHResult = aero ? _native.SetAeroGlass(hwnd, dark) : _native.SetClearAcrylic(hwnd, true, dark);
+                    LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
                     if (LastHResult >= 0) _accentMaterial = _material;
                 }
                 if (LastHResult >= 0)

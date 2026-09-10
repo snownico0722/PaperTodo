@@ -407,7 +407,9 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
     public string? PaperSkin { get; set; }
+    // Only liquid glass captures the desktop; other materials retain normal screen capture.
     public bool LiquidGlassRefraction { get; set; } = true;
+    public bool MatchAuxiliaryMaterialStrength { get; set; }
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;

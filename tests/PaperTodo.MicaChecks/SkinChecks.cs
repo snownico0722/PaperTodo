@@ -26,19 +26,19 @@ internal static class SkinChecks
             Program.Assert(PaperSkins.UsesNativeBackdrop(id) && PaperSkins.NativeBackdrop(id) == MicaBackdropTypes.Acrylic, "supported Acrylic recipe");
         Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.LiquidGlass) == NativeMicaBackdrop.ClearGlassMaterial,
             "liquid glass no longer maps to frosted Acrylic");
-        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero uses low-tint accent blur rather than the standard system recipe");
+        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero selects its clear native glass recipe");
         CheckPersistence();
         var resources = new ResourceManager("PaperTodo.Resources.Strings", typeof(Strings).Assembly);
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette").Append("SettingsLiveRefraction").Append("TipLiveRefraction"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette").Append("SettingsLiveRefraction").Append("TipLiveRefraction").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
         try
         {
-            CheckOriginalNativeRendering(controller);
+            CheckOriginalNativeRendering(controller); CheckAuxiliaryMaterials(controller);
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
             var samples = 0;
@@ -89,7 +89,7 @@ internal static class SkinChecks
     }
     private static void CheckOriginalNativeRendering(AppController controller)
     {
-        controller.State.ColorScheme = ColorSchemes.Warm;
+        controller.State.ColorScheme = ColorSchemes.Neutral;
         foreach (var mode in new[] { "light", "dark" })
         foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
         {
@@ -106,10 +106,82 @@ internal static class SkinChecks
                     "native skins add no decorative wash or replacement border pixels");
             }
         }
+        foreach (var scheme in ColorSchemes.All)
+        foreach (var mode in new[] { "light", "dark" })
+        {
+            controller.State.PaperSkin = PaperSkins.Paper; controller.State.ColorScheme = scheme;
+            controller.State.Theme = mode; Theme.Invalidate();
+            var paperColor = ((SolidColorBrush)Theme.PaperBrush).Color;
+            var textColor = ((SolidColorBrush)Theme.TextBrush).Color;
+            foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
+            {
+                controller.State.PaperSkin = skin; Theme.Invalidate();
+                Program.Assert(((SolidColorBrush)Theme.PaperBrush).Color == paperColor &&
+                    ((SolidColorBrush)Theme.TextBrush).Color == textColor && textColor.A == 255,
+                    "native material honors the independent saved palette with opaque semantic text");
+                var tint = ((SolidColorBrush)Theme.NativeMaterialTint).Color;
+                Program.Assert(scheme == ColorSchemes.Neutral ? tint.A == 0 : tint.A is > 0 and < 32,
+                    "neutral leaves native pixels alone; selected colors add a light tint, not an opaque replacement");
+                var selector = (UIElement)typeof(AppController).GetMethod("CreateColorSchemeSegmentSelector", Program.Private)!.Invoke(controller, null)!;
+                Program.Assert(selector.IsEnabled, "native material palette selector remains enabled");
+            }
+        }
+        controller.State.ColorScheme = ColorSchemes.Warm;
         controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = "light"; Theme.Invalidate();
         Program.Assert(controller.State.ColorScheme == ColorSchemes.Warm &&
             ((SolidColorBrush)Theme.PaperBrush).Color == Color.FromRgb(255, 249, 234),
             "leaving a native skin restores the independent saved color choice");
+    }
+    private static void CheckAuxiliaryMaterials(AppController controller)
+    {
+        var old = controller.State.MatchAuxiliaryMaterialStrength;
+        try
+        {
+            foreach (var mode in new[] { "light", "dark" })
+            foreach (var skin in PaperSkins.All.Where(s => s != PaperSkins.Paper))
+            {
+                controller.State.PaperSkin = skin; controller.State.Theme = mode;
+                controller.State.ColorScheme = ColorSchemes.Warm; Theme.Invalidate();
+                foreach (var capsule in new[] { false, true })
+                {
+                    var surface = new SkinBorder { Width = 240, Height = 80,
+                        IsCapsule = capsule, IsMenu = !capsule, CornerRadius = new CornerRadius(12),
+                        Background = Theme.PaperBrush, BorderBrush = Brushes.Red, BorderThickness = new Thickness(1),
+                        Child = new Border { Width = 12, Height = 12, Background = Brushes.Lime,
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                    controller.State.MatchAuxiliaryMaterialStrength = false; surface.RefreshSkin();
+                    var quiet = Pixels(Render(surface, 1));
+                    Program.Assert(surface.MaterialStrength == .4 && surface.Opacity == 1, "quiet material does not dim the entire surface");
+                    controller.State.MatchAuxiliaryMaterialStrength = true; surface.RefreshSkin();
+                    var full = Pixels(Render(surface, 1));
+                    Program.Assert(surface.MaterialStrength == 1 && !quiet.SequenceEqual(full), "switch visibly changes auxiliary material intensity");
+                    var center = (40*240+120)*4;
+                    Program.Assert(quiet.AsSpan(center, 4).SequenceEqual(full.AsSpan(center, 4)) && full[center+1] == 255,
+                        "foreground marker remains fully opaque and unchanged");
+                    Program.Assert(surface.IsHitTestVisible && surface.Child.IsHitTestVisible &&
+                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasRefractionWorker,
+                        "same auxiliary content remains hit-testable without capture ownership");
+                    var edge = (40*240)*4;
+                    Program.Assert(quiet.AsSpan(edge,4).SequenceEqual(full.AsSpan(edge,4)), "host stroke does not fade with material strength");
+                }
+                var main = new SkinBorder { Width = 240, Height = 160, Background = Theme.PaperBrush,
+                    BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
+                controller.State.MatchAuxiliaryMaterialStrength = false; main.RefreshSkin(); var a = Pixels(Render(main, 1));
+                controller.State.MatchAuxiliaryMaterialStrength = true; main.RefreshSkin(); var b = Pixels(Render(main, 1));
+                Program.Assert(a.SequenceEqual(b), "auxiliary preference never changes the main paper material");
+            }
+            foreach (var (owner, method) in new[] { (typeof(PaperWindow), "BuildContextMenuTemplate"), (typeof(AppController), "BuildTrayMenuTemplate") })
+            {
+                var template = (ControlTemplate)owner.GetMethod(method, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null)!;
+                var menu = new ContextMenu { Width = 240, Height = 80, Template = template, Background = Theme.PaperBrush };
+                menu.Items.Add(new MenuItem { Header = "Material menu" });
+                Render(menu, 1);
+                var root = VisualTreeHelper.GetChild(menu, 0);
+                Program.Assert(root is SkinBorder { IsMenu: true }, "actual right-click template instantiates a material surface");
+            }
+            Console.WriteLine("PASS auxiliary materials: main stable, capsule/menu strength, opaque foreground, hit tests and real menu templates.");
+        }
+        finally { controller.State.MatchAuxiliaryMaterialStrength = old; }
     }
     private static void CheckDockedOutline(AppController controller)
     {
@@ -144,17 +216,18 @@ internal static class SkinChecks
         {
             var store = new StateStore(temp, DurableAtomicFileWriter.Shared); long version = 0;
             foreach (var skin in PaperSkins.All)
+            foreach (var match in new[] { false, true })
             {
-                var state = new AppState { PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiquidGlassRefraction = skin != PaperSkins.LiquidGlass };
+                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiquidGlassRefraction = skin != PaperSkins.LiquidGlass };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiquidGlassRefraction == state.LiquidGlassRefraction, "independent preferences persist");
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiquidGlassRefraction == state.LiquidGlassRefraction && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
                 Program.Assert(restored.Papers.Single().Content == state.Papers.Single().Content, "note payload preserved");
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","papers":[]}""", ++version);
             var legacy = store.Load();
-            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral, "old file appearance preserved");
+            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral && !legacy.MatchAuxiliaryMaterialStrength, "old file appearance preserved");
             store.SaveJsonSync(store.SerializeState(legacy), ++version);
             Program.Assert(store.Load().PaperSkin == PaperSkins.Acrylic, "migration remains stable after resave");
         }
@@ -257,7 +330,7 @@ internal static class SkinChecks
             // This is the requested clear variant, not the old opaque reading wash.
             // Universal black/white-backdrop contrast is incompatible with clear glass;
             // opaque/high-contrast fallback is still tested above in every palette.
-            Program.Assert(alpha is >= 40 and <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
+            Program.Assert(alpha >= (mode == "dark" ? 50 : 20) && alpha <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
             foreach (var rear in mode == "dark" ? new byte[] { 0, 48 } : new byte[] { 200, 255 })
             {
                 byte Channel(int c) => (byte)Math.Min(255, bytes[i + c] + rear * (255 - alpha) / 255);

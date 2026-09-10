@@ -17,7 +17,6 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     internal static readonly DependencyProperty ProfileProperty = RegisterPixelShaderSamplerProperty(nameof(Profile), typeof(LiquidRefractionEffect), 1, SamplingMode.Bilinear);
     internal static readonly DependencyProperty CropProperty = Constant(nameof(Crop), typeof(Point4D), new Point4D(1, 1, 0, 0), 0);
     internal static readonly DependencyProperty ShiftProperty = Constant(nameof(Shift), typeof(Point), new Point(), 1);
-    internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.1737, .1764, .18, .82), 2);
     internal static readonly DependencyProperty LightProperty = Constant(nameof(Light), typeof(Point), new Point(.24, .05), 3);
     internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point4D), new Point4D(400, 340, 1d / 18, 1), 5);
     internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
@@ -28,7 +27,6 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     public Brush Profile { get => (Brush)GetValue(ProfileProperty); set => SetValue(ProfileProperty, value); }
     public Point4D Crop { get => (Point4D)GetValue(CropProperty); set => SetValue(CropProperty, value); }
     public Point Shift { get => (Point)GetValue(ShiftProperty); set => SetValue(ShiftProperty, value); }
-    public Point4D Tint { get => (Point4D)GetValue(TintProperty); set => SetValue(TintProperty, value); }
     public Point Light { get => (Point)GetValue(LightProperty); set => SetValue(LightProperty, value); }
     public Point4D Extent { get => (Point4D)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
     public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
@@ -41,12 +39,12 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         using (var stream = new MemoryStream(Bytecode.Value, false)) shader.SetStreamSource(stream);
         shader.Freeze(); PixelShader = shader;
         Profile = LensDisplacement.ProfileBrush;
-        foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty, TintProperty,
+        foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty,
                      LightProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
     }
 
-    // Every background pixel gets the same light scattering and color treatment. The
-    // monotone shoulder adds only a few DIPs of bending, joining the body with zero slope.
+    // A single scene covers the body and shoulder, with a sub-percent body lens and
+    // a smooth shoulder. The surface finish is composited above this background.
     // Foreground text/controls never enter this effect. Five bilinear taps avoid a large
     // blur intermediate; overscan is reprojected in screen coordinates during dragging.
     private const string Source = """
@@ -54,7 +52,6 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         sampler2D opticalProfile : register(s1);
         float4 crop : register(c0);
         float2 shift : register(c1);
-        float4 tint : register(c2);
         float2 light : register(c3);
         float4 extent : register(c5);
         float4 radii : register(c6);
@@ -73,7 +70,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float horizontal = saturate((q.x-q.y)*.5+.5);
             float2 normal = normalize(lerp(float2(horizontal, 1-horizontal), outside, step(.0001, len))) * (side*2-1);
             float2 delta = -normal * optical.r * shift;
-            float2 at = uv * crop.xy + crop.zw + delta;
+            float2 at = ((uv - .5) * extent.w + .5) * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
             float2 spread = scattering.xy;
             float3 color = tex2D(scene, at).rgb * .4;
@@ -81,11 +78,8 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
                 + tex2D(scene, at + spread * float2(1,-1)).rgb
                 + tex2D(scene, at + spread * float2(-1,1)).rgb) * .15;
             color = lerp(dot(color, float3(.2126,.7152,.0722)), color, scattering.z);
-            // Tint RGB is premultiplied on the CPU; A is transmission. This keeps
-            // the whole effect within ps_2_0, including WPF software rendering.
-            color = color * tint.a + tint.rgb;
             float lightness = saturate(dot(-normal, light-global) + .35);
-            float sheen = optical.b * (.06 + .24 * lightness);
+            float sheen = optical.b * (.025 + .105 * lightness);
             color += sheen;
             return float4(saturate(color), 1);
         }

@@ -20,7 +20,9 @@ internal static class LensDisplacement
         t = Math.Clamp(t, 0, 1);
         if (t >= 1) return (0, 0, 0, 0);
         var u = 1 - t;
-        var shift = u * Math.Sqrt(u);
+        // Quintic easing has zero first and second derivatives at both joins. A wider
+        // shoulder can be visible without a hard ridge or an interior folded band.
+        var shift = 1 - t * t * t * (10 + t * (-15 + 6 * t));
         var coverage = Math.Clamp((1 - t) * 6, 0, 1);
         coverage = coverage * coverage * (3 - 2 * coverage);
         return (shift, Math.Sqrt(u), u * u * u * u, coverage);

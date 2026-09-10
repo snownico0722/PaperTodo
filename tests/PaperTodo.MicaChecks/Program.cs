@@ -140,22 +140,22 @@ internal static class Program
                 f.Backdrop.Dispose();
                 Assert(!f.Api.ClearAcrylic, "disposal removes accent");
             });
-            Check("Aero uses its low-tint accent recipe and clears it across transitions", () =>
+            Check("Aero uses clear alpha without inheriting Acrylic blur", () =>
             {
                 using var f = new Fixture();
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
-                Assert(f.Backdrop.IsActive && f.Api.Aero && f.Api.AccentState == 4 && f.Api.Backdrop == 1 &&
-                    f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "Aero is not renamed standard Acrylic");
+                Assert(f.Backdrop.IsActive && f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1 &&
+                    f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "Aero transmits without either Acrylic recipe");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.Acrylic);
-                Assert(f.Api.AccentState == 0 && f.Api.Backdrop == 3, "Aero -> system Acrylic clears accent first");
+                Assert(!f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 3, "Aero -> system Acrylic clears alpha first");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.ClearAcrylic);
                 Assert(f.Api.AccentState == 4, "existing Clear Acrylic remains recipe 4");
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
-                Assert(f.Api.Aero && f.Api.AccentState == 4, "Clear Acrylic -> Aero replaces its accent recipe");
-                f.Api.Failure = "aero";
+                Assert(f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1, "Clear Acrylic -> Aero removes accent");
+                f.Api.Failure = "alpha-disable";
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial, force: true);
                 Assert(!f.Backdrop.IsActive && f.Api.AccentState == 0 && !Transparent(f.Chrome.Background),
-                    "Aero API failure clears accent and keeps a readable solid fallback");
+                    "Aero API failure keeps a readable solid fallback");
             });
 
             Check("clear glass preserves alpha without enabling either blur recipe", () =>
@@ -378,7 +378,6 @@ internal static class Program
         public bool HighContrast { get; set; }
         internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass, RedirectionAlpha;
         internal int ActivationCalls, AccentState;
-        internal bool Aero;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor, FrameTop;
         public bool IsLayered(IntPtr hwnd) => Layered;
@@ -391,17 +390,11 @@ internal static class Program
             if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && (Glass || RedirectionAlpha), "system backdrop needs full glass or explicit bitmap alpha, and excludes legacy alpha/accent");
             Backdrop = backdrop; return 0;
         }
-        public int SetAeroGlass(IntPtr hwnd, bool dark)
-        {
-            if (Failure == "aero") return Error;
-            Assert(Backdrop == 1 && !Alpha && !Glass, "Aero accent blur is exclusive of system Acrylic and legacy alpha");
-            ClearAcrylic = true; Aero = true; AccentState = 4; return 0;
-        }
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
         {
             if (enabled && Failure == "accent") return Error;
             if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass, "accent excludes system backdrop, full glass and alpha fallback");
-            ClearAcrylic = enabled; Aero = false; AccentState = enabled ? 4 : 0; return 0;
+            ClearAcrylic = enabled; AccentState = enabled ? 4 : 0; return 0;
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public void InvalidateContent(IntPtr hwnd) { }

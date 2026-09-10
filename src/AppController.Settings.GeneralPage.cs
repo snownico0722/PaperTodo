@@ -197,7 +197,6 @@ public sealed partial class AppController
     {
         State.EnableToolTips = true;
         State.EnableAnimations = true;
-        State.LiquidGlassRefraction = true;
         State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;

@@ -1457,13 +1457,13 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>전체 배경을 부드럽게 처리하고 가장자리에 완만한 굴절과 국소 하이라이트를 더합니다. 흐림, 두께, 색조는 종이 크기에 따라 조절되며 본문은 선명하게 유지됩니다. 복잡한 배경에서는 글자 대비가 달라질 수 있습니다. 실시간 효과는 펼친 종이에만 적용되며 캡슐과 설정 창은 정적 재질을 사용합니다. Liquid Glass를 근사한 표현입니다.</value>
+    <value>얕은 곡면이 중앙으로 부드럽게 이어집니다. 배경을 조금 확대하고 부드럽게 처리한 뒤 그 위에 반사를 그립니다. 두께와 착색은 용지 크기에 맞춰 바뀌며 글자와 버튼은 변형되지 않습니다. 대비는 여전히 배경에 따라 달라집니다. 실시간 효과는 펼친 용지에만 적용하고 캡슐과 설정은 정적 재질을 사용합니다. Apple Liquid Glass의 완전한 재현은 아닙니다.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>불투명한 아이보리 도자기에 국소적인 투명 유약 반사와 연속적인 곡면 가장자리 조명을 더합니다. 어두운 모드에는 짙은 유약을 사용합니다. 색상 선택을 반영하며 종이 같은 그라데이션이나 겹친 안쪽 테두리를 사용하지 않습니다.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>옅은 푸른 투과색에 선명한 대각선 반사와 이동 시 시차를 더합니다. 종이 크기를 바꿔도 반사 폭은 일정하며 큰 종이는 색조가 조금 짙어집니다. 제목 표시줄과 본문 배경이 이어집니다. 시스템 흐림을 사용할 수 없으면 불투명 표면으로 돌아갑니다.</value>
+    <value>아크릴의 강한 불투명 유리 효과 없이 배경의 세부를 유지하는 푸른빛의 투명 유리입니다. 부드러운 대각선 반사는 이동에 따라 조금씩 움직이며 창 크기가 바뀌어도 폭을 유지합니다. 제목 표시줄과 본문 배경이 이어집니다. 바탕 화면을 캡처하거나 스크린샷에서 창을 제외하지 않습니다. 합성을 사용할 수 없으면 정적 표면으로 전환합니다.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>레트로 퀘스트 패널 스타일로 작은 계단형 모서리, 단일 테두리, 픽셀 정렬 아이콘과 사각 컨트롤을 사용합니다. 본문 글꼴은 유지됩니다.</value>
@@ -1475,15 +1475,21 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>네이티브 배경에는 Windows 11 22H2 (22621) 이상이 필요합니다. 현재 환경에서는 불투명하게 표시됩니다.</value>
   </data>
   <data name="SkinNativeScope" xml:space="preserve">
-    <value>네이티브 배경은 펼친 메모와 설정에 적용됩니다. 캡슐, 형태 전환, 부분 투명 상태에서는 단색 바탕을 사용하며 시스템 투명 효과가 꺼져도 단색으로 전환됩니다.</value>
+    <value>기본 배경 재질은 펼친 용지와 설정 창에 적용됩니다. 캡슐과 메뉴는 선택한 재질의 정적 버전을 불투명한 바탕 위에 그립니다. 모양 전환, 반투명 상태 또는 시스템 투명 효과가 꺼진 경우에도 대체 표면을 사용합니다.</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
-    <value>표준 마이카와 두 아크릴 스킨은 기존 중성 색상을 유지합니다. 다른 스킨으로 돌아가면 저장된 색상 선택이 복원되며 덮어쓰지 않습니다.</value>
+    <value>운모와 두 아크릴 재질에서도 색상을 선택할 수 있습니다. 글자, 강조색과 옅은 표면 착색에 적용되며, 중립 색상은 시스템 본래의 색을 유지합니다.</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>실시간 배경 굴절</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
     <value>펼친 메모에만 적용됩니다. 뒤쪽 데스크톱 일부를 메모리에서만 처리하며 저장하거나 업로드하지 않습니다. 자기 화면의 반복을 막기 위해 켜진 메모는 일부 스크린샷·녹화·화면 공유에 표시되지 않습니다. 공유할 때는 끄세요. 숨김·접기·스킨 변경 시 중지하며 너무 큰 창이나 캡처 실패 시 정적인 렌즈로 돌아갑니다.</value>
+  </data>
+  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>캡슐과 메뉴에 전체 재질 강도 적용</value>
+  </data>
+  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>켜면 캡슐, 오른쪽 클릭 메뉴와 하위 메뉴에 기본 창과 같은 착색·반사·질감 강도를 적용합니다. 끄면 재질 효과만 약해집니다. 글자, 아이콘, 창 전체의 불투명도는 바뀌지 않습니다. 캡슐과 메뉴는 바탕 화면을 캡처하지 않는 정적 재질을 사용합니다.</value>
   </data>
 </root>

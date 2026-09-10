@@ -11,7 +11,7 @@ public sealed partial class AppController
         if (!PaperSkins.IsValid(id) || PaperSkins.Resolve(State) == id) return;
         State.PaperSkin = id;
         // Retain the last native recipe for older experimental builds.
-        if (PaperSkins.UsesSystemPalette(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
+        if (PaperSkins.IsSystemMaterial(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
         SaveNow();
         RefreshThemeSurfaces();
     }
@@ -33,6 +33,13 @@ public sealed partial class AppController
             TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 4, 2, 5)
         });
+        if (skin != PaperSkins.Paper)
+            panel.Children.Add(WrapWithHint(SettingsToggle(
+                Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
+                {
+                    State.MatchAuxiliaryMaterialStrength = !State.MatchAuxiliaryMaterialStrength;
+                    SaveNow(); RefreshThemeSurfaces();
+                }), "TipMatchAuxiliaryMaterial"));
         if (skin == PaperSkins.LiquidGlass)
         {
             panel.Children.Add(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
@@ -46,7 +53,7 @@ public sealed partial class AppController
                 Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
             });
         }
-        if (PaperSkins.UsesSystemPalette(skin))
+        if (PaperSkins.IsSystemMaterial(skin))
             panel.Children.Add(new TextBlock
             {
                 Text = Strings.Get("SkinSystemPalette"), TextWrapping = TextWrapping.Wrap,

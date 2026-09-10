@@ -32,6 +32,7 @@ internal static class RefractionChecks
             using (surface.FreezeRefractionForEvidence())
             {
                 Wait(80);
+                var foreground = Pixels(Render((FrameworkElement)editor!));
                 var bent = Render(window); Save(bent, "lens-refracted");
                 using var bentDesktop = NativeSurfaceChecks.Capture(window, Output, "lens-desktop-refracted");
                 surface.SetRefractionStrengthForEvidence(0); Wait(80);
@@ -51,10 +52,20 @@ internal static class RefractionChecks
                 }
                 Console.WriteLine($"REFRACTION changed shoulder pixels={changed}; shader tier={RenderCapability.Tier >> 16}");
                 Program.Assert(changed > 250, "actual captured grid bends, not just a changed highlight/tint");
-                for (var y = 180; y < 290; y++)
-                    Program.Assert(a.AsSpan((y * bent.PixelWidth + 32) * 4, (bent.PixelWidth - 64) * 4)
-                        .SequenceEqual(b.AsSpan((y * flat.PixelWidth + 32) * 4, (flat.PixelWidth - 64) * 4)),
-                        "changing shoulder strength leaves the scattered body and text unchanged");
+                Program.Assert(foreground.SequenceEqual(Pixels(Render((FrameworkElement)editor!))),
+                    "optics change the background only, never the actual foreground editor rendering");
+                var finish = (DrawingVisual)typeof(SkinBorder).GetField("_opticalFinish", Program.Private)!.GetValue(surface)!;
+                finish.Opacity = 0; Wait(80);
+                var bare = Pixels(Render(window));
+                finish.Opacity = 1; Wait(80);
+                var coated = Pixels(Render(window));
+                var coatChanges = 0;
+                for (var y = 200; y < 290; y++) for (var x = 60; x < 350; x++)
+                {
+                    var i = (y * bent.PixelWidth + x) * 4;
+                    if (Math.Abs(bare[i]-coated[i]) + Math.Abs(bare[i+1]-coated[i+1]) + Math.Abs(bare[i+2]-coated[i+2]) > 6) coatChanges++;
+                }
+                Program.Assert(coatChanges > 100, "the clear-coat actually composites above the sampled body, not underneath it");
                 Program.Assert(DesktopLensCapture.ReadAffinity(hwnd) == 0, "evidence uses last genuine frame with screenshot visibility restored");
             }
             var count = surface.RefractionFrameCount;
@@ -190,7 +201,7 @@ internal static class RefractionChecks
             "reference inward edge profile displaces actual source pixels");
         foreach (var point in new[] { new Point(215,175), new Point(24,100), new Point(406,100) })
             Program.Assert(LensDisplacement.Sample(point, size, 8) == (new Vector(), 0d),
-                "the body has exactly zero displacement and shoulder coverage");
+                "the shoulder profile joins the body at zero offset and coverage; body magnification is a separate shader transform");
         var small = GlassMetrics.For(new Size(240, 160), false);
         var large = GlassMetrics.For(new Size(1000, 800), false);
         var narrow = GlassMetrics.For(new Size(160, 1000), false);

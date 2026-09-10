@@ -1457,13 +1457,13 @@ When off, open at the docked edge or remembered position.</value>
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>A softly scattered background with gentle edge refraction and localized highlights. Blur, thickness and tint adapt to paper size while text stays sharp. Text contrast still varies on busy backdrops. Live optics apply only to expanded papers; capsules and Settings stay static. An approximation of Liquid Glass.</value>
+    <value>A shallow optical shoulder smoothly joins the center. The background is gently magnified and softened, with reflections above it. Depth and tint adapt to paper size; text and buttons never deform. Contrast still depends on the backdrop. Only expanded papers use live optics; capsules and Settings retain static material. Not an exact reproduction of Apple Liquid Glass.</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
     <value>Opaque ivory porcelain with localized clear-coat reflections and continuously rounded edge lighting. Dark mode uses a deep glaze. Palette-aware, without a paper-like wash or nested frames.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Light blue transmitted color with defined diagonal reflections and movement parallax. Reflection widths stay fixed as the paper resizes; larger papers gain a little tint. The header and body share one surface. Falls back to an opaque surface when system blur is unavailable.</value>
+    <value>Clear blue-tinted glass preserves background detail without heavy Acrylic frosting. Soft diagonal reflections have subtle movement parallax and keep their width as the paper resizes. The header and body share one material. No desktop capture or screenshot exclusion; unavailable composition retains a static surface.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
@@ -1475,15 +1475,21 @@ When off, open at the docked edge or remembered position.</value>
     <value>Native backdrops require Windows 11 22H2 (22621) or later. This system uses an opaque approximation.</value>
   </data>
   <data name="SkinNativeScope" xml:space="preserve">
-    <value>Native backdrops apply to expanded papers and Settings. Capsules, shape transitions and partial opacity use solid bases; disabling system transparency also falls back.</value>
+    <value>Native backdrops apply to expanded papers and Settings. Capsules and menus follow the selected material using static variants over solid bases. Transitions, partial opacity and disabled system transparency also use fallbacks.</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
-    <value>Standard Mica and both Acrylic skins retain the original neutral palette. Other skins restore your chosen color scheme without overwriting it.</value>
+    <value>Mica and both Acrylic options also support color schemes. Colors apply to text, accents and a subtle surface tint; Neutral preserves the system colors.</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>Live background refraction</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
     <value>Expanded papers only. Samples the local desktop behind the paper in memory, without saving or uploading. To prevent feedback, the paper is excluded from some screenshot, recording and screen-sharing APIs while active; turn this off to share it. Hiding, collapsing or changing skin stops capture. Oversized windows or capture failure use a static lens.</value>
+  </data>
+  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>Full material strength on capsules and menus</value>
+  </data>
+  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>When enabled, capsules, context menus and submenus use full tint, reflection and texture strength; otherwise their material is softer. Only the material layer changes, not text, icons or window opacity. Capsules and menus use static variants without desktop capture.</value>
   </data>
 </root>

@@ -97,8 +97,13 @@ public static class Theme
         }
     }
 
-    private static string CurrentScheme => _schemeCache ??= PaperSkins.UsesSystemPalette(Skin)
-        ? ColorSchemes.Neutral : ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
+    private static string CurrentScheme => _schemeCache ??=
+        ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
+
+    // Neutral leaves the system recipe untouched. Color is a light wash on the shell,
+    // never a transparent semantic brush passed to editors or plugins.
+    internal static Brush NativeMaterialTint => CurrentScheme == ColorSchemes.Neutral
+        ? Brushes.Transparent : Solid(WithAlpha(Current.Tint, (byte)(IsDark ? 24 : 18)));
 
     private static Palette Current
     {
