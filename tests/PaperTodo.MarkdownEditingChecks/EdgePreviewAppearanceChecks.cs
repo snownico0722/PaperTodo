@@ -10,6 +10,50 @@ internal static partial class Program
 {
     private static void RunEdgePreviewAppearanceChecks(Action<string, Action> check)
     {
+        check("Edge Full sizing measures visible inline text rather than hidden link destinations", () =>
+        {
+            var destination = "https://example.com/" + new string('a', 4000);
+            foreach (var source in new[]
+            {
+                $"[**标签**]({destination})",
+                $"前缀 ![图]({destination}) 后缀",
+                $"空标签 ![]({destination})",
+                "__bold__ **more** ___both___ ***last***",
+                @"原样 \*符号\* 和 `a\*b`",
+                @"\[标签](https://example.com/path) 与 \`code\`"
+            })
+            {
+                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
+                Require(!content.Truncated, "the hidden destination is within the source budget");
+                var panel = new StackPanel();
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, source, _ => { });
+                Equal(EdgePreviewText(panel), MarkdownEdgeCapsulePreviewRenderer.MeasureText(content),
+                    "measurement uses the renderer's labels, escape handling and literal inline code");
+            }
+
+            EdgeCapsulePreviewSize Describe(string source, string mode) =>
+                MarkdownEdgeCapsulePreviewProvider.Instance.Describe(new EdgeCapsulePreviewContext(
+                    new PaperData(), () => "笔记", false, () => source, () => mode,
+                    (_, _) => false, _ => false, () => new Style(), () => "", _ => { },
+                    new EdgeCapsulePreviewInvalidationSource())).Size;
+            var link = $"[标签]({destination})";
+            var full = Describe(link, MarkdownRenderModes.Full);
+            Equal(Describe("标签", MarkdownRenderModes.Full), full,
+                "an invisible long URL reserves neither width nor height");
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced })
+            {
+                var sourceSize = Describe(link, mode);
+                Require(sourceSize.WidthDip > full.WidthDip && sourceSize.HeightDip > full.HeightDip,
+                    "source-layout modes still reserve space for their visible destination syntax");
+            }
+            foreach (var source in new[] { $"`{link}`", $"```\n{link}\n```" })
+            {
+                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
+                Equal(link, MarkdownEdgeCapsulePreviewRenderer.MeasureText(content),
+                    "code destinations remain literal rather than being replaced by labels");
+            }
+        });
+
         check("Edge note typography and natural line spacing match the note body", () =>
         {
             try
