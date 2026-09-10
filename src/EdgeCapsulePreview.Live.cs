@@ -6,8 +6,8 @@ namespace PaperTodo;
 
 /// <summary>
 /// One live preview surface. Size is frozen by the queue session, while the content may refresh
-/// from the current paper model. The first content tree is built while detached so the shell can
-/// switch from compact text to preview text without ever showing both or exposing a blank frame.
+/// from the current paper model. Detached preparation subscribes and captures initial content;
+/// a renderer may finish bounded visual work after attachment without changing that geometry.
 /// </summary>
 internal abstract class EdgeCapsuleLivePreviewView : Grid
 {
@@ -126,7 +126,6 @@ internal abstract class EdgeCapsuleLivePreviewView : Grid
             Context.InvalidationSource.Invalidated -= _invalidationHandler;
             _invalidationHandler = null;
         }
-        _invalidationHandler = null;
         _subscribed = false;
     }
 
