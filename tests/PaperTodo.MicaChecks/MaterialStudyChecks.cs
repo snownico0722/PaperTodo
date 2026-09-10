@@ -22,7 +22,8 @@ internal static class MaterialStudyChecks
         PaperWindow? window = null;
         try
         {
-            rear.Show();
+            rear.Show(); Wait(150);
+            using (NativeSurfaceChecks.Capture(rear, output, "study-rear-control")) { }
             foreach (var mode in new[] { "light", "dark" })
             foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Ceramic, PaperSkins.Paper })
             {
@@ -133,7 +134,22 @@ internal static class MaterialStudyChecks
             var pen = new Pen(new SolidColorBrush(Color.FromArgb(115, 250, 253, 255)), 2);
             for (var x = 0; x < 720; x += 40) dc.DrawLine(pen, new Point(x, 0), new Point(x, 550));
         }
-        drawing.Freeze(); var brush = new DrawingBrush(drawing) { Stretch = Stretch.Fill }; brush.Freeze(); return brush;
+        // Oversized ellipses must not expand the relative brush viewbox into unpainted
+        // space. Otherwise the test backdrop itself has black gaps behind clear glass.
+        var bounds = new Rect(0, 0, 720, 550);
+        drawing.ClipGeometry = new RectangleGeometry(bounds);
+        drawing.Freeze();
+        var brush = new DrawingBrush(drawing)
+        { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.Absolute, Viewbox = bounds };
+        brush.Freeze();
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen()) dc.DrawRectangle(brush, null, bounds);
+        var image = new RenderTargetBitmap(720, 550, 96, 96, PixelFormats.Pbgra32);
+        image.Render(visual);
+        var bytes = new byte[720 * 550 * 4]; image.CopyPixels(bytes, 720 * 4, 0);
+        Program.Assert(Enumerable.Range(0, 720 * 550).All(i => bytes[i * 4 + 3] == 255),
+            "the calibration backdrop fills every pixel; transparent fixture gaps are not material evidence");
+        return brush;
     }
     private static void Wait(int ms)
     {
