@@ -39,11 +39,13 @@ internal static class RefractionChecks
                 using var flatDesktop = NativeSurfaceChecks.Capture(window, Output, "lens-desktop-flat-control");
                 surface.SetRefractionStrengthForEvidence(1); Wait(80);
                 var a = Pixels(bent); var b = Pixels(flat); var changed = 0;
-                // Both shoulders contain multiple calibration edges inside the optical
-                // footprint. Tint/light and the captured frame stay identical.
-                for (var y = 180; y < 290; y++) for (var x = 4; x < bent.PixelWidth - 4; x++)
+                // Sample the actual resized shoulder, including its first painted pixels.
+                // The old four-pixel inset discarded most of this gentler, narrower lens.
+                // Tint/light and the captured frame stay identical in this comparison.
+                var shoulder = (int)Math.Ceiling(GlassMetrics.For(new Size(bent.PixelWidth, bent.PixelHeight), false).Bezel) + 2;
+                for (var y = 180; y < 290; y++) for (var x = 2; x < bent.PixelWidth - 2; x++)
                 {
-                    if (x >= 28 && x < bent.PixelWidth - 28) continue;
+                    if (x >= shoulder && x < bent.PixelWidth - shoulder) continue;
                     var i = (y * bent.PixelWidth + x) * 4;
                     if (Math.Abs(a[i] - b[i]) + Math.Abs(a[i + 1] - b[i + 1]) + Math.Abs(a[i + 2] - b[i + 2]) > 30) changed++;
                 }

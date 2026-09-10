@@ -186,7 +186,9 @@ internal sealed partial class SkinBorder
         for (var i = 0; i < _refractionVisual.Children.Count; i++)
         {
             var slice = _slices[i]; var tile = slice.Layout!; var target = tile.Target; var bounds = tile.Bounds;
-            var size = new Size(target.Width / dpi.DpiScaleX, target.Height / dpi.DpiScaleY);
+            // The capture rectangle rounds out to physical pixels, but the optical
+            // surface must retain its exact DIP extent at fractional desktop scaling.
+            var size = RenderSize;
             slice.Visual.Offset = new Vector(target.X / dpi.DpiScaleX, target.Y / dpi.DpiScaleY);
             if (slice.Visual.ContentBounds.Size != size)
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
@@ -195,7 +197,7 @@ internal sealed partial class SkinBorder
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
             slice.Effect.Radii = new Point4D(Math.Min(limit, CornerRadius.TopLeft), Math.Min(limit, CornerRadius.TopRight),
                 Math.Min(limit, CornerRadius.BottomRight), Math.Min(limit, CornerRadius.BottomLeft));
-            slice.Effect.Crop = new Point4D(target.Width / (double)bounds.Width, target.Height / (double)bounds.Height,
+            slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
                 (window.X + geometry.OffsetX + target.X - bounds.X) / (double)bounds.Width,
                 (window.Y + geometry.OffsetY + target.Y - bounds.Y) / (double)bounds.Height);
             slice.Effect.Shift = new Point(metrics.Displacement * dpi.DpiScaleX * _refractionStrength / bounds.Width,
