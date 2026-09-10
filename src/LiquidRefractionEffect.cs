@@ -20,7 +20,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.965, .98, 1, .18), 2);
     internal static readonly DependencyProperty LightProperty = Constant(nameof(Light), typeof(Point), new Point(.24, .05), 3);
     internal static readonly DependencyProperty ViewportProperty = Constant(nameof(Viewport), typeof(Point4D), new Point4D(1, 1, 0, 0), 4);
-    internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point), new Point(400, 340), 5);
+    internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point4D), new Point4D(400, 340, 1d / 18, 1), 5);
     internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
     private static DependencyProperty Constant(string name, Type type, object value, int register) =>
         DependencyProperty.Register(name, type, typeof(LiquidRefractionEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
@@ -30,7 +30,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     public Point4D Tint { get => (Point4D)GetValue(TintProperty); set => SetValue(TintProperty, value); }
     public Point Light { get => (Point)GetValue(LightProperty); set => SetValue(LightProperty, value); }
     public Point4D Viewport { get => (Point4D)GetValue(ViewportProperty); set => SetValue(ViewportProperty, value); }
-    public Point Extent { get => (Point)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
+    public Point4D Extent { get => (Point4D)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
     public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
     private static readonly Lazy<byte[]> Bytecode = new(Compile);
 
@@ -54,31 +54,28 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         float4 tint : register(c2);
         float2 light : register(c3);
         float4 viewport : register(c4);
-        float2 extent : register(c5);
+        float4 extent : register(c5);
         float4 radii : register(c6);
         float4 main(float2 uv : TEXCOORD) : COLOR {
             float2 global = uv * viewport.xy + viewport.zw;
             float2 side = step(.5, global);
             float radius = lerp(lerp(radii.x, radii.y, side.x), lerp(radii.w, radii.z, side.x), side.y);
-            float2 p = (global - .5) * extent;
-            float2 q = abs(p) - extent * .5 + radius;
+            float2 p = (global - .5) * extent.xy;
+            float2 q = abs(p) - extent.xy * .5 + radius;
             float2 outside = max(q, 0);
             float len = length(outside);
             float distance = radius - len - min(max(q.x, q.y), 0);
-            float bezel = min(18, min(extent.x, extent.y) * .5);
-            float rim = saturate(1 - distance / max(bezel, .001));
+            float rim = saturate(1 - distance * extent.z);
             float horizontal = step(q.y, q.x);
             float2 normal = lerp(float2(horizontal, 1-horizontal), outside / max(len, .0001), step(.0001, len)) * (side*2-1);
-            float2 delta = -normal * (rim * sqrt(rim)) * shift * (bezel / 18);
+            float2 delta = -normal * (rim * sqrt(rim)) * shift * extent.w;
             float2 at = uv * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
             float coverage = saturate(rim * 5);
             coverage = coverage * coverage * (3 - 2 * coverage);
             float3 color = tex2D(scene, saturate(at)).rgb;
-            float luma = dot(color, float3(.2126, .7152, .0722));
-            color = lerp(luma.xxx, color, 1.18);
             color = lerp(color, tint.rgb, tint.a);
-            float sheen = rim * rim; sheen *= sheen; sheen *= sheen;
+            float sheen = rim * rim; sheen *= sheen;
             float lightness = saturate(dot(-normal, light-global) + .25);
             color = color * (1 - sheen * .10) + sheen * (.07 + .19 * lightness);
             return float4(saturate(color) * coverage, coverage);
