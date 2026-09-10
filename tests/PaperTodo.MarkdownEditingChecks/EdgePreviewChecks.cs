@@ -158,12 +158,14 @@ internal static partial class Program
                     Equal(clip, body.Clip.Bounds, "mouse wheel cannot reveal more content");
                 }
 
-                source = string.Join("\n\n", Enumerable.Range(1, 10).Select(i => $"正文 {i}"));
+                // Blank lines now have the same natural height as the note. Fifteen source
+                // lines fit here and still exercise content beyond the former twelve-block cap.
+                source = string.Join("\n\n", Enumerable.Range(1, 8).Select(i => $"正文 {i}"));
                 invalidation.Invalidate();
                 Pump();
                 body = viewport.Children.OfType<StackPanel>().Single();
                 var finalParagraph = (FrameworkElement)body.Children[^1];
-                Require(EdgePreviewText(finalParagraph).Contains("正文 10"), "blank lines do not exhaust an arbitrary visible block count");
+                Require(EdgePreviewText(finalParagraph).Contains("正文 8"), "blank lines do not exhaust an arbitrary visible block count");
                 Require(finalParagraph.TranslatePoint(new Point(0, finalParagraph.ActualHeight), viewport).Y <= body.Clip.Bounds.Bottom,
                     "later paragraph is actually visible when the card has room");
                 Equal(0.0, indicator.Opacity, "fitting content has no ellipsis");
@@ -175,7 +177,7 @@ internal static partial class Program
                 Pump();
                 body = viewport.Children.OfType<StackPanel>().Single();
                 Equal(0.0, indicator.Opacity, "restoring space removes the overflow indicator");
-                Require(EdgePreviewText(body).Contains("正文 10"), "growing the viewport restores the previously hidden tail");
+                Require(EdgePreviewText(body).Contains("正文 8"), "growing the viewport restores the previously hidden tail");
                 source = "";
                 invalidation.Invalidate();
                 Pump();
@@ -411,6 +413,8 @@ internal static partial class Program
                 Require(text.Length < 20000 && truncated, "bounded text reports source truncation to the viewport");
             }
         });
+
+        RunEdgePreviewAppearanceChecks(check);
     }
 
     private static IEnumerable<DependencyObject> EdgePreviewElements(DependencyObject element)

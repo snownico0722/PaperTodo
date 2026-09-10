@@ -103,8 +103,9 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         // or mutable editor halfway through a build, and never touches WPF on a worker thread.
         var markdown = Context.ReadMarkdownText();
         var renderMode = Context.ReadMarkdownRenderMode();
+        var textZoom = Context.Paper.TextZoom;
         _viewport.SetContent((target, size) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
-            target, markdown, Context.OpenExternal, renderMode, size));
+            target, markdown, Context.OpenExternal, renderMode, size, textZoom));
     }
 }
 
@@ -406,10 +407,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string? markdown,
         Action<string> openExternal,
         string renderMode = MarkdownRenderModes.Full,
-        Size? viewportSize = null)
+        Size? viewportSize = null,
+        double textZoom = 1.0)
     {
         var truncated = false;
-        foreach (var sourceTruncated in RenderSteps(target, markdown, openExternal, renderMode, viewportSize))
+        foreach (var sourceTruncated in RenderSteps(target, markdown, openExternal, renderMode, viewportSize, textZoom))
         {
             truncated = sourceTruncated;
         }
@@ -423,7 +425,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string? markdown,
         Action<string> openExternal,
         string renderMode = MarkdownRenderModes.Full,
-        Size? viewportSize = null)
+        Size? viewportSize = null,
+        double textZoom = 1.0)
     {
         target.Children.Clear();
         if (string.IsNullOrWhiteSpace(markdown))
@@ -433,6 +436,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             yield break;
         }
 
+        var zoom = double.IsFinite(textZoom) ? Math.Clamp(textZoom, 0.5, 1.5) : 1.0;
         var code = new StringBuilder();
         var fencedCodeState = default(MarkdownFencedCodeState);
         var renderedBlocks = 0;
@@ -442,6 +446,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
         void AddBlock(FrameworkElement block)
         {
+            ApplyTextZoom(block, zoom);
             target.Children.Add(block);
             if (viewportSize is { } size)
             {
@@ -542,8 +547,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         target.Children.Add(empty);
     }
 
-    // Basic/Enhanced keep the source layout, just as the note body does. Full continues to
-    // use the compact preview blocks; Off emits literal text without Markdown decoration.
+    // All modes use the note's typography and natural line metrics, without extra paragraph
+    // margins. Basic/Enhanced retain source layout; Full still uses lightweight preview blocks.
     private static FrameworkElement BuildSourceBlock(
         string line,
         string renderMode,
@@ -552,7 +557,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         Action<string> openExternal)
     {
         var text = NewTextBlock(string.Empty, NoteTypography.FontSize);
-        text.Margin = new Thickness(0, 2, 0, 3);
         if (renderMode == MarkdownRenderModes.Off)
         {
             text.Text = line;
@@ -585,14 +589,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var unordered = UnorderedListPattern.Match(trimmed);
         if (heading.Success)
         {
-            var level = heading.Groups[1].Value.Length;
-            text.FontSize = AppTypography.Scale(Math.Max(13, 19 - level));
-            text.FontWeight = level <= 2 ? FontWeights.Bold : FontWeights.SemiBold;
+            text.FontSize = HeadingFontSize(heading.Groups[1].Value.Length);
+            ApplyStrongTypography(text);
             prefixLength += heading.Groups[2].Index;
         }
         else if (trimmed.StartsWith(">", StringComparison.Ordinal))
         {
-            text.SetResourceReference(TextBlock.BackgroundProperty, "HoverBrushKey");
+            text.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
             prefixLength++;
         }
         else if (task.Success || ordered.Success)
@@ -669,18 +672,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var trimmed = line.Trim();
         if (trimmed.Length == 0)
         {
-            return new Border { Height = AppTypography.Scale(6) };
+            return NewTextBlock(string.Empty, NoteTypography.FontSize);
         }
 
         if (HorizontalRulePattern.IsMatch(trimmed))
         {
-            var rule = new Border
-            {
-                Height = 1,
-                Margin = new Thickness(2, 7, 2, 7)
-            };
-            rule.SetResourceReference(Border.BackgroundProperty, "PaperBorderBrushKey");
-            return rule;
+            return BuildSourceHorizontalRule(
+                NewTextBlock(string.Empty, NoteTypography.FontSize), trimmed, MarkdownRenderModes.Enhanced);
         }
 
         if (MarkdownImageReferences.TryParseReferenceLine(
@@ -706,29 +704,23 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var heading = HeadingPattern.Match(trimmed);
         if (heading.Success)
         {
-            var level = heading.Groups[1].Value.Length;
-            var text = NewTextBlock(
-                string.Empty,
-                AppTypography.Scale(Math.Max(13, 19 - level)));
-            text.Margin = new Thickness(0, 5, 0, 3);
-            text.FontWeight = level <= 2 ? FontWeights.Bold : FontWeights.SemiBold;
+            var text = NewTextBlock(string.Empty, HeadingFontSize(heading.Groups[1].Value.Length));
+            ApplyStrongTypography(text);
             AddInlineContent(text.Inlines, heading.Groups[2].Value, openExternal);
             return text;
         }
 
         if (trimmed.StartsWith(">", StringComparison.Ordinal))
         {
-            var text = NewTextBlock(string.Empty, AppTypography.Scale(12));
+            var text = NewTextBlock(string.Empty, NoteTypography.FontSize);
             text.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
             AddInlineContent(text.Inlines, trimmed[1..].TrimStart(), openExternal);
             var host = new Border
             {
-                Margin = new Thickness(4, 3, 0, 3),
-                Padding = new Thickness(8, 4, 5, 4),
-                CornerRadius = new CornerRadius(4),
+                Margin = new Thickness(4, 0, 0, 0),
+                Padding = new Thickness(8, 0, 5, 0),
                 Child = text
             };
-            host.SetResourceReference(Border.BackgroundProperty, "HoverBrushKey");
             return host;
         }
 
@@ -764,7 +756,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
 
         var normal = NewTextBlock(string.Empty, NoteTypography.FontSize);
-        normal.Margin = new Thickness(0, 2, 0, 3);
         AddInlineContent(normal.Inlines, trimmed, openExternal);
         return normal;
     }
@@ -777,13 +768,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     {
         var grid = new Grid
         {
-            Margin = new Thickness(2, 2, 0, 2)
+            Margin = new Thickness(2, 0, 0, 0)
         };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
-        var markerText = NewTextBlock(marker, NoteTypography.FontSize - 2.5);
-        markerText.Width = marker.Length > 2 ? AppTypography.Scale(28) : AppTypography.Scale(22);
+        var markerText = NewTextBlock(marker, NoteTypography.FontSize);
+        markerText.Margin = new Thickness(0, 0, AppTypography.Scale(6), 0);
         markerText.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         grid.Children.Add(markerText);
 
@@ -802,28 +793,76 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     private static FrameworkElement BuildCodeBlock(string code)
     {
         var text = NewTextBlock(code, NoteTypography.CodeFontSize);
-        text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
-        text.LineHeight = AppTypography.Scale(16);
+        text.FontFamily = NoteTypography.CodeFontFamily;
         var host = new Border
         {
-            Margin = new Thickness(1, 4, 1, 4),
-            Padding = new Thickness(8, 6, 8, 6),
-            CornerRadius = new CornerRadius(5),
             Child = text
         };
         host.SetResourceReference(Border.BackgroundProperty, "HoverBrushKey");
         return host;
     }
 
-    private static TextBlock NewTextBlock(string text, double fontSize) => new()
+    private static TextBlock NewTextBlock(string text, double fontSize)
     {
-        Text = text,
-        FontFamily = NoteTypography.FontFamily,
-        FontSize = fontSize,
-        FontWeight = FontWeights.Normal,
-        TextWrapping = TextWrapping.Wrap,
-        LineHeight = Math.Max(fontSize + AppTypography.Scale(4), AppTypography.Scale(17))
+        var block = new TextBlock
+        {
+            Text = text,
+            FontFamily = NoteTypography.FontFamily,
+            FontSize = fontSize,
+            FontStyle = NoteTypography.FontStyle,
+            FontWeight = NoteTypography.FontWeight,
+            FontStretch = NoteTypography.FontStretch,
+            Language = NoteTypography.Language,
+            TextWrapping = TextWrapping.Wrap,
+            // AvalonEdit uses natural TextFormatter metrics; do not add a second line-height
+            // policy or per-source-line vertical margin on the lightweight preview.
+            LineHeight = double.NaN
+        };
+        block.SetResourceReference(TextBlock.ForegroundProperty, "TextBrushKey");
+        NoteTypography.ApplyTextRendering(block);
+        return block;
+    }
+
+    private static double HeadingFontSize(int level) => level switch
+    {
+        1 => NoteTypography.Heading1FontSize,
+        2 => NoteTypography.Heading2FontSize,
+        3 => NoteTypography.Heading3FontSize,
+        _ => NoteTypography.FontSize
     };
+
+    private static void ApplyStrongTypography(DependencyObject target)
+    {
+        target.SetValue(TextElement.FontFamilyProperty, AppTypography.FontFamilyFor(content: true, bold: true));
+        target.SetValue(TextElement.FontWeightProperty, AppTypography.UsesCustomBoldFace(true)
+            ? AppTypography.FontWeightFor(true)
+            : NoteTypography.HeadingFontWeight);
+    }
+
+    private static void ApplyTextZoom(DependencyObject element, double zoom)
+    {
+        // Compose per-paper zoom with the unrounded global size once, just as MarkdownTextBox
+        // does. Only local font sizes are scaled: inherited inline sizes must not be scaled twice.
+        if (element.ReadLocalValue(TextElement.FontSizeProperty) is double size)
+        {
+            element.SetValue(TextElement.FontSizeProperty, Math.Round(size * zoom, 1));
+        }
+        switch (element)
+        {
+            case TextBlock text:
+                foreach (Inline inline in text.Inlines) ApplyTextZoom(inline, zoom);
+                break;
+            case Span span:
+                foreach (Inline inline in span.Inlines) ApplyTextZoom(inline, zoom);
+                break;
+            case Panel panel:
+                foreach (UIElement child in panel.Children) ApplyTextZoom(child, zoom);
+                break;
+            case Decorator { Child: { } child }:
+                ApplyTextZoom(child, zoom);
+                break;
+        }
+    }
 
     private static void AddInlineContent(
         InlineCollection target,
@@ -887,9 +926,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 var group = match.Groups[5].Success ? 5 : 6;
                 var span = new Span
                 {
-                    FontWeight = FontWeights.Bold,
                     FontStyle = FontStyles.Italic
                 };
+                ApplyStrongTypography(span);
                 AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1, renderMode);
                 target.Add(span);
             }
@@ -897,6 +936,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 var group = match.Groups[7].Success ? 7 : 8;
                 var bold = new Bold();
+                ApplyStrongTypography(bold);
                 AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1, renderMode);
                 target.Add(bold);
             }
@@ -908,11 +948,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (match.Groups[10].Success)
             {
-                // CodeFontSize 已含全局缩放,直接用作字号:与下方代码块(BuildCodeBlock)及编辑器
-                // "行内代码与代码块同字号"约定一致。切勿再套 AppTypography.Scale,否则会二次缩放。
+                // CodeFontSize already contains global scaling; the block publication step adds
+                // only per-paper zoom and final rounding, for both inline and fenced code.
                 var code = new Span(new Run(Group(10)))
                 {
-                    FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+                    FontFamily = NoteTypography.CodeFontFamily,
                     FontSize = NoteTypography.CodeFontSize
                 };
                 code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
