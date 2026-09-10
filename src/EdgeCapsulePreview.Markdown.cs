@@ -1145,36 +1145,41 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return truncated;
     }
 
-    private static string PrepareInlineTextForMeasurement(string text)
+    private static string PrepareInlineTextForMeasurement(string text, int depth = 0)
     {
-        if (string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text) || depth >= MaximumInlineDepth)
         {
-            return text;
+            return MarkdownInlineSyntax.Unescape(text);
         }
 
+        // Use the renderer's same bounded inline grammar and escape mask. In Full mode the
+        // label is visible, not the link/image destination or emphasis delimiters. Building
+        // WPF inlines merely to estimate their text would put layout back on the hover path.
+        var scan = MarkdownInlineSyntax.MaskEscapedPunctuation(text);
         var builder = new StringBuilder(text.Length);
         var cursor = 0;
-        while (cursor < text.Length)
+        foreach (Match match in InlinePattern.Matches(scan))
         {
-            var start = MarkdownInlineSyntax.IndexOfUnescaped(text, '`', cursor);
-            if (start < 0)
+            builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..match.Index]));
+            var groupIndex = Enumerable.Range(1, 12).First(index => match.Groups[index].Success);
+            var group = match.Groups[groupIndex];
+            var value = text.Substring(group.Index, group.Length);
+            if (groupIndex == 1)
             {
-                builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..]));
-                break;
+                var label = MarkdownInlineSyntax.Unescape(value);
+                builder.Append(string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}");
             }
-
-            var end = MarkdownInlineSyntax.IndexOfUnescaped(text, '`', start + 1);
-            if (end < 0)
+            else if (groupIndex == 10)
             {
-                builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..]));
-                break;
+                builder.Append(value);
             }
-
-            builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..start]));
-            builder.Append(text.AsSpan(start + 1, end - start - 1));
-            cursor = end + 1;
+            else
+            {
+                builder.Append(PrepareInlineTextForMeasurement(value, depth + 1));
+            }
+            cursor = match.Index + match.Length;
         }
-
+        builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..]));
         return builder.ToString();
     }
 
