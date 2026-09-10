@@ -253,15 +253,18 @@ internal static class SkinChecks
             var image = Render(lens, 1); var bytes = Pixels(image);
             var i = (80 * image.PixelWidth + 120) * 4;
             var alpha = bytes[i + 3];
-            Program.Assert(alpha is >= 128 and <= 220, "lens has a visible veil, neither bare clear nor opaque");
-            foreach (var rear in new byte[] { 0, 255 })
+            // This is the requested clear variant, not the old opaque reading wash.
+            // Universal black/white-backdrop contrast is incompatible with clear glass;
+            // opaque/high-contrast fallback is still tested above in every palette.
+            Program.Assert(alpha is >= 40 and <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
+            foreach (var rear in mode == "dark" ? new byte[] { 0, 48 } : new byte[] { 200, 255 })
             {
                 byte Channel(int c) => (byte)Math.Min(255, bytes[i + c] + rear * (255 - alpha) / 255);
                 var background = Color.FromRgb(Channel(2), Channel(1), Channel(0));
                 Program.Assert(Contrast(((SolidColorBrush)Theme.TextBrush).Color, background) >= 4.5,
-                    "primary lens text remains readable over black/white rear content");
+                    "primary clear-lens text remains readable on its theme reference backdrops");
                 Program.Assert(Contrast(((SolidColorBrush)Theme.WeakTextBrush).Color, background) >= 3,
-                    "secondary lens text remains readable over black/white rear content");
+                    "secondary clear-lens text remains readable on its theme reference backdrops");
             }
             controller.State.PaperSkin = PaperSkins.Ceramic; Theme.Invalidate();
             var ceramic = new SkinBorder { Width = 240, Height = 160, CornerRadius = new CornerRadius(8),

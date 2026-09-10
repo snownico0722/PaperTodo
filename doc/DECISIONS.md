@@ -50,7 +50,8 @@
 | D-035 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-036 | 主题 / Window integration |
 | D-036 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-037 | 主题 / Window integration |
 | D-037 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
-| D-038 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental | 主题 / Rendering |
+| D-038 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental; sampling superseded by D-039 | 主题 / Rendering |
+| D-039 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Experimental | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1316,7 +1317,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-038 — 局部真实背景折射与截图排除的显式代价
 
-**Status:** Experimental
+**Status:** Experimental；整面采样与位移贴图由 D-039 替代，采样隐私、截图排除与生命周期边界继续适用。
 
 **Context:** 用户明确要求真实背景折射，拒绝只用透明度、高光或磨砂背景来近似。原 D-035 的不采样选择只继续适用于其他材质，不足以实现此要求。
 
@@ -1325,3 +1326,18 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Why / Consequences:** 排除自己避免了截图递归，不需显隐 HWND 或破坏输入和编辑器。成本是持续局部采样、SDR 色彩和可能的 GPU/CPU 同步开销，以及明确的捕获可见性限制；不是无代价的系统级材质。工作线程、单帧背压、尺寸预算、退出恢复 affinity 和静态回退保持边界可控。不扩展到 Edge、拖动胶囊、主胶囊或设置窗口。
 
 **Evidence:** `DesktopLensCapture`、`LensDisplacement`、`LiquidRefractionEffect`、`SkinBorder.Refraction`；`RefractionChecks` 验证真后窗颜色、同一捕获帧的零位移／折射结果差异、后窗动态更新、移动／缩放／收起与捕获资源生命周期。桌面证据停止 sampler 并保留最后真实帧后恢复截图可见性，不使用合成示意画面冒充实际结果。
+
+
+---
+
+## D-039 — 清透中心由桌面合成，窄边缘采样与非阻塞呈现
+
+**Status:** Experimental
+
+**Context:** 用户在实机反馈整面折射非常卡，重底色和中心放大不符合其 index-main 清透玻璃参考。已有单工作线程与单帧背压没有消除整面 GDI 回读、全尺寸位图上传和 UI 等待渲染锁的开销。
+
+**Decision:** 中心直接使用原生透明通道，只在四个非重叠窄边缘中采样和折射。参考 index-main 的向内 `(1-d/bezel)^1.5` 曲线，但在 shader 中解析计算，避免拖动尺寸时主线程生成位移贴图。源图显式绑定 sampler，避免先缩放进整面再二次裁切。最新帧由呈现节拍消费并零等待锁定；未变帧不上传，移动只调整 crop 并唤醒后台。不改 HWND、编辑器或 Edge 归属。
+
+**Trade-offs:** GDI 并未变成零拷贝 GPU capture；驱动慢时窄边缘仍可能滞后，但中心不再等待采样。保留 D-038 的截图排除限制。清透变体降低遮色，不再声称任意黑白背景都满足固定文字对比度；实色／高对比度回退保持可读性验证。HDR、多屏实机和高速拖动仍需真人验证。没有用降低整个 UI 帧率或冻结整张背景冒充优化。
+
+**Evidence:** `LensCaptureLayout`、`DesktopLensCapture`、`SkinBorder.Refraction`；`RefractionChecks` 检查边缘预算、中心零位移、同帧折射、静止不重复上传、真实背景更新和生命周期，并记录 CI 输入回调延迟（不当作实机 FPS）。`SkinChecks` 保留实色回退对比度检查，清透材质单独检查透明范围及主题参考背景。

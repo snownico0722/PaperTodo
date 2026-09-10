@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,40 +10,49 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
-/// <summary>Short-lived, local capture of the rectangle behind one expanded lens.
-/// No files, network, screen-wide history, cursor capture or UI-thread BitBlt. A single
-/// pending presentation is allowed. Failure never silently captures our own window.</summary>
+/// <summary>Local edge-only background sampling. Worker owns GDI, dispatcher owns WPF.
+/// One latest-frame mailbox; no Render-priority queue and no UI-thread capture/wait.
+/// Samples are neither saved nor uploaded. A changed exclusion lease stops capture.</summary>
 internal sealed class DesktopLensCapture : IDisposable
 {
-    internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
+    internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding, int Rim = 0);
+    internal sealed record Tile(LensCaptureLayout.Tile Layout, byte[] Pixels);
     internal sealed class Frame : IDisposable
     {
-        internal readonly byte[] Pixels;
-        internal readonly Int32Rect Bounds;
+        internal readonly Tile[] Tiles;
         internal readonly Region Geometry;
         private int _disposed;
-        internal Frame(byte[] pixels, Int32Rect bounds, Region geometry) => (Pixels, Bounds, Geometry) = (pixels, bounds, geometry);
-        public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) ArrayPool<byte>.Shared.Return(Pixels, clearArray: true); }
+        internal Frame(Tile[] tiles, Region geometry) => (Tiles, Geometry) = (tiles, geometry);
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            foreach (var tile in Tiles) ArrayPool<byte>.Shared.Return(tile.Pixels, clearArray: true);
+        }
     }
     private readonly IntPtr _hwnd;
     private readonly uint _oldAffinity;
     private readonly Dispatcher _dispatcher;
-    private readonly Action<Frame> _present;
     private readonly Action<Exception> _failed;
     private readonly CancellationTokenSource _cancel = new();
+    private readonly AutoResetEvent _wake = new(false);
     private readonly Task _worker;
     private Region _region;
-    private int _pending, _disposed;
+    private Frame? _latest;
+    private int _disposed;
+    private long _motionUntil, _captures, _published, _sampledPixels;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
+    internal long CaptureCount => Interlocked.Read(ref _captures);
+    internal long PublishedCount => Interlocked.Read(ref _published);
+    internal long SampledPixels => Interlocked.Read(ref _sampledPixels);
+    internal Frame? TakeLatest() => Interlocked.Exchange(ref _latest, null);
 
-    internal DesktopLensCapture(IntPtr hwnd, Region region, Dispatcher dispatcher,
-        Action<Frame> present, Action<Exception> failed)
+    internal DesktopLensCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             throw new PlatformNotSupportedException("Background exclusion requires Windows 10 2004 or later.");
         if (!GetWindowDisplayAffinity(hwnd, out _oldAffinity) || !SetWindowDisplayAffinity(hwnd, 0x11))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot exclude the lens from its own background.");
-        _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _present = present; _failed = failed;
+        _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _failed = failed;
         try
         {
             _worker = Task.Factory.StartNew(CaptureLoop, CancellationToken.None,
@@ -50,75 +60,111 @@ internal sealed class DesktopLensCapture : IDisposable
         }
         catch
         {
-            SetWindowDisplayAffinity(hwnd, _oldAffinity); _cancel.Dispose(); throw;
+            SetWindowDisplayAffinity(hwnd, _oldAffinity); _cancel.Dispose(); _wake.Dispose(); throw;
         }
     }
-    internal void SetRegion(Region region) => Volatile.Write(ref _region, region);
-
+    internal void SetRegion(Region region)
+    {
+        if (_region == region || IsStopped) return;
+        Volatile.Write(ref _region, region); MarkMoving();
+    }
+    internal void MarkMoving()
+    {
+        if (IsStopped) return;
+        Interlocked.Exchange(ref _motionUntil, Environment.TickCount64 + 160);
+        _wake.Set();
+    }
     private void CaptureLoop()
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        var surfaces = new CaptureSurface[4];
         try
         {
-            using var surface = new CaptureSurface();
-            DwmFlush(); // Finish exclusion before accepting the first source frame.
-            do
+            var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
+            var quiet = 0; var next = Environment.TickCount64;
+            LensCaptureLayout.Tile[]? oldLayout = null;
+            Region? oldGeometry = null;
+            DwmFlush(); // Exclusion is established before the first background sample.
+            while (!_cancel.IsCancellationRequested)
             {
-                if (_cancel.IsCancellationRequested) break;
-                if (Volatile.Read(ref _pending) != 0) continue;
-                var geometry = Volatile.Read(ref _region);
-                if (!GetWindowRect(_hwnd, out var r) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd)) continue;
-                if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
-                    throw new InvalidOperationException("Background exclusion was changed; stopping to prevent recursive feedback.");
-                var box = new Int32Rect(r.Left + geometry.OffsetX - geometry.Padding,
-                    r.Top + geometry.OffsetY - geometry.Padding,
-                    geometry.Width + geometry.Padding * 2, geometry.Height + geometry.Padding * 2);
-                var left = Math.Max(box.X, GetSystemMetrics(76)); var top = Math.Max(box.Y, GetSystemMetrics(77));
-                var right = Math.Min(box.X + box.Width, GetSystemMetrics(76) + GetSystemMetrics(78));
-                var bottom = Math.Min(box.Y + box.Height, GetSystemMetrics(77) + GetSystemMetrics(79));
-                if (right <= left || bottom <= top) continue;
-                box = new Int32Rect(left, top, right - left, bottom - top);
-                if ((long)box.Width * box.Height > 4_194_304 || box.Width > 8192 || box.Height > 8192)
-                    throw new InvalidOperationException("Lens capture exceeds its 4-megapixel surface budget.");
-                var frame = new Frame(surface.Read(box), box, geometry);
-                if (_cancel.IsCancellationRequested || _dispatcher.HasShutdownStarted) { frame.Dispose(); break; }
-                Interlocked.Exchange(ref _pending, 1);
-                try
+                var now = Environment.TickCount64;
+                var moving = now < Interlocked.Read(ref _motionUntil);
+                if (moving) next = Math.Min(next, now + 16);
+                if (now < next)
                 {
-                    var operation = _dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
-                    {
-                        try { if (!_cancel.IsCancellationRequested) _present(frame); }
-                        catch (Exception ex) when (ex is InvalidOperationException or ExternalException or ArgumentException)
-                        { if (!_cancel.IsCancellationRequested) _failed(ex); }
-                        finally { frame.Dispose(); Interlocked.Exchange(ref _pending, 0); }
-                    }));
-                    // Subscribe before checking: shutdown can abort between these operations.
-                    operation.Aborted += (_, _) => { frame.Dispose(); Interlocked.Exchange(ref _pending, 0); };
-                    if (operation.Status == DispatcherOperationStatus.Aborted)
-                    { frame.Dispose(); Interlocked.Exchange(ref _pending, 0); break; }
+                    if (WaitHandle.WaitAny(waits, (int)Math.Min(125, next - now)) == 0) break;
+                    continue;
                 }
-                catch { frame.Dispose(); Interlocked.Exchange(ref _pending, 0); throw; }
-            } while (!_cancel.Token.WaitHandle.WaitOne(16));
+                var started = Stopwatch.GetTimestamp();
+                var geometry = Volatile.Read(ref _region);
+                next = now + 33;
+                if (!TryGetBounds(_hwnd, out var window) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd)) continue;
+                if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
+                    throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
+                var desktop = new Int32Rect(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
+                var layout = LensCaptureLayout.Create(window, geometry, desktop);
+                if (layout.Length == 0) continue;
+                var changed = oldGeometry != geometry || oldLayout == null || !layout.AsSpan().SequenceEqual(oldLayout);
+                for (var i = 0; i < layout.Length; i++)
+                {
+                    surfaces[i] ??= new CaptureSurface();
+                    surfaces[i].Capture(layout[i]);
+                    Interlocked.Add(ref _sampledPixels, (long)layout[i].PixelWidth * layout[i].PixelHeight);
+                }
+                GdiFlush(); // One completion point for all four small strips, off the UI thread.
+                for (var i = 0; i < layout.Length; i++) changed |= surfaces[i].RememberChangedPixels();
+                Interlocked.Increment(ref _captures);
+                if (_cancel.IsCancellationRequested) break;
+                if (changed)
+                {
+                    var tiles = new Tile[layout.Length]; var count = 0;
+                    try
+                    {
+                        for (; count < tiles.Length; count++) tiles[count] = new Tile(layout[count], surfaces[count].Snapshot());
+                        var frame = new Frame(tiles, geometry);
+                        Interlocked.Exchange(ref _latest, frame)?.Dispose();
+                        Interlocked.Increment(ref _published);
+                    }
+                    catch
+                    {
+                        for (var i = 0; i < count; i++) ArrayPool<byte>.Shared.Return(tiles[i].Pixels, clearArray: true);
+                        throw;
+                    }
+                    quiet = 0; oldGeometry = geometry; oldLayout = layout;
+                }
+                else quiet++;
+                // Unchanged pixels never enter WPF. A still desktop gradually drops to
+                // low-rate change detection; motion wakes it. Expensive GDI drivers also
+                // get breathing room rather than a continuous GPU-readback loop.
+                var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                var interval = moving ? 16 : quiet >= 10 ? 125 : 33;
+                next = Environment.TickCount64 + Math.Max(1, (long)Math.Max(interval - elapsed, elapsed * .5));
+            }
         }
         catch (OperationCanceledException) when (_cancel.IsCancellationRequested) { }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or ExternalException)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or ExternalException or ArgumentException)
         {
             if (!_cancel.IsCancellationRequested && !_dispatcher.HasShutdownStarted)
             {
-                try { _dispatcher.BeginInvoke(new Action(() => { if (!_cancel.IsCancellationRequested) _failed(ex); })); }
-                catch (InvalidOperationException) { /* Dispatcher shutdown won the race. */ }
+                try { _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (!IsStopped) _failed(ex); })); }
+                catch (InvalidOperationException) { /* Dispatcher shutdown won. */ }
             }
         }
-        finally { if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi); }
+        finally
+        {
+            foreach (var surface in surfaces) surface?.Dispose();
+            if (IsStopped) Interlocked.Exchange(ref _latest, null)?.Dispose();
+            if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
+        }
     }
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cancel.Cancel();
-        // Do not overwrite a later affinity decision made by another component.
+        Interlocked.Exchange(ref _latest, null)?.Dispose();
         if (GetWindowDisplayAffinity(_hwnd, out var current) && current == 0x11)
             SetWindowDisplayAffinity(_hwnd, _oldAffinity);
-        _ = _worker.ContinueWith(_ => _cancel.Dispose(), CancellationToken.None,
+        _ = _worker.ContinueWith(_ => { _cancel.Dispose(); _wake.Dispose(); }, CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
     internal static bool TryGetBounds(IntPtr hwnd, out Int32Rect bounds)
@@ -128,39 +174,51 @@ internal sealed class DesktopLensCapture : IDisposable
     }
     internal static uint ReadAffinity(IntPtr hwnd) => GetWindowDisplayAffinity(hwnd, out var value) ? value : uint.MaxValue;
 
-    // Reused DIB/DCs belong to the capture worker. Alpha is ignored (WPF Bgr32),
-    // never passed from uninitialized GDI bytes into the window compositor.
     private sealed class CaptureSurface : IDisposable
     {
         private IntPtr _screen, _dc, _bitmap, _previous, _bits;
         private int _width, _height;
+        private byte[] _last = [];
         internal CaptureSurface()
         {
             _screen = GetDC(IntPtr.Zero);
             if (_screen != IntPtr.Zero) _dc = CreateCompatibleDC(_screen);
             if (_dc == IntPtr.Zero) { Dispose(); throw new Win32Exception(Marshal.GetLastWin32Error()); }
         }
-        internal byte[] Read(Int32Rect box)
+        internal void Capture(LensCaptureLayout.Tile tile)
         {
-            if (_width != box.Width || _height != box.Height)
+            if (_width != tile.PixelWidth || _height != tile.PixelHeight)
             {
                 ReleaseBitmap();
-                var info = new BitmapInfo { Size = 40, Width = box.Width, Height = -box.Height, Planes = 1, Bits = 32 };
+                var info = new BitmapInfo { Size = 40, Width = tile.PixelWidth, Height = -tile.PixelHeight, Planes = 1, Bits = 32 };
                 _bitmap = CreateDIBSection(_screen, ref info, 0, out _bits, IntPtr.Zero, 0);
                 if (_bitmap == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
                 _previous = SelectObject(_dc, _bitmap);
                 if (_previous == IntPtr.Zero || _previous == new IntPtr(-1))
                 { DeleteObject(_bitmap); _bitmap = _bits = IntPtr.Zero; throw new Win32Exception(Marshal.GetLastWin32Error()); }
-                _width = box.Width; _height = box.Height;
+                _width = tile.PixelWidth; _height = tile.PixelHeight;
             }
-            if (!BitBlt(_dc, 0, 0, box.Width, box.Height, _screen, box.X, box.Y, 0x40CC0020))
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            GdiFlush();
-            var bytes = ArrayPool<byte>.Shared.Rent(checked(box.Width * box.Height * 4));
-            Marshal.Copy(_bits, bytes, 0, box.Width * box.Height * 4); return bytes;
+            var b = tile.Bounds;
+            var ok = b.Width == _width && b.Height == _height
+                ? BitBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, 0x40CC0020)
+                : StretchBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, b.Width, b.Height, 0x40CC0020);
+            if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        internal unsafe bool RememberChangedPixels()
+        {
+            var pixels = new ReadOnlySpan<byte>((void*)_bits, checked(_width * _height * 4));
+            if (pixels.SequenceEqual(_last)) return false;
+            if (_last.Length != pixels.Length) _last = new byte[pixels.Length];
+            pixels.CopyTo(_last); return true;
+        }
+        internal byte[] Snapshot()
+        {
+            var bytes = ArrayPool<byte>.Shared.Rent(_last.Length);
+            _last.CopyTo(bytes, 0); return bytes;
         }
         private void ReleaseBitmap()
         {
+            Array.Clear(_last); _last = [];
             if (_bitmap == IntPtr.Zero) return;
             SelectObject(_dc, _previous); DeleteObject(_bitmap); _bitmap = _previous = _bits = IntPtr.Zero;
         }
@@ -192,6 +250,7 @@ internal sealed class DesktopLensCapture : IDisposable
     [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
     [DllImport("gdi32.dll", SetLastError = true)] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
     [DllImport("gdi32.dll", SetLastError = true)] private static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, uint operation);
+    [DllImport("gdi32.dll", SetLastError = true)] private static extern bool StretchBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, int sourceWidth, int sourceHeight, uint operation);
     [DllImport("gdi32.dll")] private static extern bool GdiFlush();
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
 }

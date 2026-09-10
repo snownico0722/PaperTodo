@@ -81,7 +81,7 @@ internal static class NativeSurfaceChecks
                         // A frosted Acrylic wash cannot pass this high-frequency contrast check.
                         var row = image.Height - 90;
                         var values = Enumerable.Range(image.Width / 2 - 32, 64).Select(x => image.GetPixel(x, row).R).ToArray();
-                        Program.Assert(values.Max() - values.Min() is >= 35 and <= 150,
+                        Program.Assert(values.Max() - values.Min() is >= 120 and <= 225,
                             $"{mode}: glass must retain rear detail AND a visible veil, neither opaque nor invisible ({values.Min()}..{values.Max()})");
                         Console.WriteLine($"CLEAR GLASS {mode}: sharp rear stripe range {values.Min()}..{values.Max()}");
                     }
@@ -98,7 +98,7 @@ internal static class NativeSurfaceChecks
                     using var final = Capture(paper, output, $"desktop-{skin}-{mode}-restored");
                     var row = final.Height - 90;
                     var values = Enumerable.Range(final.Width / 2 - 32, 64).Select(x => final.GetPixel(x, row).R).ToArray();
-                    Program.Assert(values.Max() - values.Min() is >= 35 and <= 150, "resizing/collapse preserves the visible translucent lens");
+                    Program.Assert(values.Max() - values.Min() is >= 120 and <= 225, "resizing/collapse preserves the visible translucent lens");
                 }
                 paper.CloseForReal(); paper = null;
             }
@@ -169,7 +169,7 @@ internal static class NativeSurfaceChecks
     }
     private static int Difference(D.Color a, D.Color b) =>
         Math.Max(Math.Abs(a.R - b.R), Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));
-    private static D.Bitmap Capture(Window window, string output, string name)
+    internal static D.Bitmap Capture(Window window, string? output, string name)
     {
         var surface = window is PaperWindow paper
             ? (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)! : null;
@@ -179,7 +179,11 @@ internal static class NativeSurfaceChecks
         Program.Assert(GetWindowRect(new WindowInteropHelper(window).Handle, out var r), "native bounds available");
         var image = new D.Bitmap(r.Right - r.Left, r.Bottom - r.Top);
         using (var g = D.Graphics.FromImage(image)) g.CopyFromScreen(r.Left, r.Top, 0, 0, image.Size);
-        image.Save(Path.Combine(output, name + ".png"), D.Imaging.ImageFormat.Png);
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            Directory.CreateDirectory(output);
+            image.Save(Path.Combine(output, name + ".png"), D.Imaging.ImageFormat.Png);
+        }
         return image;
     }
     private static void Wait()

@@ -9,21 +9,29 @@ using System.Windows.Media.Media3D;
 
 namespace PaperTodo;
 
-/// <summary>Distorts only the captured background visual, never the editor or controls.
-/// Shader Model 2 has a WPF software fallback; no shader compiler or SDK is shipped.</summary>
+/// <summary>One small optical strip, never a full-window intermediate. The source is an
+/// explicit sampler: do not first stretch a captured screenshot into the paper rectangle.
+/// Coordinates remain in full-surface DIPs, including across slice seams and mixed DPI.</summary>
 internal sealed class LiquidRefractionEffect : ShaderEffect
 {
-    internal static readonly DependencyProperty InputProperty = RegisterPixelShaderSamplerProperty("Input", typeof(LiquidRefractionEffect), 0);
-    internal static readonly DependencyProperty MapProperty = RegisterPixelShaderSamplerProperty(nameof(Map), typeof(LiquidRefractionEffect), 1);
-    internal static readonly DependencyProperty CropProperty = DependencyProperty.Register(nameof(Crop), typeof(Point4D), typeof(LiquidRefractionEffect), new UIPropertyMetadata(new Point4D(1, 1, 0, 0), PixelShaderConstantCallback(0)));
-    internal static readonly DependencyProperty ShiftProperty = DependencyProperty.Register(nameof(Shift), typeof(Point), typeof(LiquidRefractionEffect), new UIPropertyMetadata(new Point(), PixelShaderConstantCallback(1)));
-    internal static readonly DependencyProperty TintProperty = DependencyProperty.Register(nameof(Tint), typeof(Point4D), typeof(LiquidRefractionEffect), new UIPropertyMetadata(new Point4D(.965, .98, 1, .30), PixelShaderConstantCallback(2)));
-    internal static readonly DependencyProperty LightProperty = DependencyProperty.Register(nameof(Light), typeof(Point), typeof(LiquidRefractionEffect), new UIPropertyMetadata(new Point(.25, .05), PixelShaderConstantCallback(3)));
-    public Brush Map { get => (Brush)GetValue(MapProperty); set => SetValue(MapProperty, value); }
+    internal static readonly DependencyProperty SceneProperty = RegisterPixelShaderSamplerProperty(nameof(Scene), typeof(LiquidRefractionEffect), 0, SamplingMode.Bilinear);
+    internal static readonly DependencyProperty CropProperty = Constant(nameof(Crop), typeof(Point4D), new Point4D(1, 1, 0, 0), 0);
+    internal static readonly DependencyProperty ShiftProperty = Constant(nameof(Shift), typeof(Point), new Point(), 1);
+    internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.965, .98, 1, .18), 2);
+    internal static readonly DependencyProperty LightProperty = Constant(nameof(Light), typeof(Point), new Point(.24, .05), 3);
+    internal static readonly DependencyProperty ViewportProperty = Constant(nameof(Viewport), typeof(Point4D), new Point4D(1, 1, 0, 0), 4);
+    internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point), new Point(400, 340), 5);
+    internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
+    private static DependencyProperty Constant(string name, Type type, object value, int register) =>
+        DependencyProperty.Register(name, type, typeof(LiquidRefractionEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
+    public Brush Scene { get => (Brush)GetValue(SceneProperty); set => SetValue(SceneProperty, value); }
     public Point4D Crop { get => (Point4D)GetValue(CropProperty); set => SetValue(CropProperty, value); }
     public Point Shift { get => (Point)GetValue(ShiftProperty); set => SetValue(ShiftProperty, value); }
     public Point4D Tint { get => (Point4D)GetValue(TintProperty); set => SetValue(TintProperty, value); }
     public Point Light { get => (Point)GetValue(LightProperty); set => SetValue(LightProperty, value); }
+    public Point4D Viewport { get => (Point4D)GetValue(ViewportProperty); set => SetValue(ViewportProperty, value); }
+    public Point Extent { get => (Point)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
+    public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
     private static readonly Lazy<byte[]> Bytecode = new(Compile);
 
     internal LiquidRefractionEffect()
@@ -31,34 +39,49 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         var shader = new PixelShader();
         using (var stream = new MemoryStream(Bytecode.Value, false)) shader.SetStreamSource(stream);
         shader.Freeze(); PixelShader = shader;
-        UpdateShaderValue(InputProperty); UpdateShaderValue(MapProperty);
-        UpdateShaderValue(CropProperty); UpdateShaderValue(ShiftProperty);
-        UpdateShaderValue(TintProperty); UpdateShaderValue(LightProperty);
+        foreach (var property in new[] { SceneProperty, CropProperty, ShiftProperty, TintProperty,
+                     LightProperty, ViewportProperty, ExtentProperty, RadiiProperty }) UpdateShaderValue(property);
     }
 
-    // Captured image includes an overscan margin. Crop also compensates for motion between
-    // capture and presentation. Small dispersion is confined to displaced background pixels.
+    // Same inward (1-d/bezel)^1.5 profile as the reference, evaluated analytically.
+    // No animated displacement map, central magnification, or broad white frame.
+    // Alpha is premultiplied. Samples outside overscan become transparent instead of
+    // stretching stale pixels when dragging faster than the capture source can follow.
     private const string Source = """
         sampler2D scene : register(s0);
-        sampler2D lens : register(s1);
         float4 crop : register(c0);
         float2 shift : register(c1);
         float4 tint : register(c2);
         float2 light : register(c3);
+        float4 viewport : register(c4);
+        float2 extent : register(c5);
+        float4 radii : register(c6);
         float4 main(float2 uv : TEXCOORD) : COLOR {
-            float3 field = tex2D(lens, uv).rgb;
-            float2 normal = (field.rg * 255.0 - 128.0) / 127.0;
-            float2 delta = normal * shift;
-            float2 at = uv * crop.xy + crop.zw;
-            float3 color;
-            color.r = tex2D(scene, saturate(at + delta * 1.014)).r;
-            color.g = tex2D(scene, saturate(at + delta)).g;
-            color.b = tex2D(scene, saturate(at + delta * .986)).b;
-            float f = field.b;
-            float highlight = saturate(dot(-normal, light - uv) * 2.5 + .12);
+            float2 global = uv * viewport.xy + viewport.zw;
+            float2 side = step(.5, global);
+            float radius = lerp(lerp(radii.x, radii.y, side.x), lerp(radii.w, radii.z, side.x), side.y);
+            float2 p = (global - .5) * extent;
+            float2 q = abs(p) - extent * .5 + radius;
+            float2 outside = max(q, 0);
+            float len = length(outside);
+            float distance = radius - len - min(max(q.x, q.y), 0);
+            float bezel = min(18, min(extent.x, extent.y) * .5);
+            float rim = saturate(1 - distance / max(bezel, .001));
+            float horizontal = step(q.y, q.x);
+            float2 normal = lerp(float2(horizontal, 1-horizontal), outside / max(len, .0001), step(.0001, len)) * (side*2-1);
+            float2 delta = -normal * (rim * sqrt(rim)) * shift * (bezel / 18);
+            float2 at = uv * crop.xy + crop.zw + delta;
+            clip(float4(at, 1-at));
+            float coverage = saturate(rim * 5);
+            coverage = coverage * coverage * (3 - 2 * coverage);
+            float3 color = tex2D(scene, saturate(at)).rgb;
+            float luma = dot(color, float3(.2126, .7152, .0722));
+            color = lerp(luma.xxx, color, 1.18);
             color = lerp(color, tint.rgb, tint.a);
-            color = color * (1 - f * .12) + f * highlight * .58;
-            return float4(saturate(color), 1);
+            float sheen = rim * rim; sheen *= sheen; sheen *= sheen;
+            float lightness = saturate(dot(-normal, light-global) + .25);
+            color = color * (1 - sheen * .10) + sheen * (.07 + .19 * lightness);
+            return float4(saturate(color) * coverage, coverage);
         }
         """;
     private static byte[] Compile()

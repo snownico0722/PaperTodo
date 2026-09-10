@@ -1457,13 +1457,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>実際のデスクトップの細部が曲面の縁で屈折し、控えめな色分散と方向性のある光沢を加えます。本文は歪みません。リアルタイム屈折は展開した紙のみで、カプセルと設定は静的な素材です。Apple Liquid Glass の完全な再現ではありません。</value>
+    <value>透明なレンズ：中央はデスクトップを直接透過し、細い縁で内側へ屈折します。ハイライトはポインターに追従し、本文は変形しません。文字のコントラストは背景によって変わるため、複雑な背景には不透明なスキンを推奨します。リアルタイム屈折は展開した紙片のみ。カプセルと設定は静的表示です。Apple Liquid Glass の完全な再現ではありません。</value>
   </data>
   <data name="TipSkinCeramic" xml:space="preserve">
-    <value>クリーム色の磁器に、広い釉薬のハイライトと柔らかな立体陰影を加えます。不透明で配色に追従し、厚い内枠はありません。</value>
+    <value>温かみのある白い磁器、局所的な釉薬の光沢、薄く丸みのある縁の陰影。不透明で配色を反映し、太い内枠は加えません。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>氷青色のガラス、ぼかした2本の幅広い反射、細い光の縁がヘッダーと紙面をつなぎます。アクリルの透明度プリセットやWindows 7のテーマではありません。</value>
+    <value>落ち着いた青いガラス、柔らかな空の反射、細い縁の光がタイトルバーまで連続します。太い白い斜線は使いません。アクリルの透明度プリセットや Windows 7 のシステムテーマではありません。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>レトロなクエストパネル風。小さな段状の角、一重の外枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントです。</value>
