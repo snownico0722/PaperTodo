@@ -22,19 +22,25 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
     {
         var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
             context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
+        var textScale = MarkdownEdgeCapsulePreviewRenderer.EstimateTextScale(context.Paper.TextZoom);
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
             MarkdownEdgeCapsulePreviewRenderer.MeasureText(content),
             minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
-            maximum: 460);
+            maximum: 460,
+            fixedReserveWidthDip: 72,
+            bodyScale: textScale);
+        // The body loses host close/chrome 22 + view margins 19 + viewport margins 3.
+        // Keep the estimate lightweight, but account for the same font size and per-note zoom
+        // as rendering. Only the final card height is capped, not each admitted paragraph.
         var lines = MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(
             content,
-            Math.Max(72, width - 36));
+            Math.Max(1, width - 44) / textScale);
         var empty = content.IsEmpty;
         var height = empty
             ? 120
             : Math.Clamp(
-                74 + Math.Min(15, lines) * AppTypography.Scale(22),
+                74 + lines * AppTypography.Scale(22) * textScale,
                 150,
                 410);
         if (empty)
@@ -374,6 +380,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         @"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static double NormalizeTextZoom(double textZoom) =>
+        double.IsFinite(textZoom) ? Math.Clamp(textZoom, 0.5, 1.5) : 1.0;
+
+    internal static double EstimateTextScale(double textZoom) =>
+        Math.Round(NoteTypography.FontSize * NormalizeTextZoom(textZoom), 1) / AppTypography.Scale(14);
+
     public static string MeasureText(PreviewContent content)
     {
         var measured = new List<string>();
@@ -441,7 +453,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 var lines = EdgeCapsulePreviewMeasure.EstimateWrappedLines(
                     measurementText,
                     widthDip);
-                estimate += line.WasInsideFence ? Math.Min(3, lines) : Math.Min(4, lines);
+                estimate += lines;
             }
         }
         return Math.Max(1, estimate + (emptyCodeBlock ? 1 : 0));
@@ -489,9 +501,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             yield break;
         }
 
-        var zoom = double.IsFinite(textZoom) ? Math.Clamp(textZoom, 0.5, 1.5) : 1.0;
+        var zoom = NormalizeTextZoom(textZoom);
         var renderMode = content.RenderMode;
         var code = new StringBuilder();
+        var codeLineCount = 0;
+        Border? codeBlock = null;
         var insideFence = false;
         var renderedHeight = 0.0;
         var truncated = false;
@@ -504,6 +518,29 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 block.Measure(new Size(size.Width, double.PositiveInfinity));
                 renderedHeight += block.DesiredSize.Height;
+            }
+        }
+
+        void FlushCodeBlock()
+        {
+            if (codeBlock == null)
+            {
+                codeBlock = BuildCodeBlock(code.ToString());
+                AddBlock(codeBlock);
+                return;
+            }
+
+            // Reuse one attached block while measuring only its visible prefix. Waiting for the
+            // closing fence would scan every admitted code line and layout the invisible tail.
+            if (viewportSize.HasValue)
+            {
+                renderedHeight -= codeBlock.DesiredSize.Height;
+            }
+            ((TextBlock)codeBlock.Child).Text = code.ToString();
+            if (viewportSize is { } size)
+            {
+                codeBlock.Measure(new Size(size.Width, double.PositiveInfinity));
+                renderedHeight += codeBlock.DesiredSize.Height;
             }
         }
 
@@ -531,17 +568,23 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             else if (fenceKind == MarkdownFenceLineKind.Opening)
             {
                 code.Clear();
+                codeLineCount = 0;
+                codeBlock = null;
                 insideFence = true;
             }
             else if (fenceKind == MarkdownFenceLineKind.Closing)
             {
-                AddBlock(BuildCodeBlock(code.ToString()));
+                FlushCodeBlock();
                 code.Clear();
                 insideFence = false;
             }
             else if (wasInsideFence)
             {
-                var codeLineTruncated = AppendCodeLine(code, line);
+                var codeLineTruncated = AppendCodeLine(code, line, codeLineCount++ > 0);
+                if (viewportSize.HasValue)
+                {
+                    FlushCodeBlock();
+                }
                 if (codeLineTruncated)
                 {
                     truncated = true;
@@ -559,9 +602,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             yield return false;
         }
         if (renderMode == MarkdownRenderModes.Full &&
-            insideFence)
+            insideFence && codeBlock == null)
         {
-            AddBlock(BuildCodeBlock(code.ToString()));
+            FlushCodeBlock();
         }
         if (target.Children.Count == 0)
         {
@@ -822,7 +865,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return grid;
     }
 
-    private static FrameworkElement BuildCodeBlock(string code)
+    private static Border BuildCodeBlock(string code)
     {
         var text = NewTextBlock(code, NoteTypography.CodeFontSize);
         text.FontFamily = NoteTypography.CodeFontFamily;
@@ -1083,9 +1126,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
     }
 
-    private static bool AppendCodeLine(StringBuilder target, string line)
+    private static bool AppendCodeLine(StringBuilder target, string line, bool hasPreviousLine)
     {
-        var separatorLength = target.Length > 0 ? 1 : 0;
+        // StringBuilder.Length cannot distinguish no line from an empty first line.
+        var separatorLength = hasPreviousLine ? 1 : 0;
         var remaining = MaximumCodeCharacters - target.Length - separatorLength;
         if (remaining <= 0)
         {
