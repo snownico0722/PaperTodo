@@ -465,6 +465,95 @@ internal static partial class Program
             }
         });
 
+        check("Edge note sizing admits long wrapped paragraphs and scales only body typography", () =>
+        {
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            {
+                EdgeCapsulePreviewSize Describe(string source, double zoom) =>
+                    MarkdownEdgeCapsulePreviewProvider.Instance.Describe(new EdgeCapsulePreviewContext(
+                        new PaperData { TextZoom = zoom }, () => "笔记", false, () => source, () => mode,
+                        (_, _) => false, _ => false, () => new Style(), () => "", _ => { },
+                        new EdgeCapsulePreviewInvalidationSource())).Size;
+
+                var paragraph = new string('文', 700);
+                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(paragraph, mode);
+                Require(MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(content, 400) > 4,
+                    "an admitted paragraph is not capped at four visual lines");
+                Equal(410.0, Describe(paragraph, 1).HeightDip,
+                    "a long paragraph can request the maximum card height instead of premature clipping");
+                foreach (var zoom in new[] { 0.5, 1.0, 1.5 })
+                {
+                    Equal(410.0, Describe(new string('文', 6000), zoom).HeightDip,
+                        "only the final card limit caps sufficiently long wrapped content");
+                }
+
+                const string shortLine = "12345678901234567890";
+                Require(Describe(shortLine, 1.5).WidthDip > Describe(shortLine, 0.5).WidthDip,
+                    "per-note zoom participates in the body width request");
+                var rows = string.Join("\n", Enumerable.Repeat("短行", 6));
+                Require(Describe(rows, 1.5).HeightDip > Describe(rows, 0.5).HeightDip,
+                    "per-note zoom participates in the body height request");
+                Equal(Describe("", 0.5), Describe("", 1.5), "note zoom does not scale title or empty-state geometry");
+                Equal(Describe(shortLine, 1), Describe(shortLine, double.NaN), "invalid zoom uses the renderer's default");
+                Equal(Describe(rows, 0.5), Describe(rows, 0.1), "small zoom uses the renderer's lower bound");
+                Equal(Describe(rows, 1.5), Describe(rows, 3), "large zoom uses the renderer's upper bound");
+            }
+        });
+
+        check("Edge Full code preserves leading and trailing blank lines with or without a viewport", () =>
+        {
+            foreach (var code in new[] { "", "\n\n", "\n\nalpha\n\nbeta\n" })
+            {
+                var source = "```\n" + code + "\n```";
+                foreach (var viewport in new Size?[] { null, new Size(300, 340) })
+                {
+                    var panel = new StackPanel();
+                    Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(
+                        panel, source, _ => { }, MarkdownRenderModes.Full, viewport),
+                        "a fitting code block does not report omitted content");
+                    Equal(1, panel.Children.Count, "incremental code remains one block at its closing fence");
+                    Equal(code, ((TextBlock)((Border)panel.Children[0]).Child).Text,
+                        "empty source lines are not confused with an unstarted code buffer");
+                }
+            }
+        });
+
+        check("Edge Full code stops at the viewport before scanning its invisible fence tail", () =>
+        {
+            foreach (var line in new[] { "code", "" })
+            foreach (var closed in new[] { false, true })
+            {
+                var source = "```\n" + string.Join("\n", Enumerable.Repeat(line, 1000)) +
+                    "\nINVISIBLE_TAIL" + (closed ? "\n```" : "");
+                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
+                var eager = new StackPanel();
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { });
+                var fullText = ((TextBlock)((Border)eager.Children[0]).Child).Text;
+                foreach (var size in new[] { new Size(180, 120), new Size(420, 340) })
+                foreach (var zoom in new[] { 0.5, 1.5 })
+                {
+                    var panel = new StackPanel();
+                    var steps = 0;
+                    var truncated = false;
+                    foreach (var value in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, content, _ => { }, size, zoom))
+                    {
+                        steps++;
+                        truncated = value;
+                    }
+                    Require(truncated, "omitted code is reported to the overflow indicator");
+                    Require(steps < 100 && steps < content.Lines.Count,
+                        "work stops near the visible bottom, not at the thousand-line closing fence");
+                    Equal(1, panel.Children.Count, "unfinished visible fence is not emitted twice");
+                    var shown = ((TextBlock)((Border)panel.Children[0]).Child).Text;
+                    Require(fullText.StartsWith(shown, StringComparison.Ordinal), "visible code remains an exact prefix");
+                    Require(!shown.Contains("INVISIBLE_TAIL"), "hidden code is not laid out");
+                    panel.Measure(new Size(size.Width, double.PositiveInfinity));
+                    Require(panel.DesiredSize.Height >= size.Height, "the prefix still covers the visible viewport");
+                    Console.WriteLine($"  Edge code {size} zoom={zoom} closed={closed} blank={line.Length == 0}: {content.Lines.Count} -> {steps} steps");
+                }
+            }
+        });
+
         RunEdgePreviewAppearanceChecks(check);
     }
 
