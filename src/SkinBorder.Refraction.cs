@@ -190,8 +190,6 @@ internal sealed partial class SkinBorder
             slice.Visual.Offset = new Vector(target.X / dpi.DpiScaleX, target.Y / dpi.DpiScaleY);
             if (slice.Visual.ContentBounds.Size != size)
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
-            slice.Effect.Viewport = new Point4D(target.Width / (ActualWidth * dpi.DpiScaleX), target.Height / (ActualHeight * dpi.DpiScaleY),
-                target.X / (ActualWidth * dpi.DpiScaleX), target.Y / (ActualHeight * dpi.DpiScaleY));
             var metrics = GlassMetrics.For(RenderSize, _dark);
             slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel), 1);
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
@@ -207,7 +205,8 @@ internal sealed partial class SkinBorder
             slice.Effect.Scattering = new Point4D(
                 Math.Max(metrics.Blur * dpi.DpiScaleX * 1.8 / bounds.Width, 1d / tile.PixelWidth),
                 Math.Max(metrics.Blur * dpi.DpiScaleY * 1.8 / bounds.Height, 1d / tile.PixelHeight), metrics.Saturation, 0);
-            slice.Effect.Tint = LiquidTint;
+            var tint = LiquidTint;
+            slice.Effect.Tint = new Point4D(tint.X * tint.W, tint.Y * tint.W, tint.Z * tint.W, 1 - tint.W);
             slice.Effect.Light = _lensLight.Center;
         }
         _cropDirty = false;

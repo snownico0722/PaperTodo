@@ -17,9 +17,8 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     internal static readonly DependencyProperty ProfileProperty = RegisterPixelShaderSamplerProperty(nameof(Profile), typeof(LiquidRefractionEffect), 1, SamplingMode.Bilinear);
     internal static readonly DependencyProperty CropProperty = Constant(nameof(Crop), typeof(Point4D), new Point4D(1, 1, 0, 0), 0);
     internal static readonly DependencyProperty ShiftProperty = Constant(nameof(Shift), typeof(Point), new Point(), 1);
-    internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.965, .98, 1, .18), 2);
+    internal static readonly DependencyProperty TintProperty = Constant(nameof(Tint), typeof(Point4D), new Point4D(.1737, .1764, .18, .82), 2);
     internal static readonly DependencyProperty LightProperty = Constant(nameof(Light), typeof(Point), new Point(.24, .05), 3);
-    internal static readonly DependencyProperty ViewportProperty = Constant(nameof(Viewport), typeof(Point4D), new Point4D(1, 1, 0, 0), 4);
     internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point4D), new Point4D(400, 340, 1d / 18, 1), 5);
     internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
     internal static readonly DependencyProperty ScatteringProperty = Constant(nameof(Scattering), typeof(Point4D), new Point4D(), 7);
@@ -31,7 +30,6 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     public Point Shift { get => (Point)GetValue(ShiftProperty); set => SetValue(ShiftProperty, value); }
     public Point4D Tint { get => (Point4D)GetValue(TintProperty); set => SetValue(TintProperty, value); }
     public Point Light { get => (Point)GetValue(LightProperty); set => SetValue(LightProperty, value); }
-    public Point4D Viewport { get => (Point4D)GetValue(ViewportProperty); set => SetValue(ViewportProperty, value); }
     public Point4D Extent { get => (Point4D)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
     public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
     public Point4D Scattering { get => (Point4D)GetValue(ScatteringProperty); set => SetValue(ScatteringProperty, value); }
@@ -44,7 +42,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         shader.Freeze(); PixelShader = shader;
         Profile = LensDisplacement.ProfileBrush;
         foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty, TintProperty,
-                     LightProperty, ViewportProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
+                     LightProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
     }
 
     // Every background pixel gets the same light scattering and color treatment. The
@@ -58,12 +56,11 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         float2 shift : register(c1);
         float4 tint : register(c2);
         float2 light : register(c3);
-        float4 viewport : register(c4);
         float4 extent : register(c5);
         float4 radii : register(c6);
         float4 scattering : register(c7);
         float4 main(float2 uv : TEXCOORD) : COLOR {
-            float2 global = uv * viewport.xy + viewport.zw;
+            float2 global = uv;
             float2 side = step(.5, global);
             float radius = lerp(lerp(radii.x, radii.y, side.x), lerp(radii.w, radii.z, side.x), side.y);
             float2 p = (global - .5) * extent.xy;
@@ -84,10 +81,12 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
                 + tex2D(scene, at + spread * float2(1,-1)).rgb
                 + tex2D(scene, at + spread * float2(-1,1)).rgb) * .15;
             color = lerp(dot(color, float3(.2126,.7152,.0722)), color, scattering.z);
-            color = lerp(color, tint.rgb, tint.a);
+            // Tint RGB is premultiplied on the CPU; A is transmission. This keeps
+            // the whole effect within ps_2_0, including WPF software rendering.
+            color = color * tint.a + tint.rgb;
             float lightness = saturate(dot(-normal, light-global) + .35);
             float sheen = optical.b * (.06 + .24 * lightness);
-            color = color * (1 - optical.g * .025) + sheen;
+            color += sheen;
             return float4(saturate(color), 1);
         }
         """;
