@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -5,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -41,16 +43,17 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
             width = Math.Max(130, width);
         }
 
+        MarkdownEdgeCapsulePreviewView? view = null;
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, height),
-            size => new MarkdownEdgeCapsulePreviewView(context, size));
+            size => view = new MarkdownEdgeCapsulePreviewView(context, size),
+            visible => view?.SetPreviewActive(visible));
     }
 }
 
 internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
 {
     private readonly TextBlock _title;
-    private readonly StackPanel _body;
     private readonly MarkdownEdgeCapsulePreviewViewport _viewport;
 
     public MarkdownEdgeCapsulePreviewView(
@@ -79,8 +82,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         heading.Children.Add(_title);
         Children.Add(heading);
 
-        _body = new StackPanel();
-        _viewport = new MarkdownEdgeCapsulePreviewViewport(_body)
+        _viewport = new MarkdownEdgeCapsulePreviewViewport(new StackPanel())
         {
             Margin = new Thickness(1, 0, 2, 0)
         };
@@ -90,26 +92,32 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         InitializeLiveContent();
     }
 
+    internal void SetPreviewActive(bool active) => _viewport.SetPreviewActive(active);
+
     protected override void RebuildContent()
     {
         var title = Context.Title;
         _title.Text = title;
         _title.ToolTip = title;
+        // Capture once on the owning Dispatcher. Deferred work never rereads a different paper
+        // or mutable editor halfway through a build, and never touches WPF on a worker thread.
         var markdown = Context.ReadMarkdownText();
         var renderMode = Context.ReadMarkdownRenderMode();
-        _viewport.SetContent(size => MarkdownEdgeCapsulePreviewRenderer.RenderInto(
-            _body, markdown, Context.OpenExternal, renderMode, size));
+        _viewport.SetContent((target, size) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
+            target, markdown, Context.OpenExternal, renderMode, size));
     }
 }
 
 internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 {
-    private readonly StackPanel _body;
+    private StackPanel _body;
     private readonly TextBlock _overflowIndicator;
     private readonly RectangleGeometry _bodyClip = new();
     private bool _sourceTruncated;
-    private Func<Size, bool>? _renderContent;
+    private bool _previewActive = true;
+    private Func<Panel, Size, IEnumerable<bool>>? _renderContent;
     private Size? _renderedSize;
+    private long _renderVersion;
 
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
@@ -127,35 +135,44 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         _overflowIndicator.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         Children.Add(_body);
         Children.Add(_overflowIndicator);
+        Loaded += (_, _) => InvalidateArrange();
+        Unloaded += (_, _) => InvalidateContentBuild();
+        IsVisibleChanged += (_, _) => InvalidateContentBuild();
     }
 
-    public void SetContent(Func<Size, bool> renderContent)
+    public void SetContent(Func<Panel, Size, IEnumerable<bool>> renderContent)
     {
         _renderContent = renderContent;
-        _renderedSize = null;
-        InvalidateMeasure();
+        InvalidateContentBuild();
     }
+
+    internal void SetPreviewActive(bool active)
+    {
+        if (_previewActive == active)
+        {
+            return;
+        }
+        _previewActive = active;
+        // The host can still be visible while the old card retracts. Stop its pending work at
+        // the existing preview visibility boundary, rather than waiting for WPF Unloaded.
+        InvalidateContentBuild();
+    }
+
+    private void InvalidateContentBuild()
+    {
+        _renderVersion++;
+        _renderedSize = null;
+        InvalidateArrange();
+    }
+
+    private bool IsBuildCurrent(long version) =>
+        version == _renderVersion && _previewActive && IsLoaded && IsVisible &&
+        !Dispatcher.HasShutdownStarted;
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        // The host keeps the content at its final size during the shell animation. Wait for
-        // that real layout constraint, then retain the excerpt until content or size changes.
-        if (_renderContent != null && _renderedSize != availableSize)
-        {
-            _renderedSize = availableSize;
-            try
-            {
-                _sourceTruncated = _renderContent(availableSize);
-            }
-            catch
-            {
-                // Keep an optional preview failure out of the WPF layout boundary. Like the
-                // live view, retry only on a later invalidation, not on every layout pass.
-                _body.Children.Clear();
-                _sourceTruncated = true;
-            }
-        }
-
+        // Only measure already-published content. Markdown creation must not be pulled back
+        // into shell layout by UpdateLayout, native handoff, or a new animation frame.
         var naturalSize = new Size(availableSize.Width, double.PositiveInfinity);
         _body.Measure(naturalSize);
         _overflowIndicator.Measure(naturalSize);
@@ -166,8 +183,6 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        // The card only shows its top excerpt. Use the actual body height so blank source
-        // lines cannot consume a fixed line budget and leave usable card space empty.
         var overflow = _sourceTruncated || _body.DesiredSize.Height > finalSize.Height;
         var indicatorHeight = overflow ? Math.Min(finalSize.Height, _overflowIndicator.DesiredSize.Height) : 0;
         var visibleHeight = finalSize.Height - indicatorHeight;
@@ -175,7 +190,98 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         _body.Arrange(new Rect(0, 0, finalSize.Width, _body.DesiredSize.Height));
         _overflowIndicator.Opacity = overflow ? 1 : 0;
         _overflowIndicator.Arrange(new Rect(0, visibleHeight, finalSize.Width, indicatorHeight));
+
+        if (_renderContent != null && _previewActive && IsLoaded && IsVisible &&
+            _renderedSize != finalSize && finalSize.Width > 0 && finalSize.Height > 0)
+        {
+            _renderedSize = finalSize;
+            BuildContentAsync(_renderContent, finalSize, ++_renderVersion);
+        }
         return finalSize;
+    }
+
+    private async void BuildContentAsync(
+        Func<Panel, Size, IEnumerable<bool>> renderContent,
+        Size size,
+        long version)
+    {
+        StackPanel? staging = null;
+        try
+        {
+            // Yield even before creating the iterator: shell layout/Render and input have higher
+            // priority. Moving one monolithic RenderInto to Background would still block them.
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (!IsBuildCurrent(version))
+            {
+                return;
+            }
+
+            staging = new StackPanel { Opacity = 0, IsHitTestVisible = false };
+            // Inherit the real host's resources and DPI while preparing, without participating
+            // in its Measure/Arrange or exposing partially built text. No bitmap/second HWND.
+            Children.Add(staging);
+            var truncated = false;
+            var batchSteps = 0;
+            var batchStarted = Stopwatch.GetTimestamp();
+            using (var steps = renderContent(staging, size).GetEnumerator())
+            {
+                while (IsBuildCurrent(version) && steps.MoveNext())
+                {
+                    if (!IsBuildCurrent(version))
+                    {
+                        return;
+                    }
+                    truncated = steps.Current;
+                    // This is a cooperative budget, not a hard deadline: one bounded paragraph
+                    // can still take longer. Yield inside long code fences too, one source line
+                    // per step, instead of accumulating an entire fence in a single batch.
+                    if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
+                    {
+                        await Dispatcher.Yield(DispatcherPriority.Background);
+                        batchSteps = 0;
+                        batchStarted = Stopwatch.GetTimestamp();
+                    }
+                }
+            }
+            if (!IsBuildCurrent(version))
+            {
+                return;
+            }
+
+            // Child blocks have already been measured at this exact width. Keep this root
+            // attached when publishing so inherited resources/DPI do not invalidate that work.
+            staging.Measure(new Size(size.Width, double.PositiveInfinity));
+            if (!IsBuildCurrent(version))
+            {
+                return;
+            }
+            Children.Remove(_body);
+            _body = staging;
+            staging = null;
+            _body.Clip = _bodyClip;
+            _body.Opacity = 1;
+            _body.IsHitTestVisible = true;
+            _sourceTruncated = truncated;
+            InvalidateMeasure();
+        }
+        catch (Exception ex)
+        {
+            // Preserve an already-published excerpt on an optional refresh failure. No automatic
+            // retry at the same size; a later content/visibility/size invalidation can recover.
+            if (IsBuildCurrent(version))
+            {
+                _sourceTruncated |= _body.Children.Count == 0;
+                InvalidateArrange();
+            }
+            Trace.TraceWarning("Edge note preview rendering failed: {0}", ex.GetType().Name);
+        }
+        finally
+        {
+            if (staging != null)
+            {
+                Children.Remove(staging);
+            }
+        }
     }
 }
 
@@ -302,11 +408,29 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string renderMode = MarkdownRenderModes.Full,
         Size? viewportSize = null)
     {
+        var truncated = false;
+        foreach (var sourceTruncated in RenderSteps(target, markdown, openExternal, renderMode, viewportSize))
+        {
+            truncated = sourceTruncated;
+        }
+        return truncated;
+    }
+
+    // One step consumes at most one bounded source line; the last value reports source
+    // truncation. Synchronous checks and cooperative live rendering use this same renderer.
+    public static IEnumerable<bool> RenderSteps(
+        Panel target,
+        string? markdown,
+        Action<string> openExternal,
+        string renderMode = MarkdownRenderModes.Full,
+        Size? viewportSize = null)
+    {
         target.Children.Clear();
         if (string.IsNullOrWhiteSpace(markdown))
         {
             AddEmptyState(target);
-            return false;
+            yield return false;
+            yield break;
         }
 
         var code = new StringBuilder();
@@ -389,6 +513,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 truncated = true;
                 break;
             }
+            yield return false;
         }
         if (renderMode == MarkdownRenderModes.Full &&
             (fencedCodeState.IsInside || code.Length > 0) &&
@@ -405,7 +530,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             AddEmptyState(target);
         }
-        return truncated;
+        yield return truncated;
     }
 
     private static void AddEmptyState(Panel target)

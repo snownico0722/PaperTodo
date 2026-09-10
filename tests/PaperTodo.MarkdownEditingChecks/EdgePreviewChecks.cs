@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using PaperTodo;
 
 internal static partial class Program
@@ -133,6 +134,7 @@ internal static partial class Program
                     mode = renderMode;
                     invalidation.Invalidate();
                     Pump();
+                    body = viewport.Children.OfType<StackPanel>().Single();
                     Require(!EdgePreviewElements(view).OfType<ScrollViewer>().Any(), "note preview has no scrolling surface in any mode");
                     var clip = body.Clip.Bounds;
                     var last = (FrameworkElement)body.Children[^1];
@@ -145,6 +147,7 @@ internal static partial class Program
                     var top = first.TranslatePoint(new Point(), viewport);
                     viewport.InvalidateMeasure();
                     Pump();
+                    Require(ReferenceEquals(body, viewport.Children.OfType<StackPanel>().Single()), "same-size layout reuses the published tree");
                     Require(ReferenceEquals(first, body.Children[0]), "same-size layout reuses the rendered excerpt");
                     first.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, -120)
                     {
@@ -158,6 +161,7 @@ internal static partial class Program
                 source = string.Join("\n\n", Enumerable.Range(1, 10).Select(i => $"正文 {i}"));
                 invalidation.Invalidate();
                 Pump();
+                body = viewport.Children.OfType<StackPanel>().Single();
                 var finalParagraph = (FrameworkElement)body.Children[^1];
                 Require(EdgePreviewText(finalParagraph).Contains("正文 10"), "blank lines do not exhaust an arbitrary visible block count");
                 Require(finalParagraph.TranslatePoint(new Point(0, finalParagraph.ActualHeight), viewport).Y <= body.Clip.Bounds.Bottom,
@@ -169,6 +173,7 @@ internal static partial class Program
                 Equal(1.0, indicator.Opacity, "a smaller viewport recomputes overflow");
                 window.Height = 410;
                 Pump();
+                body = viewport.Children.OfType<StackPanel>().Single();
                 Equal(0.0, indicator.Opacity, "restoring space removes the overflow indicator");
                 Require(EdgePreviewText(body).Contains("正文 10"), "growing the viewport restores the previously hidden tail");
                 source = "";
@@ -231,22 +236,168 @@ internal static partial class Program
 
         check("Edge note preview layout contains render failures and retries on invalidation", () =>
         {
-            var body = new StackPanel();
-            var viewport = new MarkdownEdgeCapsulePreviewViewport(body);
+            var viewport = new MarkdownEdgeCapsulePreviewViewport(new StackPanel());
             var attempts = 0;
-            viewport.SetContent(_ => { attempts++; throw new InvalidOperationException("optional preview"); });
+            viewport.SetContent((_, _) => { attempts++; throw new InvalidOperationException("optional preview"); });
             var size = new Size(300, 180);
             viewport.Measure(size);
             viewport.Arrange(new Rect(size));
-            viewport.InvalidateMeasure();
-            viewport.Measure(size);
-            Equal(1, attempts, "failed rendering is not repeated on every measure");
-            viewport.SetContent(bounds => MarkdownEdgeCapsulePreviewRenderer.RenderInto(
-                body, "恢复内容", _ => { }, MarkdownRenderModes.Full, bounds));
-            viewport.Measure(size);
-            viewport.Arrange(new Rect(size));
-            Require(EdgePreviewText(body).Contains("恢复内容"), "new content can recover after an optional failure");
-            Equal(0.0, viewport.Children.OfType<TextBlock>().Single().Opacity, "recovery clears stale overflow");
+            Equal(0, attempts, "detached layout never invokes the content factory");
+            var window = new Window { Content = viewport, Width = 300, Height = 180, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                Pump();
+                viewport.InvalidateMeasure();
+                Pump();
+                Equal(1, attempts, "failed rendering is not repeated on every measure");
+                viewport.SetContent((target, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
+                    target, "恢复内容", _ => { }, MarkdownRenderModes.Full, bounds));
+                Pump();
+                var body = viewport.Children.OfType<StackPanel>().Single();
+                Require(EdgePreviewText(body).Contains("恢复内容"), "new content can recover after an optional failure");
+                Equal(0.0, viewport.Children.OfType<TextBlock>().Single().Opacity, "recovery clears stale overflow");
+                viewport.SetContent((_, _) => throw new InvalidOperationException("refresh failed"));
+                Pump();
+                Require(ReferenceEquals(body, viewport.Children.OfType<StackPanel>().Single()), "failed refresh preserves the published excerpt");
+            }
+            finally
+            {
+                window.Close();
+                Pump();
+            }
+        });
+
+        check("Edge note preview yields to input without rendering in shell layout or publishing partial text", () =>
+        {
+            var source = string.Join("\n", Enumerable.Repeat("**正文** [链接](https://example.com)", 200));
+            var original = new StackPanel();
+            var viewport = new MarkdownEdgeCapsulePreviewViewport(original);
+            var stepped = 0;
+            var inputRan = false;
+            IEnumerable<bool> ObserveRender(Panel target, Size size)
+            {
+                foreach (var truncated in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(target, source, _ => { }, MarkdownRenderModes.Full, size))
+                {
+                    if (++stepped == 1)
+                    {
+                        viewport.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+                        {
+                            inputRan = true;
+                            Require(stepped <= 4, "input runs before the next rendering batch");
+                            Equal(0, original.Children.Count, "partial content does not replace the published tree");
+                            Equal(0.0, target.Opacity, "staging content remains invisible");
+                            Require(!target.IsHitTestVisible, "staging links cannot receive input");
+                            Require(viewport.ActualWidth > 0 && viewport.ActualHeight > 0, "shell already has a usable layout");
+                            var before = stepped;
+                            viewport.InvalidateMeasure();
+                            viewport.UpdateLayout();
+                            Equal(before, stepped, "forced shell layout does not advance Markdown rendering");
+                        }));
+                    }
+                    yield return truncated;
+                }
+            }
+            viewport.SetContent(ObserveRender);
+            viewport.Measure(new Size(400, 340));
+            viewport.Arrange(new Rect(0, 0, 400, 340));
+            Equal(0, stepped, "initial Measure/Arrange does no Markdown work");
+            var window = new Window { Content = viewport, Width = 420, Height = 380, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                Pump();
+                Require(inputRan && stepped > 4, "real Markdown rendering spans multiple dispatcher turns");
+                var body = viewport.Children.OfType<StackPanel>().Single();
+                var expected = new StackPanel();
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(expected, source, _ => { }, MarkdownRenderModes.Full,
+                    new Size(viewport.ActualWidth, viewport.ActualHeight));
+                Equal(EdgePreviewText(expected), EdgePreviewText(body), "atomic publication matches synchronous rendering");
+                Equal(1.0, body.Opacity, "completed excerpt is visible");
+            }
+            finally
+            {
+                window.Close();
+                Pump();
+            }
+        });
+
+        check("Edge note preview cancels stale content, retraction and unloaded builds", () =>
+        {
+            foreach (var boundary in new[] { "replace", "retract", "unload" })
+            {
+                var original = new StackPanel();
+                var viewport = new MarkdownEdgeCapsulePreviewViewport(original);
+                var window = new Window { Content = viewport, Width = 420, Height = 380, ShowInTaskbar = false };
+                var stepped = 0;
+                var disposed = false;
+                IEnumerable<bool> OldRender(Panel target, Size size)
+                {
+                    try
+                    {
+                        var source = string.Join("\n", Enumerable.Repeat("旧内容", 200));
+                        foreach (var truncated in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(target, source, _ => { }, MarkdownRenderModes.Full, size))
+                        {
+                            if (++stepped == 1)
+                            {
+                                viewport.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+                                {
+                                    if (boundary == "replace")
+                                        viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "新内容", _ => { }, MarkdownRenderModes.Full, bounds));
+                                    else if (boundary == "retract")
+                                        viewport.SetPreviewActive(false);
+                                    else
+                                        window.Content = null;
+                                }));
+                            }
+                            yield return truncated;
+                        }
+                    }
+                    finally { disposed = true; }
+                }
+                viewport.SetContent(OldRender);
+                try
+                {
+                    window.Show();
+                    Pump();
+                    Require(stepped is > 0 and <= 4 && disposed, $"{boundary} stops and disposes the old iterator");
+                    var body = viewport.Children.OfType<StackPanel>().Single();
+                    Require(!EdgePreviewText(body).Contains("旧内容"), $"{boundary} never publishes a late result");
+                    if (boundary == "replace")
+                    {
+                        Require(EdgePreviewText(body).Contains("新内容"), "replacement wins over the older asynchronous task");
+                    }
+                    else
+                    {
+                        Require(ReferenceEquals(original, body), "cancelled build keeps the prior published surface");
+                        viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "恢复", _ => { }, MarkdownRenderModes.Full, bounds));
+                        viewport.SetPreviewActive(true);
+                        window.Content = viewport;
+                        Pump();
+                        Require(EdgePreviewText(viewport).Contains("恢复"), "reactivation and reattachment can prepare fresh content");
+                    }
+                }
+                finally
+                {
+                    window.Close();
+                    Pump();
+                }
+            }
+        });
+
+        check("Edge note preview yields while scanning a long fenced block", () =>
+        {
+            var source = "```\n" + string.Join("\n", Enumerable.Repeat("code", 100)) + "\n```";
+            var panel = new StackPanel();
+            using var steps = MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, source, _ => { }).GetEnumerator();
+            for (var i = 0; i < 4; i++)
+            {
+                Require(steps.MoveNext(), "each fence source line is a separate step");
+                Equal(0, panel.Children.Count, "initial steps do not scan and build the whole code fence");
+            }
+            while (steps.MoveNext()) { }
+            Equal(1, panel.Children.Count, "completed fence remains one formatted code block");
+            Require(EdgePreviewText(panel).Contains("code"), "code content survives cooperative preparation");
         });
 
         check("Edge note preview still bounds pathological documents", () =>
