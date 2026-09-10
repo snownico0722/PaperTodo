@@ -52,6 +52,7 @@
 | D-037 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
 | D-038 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental; sampling superseded by D-039 | 主题 / Rendering |
 | D-039 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Experimental | 主题 / Rendering |
+| D-040 | Aero 独立模糊与材质光照分层 | Experimental | 主题 / Rendering |
 
 ## 维护规则
 

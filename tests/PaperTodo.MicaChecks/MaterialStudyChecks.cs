@@ -17,7 +17,7 @@ internal static class MaterialStudyChecks
         var output = Environment.GetEnvironmentVariable("PAPER_SKIN_CAPTURE");
         if (string.IsNullOrWhiteSpace(output)) return;
         var rear = new Window { Left = 20, Top = 20, Width = 720, Height = 550,
-            WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, Topmost = true,
             Background = RearSurface() };
         PaperWindow? window = null;
         try
@@ -44,6 +44,20 @@ internal static class MaterialStudyChecks
                 using (NativeSurfaceChecks.Capture(window, output, $"study-{skin}-{mode}")) { }
                 if (skin == PaperSkins.Aero)
                 {
+                    // A successful private API return does not prove visible blur: test
+                    // actual background response before accepting an Aero screenshot.
+                    var background = rear.Background;
+                    rear.Background = Brushes.White; Wait(150);
+                    using var white = NativeSurfaceChecks.Capture(window, output, $"study-aero-{mode}-white-control");
+                    rear.Background = Brushes.RoyalBlue; Wait(150);
+                    using var blue = NativeSurfaceChecks.Capture(window, output, $"study-aero-{mode}-blue-control");
+                    var wp = white.GetPixel(340, 260); var bp = blue.GetPixel(340, 260);
+                    Console.WriteLine($"AERO REAR {mode}: white={wp}; blue={bp}");
+                    Program.Assert(mode != "light" || Math.Min(wp.R, Math.Min(wp.G, wp.B)) > 130,
+                        "light Aero must not turn a genuine white rear window into a black underlay");
+                    Program.Assert(Math.Abs(wp.R-bp.R) + Math.Abs(wp.G-bp.G) + Math.Abs(wp.B-bp.B) > 50,
+                        "Aero must visibly respond to the controlled rear window, not an opaque native fallback");
+                    rear.Background = background; Wait(100);
                     var brush = (LinearGradientBrush)typeof(SkinBorder).GetField("_aeroReflection", Program.Private)!.GetValue(surface)!;
                     var shift = (TranslateTransform)brush.Transform;
                     var oldX = shift.X; var width = brush.EndPoint.X - brush.StartPoint.X;

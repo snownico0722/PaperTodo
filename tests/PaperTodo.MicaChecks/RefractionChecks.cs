@@ -15,7 +15,7 @@ internal static class RefractionChecks
             controller.State.EnableAnimations, controller.State.LiquidGlassRefraction, controller.State.UseCapsuleMode);
         PaperWindow? window = null;
         var rear = new Window { Left = 20, Top = 20, Width = 680, Height = 510, WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, Background = Grid(0) };
+            ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, Topmost = true, Background = Grid(0) };
         try
         {
             controller.State.PaperSkin = PaperSkins.LiquidGlass; controller.State.Theme = "light";
@@ -39,8 +39,8 @@ internal static class RefractionChecks
                 using var flatDesktop = NativeSurfaceChecks.Capture(window, Output, "lens-desktop-flat-control");
                 surface.SetRefractionStrengthForEvidence(1); Wait(80);
                 var a = Pixels(bent); var b = Pixels(flat); var changed = 0;
-                // Test both empty shoulders: the inward reference profile can sample a
-                // uniform grid cell on one side at this phase. Tint/light stay identical.
+                // Both shoulders contain multiple calibration edges inside the optical
+                // footprint. Tint/light and the captured frame stay identical.
                 for (var y = 180; y < 290; y++) for (var x = 4; x < bent.PixelWidth - 4; x++)
                 {
                     if (x >= 28 && x < bent.PixelWidth - 28) continue;
@@ -224,8 +224,10 @@ internal static class RefractionChecks
         {
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(235, 245, 251)), null, new Rect(0, 0, 680, 510));
             var pen = new Pen(new SolidColorBrush(Color.FromRgb(24, 97, 150)), 2);
-            for (var x = -30 + phase % 24; x < 680; x += 24) dc.DrawLine(pen, new Point(x, 0), new Point(x, 510));
-            for (var y = -30 + phase % 24; y < 510; y += 24) dc.DrawLine(pen, new Point(0, y), new Point(680, y));
+            // Twelve-pixel cells exercise a curved 18-DIP shoulder at multiple distances;
+            // the earlier 24px grid could place both sides entirely inside flat cells.
+            for (var x = -18 + phase % 12; x < 680; x += 12) dc.DrawLine(pen, new Point(x, 0), new Point(x, 510));
+            for (var y = -18 + phase % 12; y < 510; y += 12) dc.DrawLine(pen, new Point(0, y), new Point(680, y));
         }
         drawing.Freeze(); var brush = new DrawingBrush(drawing) { Stretch = Stretch.Fill }; brush.Freeze(); return brush;
     }
