@@ -108,7 +108,7 @@ internal static partial class Program
             var paper = new PaperData { Type = PaperTypes.Todo };
             for (var i = 0; i < 30; i++)
                 paper.Items.Add(new PaperItem { Id = $"item-{i}", Text = $"待办 {i}", Order = i });
-            paper.Items[0].LinkedPaperId = "linked-paper";
+            paper.Items[0].LinkPaper("linked-paper");
             var invalidation = new EdgeCapsulePreviewInvalidationSource();
             string? toggled = null;
             string? opened = null;

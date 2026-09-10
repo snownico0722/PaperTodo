@@ -217,7 +217,6 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         };
         _title.SetResourceReference(TextBlock.ForegroundProperty, "TextBrushKey");
         heading.Children.Add(_title);
-        Children.Add(heading);
 
         _summary = new TextBlock
         {
