@@ -512,7 +512,7 @@ internal static partial class Program
                         panel, source, _ => { }, MarkdownRenderModes.Full, viewport),
                         "a fitting code block does not report omitted content");
                     Equal(1, panel.Children.Count, "incremental code remains one block at its closing fence");
-                    Equal(code, ((TextBlock)((Border)panel.Children[0]).Child).Text,
+                    Equal(code, EdgePreviewCodeText(panel),
                         "empty source lines are not confused with an unstarted code buffer");
                 }
             }
@@ -528,7 +528,7 @@ internal static partial class Program
                 var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
                 var eager = new StackPanel();
                 MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { });
-                var fullText = ((TextBlock)((Border)eager.Children[0]).Child).Text;
+                var fullText = EdgePreviewCodeText(eager);
                 foreach (var size in new[] { new Size(180, 120), new Size(420, 340) })
                 foreach (var zoom in new[] { 0.5, 1.5 })
                 {
@@ -544,7 +544,7 @@ internal static partial class Program
                     Require(steps < 100 && steps < content.Lines.Count,
                         "work stops near the visible bottom, not at the thousand-line closing fence");
                     Equal(1, panel.Children.Count, "unfinished visible fence is not emitted twice");
-                    var shown = ((TextBlock)((Border)panel.Children[0]).Child).Text;
+                    var shown = EdgePreviewCodeText(panel);
                     Require(fullText.StartsWith(shown, StringComparison.Ordinal), "visible code remains an exact prefix");
                     Require(!shown.Contains("INVISIBLE_TAIL"), "hidden code is not laid out");
                     panel.Measure(new Size(size.Width, double.PositiveInfinity));
@@ -555,6 +555,14 @@ internal static partial class Program
         });
 
         RunEdgePreviewAppearanceChecks(check);
+    }
+
+    private static string EdgePreviewCodeText(Panel panel)
+    {
+        // Before first Measure, inline edits need not update TextBlock.Text. Inspect the actual
+        // text container, not that cached property, and normalize only its newline convention.
+        return EdgePreviewText(((Border)panel.Children[0]).Child)
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
     private static IEnumerable<DependencyObject> EdgePreviewElements(DependencyObject element)
