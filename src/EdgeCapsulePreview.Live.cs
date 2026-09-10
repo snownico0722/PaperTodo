@@ -126,6 +126,7 @@ internal abstract class EdgeCapsuleLivePreviewView : Grid
             Context.InvalidationSource.Invalidated -= _invalidationHandler;
             _invalidationHandler = null;
         }
+        _invalidationHandler = null;
         _subscribed = false;
     }
 
@@ -233,8 +234,11 @@ internal static class EdgeCapsulePreviewMeasure
         string? body,
         double minimum,
         double maximum,
-        double fixedReserveWidthDip)
+        double fixedReserveWidthDip,
+        double bodyScale = 1.0)
     {
+        // Note zoom changes the body, not the UI title or the fixed chrome. Other providers
+        // retain the existing estimate by leaving bodyScale at one.
         var longest = Math.Max(
             DisplayWidth(title),
             (body ?? string.Empty)
@@ -243,7 +247,7 @@ internal static class EdgeCapsulePreviewMeasure
                 .Take(32)
                 .Select(DisplayWidth)
                 .DefaultIfEmpty(0)
-                .Max());
+                .Max() * bodyScale);
         var desired = Math.Max(0, fixedReserveWidthDip) +
             Math.Min(64, longest) * ApproximateGlyphWidthDip;
         return Math.Clamp(Math.Ceiling(desired), minimum, maximum);
