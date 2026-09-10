@@ -36,9 +36,11 @@ internal sealed partial class SkinBorder
             case PaperSkins.Aero:
                 // Aero needs colored transmission and bounded specular bands. Mixing
                 // blue into opaque white paper and stacking a broad white wash made milk.
-                var glass = Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(30, 103, 156), .90);
+                var glass = opaque
+                    ? Mix(paper, _dark ? Color.FromRgb(25, 53, 73) : Color.FromRgb(111, 171, 205), .18)
+                    : Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(30, 103, 156), .90);
                 var top = Mix(glass, Colors.White, .10);
-                var low = Mix(glass, Color.FromRgb(12, 39, 66), .25);
+                var low = Mix(glass, Color.FromRgb(12, 39, 66), opaque ? .06 : .25);
                 var density = GlassMetrics.For(RenderSize, _dark).Tint;
                 byte a = opaque ? (byte)255 : (byte)Math.Round((_dark ? 72 : 32) + (density - (_dark ? .32 : .17)) * 120);
                 _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
