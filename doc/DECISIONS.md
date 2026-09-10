@@ -1346,12 +1346,14 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-040 — Aero 独立清透模糊 recipe 与材质光照分层
+## D-040 — Aero 低染色模糊 recipe 与材质光照分层
 
 **Status:** Experimental
 
 **Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
 
-**Decision:** Aero 的内部 `aeroGlass` recipe 在现有 adapter 内使用 accent clean blur（state=3），不叠加 system backdrop，由 WPF 染色一次并绘制固定逻辑尺寸、轻微位置视差的反光。与 Clear Acrylic 的 state=4 共享低层接口和清理，不复制状态 owner。接口不公开，任一步失败仍回退不透明表面；原标准云母／亚克力接法不改。陶瓷用不透明漫反射底、局部清釉反光和缓存的法线边缘照明，不新增采样或材质定时器。
+**Decision:** Aero 的内部 `aeroGlass` recipe 在现有 adapter 内使用低中性色 alpha 的兼容 accent blur（state=4），不叠加 system backdrop，主要染色由 WPF 统一绘制并绘制固定逻辑尺寸、轻微位置视差的反光。与 Clear Acrylic 的 state=4 共享低层接口和清理，不复制状态 owner。接口不公开，任一步失败仍回退不透明表面；原标准云母／亚克力接法不改。陶瓷用不透明漫反射底、局部清釉反光和缓存的法线边缘照明，不新增采样或材质定时器。
+
+**Rejected:** 在受控白色后窗上，旧 state=3 纯模糊 API 返回成功但最终桌面为固定黑底；不能以 HRESULT 成功认定有效。不将这条接法作为当前 Aero 后端。CI 若所有透明模糊均被系统抑制，只有独立的标准 Acrylic 后窗对照也失败时，才跳过透色比较；浅色不得黑底的检查始终执行。
 
 **Evidence / Limits:** `Program` 验证 Aero／Acrylic 双向切换、失败清理和 alpha 互斥；`MaterialStudyChecks` 检查曲面数据、开口、视差生命周期和最终桌面截图。`RefractionChecks` 验证 LUT 系数、真实后窗曲面位移和静止解绑。参考 Apple WWDC25 “Meet Liquid Glass”、Kube 的 Snell/squircle 原创演示、Google Filament clear-coat 分层以及 DWMBlurGlass 的 Aero 反射／视差描述；实现为独立编写，未复制第三方材质纹理或代码，不声称 Apple 或 Windows 7 像素级复现。

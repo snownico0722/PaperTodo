@@ -73,9 +73,11 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark) =>
         SetAccent(hwnd, enabled ? 4 : 0, dark ? 0x30282120u : 0x28FFFFFFu);
 
-    // Same isolated accent API, but no Acrylic noise/luminosity/exclusion recipe.
-    // Tint lives in the WPF material so the header and body receive it exactly once.
-    public int SetAeroGlass(IntPtr hwnd, bool dark) => SetAccent(hwnd, 3, 0);
+    // State 3 can return success yet render solid black on current Windows builds.
+    // Use the compatible accent-blur path with a minimal neutral tint instead of the
+    // standard system Acrylic recipe. Colored glass and reflections belong to WPF.
+    public int SetAeroGlass(IntPtr hwnd, bool dark) =>
+        SetAccent(hwnd, 4, dark ? 0x08000000u : 0x08FFFFFFu);
 
     private unsafe int SetAccent(IntPtr hwnd, int state, uint color)
     {
@@ -84,7 +86,7 @@ internal sealed class DwmMicaApi : INativeMicaApi
         // GradientColor is AABBGGRR; nonzero alpha is required for Acrylic blur.
         var policy = new AccentPolicy
         {
-            State = state, // 3: clean blur, 4: Acrylic, 0: disabled
+            State = state, // 4: compatible accent blur, 0: disabled
             Color = color
         };
         var data = new CompositionAttributeData

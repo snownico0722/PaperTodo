@@ -1463,7 +1463,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Opaque ivory porcelain with localized clear-coat reflections and continuously rounded edge lighting. Dark mode uses a deep glaze. Palette-aware, without a paper-like wash or nested frames.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Clean background blur, one blue tint and glass reflections with movement parallax. Reflection width does not stretch with the window; the header is continuous. Uses an undocumented system blur API with an opaque fallback on failure. Not standard Acrylic or a Windows 7 system theme.</value>
+    <value>Low-tint native blur, a blue glass surface and glass reflections with movement parallax. Reflection width does not stretch with the window; the header is continuous. Uses an undocumented system blur API with an opaque fallback on failure. Not standard Acrylic or a Windows 7 system theme.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>

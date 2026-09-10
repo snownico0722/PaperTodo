@@ -26,7 +26,7 @@ internal static class SkinChecks
             Program.Assert(PaperSkins.UsesNativeBackdrop(id) && PaperSkins.NativeBackdrop(id) == MicaBackdropTypes.Acrylic, "supported Acrylic recipe");
         Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.LiquidGlass) == NativeMicaBackdrop.ClearGlassMaterial,
             "liquid glass no longer maps to frosted Acrylic");
-        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero uses clean native blur rather than system Acrylic");
+        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero uses low-tint accent blur rather than the standard system recipe");
         CheckPersistence();
         var resources = new ResourceManager("PaperTodo.Resources.Strings", typeof(Strings).Assembly);
         foreach (var culture in new[] { "", "en", "ja", "ko" })

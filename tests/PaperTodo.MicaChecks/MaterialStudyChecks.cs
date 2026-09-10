@@ -55,8 +55,22 @@ internal static class MaterialStudyChecks
                     Console.WriteLine($"AERO REAR {mode}: white={wp}; blue={bp}");
                     Program.Assert(mode != "light" || Math.Min(wp.R, Math.Min(wp.G, wp.B)) > 130,
                         "light Aero must not turn a genuine white rear window into a black underlay");
-                    Program.Assert(Math.Abs(wp.R-bp.R) + Math.Abs(wp.G-bp.G) + Math.Abs(wp.B-bp.B) > 50,
-                        "Aero must visibly respond to the controlled rear window, not an opaque native fallback");
+                    var response = Math.Abs(wp.R-bp.R) + Math.Abs(wp.G-bp.G) + Math.Abs(wp.B-bp.B);
+                    if (response <= 50)
+                    {
+                        // Hosted Server can suppress all blur transparency. Only skip if
+                        // the independent, documented system Acrylic control also does.
+                        controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate(); window.UpdateTheme();
+                        rear.Background = Brushes.White; Wait(150);
+                        using var systemWhite = NativeSurfaceChecks.Capture(window, output, $"study-system-{mode}-white-control");
+                        rear.Background = Brushes.RoyalBlue; Wait(150);
+                        using var systemBlue = NativeSurfaceChecks.Capture(window, output, $"study-system-{mode}-blue-control");
+                        var sw = systemWhite.GetPixel(340, 260); var sb = systemBlue.GetPixel(340, 260);
+                        Program.Assert(Math.Abs(sw.R-sb.R) + Math.Abs(sw.G-sb.G) + Math.Abs(sw.B-sb.B) <= 10,
+                            "Aero transparency failed while the documented system blur control responds normally");
+                        Console.WriteLine($"SKIP Aero rear-color comparison: system control also suppresses transparency ({sw}/{sb}); native Windows 11 appearance still requires manual acceptance.");
+                        controller.State.PaperSkin = PaperSkins.Aero; Theme.Invalidate(); window.UpdateTheme();
+                    }
                     rear.Background = background; Wait(100);
                     var brush = (LinearGradientBrush)typeof(SkinBorder).GetField("_aeroReflection", Program.Private)!.GetValue(surface)!;
                     var shift = (TranslateTransform)brush.Transform;

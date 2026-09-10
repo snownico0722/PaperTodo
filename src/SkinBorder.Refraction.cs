@@ -121,7 +121,9 @@ internal sealed partial class SkinBorder
             if (_cropDirty) UpdateRefractionCrop();
             // New frames wake us via one coalesced Background-priority notification.
             // An idle Rendering handler otherwise keeps WPF composition awake forever.
-            if (_pendingFrame == null && !_cropDirty && _renderingSubscribed)
+            // Missing/offscreen geometry also waits for a new frame or move notification,
+            // not an unproductive render loop while there is nothing to present.
+            if (_pendingFrame == null && _renderingSubscribed)
             {
                 CompositionTarget.Rendering -= OnRefractionRendering;
                 _renderingSubscribed = false;

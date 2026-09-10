@@ -161,7 +161,7 @@ internal static class NativeSurfaceChecks
                 $"{name}: positive control exposes the hostile native caption ({before} / {exposed})");
             if (Theme.Skin == PaperSkins.Aero)
                 Program.Assert(DwmMicaApi.Instance.SetAeroGlass(hwnd, Theme.IsDark) >= 0,
-                    "restore the actual clean-blur Aero recipe for the negative control");
+                    "restore the actual low-tint Aero recipe for the negative control");
             Program.Assert(DwmMicaApi.Instance.SetRedirectionAlpha(hwnd, true) >= 0 &&
                 DwmMicaApi.Instance.ExtendFrame(hwnd, 0) >= 0, "restoring tested redirection alpha");
             Program.Assert(DwmSetWindowAttribute(hwnd, 35, ref sentinel, 4) >= 0, "same caption sentinel reapplied");
