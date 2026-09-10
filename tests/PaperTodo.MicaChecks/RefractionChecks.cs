@@ -39,14 +39,20 @@ internal static class RefractionChecks
                 using var flatDesktop = NativeSurfaceChecks.Capture(window, Output, "lens-desktop-flat-control");
                 surface.SetRefractionStrengthForEvidence(1); Wait(80);
                 var a = Pixels(bent); var b = Pixels(flat); var changed = 0;
-                // Empty text-free shoulder: only the background sampling offset differs.
-                for (var y = 180; y < 290; y++) for (var x = 4; x < 28; x++)
+                // Test both empty shoulders: the inward reference profile can sample a
+                // uniform grid cell on one side at this phase. Tint/light stay identical.
+                for (var y = 180; y < 290; y++) for (var x = 4; x < bent.PixelWidth - 4; x++)
                 {
+                    if (x >= 28 && x < bent.PixelWidth - 28) continue;
                     var i = (y * bent.PixelWidth + x) * 4;
                     if (Math.Abs(a[i] - b[i]) + Math.Abs(a[i + 1] - b[i + 1]) + Math.Abs(a[i + 2] - b[i + 2]) > 30) changed++;
                 }
                 Console.WriteLine($"REFRACTION changed shoulder pixels={changed}; shader tier={RenderCapability.Tier >> 16}");
                 Program.Assert(changed > 250, "actual captured grid bends, not just a changed highlight/tint");
+                for (var y = 180; y < 290; y++)
+                    Program.Assert(a.AsSpan((y * bent.PixelWidth + 32) * 4, (bent.PixelWidth - 64) * 4)
+                        .SequenceEqual(b.AsSpan((y * flat.PixelWidth + 32) * 4, (flat.PixelWidth - 64) * 4)),
+                        "refraction strength never warps or repaints the clear center");
                 Program.Assert(DesktopLensCapture.ReadAffinity(hwnd) == 0, "evidence uses last genuine frame with screenshot visibility restored");
             }
             var count = surface.RefractionFrameCount;
