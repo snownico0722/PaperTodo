@@ -185,7 +185,7 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 内置 Markdown Note 的编辑态和浏览态复用同一个 `MarkdownTextBox`，通过 interaction/presentation 状态切换，而不是维护两套正文 surface。
 
-普通浮动纸片的失焦标题栏由 `PaperWindow.ExperimentalFocusPresentation` 管理：保留原始 HWND 和 shell 布局，在阴影外层使用 `InactiveTitleBarMask` 淡出标题栏区域。完全隐藏区的最终像素 alpha 为零，由分层窗口命中机制允许点击穿透；布局变化只更新遮罩边界，窗口位置保存不受失焦状态抑制。此路径仅适用于 `AllowsTransparency` 窗口，折叠、隐藏和 Snap 等边界会移除遮罩。
+普通浮动纸片的失焦标题栏由 `PaperWindow.ExperimentalFocusPresentation` 管理：保留原始 HWND 和 shell 布局，`PaperChromeBorder` 只将无内容的背景 Border 收短，并在阴影生成之前裁剪标题内容，形成完整的圆角、描边和阴影。正文保持原位置与尺寸；完全透明区由分层窗口命中机制允许点击穿透，原窗口边缘的缩放区域不会移入正文。此路径仅适用于 `AllowsTransparency` 窗口，折叠、隐藏和 Snap 等边界会恢复完整外框。
 
 ### 5.2 Provider / session 分层
 
