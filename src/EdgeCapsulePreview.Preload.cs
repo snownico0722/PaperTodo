@@ -9,10 +9,8 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
-// Dispatcher-local, disposable speculative work. Never a new preview/animation authority.
-// Only content that already qualifies for the renderer's expensive prepared-paragraph path is
-// retained. There is deliberately no paper-count/LRU cap: light notes do not enter this cache,
-// while heavy notes keep one current excerpt/body each until invalidated or their window closes.
+// Dispatcher-local, discardable prelayout of eligible edge notes. This cache never owns
+// presentation, input or persistence. One current body per source, with no count-based eviction.
 internal sealed class MarkdownEdgePreviewPreload
 {
     private static readonly ConditionalWeakTable<Dispatcher, MarkdownEdgePreviewPreload> Instances = new();
@@ -20,30 +18,27 @@ internal sealed class MarkdownEdgePreviewPreload
         Instances.GetValue(dispatcher, value => new(value));
 
     private readonly Dispatcher _dispatcher;
-    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Excerpt> _excerpts = new();
-    private readonly LinkedList<Body> _bodies = new();
-    // Kept only for the same-binary diagnostic that proves text-only warming is not generally
-    // useful. Product scheduling does not call RequestText.
-    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<EdgeCapsulePreviewContext?>> _pendingText = new();
-    private readonly LinkedList<(EdgeCapsulePreviewInvalidationSource Source, Func<Target?> Read)> _pendingLayout = new();
+    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, MarkdownEdgeCapsulePreviewRenderer.PreviewContent> _excerpts = new();
+    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Body> _bodies = new();
+    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<Target?>> _pendingLayout = new();
     private readonly DispatcherTimer _debounce;
     private CancellationTokenSource? _work;
-    private long _clock;
+    private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
     internal int ExcerptCount => _excerpts.Count;
     internal int BodyCount => _bodies.Count;
-    internal int PendingCount => _pendingText.Count + _pendingLayout.Count;
+    internal int PendingCount => _pendingLayout.Count;
     internal long BodyHits { get; private set; }
     internal long WarmCompletions { get; private set; }
 
     internal sealed record Target(EdgeCapsulePreviewContext Context, Panel Anchor,
         EdgeCapsulePreviewSize Size, Func<bool> StillEligible);
-    private sealed record Excerpt(MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, long Touched);
     internal sealed record Binding(MarkdownEdgePreviewPreload Owner,
         EdgeCapsulePreviewInvalidationSource Source, long Version,
         MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom)
     {
-        internal bool Current => Source.Version == Version;
+        internal bool Current => Owner._enabled && Source.Version == Version &&
+            Owner._excerpts.TryGetValue(Source, out var current) && ReferenceEquals(current, Content);
     }
     internal sealed record Key(Binding Binding, Size Size, DpiScale Dpi, string Appearance);
     internal sealed record Body(Key Key, StackPanel Panel, bool Truncated);
@@ -84,9 +79,10 @@ internal sealed class MarkdownEdgePreviewPreload
             }
             else
             {
-                foreach (var piece in content.Inlines.Get(line.Text, content.RenderMode).Pieces)
+                foreach (var piece in content.Inlines.Get(line.Text, MarkdownRenderModes.Full).Pieces)
                 {
-                    if (piece.Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None && piece.Link == null)
+                    // Count semantic content, never Enhanced-mode delimiter/URL styling.
+                    if ((piece.Style & ~MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) == 0 && piece.Link == null)
                         continue;
                     styledCharacters += piece.Text.Length;
                     styledPieces++;
@@ -106,27 +102,20 @@ internal sealed class MarkdownEdgePreviewPreload
             context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
         if (!_enabled) return candidate;
         var source = context.InvalidationSource;
-        if (!IsClearlyHighLoad(candidate))
-        {
-            _excerpts.Remove(source);
-            ForgetBodies(source);
-            return candidate;
-        }
+        // Compare the bounded source BEFORE classifying: unchanged previews must not reparse.
         if (_excerpts.TryGetValue(source, out var entry) &&
-            entry.Content.RenderMode == candidate.RenderMode && entry.Content.Truncated == candidate.Truncated &&
-            entry.Content.Lines.SequenceEqual(candidate.Lines))
-        {
-            _excerpts[source] = entry with { Touched = ++_clock };
-            return entry.Content;
-        }
-        ForgetBodies(source);
-        _excerpts[source] = new(candidate, ++_clock);
+            entry.RenderMode == candidate.RenderMode && entry.Truncated == candidate.Truncated &&
+            entry.Lines.SequenceEqual(candidate.Lines)) return entry;
+        _bodies.Remove(source);
+        _excerpts.Remove(source);
+        if (IsClearlyHighLoad(candidate)) _excerpts[source] = candidate;
         return candidate;
     }
 
     internal Binding? Bind(EdgeCapsulePreviewContext context,
         MarkdownEdgeCapsulePreviewRenderer.PreviewContent content, double zoom) =>
-        _enabled ? new(this, context.InvalidationSource, context.InvalidationSource.Version, content, zoom) : null;
+        _enabled && _excerpts.TryGetValue(context.InvalidationSource, out var entry) && ReferenceEquals(entry, content)
+            ? new(this, context.InvalidationSource, context.InvalidationSource.Version, content, zoom) : null;
 
     internal static Key? MakeKey(Binding? binding, FrameworkElement surface, Size size)
     {
@@ -143,7 +132,8 @@ internal sealed class MarkdownEdgePreviewPreload
                 !brush.Transform.Value.IsIdentity || !brush.RelativeTransform.Value.IsIdentity) return null;
             stamps.Add(brush.Color + ":" + brush.Opacity.ToString("R", CultureInfo.InvariantCulture));
         }
-        if (Theme.SyntaxFadeBrush is not SolidColorBrush syntax || syntax.HasAnimatedProperties) return null;
+        if (Theme.SyntaxFadeBrush is not SolidColorBrush syntax || syntax.HasAnimatedProperties ||
+            !syntax.Transform.Value.IsIdentity || !syntax.RelativeTransform.Value.IsIdentity) return null;
         stamps.Add(syntax.Color + ":" + syntax.Opacity.ToString("R", CultureInfo.InvariantCulture));
         stamps.Add(string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.CodeFontFamily.Source,
             AppTypography.FontFamilyFor(content: true, bold: true).Source,
@@ -152,7 +142,8 @@ internal sealed class MarkdownEdgePreviewPreload
             NoteTypography.Language.IetfLanguageTag, NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
             NoteTypography.FontSize, NoteTypography.CodeFontSize,
             NoteTypography.Heading1FontSize, NoteTypography.Heading2FontSize, NoteTypography.Heading3FontSize,
-            AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection));
+            AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection,
+            TextOptions.GetTextRenderingMode(surface), TextOptions.GetTextHintingMode(surface)));
         return new(binding, size, dpi, string.Join("|", stamps));
     }
 
@@ -160,85 +151,45 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         body = null;
-        for (var node = _bodies.First; node != null;)
-        {
-            var next = node.Next;
-            if (!node.Value.Key.Binding.Current) _bodies.Remove(node);
-            else if (node.Value.Key == key)
-            {
-                body = node.Value;
-                _bodies.Remove(node);
-                if (demand) BodyHits++;
-                return true;
-            }
-            node = next;
-        }
-        return false;
+        if (!key.Binding.Current || !_bodies.TryGetValue(key.Binding.Source, out var candidate)) return false;
+        if (!candidate.Key.Binding.Current) { _bodies.Remove(key.Binding.Source); return false; }
+        if (candidate.Key != key) return false;
+        _bodies.Remove(key.Binding.Source);
+        body = candidate;
+        if (demand) BodyHits++;
+        return true;
     }
 
     internal bool Store(Body body)
     {
         _dispatcher.VerifyAccess();
-        if (!_enabled || !body.Key.Binding.Current || body.Panel.Parent != null ||
-            !IsClearlyHighLoad(body.Key.Binding.Content) ||
-            !_excerpts.TryGetValue(body.Key.Binding.Source, out var current) ||
-            !ReferenceEquals(current.Content, body.Key.Binding.Content)) return false;
-        // Exactly one completed body per heavy note. Count is determined by heavy-note count, not
-        // mouse prediction or a recent-items LRU.
-        ForgetBodies(body.Key.Binding.Source);
-        _bodies.AddFirst(body);
+        if (!body.Key.Binding.Current || body.Panel.Parent != null) return false;
+        _bodies[body.Key.Binding.Source] = body;
         return true;
-    }
-
-    private void ForgetBodies(EdgeCapsulePreviewInvalidationSource source)
-    {
-        for (var node = _bodies.First; node != null;)
-        {
-            var next = node.Next;
-            if (ReferenceEquals(node.Value.Key.Binding.Source, source)) _bodies.Remove(node);
-            node = next;
-        }
     }
 
     internal void Invalidate(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
-        ForgetBodies(source);
-        // Pure text may still be identical after a theme/title update. Capture will compare it.
+        _bodies.Remove(source);
     }
 
     internal void Forget(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
-        _excerpts.Remove(source); _pendingText.Remove(source); ForgetBodies(source);
-        for (var node = _pendingLayout.First; node != null;)
-        {
-            var next = node.Next;
-            if (ReferenceEquals(node.Value.Source, source)) _pendingLayout.Remove(node);
-            node = next;
-        }
+        _excerpts.Remove(source); _bodies.Remove(source); _pendingLayout.Remove(source);
+        if (ReferenceEquals(_workingSource, source)) _work?.Cancel();
         if (PendingCount == 0) _debounce.Stop();
-    }
-
-    internal void RequestText(EdgeCapsulePreviewInvalidationSource source, Func<EdgeCapsulePreviewContext?> read)
-    {
-        if (!_enabled || _dispatcher.HasShutdownStarted) return;
-        _dispatcher.VerifyAccess();
-        _pendingText[source] = read;
-        Arm();
     }
 
     internal void RequestLayout(EdgeCapsulePreviewInvalidationSource source, Func<Target?> read)
     {
-        if (!_enabled || _dispatcher.HasShutdownStarted) return;
         _dispatcher.VerifyAccess();
-        for (var node = _pendingLayout.First; node != null;)
-        {
-            var next = node.Next;
-            if (ReferenceEquals(node.Value.Source, source)) _pendingLayout.Remove(node);
-            node = next;
-        }
-        _pendingLayout.AddLast((source, read));
+        if (!_enabled || _dispatcher.HasShutdownStarted) return;
+        // Keep only the newest request. Capturing/classifying text happens after the debounce,
+        // never on a keystroke or pointer callback. A running drain cannot bypass a new 500ms wait.
+        _pendingLayout[source] = read;
+        _work?.Cancel();
         Arm();
     }
 
@@ -247,8 +198,6 @@ internal sealed class MarkdownEdgePreviewPreload
     internal void BeginDemand()
     {
         _dispatcher.VerifyAccess();
-        // Demand wins immediately, but queued high-load notes are not discarded. They resume at
-        // ContextIdle afterwards, so pointer movement does not decide which notes deserve preload.
         _work?.Cancel();
         _debounce.Stop();
         if (PendingCount > 0) Arm();
@@ -264,33 +213,32 @@ internal sealed class MarkdownEdgePreviewPreload
             while (!work.IsCancellationRequested && PendingCount > 0)
             {
                 await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                if (work.IsCancellationRequested) break;
-                if (_pendingLayout.First is { } node)
+                if (work.IsCancellationRequested || PendingCount == 0) break;
+                var pair = _pendingLayout.First();
+                _workingSource = pair.Key;
+                try
                 {
-                    _pendingLayout.RemoveFirst();
-                    var target = node.Value.Read();
+                    var target = pair.Value();
                     if (target != null) await WarmLayoutAsync(target, work.Token);
-                    continue;
                 }
-                var pair = _pendingText.First();
-                _pendingText.Remove(pair.Key);
-                var context = pair.Value();
-                if (context == null) { Forget(pair.Key); continue; }
-                var content = Capture(context);
-                var version = context.InvalidationSource.Version;
-                foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(content))
+                catch (OperationCanceledException) when (work.IsCancellationRequested) { }
+                catch (Exception ex) { Trace.TraceWarning("Markdown preview preload failed: {0}", ex.GetType().Name); }
+                finally
                 {
-                    if (work.IsCancellationRequested || context.InvalidationSource.Version != version) break;
-                    await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                    _workingSource = null;
+                    // Retain interrupted work. A newer edit replaces the delegate and must not
+                    // be removed by the completion of the older request. Failed/ineligible work
+                    // is retired, not polled forever; host/content lifecycle supplies a new event.
+                    if (!work.IsCancellationRequested &&
+                        _pendingLayout.TryGetValue(pair.Key, out var current) && ReferenceEquals(current, pair.Value))
+                        _pendingLayout.Remove(pair.Key);
                 }
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { Trace.TraceWarning("Markdown preview preload failed: {0}", ex.GetType().Name); }
         finally
         {
             _work = null;
-            if (PendingCount > 0 && !_dispatcher.HasShutdownStarted) Arm();
+            if (PendingCount > 0 && !_dispatcher.HasShutdownStarted && !_debounce.IsEnabled) Arm();
         }
     }
 
@@ -302,11 +250,9 @@ internal sealed class MarkdownEdgePreviewPreload
         if (!_enabled || cancellation.IsCancellationRequested || !target.StillEligible() ||
             !target.Anchor.IsLoaded || !target.Anchor.IsVisible) return false;
         var version = target.Context.InvalidationSource.Version;
-        var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(target.Context);
-        // Recheck at execution time: a queued heavy note may have become cheap before its turn.
         var content = Capture(target.Context);
         if (!IsClearlyHighLoad(content)) return false;
-        var view = (MarkdownEdgeCapsulePreviewView)descriptor.CreateContent(target.Size);
+        var view = new MarkdownEdgeCapsulePreviewView(target.Context, target.Size, content, version);
         var viewport = view.PreloadViewport;
         var holder = new Canvas { Width = 0, Height = 0, ClipToBounds = true,
             Opacity = 0, IsHitTestVisible = false, Focusable = false,
@@ -343,6 +289,7 @@ internal sealed class MarkdownEdgePreviewPreload
             if (!Current()) return false;
             sized.Measure(new Size(sized.Width, sized.Height));
             sized.Arrange(new Rect(0, 0, sized.Width, sized.Height));
+            if (!viewport.IsLoaded || viewport.RenderSize.Width <= 0 || viewport.RenderSize.Height <= 0) return false;
             var success = await complete.Task;
             if (!success || !Current()) return false;
             var retained = viewport.ReturnBodyToPreload();
@@ -366,7 +313,7 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         _debounce.Stop(); _work?.Cancel();
-        _pendingText.Clear(); _pendingLayout.Clear(); _bodies.Clear(); _excerpts.Clear();
+        _pendingLayout.Clear(); _bodies.Clear(); _excerpts.Clear();
     }
 
     // Same-binary A/B probe; no settings, environment switch or persistent product option.

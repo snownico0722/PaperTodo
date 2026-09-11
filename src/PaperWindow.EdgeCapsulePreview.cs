@@ -131,16 +131,6 @@ public sealed partial class PaperWindow
                 return null;
             }
 
-            if (content is MarkdownEdgeCapsulePreviewView markdownView)
-            {
-                void Prepared(bool success)
-                {
-                    markdownView.PreloadViewport.PreparationFinished -= Prepared;
-                    if (success && _windowLifecycle == PaperWindowLifecycleState.Alive)
-                        _controller.ScheduleMarkdownPreviewNeighbors(this);
-                }
-                markdownView.PreloadViewport.PreparationFinished += Prepared;
-            }
             content.HorizontalAlignment = HorizontalAlignment.Stretch;
             content.VerticalAlignment = VerticalAlignment.Stretch;
             EdgeCapsulePerformanceDiagnostics.Trace(

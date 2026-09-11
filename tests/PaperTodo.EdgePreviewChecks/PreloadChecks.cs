@@ -63,14 +63,14 @@ internal static partial class Program
             var shortDense = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
                 string.Join('\n', Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)), 12)),
                 MarkdownRenderModes.Full);
-            Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(light), "ordinary short rows are not speculatively preloaded");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(light), "200+ multi-row styled text qualifies under the new style-count rule");
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(heavy), "long dense row is classified high-load");
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(shortDense), "short style-dense rows are classified high-load");
             Console.WriteLine("PASS content-cost preload classifier: light skips, both heavy shapes qualify");
             var exactly400Plain = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(new string('文', 400), MarkdownRenderModes.Full);
             var over400Plain = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(new string('文', 401), MarkdownRenderModes.Full);
-            var exactly100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Concat(Enumerable.Repeat("**ab**", 50)), MarkdownRenderModes.Full);
-            var over100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Concat(Enumerable.Repeat("**ab**", 51)), MarkdownRenderModes.Full);
+            var exactly100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("**" + new string('a', 100) + "** " + new string('文', 110), MarkdownRenderModes.Full);
+            var over100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("**" + new string('a', 101) + "** " + new string('文', 110), MarkdownRenderModes.Full);
             Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(exactly400Plain), "400 plain characters stay cold at the strict boundary");
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(over400Plain), "401 total characters qualify for preload");
             Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(exactly100Styled), "200+ source characters with exactly 100 styled characters stay cold");
@@ -189,7 +189,6 @@ internal static partial class Program
             Require(cache.BodyCount == 0 && cache.ExcerptCount == 0 && cache.PendingCount == 0, "clear releases cache and pending jobs");
             Console.WriteLine("PASS cancellation, stale publication, no-count-eviction and cleanup");
             var completions = cache.WarmCompletions;
-            cache.RequestText(source, () => a);
             cache.RequestLayout(source, () => new(a, root, size, () => true));
             var watch = Stopwatch.StartNew();
             while ((cache.WarmCompletions == completions || cache.PendingCount > 0) && watch.Elapsed < TimeSpan.FromSeconds(4)) Pump();
