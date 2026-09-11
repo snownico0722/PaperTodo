@@ -18,21 +18,14 @@ public sealed partial class AppController
     private UIElement CreateSkinSettings()
     {
         var panel = new StackPanel();
-        panel.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsPaperSkin")), "TipPaperSkin"));
         var skin = PaperSkins.Resolve(State);
+        panel.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsPaperSkin")), skin switch
+        {
+            PaperSkins.TracingPaper => "TipSkinTracingPaper", PaperSkins.LiquidGlass => "TipSkinLiquidGlass",
+            PaperSkins.Aero => "TipSkinAero", PaperSkins.Pixel => "TipSkinPixel", _ => "TipPaperSkin"
+        }));
         panel.Children.Add(CreateSettingsSelect(
             PaperSkins.All.Select(id => (id, Strings.Get(PaperSkins.LabelKey(id)))).ToArray(), skin, SetPaperSkin));
-        panel.Children.Add(new TextBlock
-        {
-            Text = Strings.Get(skin switch
-            {
-                PaperSkins.TracingPaper => "TipSkinTracingPaper",
-                PaperSkins.LiquidGlass => "TipSkinLiquidGlass",
-                PaperSkins.Aero => "TipSkinAero", PaperSkins.Pixel => "TipSkinPixel", _ => "TipPaperSkin"
-            }),
-            TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 4, 2, 5)
-        });
         if (skin != PaperSkins.Paper)
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
@@ -42,33 +35,26 @@ public sealed partial class AppController
                 }), "TipMatchAuxiliaryMaterial"));
         if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
         {
-            panel.Children.Add(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
+            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
             {
                 State.LiquidGlassRefraction = !State.LiquidGlassRefraction;
                 SaveNow(); RefreshSkinSurfaces();
-            }));
+            }), "TipLiveRefraction"));
             panel.Children.Add(new TextBlock
             {
-                Text = Strings.Get("TipLiveRefraction"), TextWrapping = TextWrapping.Wrap,
+                Text = Strings.Get("SkinCaptureNotice"), TextWrapping = TextWrapping.Wrap,
                 Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
             });
         }
-        if (PaperSkins.IsSystemMaterial(skin))
-            panel.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("SkinSystemPalette"), TextWrapping = TextWrapping.Wrap,
-                Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11),
-                Margin = new Thickness(2, 0, 2, 5)
-            });
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
-            panel.Children.Add(new TextBlock
-            {
-                Text = Strings.Get(!NativeMicaBackdrop.IsSupported ? "SkinNativeUnsupported" :
-                    !UsesNativeMicaWindows ? "SkinRestartRequired" : "SkinNativeScope"),
-                TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
-                FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
-            });
+            if (!NativeMicaBackdrop.IsSupported || !UsesNativeMicaWindows)
+                panel.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get(!NativeMicaBackdrop.IsSupported ? "SkinNativeUnsupported" : "SkinRestartRequired"),
+                    TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
+                    FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
+                });
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMicaAlwaysActive"), State.MicaAlwaysActive, ToggleMicaAlwaysActive), "TipMicaAlwaysActive"));
         }

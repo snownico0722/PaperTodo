@@ -32,7 +32,7 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinSystemPalette").Append("SettingsLiveRefraction").Append("TipLiveRefraction").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsLiveRefraction").Append("TipLiveRefraction").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
@@ -154,7 +154,7 @@ internal static class SkinChecks
                     Program.Assert(surface.MaterialStrength == .4 && surface.Opacity == 1, "quiet material does not dim the entire surface");
                     controller.State.MatchAuxiliaryMaterialStrength = true; surface.RefreshSkin();
                     var full = Pixels(Render(surface, 1));
-                    Program.Assert(surface.MaterialStrength == 1 && !quiet.SequenceEqual(full), "switch visibly changes auxiliary material intensity");
+                    Program.Assert(surface.MaterialStrength == 1 && !quiet.SequenceEqual(full), $"{skin}/{mode}/{capsule}: switch visibly changes auxiliary material intensity");
                     var center = (40*240+120)*4;
                     Program.Assert(quiet.AsSpan(center, 4).SequenceEqual(full.AsSpan(center, 4)) && full[center+1] == 255,
                         "foreground marker remains fully opaque and unchanged");

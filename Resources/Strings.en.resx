@@ -1433,7 +1433,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Skin (experimental)</value>
   </data>
   <data name="TipPaperSkin" xml:space="preserve">
-    <value>Skins change the surface; color schemes control text and controls. Switching preserves editors. High contrast disables decoration.</value>
+    <value>Skins control materials; palettes control colors.</value>
   </data>
   <data name="SkinPaper" xml:space="preserve">
     <value>Default paper</value>
@@ -1454,36 +1454,33 @@ When off, open at the docked edge or remembered position.</value>
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>Curved edges refract the actual background with pointer-responsive highlights and localized chromatic dispersion. The center has subtle magnification. Papers, capsules, context menus and submenus share the liquid pipeline, adapted to their sizes. Text is not distorted; clarity depends on the backdrop.</value>
+    <value>Clear glass with curved refraction, highlights and dispersion. Edge previews use a lightweight finish.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Clear blue-tinted glass preserves background detail without heavy Acrylic frosting. Soft diagonal reflections have subtle movement parallax and keep their width as the paper resizes. The header and body share one material. No desktop capture or screenshot exclusion; unavailable composition retains a static surface.</value>
+    <value>Pale blue transparent glass with diagonal reflections. No desktop capture.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
-    <value>Skin saved. Exit from the tray and reopen to enable the native backdrop. Existing windows use a solid approximation without rebuilding editors or undo history.</value>
+    <value>Restart PaperTodo to enable native backdrops.</value>
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
-    <value>Native backdrops require Windows 11 22H2 (22621) or later. This system uses an opaque approximation.</value>
-  </data>
-  <data name="SkinNativeScope" xml:space="preserve">
-    <value>Papers and Settings retain native backdrops. Capsules and menus keep their HWNDs: liquid glass shares live refraction, Mica/Acrylic uses a local diffusion approximation, and Aero shares alpha tint and reflection. Unavailable effects retain a readable fallback.</value>
-  </data>
-  <data name="SkinSystemPalette" xml:space="preserve">
-    <value>Mica and both Acrylic options also support color schemes. Colors apply to text, accents and a subtle surface tint; Neutral preserves the system colors.</value>
+    <value>Native backdrops require Windows 11 22H2 or later.</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>Live background processing</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>Liquid papers, Settings, capsules and menus, plus Mica/Acrylic/tracing-paper capsules and menus, sample the local desktop in memory only, without saving or uploading. To prevent feedback, sampled surfaces are excluded from some screenshot, recording and screen-sharing APIs. Turn this off when sharing. Hidden, minimized, partially transparent or failed surfaces stop sampling and fall back. Aero does not capture.</value>
+    <value>Processes local backgrounds in memory; nothing is saved or uploaded. Sampled windows may be missing from screenshots, recordings or screen sharing. Turn this off before sharing.</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>Full material strength on capsules and menus</value>
+    <value>Full capsule and menu material</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>On uses full material strength on capsules, context menus and submenus. Off still processes the actual background with gentler refraction, dispersion, diffusion, tint and highlights. Liquid glass shares the main pipeline; Mica/Acrylic on layered auxiliary windows approximates the material with local background diffusion, not the same DWM algorithm. Live processing also follows the separate background switch. Text, icons, the main paper and hit areas are unchanged.</value>
+    <value>On: match the paper. Off: lighter effects and a more solid, readable paper base. Edge previews always use lightweight effects.</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>May affect screenshots and sharing. Turn off before sharing.</value>
   </data>
 </root>

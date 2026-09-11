@@ -1433,7 +1433,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>スキン（実験）</value>
   </data>
   <data name="TipPaperSkin" xml:space="preserve">
-    <value>スキンは素材、配色は文字と操作部の色を決めます。変更時にエディターは作り直しません。ハイコントラストでは装飾を隠します。</value>
+    <value>スキンは質感、配色は色を変更します。</value>
   </data>
   <data name="SkinPaper" xml:space="preserve">
     <value>標準の紙</value>
@@ -1454,36 +1454,33 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>曲面の縁が実際の背景を屈折させ、ポインターに応じたハイライトと局所的な色分散を描きます。中央はわずかに拡大。紙片、カプセル、メニューとサブメニューは同じ処理を各サイズに合わせて使用します。本文は変形せず、読みやすさは背景に依存します。</value>
+    <value>曲面の屈折、ハイライト、色分散を備えた透明ガラス。端のプレビューは軽量表示です。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>Acrylic の強いすりガラス効果を使わず、背景の細部を残す青みがかった透明ガラスです。柔らかな斜め反射は移動に応じてわずかにずれ、サイズを変えても幅を保ちます。タイトルバーと本文の素材は連続します。デスクトップ取得やスクリーンショットからの除外は行いません。合成できない場合は静的な表面を使います。</value>
+    <value>淡い青の透明ガラスと斜めの反射。画面の取り込みは行いません。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>レトロなクエストパネル風。小さな段状の角、一重の外枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントです。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
-    <value>スキンを保存しました。トレイから終了し再起動するとネイティブ背景が有効になります。それまでは単色で表示し、編集内容や取り消し履歴は作り直しません。</value>
+    <value>ネイティブ背景を有効にするには PaperTodo を再起動してください。</value>
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
-    <value>ネイティブ背景には Windows 11 22H2（22621）以降が必要です。この環境では不透明な外観を使用します。</value>
-  </data>
-  <data name="SkinNativeScope" xml:space="preserve">
-    <value>紙片と設定はネイティブ背景を維持します。カプセルとメニューはウィンドウを交換せず、液体ガラスのリアルタイム屈折、マイカ／アクリルの局所ぼかし近似、Aero の透明な着色と反射を使用。利用できない場合は読みやすい代替表示になります。</value>
-  </data>
-  <data name="SkinSystemPalette" xml:space="preserve">
-    <value>Mica と両方の Acrylic でも配色を選択できます。文字、アクセント、薄い表面の着色に適用され、「ニュートラル」ではシステム本来の色を保ちます。</value>
+    <value>ネイティブ背景には Windows 11 22H2 以降が必要です。</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>背景のリアルタイム処理</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>液体ガラスの紙片・設定・カプセル・メニューと、マイカ／アクリル／トレーシングペーパーのカプセル・メニューが、ローカルのデスクトップをメモリ内だけで取得します。保存・送信しません。自己反映を防ぐため、取得中の面は一部のスクリーンショット・録画・画面共有から除外されます。共有時はオフにしてください。非表示・最小化・半透明・失敗時は停止して代替表示に戻ります。Aero は取得しません。</value>
+    <value>背景を端末のメモリ内だけで処理し、保存・送信しません。対象のウィンドウがスクリーンショット・録画・画面共有に映らない場合があります。共有前にオフにしてください。</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>カプセルとメニューを同じ素材強度にする</value>
+    <value>カプセル・メニューのフル質感</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>オンでカプセルと各メニューに完全な材質を使用。オフでも実際の背景を処理し、屈折・色分散・ぼかし・着色・ハイライトだけを弱めます。液体ガラスは主ウィンドウと共通処理です。小型のレイヤードウィンドウのマイカ／アクリルは局所背景のぼかしによる近似で、同じ DWM 処理ではありません。別のリアルタイム処理設定にも従います。文字・アイコン・主紙片・クリック領域は変更しません。</value>
+    <value>オン：紙と同じ質感。オフ：効果を弱め、紙の地色を濃くして読みやすくします。端のプレビューは常に軽量表示です。</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>撮影・共有に影響します。共有前にオフにしてください。</value>
   </data>
 </root>

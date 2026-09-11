@@ -1433,7 +1433,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>스킨 (실험)</value>
   </data>
   <data name="TipPaperSkin" xml:space="preserve">
-    <value>스킨은 표면 재질을, 색상 테마는 텍스트와 컨트롤 색을 바꿉니다. 편집기는 유지되며 고대비에서는 장식이 꺼집니다.</value>
+    <value>스킨은 재질을, 색상표는 색상을 바꿉니다.</value>
   </data>
   <data name="SkinPaper" xml:space="preserve">
     <value>기본 메모</value>
@@ -1454,36 +1454,33 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>유백색 바탕과 미세한 섬유 무늬 사이로 배경색이 은은하게 비치며 글자는 선명하게 유지됩니다.</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>곡면 가장자리에서 실제 배경을 굴절시키며 포인터에 반응하는 하이라이트와 국소 색 분산을 표시합니다. 중앙은 약하게 확대됩니다. 메모, 캡슐, 메뉴와 하위 메뉴가 크기에 맞춘 같은 액체 유리 처리를 사용합니다. 본문은 변형하지 않으며 가독성은 배경에 따라 달라집니다.</value>
+    <value>곡면 굴절, 하이라이트와 색 분산이 있는 투명 유리입니다. 가장자리 미리보기는 가벼운 효과를 사용합니다.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>아크릴의 강한 불투명 유리 효과 없이 배경의 세부를 유지하는 푸른빛의 투명 유리입니다. 부드러운 대각선 반사는 이동에 따라 조금씩 움직이며 창 크기가 바뀌어도 폭을 유지합니다. 제목 표시줄과 본문 배경이 이어집니다. 바탕 화면을 캡처하거나 스크린샷에서 창을 제외하지 않습니다. 합성을 사용할 수 없으면 정적 표면으로 전환합니다.</value>
+    <value>연한 파란색 투명 유리와 사선 반사입니다. 바탕 화면을 캡처하지 않습니다.</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>레트로 퀘스트 패널 스타일로 작은 계단형 모서리, 단일 테두리, 픽셀 정렬 아이콘과 사각 컨트롤을 사용합니다. 본문 글꼴은 유지됩니다.</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
-    <value>스킨이 저장되었습니다. 트레이에서 종료한 뒤 다시 실행하면 네이티브 배경이 켜집니다. 현재 창은 단색으로 표시하며 편집 내용과 실행 취소 기록은 유지합니다.</value>
+    <value>기본 배경을 사용하려면 PaperTodo를 다시 시작하세요.</value>
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
-    <value>네이티브 배경에는 Windows 11 22H2 (22621) 이상이 필요합니다. 현재 환경에서는 불투명하게 표시됩니다.</value>
-  </data>
-  <data name="SkinNativeScope" xml:space="preserve">
-    <value>메모와 설정은 네이티브 배경을 유지합니다. 캡슐과 메뉴는 창을 바꾸지 않고 액체 유리의 실시간 굴절, 마이카/아크릴의 국소 배경 흐림 근사, Aero의 투명 착색과 반사를 사용합니다. 지원하지 않으면 읽기 쉬운 대체 표시를 유지합니다.</value>
-  </data>
-  <data name="SkinSystemPalette" xml:space="preserve">
-    <value>운모와 두 아크릴 재질에서도 색상을 선택할 수 있습니다. 글자, 강조색과 옅은 표면 착색에 적용되며, 중립 색상은 시스템 본래의 색을 유지합니다.</value>
+    <value>기본 배경은 Windows 11 22H2 이상이 필요합니다.</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>실시간 배경 처리</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>액체 유리 메모·설정·캡슐·메뉴와 마이카/아크릴/트레이싱 페이퍼의 캡슐·메뉴는 로컬 바탕 화면을 메모리에서만 샘플링합니다. 저장하거나 전송하지 않습니다. 자기 화면이 반복되는 현상을 막기 위해 처리 중인 표면은 일부 스크린샷·녹화·화면 공유에서 제외됩니다. 공유할 때는 끄세요. 숨김·최소화·부분 투명·실패 상태에서는 중지하고 대체 표시합니다. Aero는 샘플링하지 않습니다.</value>
+    <value>주변 배경을 기기 메모리에서만 처리하며 저장하거나 업로드하지 않습니다. 해당 창이 스크린샷·녹화·화면 공유에 표시되지 않을 수 있으니 공유 전에 끄세요.</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>캡슐과 메뉴에 전체 재질 강도 적용</value>
+    <value>캡슐·메뉴 전체 재질 효과</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>켜면 캡슐과 메뉴에 전체 재질 강도를 적용합니다. 꺼도 실제 배경을 처리하며 굴절·색 분산·흐림·착색·하이라이트만 약하게 합니다. 액체 유리는 기본 창과 같은 처리를 사용합니다. 계층형 보조 창의 마이카/아크릴은 국소 배경 흐림으로 근사하며 같은 DWM 알고리즘은 아닙니다. 별도의 실시간 배경 설정도 따릅니다. 글자·아이콘·기본 메모·클릭 영역은 변경하지 않습니다.</value>
+    <value>켬: 종이와 같은 재질. 끔: 효과를 줄이고 종이 바탕을 더 불투명하게 하여 읽기 쉽게 합니다. 가장자리 미리보기는 항상 가벼운 효과를 사용합니다.</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>캡처와 공유에 영향을 줄 수 있습니다. 공유 전에 끄세요.</value>
   </data>
 </root>

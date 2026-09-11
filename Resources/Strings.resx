@@ -1482,7 +1482,7 @@
     <value>皮肤（实验）</value>
   </data>
   <data name="TipPaperSkin" xml:space="preserve">
-    <value>皮肤决定表面材质，配色决定正文和控件颜色。换肤不重建编辑器；高对比度时隐藏装饰。</value>
+    <value>皮肤控制材质，配色控制颜色。</value>
   </data>
   <data name="SkinPaper" xml:space="preserve">
     <value>默认纸片</value>
@@ -1503,36 +1503,33 @@
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>曲面边缘折射真实背景，边缘高光随指针变化，并有局部色散；中心保持轻微放大。主纸片、胶囊、右键及子菜单使用同一液态处理，按各自尺寸适配。正文不变形，清透效果的可读性取决于背景。</value>
+    <value>清透玻璃，带曲面折射、高光和色散。边缘浏览使用轻量效果。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
-    <value>清透的淡蓝玻璃，保留背景细节，不再叠加亚克力的重磨砂。柔化斜向反光带有轻微移动视差，宽度不随纸片拉伸，顶栏与正文背景连续。不采样桌面，不影响截图；合成不可用时回退静态表面。</value>
+    <value>淡蓝透明玻璃与斜向反光，不采样桌面。</value>
   </data>
   <data name="TipSkinPixel" xml:space="preserve">
     <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
   </data>
   <data name="SkinRestartRequired" xml:space="preserve">
-    <value>皮肤已保存。请从托盘退出并重新打开，启用原生背景；当前先显示实色外观，不重建编辑内容或撤销记录。</value>
+    <value>重启 PaperTodo 后启用原生背景。</value>
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
-    <value>原生背景需要 Windows 11 22H2（22621）及以上；当前使用不透明外观。</value>
-  </data>
-  <data name="SkinNativeScope" xml:space="preserve">
-    <value>展开纸片与设置保留原生背景；胶囊与菜单不更换窗口，液态玻璃共用实时折射，云母／亚克力使用局部背景柔化近似。Aero 共用透明染色与反光；接口不可用时保留可读回退。</value>
-  </data>
-  <data name="SkinSystemPalette" xml:space="preserve">
-    <value>云母和两种亚克力也可选择配色。配色用于文字、强调色和轻微表面染色；素灰保留系统原色。</value>
+    <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
     <value>实时背景处理</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>液态玻璃的纸片、设置、胶囊和菜单，以及云母／亚克力／描图纸的胶囊和菜单，会实时采样局部桌面。仅在本机内存中处理，不保存或上传。为避免自身重影，这些开启采样的表面会被部分截图、录屏和屏幕共享接口忽略；需要分享时关闭此项。隐藏、最小化、部分透明或采样失败时停止并回退。Aero 不采样。</value>
+    <value>实时处理局部背景，仅在本机内存中使用，不保存或上传。开启采样的窗口可能无法被截图、录屏或共享；分享前关闭此项。</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>胶囊与右键使用完整材质强度</value>
+    <value>胶囊与菜单完整材质</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>开启时胶囊、右键和子菜单使用完整材质；关闭时仍处理真实背景，只减弱折射、色散、模糊、染色和高光。液态玻璃与主窗口共用处理；云母／亚克力在分层小窗口中使用局部背景柔化近似，非同一 DWM 算法。实时处理另受「实时背景处理」控制，不改变文字、图标、主纸片或点击区域。</value>
+    <value>开启：与纸片一致。关闭：材质更轻、底色更实，更易阅读。边缘浏览始终使用轻量效果。</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>可能影响截图与共享，分享前请关闭。</value>
   </data>
 </root>
