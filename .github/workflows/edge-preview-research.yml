@@ -1,0 +1,206 @@
+name: Edge preview research comparison
+on:
+  push:
+    branches: [experiment/edge-preview-avalonedit]
+    paths: [.github/workflows/edge-preview-research.yml]
+permissions:
+  contents: write
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/checkout@v7
+        with:
+          path: baseline
+          ref: 14c7223190b1198941d7ce450e3cf52ee83ed73e
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare isolated candidate and identical measurement harness
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          Path('results').mkdir()
+          def edit(path, old, new):
+              p=Path(path); s=p.read_text(encoding='utf-8-sig')
+              assert s.count(old)==1, (path, old[:100], s.count(old))
+              p.write_text(s.replace(old,new),encoding='utf-8',newline='\n')
+          p=Path('candidate/src/EdgeCapsulePreview.Markdown.Inlines.cs')
+          s=p.read_text(encoding='utf-8-sig')
+          a=s.index('            Inline inline = run;')
+          b=s.index('            (activeLink?.Inlines ?? target).Add(inline);',a)+len('            (activeLink?.Inlines ?? target).Add(inline);')
+          replacement='''            // One Run carries the combined style; keep real Hyperlinks for input/resources.
+                      if (Has(InlineStyle.Strong)) ApplyStrongTypography(run);
+                      if (Has(InlineStyle.Italic)) run.FontStyle = FontStyles.Italic;
+                      if (Has(InlineStyle.Code))
+                      {
+                          // The former inner code Span overrode the outer Bold's font family.
+                          run.FontFamily = NoteTypography.CodeFontFamily;
+                          run.FontSize = NoteTypography.CodeFontSize;
+                          run.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
+                      }
+                      if (Has(InlineStyle.Strike) && Has(InlineStyle.Underline))
+                      {
+                          var decorations = new TextDecorationCollection(TextDecorations.Strikethrough);
+                          foreach (var decoration in TextDecorations.Underline) decorations.Add(decoration);
+                          decorations.Freeze();
+                          run.TextDecorations = decorations;
+                      }
+                      else if (Has(InlineStyle.Strike)) run.TextDecorations = TextDecorations.Strikethrough;
+                      else if (Has(InlineStyle.Underline)) run.TextDecorations = TextDecorations.Underline;
+                      (activeLink?.Inlines ?? target).Add(run);'''
+          # Dedent embedded replacement to ordinary member-body indentation.
+          replacement='\n'.join(line[10:] if line.startswith('                      ') else line for line in replacement.split('\n'))
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8',newline='\n')
+          p=Path('candidate/src/EdgeCapsulePreview.Markdown.TextLayout.cs')
+          s=p.read_text(encoding='utf-8-sig'); a=s.index('        var count = 0;',s.index('internal IEnumerable<bool> Prepare')); b=s.index('        var source = new ParagraphSource',a)
+          s=s[:a]+'''        // Copy bounded prepared values without synthetic work steps. Real formatted lines
+                  // still yield; the viewport retains its existing 2ms / four-step budget.
+                  pieces.AddRange(_inlineCache.Get(_source, _mode).Pieces);
+          '''.replace('\n                  ','\n        ').rstrip()+ '\n'+s[b:]
+          p.write_text(s,encoding='utf-8',newline='\n')
+          edit('candidate/tests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs',
+              'Require(text.Inlines.OfType<Bold>().Any(), "enabled modes style emphasis");',
+              'Require(text.Inlines.OfType<Run>().Any(run => run.Text == "粗体" && run.FontWeight == (AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight)), "enabled modes retain effective strong typography without wrappers");')
+          # Identical harness in both worktrees. Never compare different sample policies.
+          for folder in ['baseline','candidate']:
+              path=folder+'/tests/PaperTodo.EdgePreviewExperimentChecks/Program.cs'
+              edit(path,'internal static class Program','internal static partial class Program')
+              edit(path,'else { Checks(); SharedPreviewSemanticChecks.Run(); }','else if (args.Contains("--export")) ExportPreviewPixels(args.Last());\n            else { Checks(); SharedPreviewSemanticChecks.Run(); }')
+              edit(path,'for (var i = 0; i < 9; i++)','for (var i = 0; i < 24; i++)')
+              edit(path,'if (i >= 2) rows.Add(result);','if (i >= 3) rows.Add(result);')
+              edit(path,'.Order().ElementAt(3)','.Order().ElementAt(rows.Count / 2)')
+              export=r'''using System.IO;
+          using System.Windows;
+          using System.Windows.Controls;
+          using System.Windows.Documents;
+          using System.Windows.Media;
+          using System.Windows.Media.Imaging;
+          using PaperTodo;
+          internal static partial class Program
+          {
+              private static void ExportPreviewPixels(string folder)
+              {
+                  Directory.CreateDirectory(folder);
+                  var fixtures = new[] {
+                      "ordinary 中文 e\u0301 العربية 😀 **粗体** *italic* ~~strike~~ `code`",
+                      "**a *nested* b** <u>under ~~strike~~</u> **`code`**",
+                      "[a **bold** *italic*](https://example.com)[second](https://example.com)",
+                      "## Heading\n> 引用 **strong**\n12. list *item*\n- [x] task\n---",
+                      "```\n\n**literal**\n\n[not-link](https://example.com)\n```",
+                      string.Concat(Enumerable.Repeat("**加粗** *斜体* ~~删除~~ `code` [a **styled** link](https://example.com) 中文 ",45)),
+                      string.Join('\n',Enumerable.Range(1,16).Select(i=>$"第{i}行 **加粗** *italic* `code`")),
+                      string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ",120))
+                  };
+                  foreach (var sharp in new[] {false,true})
+                  foreach (var zoom in new[] {0.7,1.3})
+                  foreach (var mode in new[] {MarkdownRenderModes.Off,MarkdownRenderModes.Basic,MarkdownRenderModes.Enhanced,MarkdownRenderModes.Full})
+                  for (var i=0;i<fixtures.Length;i++)
+                  {
+                      AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
+                          textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
+                      var panel=new StackPanel {Width=420,Height=320,Background=Brushes.White,ClipToBounds=true};
+                      panel.Resources["TextBrushKey"]=Brushes.Black;
+                      panel.Resources["WeakTextBrushKey"]=Brushes.Gray;
+                      panel.Resources["LinkBrushKey"]=Brushes.Blue;
+                      panel.Resources["HoverBrushKey"]=Brushes.LightGray;
+                      var window=new Window {Content=panel,Width=500,Height=420,ShowActivated=false,ShowInTaskbar=false};
+                      try
+                      {
+                          window.Show(); Pump();
+                          MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel,fixtures[i],_=>{},mode,new Size(420,320),zoom);
+                          Pump(); window.UpdateLayout();
+                          var dpi=VisualTreeHelper.GetDpi(panel);
+                          int w=(int)Math.Ceiling(420*dpi.DpiScaleX),h=(int)Math.Ceiling(320*dpi.DpiScaleY);
+                          var bitmap=new RenderTargetBitmap(w,h,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);
+                          bitmap.Render(panel);
+                          var bytes=new byte[w*h*4];bitmap.CopyPixels(bytes,w*4,0);
+                          File.WriteAllBytes(Path.Combine(folder,$"{sharp}-{zoom}-{mode}-{i}.rgba"),bytes);
+                          if (mode==MarkdownRenderModes.Full && i==6)
+                          {
+                              int Count(InlineCollection values)=>values.Cast<Inline>().Sum(x=>1+(x is Span span?Count(span.Inlines):0));
+                              Console.WriteLine($"OBJECTS short-styled zoom={zoom} sharp={sharp} inlines="+panel.Children.OfType<TextBlock>().Sum(b=>Count(b.Inlines)));
+                          }
+                      }
+                      finally {window.Close();Pump();}
+                  }
+                  AppTypography.Configure(UiFontPresets.Default);
+              }
+          }'''
+              Path(folder+'/tests/PaperTodo.EdgePreviewExperimentChecks/ResearchExport.cs').write_text(export,encoding='utf-8')
+          Path('results/changed-paths.txt').write_text('src/EdgeCapsulePreview.Markdown.Inlines.cs\nsrc/EdgeCapsulePreview.Markdown.TextLayout.cs\ntests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs\n')
+      - name: Candidate correctness and existing regressions
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $results = @{}
+          foreach ($name in @('EdgePreviewExperimentChecks','MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
+            dotnet run --project "candidate/tests/PaperTodo.$name" -c Release 2>&1 | Tee-Object "results/$name.log"
+            $results[$name] = $LASTEXITCODE
+          }
+          $results | ConvertTo-Json | Set-Content results/exit-codes.json
+          if (@($results.Values | Where-Object { $_ -ne 0 }).Count) { throw 'Regression failures; preserve evidence without waiving checks.' }
+      - name: Baseline and candidate pixel exports
+        run: |
+          dotnet run --project baseline/tests/PaperTodo.EdgePreviewExperimentChecks -c Release -- --export "$pwd/results/pixels-before" 2>&1 | Tee-Object results/pixels-before.log
+          if ($LASTEXITCODE -ne 0) { throw 'baseline export' }
+          dotnet run --project candidate/tests/PaperTodo.EdgePreviewExperimentChecks -c Release -- --export "$pwd/results/pixels-after" 2>&1 | Tee-Object results/pixels-after.log
+          if ($LASTEXITCODE -ne 0) { throw 'candidate export' }
+      - name: Compare actual pixels
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          results=[]
+          for p in sorted(Path('results/pixels-before').glob('*.rgba')):
+              a=p.read_bytes(); b=(Path('results/pixels-after')/p.name).read_bytes()
+              assert len(a)==len(b)
+              changed=sum(abs(x-y)>32 for x,y in zip(a,b))
+              results.append({'fixture':p.name,'bytes':len(a),'changed':changed,'fraction':changed/len(a)})
+          assert len(results)==128, len(results)
+          Path('results/pixel-comparison.json').write_text(json.dumps(results,indent=2))
+          print('PIXELS',len(results),'maximum changed fraction',max(r['fraction'] for r in results))
+          assert all(r['fraction']<0.02 for r in results), [r for r in results if r['fraction']>=0.02]
+      - name: Same-machine forward and reverse-order profiles
+        run: |
+          foreach ($case in @(@('baseline','before-a'),@('candidate','after-a'),@('candidate','after-b'),@('baseline','before-b'))) {
+            dotnet run --project "$($case[0])/tests/PaperTodo.EdgePreviewExperimentChecks" -c Release --no-build -- --profile 2>&1 | Tee-Object "results/$($case[1]).log"
+            if ($LASTEXITCODE -ne 0) { throw "Profile $($case[1]) failed" }
+          }
+      - name: Candidate Debug checks
+        run: |
+          dotnet run --project candidate/tests/PaperTodo.EdgePreviewExperimentChecks -c Debug 2>&1 | Tee-Object results/debug.log
+          if ($LASTEXITCODE -ne 0) { throw 'Debug checks failed' }
+      - name: Record exact checked source blobs only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json'}
+          $entries = foreach ($path in Get-Content results/changed-paths.txt) {
+            $text = [IO.File]::ReadAllText("$pwd/candidate/$path").Replace("`r`n","`n")
+            $body = @{content=$text; encoding='utf-8'} | ConvertTo-Json -Compress
+            $blob = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
+            @{path=$path; sha=$blob.sha; mode='100644'; type='blob'}
+            $dest=Join-Path "$pwd/results/source" $path
+            New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+            [IO.File]::WriteAllText($dest,$text,[Text.UTF8Encoding]::new($false))
+          }
+          $entries | ConvertTo-Json | Set-Content results/checked-blobs.json
+          git -C candidate diff | Set-Content results/candidate.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: edge-preview-research-results
+          path: results/
+          retention-days: 2
