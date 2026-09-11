@@ -58,7 +58,7 @@ jobs:
                   var current = source;
           '@
           Replace-Once candidate/src/EdgeCapsuleHost.Preview.cs $old $new
-          Replace-Once candidate/src/EdgeCapsulePreview.AvalonEdit.cs 'MouseMove += (_, e) => Cursor = TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow;' 'MouseMove += (_, e) => Editor?.SetInteractionCursor(TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow);'
+          Replace-Once candidate/src/EdgeCapsulePreview.AvalonEdit.cs 'MouseMove += (_, e) => Cursor = TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow;' 'MouseMove += (sender, e) => Editor?.SetInteractionCursor(TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow);'
           Replace-Once candidate/src/EdgeCapsulePreview.AvalonEdit.cs 'MouseLeave += (_, _) => Cursor = Cursors.Arrow;' 'MouseLeave += (_, _) => Editor?.SetInteractionCursor(Cursors.Arrow);'
           foreach ($folder in @('baseline', 'textlayout')) {
             Copy-Item candidate/src/EdgeCapsulePreview.AvalonEdit.cs "$folder/src/EdgeCapsulePreview.AvalonEdit.cs"
