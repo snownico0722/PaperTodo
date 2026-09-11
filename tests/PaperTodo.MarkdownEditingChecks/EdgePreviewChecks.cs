@@ -27,7 +27,7 @@ internal static partial class Program
             {
                 MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, "**粗体**", _ => { }, mode);
                 var text = (TextBlock)panel.Children[0];
-                Require(text.Inlines.OfType<Bold>().Any(), "enabled modes style emphasis");
+                Require(text.Inlines.OfType<Run>().Any(run => run.Text == "粗体" && run.FontWeight == (AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight)), "enabled modes retain effective strong typography without wrappers");
                 var marker = text.Inlines.OfType<Run>().First();
                 Equal(mode == MarkdownRenderModes.Enhanced,
                     marker.ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue,
@@ -238,7 +238,12 @@ internal static partial class Program
                 var single = new StackPanel();
                 MarkdownEdgeCapsulePreviewRenderer.RenderInto(single, paragraph + "\n后续内容", _ => { }, mode, new Size(180, 120));
                 Equal(1, single.Children.Count, "a wrapping paragraph alone can fill the card");
-                Equal(paragraph, EdgePreviewText(single.Children[0]), "viewport budgeting does not reinstate the 512-character cutoff");
+                var shown = EdgePreviewText(single.Children[0]);
+                Require(shown.Length > 0 && paragraph.StartsWith(shown, StringComparison.Ordinal), "visible paragraph remains an exact prefix");
+                single.Measure(new Size(180, double.PositiveInfinity));
+                Require(single.DesiredSize.Height >= 120, "the formatted prefix fills the viewport");
+                MarkdownEdgeCapsulePreviewRenderer.RenderInto(single, paragraph, _ => { }, mode, new Size(420, 2000));
+                Equal(paragraph, EdgePreviewText(single.Children[0]), "a larger viewport can show all admitted characters beyond 512");
             }
         });
 
@@ -257,7 +262,7 @@ internal static partial class Program
                 Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, prefix, _ => { }, mode),
                     "exactly sixteen blocks fit without source truncation");
                 var extra = prefix + "\n" + new string('宽', 300) + "\n预算外内容";
-                Equal(Describe(prefix).Size, Describe(extra).Size, "a seventeenth block cannot widen or heighten the card");
+                Equal(Describe(prefix).Size, Describe(extra).Size, "budget-external text cannot change card geometry");
                 Require(MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, extra, _ => { }, mode), "omitted tail is reported");
                 Equal(16, panel.Children.Count, "rendered block count stays at sixteen");
                 Require(!EdgePreviewText(panel).Contains("宽"), "sizing-only tail is not silently rendered");
@@ -378,64 +383,67 @@ internal static partial class Program
         check("Edge note preview cancels stale content, retraction and unloaded builds", () =>
         {
             foreach (var boundary in new[] { "replace", "retract", "unload" })
-            {
-                var original = new StackPanel();
-                var viewport = new MarkdownEdgeCapsulePreviewViewport(original);
-                var window = new Window { Content = viewport, Width = 420, Height = 380, ShowInTaskbar = false };
-                var stepped = 0;
-                var disposed = false;
-                IEnumerable<bool> OldRender(Panel target, Size size)
+                foreach (var dense in new[] { false, true })
                 {
+                    var original = new StackPanel();
+                    var viewport = new MarkdownEdgeCapsulePreviewViewport(original);
+                    var window = new Window { Content = viewport, Width = 420, Height = 380, ShowInTaskbar = false };
+                    var stepped = 0;
+                    var disposed = false;
+                    IEnumerable<bool> OldRender(Panel target, Size size)
+                    {
+                        try
+                        {
+                            var source = dense
+                                ? string.Concat(Enumerable.Repeat("**旧内容** `code` [链接](https://example.com) ", 150))
+                                : string.Join("\n", Enumerable.Repeat("旧内容", 200));
+                            foreach (var truncated in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(target, source, _ => { }, MarkdownRenderModes.Full, size))
+                            {
+                                if (++stepped == 1)
+                                {
+                                    viewport.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+                                    {
+                                        if (boundary == "replace")
+                                            viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "新内容", _ => { }, MarkdownRenderModes.Full, bounds));
+                                        else if (boundary == "retract")
+                                            viewport.SetPreviewActive(false);
+                                        else
+                                            window.Content = null;
+                                    }));
+                                }
+                                yield return truncated;
+                            }
+                        }
+                        finally { disposed = true; }
+                    }
+                    viewport.SetContent(OldRender);
                     try
                     {
-                        var source = string.Join("\n", Enumerable.Repeat("旧内容", 200));
-                        foreach (var truncated in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(target, source, _ => { }, MarkdownRenderModes.Full, size))
+                        window.Show();
+                        Pump();
+                        Require(stepped is > 0 and <= 4 && disposed, $"{boundary} stops and disposes the old iterator");
+                        var body = viewport.Children.OfType<StackPanel>().Single();
+                        Require(!EdgePreviewText(body).Contains("旧内容"), $"{boundary} never publishes a late result");
+                        if (boundary == "replace")
                         {
-                            if (++stepped == 1)
-                            {
-                                viewport.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
-                                {
-                                    if (boundary == "replace")
-                                        viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "新内容", _ => { }, MarkdownRenderModes.Full, bounds));
-                                    else if (boundary == "retract")
-                                        viewport.SetPreviewActive(false);
-                                    else
-                                        window.Content = null;
-                                }));
-                            }
-                            yield return truncated;
+                            Require(EdgePreviewText(body).Contains("新内容"), "replacement wins over the older asynchronous task");
+                        }
+                        else
+                        {
+                            Require(ReferenceEquals(original, body), "cancelled build keeps the prior published surface");
+                            viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "恢复", _ => { }, MarkdownRenderModes.Full, bounds));
+                            viewport.SetPreviewActive(true);
+                            window.Content = viewport;
+                            Pump();
+                            Require(EdgePreviewText(viewport).Contains("恢复"), "reactivation and reattachment can prepare fresh content");
                         }
                     }
-                    finally { disposed = true; }
-                }
-                viewport.SetContent(OldRender);
-                try
-                {
-                    window.Show();
-                    Pump();
-                    Require(stepped is > 0 and <= 4 && disposed, $"{boundary} stops and disposes the old iterator");
-                    var body = viewport.Children.OfType<StackPanel>().Single();
-                    Require(!EdgePreviewText(body).Contains("旧内容"), $"{boundary} never publishes a late result");
-                    if (boundary == "replace")
+                    finally
                     {
-                        Require(EdgePreviewText(body).Contains("新内容"), "replacement wins over the older asynchronous task");
-                    }
-                    else
-                    {
-                        Require(ReferenceEquals(original, body), "cancelled build keeps the prior published surface");
-                        viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "恢复", _ => { }, MarkdownRenderModes.Full, bounds));
-                        viewport.SetPreviewActive(true);
-                        window.Content = viewport;
+                        window.Close();
                         Pump();
-                        Require(EdgePreviewText(viewport).Contains("恢复"), "reactivation and reattachment can prepare fresh content");
                     }
                 }
-                finally
-                {
-                    window.Close();
-                    Pump();
-                }
-            }
         });
 
         check("Edge note preview yields while scanning a long fenced block", () =>
@@ -521,40 +529,41 @@ internal static partial class Program
         check("Edge Full code stops at the viewport before scanning its invisible fence tail", () =>
         {
             foreach (var line in new[] { "code", "" })
-            foreach (var closed in new[] { false, true })
-            {
-                var source = "```\n" + string.Join("\n", Enumerable.Repeat(line, 1000)) +
-                    "\nINVISIBLE_TAIL" + (closed ? "\n```" : "");
-                var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
-                var eager = new StackPanel();
-                MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { });
-                var fullText = EdgePreviewCodeText(eager);
-                foreach (var size in new[] { new Size(180, 120), new Size(420, 340) })
-                foreach (var zoom in new[] { 0.5, 1.5 })
+                foreach (var closed in new[] { false, true })
                 {
-                    var panel = new StackPanel();
-                    var steps = 0;
-                    var truncated = false;
-                    foreach (var value in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, content, _ => { }, size, zoom))
-                    {
-                        steps++;
-                        truncated = value;
-                    }
-                    Require(truncated, "omitted code is reported to the overflow indicator");
-                    Require(steps < 100 && steps < content.Lines.Count,
-                        "work stops near the visible bottom, not at the thousand-line closing fence");
-                    Equal(1, panel.Children.Count, "unfinished visible fence is not emitted twice");
-                    var shown = EdgePreviewCodeText(panel);
-                    Require(fullText.StartsWith(shown, StringComparison.Ordinal), "visible code remains an exact prefix");
-                    Require(!shown.Contains("INVISIBLE_TAIL"), "hidden code is not laid out");
-                    panel.Measure(new Size(size.Width, double.PositiveInfinity));
-                    Require(panel.DesiredSize.Height >= size.Height, "the prefix still covers the visible viewport");
-                    Console.WriteLine($"  Edge code {size} zoom={zoom} closed={closed} blank={line.Length == 0}: {content.Lines.Count} -> {steps} steps");
+                    var source = "```\n" + string.Join("\n", Enumerable.Repeat(line, 1000)) +
+                        "\nINVISIBLE_TAIL" + (closed ? "\n```" : "");
+                    var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, MarkdownRenderModes.Full);
+                    var eager = new StackPanel();
+                    MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { });
+                    var fullText = EdgePreviewCodeText(eager);
+                    foreach (var size in new[] { new Size(180, 120), new Size(420, 340) })
+                        foreach (var zoom in new[] { 0.5, 1.5 })
+                        {
+                            var panel = new StackPanel();
+                            var steps = 0;
+                            var truncated = false;
+                            foreach (var value in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, content, _ => { }, size, zoom))
+                            {
+                                steps++;
+                                truncated = value;
+                            }
+                            Require(truncated, "omitted code is reported to the overflow indicator");
+                            Require(steps < 100 && steps < content.Lines.Count,
+                                "work stops near the visible bottom, not at the thousand-line closing fence");
+                            Equal(1, panel.Children.Count, "unfinished visible fence is not emitted twice");
+                            var shown = EdgePreviewCodeText(panel);
+                            Require(fullText.StartsWith(shown, StringComparison.Ordinal), "visible code remains an exact prefix");
+                            Require(!shown.Contains("INVISIBLE_TAIL"), "hidden code is not laid out");
+                            panel.Measure(new Size(size.Width, double.PositiveInfinity));
+                            Require(panel.DesiredSize.Height >= size.Height, "the prefix still covers the visible viewport");
+                            Console.WriteLine($"  Edge code {size} zoom={zoom} closed={closed} blank={line.Length == 0}: {content.Lines.Count} -> {steps} steps");
+                        }
                 }
-            }
         });
 
         RunEdgePreviewAppearanceChecks(check);
+        RunEdgePreviewTextLayoutChecks(check);
     }
 
     private static string EdgePreviewCodeText(Panel panel)
@@ -579,6 +588,7 @@ internal static partial class Program
 
     private static string EdgePreviewText(DependencyObject element)
     {
+        if (element is MarkdownEdgePreviewParagraph paragraph) return paragraph.VisibleText;
         if (element is TextBlock text)
         {
             return new TextRange(text.ContentStart, text.ContentEnd).Text;

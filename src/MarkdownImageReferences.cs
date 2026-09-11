@@ -232,7 +232,7 @@ public static class MarkdownImageReferences
         return builder.ToString();
     }
 
-    private static bool TrySplitMarkdownImage(
+    internal static bool TrySplitMarkdownImage(
         string text,
         out string label,
         out string url,
