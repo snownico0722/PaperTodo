@@ -130,10 +130,10 @@ internal static partial class Program
                                     ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight;
                                 Equal(expectedWeight, heading.FontWeight, "same heading weight");
                                 var row = (TextBlock)panel.Children[1];
-                                var bold = row.Inlines.OfType<Bold>().Single();
+                                var bold = row.Inlines.OfType<Run>().Single(run => run.Text == "strong");
                                 Equal(expectedWeight, bold.FontWeight, "same semantic strong weight");
                                 Equal(AppTypography.FontFamilyFor(content: true, bold: true).Source, bold.FontFamily.Source, "same semantic bold face");
-                                var code = row.Inlines.OfType<Span>().First(span => span is not Bold);
+                                var code = row.Inlines.OfType<Run>().Single(run => run.Text == "code");
                                 Equal(NoteTypography.CodeFontFamily.Source, code.FontFamily.Source, "same inline code family");
                                 Equal(Math.Round(NoteTypography.CodeFontSize * zoom, 1), code.FontSize, "inline code zoom is composed once");
                             }

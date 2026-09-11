@@ -27,7 +27,7 @@ internal static partial class Program
             {
                 MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, "**粗体**", _ => { }, mode);
                 var text = (TextBlock)panel.Children[0];
-                Require(text.Inlines.OfType<Bold>().Any(), "enabled modes style emphasis");
+                Require(text.Inlines.OfType<Run>().Any(run => run.Text == "粗体" && run.FontWeight == (AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight)), "enabled modes retain effective strong typography without wrappers");
                 var marker = text.Inlines.OfType<Run>().First();
                 Equal(mode == MarkdownRenderModes.Enhanced,
                     marker.ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue,

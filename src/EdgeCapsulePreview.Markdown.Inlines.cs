@@ -70,24 +70,19 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var run = new Run(piece.Text);
             if (Has(InlineStyle.Syntax)) run.Foreground = Theme.SyntaxFadeBrush;
             else if (Has(InlineStyle.Weak)) run.SetResourceReference(TextElement.ForegroundProperty, "WeakTextBrushKey");
-            Inline inline = run;
+            // Apply font styles directly; keep real Hyperlinks for input and resources.
+            if (Has(InlineStyle.Strong)) ApplyStrongTypography(run);
+            if (Has(InlineStyle.Italic)) run.FontStyle = FontStyles.Italic;
             if (Has(InlineStyle.Code))
             {
-                var code = new Span(inline)
-                {
-                    FontFamily = NoteTypography.CodeFontFamily,
-                    FontSize = NoteTypography.CodeFontSize
-                };
-                code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
-                inline = code;
+                // The former inner code Span overrode the outer Bold's font family.
+                run.FontFamily = NoteTypography.CodeFontFamily;
+                run.FontSize = NoteTypography.CodeFontSize;
+                run.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
             }
-            if (Has(InlineStyle.Strong))
-            {
-                var bold = new Bold(inline);
-                ApplyStrongTypography(bold);
-                inline = bold;
-            }
-            if (Has(InlineStyle.Italic)) inline = new Italic(inline);
+            // Decorations retain their original scope: moving them onto a font-sized Run
+            // changes WPF underline/strikethrough metrics even when glyphs are identical.
+            Inline inline = run;
             if (Has(InlineStyle.Strike)) inline = new Span(inline) { TextDecorations = TextDecorations.Strikethrough };
             if (Has(InlineStyle.Underline)) inline = new Span(inline) { TextDecorations = TextDecorations.Underline };
             (activeLink?.Inlines ?? target).Add(inline);
