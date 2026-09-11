@@ -50,22 +50,25 @@ internal sealed class EdgeCapsulePresenter
     private sealed class RenderReconcileRegistration
     {
         private EdgeCapsuleFrameScheduler? _scheduler;
+        private readonly EdgeCapsulePresenter _owner;
 
-        internal RenderReconcileRegistration(EdgeCapsuleFrameScheduler scheduler)
+        internal RenderReconcileRegistration(EdgeCapsuleFrameScheduler scheduler, EdgeCapsulePresenter owner)
         {
             _scheduler = scheduler;
-            scheduler.RegisterRenderReconcile();
+            _owner = owner;
+            scheduler.RegisterRenderReconcile(owner);
         }
 
         internal void Complete()
         {
             var scheduler = _scheduler;
             _scheduler = null;
-            scheduler?.CompleteRenderReconcile();
+            scheduler?.CompleteRenderReconcile(_owner);
         }
     }
 
-    private sealed class VisualTransactionDeferral(EdgeCapsulePresenter owner) : IDisposable
+    private sealed class VisualTransactionDeferral(
+        EdgeCapsulePresenter owner, RenderReconcileRegistration registration) : IDisposable
     {
         private EdgeCapsulePresenter? _owner = owner;
 
@@ -73,7 +76,9 @@ internal sealed class EdgeCapsulePresenter
         {
             var presenter = _owner;
             _owner = null;
-            presenter?.ReleaseVisualTransactionDeferral();
+            if (presenter == null) return;
+            try { presenter.ReleaseVisualTransactionDeferral(); }
+            finally { registration.Complete(); }
         }
     }
 
@@ -82,10 +87,14 @@ internal sealed class EdgeCapsulePresenter
     internal IDisposable DeferReconcileToVisualTransaction()
     {
         _visualTransactionDeferrals++;
+        // A staged member may not yet be animated. Register its queue barrier independently of
+        // the active presenter list so an existing sibling cannot publish this generation early.
+        _frameScheduler ??= EdgeCapsuleFrameScheduler.For(_dispatcher ?? Dispatcher.CurrentDispatcher);
+        var registration = new RenderReconcileRegistration(_frameScheduler, this);
         // Retain dirty input/measure work, but retire its earlier Send/Render callback. Otherwise
         // it can see the newly staged Preview model before the queue installs its shared motion.
         CancelQueuedReconcile();
-        return new VisualTransactionDeferral(this);
+        return new VisualTransactionDeferral(this, registration);
     }
 
     private void ReleaseVisualTransactionDeferral()
@@ -98,6 +107,8 @@ internal sealed class EdgeCapsulePresenter
             // Also drain unconsumed work after cancellation or a failed queue admission.
             QueueReconcile(EdgeCapsuleDirty.None, dispatcher, reconcile, beforeNextRender: false);
         }
+        // The deferral releases its registration after any remaining work is queued. Even if
+        // Flush consumed all dirty flags, that release resumes an active transition directly.
     }
 
     private EdgeCapsuleDirty _dirty;
@@ -716,7 +727,7 @@ internal sealed class EdgeCapsulePresenter
         {
             _frameScheduler ??= EdgeCapsuleFrameScheduler.For(_dispatcher);
             reconcileRegistration =
-                new RenderReconcileRegistration(_frameScheduler);
+                new RenderReconcileRegistration(_frameScheduler, this);
         }
         _reconcileRegistration = reconcileRegistration;
 
@@ -885,6 +896,9 @@ internal sealed class EdgeCapsulePresenter
         }
         if (_frameSchedulerActive)
         {
+            // Layout refresh or joining a cross-queue transaction can change the current group
+            // while this presenter is already registered, including while Rendering is paused.
+            _frameScheduler?.ReconcileReadinessChanged();
             return;
         }
 
@@ -960,6 +974,7 @@ internal sealed class EdgeCapsulePresenter
         {
             StopFrameScheduler();
         }
+        _frameScheduler?.ReconcileReadinessChanged();
     }
 
     internal void AbortNativeBatchTransactionGroup(long groupId)
@@ -1205,8 +1220,7 @@ internal sealed class EdgeCapsulePresenter
         {
             _dirty |= EdgeCapsuleDirty.Frame;
         }
-        _reconcileGeneration++;
-        _reconcileScheduled = false;
+        CancelQueuedReconcile();
         _hasFramePointerOverride = true;
         _framePointerOverride = pointer;
         _advancingSharedFrameScheduler = scheduler;

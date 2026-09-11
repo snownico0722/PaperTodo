@@ -80,7 +80,7 @@ PaperTodo.exe
 | docked Edge surface | `EdgeCapsuleHost` | 每纸片 bounded HWND 和完整 WPF visual tree |
 | 同队列 compositor translation | `EdgeCapsuleQueueCompositionProxy` | live HWND surface 的 X/Y translation 与 visual-authority handoff |
 | floating drag | `EdgeCapsuleDragWindow` | 独立 floating pill HWND |
-| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` | Rendering cadence、统一 pointer/time sample、liveness rescue |
+| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` | Rendering cadence、统一 pointer/time sample、按队列的更新屏障 |
 
 ## 3. 进程与运行时边界
 
@@ -357,9 +357,9 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 首次没有 preview session 时，经过验证的真实物理命中可以直接建立 owner；已有 session 内的 A→B transfer 则继续使用当前 residence/stability/predictor policy。具体毫秒数和灵敏度属于实现参数，留在代码。
 
-同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`。正常 transition 由 `CompositionTarget.Rendering` 推进；watchdog 只在 Rendering 没有及时推进 active transition 时做 demand-driven rescue，不成为第二套长期动画时钟。
+同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`，transition 只由 `CompositionTarget.Rendering` 推进，不设补帧计时器。待处理 reconcile 与 visual transaction deferral 只阻挡所属 native batch group，其他就绪队列继续逐帧推进；跨队列事务仍按同一 transaction group 原子处理，原生 apply 重入保护不变。没有就绪队列时暂停 Rendering 订阅，更新或事务的最后一个 owner 释放后重新订阅，由 WPF 请求下一帧；全部结束后取消订阅。
 
-这些原则的历史原因、失败路线和不可回退点见 D-005～D-014。
+这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前无补帧调度见 D-032。
 
 ## 7. OS 与全局集成
 

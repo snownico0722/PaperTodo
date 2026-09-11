@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using System.Windows.Threading;
 using PaperTodo;
 
@@ -7,7 +6,7 @@ internal static partial class Program
 {
     private static void QueuedPreviewTransactions()
     {
-        SharedFrameWatchdogLiveness();
+        SharedFrameRenderingLiveness();
         var dispatcher = Dispatcher.CurrentDispatcher;
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
         foreach (var edge in new[] { EdgeCapsuleEdge.Left, EdgeCapsuleEdge.Right })
@@ -113,88 +112,6 @@ internal static partial class Program
                     presenter.ClearDeferredWork();
                 }
             }
-        }
-    }
-
-    private static void SharedFrameWatchdogLiveness()
-    {
-        var dispatcher = Dispatcher.CurrentDispatcher;
-        var scheduler = EdgeCapsuleFrameScheduler.For(dispatcher);
-        var presenter = new EdgeCapsulePresenter();
-        var monitor = new MonitorGeometry("watchdog-test",
-            new DeviceScreenRect(-100000, -100000, 2560, 1440), 1, 1);
-        Func<EdgeCapsuleDirty, EdgeCapsuleDirty> reconcile = dirty => presenter.Reconcile(dirty,
-            () => new EdgeCapsuleLayoutSnapshot(monitor, EdgeCapsuleEdge.Left,
-                40, 0, 100, 28, 40, 300, 360, false, 1, null, 328, 360),
-            () => null, frame => frame, _ => true);
-        // Drive the real scheduler at deterministic expiry boundaries without sleeping or
-        // assuming that a CI desktop delivers a particular display refresh rate.
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var type = typeof(EdgeCapsuleFrameScheduler);
-        var deadline = type.GetField("_transitionLivenessWatchdogDeadlineTimestamp", flags)!;
-        var generation = type.GetField("_transitionLivenessWatchdogGeneration", flags)!;
-        void Invoke(string method, params object?[] arguments) => type.GetMethod(method, flags)!.Invoke(scheduler, arguments);
-        void Wake()
-        {
-            // A real one-shot has already fired before entering this UI callback.
-            ((System.Threading.Timer)type.GetField("_transitionLivenessWatchdog", flags)!.GetValue(scheduler)!)
-                .Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
-            Invoke("OnTransitionLivenessWatchdogDispatcherWake");
-        }
-        var pending = false;
-        try
-        {
-            Check(presenter.Dispatch(EdgeCapsuleIntent.Attach(new(0, 0, 1),
-                EdgeCapsulePaperForm.Collapsed, false)).Accepted, "Attach watchdog presenter");
-            presenter.RequestPresentation(EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State));
-            presenter.Flush(EdgeCapsuleDirty.Measure | EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
-            presenter.Dispatch(EdgeCapsuleIntent.PreviewChanged(true));
-            presenter.RequestPresentation(EdgeCapsuleMotion.Animate(EdgeCapsuleTransitionReason.Preview, 1000));
-            presenter.Flush(EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
-            Check(presenter.HasActiveTransition && (long)deadline.GetValue(scheduler)! > 0,
-                "Liveness is armed before the first composition callback");
-
-            var version = presenter.AppliedPresentationVersion;
-            deadline.SetValue(scheduler, Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10);
-            Wake();
-            Check(presenter.AppliedPresentationVersion == version,
-                "A wake before the latest progress deadline cannot supplement an animation frame");
-
-            deadline.SetValue(scheduler, 1L);
-            var expiredGeneration = (long)generation.GetValue(scheduler)!;
-            presenter.RebaseActiveTransitionStart(Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10);
-            Invoke("OnRendering", null, EventArgs.Empty);
-            version = presenter.AppliedPresentationVersion;
-            Invoke("TryRunTransitionLivenessRescue", "stale-check", expiredGeneration);
-            Check(presenter.AppliedPresentationVersion == version,
-                "A genuine composition frame supersedes an older rescue generation");
-
-            presenter.RebaseActiveTransitionStart(Stopwatch.GetTimestamp() - Stopwatch.Frequency * 2);
-            deadline.SetValue(scheduler, 1L);
-            scheduler.RegisterRenderReconcile();
-            pending = true;
-            Wake();
-            Check(presenter.AppliedPresentationVersion == version && presenter.HasActiveTransition,
-                "An expired rescue cannot consume a pending render transaction");
-            scheduler.CompleteRenderReconcile();
-            pending = false;
-            Wake();
-            Check(!presenter.HasActiveTransition && presenter.AppliedPresentationVersion > version,
-                "Once the owner releases, a missing-render rescue can finish the transition");
-
-            version = presenter.AppliedPresentationVersion;
-            presenter.CancelTransition();
-            presenter.ClearDeferredWork();
-            Wake();
-            Check(presenter.AppliedPresentationVersion == version && !presenter.HasActiveTransition,
-                "A late timer wake cannot revive a settled or cancelled presenter");
-        }
-        finally
-        {
-            if (pending) scheduler.CompleteRenderReconcile();
-            presenter.CancelTransition();
-            presenter.ClearDeferredWork();
-            DrainTransactionChecksDispatcher();
         }
     }
 

@@ -158,6 +158,7 @@ internal static partial class Program
         host.SetDefaultIconSlotWidth(0);
         Check(host.DefaultIconSlotWidthForChecks < 0.01,
             "Script/natural icon layout can release the default slot");
+        PreviewClipReuse(host);
     }
 
     private static void Geometry()
