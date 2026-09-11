@@ -9,12 +9,12 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
-// Dispatcher-local, bounded, disposable work. Never a new preview/animation authority.
-// Pure excerpts own no paper/view; only four detached, already complete bodies may be retained.
+// Dispatcher-local, disposable speculative work. Never a new preview/animation authority.
+// Only content that already qualifies for the renderer's expensive prepared-paragraph path is
+// retained. There is deliberately no paper-count/LRU cap: light notes do not enter this cache,
+// while heavy notes keep one current excerpt/body each until invalidated or their window closes.
 internal sealed class MarkdownEdgePreviewPreload
 {
-    internal const int MaximumExcerpts = 128;
-    internal const int MaximumBodies = 4;
     private static readonly ConditionalWeakTable<Dispatcher, MarkdownEdgePreviewPreload> Instances = new();
     internal static MarkdownEdgePreviewPreload For(Dispatcher dispatcher) =>
         Instances.GetValue(dispatcher, value => new(value));
@@ -22,6 +22,8 @@ internal sealed class MarkdownEdgePreviewPreload
     private readonly Dispatcher _dispatcher;
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Excerpt> _excerpts = new();
     private readonly LinkedList<Body> _bodies = new();
+    // Kept only for the same-binary diagnostic that proves text-only warming is not generally
+    // useful. Product scheduling does not call RequestText.
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<EdgeCapsulePreviewContext?>> _pendingText = new();
     private readonly LinkedList<(EdgeCapsulePreviewInvalidationSource Source, Func<Target?> Read)> _pendingLayout = new();
     private readonly DispatcherTimer _debounce;
@@ -56,6 +58,28 @@ internal sealed class MarkdownEdgePreviewPreload
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
+    // Match the renderer's existing expensive-path rule rather than pointer proximity. Long rows
+    // always use TextFormatter preparation; a shorter row is heavy only when it is at least 96
+    // source characters and expands into at least 24 semantic style pieces. Ordinary short notes
+    // therefore pay no speculative parse/layout cost.
+    internal static bool IsClearlyHighLoad(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
+    {
+        if (content.IsEmpty) return false;
+        foreach (var line in content.Lines)
+        {
+            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
+                continue;
+            var text = line.Text.Trim();
+            if (text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
+                return true;
+            if (line.WasInsideFence || content.RenderMode == MarkdownRenderModes.Off || text.Length < 96)
+                continue;
+            if (content.Inlines.Get(text, content.RenderMode).Pieces.Count >= 24)
+                return true;
+        }
+        return false;
+    }
+
     internal MarkdownEdgeCapsulePreviewRenderer.PreviewContent Capture(EdgeCapsulePreviewContext context)
     {
         _dispatcher.VerifyAccess();
@@ -65,6 +89,12 @@ internal sealed class MarkdownEdgePreviewPreload
             context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
         if (!_enabled) return candidate;
         var source = context.InvalidationSource;
+        if (!IsClearlyHighLoad(candidate))
+        {
+            _excerpts.Remove(source);
+            ForgetBodies(source);
+            return candidate;
+        }
         if (_excerpts.TryGetValue(source, out var entry) &&
             entry.Content.RenderMode == candidate.RenderMode && entry.Content.Truncated == candidate.Truncated &&
             entry.Content.Lines.SequenceEqual(candidate.Lines))
@@ -74,12 +104,6 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         ForgetBodies(source);
         _excerpts[source] = new(candidate, ++_clock);
-        while (_excerpts.Count > MaximumExcerpts)
-        {
-            var oldest = _excerpts.MinBy(pair => pair.Value.Touched).Key;
-            _excerpts.Remove(oldest);
-            ForgetBodies(oldest);
-        }
         return candidate;
     }
 
@@ -139,11 +163,13 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || !body.Key.Binding.Current || body.Panel.Parent != null ||
+            !IsClearlyHighLoad(body.Key.Binding.Content) ||
             !_excerpts.TryGetValue(body.Key.Binding.Source, out var current) ||
             !ReferenceEquals(current.Content, body.Key.Binding.Content)) return false;
+        // Exactly one completed body per heavy note. Count is determined by heavy-note count, not
+        // mouse prediction or a recent-items LRU.
         ForgetBodies(body.Key.Binding.Source);
         _bodies.AddFirst(body);
-        while (_bodies.Count > MaximumBodies) _bodies.RemoveLast();
         return true;
     }
 
@@ -182,7 +208,6 @@ internal sealed class MarkdownEdgePreviewPreload
         if (!_enabled || _dispatcher.HasShutdownStarted) return;
         _dispatcher.VerifyAccess();
         _pendingText[source] = read;
-        while (_pendingText.Count > MaximumExcerpts) _pendingText.Remove(_pendingText.Keys.First());
         Arm();
     }
 
@@ -197,7 +222,6 @@ internal sealed class MarkdownEdgePreviewPreload
             node = next;
         }
         _pendingLayout.AddLast((source, read));
-        while (_pendingLayout.Count > MaximumBodies) _pendingLayout.RemoveFirst();
         Arm();
     }
 
@@ -206,10 +230,11 @@ internal sealed class MarkdownEdgePreviewPreload
     internal void BeginDemand()
     {
         _dispatcher.VerifyAccess();
+        // Demand wins immediately, but queued high-load notes are not discarded. They resume at
+        // ContextIdle afterwards, so pointer movement does not decide which notes deserve preload.
         _work?.Cancel();
-        _pendingLayout.Clear();
         _debounce.Stop();
-        if (_pendingText.Count > 0) Arm();
+        if (PendingCount > 0) Arm();
     }
 
     private async void Drain()
@@ -261,6 +286,9 @@ internal sealed class MarkdownEdgePreviewPreload
             !target.Anchor.IsLoaded || !target.Anchor.IsVisible) return false;
         var version = target.Context.InvalidationSource.Version;
         var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(target.Context);
+        // Recheck at execution time: a queued heavy note may have become cheap before its turn.
+        var content = Capture(target.Context);
+        if (!IsClearlyHighLoad(content)) return false;
         var view = (MarkdownEdgeCapsulePreviewView)descriptor.CreateContent(target.Size);
         var viewport = view.PreloadViewport;
         var holder = new Canvas { Width = 0, Height = 0, ClipToBounds = true,
