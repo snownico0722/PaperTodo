@@ -9,7 +9,8 @@ public sealed partial class AppController
         PaperWindow Window,
         string QueueKey,
         EdgeCapsuleMotion Motion,
-        bool RefreshLayout);
+        bool RefreshLayout,
+        IDisposable? ReconcileDeferral = null);
 
     private readonly Dictionary<
         PaperWindow,
@@ -91,7 +92,8 @@ public sealed partial class AppController
                     window,
                     QueueKey(window.EdgeCapsulePreviewPaper),
                     motion,
-                    refreshLayout);
+                    refreshLayout,
+                    window.DeferEdgeCapsuleVisualTransactionReconcile());
         }
         return true;
     }
@@ -183,6 +185,10 @@ public sealed partial class AppController
         }
         finally
         {
+            foreach (var entry in entries)
+            {
+                entry.ReconcileDeferral?.Dispose();
+            }
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"transaction.commit totalMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(commitStartedAt):F3} " +

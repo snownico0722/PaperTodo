@@ -65,6 +65,41 @@ internal sealed class EdgeCapsulePresenter
         }
     }
 
+    private sealed class VisualTransactionDeferral(EdgeCapsulePresenter owner) : IDisposable
+    {
+        private EdgeCapsulePresenter? _owner = owner;
+
+        public void Dispose()
+        {
+            var presenter = _owner;
+            _owner = null;
+            presenter?.ReleaseVisualTransactionDeferral();
+        }
+    }
+
+    private int _visualTransactionDeferrals;
+
+    internal IDisposable DeferReconcileToVisualTransaction()
+    {
+        _visualTransactionDeferrals++;
+        // Retain dirty input/measure work, but retire its earlier Send/Render callback. Otherwise
+        // it can see the newly staged Preview model before the queue installs its shared motion.
+        CancelQueuedReconcile();
+        return new VisualTransactionDeferral(this);
+    }
+
+    private void ReleaseVisualTransactionDeferral()
+    {
+        _visualTransactionDeferrals--;
+        if (_visualTransactionDeferrals == 0 && _dirty != EdgeCapsuleDirty.None &&
+            _dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } dispatcher &&
+            _reconcile is { } reconcile)
+        {
+            // Also drain unconsumed work after cancellation or a failed queue admission.
+            QueueReconcile(EdgeCapsuleDirty.None, dispatcher, reconcile, beforeNextRender: false);
+        }
+    }
+
     private EdgeCapsuleDirty _dirty;
     private bool _reconcileScheduled;
     private DispatcherOperation? _reconcileOperation;
@@ -167,9 +202,8 @@ internal sealed class EdgeCapsulePresenter
             return;
         }
 
-        // Queue endpoint settlement happens while compositor authority still covers the real
-        // HWND. No animation frame has been published yet, so the full WPF transition begins at
-        // the same post-endpoint QPC used by DirectComposition.
+        // Queue endpoint settlement and the blocking cover publication have finished. No motion
+        // has been published yet, so WPF and DirectComposition share this fresh animation start.
         Transition = active with
         {
             Start = AppliedPresentation,
@@ -444,7 +478,7 @@ internal sealed class EdgeCapsulePresenter
         _dirty |= dirty;
         Configure(dispatcher, reconcile);
         CancelQueuedReconcile();
-        RunReconcile(nowTimestamp);
+        RunReconcile(nowTimestamp, synchronousFlush: true);
     }
 
     public void ClearDeferredWork()
@@ -652,6 +686,11 @@ internal sealed class EdgeCapsulePresenter
             return;
         }
 
+        if (_visualTransactionDeferrals > 0)
+        {
+            return;
+        }
+
         if (_reconcileScheduled)
         {
             if (beforeNextRender &&
@@ -726,10 +765,16 @@ internal sealed class EdgeCapsulePresenter
         // If input promotes one callback to Send, the same registration drains there.
     }
 
-    private void RunReconcile(long? nowTimestamp = null)
+    private void RunReconcile(long? nowTimestamp = null, bool synchronousFlush = false)
     {
         if (_reconcile == null)
         {
+            return;
+        }
+        if (_visualTransactionDeferrals > 0 && !synchronousFlush)
+        {
+            // Only the owner's explicit Flush may consume a staged queue generation. This also
+            // covers shared frame callbacks, whose native batch alone is not that owner.
             return;
         }
         if (_nativeBatchRetryPending && !_nativeBatchApplyActive)

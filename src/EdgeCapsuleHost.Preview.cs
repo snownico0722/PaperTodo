@@ -766,6 +766,14 @@ internal sealed partial class EdgeCapsuleHost
 
     private void RestoreCompactContentAnchor()
     {
+        if (double.IsNaN(_compactContentAnchorWidthDip) &&
+            double.IsNaN(_compactPluginContentAnchorWidthDip) &&
+            double.IsNaN(_compactContentAnchorCloseWidthDip))
+        {
+            // Ordinary moving peers have no preview anchor to release. Their title/plugin layout
+            // is already compact; avoid rewriting its dependency properties on every queue frame.
+            return;
+        }
         _compactContentAnchorWidthDip = double.NaN;
         _compactPluginContentAnchorWidthDip = double.NaN;
         _compactContentAnchorCloseWidthDip = double.NaN;
