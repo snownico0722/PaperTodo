@@ -29,18 +29,20 @@ public sealed partial class PaperWindow
                 cache.Forget(_edgeCapsulePreviewInvalidationSource);
             };
         }
-        var weak = new WeakReference<PaperWindow>(this);
-        cache.RequestText(_edgeCapsulePreviewInvalidationSource, () =>
-            weak.TryGetTarget(out var window) && window.CanPreloadMarkdownText
-                ? window.CreateEdgeCapsulePreviewContext() : null);
         RequestMarkdownPreviewLayoutPreload();
     }
 
     internal void RequestMarkdownPreviewLayoutPreload()
     {
         if (!CanPreloadMarkdownText) return;
+        var cache = MarkdownEdgePreviewPreload.For(Dispatcher);
+        var context = CreateEdgeCapsulePreviewContext();
+        var content = cache.Capture(context);
+        // Light notes intentionally do nothing here. The expensive-path classifier is the same
+        // content signal that chooses prepared TextFormatter paragraphs at demand time.
+        if (!MarkdownEdgePreviewPreload.IsClearlyHighLoad(content)) return;
         var weak = new WeakReference<PaperWindow>(this);
-        MarkdownEdgePreviewPreload.For(Dispatcher).RequestLayout(_edgeCapsulePreviewInvalidationSource,
+        cache.RequestLayout(_edgeCapsulePreviewInvalidationSource,
             () => weak.TryGetTarget(out var window) ? window.ReadMarkdownPreloadTarget() : null);
     }
 
@@ -51,6 +53,8 @@ public sealed partial class PaperWindow
         var host = _edgeCapsuleHost;
         var generation = _bodySessionGeneration;
         var context = CreateEdgeCapsulePreviewContext();
+        var cache = MarkdownEdgePreviewPreload.For(Dispatcher);
+        if (!MarkdownEdgePreviewPreload.IsClearlyHighLoad(cache.Capture(context))) return null;
         var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
         var size = descriptor.Size.Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
@@ -65,19 +69,14 @@ public sealed partial class PaperWindow
 public sealed partial class AppController
 {
     internal bool MarkdownPreviewPreloadingAllowed => !IsExiting;
+
+    // Kept at the two existing preview-interest call sites, but no longer predicts nearby targets.
+    // Each live note decides from its own bounded content whether it is expensive; every expensive
+    // note is queued, regardless of queue distance or how many expensive notes currently exist.
     internal void ScheduleMarkdownPreviewNeighbors(PaperWindow owner)
     {
         if (IsExiting || !State.ExperimentalEdgeCapsuleHoverPreview || !owner.CanEnterEdgeCapsulePreview) return;
-        // Reuse the authoritative queue ordering. This never changes owner/intent/hit geometry.
-        var queueKey = QueueKey(owner.EdgeCapsulePreviewPaper);
-        var queue = BuildCurrentEdgeCapsuleQueuePlan().Queues.FirstOrDefault(item => item.Key == queueKey);
-        if (queue == null) return;
-        var index = -1;
-        for (var i = 0; i < queue.Papers.Count; i++)
-            if (queue.Papers[i].Id == owner.EdgeCapsulePreviewPaperId) { index = i; break; }
-        if (index < 0) return;
-        foreach (var i in new[] { index, index + 1, index - 1 })
-            if (i >= 0 && i < queue.Papers.Count && _windows.TryGetValue(queue.Papers[i].Id, out var window))
-                window.RequestMarkdownPreviewLayoutPreload();
+        foreach (var window in _windows.Values)
+            window.RequestMarkdownPreviewLayoutPreload();
     }
 }
