@@ -70,13 +70,12 @@ public sealed partial class AppController
 {
     internal bool MarkdownPreviewPreloadingAllowed => !IsExiting;
 
-    // Kept at the two existing preview-interest call sites, but no longer predicts nearby targets.
-    // Each live note decides from its own bounded content whether it is expensive; every expensive
-    // note is queued, regardless of queue distance or how many expensive notes currently exist.
+    // Existing call sites may nudge the actually interacted paper again if its earlier idle preload
+    // ran before the host became eligible. This is a retry only: no neighbor/global selection and
+    // no pointer prediction decides which other notes deserve caching.
     internal void ScheduleMarkdownPreviewNeighbors(PaperWindow owner)
     {
         if (IsExiting || !State.ExperimentalEdgeCapsuleHoverPreview || !owner.CanEnterEdgeCapsulePreview) return;
-        foreach (var window in _windows.Values)
-            window.RequestMarkdownPreviewLayoutPreload();
+        owner.RequestMarkdownPreviewLayoutPreload();
     }
 }
