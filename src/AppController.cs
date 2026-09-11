@@ -395,6 +395,9 @@ public sealed partial class AppController : IDisposable
 
         RefreshTrayMenu();
         ScheduleStartupShellPrewarm(papersToRestore);
+        // Restored hosts are now staged. Only queue readers; classification/layout run after the
+        // existing shared debounce, without an additional startup timer or synchronous wait.
+        foreach (var window in _windows.Values) window.RequestMarkdownPreviewLayoutPreload();
     }
 
     private void ApplyInitialStartupVisibility(StartupCommandKind command)
