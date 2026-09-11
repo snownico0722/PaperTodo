@@ -442,7 +442,7 @@ public sealed partial class PaperWindow
         }
         if (_paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown)
         {
-            return AvalonEditEdgeCapsulePreviewProvider.Instance;
+            return MarkdownEdgeCapsulePreviewProvider.Instance;
         }
         if (_paper.Type == PaperTypes.Note &&
             !IsCurrentBodyProviderMarkdown &&

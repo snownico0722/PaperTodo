@@ -18,7 +18,7 @@ internal static class Program
         try
         {
             if (args.Contains("--profile")) Profile(args.Contains("--avalon"));
-            else Checks();
+            else { SharedPreviewSemanticChecks.Run(); Checks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

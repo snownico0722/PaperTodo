@@ -132,8 +132,6 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
         ClipToBounds = true;
-        // The shell/title may appear immediately, but the body must not expose an empty first
-        // frame while cooperative Markdown preparation is still in flight.
         Opacity = 0;
         IsHitTestVisible = false;
         _body = body;
@@ -183,6 +181,12 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         version == _renderVersion && _previewActive && IsLoaded && IsVisible &&
         !Dispatcher.HasShutdownStarted;
 
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        InvalidateContentBuild();
+    }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         // Only measure already-published content. Markdown creation must not be pulled back
@@ -220,6 +224,11 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         long version)
     {
         StackPanel? staging = null;
+        var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
+        var maxBatchMs = 0.0;
+        var publicationMs = 0.0;
+        var totalSteps = 0;
+        var published = false;
         try
         {
             // Yield even before creating the iterator: shell layout/Render and input have higher
@@ -246,11 +255,12 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                         return;
                     }
                     truncated = steps.Current;
-                    // This is a cooperative budget, not a hard deadline: one bounded paragraph
-                    // can still take longer. Yield inside long code fences too, one source line
-                    // per step, instead of accumulating an entire fence in a single batch.
+                    totalSteps++;
+                    // The budget is cooperative, not a hard deadline. Long styled paragraphs
+                    // and code rows yield between visible lines; inline parsing also yields in batches.
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
+                        maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
                         await Dispatcher.Yield(DispatcherPriority.Background);
                         batchSteps = 0;
                         batchStarted = Stopwatch.GetTimestamp();
@@ -262,8 +272,10 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                 return;
             }
 
+            maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
             // Child blocks have already been measured at this exact width. Keep this root
             // attached when publishing so inherited resources/DPI do not invalidate that work.
+            var publicationStarted = Stopwatch.GetTimestamp();
             staging.Measure(new Size(size.Width, double.PositiveInfinity));
             if (!IsBuildCurrent(version))
             {
@@ -276,11 +288,11 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             _body.Opacity = 1;
             _body.IsHitTestVisible = true;
             _sourceTruncated = truncated;
-            // First publication flips only the body lane. Later refreshes keep the already
-            // published excerpt visible until their replacement is atomically ready.
             Opacity = 1;
             IsHitTestVisible = true;
+            published = true;
             InvalidateMeasure();
+            publicationMs = Stopwatch.GetElapsedTime(publicationStarted).TotalMilliseconds;
         }
         catch (Exception ex)
         {
@@ -295,6 +307,9 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         }
         finally
         {
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"markdown.prepare version={version} published={published} steps={totalSteps} " +
+                $"maxBatchMs={maxBatchMs:F3} publishMs={publicationMs:F3} elapsedMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(started):F3}");
             if (staging != null)
             {
                 Children.Remove(staging);
@@ -321,6 +336,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         bool Truncated)
     {
         public bool IsEmpty => Lines.All(line => string.IsNullOrWhiteSpace(line.Text));
+        internal PreviewInlineCache Inlines { get; } = new();
     }
 
     internal readonly record struct ContentLine(
@@ -369,9 +385,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return new PreviewContent(lines, renderMode, truncated);
     }
 
-    private static readonly Regex InlinePattern = new(
-        @"!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|\*\*\*(.+?)\*\*\*|___(.+?)___|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`]+)`|\*(.+?)\*|_([^_]+)_",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex HeadingPattern = new(
         @"^(#{1,6})\s+(.+)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -413,7 +426,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
             var text = line.WasInsideFence
                 ? original.TrimEnd()
-                : PrepareInlineTextForMeasurement(StripBlockPrefix(original));
+                : PrepareInlineTextForMeasurement(StripBlockPrefix(original), content.Inlines);
             measured.Add(CompactText(text));
         }
 
@@ -457,7 +470,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 emptyCodeBlock = false;
                 var measurementText = line.WasInsideFence || content.RenderMode != MarkdownRenderModes.Full
                     ? raw.TrimEnd()
-                    : PrepareInlineTextForMeasurement(StripBlockPrefix(trimmed));
+                    : PrepareInlineTextForMeasurement(StripBlockPrefix(trimmed), content.Inlines);
                 var lines = EdgeCapsulePreviewMeasure.EstimateWrappedLines(
                     measurementText,
                     widthDip);
@@ -513,10 +526,39 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var renderMode = content.RenderMode;
         var code = new StringBuilder();
         var codeLineCount = 0;
-        Border? codeBlock = null;
+        StackPanel? codeRows = null;
         var insideFence = false;
         var renderedHeight = 0.0;
         var truncated = false;
+        MarkdownEdgePreviewParagraph? paragraph = null;
+
+        FrameworkElement InlineBlock(TextBlock template, string text, string mode)
+        {
+            if (viewportSize.HasValue && text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
+                return paragraph = new MarkdownEdgePreviewParagraph(template, text, mode, zoom, openExternal, content.Inlines);
+            if (mode == MarkdownRenderModes.Off) { template.Text = text; return template; }
+            AddInlineContent(template.Inlines, text, openExternal, mode, content.Inlines);
+            return template;
+        }
+
+        IEnumerable<bool> AddParagraph(FrameworkElement block, Panel? parent = null)
+        {
+            ApplyTextZoom(block, zoom);
+            (parent ?? target).Children.Add(block);
+            if (viewportSize is not { } size) yield break;
+            block.Measure(new Size(size.Width, double.PositiveInfinity));
+            if (paragraph != null)
+            {
+                foreach (var omitted in paragraph.Prepare(new Size(paragraph.MeasuredWidth, Math.Max(0, size.Height - renderedHeight))))
+                {
+                    truncated |= omitted;
+                    yield return false;
+                }
+                block.InvalidateMeasure();
+                block.Measure(new Size(size.Width, double.PositiveInfinity));
+            }
+            renderedHeight += block.DesiredSize.Height;
+        }
 
         void AddBlock(FrameworkElement block)
         {
@@ -529,37 +571,50 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
         }
 
-        void FlushCodeBlock()
+        IEnumerable<bool> AddCodeRow(string line)
         {
-            if (codeBlock == null)
+            if (codeRows == null)
             {
-                codeBlock = BuildCodeBlock(code.ToString());
-                AddBlock(codeBlock);
-                return;
+                // A fence remains one content block. Prepare each admitted row once instead of
+                // repeatedly measuring a growing TextBlock, including its invisible wrapped tail.
+                codeRows = new StackPanel();
+                var host = new Border { Child = codeRows };
+                host.SetResourceReference(Border.BackgroundProperty, "HoverBrushKey");
+                target.Children.Add(host);
             }
 
-            // Reuse one attached block while measuring only its visible prefix. Waiting for the
-            // closing fence would scan every admitted code line and layout the invisible tail.
-            if (viewportSize.HasValue)
+            var text = NewTextBlock(string.Empty, NoteTypography.CodeFontSize);
+            text.FontFamily = NoteTypography.CodeFontFamily;
+            FrameworkElement row;
+            if (line.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
             {
-                renderedHeight -= codeBlock.DesiredSize.Height;
+                row = paragraph = new MarkdownEdgePreviewParagraph(
+                    text, line, MarkdownRenderModes.Off, zoom, openExternal, content.Inlines);
             }
-            // TextBlock.Text can discard an all-whitespace replacement in rich content mode.
-            // Keep the explicit Run created by BuildCodeBlock, including when its text is empty.
-            var codeText = (TextBlock)codeBlock.Child;
-            ((Run)codeText.Inlines.FirstInline!).Text = code.ToString();
-            if (viewportSize is { } size)
+            else
             {
-                // The child's text invalidation has not propagated through a layout pass yet.
-                // Explicitly invalidate the parent so same-width Measure cannot reuse old bounds.
-                codeBlock.InvalidateMeasure();
-                codeBlock.Measure(new Size(size.Width, double.PositiveInfinity));
-                renderedHeight += codeBlock.DesiredSize.Height;
+                // Explicit empty Runs preserve the first, middle and last blank code rows.
+                text.Inlines.Add(new Run(line));
+                row = text;
+            }
+            foreach (var step in AddParagraph(row, codeRows)) yield return step;
+        }
+
+        IEnumerable<bool> FinishCodeBlock()
+        {
+            if (!viewportSize.HasValue)
+            {
+                AddBlock(BuildCodeBlock(code.ToString()));
+            }
+            else if (codeRows == null)
+            {
+                foreach (var step in AddCodeRow(string.Empty)) yield return step;
             }
         }
 
         foreach (var previewLine in content.Lines)
         {
+            paragraph = null;
             // Include the block crossing the bottom edge. Measuring actual wrapped heights
             // avoids building admitted content that cannot be seen. The source budget was
             // already applied before sizing, so it cannot diverge here from the geometry input.
@@ -576,37 +631,36 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var fenceKind = previewLine.FenceKind;
             if (renderMode != MarkdownRenderModes.Full)
             {
-                AddBlock(BuildSourceBlock(
-                    line, renderMode, wasInsideFence, fenceKind, openExternal));
+                foreach (var step in AddParagraph(BuildSourceBlock(
+                    line, renderMode, wasInsideFence, fenceKind, openExternal, InlineBlock))) yield return step;
             }
             else if (fenceKind == MarkdownFenceLineKind.Opening)
             {
                 code.Clear();
                 codeLineCount = 0;
-                codeBlock = null;
+                codeRows = null;
                 insideFence = true;
             }
             else if (fenceKind == MarkdownFenceLineKind.Closing)
             {
-                FlushCodeBlock();
+                foreach (var step in FinishCodeBlock()) yield return step;
                 code.Clear();
                 insideFence = false;
             }
             else if (wasInsideFence)
             {
-                var codeLineTruncated = AppendCodeLine(code, line, codeLineCount++ > 0);
                 if (viewportSize.HasValue)
                 {
-                    FlushCodeBlock();
+                    foreach (var step in AddCodeRow(line)) yield return step;
                 }
-                if (codeLineTruncated)
+                else
                 {
-                    truncated = true;
+                    truncated |= AppendCodeLine(code, line, codeLineCount++ > 0);
                 }
             }
             else
             {
-                AddBlock(BuildBlock(line, openExternal));
+                foreach (var step in AddParagraph(BuildBlock(line, openExternal, InlineBlock))) yield return step;
             }
 
             if (truncated)
@@ -615,10 +669,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             yield return false;
         }
-        if (renderMode == MarkdownRenderModes.Full &&
-            insideFence && codeBlock == null)
+        if (renderMode == MarkdownRenderModes.Full && insideFence)
         {
-            FlushCodeBlock();
+            foreach (var step in FinishCodeBlock()) yield return step;
         }
         if (target.Children.Count == 0)
         {
@@ -643,11 +696,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string renderMode,
         bool wasInsideFence,
         MarkdownFenceLineKind fenceKind,
-        Action<string> openExternal)
+        Action<string> openExternal,
+        Func<TextBlock, string, string, FrameworkElement>? inlineBlock = null)
     {
         var text = NewTextBlock(string.Empty, NoteTypography.FontSize);
         if (renderMode == MarkdownRenderModes.Off)
         {
+            if (inlineBlock != null) return inlineBlock(text, line, MarkdownRenderModes.Off);
             text.Text = line;
             return text;
         }
@@ -663,6 +718,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else
             {
+                if (inlineBlock != null) return inlineBlock(text, line, MarkdownRenderModes.Off);
                 text.Text = line;
             }
             return text;
@@ -709,7 +765,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
 
         AddSourceSyntax(text.Inlines, renderedPrefix ?? line[..prefixLength], prefixRenderMode);
-        AddInlineContent(text.Inlines, line[prefixLength..], openExternal, 0, renderMode);
+        if (inlineBlock != null) return inlineBlock(text, line[prefixLength..], renderMode);
+        AddInlineContent(text.Inlines, line[prefixLength..], openExternal, renderMode);
         return text;
     }
 
@@ -756,7 +813,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static FrameworkElement BuildBlock(
         string line,
-        Action<string> openExternal)
+        Action<string> openExternal,
+        Func<TextBlock, string, string, FrameworkElement>? inlineBlock = null)
     {
         var trimmed = line.Trim();
         if (trimmed.Length == 0)
@@ -795,6 +853,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             var text = NewTextBlock(string.Empty, HeadingFontSize(heading.Groups[1].Value.Length));
             ApplyStrongTypography(text);
+            if (inlineBlock != null) return inlineBlock(text, heading.Groups[2].Value, MarkdownRenderModes.Full);
             AddInlineContent(text.Inlines, heading.Groups[2].Value, openExternal);
             return text;
         }
@@ -803,12 +862,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             var text = NewTextBlock(string.Empty, NoteTypography.FontSize);
             text.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
-            AddInlineContent(text.Inlines, trimmed[1..].TrimStart(), openExternal);
+            var body = inlineBlock?.Invoke(text, trimmed[1..].TrimStart(), MarkdownRenderModes.Full);
+            if (body == null) AddInlineContent(text.Inlines, trimmed[1..].TrimStart(), openExternal);
             var host = new Border
             {
                 Margin = new Thickness(4, 0, 0, 0),
                 Padding = new Thickness(8, 0, 5, 0),
-                Child = text
+                Child = body ?? text
             };
             return host;
         }
@@ -821,7 +881,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 done ? "☑" : "☐",
                 task.Groups[2].Value,
                 openExternal,
-                done);
+                done, inlineBlock);
         }
 
         var ordered = OrderedListPattern.Match(trimmed);
@@ -831,7 +891,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 $"{ordered.Groups[1].Value}.",
                 ordered.Groups[2].Value,
                 openExternal,
-                done: false);
+                done: false, inlineBlock);
         }
 
         var unordered = UnorderedListPattern.Match(trimmed);
@@ -841,10 +901,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 "•",
                 unordered.Groups[1].Value,
                 openExternal,
-                done: false);
+                done: false, inlineBlock);
         }
 
         var normal = NewTextBlock(string.Empty, NoteTypography.FontSize);
+        if (inlineBlock != null) return inlineBlock(normal, trimmed, MarkdownRenderModes.Full);
         AddInlineContent(normal.Inlines, trimmed, openExternal);
         return normal;
     }
@@ -853,7 +914,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         string marker,
         string content,
         Action<string> openExternal,
-        bool done)
+        bool done,
+        Func<TextBlock, string, string, FrameworkElement>? inlineBlock = null)
     {
         var grid = new Grid
         {
@@ -868,14 +930,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         grid.Children.Add(markerText);
 
         var body = NewTextBlock(string.Empty, NoteTypography.FontSize);
-        AddInlineContent(body.Inlines, content, openExternal);
         if (done)
         {
             body.TextDecorations = TextDecorations.Strikethrough;
             body.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         }
-        Grid.SetColumn(body, 1);
-        grid.Children.Add(body);
+        var renderedBody = inlineBlock?.Invoke(body, content, MarkdownRenderModes.Full);
+        if (renderedBody == null) AddInlineContent(body.Inlines, content, openExternal);
+        Grid.SetColumn(renderedBody ?? body, 1);
+        grid.Children.Add(renderedBody ?? body);
         return grid;
     }
 
@@ -931,6 +994,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static void ApplyTextZoom(DependencyObject element, double zoom)
     {
+        if (element is MarkdownEdgePreviewParagraph or MarkdownEdgePreviewParagraph.MeasureElement) return;
         // Compose per-paper zoom with the unrounded global size once, just as MarkdownTextBox
         // does. Only local font sizes are scaled: inherited inline sizes must not be scaled twice.
         if (element.ReadLocalValue(TextElement.FontSizeProperty) is double size)
@@ -952,153 +1016,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 ApplyTextZoom(child, zoom);
                 break;
         }
-    }
-
-    private static void AddInlineContent(
-        InlineCollection target,
-        string text,
-        Action<string> openExternal)
-        => AddInlineContent(target, text, openExternal, depth: 0);
-
-    private static void AddInlineContent(
-        InlineCollection target,
-        string text,
-        Action<string> openExternal,
-        int depth,
-        string renderMode = MarkdownRenderModes.Full)
-    {
-        string DisplayText(string source) => renderMode == MarkdownRenderModes.Full
-            ? MarkdownInlineSyntax.Unescape(source)
-            : source;
-        if (depth >= MaximumInlineDepth)
-        {
-            target.Add(new Run(DisplayText(text)));
-            return;
-        }
-
-        var scan = MarkdownInlineSyntax.MaskEscapedPunctuation(text);
-        var cursor = 0;
-        foreach (Match match in InlinePattern.Matches(scan))
-        {
-            if (match.Index > cursor)
-            {
-                target.Add(new Run(DisplayText(text[cursor..match.Index])));
-            }
-
-            string Group(int index)
-            {
-                var group = match.Groups[index];
-                return text.Substring(group.Index, group.Length);
-            }
-
-            var contentGroup = match.Groups[Enumerable.Range(1, 12)
-                .First(index => match.Groups[index].Success)];
-            if (renderMode != MarkdownRenderModes.Full)
-            {
-                AddSourceSyntax(target, text[match.Index..contentGroup.Index], renderMode);
-            }
-
-            if (match.Groups[1].Success)
-            {
-                var label = DisplayText(Group(1));
-                var image = new Span(new Run(renderMode == MarkdownRenderModes.Full
-                    ? string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}"
-                    : label));
-                image.SetResourceReference(TextElement.ForegroundProperty, "WeakTextBrushKey");
-                target.Add(image);
-            }
-            else if (match.Groups[3].Success)
-            {
-                target.Add(CreateLink(Group(3), Group(4), openExternal, depth, renderMode));
-            }
-            else if (match.Groups[5].Success || match.Groups[6].Success)
-            {
-                var group = match.Groups[5].Success ? 5 : 6;
-                var span = new Span
-                {
-                    FontStyle = FontStyles.Italic
-                };
-                ApplyStrongTypography(span);
-                AddInlineContent(span.Inlines, Group(group), openExternal, depth + 1, renderMode);
-                target.Add(span);
-            }
-            else if (match.Groups[7].Success || match.Groups[8].Success)
-            {
-                var group = match.Groups[7].Success ? 7 : 8;
-                var bold = new Bold();
-                ApplyStrongTypography(bold);
-                AddInlineContent(bold.Inlines, Group(group), openExternal, depth + 1, renderMode);
-                target.Add(bold);
-            }
-            else if (match.Groups[9].Success)
-            {
-                var strike = new Span { TextDecorations = TextDecorations.Strikethrough };
-                AddInlineContent(strike.Inlines, Group(9), openExternal, depth + 1, renderMode);
-                target.Add(strike);
-            }
-            else if (match.Groups[10].Success)
-            {
-                // CodeFontSize already contains global scaling; the block publication step adds
-                // only per-paper zoom and final rounding, for both inline and fenced code.
-                var code = new Span(new Run(Group(10)))
-                {
-                    FontFamily = NoteTypography.CodeFontFamily,
-                    FontSize = NoteTypography.CodeFontSize
-                };
-                code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
-                target.Add(code);
-            }
-            else
-            {
-                var group = match.Groups[11].Success ? 11 : 12;
-                var italic = new Italic();
-                AddInlineContent(italic.Inlines, Group(group), openExternal, depth + 1, renderMode);
-                target.Add(italic);
-            }
-
-            cursor = match.Index + match.Length;
-            if (renderMode != MarkdownRenderModes.Full)
-            {
-                AddSourceSyntax(target, text[(contentGroup.Index + contentGroup.Length)..cursor], renderMode);
-            }
-        }
-
-        if (cursor < text.Length)
-        {
-            target.Add(new Run(DisplayText(text[cursor..])));
-        }
-    }
-
-    private static Inline CreateLink(
-        string label,
-        string value,
-        Action<string> openExternal,
-        int depth,
-        string renderMode)
-    {
-        var normalizedValue = MarkdownInlineSyntax.Unescape(value);
-        if (!Uri.TryCreate(normalizedValue, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https" or "mailto"))
-        {
-            var fallback = new Span();
-            AddInlineContent(fallback.Inlines, label, openExternal, depth + 1, renderMode);
-            return fallback;
-        }
-
-        var link = new Hyperlink
-        {
-            NavigateUri = uri,
-            Cursor = Cursors.Hand
-        };
-        AddInlineContent(link.Inlines, label, openExternal, depth + 1, renderMode);
-        link.SetResourceReference(TextElement.ForegroundProperty, "LinkBrushKey");
-        EdgeCapsulePreviewInteraction.SetConsumesPointer(link, true);
-        link.RequestNavigate += (_, e) =>
-        {
-            openExternal(e.Uri.AbsoluteUri);
-            e.Handled = true;
-        };
-        return link;
     }
 
     private static IEnumerable<PreviewLine> NormalizeLines(string? markdown)
@@ -1160,44 +1077,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return truncated;
     }
 
-    private static string PrepareInlineTextForMeasurement(string text, int depth = 0)
-    {
-        if (string.IsNullOrEmpty(text) || depth >= MaximumInlineDepth)
-        {
-            return MarkdownInlineSyntax.Unescape(text);
-        }
-
-        // Use the renderer's same bounded inline grammar and escape mask. In Full mode the
-        // label is visible, not the link/image destination or emphasis delimiters. Building
-        // WPF inlines merely to estimate their text would put layout back on the hover path.
-        var scan = MarkdownInlineSyntax.MaskEscapedPunctuation(text);
-        var builder = new StringBuilder(text.Length);
-        var cursor = 0;
-        foreach (Match match in InlinePattern.Matches(scan))
-        {
-            builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..match.Index]));
-            var groupIndex = Enumerable.Range(1, 12).First(index => match.Groups[index].Success);
-            var group = match.Groups[groupIndex];
-            var value = text.Substring(group.Index, group.Length);
-            if (groupIndex == 1)
-            {
-                var label = MarkdownInlineSyntax.Unescape(value);
-                builder.Append(string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}");
-            }
-            else if (groupIndex == 10)
-            {
-                builder.Append(value);
-            }
-            else
-            {
-                builder.Append(PrepareInlineTextForMeasurement(value, depth + 1));
-            }
-            cursor = match.Index + match.Length;
-        }
-        builder.Append(MarkdownInlineSyntax.Unescape(text[cursor..]));
-        return builder.ToString();
-    }
-
+    private static string PrepareInlineTextForMeasurement(string text, PreviewInlineCache cache) =>
+        cache.Get(text, MarkdownRenderModes.Full).VisibleText;
     private static string CompactText(string value) =>
         LimitText(value, MaximumBlockCharacters, out _);
 
@@ -1236,9 +1117,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var ordered = OrderedListPattern.Match(trimmed);
         if (ordered.Success)
         {
-            // Full mode renders this marker in an Auto-sized column. Keep its visible width in
-            // the lightweight width/wrap estimate so unusually long numbers cannot steal space
-            // from the body without the card geometry noticing.
             return $"{ordered.Groups[1].Value}. {ordered.Groups[2].Value}";
         }
         var unordered = UnorderedListPattern.Match(trimmed);

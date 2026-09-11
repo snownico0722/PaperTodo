@@ -1,0 +1,181 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using PaperTodo;
+
+internal static partial class Program
+{
+    private static void RunEdgePreviewTextLayoutChecks(Action<string, Action> check)
+    {
+        RunEdgePreviewInlinePreparationChecks(check);
+        // Describe retains main's bounded lightweight estimate; renderer checks follow.
+        check("Value inline runs retain the existing preview grammar", () =>
+        {
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+                foreach (var text in new[] { "**粗体** `code` [链接](https://example.com)", "***both*** ~~strike~~ __bold__ ![图](i:asset)",
+                @"\*literal\* **a *nested* b** [**label**](https://example.com/a\*b)", "`a\\*b` [bad](javascript:no) ![](i:asset)" })
+                {
+                    var panel = new StackPanel();
+                    MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, text, _ => { }, mode);
+                    Equal(string.Concat(EdgePreviewElements(panel).OfType<TextBlock>().Select(t => InlineText(t.Inlines))), string.Concat(MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).Select(p => p.Text)),
+                        "optimized layout does not change visible syntax or labels");
+                }
+        });
+
+        check("Long paragraph layout preserves visible pixels and link activation", () =>
+        {
+            try
+            {
+                foreach (var sharp in new[] { false, true })
+                    foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
+                        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+                            foreach (var prefix in new[] { "", "## ", "> ", "- [x] ", "```\n" })
+                            {
+                                AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
+                                    sharp ? 1.2 : 1.0, textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
+                                NoteTypography.Configure(sharp ? VisualTextSizes.Large : VisualTextSizes.Medium, sharp);
+                                var source = prefix + string.Concat(Enumerable.Repeat("**粗体** `code` [链接](https://example.com) 中文 ", 12)).TrimEnd();
+                                var eager = new StackPanel { Background = Brushes.White }; var bounded = new StackPanel { Background = Brushes.White };
+                                var host = new Grid(); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) }); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
+                                host.Resources["TextBrushKey"] = Brushes.Black;
+                                host.Resources["WeakTextBrushKey"] = Brushes.Gray;
+                                host.Resources["LinkBrushKey"] = Brushes.Blue;
+                                host.Resources["HoverBrushKey"] = Brushes.LightGray;
+                                host.Children.Add(eager); Grid.SetColumn(bounded, 1); host.Children.Add(bounded);
+                                var window = new Window { Content = host, Width = 850, Height = 600, ShowInTaskbar = false, ShowActivated = false };
+                                string? opened = null;
+                                try
+                                {
+                                    window.Show(); Pump();
+                                    MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { }, mode, textZoom: zoom);
+                                    MarkdownEdgeCapsulePreviewRenderer.RenderInto(bounded, source, uri => opened = uri, mode, new Size(eager.ActualWidth, 180), zoom);
+                                    Pump(); host.UpdateLayout();
+                                    var paragraph = EdgePreviewElements(bounded).OfType<MarkdownEdgePreviewParagraph>().Single();
+                                    Require(EdgePreviewElements(eager).OfType<TextBlock>().Any(text => InlineText(text.Inlines).StartsWith(paragraph.VisibleText, StringComparison.Ordinal)), "formatted text is a visible prefix");
+                                    var first = CapturePreviewPixels(eager, 120, mode + "-expected"); var second = CapturePreviewPixels(bounded, 120, mode + "-actual");
+                                    var changed = first.Zip(second).Count(pair => Math.Abs(pair.First - pair.Second) > 32);
+                                    Console.WriteLine($"  Edge paragraph pixels {mode} sharp={sharp} zoom={zoom} prefix={prefix}: changed={changed}/{first.Length}, lines={paragraph.FormattedLines}");
+                                    if (changed >= first.Length * 0.02)
+                                    {
+                                        IEnumerable<GlyphRun> Glyphs(Drawing drawing) => drawing is GlyphRunDrawing g ? new[] { g.GlyphRun }
+                                            : drawing is DrawingGroup group ? group.Children.SelectMany(Glyphs) : Enumerable.Empty<GlyphRun>();
+                                        foreach (var element in new Visual[] { EdgePreviewElements(eager).OfType<TextBlock>().Last(), paragraph })
+                                            Console.WriteLine("  glyphs " + string.Join("; ", Glyphs(VisualTreeHelper.GetDrawing(element)).Take(15)
+                                                .Select(g => $"{g.FontRenderingEmSize:F2}dpi{g.PixelsPerDip:F2}@{g.BaselineOrigin.X:F3},{g.BaselineOrigin.Y:F3}")));
+                                    }
+                                    Require(changed < first.Length * 0.02, "line positions and visible styles match the TextBlock reference");
+                                    var preparedLines = paragraph.FormattedLines;
+                                    paragraph.InvalidateMeasure(); paragraph.InvalidateVisual(); host.UpdateLayout(); Pump();
+                                    Equal(preparedLines, paragraph.FormattedLines, "layout and repaint reuse prepared lines");
+                                    if (mode != MarkdownRenderModes.Off && prefix != "```\n")
+                                    {
+                                        var link = paragraph.Children.OfType<Border>().First();
+                                        link.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                                        { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                                        Equal("https://example.com/", opened, "visible link retains its action");
+                                    }
+                                }
+                                finally { window.Close(); Pump(); }
+                            }
+            }
+            finally
+            {
+                AppTypography.Configure(UiFontPresets.Default);
+                NoteTypography.Configure(VisualTextSizes.Medium, false);
+            }
+        });
+
+        check("Full fenced code prepares at most one visible line per step", () =>
+        {
+            var code = new string('文', 5990);
+            var panel = new StackPanel();
+            var prepared = 0;
+            var omitted = false;
+            using (var steps = MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel,
+                "```\n" + code + "\n```", _ => { }, MarkdownRenderModes.Full, new Size(180, 120)).GetEnumerator())
+            {
+                while (steps.MoveNext())
+                {
+                    omitted = steps.Current;
+                    var current = EdgePreviewElements(panel).OfType<MarkdownEdgePreviewParagraph>().Sum(p => p.FormattedLines);
+                    Require(current - prepared <= 1, "a single long code row cannot format its entire tail in one step");
+                    prepared = current;
+                }
+            }
+            var paragraph = EdgePreviewElements(panel).OfType<MarkdownEdgePreviewParagraph>().Single();
+            Require(omitted && prepared is > 1 and < 30, "the viewport, not the entire code row, bounds formatting work");
+            Equal(1, panel.Children.Count, "one fence remains one content block");
+            Require(paragraph.VisibleText.Length < code.Length && code.StartsWith(paragraph.VisibleText, StringComparison.Ordinal),
+                "code remains a literal visible prefix");
+            Equal(0, paragraph.Children.Count, "code syntax cannot create link hit targets");
+            panel.Measure(new Size(180, double.PositiveInfinity));
+            panel.Arrange(new Rect(0, 0, 180, panel.DesiredSize.Height));
+            Equal(prepared, paragraph.FormattedLines, "publication does not reformat the prepared code");
+        });
+
+        check("Full fenced code preserves empty rows, literal syntax and natural height", () =>
+        {
+            foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
+                foreach (var code in new[] { "", "\n", "\n\n", "\n**literal**\n\n[link](https://example.com)\n",
+                    "first\n" + new string('文', 400) + "\n\nlast\n" })
+                    foreach (var closed in new[] { false, true })
+                    {
+                        var eager = new StackPanel();
+                        var bounded = new StackPanel();
+                        var host = new Grid();
+                        host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
+                        host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
+                        host.Children.Add(eager); Grid.SetColumn(bounded, 1); host.Children.Add(bounded);
+                        var window = new Window { Content = host, Width = 850, Height = 600, ShowActivated = false, ShowInTaskbar = false };
+                        try
+                        {
+                            window.Show(); Pump();
+                            var source = "```\n" + code + (closed ? "\n```" : "");
+                            MarkdownEdgeCapsulePreviewRenderer.RenderInto(eager, source, _ => { }, MarkdownRenderModes.Full, textZoom: zoom);
+                            Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(bounded, source, _ => { }, MarkdownRenderModes.Full,
+                                new Size(400, 2000), zoom), "all fitting code rows are admitted");
+                            Pump(); host.UpdateLayout();
+                            Equal(EdgePreviewText(eager), EdgePreviewText(bounded), "blank rows and literal code survive both fence endings");
+                            Require(Math.Abs(eager.DesiredSize.Height - bounded.DesiredSize.Height) < 0.2,
+                                $"code row metrics match the single TextBlock reference: {eager.DesiredSize.Height:F3}/{bounded.DesiredSize.Height:F3}");
+                        }
+                        finally { window.Close(); Pump(); }
+                    }
+        });
+    }
+
+    private static string InlineText(InlineCollection inlines) => string.Concat(inlines.Cast<Inline>().Select(inline => inline switch
+    {
+        Run run => run.Text,
+        Span span => InlineText(span.Inlines),
+        LineBreak => "\n",
+        _ => ""
+    }));
+
+    private static byte[] CapturePreviewPixels(FrameworkElement element, int height, string name)
+    {
+        var dpi = VisualTreeHelper.GetDpi(element);
+        var widthPixels = (int)Math.Floor(element.ActualWidth * dpi.DpiScaleX);
+        var heightPixels = (int)Math.Floor(height * dpi.DpiScaleY);
+        // Render the shared parent and crop each column. A VisualBrush independently normalizes
+        // overflowing content bounds and can scale/shift the two captures differently.
+        var root = (FrameworkElement)VisualTreeHelper.GetParent(element);
+        var origin = element.TranslatePoint(new Point(), root);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth * dpi.DpiScaleX),
+            (int)Math.Ceiling((height + origin.Y) * dpi.DpiScaleY), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+        bitmap.Render(root);
+        var cropped = new CroppedBitmap(bitmap, new Int32Rect((int)Math.Round(origin.X * dpi.DpiScaleX),
+            (int)Math.Round(origin.Y * dpi.DpiScaleY), widthPixels, heightPixels));
+        if (Environment.GetEnvironmentVariable("PAPERTODO_EDGE_CHECK_IMAGES") is { Length: > 0 } folder)
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(cropped));
+            using var stream = System.IO.File.Create(System.IO.Path.Combine(folder, name + ".png")); encoder.Save(stream);
+        }
+        var pixels = new byte[widthPixels * heightPixels * 4]; cropped.CopyPixels(pixels, widthPixels * 4, 0);
+        return pixels;
+    }
+}
