@@ -88,7 +88,8 @@ internal sealed partial class SkinBorder
     {
         if (!DesktopLensCapture.TryGetBounds(hwnd, out var bounds)) return null;
         var dpi = VisualTreeHelper.GetDpi(this);
-        var origin = PointToScreen(new Point());
+        if (PresentationSource.FromVisual(this) is not HwndSource source ||
+            !TryGetMaterialScreenOrigin(source, out var origin)) return null;
         return new((int)Math.Floor(origin.X) - bounds.X, (int)Math.Floor(origin.Y) - bounds.Y,
             (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY),
             (int)Math.Min(1024, Math.Ceiling(256 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY))));
@@ -229,7 +230,8 @@ internal sealed partial class SkinBorder
         // in-use bitmap for a SAME-SIZED but recentered scene lets the render thread
         // observe new pixels with old crop constants. Replace on any mapping change;
         // stationary samples still reuse their bitmap and zero-wait lock.
-        var replaceBitmap = immutable || bitmap == null || bitmap.IsFrozen || scene.Layout != layout;
+        var mappingChanged = scene.Layout != layout;
+        var replaceBitmap = immutable || bitmap == null || bitmap.IsFrozen || mappingChanged;
         if (replaceBitmap)
             bitmap = new WriteableBitmap(layout.PixelWidth, layout.PixelHeight, 96, 96, PixelFormats.Bgr32, null);
         // Prepare the replacement privately. A busy render thread must not expose an
@@ -251,7 +253,12 @@ internal sealed partial class SkinBorder
             bitmap.AddDirtyRect(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
         }
         finally { bitmap.Unlock(); }
-        if (immutable) bitmap.Freeze();
+        // A fresh WriteableBitmap still has a deferred back-to-front copy after Unlock.
+        // Changing only the object identity does not publish its pixels atomically with
+        // the new screen mapping. Complete private mapped textures before binding them.
+        // The first subsequent SAME-region update may become mutable again; its mapping
+        // is unchanged, so later content updates keep the cheap zero-wait reuse path.
+        if (immutable || mappingChanged) bitmap.Freeze();
         if (replaceBitmap)
         {
             scene.Bitmap = bitmap;
@@ -277,8 +284,8 @@ internal sealed partial class SkinBorder
     private void UpdateRefractionCrop()
     {
         if (_captureHwnd == IntPtr.Zero || _scene?.Layout == null || _refractionVisual == null ||
-            PresentationSource.FromVisual(this) is not HwndSource { IsDisposed: false }) return;
-        var origin = PointToScreen(new Point()); // retain the fractional screen position
+            PresentationSource.FromVisual(this) is not HwndSource { IsDisposed: false } source ||
+            !TryGetMaterialScreenOrigin(source, out var origin)) return;
         var dpi = VisualTreeHelper.GetDpi(this);
         EnsureGeometry(); EnsureBrushes(Colors.Transparent);
         _refractionVisual.Clip = _shape;

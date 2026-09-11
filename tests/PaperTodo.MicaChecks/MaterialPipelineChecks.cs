@@ -50,8 +50,12 @@ internal static class MaterialPipelineChecks
                 var layout = new LensCaptureLayout.Scene(bounds, 800, 700);
                 WriteFrame(surface, layout, 23);
                 var scene = typeof(SkinBorder).GetField("_scene", Program.Private)!.GetValue(surface)!;
-                var bitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
+                var seed = SceneField<WriteableBitmap>(scene, "Bitmap");
+                Program.Assert(seed.IsFrozen, "mapped scene pixels are complete before its first binding");
                 var visual = SceneField<DrawingVisual>(scene, "Visual");
+                WriteFrame(surface, layout, 47);
+                var bitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
+                Program.Assert(!bitmap.IsFrozen && !ReferenceEquals(seed, bitmap), "same-region content adopts a mutable working texture");
                 WriteFrame(surface, layout, 47);
                 Program.Assert(ReferenceEquals(bitmap, SceneField<WriteableBitmap>(scene, "Bitmap")), "samples of the same world-space region reuse the bitmap");
 
@@ -75,12 +79,16 @@ internal static class MaterialPipelineChecks
                 var recentered = layout with { Bounds = new Int32Rect(bounds.X + 128, bounds.Y, bounds.Width, bounds.Height) };
                 WriteFrame(surface, recentered, 63);
                 var movedBitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
-                Program.Assert(!ReferenceEquals(bitmap, movedBitmap), "same-size recenter publishes a new mapped texture");
+                Program.Assert(!ReferenceEquals(bitmap, movedBitmap) && movedBitmap.IsFrozen,
+                    "same-size recenter publishes a complete immutable mapped texture, not a pending copy");
                 var retainedPixels = new byte[layout.PixelWidth * layout.PixelHeight * 4];
                 bitmap.CopyPixels(retainedPixels, layout.PixelWidth * 4, 0);
                 Program.Assert(retainedPixels.All(b => b == 47), "recenter does not mutate pixels referenced by previous drawing commands");
                 WriteFrame(surface, recentered, 71);
-                Program.Assert(ReferenceEquals(movedBitmap, SceneField<WriteableBitmap>(scene, "Bitmap")),
+                var workingBitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
+                Program.Assert(!workingBitmap.IsFrozen, "same-region content resumes the mutable upload path");
+                WriteFrame(surface, recentered, 71);
+                Program.Assert(ReferenceEquals(workingBitmap, SceneField<WriteableBitmap>(scene, "Bitmap")),
                     "after recenter, stationary updates resume bitmap reuse");
                 var larger = layout with { Bounds = new Int32Rect(bounds.X, bounds.Y, 810, 700), PixelWidth = 810 };
                 WriteFrame(surface, larger, 79);

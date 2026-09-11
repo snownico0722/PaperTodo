@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -40,6 +41,30 @@ internal sealed partial class SkinBorder
     private IntPtr MaterialHostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (message == 0x0002 /* WM_DESTROY */) { StopRefraction(); return IntPtr.Zero; }
+        if (message == 0x0047 /* WM_WINDOWPOSCHANGED */ && lParam != IntPtr.Zero &&
+            _capture != null && _scene?.Layout != null && Skin == PaperSkins.LiquidGlass)
+        {
+            var position = Marshal.PtrToStructure<MaterialWindowPos>(lParam);
+            // Native caption dragging moves the HWND outside WPF's Rendering cadence.
+            // Feed the matching crop into this window-position transaction, rather than
+            // leaving its previous crop attached until a later dispatcher/render pass.
+            // Resize/show/hide/frame changes still use the full lifecycle below.
+            const uint sizeOrVisibility = 0x0020 /* FRAMECHANGED */ | 0x0040 /* SHOWWINDOW */ | 0x0080 /* HIDEWINDOW */;
+            if ((position.Flags & 0x0001 /* NOSIZE */) != 0 && (position.Flags & sizeOrVisibility) == 0)
+            {
+                if ((position.Flags & 0x0002 /* NOMOVE */) == 0)
+                {
+                    _capture.MarkMoving();
+                    _cropDirty = true;
+                    try { UpdateRefractionCrop(); if (_cropDirty) RequestRefractionRender(); }
+                    catch (Exception ex) when (ex is InvalidOperationException or ExternalException or ArgumentException)
+                    { FailRefraction(ex); }
+                }
+                // Do not consume the message: HwndTarget must still synchronize its
+                // render target, and DefWindowProc must still send WM_MOVE/WM_SIZE.
+                return IntPtr.Zero;
+            }
+        }
         if (message is 0x0047 /* WINDOWPOSCHANGED */ or 0x0018 /* SHOWWINDOW */ or 0x02e0 /* DPICHANGED */
             or 0x007e /* DISPLAYCHANGE */ or 0x031e /* DWMCOMPOSITIONCHANGED */ or 0x001a /* SETTINGCHANGE */)
         {
@@ -65,6 +90,35 @@ internal sealed partial class SkinBorder
         }
         return IntPtr.Zero;
     }
+    // PointToScreen rounds through a Win32 POINT. Keep the local visual's fractional
+    // offset separate from the integer client origin so 125/150% DPI and translated
+    // shells do not change sampling phase when their bounds are re-evaluated.
+    private bool TryGetMaterialScreenOrigin(HwndSource source, out Point origin)
+    {
+        origin = default;
+        if (source.IsDisposed || source.RootVisual is not Visual root || source.CompositionTarget is not { } target)
+            return false;
+        var local = ReferenceEquals(this, root) ? new Point() : TransformToAncestor(root).Transform(new Point());
+        if (VisualTreeHelper.GetTransform(root) is { } transform) local = transform.Transform(local);
+        local += VisualTreeHelper.GetOffset(root);
+        local = target.TransformToDevice.Transform(local);
+        var client = new MaterialPoint();
+        if (!MaterialClientToScreen(source.Handle, ref client)) return false;
+        origin = new Point(client.X + local.X, client.Y + local.Y);
+        return double.IsFinite(origin.X) && double.IsFinite(origin.Y);
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MaterialWindowPos
+    {
+        internal IntPtr Hwnd, InsertAfter;
+        internal int X, Y, Width, Height;
+        internal uint Flags;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MaterialPoint { internal int X, Y; }
+    [DllImport("user32.dll", EntryPoint = "ClientToScreen")]
+    private static extern bool MaterialClientToScreen(IntPtr hwnd, ref MaterialPoint point);
+
     private void OnMaterialOpacityChanged(object? sender, EventArgs e) => RefreshRefraction();
     private void OnMaterialSourceDisposed(object? sender, EventArgs e)
     { StopRefraction(); DetachMaterialHost(); }
