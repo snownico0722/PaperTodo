@@ -85,6 +85,9 @@ internal sealed partial class SkinBorder : Border
 
     protected override void OnRender(DrawingContext dc)
     {
+        PresentPreparedMenuBackground();
+        if (IsMenu && !_menuRendered)
+        { FirstMenuRenderUsedBackground = _refractionVisual != null; _menuRendered = true; }
         var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
         if (_highContrast || !PaperSkins.IsDecorated(Skin) && !(systemMaterial && IsAuxiliary))
         {

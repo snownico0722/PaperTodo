@@ -11,7 +11,7 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 /// <summary>Bounded local background sampling. Worker owns GDI, dispatcher owns WPF.
-/// One latest-frame mailbox; no Render-priority queue and no UI-thread capture/wait.
+/// One latest-frame mailbox and one coalesced presentation notification; no UI-thread capture/wait.
 /// Samples are neither saved nor uploaded. A changed exclusion lease stops capture.</summary>
 internal sealed class DesktopLensCapture : IDisposable
 {
@@ -42,6 +42,10 @@ internal sealed class DesktopLensCapture : IDisposable
     private Frame? _latest;
     private int _disposed;
     private long _motionUntil, _captures, _published, _sampledPixels;
+    private static long ClockMilliseconds => (long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency));
+    internal const int ActiveInterval = 16;
+    internal const int MovingInterval = 8;
+    internal static int CaptureInterval(bool moving, int quiet) => moving ? MovingInterval : quiet >= 10 ? 125 : ActiveInterval;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
     internal long CaptureCount => Interlocked.Read(ref _captures);
     internal long PublishedCount => Interlocked.Read(ref _published);
@@ -73,7 +77,7 @@ internal sealed class DesktopLensCapture : IDisposable
     internal void MarkMoving()
     {
         if (IsStopped) return;
-        Interlocked.Exchange(ref _motionUntil, Environment.TickCount64 + 160);
+        Interlocked.Exchange(ref _motionUntil, ClockMilliseconds + 160);
         _wake.Set();
     }
     private void CaptureLoop()
@@ -83,15 +87,15 @@ internal sealed class DesktopLensCapture : IDisposable
         try
         {
             var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
-            var quiet = 0; var next = Environment.TickCount64;
+            var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L;
             LensCaptureLayout.Tile[]? oldLayout = null;
             Region? oldGeometry = null;
             DwmFlush(); // Exclusion is established before the first background sample.
             while (!_cancel.IsCancellationRequested)
             {
-                var now = Environment.TickCount64;
+                var now = ClockMilliseconds;
                 var moving = now < Interlocked.Read(ref _motionUntil);
-                if (moving) next = Math.Min(next, now + 33);
+                if (moving) next = Math.Max(driverPauseUntil, Math.Min(next, now + MovingInterval));
                 if (now < next)
                 {
                     if (WaitHandle.WaitAny(waits, (int)Math.Min(125, next - now)) == 0) break;
@@ -99,11 +103,11 @@ internal sealed class DesktopLensCapture : IDisposable
                 }
                 var started = Stopwatch.GetTimestamp();
                 var geometry = Volatile.Read(ref _region);
-                next = now + 33;
+                next = now + ActiveInterval;
                 if (!TryGetBounds(_hwnd, out var window) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd)) continue;
                 if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
                     throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
-                var desktop = new Int32Rect(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
+                var desktop = DesktopBounds;
                 var layout = LensCaptureLayout.Create(window, geometry, desktop);
                 if (layout.Length == 0) continue;
                 var changed = oldGeometry != geometry || oldLayout == null || !layout.AsSpan().SequenceEqual(oldLayout);
@@ -140,10 +144,12 @@ internal sealed class DesktopLensCapture : IDisposable
                 // low-rate change detection; motion wakes it. Expensive GDI drivers also
                 // get breathing room rather than a continuous GPU-readback loop.
                 var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                // Motion reprojects the texture on WPF's render cadence. Do not double
-                // readback pressure during the interaction that most needs headroom.
-                var interval = !moving && quiet >= 10 ? 125 : 33;
-                next = Environment.TickCount64 + Math.Max(1, (long)Math.Max(interval - elapsed, elapsed * .5));
+                // Motion also reprojects existing pixels at WPF cadence. New source frames
+                // use a bounded faster cadence, but slow drivers still get backpressure.
+                var interval = CaptureInterval(moving, quiet);
+                var completed = ClockMilliseconds;
+                driverPauseUntil = completed + Math.Max(1, (long)(elapsed * .5));
+                next = Math.Max(driverPauseUntil, completed + (long)(interval - elapsed));
             }
         }
         catch (OperationCanceledException) when (_cancel.IsCancellationRequested) { }
@@ -168,7 +174,7 @@ internal sealed class DesktopLensCapture : IDisposable
             Interlocked.Exchange(ref _notificationQueued, 1) != 0) return;
         try
         {
-            _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            _dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
             {
                 Interlocked.Exchange(ref _notificationQueued, 0);
                 if (!IsStopped) _frameReady();
@@ -186,6 +192,26 @@ internal sealed class DesktopLensCapture : IDisposable
         _ = _worker.ContinueWith(_ => { _cancel.Dispose(); _wake.Dispose(); }, CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
+    internal static Int32Rect DesktopBounds => new(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
+
+    internal static Task<Frame?> PreparePopupAsync(Int32Rect requested, bool liquid, CancellationToken token) => Task.Run(() =>
+    {
+        var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            if (liquid) LiquidRefractionEffect.PrepareBytecode();
+            var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
+            var layout = LensCaptureLayout.Create(requested, geometry, DesktopBounds);
+            if (layout.Length == 0) return null;
+            using var surface = new CaptureSurface();
+            surface.Capture(layout[0]); GdiFlush(); surface.RememberChangedPixels();
+            token.ThrowIfCancellationRequested();
+            return new Frame([new Tile(layout[0], surface.Snapshot())], geometry);
+        }
+        finally { if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi); }
+    }, token);
+
     internal static bool TryGetBounds(IntPtr hwnd, out Int32Rect bounds)
     {
         if (GetWindowRect(hwnd, out var r)) { bounds = new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top); return true; }
@@ -221,11 +247,18 @@ internal sealed class DesktopLensCapture : IDisposable
                 SetBrushOrgEx(_dc, 0, 0, IntPtr.Zero);
             }
             var b = tile.Bounds;
+            // The last aligned cell can extend a few pixels beyond the virtual desktop.
+            // Clear it before GDI clips the screen source; stale DIB pixels must not leak.
+            var desktop = DesktopBounds;
+            if (b.X < desktop.X || b.Y < desktop.Y || b.X + b.Width > desktop.X + desktop.Width ||
+                b.Y + b.Height > desktop.Y + desktop.Height)
+                ClearPixels();
             var ok = b.Width == _width && b.Height == _height
                 ? BitBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, 0x40CC0020)
                 : StretchBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, b.Width, b.Height, 0x40CC0020);
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
+        private unsafe void ClearPixels() => new Span<byte>((void*)_bits, checked(_width * _height * 4)).Clear();
         internal unsafe bool RememberChangedPixels()
         {
             var pixels = new ReadOnlySpan<byte>((void*)_bits, checked(_width * _height * 4));

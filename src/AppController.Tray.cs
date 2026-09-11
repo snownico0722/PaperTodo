@@ -262,7 +262,7 @@ public sealed partial class AppController
         border.AppendChild(contentPanel);
         root.AppendChild(border);
 
-        var popup = new FrameworkElementFactory(typeof(Popup));
+        var popup = new FrameworkElementFactory(typeof(MaterialSubmenuPopup));
         popup.Name = "PART_Popup";
         popup.SetValue(Popup.AllowsTransparencyProperty, true);
         popup.SetValue(Popup.FocusableProperty, false);
@@ -393,7 +393,7 @@ public sealed partial class AppController
 
     internal ContextMenu CreateTrayMenu(bool registerForLiveRefresh = false)
     {
-        var menu = new ContextMenu
+        var menu = new MaterialContextMenu
         {
             BorderThickness = new Thickness(1),
             Padding = new Thickness(4, 4, 4, 4),

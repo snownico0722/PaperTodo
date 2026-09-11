@@ -456,7 +456,7 @@ public sealed partial class PaperWindow : Window
         border.AppendChild(itemGrid);
         rootGrid.AppendChild(border);
 
-        var popup = new FrameworkElementFactory(typeof(Popup));
+        var popup = new FrameworkElementFactory(typeof(MaterialSubmenuPopup));
         popup.Name = "PART_Popup";
         popup.SetValue(
             Popup.IsOpenProperty,
@@ -3293,7 +3293,7 @@ public sealed partial class PaperWindow : Window
 
     private ContextMenu CreateContextMenu()
     {
-        var menu = new ContextMenu
+        var menu = new MaterialContextMenu
         {
             Padding = new Thickness(4, 4, 4, 4),
             FontFamily = AppTypography.UiFontFamily,

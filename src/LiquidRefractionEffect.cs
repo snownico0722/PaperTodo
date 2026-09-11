@@ -32,6 +32,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     public Point4D Scattering { get => (Point4D)GetValue(ScatteringProperty); set => SetValue(ScatteringProperty, value); }
     public double Dispersion { get => (double)GetValue(DispersionProperty); set => SetValue(DispersionProperty, value); }
     private static readonly Lazy<byte[]> Bytecode = new(Compile);
+    internal static void PrepareBytecode() => _ = Bytecode.Value;
 
     internal LiquidRefractionEffect()
     {

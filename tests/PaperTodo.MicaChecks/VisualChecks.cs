@@ -333,13 +333,15 @@ internal static class VisualChecks
             window.Left = 20; window.Top = 20; Wait();
             var hwnd = new WindowInteropHelper(window).Handle;
             AssertNoSystemCaption(hwnd);
-            var oldRoot = window.Content;
+            var oldRoot = (Border)window.Content;
+            var oldContent = oldRoot.Child;
             Capture(window, "10-settings-light", null, null, dark: null);
             controller.State.Theme = "dark"; Theme.Invalidate(); refresh.Invoke(controller, null); Wait();
-            Program.Assert(!ReferenceEquals(oldRoot, window.Content), "settings test actually rebuilds the chrome");
+            Program.Assert(ReferenceEquals(oldRoot, window.Content) && !ReferenceEquals(oldContent, oldRoot.Child),
+                "settings retains the material chrome while refreshing page content");
             Program.Assert(hwnd == new WindowInteropHelper(window).Handle, "settings keeps its HWND");
             Program.Assert(window.Content is Border { Background: SolidColorBrush brush } && brush.Color.A == 0,
-                "rebuilt settings root exposes native material");
+                "retained settings root exposes the updated native material");
             Capture(window, "11-settings-dark", null, null, dark: null);
             var checkbox = Descendants(window).OfType<CheckBox>().Single(c =>
                 Equals(c.Content, Strings.Get("SettingsMicaAlwaysActive")));
@@ -350,7 +352,7 @@ internal static class VisualChecks
                 .Invoke(controller, new object[] { PaperSkins.ClearAcrylic });
             Wait();
             Program.Assert(window.Content is Border { Background: SolidColorBrush clear } && clear.Color.A == 0,
-                "settings receives Clear Acrylic after rebuilding its root");
+                "settings receives Clear Acrylic without replacing its material root");
             Program.Assert(Descendants(window).OfType<CheckBox>().Single(c =>
                 Equals(c.Content, Strings.Get("SettingsMicaAlwaysActive"))).IsChecked == true,
                 "material switching retains the checkbox state");

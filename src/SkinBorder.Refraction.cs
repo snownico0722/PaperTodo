@@ -15,12 +15,13 @@ internal sealed partial class SkinBorder
     private sealed class LensSlice
     {
         internal readonly DrawingVisual Visual = new();
-        internal readonly LiquidRefractionEffect Effect = new();
+        private LiquidRefractionEffect? _effect;
+        internal LiquidRefractionEffect Effect => _effect ??= new();
         internal readonly BlurEffect Diffusion = new() { KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
         internal Rect? ImageBounds;
         internal WriteableBitmap? Bitmap;
         internal LensCaptureLayout.Tile? Layout;
-        internal LensSlice() => Visual.Effect = Effect;
+
     }
     private ContainerVisual? _refractionVisual;
     private DrawingVisual? _opticalFinish;
@@ -28,7 +29,44 @@ internal sealed partial class SkinBorder
     private Brush? _finishBorderBrush;
     private readonly System.Collections.Generic.List<LensSlice> _slices = new(1);
     private DesktopLensCapture? _capture;
-    private DesktopLensCapture.Frame? _pendingFrame;
+    private DesktopLensCapture.Frame? _pendingFrame, _preparedFrame;
+    internal bool SuppressLiveBackgroundForOpening { get; set; }
+    internal bool FirstMenuRenderUsedBackground { get; private set; }
+    private bool _menuRendered;
+
+    internal void PrepareMenuBackground(DesktopLensCapture.Frame? frame, bool failed)
+    {
+        _preparedFrame?.Dispose(); _preparedFrame = frame;
+        SuppressLiveBackgroundForOpening = failed; _menuRendered = false;
+    }
+
+    // The popup's initial scene was captured while no popup HWND existed. Upload it
+    // in its first render, at the FINAL WPF placement, without a UI-thread capture/wait.
+    private void PresentPreparedMenuBackground()
+    {
+        if (_preparedFrame == null || ActualWidth < 8 || ActualHeight < 8 ||
+            PresentationSource.FromVisual(this) is not HwndSource source || source.IsDisposed) return;
+        try
+        {
+            _captureHwnd = source.Handle;
+            _captureGeometry = CaptureRegion(source.Handle);
+            if (_captureGeometry != null && PresentRefraction(_preparedFrame))
+            { _preparedFrame.Dispose(); _preparedFrame = null; }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
+        { _preparedFrame?.Dispose(); _preparedFrame = null; FailRefraction(ex); }
+    }
+
+    private DesktopLensCapture.Region? CaptureRegion(IntPtr hwnd)
+    {
+        if (!DesktopLensCapture.TryGetBounds(hwnd, out var bounds)) return null;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var origin = PointToScreen(new Point());
+        return new((int)Math.Floor(origin.X) - bounds.X, (int)Math.Floor(origin.Y) - bounds.Y,
+            (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY),
+            (int)Math.Ceiling(64 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
+    }
+
     private IntPtr _captureHwnd;
     private string? _capturedSkin, _requestedSkin;
     private DesktopLensCapture.Region? _captureGeometry, _presentedGeometry;
@@ -55,7 +93,7 @@ internal sealed partial class SkinBorder
     {
         SizeChanged += (_, _) => { _refractionFailed = false; RefreshRefraction(); };
         Loaded += (_, _) => RefreshRefraction();
-        Unloaded += (_, _) => { StopRefraction(); DetachMaterialHost(); };
+        Unloaded += (_, _) => { StopRefraction(); DetachMaterialHost(); _preparedFrame?.Dispose(); _preparedFrame = null; };
         IsVisibleChanged += (_, _) => RefreshRefraction();
     }
     internal void RefreshRefraction()
@@ -76,22 +114,18 @@ internal sealed partial class SkinBorder
             if (!RequestsLiveBackground || !enabled) { _refractionFailed = false; RefractionFailure = null; }
             return;
         }
-        // Switching recipes must not leave the previous effect/fill on a frozen frame.
-        if (_capture != null && (_captureHwnd != source!.Handle || _capturedSkin != Skin)) StopRefraction();
+        // The captured scene is independent of the recipe. Reuse it when switching
+        // materials on the same HWND; only the effect/finish changes, never a blank frame.
+        if (_capture != null && _captureHwnd != source!.Handle) StopRefraction();
         if (_refractionFailed) return;
         try
         {
             var hwnd = source!.Handle;
-            if (!DesktopLensCapture.TryGetBounds(hwnd, out var bounds)) return;
-            var dpi = VisualTreeHelper.GetDpi(this);
-            var origin = PointToScreen(new Point());
-            var scale = Math.Max(dpi.DpiScaleX, dpi.DpiScaleY);
-            var geometry = new DesktopLensCapture.Region((int)Math.Round(origin.X) - bounds.X,
-                (int)Math.Round(origin.Y) - bounds.Y, (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX),
-                (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY), (int)Math.Ceiling(48 * scale));
+            var geometry = CaptureRegion(hwnd);
+            if (geometry == null) return;
             if (_capture == null)
             {
-                _capture = new DesktopLensCapture(hwnd, geometry, Dispatcher, FailRefraction, RequestRefractionRender);
+                _capture = new DesktopLensCapture(hwnd, geometry, Dispatcher, FailRefraction, OnCaptureFrameReady);
                 _captureHwnd = hwnd;
                 _capturedSkin = Skin;
                 RequestRefractionRender();
@@ -100,7 +134,9 @@ internal sealed partial class SkinBorder
             _captureGeometry = geometry;
             _cropDirty = true;
             RequestRefractionRender();
-            if (_refractionVisual != null && _presentedGeometry != geometry) _refractionVisual.Opacity = 0;
+            // Keep the current world-space scene during resize/reposition. A replacement
+            // frame changes coverage, not the visible material or its opacity.
+            if (_refractionVisual != null) UpdateRefractionCrop();
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or System.Runtime.InteropServices.ExternalException or DllNotFoundException or EntryPointNotFoundException or NotSupportedException)
         { FailRefraction(ex); }
@@ -111,6 +147,8 @@ internal sealed partial class SkinBorder
         Debug.WriteLine("Glass background unavailable; keeping material fallback: " + error.Message);
         _refractionFailed = true; StopRefraction();
     }
+    private void OnCaptureFrameReady() => OnRefractionRendering(null, EventArgs.Empty);
+
     private void RequestRefractionRender()
     {
         if (_capture == null || _renderingSubscribed) return;
@@ -126,19 +164,14 @@ internal sealed partial class SkinBorder
             if (latest != null) { _pendingFrame?.Dispose(); _pendingFrame = latest; }
             if (_pendingFrame != null)
             {
-                if (_captureGeometry != _pendingFrame.Geometry || PresentRefraction(_pendingFrame))
+                if (PresentRefraction(_pendingFrame))
                 { _pendingFrame.Dispose(); _pendingFrame = null; }
             }
             if (_cropDirty) UpdateRefractionCrop();
-            // New frames wake us via one coalesced Background-priority notification.
-            // An idle Rendering handler otherwise keeps WPF composition awake forever.
-            // Missing/offscreen geometry also waits for a new frame or move notification,
-            // not an unproductive render loop while there is nothing to present.
-            if (_pendingFrame == null && _renderingSubscribed)
-            {
-                CompositionTarget.Rendering -= OnRefractionRendering;
-                _renderingSubscribed = false;
-            }
+            // New pixels are presented by one coalesced callback, not queued behind input
+            // and then delayed another frame. Only a busy bitmap needs a render retry.
+            if (_pendingFrame != null) RequestRefractionRender();
+            else UnhookCaptureRendering();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
         { FailRefraction(ex); }
@@ -156,7 +189,8 @@ internal sealed partial class SkinBorder
                 {
                     slice.Bitmap = new WriteableBitmap(tile.PixelWidth, tile.PixelHeight, 96, 96, PixelFormats.Bgr32, null);
                     slice.ImageBounds = null;
-                    slice.Effect.Scene = new ImageBrush(slice.Bitmap) { Stretch = Stretch.Fill };
+                    if (Skin == PaperSkins.LiquidGlass)
+                        slice.Effect.Scene = new ImageBrush(slice.Bitmap) { Stretch = Stretch.Fill };
                 }
                 // WritePixels internally waits for render-thread access. Never wait here:
                 // retain only the newest frame and retry on the next composition callback.
@@ -191,7 +225,7 @@ internal sealed partial class SkinBorder
         }
         EnsureGeometry(); _refractionVisual.Clip = _shape;
         _refractionVisual.Opacity = 1;
-        _presentedGeometry = frame.Geometry; _cropDirty = true;
+        _presentedGeometry = _captureGeometry ?? frame.Geometry; _cropDirty = true;
         UpdateRefractionCrop(); RefractionFrameCount++; RefractionFailure = null;
         return true;
     }
@@ -199,9 +233,10 @@ internal sealed partial class SkinBorder
     {
         if (_captureHwnd == IntPtr.Zero || _presentedGeometry == null || _refractionVisual == null) return;
         if (!DesktopLensCapture.TryGetBounds(_captureHwnd, out var window)) return;
-        var geometry = _presentedGeometry;
+        var origin = PointToScreen(new Point()); // retain the fractional screen position
         var dpi = VisualTreeHelper.GetDpi(this);
         EnsureGeometry(); EnsureBrushes(Colors.Transparent);
+        _refractionVisual.Clip = _shape;
         for (var i = 0; i < _refractionVisual.Children.Count - 1; i++)
         {
             var slice = _slices[i]; var tile = slice.Layout!; var target = tile.Target; var bounds = tile.Bounds;
@@ -213,8 +248,8 @@ internal sealed partial class SkinBorder
             {
                 // Blur an overscanned scene BEFORE clipping the shell, so there is no
                 // dark halo from transparent pixels and no blur of text or menu items.
-                var imageBounds = new Rect((bounds.X - window.X - geometry.OffsetX - target.X) / dpi.DpiScaleX,
-                    (bounds.Y - window.Y - geometry.OffsetY - target.Y) / dpi.DpiScaleY,
+                var imageBounds = new Rect((bounds.X - origin.X - target.X) / dpi.DpiScaleX,
+                    (bounds.Y - origin.Y - target.Y) / dpi.DpiScaleY,
                     bounds.Width / dpi.DpiScaleX, bounds.Height / dpi.DpiScaleY);
                 if (slice.ImageBounds != imageBounds)
                 {
@@ -229,6 +264,11 @@ internal sealed partial class SkinBorder
                 slice.Visual.Effect = slice.Diffusion;
                 continue;
             }
+            if (!ReferenceEquals(slice.Visual.Effect, slice.Effect))
+            {
+                slice.Effect.Scene = new ImageBrush(slice.Bitmap) { Stretch = Stretch.Fill };
+                slice.Visual.Effect = slice.Effect; slice.ImageBounds = null;
+            }
             if (slice.Visual.ContentBounds.Size != size)
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
             var metrics = GlassMetrics.For(RenderSize, _dark);
@@ -240,8 +280,8 @@ internal sealed partial class SkinBorder
                 Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomRight)),
                 Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomLeft)));
             slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
-                (window.X + geometry.OffsetX + target.X - bounds.X) / (double)bounds.Width,
-                (window.Y + geometry.OffsetY + target.Y - bounds.Y) / (double)bounds.Height);
+                (origin.X + target.X - bounds.X) / (double)bounds.Width,
+                (origin.Y + target.Y - bounds.Y) / (double)bounds.Height);
             var bend = metrics.Displacement * _refractionStrength * MaterialStrength;
             slice.Effect.Shift = new Point(bend * dpi.DpiScaleX / bounds.Width, bend * dpi.DpiScaleY / bounds.Height);
             // Never sharpen an upscaled low-resolution sample into a pixel grid on a

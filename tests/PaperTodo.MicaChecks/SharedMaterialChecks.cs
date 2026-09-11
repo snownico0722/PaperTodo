@@ -87,7 +87,7 @@ internal static class SharedMaterialChecks
             // own HWND, never the owning capsule and never a disconnected test control.
             var template = (ControlTemplate)typeof(PaperWindow).GetMethod("BuildContextMenuTemplate", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, null)!;
             var style = (Style)typeof(PaperWindow).GetMethod("BuildCompactMenuItemStyle", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, null)!;
-            menu = new ContextMenu { Template = template, ItemContainerStyle = style, Background = Theme.PaperBrush,
+            menu = new MaterialContextMenu { Template = template, ItemContainerStyle = style, Background = Theme.PaperBrush,
                 Foreground = Theme.TextBrush, BorderBrush = Theme.PaperBorderBrush, Padding = new Thickness(8),
                 PlacementTarget = surface, Placement = PlacementMode.Right, MinWidth = 180 };
             var parent = new MenuItem { Header = "Optical submenu", Style = style };
@@ -97,6 +97,8 @@ internal static class SharedMaterialChecks
             var menuSurface = Find<SkinBorder>(menu)!;
             Program.Assert(menuSurface is { IsMenu: true }, "opened production menu instantiates the material root");
             Ready(menuSurface!, 0, "actual context menu receives live background");
+            Program.Assert(menuSurface!.FirstMenuRenderUsedBackground,
+                "root menu's first paint already contains its prepared scene");
             var menuHwnd = ((HwndSource)PresentationSource.FromVisual(menuSurface!)!).Handle;
             Program.Assert(menuHwnd != hwnd && DesktopLensCapture.ReadAffinity(menuHwnd) == 0x11,
                 "context menu excludes its own popup, not the owner");
@@ -112,6 +114,8 @@ internal static class SharedMaterialChecks
             var submenuSurface = Find<SkinBorder>(popup.Child)!;
             Program.Assert(submenuSurface is { IsMenu: true }, "production submenu carries material role");
             Ready(submenuSurface!, 0, "actual submenu has its own sampled background");
+            Program.Assert(submenuSurface!.FirstMenuRenderUsedBackground,
+                "submenu's first paint already contains its prepared scene");
             var subHwnd = ((HwndSource)PresentationSource.FromVisual(submenuSurface!)!).Handle;
             Program.Assert(subHwnd != menuHwnd && subHwnd != hwnd && DesktopLensCapture.ReadAffinity(subHwnd) == 0x11,
                 "submenu owns a distinct background lease");
@@ -129,8 +133,11 @@ internal static class SharedMaterialChecks
 
             foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic, PaperSkins.TracingPaper })
             {
-                controller.State.PaperSkin = skin; Theme.Invalidate(); count = surface.RefractionFrameCount; surface.RefreshSkin();
-                Ready(surface, count, $"{skin} layered backdrop is real processing");
+                var worker = typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(surface);
+                controller.State.PaperSkin = skin; Theme.Invalidate(); surface.RefreshSkin();
+                Program.Assert(surface.IsRefractionActive && ReferenceEquals(worker,
+                    typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(surface)),
+                    $"{skin} changes its recipe without discarding the actual scene or capture worker");
                 controller.State.MatchAuxiliaryMaterialStrength = true; surface.RefreshSkin(); Wait(80); full = Snapshot(surface);
                 controller.State.MatchAuxiliaryMaterialStrength = false; surface.RefreshSkin(); Wait(80); quiet = Snapshot(surface);
                 Program.Assert(surface.HasRefractionWorker && PixelDifference(full, quiet) > 500,

@@ -12,6 +12,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private readonly Dictionary<SettingsPage, double> _settingsPageScrollOffsets = new();
+    private string? _settingsNativePalette;
 
     private void RefreshSettingsWindowContent()
     {
@@ -71,19 +72,23 @@ public sealed partial class AppController
         window.Content = BuildSettingsSidebarWindowContent(window);
         ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
-        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: true);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: _settingsNativePalette != State.ColorScheme);
+        _settingsNativePalette = State.ColorScheme;
     }
 
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
-        var frame = new SkinBorder
+        // Navigation replaces page content, not the HWND's material owner. Keep its
+        // current scene, exclusion lease and DWM state alive across a page switch.
+        var frame = window.Content as SkinBorder ?? new SkinBorder
         {
-            Background = TrayPaperBrush,
-            BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 10),
             SnapsToDevicePixels = true
         };
+        if (_settingsMica?.IsActive != true)
+        { frame.Background = TrayPaperBrush; frame.BorderBrush = TrayBorderBrush; }
+        frame.CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 10);
+        frame.RefreshSkin();
 
         var root = new Grid();
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(158) });

@@ -47,6 +47,7 @@ internal sealed partial class SkinBorder
             { _refractionFailed = false; _materialEnvironmentDirty = true; }
             _cropDirty = true;
             _capture?.MarkMoving();
+            RequestRefractionRender(); // reproject this move, not only the next captured frame
             if (!_hostRefreshQueued && !Dispatcher.HasShutdownStarted)
             {
                 _hostRefreshQueued = true;
@@ -58,7 +59,6 @@ internal sealed partial class SkinBorder
                         if (_materialEnvironmentDirty) { _materialEnvironmentDirty = false; RefreshSkin(); }
                         else RefreshRefraction();
                         if (Skin == PaperSkins.Aero) OnAeroLocation(null, EventArgs.Empty);
-                        InvalidateVisual();
                     }
                 }));
             }
@@ -86,6 +86,6 @@ internal sealed partial class SkinBorder
     private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
         IsLoaded && IsVisible && !_highContrast && IsMaterialHostVisible &&
         DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
-    private bool RequestsLiveBackground => Skin == PaperSkins.LiquidGlass ||
-        IsAuxiliary && Skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic or PaperSkins.TracingPaper;
+    private bool RequestsLiveBackground => !SuppressLiveBackgroundForOpening && (Skin == PaperSkins.LiquidGlass ||
+        IsAuxiliary && Skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic or PaperSkins.TracingPaper);
 }

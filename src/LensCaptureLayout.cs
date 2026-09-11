@@ -3,11 +3,11 @@ using System.Windows;
 
 namespace PaperTodo;
 
-/// <summary>One coherent background sample, including a world-space drag margin. The
-/// upload budget is fixed even on large/high-DPI papers; text never enters this texture.</summary>
+/// <summary>One coherent, bounded scene on a screen-anchored sampling grid.
+/// Moving a surface changes its crop, not the phase of the downsampling filter.</summary>
 internal static class LensCaptureLayout
 {
-    internal const long PixelBudget = 196_608;
+    internal const long PixelBudget = 1_048_576;
     internal sealed record Tile(Int32Rect Target, Int32Rect Bounds, int PixelWidth, int PixelHeight);
 
     internal static Tile[] Create(Int32Rect window, DesktopLensCapture.Region region, Int32Rect desktop)
@@ -20,10 +20,20 @@ internal static class LensCaptureLayout
         var right = Math.Min(desktop.X + desktop.Width, window.X + region.OffsetX + w + region.Padding);
         var bottom = Math.Min(desktop.Y + desktop.Height, window.Y + region.OffsetY + h + region.Padding);
         if (right <= left || bottom <= top) return [];
-        var bounds = new Int32Rect(left, top, right - left, bottom - top);
-        var scale = Math.Min(1, Math.Sqrt(PixelBudget / ((double)bounds.Width * bounds.Height)));
-        scale = Math.Min(scale, 2048d / Math.Max(bounds.Width, bounds.Height));
-        return [new(new Int32Rect(0, 0, w, h), bounds,
-            Math.Max(1, (int)(bounds.Width * scale)), Math.Max(1, (int)(bounds.Height * scale)))];
+        // Pick density from the WHOLE surface, not its changing onscreen intersection.
+        // Ordinary papers/menus stay 1:1. Large surfaces use integral source-pixel cells.
+        var fullWidth = (long)w + 2 * region.Padding;
+        var fullHeight = (long)h + 2 * region.Padding;
+        var step = Math.Max(1, (int)Math.Ceiling(Math.Max(
+            Math.Sqrt((double)fullWidth * fullHeight / PixelBudget), Math.Max(fullWidth, fullHeight) / 2048d)));
+        // Alignment can add one cell on either axis. Budget for the worst phase
+        // before intersecting the desktop, so crossing a grid cell never changes density.
+        while (step > 1 && (((fullWidth + step - 1) / step + 1) * ((fullHeight + step - 1) / step + 1) > PixelBudget ||
+            (fullWidth + step - 1) / step + 1 > 2048 || (fullHeight + step - 1) / step + 1 > 2048)) step++;
+        var x = (int)Math.Floor(left / (double)step) * step;
+        var y = (int)Math.Floor(top / (double)step) * step;
+        var pw = (int)Math.Ceiling(right / (double)step) - x / step;
+        var ph = (int)Math.Ceiling(bottom / (double)step) - y / step;
+        return [new(new Int32Rect(0, 0, w, h), new Int32Rect(x, y, pw * step, ph * step), pw, ph)];
     }
 }

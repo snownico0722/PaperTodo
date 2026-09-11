@@ -232,13 +232,13 @@ internal static class RefractionChecks
                 "negative screen origins / DPI / large surfaces retain bounded physical capture budget");
             Program.Assert(layout[0].Target == new Int32Rect(0,0,width,height),
                 "body and edge come from one time-coherent source, without tile seams");
-            if (size.Width >= 1024)
-            {
-                var pixels = layout.Sum(t => (long)t.PixelWidth*t.PixelHeight);
-                var old = (width+(long)Math.Ceiling(128*dpi))*(height+(long)Math.Ceiling(128*dpi));
-                Program.Assert(pixels < old*.35, "large paper samples less than 35% of previous full padded capture");
-                Console.WriteLine($"LENS BUDGET {size.Width}x{size.Height}@{dpi}: {pixels} vs old {old} pixels ({100d*pixels/old:F1}%)");
-            }
+            var tile = layout[0];
+            var step = tile.Bounds.Width / tile.PixelWidth;
+            Program.Assert(tile.Bounds.Width == tile.PixelWidth * step && tile.Bounds.Height == tile.PixelHeight * step &&
+                tile.Bounds.X % step == 0 && tile.Bounds.Y % step == 0,
+                "every sample stays on the same integral screen grid, including negative origins");
+            Console.WriteLine($"LENS BUDGET {size.Width}x{size.Height}@{dpi}: {tile.PixelWidth * (long)tile.PixelHeight}; stride={step}");
+
         }
     }
     private static string? Output => Environment.GetEnvironmentVariable("PAPER_SKIN_CAPTURE");
