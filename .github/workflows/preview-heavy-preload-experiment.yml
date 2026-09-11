@@ -1,0 +1,49 @@
+name: Heavy-only preview preload experiment
+on:
+  push:
+    branches: [experiment/edge-preview-preload]
+    paths:
+      - .github/workflows/preview-heavy-preload-experiment.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release behavior checks
+        run: |
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object edge-preview.log
+          if ($LASTEXITCODE -ne 0) { throw 'Edge preview checks failed' }
+      - name: Forward preload profile
+        run: |
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release --no-build -- --preload-profile 2>&1 | Tee-Object profile-forward.log
+          if ($LASTEXITCODE -ne 0) { throw 'Forward profile failed' }
+      - name: Reverse preload profile
+        run: |
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release --no-build -- --preload-profile --reverse 2>&1 | Tee-Object profile-reverse.log
+          if ($LASTEXITCODE -ne 0) { throw 'Reverse profile failed' }
+      - name: Hundred-heavy-note retained memory
+        run: |
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release --no-build -- --preload-memory 2>&1 | Tee-Object memory.log
+          if ($LASTEXITCODE -ne 0) { throw 'Memory profile failed' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: heavy-only-preload-results
+          path: |
+            edge-preview.log
+            profile-forward.log
+            profile-reverse.log
+            memory.log
+          retention-days: 2
