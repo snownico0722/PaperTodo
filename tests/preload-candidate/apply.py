@@ -95,7 +95,7 @@ edit('src/EdgeCapsulePreview.Markdown.cs', '''        var published = false;
         try''', '''        var published = false;
         var preparedKey = MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, size);
         try''')
-p=Path('src/EdgeCapsulePreview.Markdown.cs');s=p.read_text();assert s.count('await Dispatcher.Yield(DispatcherPriority.Background);')==2
+p=Path('src/EdgeCapsulePreview.Markdown.cs');s=p.read_text(encoding='utf-8');assert s.count('await Dispatcher.Yield(DispatcherPriority.Background);')==2
 s=s.replace('await Dispatcher.Yield(DispatcherPriority.Background);','await Dispatcher.Yield(PreloadStillCurrent == null\n                ? DispatcherPriority.Background : DispatcherPriority.ContextIdle);')
 p.write_text(s,encoding='utf-8',newline='\n')
 edit('src/EdgeCapsulePreview.Markdown.cs', '''            _publishedSize = size;
@@ -154,7 +154,11 @@ edit('src/PaperWindow.EdgeCapsulePreviewContent.cs', '''    private void Invalid
     }''')
 edit('src/PaperWindow.EdgeCapsulePreview.cs', '''        var prepareStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();''', '''        MarkdownEdgePreviewPreload.For(Dispatcher).BeginDemand();
         var prepareStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();''')
-edit('src/PaperWindow.EdgeCapsulePreview.cs', '''            content.HorizontalAlignment = HorizontalAlignment.Stretch;''', '''            if (content is MarkdownEdgeCapsulePreviewView markdownView)
+anchor='''            content.HorizontalAlignment = HorizontalAlignment.Stretch;
+            content.VerticalAlignment = VerticalAlignment.Stretch;
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"preview.prepare.ready'''
+edit('src/PaperWindow.EdgeCapsulePreview.cs', anchor, '''            if (content is MarkdownEdgeCapsulePreviewView markdownView)
             {
                 void Prepared(bool success)
                 {
@@ -164,7 +168,7 @@ edit('src/PaperWindow.EdgeCapsulePreview.cs', '''            content.HorizontalA
                 }
                 markdownView.PreloadViewport.PreparationFinished += Prepared;
             }
-            content.HorizontalAlignment = HorizontalAlignment.Stretch;''')
+''' + anchor)
 edit('src/AppController.EdgeCapsulePreview.cs', '''        if (!pointerOver)
 ''', '''        if (pointerOver) ScheduleMarkdownPreviewNeighbors(window);
 
