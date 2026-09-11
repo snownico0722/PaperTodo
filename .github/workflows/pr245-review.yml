@@ -1,0 +1,239 @@
+name: Validate PR245 rendering review
+on:
+  push:
+    branches: [experiment/edge-preview-avalonedit]
+    paths: [.github/workflows/pr245-review.yml]
+permissions:
+  contents: write
+jobs:
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/checkout@v7
+        with:
+          path: baseline
+          ref: f7709dbc2ff727c1a169745a84ad1a649e32e609
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Assemble isolated candidate and identical regression harness
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          Path('results').mkdir()
+          def edit(folder,path,old,new):
+              p=Path(folder)/path; s=p.read_text(encoding='utf-8-sig')
+              assert s.count(old)==1,(folder,path,s.count(old))
+              p.write_text(s.replace(old,new),encoding='utf-8',newline='\n')
+          edit('candidate','src/EdgeCapsulePreview.Markdown.TextLayout.cs',
+              '                if (lineDrawing.CanFreeze) lineDrawing.Freeze();',
+              '''                // Drawing commands reference the host's brushes. Freeze a snapshot, never
+                          // freeze those shared resources as a side effect of preparing this paragraph.
+                          if (lineDrawing.CanFreeze) lineDrawing = (DrawingGroup)lineDrawing.GetAsFrozen();'''.replace('\n                          ','\n                '))
+          edit('candidate','src/EdgeCapsulePreview.Markdown.SemanticInlines.cs',
+              '        var snapshot = MarkdownSemanticSnapshot.Parse(text);\n        var styles',
+              '''        var snapshot = MarkdownSemanticSnapshot.Parse(text);
+                  // Recognition still decides what is plain. Without inline semantics there is no need
+                  // for per-character style/link arrays or rebuilding an identical output string.
+                  if (!snapshot.Spans.Any() && !snapshot.Links.Any())
+                  {
+                      yield return new InlinePiece(text, InlineStyle.None);
+                      yield break;
+                  }
+                  var styles'''.replace('\n                  ','\n        '))
+          edit('candidate','src/EdgeCapsulePreview.Markdown.cs',
+              '                markdown[lineStart..lineEnd],\n                truncated);',
+              '                markdown[lineStart..SafePrefixEnd(markdown, lineEnd)],\n                truncated);')
+          edit('candidate','src/EdgeCapsulePreview.Markdown.cs',
+              '        return value[..(maximumLength - 1)] + "…";\n    }',
+              '''        return value[..SafePrefixEnd(value, maximumLength - 1)] + "…";
+              }
+
+              // Character budgets use UTF-16 units, but never split a valid surrogate pair at the edge.
+              private static int SafePrefixEnd(string value, int end) =>
+                  end > 0 && end < value.Length &&
+                  char.IsHighSurrogate(value[end - 1]) && char.IsLowSurrogate(value[end]) ? end - 1 : end;'''.replace('\n              ','\n    '))
+          test=r'''using System.Text;
+          using System.Windows;
+          using System.Windows.Controls;
+          using System.Windows.Media;
+          using PaperTodo;
+
+          internal static partial class Program
+          {
+              private static void ReviewBoundaryChecks()
+              {
+                  var failures = new List<string>();
+                  void Check(string name, Action check)
+                  {
+                      try { check(); Console.WriteLine("PASS review " + name); }
+                      catch (Exception ex) { failures.Add(name); Console.Error.WriteLine("FAIL review " + name + ": " + ex.Message); }
+                  }
+                  Check("borrowed-brushes", CheckBorrowedBrushes);
+                  Check("unicode-excerpt", CheckUnicodeExcerpt);
+                  Check("plain-inline-reuse", CheckPlainInlineReuse);
+                  if (failures.Count > 0) throw new InvalidOperationException("Review failures: " + string.Join(", ", failures));
+              }
+
+              private static void CheckBorrowedBrushes()
+              {
+                  var root = new StackPanel();
+                  var foreground = new SolidColorBrush(Colors.DarkRed);
+                  var background = new SolidColorBrush(Colors.LightGray);
+                  var link = new SolidColorBrush(Colors.Blue);
+                  root.Resources["TextBrushKey"] = foreground;
+                  root.Resources["HoverBrushKey"] = background;
+                  root.Resources["LinkBrushKey"] = link;
+                  var window = new Window { Content = root, Width = 420, Height = 260,
+                      ShowActivated = false, ShowInTaskbar = false };
+                  var text = string.Concat(Enumerable.Repeat("正文 **粗体** `code` [link](https://example.com) ", 40));
+                  void Render()
+                  {
+                      MarkdownEdgeCapsulePreviewRenderer.RenderInto(root, text, _ => { },
+                          MarkdownRenderModes.Full, new Size(390, 200));
+                      window.UpdateLayout(); Pump();
+                  }
+                  bool HasColor(Color color) => root.Children.OfType<MarkdownEdgePreviewParagraph>()
+                      .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
+                      .Any(g => g.ForegroundBrush is SolidColorBrush b && b.Color == color);
+                  try
+                  {
+                      window.Show(); Pump(); Render();
+                      Require(root.Children.OfType<MarkdownEdgePreviewParagraph>().Any(), "fixture uses prepared paragraph path");
+                      Require(!foreground.IsFrozen && !background.IsFrozen && !link.IsFrozen,
+                          "preparing text must not freeze caller-owned color resources");
+                      Require(HasColor(Colors.DarkRed), "first draw uses the original resource value");
+                      foreground.Color = Colors.DarkGreen;
+                      background.Color = Colors.Beige;
+                      link.Color = Colors.Purple;
+                      Require(HasColor(Colors.DarkRed), "completed drawing retains its own immutable snapshot");
+                      Render();
+                      Require(HasColor(Colors.DarkGreen) && HasColor(Colors.Purple), "rebuild captures the changed resource values");
+                  }
+                  finally { window.Close(); Pump(); }
+              }
+
+              private static void CheckUnicodeExcerpt()
+              {
+                  var fixtures = new[] {
+                      new string('文', 5999) + "😀tail",
+                      "prefix\n" + new string('文', 5991) + "😀tail",
+                      new string('文', 5998) + "😀",
+                      "```\n" + new string('文', 5995) + "😀tail\n```"
+                  };
+                  var strictUtf8 = new UTF8Encoding(false, true);
+                  foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
+                      MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+                  foreach (var source in fixtures)
+                  {
+                      var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
+                      var excerpt = string.Join('\n', content.Lines.Select(line => line.Text));
+                      Require(excerpt.Length <= 6000, "valid Unicode never exceeds the existing source budget");
+                      _ = strictUtf8.GetBytes(excerpt);
+                      if (source.Length == 6000)
+                          Require(!content.Truncated && excerpt == source, "a complete pair fitting exactly is retained");
+                      else Require(content.Truncated, "omission remains reported after moving to a safe boundary");
+                  }
+              }
+
+              private static void CheckPlainInlineReuse()
+              {
+                  var text = string.Concat(Enumerable.Repeat("普通文字 English e\u0301 العربية 😀 ", 20));
+                  foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
+                      MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+                  {
+                      var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
+                      Require(pieces.Length == 1 && pieces[0].Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None &&
+                          pieces[0].Link == null && ReferenceEquals(pieces[0].Text, text),
+                          "semantic plain text reuses the original string instead of per-character reconstruction");
+                  }
+                  var styled = MarkdownEdgeCapsulePreviewRenderer.InlinePieces("**正文** " + text, MarkdownRenderModes.Full).ToArray();
+                  Require(styled.Any(p => (p.Style & MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strong) != 0) &&
+                      string.Concat(styled.Select(p => p.Text)) == "正文 " + text, "styled input still uses the shared recognizer");
+              }
+
+              private static void ProfilePlainInlineAllocation()
+              {
+                  foreach (var length in new[] { 300, 6000 })
+                  foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+                  {
+                      var text = new string('文', length);
+                      long Sample()
+                      {
+                          var before = GC.GetAllocatedBytesForCurrentThread();
+                          var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
+                          GC.KeepAlive(pieces);
+                          return GC.GetAllocatedBytesForCurrentThread() - before;
+                      }
+                      for (var i = 0; i < 5; i++) Sample();
+                      var bytes = Enumerable.Range(0, 21).Select(_ => Sample()).Order().ToArray();
+                      Console.WriteLine($"INLINE_ALLOC length={length} mode={mode} medianBytes={bytes[bytes.Length/2]}");
+                  }
+              }
+          }
+          '''
+          for folder in ['baseline','candidate']:
+              Path(folder+'/tests/PaperTodo.EdgePreviewChecks/ReviewBoundaryChecks.cs').write_text(test,encoding='utf-8',newline='\n')
+              edit(folder,'tests/PaperTodo.EdgePreviewChecks/Program.cs',
+                  'if (args.Contains("--preload-profile"))',
+                  'if (args.Contains("--review-only")) ReviewBoundaryChecks();\n            else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();\n            else if (args.Contains("--preload-profile"))')
+              edit(folder,'tests/PaperTodo.EdgePreviewChecks/Program.cs',
+                  'Checks(); PreloadAuditChecks();','Checks(); ReviewBoundaryChecks(); PreloadAuditChecks();')
+          Path('results/changed-paths.txt').write_text('src/EdgeCapsulePreview.Markdown.cs\nsrc/EdgeCapsulePreview.Markdown.SemanticInlines.cs\nsrc/EdgeCapsulePreview.Markdown.TextLayout.cs\ntests/PaperTodo.EdgePreviewChecks/Program.cs\ntests/PaperTodo.EdgePreviewChecks/ReviewBoundaryChecks.cs\n')
+          shutil.copyfile('candidate/.github/workflows/pr245-review.yml','results/exact-workflow.yml')
+      - name: Reproduce on unmodified production baseline
+        run: |
+          dotnet run --project baseline/tests/PaperTodo.EdgePreviewChecks -c Release -- --review-only 2>&1 | Tee-Object results/baseline-regressions.log
+          if ($LASTEXITCODE -eq 0) { throw 'Expected baseline regressions were not reproduced' }
+          if (-not (Select-String -Path results/baseline-regressions.log -Pattern 'FAIL review')) { throw 'Baseline failed before running regression checks' }
+          exit 0
+      - name: Candidate standard regressions
+        run: |
+          $codes = @{}
+          foreach ($name in @('EdgePreviewChecks','MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
+            dotnet run --project "candidate/tests/PaperTodo.$name" -c Release 2>&1 | Tee-Object "results/$name.log"
+            $codes[$name] = $LASTEXITCODE
+          }
+          $codes | ConvertTo-Json | Set-Content results/exit-codes.json
+          if (@($codes.Values | Where-Object {$_ -ne 0}).Count) { throw 'Candidate regression failure' }
+      - name: Same-machine inline allocation comparison
+        run: |
+          foreach ($case in @(@('baseline','before'),@('candidate','after'))) {
+            dotnet run --project "$($case[0])/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- --inline-allocation 2>&1 | Tee-Object "results/$($case[1])-alloc.log"
+            if ($LASTEXITCODE -ne 0) { throw 'Allocation probe failed' }
+          }
+          dotnet run --project candidate/tests/PaperTodo.EdgePreviewChecks -c Debug -- --review-only 2>&1 | Tee-Object results/debug-review.log
+          if ($LASTEXITCODE -ne 0) { throw 'Debug regression failed' }
+      - name: Export checked source blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json'}
+          $entries = foreach ($path in Get-Content results/changed-paths.txt) {
+            $text = [IO.File]::ReadAllText("$pwd/candidate/$path").Replace("`r`n","`n")
+            $body = @{content=$text; encoding='utf-8'} | ConvertTo-Json -Compress
+            $blob = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
+            @{path=$path; sha=$blob.sha; mode='100644'; type='blob'}
+            $dest=Join-Path "$pwd/results/source" $path
+            New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+            [IO.File]::WriteAllText($dest,$text,[Text.UTF8Encoding]::new($false))
+          }
+          $entries | ConvertTo-Json | Set-Content results/checked-blobs.json
+          git -C candidate diff | Set-Content results/candidate.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pr245-rendering-review-evidence
+          path: results/
+          retention-days: 2
