@@ -4,8 +4,11 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private void InvalidateEdgeCapsulePreviewContent() =>
+    private void InvalidateEdgeCapsulePreviewContent()
+    {
         _edgeCapsulePreviewInvalidationSource.Invalidate();
+        ScheduleMarkdownPreviewPreload();
+    }
 
     private string CurrentMarkdownTextForEdgeCapsulePreview()
     {

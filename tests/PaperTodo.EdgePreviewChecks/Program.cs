@@ -17,9 +17,11 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--profile")) Profile();
+            if (args.Contains("--preload-profile")) ProfilePreload(args.Contains("--reverse"));
+            else if (args.Contains("--preload-memory")) PreloadMemory();
+            else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { SharedPreviewSemanticChecks.Run(); Checks(); }
+            else { SharedPreviewSemanticChecks.Run(); Checks(); PreloadChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -91,7 +93,7 @@ internal static partial class Program
         }
     }
 
-    private static double[] ProfileOne(string text, string mode)
+    private static double[] ProfileOne(string text, string mode, string preparation = "cold")
     {
         using var host = NewHost();
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "profile monitor");
@@ -116,6 +118,16 @@ internal static partial class Program
         Pump(); times.Clear(); costs.Clear();
         var context = new EdgeCapsulePreviewContext(new PaperData(), () => "Profile", false,
             () => text, () => mode, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
+        var preload = MarkdownEdgePreviewPreload.For(dispatcher);
+        preload.SetEnabledForChecks(preparation != "cold");
+        var warmStarted = Stopwatch.GetTimestamp();
+        if (preparation == "text")
+            foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(preload.Capture(context))) { }
+        if (preparation == "layout")
+            Require(AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true))),
+                "profile prelayout completes on the real host without opening it");
+        var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
+        var hitsBefore = preload.BodyHits;
         var allocation = GC.GetAllocatedBytesForCurrentThread();
         var started = Stopwatch.GetTimestamp();
         IEdgeCapsulePreviewProvider provider = MarkdownEdgeCapsulePreviewProvider.Instance;
@@ -163,7 +175,7 @@ internal static partial class Program
                 Stopwatch.GetElapsedTime(stageStarted, readyAt).TotalMilliseconds,
                 times.Count > 1 ? Stopwatch.GetElapsedTime(motionStarted, times[1]).TotalMilliseconds : 0,
                 gaps.DefaultIfEmpty(0).Max(), costs.DefaultIfEmpty(0).Max(),
-                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0 };
+                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.BodyHits - hitsBefore };
         }
         finally
         {

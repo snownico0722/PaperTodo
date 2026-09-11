@@ -202,6 +202,8 @@ public sealed partial class AppController
             return;
         }
 
+        if (pointerOver) ScheduleMarkdownPreviewNeighbors(window);
+
         if (!pointerOver)
         {
             CancelEdgeCapsulePreviewActivationIntent(

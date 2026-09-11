@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -106,7 +107,8 @@ internal sealed class MarkdownEdgePreviewPreload
         stamps.Add(string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.CodeFontFamily.Source,
             AppTypography.FontFamilyFor(content: true, bold: true).Source,
             AppTypography.FontWeightFor(true), AppTypography.UsesCustomBoldFace(true),
-            NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
+            NoteTypography.FontWeight, NoteTypography.FontStyle, NoteTypography.FontStretch,
+            NoteTypography.Language.IetfLanguageTag, NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
             NoteTypography.FontSize, NoteTypography.CodeFontSize,
             NoteTypography.Heading1FontSize, NoteTypography.Heading2FontSize, NoteTypography.Heading3FontSize,
             AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection));
@@ -133,15 +135,16 @@ internal sealed class MarkdownEdgePreviewPreload
         return false;
     }
 
-    internal void Store(Body body)
+    internal bool Store(Body body)
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || !body.Key.Binding.Current || body.Panel.Parent != null ||
             !_excerpts.TryGetValue(body.Key.Binding.Source, out var current) ||
-            !ReferenceEquals(current.Content, body.Key.Binding.Content)) return;
+            !ReferenceEquals(current.Content, body.Key.Binding.Content)) return false;
         ForgetBodies(body.Key.Binding.Source);
         _bodies.AddFirst(body);
         while (_bodies.Count > MaximumBodies) _bodies.RemoveLast();
+        return true;
     }
 
     private void ForgetBodies(EdgeCapsulePreviewInvalidationSource source)
@@ -263,6 +266,11 @@ internal sealed class MarkdownEdgePreviewPreload
         var holder = new Canvas { Width = 0, Height = 0, ClipToBounds = true,
             Opacity = 0, IsHitTestVisible = false, Focusable = false,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        // Hidden speculative content cannot join keyboard navigation, even though opacity zero
+        // keeps it eligible for WPF layout and inheriting the target host's resources.
+        KeyboardNavigation.SetTabNavigation(holder, KeyboardNavigationMode.None);
+        KeyboardNavigation.SetControlTabNavigation(holder, KeyboardNavigationMode.None);
+        KeyboardNavigation.SetDirectionalNavigation(holder, KeyboardNavigationMode.None);
         var sized = new Border { Width = Math.Max(1, target.Size.WidthDip - 22), Height = target.Size.HeightDip,
             IsHitTestVisible = false, Focusable = false, Child = view };
         holder.Children.Add(sized);
@@ -272,6 +280,15 @@ internal sealed class MarkdownEdgePreviewPreload
         bool Current() => _enabled && !cancellation.IsCancellationRequested && target.StillEligible() &&
             target.Context.InvalidationSource.Version == version && target.Anchor.IsLoaded && target.Anchor.IsVisible;
         viewport.PreloadStillCurrent = Current;
+        void Abandoned(object? sender, EventArgs args)
+        {
+            if (!Current()) complete.TrySetResult(false);
+        }
+        void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs args) => Abandoned(sender, EventArgs.Empty);
+        void Invalidated() => complete.TrySetResult(false);
+        target.Anchor.Unloaded += Abandoned;
+        target.Anchor.IsVisibleChanged += VisibilityChanged;
+        target.Context.InvalidationSource.Invalidated += Invalidated;
         using var registration = cancellation.Register(() => complete.TrySetCanceled(cancellation));
         try
         {
@@ -289,6 +306,9 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         finally
         {
+            target.Anchor.Unloaded -= Abandoned;
+            target.Anchor.IsVisibleChanged -= VisibilityChanged;
+            target.Context.InvalidationSource.Invalidated -= Invalidated;
             viewport.PreparationFinished -= Finished;
             viewport.SetPreviewActive(false);
             viewport.PreloadStillCurrent = () => false;
