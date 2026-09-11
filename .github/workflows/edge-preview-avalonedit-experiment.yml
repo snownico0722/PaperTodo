@@ -68,29 +68,45 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Diff whitespace check failed' }
           git -C candidate diff | Set-Content results/wiring.diff
       - name: Candidate Release regression suites
+        id: regression
         run: |
           $ErrorActionPreference = 'Stop'
+          $results = @{}
           foreach ($name in @('EdgePreviewExperimentChecks','MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
             dotnet run --project "candidate/tests/PaperTodo.$name/PaperTodo.$name.csproj" -c Release 2>&1 | Tee-Object "results/$name.log"
-            if ($LASTEXITCODE -ne 0) { throw "$name failed" }
+            $results[$name] = $LASTEXITCODE
           }
+          $results | ConvertTo-Json | Set-Content results/regression-exit-codes.json
+          "failed=$(@($results.Values | Where-Object { $_ -ne 0 }).Count)" >> $env:GITHUB_OUTPUT
+          "prototype=$($results['EdgePreviewExperimentChecks'])" >> $env:GITHUB_OUTPUT
+          exit 0
+      - name: Baseline Markdown editing control
+        run: |
+          dotnet run --project baseline/tests/PaperTodo.MarkdownEditingChecks -c Release 2>&1 | Tee-Object results/baseline-editing.log
+          $LASTEXITCODE | Set-Content results/baseline-editing-exit-code.txt
+          exit 0
       - name: Candidate Debug experiment checks
+        if: steps.regression.outputs.prototype == '0'
         run: |
           dotnet run --project candidate/tests/PaperTodo.EdgePreviewExperimentChecks -c Debug 2>&1 | Tee-Object results/experiment-debug.log
           if ($LASTEXITCODE -ne 0) { throw 'Debug experiment checks failed' }
       - name: Main baseline profile
+        if: steps.regression.outputs.prototype == '0'
         run: |
           dotnet run --project baseline/tests/PaperTodo.EdgePreviewExperimentChecks -c Release -- --profile 2>&1 | Tee-Object results/baseline.log
           if ($LASTEXITCODE -ne 0) { throw 'Main baseline profile failed' }
       - name: PR243 profile without animation layer
+        if: steps.regression.outputs.prototype == '0'
         run: |
           dotnet run --project textlayout/tests/PaperTodo.EdgePreviewExperimentChecks -c Release -- --profile 2>&1 | Tee-Object results/pr243.log
           if ($LASTEXITCODE -ne 0) { throw 'PR243 profile failed' }
       - name: AvalonEdit candidate profile
+        if: steps.regression.outputs.prototype == '0'
         run: |
           dotnet run --project candidate/tests/PaperTodo.EdgePreviewExperimentChecks -c Release -- --profile --avalon 2>&1 | Tee-Object results/avalon.log
           if ($LASTEXITCODE -ne 0) { throw 'AvalonEdit candidate profile failed' }
-      - name: Record validated wiring blobs without changing any branch
+      - name: Record checked source blobs without changing any branch
+        if: steps.regression.outputs.prototype == '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -103,8 +119,12 @@ jobs:
             $blob = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $json -ContentType 'application/json'
             @{ path = $path; sha = $blob.sha; mode = '100644'; type = 'blob' }
           }
-          $entries | ConvertTo-Json -Compress | Tee-Object results/validated-blobs.json
-          Write-Output ('VALIDATED_BLOBS ' + ($entries | ConvertTo-Json -Compress))
+          $entries | ConvertTo-Json -Compress | Tee-Object results/checked-blobs.json
+          Write-Output ('CHECKED_BLOBS ' + ($entries | ConvertTo-Json -Compress))
+      - name: Preserve regression failure status
+        if: steps.regression.outputs.failed != '0'
+        run: |
+          throw 'Regression failure(s) retained; inspect regression-exit-codes.json and baseline control. No checks were removed or waived.'
       - uses: actions/upload-artifact@v7
         if: always()
         with:
