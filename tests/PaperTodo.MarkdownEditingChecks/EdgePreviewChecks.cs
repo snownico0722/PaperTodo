@@ -27,7 +27,7 @@ internal static partial class Program
             {
                 MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, "**粗体**", _ => { }, mode);
                 var text = (TextBlock)panel.Children[0];
-                Require(text.Inlines.OfType<Bold>().Any(), "enabled modes style emphasis");
+                Require(text.Inlines.OfType<Run>().Any(run => run.Text == "粗体" && run.FontWeight == (AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight)), "enabled modes retain effective strong typography without wrappers");
                 var marker = text.Inlines.OfType<Run>().First();
                 Equal(mode == MarkdownRenderModes.Enhanced,
                     marker.ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue,
@@ -262,10 +262,7 @@ internal static partial class Program
                 Require(!MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, prefix, _ => { }, mode),
                     "exactly sixteen blocks fit without source truncation");
                 var extra = prefix + "\n" + new string('宽', 300) + "\n预算外内容";
-                Equal(Describe(prefix).Size.WidthDip, Describe(extra).Size.WidthDip, "a seventeenth block cannot widen the card");
-                Equal(Describe(prefix + "\n尾部").Size, Describe(extra).Size, "the omitted tail's length cannot reserve card space");
-                Require(Describe(extra).Size.HeightDip - Describe(prefix).Size.HeightDip <= AppTypography.Scale(20),
-                    "only the overflow indicator may add height to the admitted sixteen rows");
+                Equal(Describe(prefix).Size, Describe(extra).Size, "budget-external text cannot change card geometry");
                 Require(MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, extra, _ => { }, mode), "omitted tail is reported");
                 Equal(16, panel.Children.Count, "rendered block count stays at sixteen");
                 Require(!EdgePreviewText(panel).Contains("宽"), "sizing-only tail is not silently rendered");
@@ -488,7 +485,7 @@ internal static partial class Program
 
                 var paragraph = new string('文', 700);
                 var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(paragraph, mode);
-                Require(MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(content, 400, 1) > NoteTypography.FontSize * 4,
+                Require(MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(content, 400) > 4,
                     "an admitted paragraph is not capped at four visual lines");
                 Equal(410.0, Describe(paragraph, 1).HeightDip,
                     "a long paragraph can request the maximum card height instead of premature clipping");

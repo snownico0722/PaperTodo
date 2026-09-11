@@ -11,50 +11,7 @@ internal static partial class Program
     private static void RunEdgePreviewTextLayoutChecks(Action<string, Action> check)
     {
         RunEdgePreviewInlinePreparationChecks(check);
-        check("Sixteen admitted rows reserve their actual height and one overflow indicator", () =>
-        {
-            try
-            {
-                foreach (var sharp in new[] { false, true })
-                    foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
-                        foreach (var zoom in new[] { 0.5, 1.0, 1.5 })
-                        {
-                            AppTypography.Configure(UiFontPresets.Default, textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
-                            var source = string.Join('\n', Enumerable.Range(1, 128).Select(i => $"第{i}行"));
-                            var context = new EdgeCapsulePreviewContext(new PaperData { TextZoom = zoom }, () => "笔记", false,
-                                () => source, () => mode, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
-                            var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
-                            var view = (EdgeCapsuleLivePreviewView)descriptor.CreateContent(descriptor.Size);
-                            view.PrepareForFirstDisplay();
-                            var host = new Border
-                            {
-                                Padding = new Thickness(0, 0, 22, 0),
-                                Width = descriptor.Size.WidthDip,
-                                Height = descriptor.Size.HeightDip,
-                                Child = view,
-                                HorizontalAlignment = HorizontalAlignment.Left,
-                                VerticalAlignment = VerticalAlignment.Top
-                            };
-                            var window = new Window { Content = host, Width = 600, Height = 600, ShowActivated = false, ShowInTaskbar = false };
-                            try
-                            {
-                                window.Show(); Pump();
-                                var viewport = EdgePreviewElements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-                                var body = viewport.Children.OfType<StackPanel>().Single();
-                                if (descriptor.Size.HeightDip < 410)
-                                {
-                                    Equal(16, body.Children.Count, "all sixteen admitted rows are present");
-                                    var gap = body.Clip.Bounds.Height - body.DesiredSize.Height;
-                                    Require(gap >= -0.1 && gap <= 2, $"no unused source rows below the excerpt: {gap:F3} DIP");
-                                }
-                                Equal(1.0, viewport.Children.OfType<TextBlock>().Single().Opacity, "the omitted tail is indicated");
-                            }
-                            finally { window.Close(); Pump(); }
-                        }
-            }
-            finally { AppTypography.Configure(UiFontPresets.Default); }
-        });
-
+        // Describe retains main's bounded lightweight estimate; renderer checks follow.
         check("Value inline runs retain the existing preview grammar", () =>
         {
             foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
@@ -76,11 +33,15 @@ internal static partial class Program
                     foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
                         foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
                             foreach (var prefix in new[] { "", "## ", "> ", "- [x] ", "```\n" })
+                            foreach (var shortDense in new[] { false, true })
                             {
                                 AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
                                     sharp ? 1.2 : 1.0, textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
                                 NoteTypography.Configure(sharp ? VisualTextSizes.Large : VisualTextSizes.Medium, sharp);
-                                var source = prefix + string.Concat(Enumerable.Repeat("**粗体** `code` [链接](https://example.com) 中文 ", 12)).TrimEnd();
+                                if (shortDense && (mode == MarkdownRenderModes.Off || prefix == "```\n")) continue;
+                                var source = prefix + (shortDense
+                                    ? string.Concat(Enumerable.Repeat("**a** *b* `c` ", 8)) + "[link](https://example.com)"
+                                    : string.Concat(Enumerable.Repeat("**粗体** `code` [链接](https://example.com) 中文 ", 12))).TrimEnd();
                                 var eager = new StackPanel { Background = Brushes.White }; var bounded = new StackPanel { Background = Brushes.White };
                                 var host = new Grid(); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) }); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
                                 host.Resources["TextBrushKey"] = Brushes.Black;

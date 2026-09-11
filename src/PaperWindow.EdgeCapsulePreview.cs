@@ -55,6 +55,7 @@ public sealed partial class PaperWindow
         {
             return null;
         }
+        MarkdownEdgePreviewPreload.For(Dispatcher).BeginDemand();
         var prepareStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var bodySessionGeneration = _bodySessionGeneration;
 

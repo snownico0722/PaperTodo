@@ -8,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("PaperTodo.EdgePreviewChecks")]
+
 namespace PaperTodo;
 
 internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvider
@@ -20,9 +22,8 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
 
     public EdgeCapsulePreviewDescriptor Describe(EdgeCapsulePreviewContext context)
     {
-        var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
-        var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
-            context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
+        var initialVersion = context.InvalidationSource.Version;
+        var content = MarkdownEdgePreviewPreload.For(Dispatcher.CurrentDispatcher).Capture(context);
         var textScale = MarkdownEdgeCapsulePreviewRenderer.EstimateTextScale(context.Paper.TextZoom);
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
@@ -32,26 +33,16 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
             fixedReserveWidthDip: 72,
             bodyScale: textScale);
         // The body loses host close/chrome 22 + view margins 19 + viewport margins 3.
-        // Measure ordinary admitted rows with their rendered metrics. Long paragraphs retain a
-        // lightweight estimate; shaping their rich runs here would block hover/animation again.
+        // Keep the estimate lightweight, but account for the same font size and per-note zoom
+        // as rendering. Only the final card height is capped, not each admitted paragraph.
+        var lines = MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(
+            content,
+            Math.Max(1, width - 44) / textScale);
         var empty = content.IsEmpty;
-        var title = new TextBlock
-        {
-            Text = context.Title,
-            FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold
-        };
-        title.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var bodyHeight = empty ? 0 : MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(
-            content, Math.Max(1, width - 44), context.Paper.TextZoom);
-        var ellipsis = new TextBlock { Text = "…", FontFamily = NoteTypography.FontFamily, FontSize = AppTypography.Scale(14) };
-        ellipsis.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var height = empty
             ? 120
             : Math.Clamp(
-                Math.Ceiling(19 + 8 + title.DesiredSize.Height + bodyHeight +
-                    (content.Truncated ? ellipsis.DesiredSize.Height : 0)),
+                74 + lines * AppTypography.Scale(22) * textScale,
                 150,
                 410);
         if (empty)
@@ -59,14 +50,10 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
             width = Math.Max(130, width);
         }
 
-        EdgeCapsulePerformanceDiagnostics.Trace(
-            $"markdown.describe mode={content.RenderMode} lines={content.Lines.Count} " +
-            $"truncated={content.Truncated} width={width:F1} height={height:F1} " +
-            $"elapsedMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(started):F3}");
         MarkdownEdgeCapsulePreviewView? view = null;
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, height),
-            size => view = new MarkdownEdgeCapsulePreviewView(context, size, content),
+            size => view = new MarkdownEdgeCapsulePreviewView(context, size, content, initialVersion),
             visible => view?.SetPreviewActive(visible));
     }
 }
@@ -76,14 +63,17 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
     private readonly TextBlock _title;
     private readonly MarkdownEdgeCapsulePreviewViewport _viewport;
     private MarkdownEdgeCapsulePreviewRenderer.PreviewContent? _initialContent;
+    private readonly long _initialVersion;
 
     public MarkdownEdgeCapsulePreviewView(
         EdgeCapsulePreviewContext context,
         EdgeCapsulePreviewSize size,
-        MarkdownEdgeCapsulePreviewRenderer.PreviewContent initialContent)
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent initialContent,
+        long initialVersion = 0)
         : base(context, size)
     {
         _initialContent = initialContent;
+        _initialVersion = initialVersion;
         Margin = new Thickness(10, 9, 9, 10);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition());
@@ -116,6 +106,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
     }
 
     internal void SetPreviewActive(bool active) => _viewport.SetPreviewActive(active);
+    internal MarkdownEdgeCapsulePreviewViewport PreloadViewport => _viewport;
 
     protected override void RebuildContent()
     {
@@ -124,12 +115,13 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         _title.ToolTip = title;
         // Capture once on the owning Dispatcher. Deferred work never rereads a different paper
         // or mutable editor halfway through a build, and never touches WPF on a worker thread.
-        var content = _initialContent ?? MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
-            Context.ReadMarkdownText(), Context.ReadMarkdownRenderMode());
+        var content = _initialContent != null && _initialVersion == Context.InvalidationSource.Version
+            ? _initialContent : MarkdownEdgePreviewPreload.For(Dispatcher).Capture(Context);
         _initialContent = null;
         var textZoom = Context.Paper.TextZoom;
         _viewport.SetContent((target, size) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
-            target, content, Context.OpenExternal, size, textZoom));
+            target, content, Context.OpenExternal, size, textZoom),
+            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));
     }
 }
 
@@ -142,11 +134,21 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private bool _previewActive = true;
     private Func<Panel, Size, IEnumerable<bool>>? _renderContent;
     private Size? _renderedSize;
+    // A completed body may survive a brief retract/resume at unchanged content and geometry.
+    // Published bodies stay view-owned while mounted. On detach the optional bounded preload
+    // cache may take exclusive ownership; no body can belong to two live trees.
+    private Size? _publishedSize;
     private long _renderVersion;
+    private MarkdownEdgePreviewPreload.Binding? _preloadBinding;
+    private MarkdownEdgePreviewPreload.Key? _publishedKey;
+    internal Func<bool>? PreloadStillCurrent { get; set; }
+    internal event Action<bool>? PreparationFinished;
 
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
         ClipToBounds = true;
+        Opacity = 0;
+        IsHitTestVisible = false;
         _body = body;
         _body.Clip = _bodyClip;
         _overflowIndicator = new TextBlock
@@ -161,14 +163,35 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         Children.Add(_body);
         Children.Add(_overflowIndicator);
         Loaded += (_, _) => InvalidateArrange();
-        Unloaded += (_, _) => InvalidateContentBuild();
-        IsVisibleChanged += (_, _) => InvalidateContentBuild();
+        Unloaded += (_, _) => { ReturnBodyToPreload(); InvalidateContentBuild(); };
+        IsVisibleChanged += (_, _) => CancelPendingBuild();
     }
 
-    public void SetContent(Func<Panel, Size, IEnumerable<bool>> renderContent)
+    public void SetContent(Func<Panel, Size, IEnumerable<bool>> renderContent,
+        MarkdownEdgePreviewPreload.Binding? preloadBinding = null)
     {
         _renderContent = renderContent;
+        _preloadBinding = preloadBinding;
         InvalidateContentBuild();
+    }
+
+    internal bool ReturnBodyToPreload()
+    {
+        if (_publishedKey is not { } key || _publishedSize == null || !key.Binding.Current) return false;
+        var body = _body;
+        Children.Remove(body);
+        body.Clip = null;
+        body.IsHitTestVisible = false;
+        _body = new StackPanel { Clip = _bodyClip };
+        Children.Add(_body);
+        var retained = key.Binding.Owner.Store(new(key, body, _sourceTruncated));
+        _sourceTruncated = false;
+        _publishedKey = null;
+        _publishedSize = _renderedSize = null;
+        _renderVersion++;
+        Opacity = 0;
+        IsHitTestVisible = false;
+        return retained;
     }
 
     internal void SetPreviewActive(bool active)
@@ -178,21 +201,30 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             return;
         }
         _previewActive = active;
-        // The host can still be visible while the old card retracts. Stop its pending work at
-        // the existing preview visibility boundary, rather than waiting for WPF Unloaded.
-        InvalidateContentBuild();
+        IsHitTestVisible = active && Opacity > 0;
+        // Cancel unfinished work immediately, but keep a complete body at the same size.
+        // A content/DPI invalidation or unload separately revokes that reuse permission.
+        CancelPendingBuild();
     }
 
     private void InvalidateContentBuild()
     {
+        _publishedSize = null;
+        _publishedKey = null;
+        CancelPendingBuild();
+    }
+
+    private void CancelPendingBuild()
+    {
         _renderVersion++;
-        _renderedSize = null;
+        _renderedSize = _publishedSize;
         InvalidateArrange();
     }
 
     private bool IsBuildCurrent(long version) =>
         version == _renderVersion && _previewActive && IsLoaded && IsVisible &&
-        !Dispatcher.HasShutdownStarted;
+        !Dispatcher.HasShutdownStarted && _preloadBinding?.Current != false &&
+        PreloadStillCurrent?.Invoke() != false;
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
@@ -214,6 +246,26 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
+        if (_renderedSize != finalSize && _previewActive && IsLoaded && IsVisible &&
+            finalSize.Width > 0 && finalSize.Height > 0 && PreloadStillCurrent?.Invoke() != false &&
+            MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, finalSize) is { } cachedKey &&
+            cachedKey.Binding.Owner.TryTake(cachedKey, out var cached, PreloadStillCurrent == null))
+        {
+            Children.Remove(_body);
+            _body = cached!.Panel;
+            Children.Add(_body);
+            _body.Clip = _bodyClip;
+            _body.Opacity = 1;
+            _body.IsHitTestVisible = true;
+            _body.Measure(new Size(finalSize.Width, double.PositiveInfinity));
+            _sourceTruncated = cached.Truncated;
+            _publishedSize = _renderedSize = finalSize;
+            _publishedKey = cachedKey;
+            _renderVersion++;
+            Opacity = 1;
+            IsHitTestVisible = true;
+            PreparationFinished?.Invoke(true);
+        }
         var overflow = _sourceTruncated || _body.DesiredSize.Height > finalSize.Height;
         var indicatorHeight = overflow ? Math.Min(finalSize.Height, _overflowIndicator.DesiredSize.Height) : 0;
         var visibleHeight = finalSize.Height - indicatorHeight;
@@ -242,11 +294,13 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         var publicationMs = 0.0;
         var totalSteps = 0;
         var published = false;
+        var preparedKey = MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, size);
         try
         {
             // Yield even before creating the iterator: shell layout/Render and input have higher
             // priority. Moving one monolithic RenderInto to Background would still block them.
-            await Dispatcher.Yield(DispatcherPriority.Background);
+            await Dispatcher.Yield(PreloadStillCurrent == null
+                ? DispatcherPriority.Background : DispatcherPriority.ContextIdle);
             if (!IsBuildCurrent(version))
             {
                 return;
@@ -270,11 +324,12 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                     truncated = steps.Current;
                     totalSteps++;
                     // The budget is cooperative, not a hard deadline. Long styled paragraphs
-                    // and code rows yield between visible lines; inline parsing also yields in batches.
+                    // and code rows yield between visible lines; copying prepared runs also yields in batches.
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
                         maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
-                        await Dispatcher.Yield(DispatcherPriority.Background);
+                        await Dispatcher.Yield(PreloadStillCurrent == null
+                ? DispatcherPriority.Background : DispatcherPriority.ContextIdle);
                         batchSteps = 0;
                         batchStarted = Stopwatch.GetTimestamp();
                     }
@@ -301,6 +356,12 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             _body.Opacity = 1;
             _body.IsHitTestVisible = true;
             _sourceTruncated = truncated;
+            _publishedSize = size;
+            // A resource/DPI change during preparation makes this result non-cacheable.
+            _publishedKey = preparedKey == MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, size)
+                ? preparedKey : null;
+            Opacity = 1;
+            IsHitTestVisible = true;
             published = true;
             InvalidateMeasure();
             publicationMs = Stopwatch.GetElapsedTime(publicationStarted).TotalMilliseconds;
@@ -325,6 +386,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             {
                 Children.Remove(staging);
             }
+            PreparationFinished?.Invoke(published);
         }
     }
 }
@@ -337,7 +399,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     private const int MaximumRenderedCharacters = 6000;
     private const int MaximumBlockCharacters = MaximumRenderedCharacters;
     private const int MaximumCodeCharacters = MaximumRenderedCharacters;
-    private const int MaximumInlineDepth = 6;
 
     private readonly record struct PreviewLine(string Text, bool Truncated);
 
@@ -396,9 +457,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return new PreviewContent(lines, renderMode, truncated);
     }
 
-    private static readonly Regex InlinePattern = new(
-        @"!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|\*\*\*(.+?)\*\*\*|___(.+?)___|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`]+)`|\*(.+?)\*|_([^_]+)_",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex HeadingPattern = new(
         @"^(#{1,6})\s+(.+)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -420,6 +478,35 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     internal static double EstimateTextScale(double textZoom) =>
         Math.Round(NoteTypography.FontSize * NormalizeTextZoom(textZoom), 1) / AppTypography.Scale(14);
+
+    internal static IEnumerable<bool> WarmInlineSteps(PreviewContent content)
+    {
+        foreach (var line in content.Lines)
+        {
+            if (content.RenderMode == MarkdownRenderModes.Off || line.WasInsideFence ||
+                line.FenceKind != MarkdownFenceLineKind.None) { yield return false; continue; }
+            var raw = content.RenderMode == MarkdownRenderModes.Full ? line.Text.Trim() : line.Text;
+            var trimmed = raw.TrimStart();
+            var prefix = raw.Length - trimmed.Length;
+            var heading = HeadingPattern.Match(trimmed);
+            var task = TaskListPattern.Match(trimmed);
+            var ordered = OrderedListPattern.Match(trimmed);
+            var unordered = UnorderedListPattern.Match(trimmed);
+            if (heading.Success) prefix += heading.Groups[2].Index;
+            else if (trimmed.StartsWith(">", StringComparison.Ordinal))
+            {
+                prefix++;
+                if (content.RenderMode == MarkdownRenderModes.Full)
+                    while (prefix < raw.Length && char.IsWhiteSpace(raw[prefix])) prefix++;
+            }
+            else if (task.Success || ordered.Success) prefix += (task.Success ? task : ordered).Groups[2].Index;
+            else if (unordered.Success) prefix += unordered.Groups[1].Index;
+            if (!HorizontalRulePattern.IsMatch(trimmed)) content.Inlines.Get(raw[prefix..], content.RenderMode);
+            if (content.RenderMode == MarkdownRenderModes.Full)
+                content.Inlines.Get(StripBlockPrefix(raw), MarkdownRenderModes.Full);
+            yield return false;
+        }
+    }
 
     public static string MeasureText(PreviewContent content)
     {
@@ -447,6 +534,51 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         // The shared width helper samples only 32 lines. Supply the widest admitted line so
         // a long Full-mode code block has no second, unrelated measurement cutoff.
         return measured.MaxBy(EdgeCapsulePreviewMeasure.DisplayWidth) ?? string.Empty;
+    }
+
+    public static int EstimateVisualLines(PreviewContent content, double widthDip)
+    {
+        var estimate = 0;
+        var emptyCodeBlock = false;
+        foreach (var line in content.Lines)
+        {
+            var raw = line.Text;
+            var trimmed = raw.Trim();
+            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
+            {
+                if (content.RenderMode != MarkdownRenderModes.Full)
+                {
+                    estimate += 1;
+                }
+                else if (line.FenceKind == MarkdownFenceLineKind.Opening)
+                {
+                    emptyCodeBlock = true;
+                }
+                else if (emptyCodeBlock)
+                {
+                    estimate += 1;
+                    emptyCodeBlock = false;
+                }
+            }
+            else if (trimmed.Length == 0 ||
+                     (!line.WasInsideFence && HorizontalRulePattern.IsMatch(trimmed)))
+            {
+                emptyCodeBlock = false;
+                estimate += 1;
+            }
+            else
+            {
+                emptyCodeBlock = false;
+                var measurementText = line.WasInsideFence || content.RenderMode != MarkdownRenderModes.Full
+                    ? raw.TrimEnd()
+                    : PrepareInlineTextForMeasurement(StripBlockPrefix(trimmed), content.Inlines);
+                var lines = EdgeCapsulePreviewMeasure.EstimateWrappedLines(
+                    measurementText,
+                    widthDip);
+                estimate += lines;
+            }
+        }
+        return Math.Max(1, estimate + (emptyCodeBlock ? 1 : 0));
     }
 
     public static bool RenderInto(
@@ -503,7 +635,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
         FrameworkElement InlineBlock(TextBlock template, string text, string mode)
         {
-            if (viewportSize.HasValue && text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
+            if (viewportSize.HasValue && ShouldPrepareParagraph(text, mode, content.Inlines))
                 return paragraph = new MarkdownEdgePreviewParagraph(template, text, mode, zoom, openExternal, content.Inlines);
             if (mode == MarkdownRenderModes.Off) { template.Text = text; return template; }
             AddInlineContent(template.Inlines, text, openExternal, mode, content.Inlines);
@@ -647,6 +779,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             AddEmptyState(target);
         }
         yield return truncated || content.Truncated;
+    }
+
+    private static bool ShouldPrepareParagraph(string text, string mode, PreviewInlineCache cache)
+    {
+        if (text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength) return true;
+        // Tiny ordinary text stays on the simpler path. Reuse already-admitted inline values;
+        // a short source can still contain many expensive styled elements.
+        return text.Length >= 96 && mode != MarkdownRenderModes.Off &&
+            cache.Get(text, mode).Pieces.Count >= 24;
     }
 
     private static void AddEmptyState(Panel target)
@@ -963,7 +1104,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static void ApplyTextZoom(DependencyObject element, double zoom)
     {
-        if (element is MarkdownEdgePreviewParagraph or MarkdownEdgePreviewParagraph.MeasureElement) return;
+        if (element is MarkdownEdgePreviewParagraph) return;
         // Compose per-paper zoom with the unrounded global size once, just as MarkdownTextBox
         // does. Only local font sizes are scaled: inherited inline sizes must not be scaled twice.
         if (element.ReadLocalValue(TextElement.FontSizeProperty) is double size)
@@ -1006,7 +1147,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var truncated = lineEnd < markdown.Length &&
                 markdown[lineEnd] is not ('\r' or '\n');
             yield return new PreviewLine(
-                markdown[lineStart..lineEnd],
+                markdown[lineStart..SafePrefixEnd(markdown, lineEnd)],
                 truncated);
             if (truncated)
             {
@@ -1067,8 +1208,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             return "…";
         }
-        return value[..(maximumLength - 1)] + "…";
+        return value[..SafePrefixEnd(value, maximumLength - 1)] + "…";
     }
+
+    // Character budgets use UTF-16 units, but never split a valid surrogate pair at the edge.
+    private static int SafePrefixEnd(string value, int end) =>
+        end > 0 && end < value.Length &&
+        char.IsHighSurrogate(value[end - 1]) && char.IsLowSurrogate(value[end]) ? end - 1 : end;
 
     private static string StripBlockPrefix(string line)
     {
@@ -1086,7 +1232,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var ordered = OrderedListPattern.Match(trimmed);
         if (ordered.Success)
         {
-            return ordered.Groups[2].Value;
+            return $"{ordered.Groups[1].Value}. {ordered.Groups[2].Value}";
         }
         var unordered = UnorderedListPattern.Match(trimmed);
         if (unordered.Success)

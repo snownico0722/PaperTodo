@@ -153,6 +153,7 @@ internal sealed partial class EdgeCapsuleHost
         ReferenceEquals(content.Parent, _previewContentLayer);
 
     public bool HasPreviewContent => !_disposed && _previewContent != null;
+    internal Panel? MarkdownPreloadAnchor => !_disposed && IsVisible ? ContentHost : null;
 
     // Stage and prepare the final-size preview tree before the visual transaction begins. The
     // viewport changes size during the shell animation, but the content tree itself keeps its final

@@ -70,7 +70,13 @@ internal sealed class EdgeCapsulePreviewInvalidationSource
 {
     public event Action? Invalidated;
 
-    public void Invalidate() => Invalidated?.Invoke();
+    private long _version;
+    internal long Version => Interlocked.Read(ref _version);
+    public void Invalidate()
+    {
+        Interlocked.Increment(ref _version);
+        Invalidated?.Invoke();
+    }
 }
 
 internal sealed record EdgeCapsulePreviewContext(

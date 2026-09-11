@@ -70,84 +70,35 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var run = new Run(piece.Text);
             if (Has(InlineStyle.Syntax)) run.Foreground = Theme.SyntaxFadeBrush;
             else if (Has(InlineStyle.Weak)) run.SetResourceReference(TextElement.ForegroundProperty, "WeakTextBrushKey");
-            Inline inline = run;
+            // Apply font styles directly; keep real Hyperlinks for input and resources.
+            if (Has(InlineStyle.Strong)) ApplyStrongTypography(run);
+            if (Has(InlineStyle.Italic)) run.FontStyle = FontStyles.Italic;
             if (Has(InlineStyle.Code))
             {
-                var code = new Span(inline)
-                {
-                    FontFamily = NoteTypography.CodeFontFamily,
-                    FontSize = NoteTypography.CodeFontSize
-                };
-                code.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
-                inline = code;
+                // The former inner code Span overrode the outer Bold's font family.
+                run.FontFamily = NoteTypography.CodeFontFamily;
+                run.FontSize = NoteTypography.CodeFontSize;
+                run.SetResourceReference(TextElement.BackgroundProperty, "HoverBrushKey");
             }
-            if (Has(InlineStyle.Strong))
-            {
-                var bold = new Bold(inline);
-                ApplyStrongTypography(bold);
-                inline = bold;
-            }
-            if (Has(InlineStyle.Italic)) inline = new Italic(inline);
+            // Decorations retain their original scope: moving them onto a font-sized Run
+            // changes WPF underline/strikethrough metrics even when glyphs are identical.
+            Inline inline = run;
             if (Has(InlineStyle.Strike)) inline = new Span(inline) { TextDecorations = TextDecorations.Strikethrough };
+            if (Has(InlineStyle.Underline)) inline = new Span(inline) { TextDecorations = TextDecorations.Underline };
             (activeLink?.Inlines ?? target).Add(inline);
         }
     }
 
     [Flags]
-    internal enum InlineStyle { None = 0, Strong = 1, Italic = 2, Strike = 4, Code = 8, Weak = 16, Syntax = 32 }
+    internal enum InlineStyle { None = 0, Strong = 1, Italic = 2, Strike = 4, Code = 8, Weak = 16, Syntax = 32, Underline = 64 }
     internal readonly record struct InlinePiece(string Text, InlineStyle Style, Uri? Link = null);
 
-    // The single bounded inline grammar shared by measurement, TextBlock publication and
+    // The note's shared semantic recognizer feeds measurement, TextBlock publication and
     // prepared TextFormatter paragraphs. Syntax stays in values until a renderer consumes it.
     internal static IEnumerable<InlinePiece> InlinePieces(
         string text, string mode, InlineStyle style = InlineStyle.None, Uri? link = null, int depth = 0)
     {
-        string Display(string value) => mode == MarkdownRenderModes.Full ? MarkdownInlineSyntax.Unescape(value) : value;
-        if (mode == MarkdownRenderModes.Off || depth >= MaximumInlineDepth)
-        {
-            yield return new InlinePiece(Display(text), style, link);
-            yield break;
-        }
-        var scan = MarkdownInlineSyntax.MaskEscapedPunctuation(text);
-        var cursor = 0;
-        foreach (System.Text.RegularExpressions.Match match in InlinePattern.Matches(scan))
-        {
-            if (match.Index > cursor)
-                yield return new InlinePiece(Display(text[cursor..match.Index]), style, link);
-            var index = Enumerable.Range(1, 12).First(i => match.Groups[i].Success);
-            var group = match.Groups[index];
-            var value = text.Substring(group.Index, group.Length);
-            var syntaxStyle = mode == MarkdownRenderModes.Enhanced ? style | InlineStyle.Syntax : style;
-            if (mode != MarkdownRenderModes.Full)
-                yield return new InlinePiece(text[match.Index..group.Index], syntaxStyle, link);
-            if (index == 1)
-            {
-                var label = Display(value);
-                yield return new InlinePiece(mode == MarkdownRenderModes.Full
-                    ? string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}" : label, style | InlineStyle.Weak, link);
-            }
-            else if (index == 10)
-                yield return new InlinePiece(value, style | InlineStyle.Code, link);
-            else
-            {
-                var nestedStyle = style | (index switch
-                {
-                    5 or 6 => InlineStyle.Strong | InlineStyle.Italic,
-                    7 or 8 => InlineStyle.Strong,
-                    9 => InlineStyle.Strike,
-                    11 or 12 => InlineStyle.Italic,
-                    _ => InlineStyle.None
-                });
-                var nestedLink = link;
-                if (index == 3 && Uri.TryCreate(MarkdownInlineSyntax.Unescape(
-                    text.Substring(match.Groups[4].Index, match.Groups[4].Length)), UriKind.Absolute, out var uri) &&
-                    uri.Scheme is "http" or "https" or "mailto") nestedLink = uri;
-                foreach (var part in InlinePieces(value, mode, nestedStyle, nestedLink, depth + 1)) yield return part;
-            }
-            cursor = match.Index + match.Length;
-            if (mode != MarkdownRenderModes.Full)
-                yield return new InlinePiece(text[(group.Index + group.Length)..cursor], syntaxStyle, link);
-        }
-        if (cursor < text.Length) yield return new InlinePiece(Display(text[cursor..]), style, link);
+        foreach (var piece in SemanticInlinePieces(text, mode))
+            yield return piece with { Style = piece.Style | style, Link = piece.Link ?? link };
     }
 }

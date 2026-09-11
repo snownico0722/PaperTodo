@@ -60,5 +60,8 @@ jobs:
       - name: Edge title checks
         run: dotnet run --project .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
 
+      - name: Edge preview rendering and lifecycle checks
+        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
+
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
