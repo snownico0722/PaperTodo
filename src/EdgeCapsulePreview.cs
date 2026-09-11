@@ -14,6 +14,12 @@ internal readonly record struct EdgeCapsulePreviewSize(
     public const double MinimumHeightDip = 90;
     public const double MaximumHeightDip = double.MaxValue;
 
+    // Descriptor sizes include close/chrome. Preload, first display and replacement must
+    // use the same content box; height is part of the prepared-body cache key.
+    internal Size ContentSize => new(
+        Math.Max(1, WidthDip - EdgeCapsuleLayout.CapsuleCloseWidth - EdgeCapsuleLayout.WindowChromeMargin),
+        Math.Max(1, HeightDip - EdgeCapsuleLayout.WindowChromeMargin * 2));
+
     public EdgeCapsulePreviewSize Normalize(double maximumWidthDip, double maximumHeightDip)
     {
         if (!double.IsFinite(WidthDip) ||

@@ -165,7 +165,7 @@ public sealed partial class PaperWindow : Window
     private const double CapsuleNormalMinWidth = 76;
     private const double CapsuleLeftPadding = 6;
     private const double CapsuleIconGap = 4;
-    private const double CapsuleCloseWidth = 14;
+    private const double CapsuleCloseWidth = EdgeCapsuleLayout.CapsuleCloseWidth;
     private const double CapsuleNormalCloseWidth = 21;
     private const double CapsuleRightPadding = 6;
     private double CapsuleIconFontSize => AppTypography.Scale(13);

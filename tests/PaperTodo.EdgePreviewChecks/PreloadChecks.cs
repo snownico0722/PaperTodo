@@ -43,7 +43,7 @@ internal static partial class Program
             var actual = bounds ?? size;
             var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
             var view = descriptor.CreateContent(actual);
-            var border = new Border { Width = actual.WidthDip - 22, Height = actual.HeightDip, Child = view };
+            var border = new Border { Width = actual.ContentSize.Width, Height = actual.ContentSize.Height, Child = view };
             root.Children.Add(border);
             ((EdgeCapsuleLivePreviewView)view).PrepareForFirstDisplay();
             border.Measure(new Size(border.Width, border.Height));
@@ -137,7 +137,7 @@ internal static partial class Program
             text = string.Concat(Enumerable.Repeat("**edited** *between* `mount` ", 30));
             source.Invalidate();
             var editedView = descriptorBeforeEdit.CreateContent(size);
-            var editedBorder = new Border { Width = size.WidthDip - 22, Height = size.HeightDip, Child = editedView };
+            var editedBorder = new Border { Width = size.ContentSize.Width, Height = size.ContentSize.Height, Child = editedView };
             root.Children.Add(editedBorder);
             ((EdgeCapsuleLivePreviewView)editedView).PrepareForFirstDisplay();
             Pump();

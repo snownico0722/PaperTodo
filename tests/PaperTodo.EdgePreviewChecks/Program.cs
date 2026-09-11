@@ -17,13 +17,14 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--review-only")) ReviewBoundaryChecks();
+            if (args.Contains("--review-integration")) ReviewIntegrationChecks();
+            else if (args.Contains("--review-only")) ReviewBoundaryChecks();
             else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();
             else if (args.Contains("--preload-profile")) ProfilePreload(args.Contains("--reverse"));
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); }
+            else { SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -159,7 +160,7 @@ internal static partial class Program
         try
         {
             var stageStarted = Stopwatch.GetTimestamp();
-            Require(host.StagePreviewContent(view, fixedSize.WidthDip - 22, fixedSize.HeightDip), "stage real preview");
+            Require(host.StagePreviewContent(view, fixedSize.ContentSize.Width, fixedSize.ContentSize.Height), "stage real preview");
             var stageMs = Stopwatch.GetElapsedTime(stageStarted).TotalMilliseconds;
             descriptor.SetVisibility?.Invoke(true);
             var motionStarted = Stopwatch.GetTimestamp();

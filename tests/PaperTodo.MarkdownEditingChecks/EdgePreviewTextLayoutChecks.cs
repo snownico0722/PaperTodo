@@ -76,10 +76,12 @@ internal static partial class Program
                                     Equal(preparedLines, paragraph.FormattedLines, "layout and repaint reuse prepared lines");
                                     if (mode != MarkdownRenderModes.Off && prefix != "```\n")
                                     {
-                                        var link = paragraph.Children.OfType<Border>().First();
+                                        var link = paragraph.Children.OfType<System.Windows.Controls.Button>().First();
                                         link.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
                                         { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
-                                        Equal("https://example.com/", opened, "visible link retains its action");
+                                        Equal<string?>(null, opened, "release without a press cannot activate a link");
+                                        link.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                                        Equal("https://example.com/", opened, "completed link click retains its action");
                                     }
                                 }
                                 finally { window.Close(); Pump(); }

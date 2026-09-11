@@ -14,6 +14,17 @@ namespace PaperTodo;
 internal sealed class MarkdownEdgePreviewParagraph : Canvas
 {
     internal const int MinimumSourceLength = 256;
+    [ThreadStatic] private static ControlTemplate? _linkHitTemplate;
+    private static ControlTemplate LinkHitTemplate
+    {
+        get
+        {
+            if (_linkHitTemplate != null) return _linkHitTemplate;
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            return _linkHitTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button)) { VisualTree = border };
+        }
+    }
     private readonly TextBlock _template;
     private readonly string _source;
     private readonly string _mode;
@@ -83,9 +94,12 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                     foreach (var bounds in line.GetTextBounds(start, stop - start))
                     {
                         var rect = bounds.Rectangle; rect.Offset(0, height);
-                        var hit = new Border
+                        var hit = new System.Windows.Controls.Button
                         {
                             Background = Brushes.Transparent,
+                            Template = LinkHitTemplate,
+                            Padding = new Thickness(),
+                            BorderThickness = new Thickness(),
                             Width = rect.Width,
                             Height = rect.Height,
                             Cursor = Cursors.Hand,
@@ -93,8 +107,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                             ToolTip = range.Uri.AbsoluteUri
                         };
                         EdgeCapsulePreviewInteraction.SetConsumesPointer(hit, true);
-                        hit.MouseLeftButtonUp += (_, e) => { _openExternal(range.Uri.AbsoluteUri); e.Handled = true; };
-                        hit.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { _openExternal(range.Uri.AbsoluteUri); e.Handled = true; } };
+                        hit.Click += (_, e) => { _openExternal(range.Uri.AbsoluteUri); e.Handled = true; };
                         SetLeft(hit, rect.X); SetTop(hit, rect.Y); Children.Add(hit);
                     }
                 }

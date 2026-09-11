@@ -262,7 +262,8 @@ internal sealed class MarkdownEdgePreviewPreload
         KeyboardNavigation.SetTabNavigation(holder, KeyboardNavigationMode.None);
         KeyboardNavigation.SetControlTabNavigation(holder, KeyboardNavigationMode.None);
         KeyboardNavigation.SetDirectionalNavigation(holder, KeyboardNavigationMode.None);
-        var sized = new Border { Width = Math.Max(1, target.Size.WidthDip - 22), Height = target.Size.HeightDip,
+        var contentSize = target.Size.ContentSize;
+        var sized = new Border { Width = contentSize.Width, Height = contentSize.Height,
             IsHitTestVisible = false, Focusable = false, Child = view };
         holder.Children.Add(sized);
         var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
