@@ -118,7 +118,7 @@ internal sealed class DesktopLensCapture : IDisposable
                     throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
                 var desktop = DesktopBounds;
                 var layout = LensCaptureLayout.Create(window, geometry, desktop,
-                    oldGeometry == geometry && oldDesktop == desktop ? oldLayout : null);
+                    oldGeometry?.Padding == geometry.Padding && oldDesktop == desktop ? oldLayout : null);
                 if (layout == null) continue;
                 var changed = oldLayout != layout;
                 surface ??= new CaptureSurface();

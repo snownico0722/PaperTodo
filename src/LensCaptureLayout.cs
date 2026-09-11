@@ -30,12 +30,21 @@ internal static class LensCaptureLayout
         // before intersecting the desktop, so crossing a grid cell never changes density.
         while (step > 1 && (((fullWidth + step - 1) / step + 1) * ((fullHeight + step - 1) / step + 1) > PixelBudget ||
             (fullWidth + step - 1) / step + 1 > 2048 || (fullHeight + step - 1) / step + 1 > 2048)) step++;
+        // Hysteresis prevents tiny back-and-forth resizes at the pixel budget from
+        // alternating the entire scene between two sampling densities. Recover detail
+        // after a substantial shrink, rather than keeping the coarse density forever.
+        var previousStep = previous == null ? 0 : previous.Bounds.Width / previous.PixelWidth;
+        if (previousStep > step &&
+            ((fullWidth + step - 1) / step + 1) * ((fullHeight + step - 1) / step + 1) > PixelBudget * .70)
+            step = previousStep;
         // Keep the world-space scene while the surface fits inside its inner guard.
         // Otherwise every tiny drag changes all pixels, defeats duplicate detection,
         // and can alternate bitmap dimensions at a downsample-cell boundary.
-        // The caller invalidates previous on geometry/DPI or desktop changes.
-        if (previous != null && previous.Bounds.Width / previous.PixelWidth == step &&
-            previous.Bounds.Height / previous.PixelHeight == step)
+        // The caller invalidates previous on DPI/padding or desktop changes, not each
+        // new surface size. A retained texture can still cover the resized surface at
+        // HIGHER detail than a new fully padded allocation, within its original budget.
+        if (previous != null && previousStep <= step &&
+            previous.Bounds.Height / previous.PixelHeight == previousStep)
         {
             var guard = region.Padding / 2;
             var needed = new Int32Rect(

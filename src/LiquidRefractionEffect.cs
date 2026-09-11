@@ -46,8 +46,8 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
                      DispersionProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
     }
 
-    // A single scene covers the body and shoulder, with a sub-percent body lens and
-    // a smooth shoulder. The surface finish is composited above this background.
+    // One screen-anchored scene covers a flat body and a curved shoulder. Never
+    // scale the whole scene around the changing window centre during resize.
     // Foreground text/controls never enter this effect. Bounded bilinear taps avoid a large
     // blur intermediate; overscan is reprojected in screen coordinates during dragging.
     private const string Source = """
@@ -74,7 +74,9 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float horizontal = saturate((q.x-q.y)*.5+.5);
             float2 normal = normalize(lerp(float2(horizontal, 1-horizontal), outside, step(.0001, len))) * (side*2-1);
             float2 delta = -normal * optical * shift;
-            float2 at = ((uv - .5) * extent.w + .5) * crop.xy + crop.zw + delta;
+            // The profile reaches exactly zero inside the shoulder. Interior samples
+            // stay at their desktop coordinates regardless of the surface dimensions.
+            float2 at = uv * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
             // Preserve a sharp shoulder: a blurred RGB fringe cannot read as dispersion.
             // RGB sample the SAME frame at slightly different refraction angles.

@@ -325,6 +325,7 @@ internal static class Program
                     Check("shared live capsule and popup materials, RGB dispersion and lifecycle", () => SharedMaterialChecks.Run(controller));
                     Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
                 }
+                Check("stationary resize mapping and sampling stability", () => MaterialResizeChecks.Run(controller));
                 Check("native drag crop alignment before the next frame", () => MaterialMotionChecks.Run(controller));
                 Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));

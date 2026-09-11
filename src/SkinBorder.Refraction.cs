@@ -332,8 +332,7 @@ internal sealed partial class SkinBorder
             {
                 scene.OpticalKey = opticalKey;
                 var metrics = GlassMetrics.For(RenderSize, _dark);
-                scene.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel),
-                    1 - metrics.Magnification * _refractionStrength * MaterialStrength);
+                scene.Effect.Extent = new Point4D(size.Width, size.Height, 1 / Math.Max(.001, metrics.Bezel), 1);
                 var limit = Math.Min(ActualWidth, ActualHeight) * .5;
                 scene.Effect.Radii = new Point4D(Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopLeft)),
                     Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopRight)),
@@ -390,9 +389,6 @@ internal sealed partial class SkinBorder
         var metrics = GlassMetrics.For(RenderSize, _dark);
         _scene.Effect.Shift = new Point(metrics.Displacement * dpi.DpiScaleX * value * MaterialStrength / layout.Bounds.Width,
             metrics.Displacement * dpi.DpiScaleY * value * MaterialStrength / layout.Bounds.Height);
-        var extent = _scene.Effect.Extent;
-        _scene.Effect.Extent = new Point4D(extent.X, extent.Y, extent.Z,
-            1 - metrics.Magnification * value * MaterialStrength);
     }
     internal void SetDispersionForEvidence(double value)
     {

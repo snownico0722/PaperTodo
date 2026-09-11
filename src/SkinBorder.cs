@@ -138,7 +138,10 @@ internal sealed partial class SkinBorder : Border
             // actual finish belongs only above the scene, never duplicated underneath.
             PaintMaterialBase(dc);
             _refractionVisual.Clip = _shape;
-            if (!_evidenceFrozen) { _cropDirty = true; RequestRefractionRender(); }
+            // Arrange has committed RenderSize before this paint. Publish the matching
+            // background extent/crop in this same render, not a later Rendering callback
+            // that would briefly stretch the old scene beneath the newly sized shell.
+            UpdateRefractionCrop();
             RefreshOpticalFinish();
             return;
         }

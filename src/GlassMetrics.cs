@@ -6,7 +6,7 @@ namespace PaperTodo;
 /// <summary>Optical dimensions in DIPs. A broad, shallow shoulder joins a nearly flat
 /// body; narrow controls do not inherit the thickness of a large reading panel.</summary>
 internal readonly record struct GlassMetrics(double Bezel, double Displacement, double Blur,
-    double Tint, double Saturation, double Magnification)
+    double Tint, double Saturation)
 {
     internal const double ChromaticSpread = .24;
 
@@ -19,7 +19,7 @@ internal readonly record struct GlassMetrics(double Bezel, double Displacement, 
     {
         var shortSide = Math.Min(size.Width, size.Height);
         if (!double.IsFinite(size.Width) || !double.IsFinite(size.Height) || shortSide <= 0)
-            return new(0, 0, 0, 0, 1, 0);
+            return new(0, 0, 0, 0, 1);
         var opticalSize = Math.Min(Math.Sqrt(size.Width * size.Height), shortSide * 1.35);
         var t = Math.Clamp((opticalSize - 160) / 640, 0, 1);
         t = t * t * (3 - 2 * t);
@@ -27,7 +27,10 @@ internal readonly record struct GlassMetrics(double Bezel, double Displacement, 
         // Quintic falloff has a peak derivative of 1.875. Bound the most displaced
         // RGB channel as well, not just green: enlarging displacement alone folds
         // background lines inside the shoulder (especially on small capsules).
+        // Resizing changes the shoulder, not the middle of the reading surface.
+        // A moving magnification centre or size-dependent body filter makes stationary
+        // background details swim even when the window's screen origin never changes.
         return new(shoulder, Math.Min(8 + 3 * t, shoulder * .38),
-            .45 + .65 * t, (dark ? .22 : .085) + .075 * t, 1.10 - .04 * t, .006 + .003 * t);
+            .65, dark ? .22 : .085, 1.06);
     }
 }

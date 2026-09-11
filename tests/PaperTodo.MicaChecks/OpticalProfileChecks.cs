@@ -34,7 +34,7 @@ internal static class OpticalProfileChecks
         foreach (var channel in new[] { 1 - GlassMetrics.ChromaticSpread, 1, 1 + GlassMetrics.ChromaticSpread })
         {
             var metrics = GlassMetrics.For(size, false);
-            var zoom = 1 - metrics.Magnification * strength;
+            const double zoom = 1; // flat body; only the shoulder displaces background samples
             var amount = metrics.Displacement * strength * channel;
             for (var i = 0; i < values.Length - 1; i++)
             {
@@ -74,7 +74,7 @@ internal static class OpticalProfileChecks
         {
             Scene = new ImageBrush(scene),
             Shift = new Point(metrics.Displacement / width, metrics.Displacement / height),
-            Extent = new(width, height, 1 / metrics.Bezel, 1 - metrics.Magnification),
+            Extent = new(width, height, 1 / metrics.Bezel, 1),
             Radii = new(radius, radius, radius, radius), Scattering = new(0, 0, 1, 0)
         };
         var visual = new DrawingVisual { Effect = effect };
