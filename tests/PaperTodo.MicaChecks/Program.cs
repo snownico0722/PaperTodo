@@ -320,6 +320,7 @@ internal static class Program
                 Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
                 Check("real background refraction and capture lifecycle", () => RefractionChecks.Run(controller));
                 Check("shared live capsule and popup materials, RGB dispersion and lifecycle", () => SharedMaterialChecks.Run(controller));
+                Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
                 Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
                 Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));

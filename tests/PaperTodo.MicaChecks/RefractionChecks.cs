@@ -100,6 +100,11 @@ internal static class RefractionChecks
             Program.Assert(inputDelays.Count == 48, "input callbacks are not starved by background publication");
             inputDelays.Sort();
             Console.WriteLine($"LENS INPUT (CI diagnostic, not hardware FPS): p50={inputDelays[24]:F2}ms p95={inputDelays[45]:F2}ms; uploaded={surface.RefractionUploadedPixels-pixelsBefore} pixels over {surface.RefractionFrameCount-framesBefore} frames; nonblocking retries={surface.RefractionBusyFrames}");
+            var projectionStart = surface.RefractionProjectionCount;
+            var captureStart = surface.RefractionFrameCount;
+            for (var move = 0; move < 20; move++) { window.Left += 2; Wait(16); }
+            Program.Assert(surface.RefractionProjectionCount - projectionStart > surface.RefractionFrameCount - captureStart,
+                "moving glass reprojects between source samples instead of running at the capture rate");
             window.Left += 100; window.Top += 30; count = surface.RefractionFrameCount;
             Until(() => surface.RefractionFrameCount > count, surface, "movement resamples new physical background");
             Save(Render(window), "lens-moved");

@@ -121,6 +121,9 @@ internal sealed class MaterialMenuOpening
                 if (surface == null) failed = true;
                 else
                 {
+                    // Reused tray/master templates may still carry the PREVIOUS skin.
+                    // Loaded is too late to decide the first render's recipe.
+                    surface.RefreshSkin();
                     var requested = InitialBounds(content, _target(), _placement());
                     var capture = DesktopLensCapture.PreparePopupAsync(requested, Theme.Skin == PaperSkins.LiquidGlass, cancel.Token);
                     try { frame = await capture.WaitAsync(TimeSpan.FromMilliseconds(300), cancel.Token); }

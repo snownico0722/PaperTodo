@@ -43,9 +43,9 @@ internal sealed class DesktopLensCapture : IDisposable
     private int _disposed;
     private long _motionUntil, _captures, _published, _sampledPixels;
     private static long ClockMilliseconds => (long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency));
-    internal const int ActiveInterval = 16;
-    internal const int MovingInterval = 8;
-    internal static int CaptureInterval(bool moving, int quiet) => moving ? MovingInterval : quiet >= 10 ? 125 : ActiveInterval;
+    internal const int ActiveInterval = 100;
+    internal const int MovingInterval = ActiveInterval;
+    internal static int CaptureInterval(bool moving, int quiet) => !moving && quiet >= 10 ? 250 : ActiveInterval;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
     internal long CaptureCount => Interlocked.Read(ref _captures);
     internal long PublishedCount => Interlocked.Read(ref _published);
@@ -87,7 +87,7 @@ internal sealed class DesktopLensCapture : IDisposable
         try
         {
             var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
-            var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L;
+            var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L; var lastSample = next - ActiveInterval;
             LensCaptureLayout.Tile[]? oldLayout = null;
             Region? oldGeometry = null;
             DwmFlush(); // Exclusion is established before the first background sample.
@@ -95,13 +95,16 @@ internal sealed class DesktopLensCapture : IDisposable
             {
                 var now = ClockMilliseconds;
                 var moving = now < Interlocked.Read(ref _motionUntil);
-                if (moving) next = Math.Max(driverPauseUntil, Math.Min(next, now + MovingInterval));
+                // Movement may wake idle detection, but NEVER turns it into high-rate readback.
+                // WPF reprojects the larger scene independently between these samples.
+                if (moving) next = Math.Max(Math.Max(driverPauseUntil, lastSample + ActiveInterval), Math.Min(next, now));
                 if (now < next)
                 {
                     if (WaitHandle.WaitAny(waits, (int)Math.Min(125, next - now)) == 0) break;
                     continue;
                 }
                 var started = Stopwatch.GetTimestamp();
+                lastSample = now;
                 var geometry = Volatile.Read(ref _region);
                 next = now + ActiveInterval;
                 if (!TryGetBounds(_hwnd, out var window) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd)) continue;
@@ -144,8 +147,8 @@ internal sealed class DesktopLensCapture : IDisposable
                 // low-rate change detection; motion wakes it. Expensive GDI drivers also
                 // get breathing room rather than a continuous GPU-readback loop.
                 var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                // Motion also reprojects existing pixels at WPF cadence. New source frames
-                // use a bounded faster cadence, but slow drivers still get backpressure.
+                // Readback remains low-rate even during dragging. Slow drivers still get
+                // backpressure; motion and the shader use the retained scene at render cadence.
                 var interval = CaptureInterval(moving, quiet);
                 var completed = ClockMilliseconds;
                 driverPauseUntil = completed + Math.Max(1, (long)(elapsed * .5));

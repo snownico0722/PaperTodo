@@ -102,8 +102,8 @@ public static class Theme
 
     // Neutral leaves the system recipe untouched. Color is a light wash on the shell,
     // never a transparent semantic brush passed to editors or plugins.
-    internal static Brush NativeMaterialTint => CurrentScheme == ColorSchemes.Neutral
-        ? Brushes.Transparent : Solid(WithAlpha(Current.Tint, (byte)(IsDark ? 24 : 18)));
+    internal static MaterialPalette MaterialColors => MaterialPalette.For(Skin, CurrentScheme, IsDark, Current.Paper);
+    internal static Brush NativeMaterialTint => Solid(MaterialColors.NativeOverlay);
 
     private static Palette Current
     {

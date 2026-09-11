@@ -10,7 +10,8 @@ internal sealed partial class SkinBorder
     private Window? _lensWindow;
     private UIElement? _lensRoot;
     private string? _lightingSkin;
-    private Point _lensPointer = new(.24, .05);
+    private Point _lensPointer = new(.24, .05), _nextLensPointer;
+    private bool _lightFramePending;
     internal bool HasLensLightSubscription => _lensRoot != null;
 
     // Event-driven optics only: lens pointer light and Aero world-space parallax.
@@ -43,6 +44,7 @@ internal sealed partial class SkinBorder
             _lensRoot.MouseLeave -= OnLensPointerLeft;
         }
         _lensRoot = null;
+        CancelLightFrame();
         if (_lensWindow != null)
         {
             _lensWindow.LocationChanged -= OnAeroLocation;
@@ -71,13 +73,28 @@ internal sealed partial class SkinBorder
         // old threshold could jump a dozen pixels at a time.
         var delta = new Vector((point.X - _lensPointer.X) * ActualWidth,
             (point.Y - _lensPointer.Y) * ActualHeight);
-        if (delta.LengthSquared < 1) return;
-        _lensPointer = point;
+        _nextLensPointer = point;
+        if (delta.LengthSquared < 1) { CancelLightFrame(); return; }
+        if (_lightFramePending) return;
+        _lightFramePending = true;
+        System.Windows.Media.CompositionTarget.Rendering += OnLightFrame;
+    }
+    private void OnLightFrame(object? sender, EventArgs e)
+    {
+        CancelLightFrame();
+        _lensPointer = _nextLensPointer;
         UpdateLensLightGeometry();
+    }
+    private void CancelLightFrame()
+    {
+        if (!_lightFramePending) return;
+        System.Windows.Media.CompositionTarget.Rendering -= OnLightFrame;
+        _lightFramePending = false;
     }
     private void OnLensPointerLeft(object sender, MouseEventArgs e) => ResetLensLight();
     private void ResetLensLight()
     {
+        CancelLightFrame();
         _lensPointer = new Point(.24, .05);
         UpdateLensLightGeometry();
     }

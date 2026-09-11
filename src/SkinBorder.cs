@@ -103,8 +103,11 @@ internal sealed partial class SkinBorder : Border
     protected override void OnRender(DrawingContext dc)
     {
         PresentPreparedMenuBackground();
-        if (IsMenu && !_menuRendered)
-        { FirstMenuRenderUsedBackground = _refractionVisual != null; _menuRendered = true; }
+        if (IsMenu)
+        {
+            if (!_menuRendered) { FirstMenuRenderUsedBackground = _refractionVisual != null; _menuRendered = true; }
+            if (RequestsLiveBackground && _refractionVisual == null) MenuFallbackRenderCount++;
+        }
         var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
         if (_highContrast || !PaperSkins.IsDecorated(Skin) && !(systemMaterial && IsAuxiliary))
         {
@@ -132,11 +135,11 @@ internal sealed partial class SkinBorder : Border
         dc.PushClip(_shape);
         // Both auxiliary strengths retain actual background processing. Only an unavailable
         // source falls back to an opaque base; no foreground or HWND opacity is altered.
-        if (IsAuxiliary && _refractionVisual == null && !HasAuxiliaryTransmission)
+        if (IsAuxiliary && !UseLightweightMaterial && _refractionVisual == null && !HasAuxiliaryTransmission)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
         dc.PushOpacity(MaterialStrength);
-        if (Skin == PaperSkins.TracingPaper)
+        if (Skin == PaperSkins.TracingPaper && !UseLightweightMaterial)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
         PaintMaterialDetails(dc);
@@ -157,17 +160,23 @@ internal sealed partial class SkinBorder : Border
 
     private void PaintMaterialBase(DrawingContext dc)
     {
-        if (PaperSkins.UsesNativeBackdrop(Skin))
+        if (UseLightweightMaterial && PaperSkins.UsesNativeBackdrop(Skin))
         {
-            // Weakening the optics must not thin the reading tint. Blend in paper
-            // first, then retain the recipe's base density (especially dense Mica).
+            // One preset alpha and hue for the ENTIRE preview, independent of size,
+            // focus, live readiness and the auxiliary strength switch.
+            dc.DrawGeometry(_fill, null, _shape);
+        }
+        else if (PaperSkins.UsesNativeBackdrop(Skin))
+        {
+            dc.DrawGeometry(_fill, null, _shape);
+            // Quiet mode blends the COMPLETE material color toward semantic paper.
+            // Putting paper underneath an almost opaque Mica tint cannot quiet that tint.
             if (PaperBackingOpacity > 0)
             {
                 dc.PushOpacity(PaperBackingOpacity);
                 dc.DrawGeometry(Theme.PaperBrush, null, _shape);
                 dc.Pop();
             }
-            dc.DrawGeometry(_fill, null, _shape);
         }
         else
         {

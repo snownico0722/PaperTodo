@@ -23,11 +23,19 @@ internal sealed partial class SkinBorder
 
     private void EnsureBrushes(Color background)
     {
-        var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background, RenderSize);
+        var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background, UseLightweightMaterial ? default : RenderSize);
         if (_brushKey == key) return;
         _brushKey = key;
         _surfaceVersion++;
-        var paper = ((SolidColorBrush)Theme.PaperBrush).Color;
+        var palette = Theme.MaterialColors;
+        var paper = palette.Surface;
+        if (UseLightweightMaterial && PaperSkins.UsesNativeBackdrop(Skin))
+        {
+            _fill = Frozen(new SolidColorBrush(palette.Preview));
+            _shine = _header = Brushes.Transparent;
+            _glint = Gradient(0, White(_dark ? 40 : 80), 1, White(8));
+            return;
+        }
         var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
         byte alpha = opaque ? (byte)255 : (byte)(_dark ? 226 : 211);
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
@@ -41,8 +49,7 @@ internal sealed partial class SkinBorder
                 // Main Mica/Acrylic keeps its DWM backdrop; a layered popup uses real local
                 // background diffusion instead of pretending an opaque gradient is blur.
                 var nativeHighlight = Skin == PaperSkins.Mica ? .035 : .075;
-                var density = opaque ? (byte)255 : (byte)(Skin == PaperSkins.Mica ? 220 :
-                    Skin == PaperSkins.Acrylic ? (_dark ? 165 : 145) : (_dark ? 95 : 75));
+                var density = opaque ? (byte)255 : palette.TransmissionAlpha;
                 _fill = Gradient(0, WithAlpha(Mix(paper, Colors.White, nativeHighlight), density),
                     1, WithAlpha(paper, density));
                 _shine = Gradient(0, White(_dark ? 16 : 28), 1, White(0));
@@ -50,9 +57,7 @@ internal sealed partial class SkinBorder
             case PaperSkins.Aero:
                 // Aero needs colored transmission and bounded specular bands. Mixing
                 // blue into opaque white paper and stacking a broad white wash made milk.
-                var glass = opaque
-                    ? Mix(paper, _dark ? Color.FromRgb(25, 53, 73) : Color.FromRgb(111, 171, 205), .18)
-                    : Mix(paper, _dark ? Color.FromRgb(13, 36, 54) : Color.FromRgb(42, 113, 164), .84);
+                var glass = opaque ? Mix(((SolidColorBrush)Theme.PaperBrush).Color, paper, .18) : paper;
                 var top = Mix(glass, Colors.White, .035);
                 var low = Mix(glass, Color.FromRgb(12, 39, 66), opaque ? .06 : .25);
                 byte a = opaque ? (byte)255 : (byte)(_dark ? 54 : 27);

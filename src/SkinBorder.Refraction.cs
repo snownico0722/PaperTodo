@@ -21,6 +21,8 @@ internal sealed partial class SkinBorder
         internal Rect? ImageBounds;
         internal WriteableBitmap? Bitmap;
         internal LensCaptureLayout.Tile? Layout;
+        internal (Size Size, CornerRadius Radius, double DpiX, double DpiY, int Width, int Height,
+            int PixelsX, int PixelsY, bool Dark, double Strength, double Refraction, double Dispersion)? OpticalKey;
 
     }
     private ContainerVisual? _refractionVisual;
@@ -33,11 +35,13 @@ internal sealed partial class SkinBorder
     internal bool SuppressLiveBackgroundForOpening { get; set; }
     internal bool FirstMenuRenderUsedBackground { get; private set; }
     private bool _menuRendered;
+    internal int MenuFallbackRenderCount { get; private set; }
+    internal int RefractionProjectionCount { get; private set; }
 
     internal void PrepareMenuBackground(DesktopLensCapture.Frame? frame, bool failed)
     {
         _preparedFrame?.Dispose(); _preparedFrame = frame;
-        SuppressLiveBackgroundForOpening = failed; _menuRendered = false;
+        SuppressLiveBackgroundForOpening = failed; _menuRendered = false; MenuFallbackRenderCount = 0;
     }
 
     // The popup's initial scene was captured while no popup HWND existed. Upload it
@@ -64,7 +68,13 @@ internal sealed partial class SkinBorder
         var origin = PointToScreen(new Point());
         return new((int)Math.Floor(origin.X) - bounds.X, (int)Math.Floor(origin.Y) - bounds.Y,
             (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY),
-            (int)Math.Ceiling(64 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
+            (int)Math.Min(1024, Math.Ceiling(256 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY))));
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        PresentPreparedMenuBackground();
     }
 
     private IntPtr _captureHwnd;
@@ -91,8 +101,8 @@ internal sealed partial class SkinBorder
     }
     private void InitializeRefraction()
     {
-        SizeChanged += (_, _) => { _refractionFailed = false; RefreshRefraction(); };
-        Loaded += (_, _) => RefreshRefraction();
+        SizeChanged += (_, _) => { _refractionFailed = false; PresentPreparedMenuBackground(); RefreshRefraction(); };
+        Loaded += (_, _) => { PresentPreparedMenuBackground(); RefreshRefraction(); };
         Unloaded += (_, _) => { StopRefraction(); DetachMaterialHost(); _preparedFrame?.Dispose(); _preparedFrame = null; };
         IsVisibleChanged += (_, _) => RefreshRefraction();
     }
@@ -110,6 +120,14 @@ internal sealed partial class SkinBorder
             DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
         if (!active)
         {
+            // OnRender records drawing commands during arrange, BEFORE Loaded/SHOWWINDOW.
+            // A first OnRender therefore does not mean the popup has become visible.
+            // Retain the primed scene until capture can take over; Unloaded releases a
+            // cancelled opening. Once a worker exists, normal hide/opacity teardown wins.
+            if (IsMenu && _capture == null && _refractionVisual != null && enabled && RequestsLiveBackground &&
+                !_highContrast && !UseLightweightMaterial && !SuppressLiveBackgroundForOpening &&
+                DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled)
+                return;
             StopRefraction();
             if (!RequestsLiveBackground || !enabled) { _refractionFailed = false; RefractionFailure = null; }
             return;
@@ -136,7 +154,7 @@ internal sealed partial class SkinBorder
             RequestRefractionRender();
             // Keep the current world-space scene during resize/reposition. A replacement
             // frame changes coverage, not the visible material or its opacity.
-            if (_refractionVisual != null) UpdateRefractionCrop();
+            // The rendering callback consumes this geometry once, independent of readback.
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or System.Runtime.InteropServices.ExternalException or DllNotFoundException or EntryPointNotFoundException or NotSupportedException)
         { FailRefraction(ex); }
@@ -147,7 +165,9 @@ internal sealed partial class SkinBorder
         Debug.WriteLine("Glass background unavailable; keeping material fallback: " + error.Message);
         _refractionFailed = true; StopRefraction();
     }
-    private void OnCaptureFrameReady() => OnRefractionRendering(null, EventArgs.Empty);
+    // Notifications only schedule a render. Never upload/reproject in a second,
+    // competing dispatcher clock or read the desktop from the render callback.
+    private void OnCaptureFrameReady() => RequestRefractionRender();
 
     private void RequestRefractionRender()
     {
@@ -256,11 +276,8 @@ internal sealed partial class SkinBorder
                     using var dc = slice.Visual.RenderOpen(); dc.DrawImage(slice.Bitmap, imageBounds);
                     slice.ImageBounds = imageBounds;
                 }
-                slice.Diffusion.Radius = (Skin switch
-                {
-                    PaperSkins.Mica => 38, PaperSkins.Acrylic => 26,
-                    PaperSkins.TracingPaper => 18, _ => 12
-                }) * MaterialStrength;
+                slice.Diffusion.Radius = Theme.MaterialColors.Diffusion * MaterialStrength;
+                slice.OpticalKey = null;
                 slice.Visual.Effect = slice.Diffusion;
                 continue;
             }
@@ -271,6 +288,12 @@ internal sealed partial class SkinBorder
             }
             if (slice.Visual.ContentBounds.Size != size)
             { using var dc = slice.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size)); }
+            slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
+                (origin.X + target.X - bounds.X) / bounds.Width, (origin.Y + target.Y - bounds.Y) / bounds.Height);
+            var opticalKey = (size, CornerRadius, dpi.DpiScaleX, dpi.DpiScaleY, bounds.Width, bounds.Height, tile.PixelWidth, tile.PixelHeight,
+                _dark, MaterialStrength, _refractionStrength, _dispersionStrength);
+            if (slice.OpticalKey == opticalKey) continue;
+            slice.OpticalKey = opticalKey;
             var metrics = GlassMetrics.For(RenderSize, _dark);
             slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel),
                 1 - metrics.Magnification * _refractionStrength * MaterialStrength);
@@ -279,9 +302,6 @@ internal sealed partial class SkinBorder
                 Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopRight)),
                 Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomRight)),
                 Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomLeft)));
-            slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
-                (origin.X + target.X - bounds.X) / (double)bounds.Width,
-                (origin.Y + target.Y - bounds.Y) / (double)bounds.Height);
             var bend = metrics.Displacement * _refractionStrength * MaterialStrength;
             slice.Effect.Shift = new Point(bend * dpi.DpiScaleX / bounds.Width, bend * dpi.DpiScaleY / bounds.Height);
             // Never sharpen an upscaled low-resolution sample into a pixel grid on a
@@ -297,6 +317,7 @@ internal sealed partial class SkinBorder
         }
         RefreshOpticalFinish();
         _cropDirty = false;
+        RefractionProjectionCount++;
     }
     private void RefreshOpticalFinish()
     {
@@ -305,7 +326,7 @@ internal sealed partial class SkinBorder
             using var dc = _opticalFinish.RenderOpen();
             PaintMaterialBase(dc);
             dc.PushOpacity(MaterialStrength);
-            if (Skin == PaperSkins.TracingPaper)
+            if (Skin == PaperSkins.TracingPaper && !UseLightweightMaterial)
                 dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
             dc.DrawRectangle(_shine, null, new Rect(RenderSize));
             PaintMaterialDetails(dc);
@@ -315,9 +336,14 @@ internal sealed partial class SkinBorder
             _finishVersion = _surfaceVersion; _finishBorderBrush = BorderBrush;
         }
     }
-    private Point4D LiquidTint => _dark
-        ? new Point4D(.085, .10, .13, GlassMetrics.For(RenderSize, true).Tint)
-        : new Point4D(.965, .98, 1, GlassMetrics.For(RenderSize, false).Tint);
+    private Point4D LiquidTint
+    {
+        get
+        {
+            var color = Theme.MaterialColors.Surface;
+            return new(color.R / 255d, color.G / 255d, color.B / 255d, GlassMetrics.For(RenderSize, _dark).Tint);
+        }
+    }
     internal void SetRefractionStrengthForEvidence(double value)
     {
         _refractionStrength = value;

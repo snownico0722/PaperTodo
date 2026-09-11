@@ -31,8 +31,14 @@ internal static class MaterialPresentationChecks
                     "dragging retains downsample density and world-space phase, including budget boundaries");
             }
         }
-        Program.Assert(DesktopLensCapture.CaptureInterval(false, 0) <= 16 && DesktopLensCapture.CaptureInterval(true, 20) <= 16 &&
-            DesktopLensCapture.CaptureInterval(false, 20) >= 100, "active sampling is not capped at 30 Hz; idle retains backoff");
+        Program.Assert(DesktopLensCapture.CaptureInterval(false, 0) == 100 && DesktopLensCapture.CaptureInterval(true, 20) == 100 &&
+            DesktopLensCapture.CaptureInterval(false, 20) >= 100, "readback stays at 100ms even while motion reprojects each frame");
+        var overscan = LensCaptureLayout.Create(new Int32Rect(400, 400, 360, 300),
+            new DesktopLensCapture.Region(0, 0, 360, 300, 256), desktop)[0];
+        Program.Assert(overscan.Bounds.X <= 400-200 && overscan.Bounds.Y <= 400-200 &&
+            overscan.Bounds.X+overscan.Bounds.Width >= 400+360+200 &&
+            (long)overscan.PixelWidth*overscan.PixelHeight <= LensCaptureLayout.PixelBudget,
+            "bounded wider scene covers motion between low-rate samples");
 
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiquidGlassRefraction);
         Window? settings = null;
@@ -55,6 +61,9 @@ internal static class MaterialPresentationChecks
             menu.IsOpen = false; Wait(60);
 
             CheckRealRightClicks(controller);
+            CheckMasterRightClicks(controller);
+            controller.State.PaperSkin = PaperSkins.LiquidGlass; controller.State.Theme = "light";
+            controller.State.EnableAnimations = false; Theme.Invalidate();
 
             var pageType = typeof(AppController).GetNestedType("SettingsPage", BindingFlags.NonPublic)!;
             var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, [pageType], null)!;
@@ -118,6 +127,57 @@ internal static class MaterialPresentationChecks
         {
             window.CloseForReal(); controller.State.Papers.Remove(paper);
             SetCursorPos(cursor.X, cursor.Y);
+        }
+    }
+    private static void CheckMasterRightClicks(AppController controller)
+    {
+        var original = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
+            controller.State.MatchAuxiliaryMaterialStrength);
+        controller.State.PaperSkin = PaperSkins.Paper; Theme.Invalidate();
+        var master = new MasterCapsuleWindow(controller, EdgeCapsuleEdge.Left, "");
+        GetCursorPos(out var cursor);
+        ContextMenu? menu = null;
+        try
+        {
+            master.ShowPlaced(1, false, false); Wait(120);
+            var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
+            menu = pill.ContextMenu!;
+            // The very same detached template survives Paper -> Mica -> Acrylic.
+            menu.ApplyTemplate();
+            foreach (var theme in new[] { "light", "dark" })
+            foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
+            {
+                controller.State.PaperSkin = skin; controller.State.Theme = theme;
+                controller.State.EnableAnimations = true;
+                Theme.Invalidate(); master.UpdateTheme(); Wait(60);
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    controller.State.MatchAuxiliaryMaterialStrength = attempt == 1;
+                    var point = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
+                    SetCursorPos((int)point.X, (int)point.Y); Wait(25);
+                    mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
+                    Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
+                    Wait(180);
+                    var surface = Find(menu)!;
+                    var opacityOwners = new List<string>();
+                    for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
+                        if (node is UIElement ui) opacityOwners.Add($"{ui.GetType().Name}:{ui.Opacity:F3}/{ui.IsVisible}");
+                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; fallback={surface.MenuFallbackRenderCount}; worker={surface.HasRefractionWorker}; frames={surface.RefractionFrameCount}; suppress={surface.SuppressLiveBackgroundForOpening}; failure={surface.RefractionFailure}; opacity={string.Join(',', opacityOwners)}");
+                    Program.Assert(surface.Skin == skin && surface.FirstMenuRenderUsedBackground && surface.MenuFallbackRenderCount == 0,
+                        $"master {skin}/{theme}: prepared current recipe from first render, no later plain-paper frame");
+                    Program.Assert(menu.Opacity == 1, "master menu does not hide material flicker with a foreground fade");
+                    menu.IsOpen = false; Wait(80);
+                }
+            }
+        }
+        finally
+        {
+            if (menu != null) menu.IsOpen = false;
+            master.CloseForReal(); SetCursorPos(cursor.X, cursor.Y);
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
+                controller.State.MatchAuxiliaryMaterialStrength) = original;
+            Theme.Invalidate();
         }
     }
     [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
