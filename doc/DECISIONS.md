@@ -24,7 +24,7 @@
 | D-009 | Visual authority 显式交接 | Accepted | Edge handoff |
 | D-010 | Successor 继承 predecessor live authority | Accepted | Edge transaction |
 | D-011 | Floating drag 使用独立持久 HWND | Accepted | Edge drag |
-| D-012 | Rendering cadence + rescue-only watchdog | Accepted | Edge animation |
+| D-012 | Rendering cadence + rescue-only watchdog | Superseded by D-032 | Edge animation |
 | D-013 | Proxy handoff 等待真实 WPF terminal presentation | Accepted | Edge handoff |
 | D-014 | Pointer truth 来自 `InteractiveBounds` | Accepted | Edge input |
 | D-015 | AGENTS / Architecture / Decisions / 注释分工 | Accepted | 文档体系 |
@@ -44,6 +44,7 @@
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
+| D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Accepted | Edge animation |
 
 ## 维护规则
 
