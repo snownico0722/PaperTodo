@@ -1147,7 +1147,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var truncated = lineEnd < markdown.Length &&
                 markdown[lineEnd] is not ('\r' or '\n');
             yield return new PreviewLine(
-                markdown[lineStart..lineEnd],
+                markdown[lineStart..SafePrefixEnd(markdown, lineEnd)],
                 truncated);
             if (truncated)
             {
@@ -1208,8 +1208,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             return "…";
         }
-        return value[..(maximumLength - 1)] + "…";
+        return value[..SafePrefixEnd(value, maximumLength - 1)] + "…";
     }
+
+    // Character budgets use UTF-16 units, but never split a valid surrogate pair at the edge.
+    private static int SafePrefixEnd(string value, int end) =>
+        end > 0 && end < value.Length &&
+        char.IsHighSurrogate(value[end - 1]) && char.IsLowSurrogate(value[end]) ? end - 1 : end;
 
     private static string StripBlockPrefix(string line)
     {

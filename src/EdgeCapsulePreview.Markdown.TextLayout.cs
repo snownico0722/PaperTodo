@@ -68,7 +68,9 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                 previous?.Dispose(); previous = line.GetTextLineBreak();
                 var lineDrawing = new DrawingGroup();
                 using (var drawing = lineDrawing.Open()) line.Draw(drawing, new Point(0, height), InvertAxes.None);
-                if (lineDrawing.CanFreeze) lineDrawing.Freeze();
+                // Drawing commands reference the host's brushes. Freeze a snapshot, never
+                // freeze those shared resources as a side effect of preparing this paragraph.
+                if (lineDrawing.CanFreeze) lineDrawing = (DrawingGroup)lineDrawing.GetAsFrozen();
                 _drawing.Children.Add(lineDrawing);
                 var end = Math.Min(source.Text.Length, offset + line.Length);
                 // Link ranges are ordered; do not rescan offscreen links for every visible line.

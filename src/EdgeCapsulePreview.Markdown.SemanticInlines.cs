@@ -15,6 +15,13 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             yield break;
         }
         var snapshot = MarkdownSemanticSnapshot.Parse(text);
+        // Recognition still decides what is plain. Without inline semantics there is no need
+        // for per-character style/link arrays or rebuilding an identical output string.
+        if (!snapshot.Spans.Any() && !snapshot.Links.Any())
+        {
+            yield return new InlinePiece(text, InlineStyle.None);
+            yield break;
+        }
         var styles = new InlineStyle[text.Length];
         var hidden = new bool[text.Length];
         var links = new Uri?[text.Length];
