@@ -18,16 +18,19 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: candidate
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/checkout@v7
         with:
           ref: 13a2224c549fcc7d6fbbd5c58a9b666d9f75086f
           path: baseline
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/checkout@v7
         with:
           ref: b88322feb212c4ca5be1da2d900e35794666dc37
           path: textlayout
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
@@ -55,6 +58,8 @@ jobs:
                   var current = source;
           '@
           Replace-Once candidate/src/EdgeCapsuleHost.Preview.cs $old $new
+          Replace-Once candidate/src/EdgeCapsulePreview.AvalonEdit.cs 'MouseMove += (_, e) => Cursor = TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow;' 'MouseMove += (_, e) => Editor?.SetInteractionCursor(TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow);'
+          Replace-Once candidate/src/EdgeCapsulePreview.AvalonEdit.cs 'MouseLeave += (_, _) => Cursor = Cursors.Arrow;' 'MouseLeave += (_, _) => Editor?.SetInteractionCursor(Cursors.Arrow);'
           foreach ($folder in @('baseline', 'textlayout')) {
             Copy-Item candidate/src/EdgeCapsulePreview.AvalonEdit.cs "$folder/src/EdgeCapsulePreview.AvalonEdit.cs"
             Copy-Item candidate/tests/PaperTodo.EdgePreviewExperimentChecks "$folder/tests/" -Recurse
@@ -65,7 +70,7 @@ jobs:
       - name: Candidate Release regression suites
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($name in @('MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks','EdgePreviewExperimentChecks')) {
+          foreach ($name in @('EdgePreviewExperimentChecks','MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
             dotnet run --project "candidate/tests/PaperTodo.$name/PaperTodo.$name.csproj" -c Release 2>&1 | Tee-Object "results/$name.log"
             if ($LASTEXITCODE -ne 0) { throw "$name failed" }
           }
@@ -91,8 +96,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
-          $entries = foreach ($path in @('src/PaperWindow.EdgeCapsulePreview.cs','src/EdgeCapsuleHost.Preview.cs')) {
-            $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("candidate/$path"))
+          $entries = foreach ($path in @('src/PaperWindow.EdgeCapsulePreview.cs','src/EdgeCapsuleHost.Preview.cs','src/EdgeCapsulePreview.AvalonEdit.cs')) {
+            $text = [IO.File]::ReadAllText("candidate/$path").Replace("`r`n", "`n")
+            $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
             $json = @{ content = $content; encoding = 'base64' } | ConvertTo-Json -Compress
             $blob = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $json -ContentType 'application/json'
             @{ path = $path; sha = $blob.sha; mode = '100644'; type = 'blob' }
