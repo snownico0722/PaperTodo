@@ -28,6 +28,23 @@ internal sealed partial class SkinBorder : Border
     internal bool IsAuxiliary => IsCapsule || IsMenu;
     internal double MaterialStrength => IsAuxiliary &&
         AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
+    // A weaker material means more ordinary paper, not more background transmission.
+    internal double PaperBackingOpacity => IsAuxiliary ? 1 - MaterialStrength * MaterialStrength : 0;
+    public static readonly DependencyProperty UseLightweightMaterialProperty = DependencyProperty.Register(
+        nameof(UseLightweightMaterial), typeof(bool), typeof(SkinBorder),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, _) =>
+            {
+                var surface = (SkinBorder)d;
+                surface._brushKey = null;
+                surface._relief = null; surface._reliefKey = null;
+                surface.SyncLensLight(); surface.RefreshRefraction();
+            }));
+    public bool UseLightweightMaterial
+    {
+        get => (bool)GetValue(UseLightweightMaterialProperty);
+        set => SetValue(UseLightweightMaterialProperty, value);
+    }
     internal bool IsOutline { get; init; }
     private static readonly System.Collections.Generic.List<WeakReference<SkinBorder>> LoadedSurfaces = new();
     internal static void RefreshLoadedSurfaces()
@@ -117,8 +134,8 @@ internal sealed partial class SkinBorder : Border
         // source falls back to an opaque base; no foreground or HWND opacity is altered.
         if (IsAuxiliary && _refractionVisual == null && !HasAuxiliaryTransmission)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
+        PaintMaterialBase(dc);
         dc.PushOpacity(MaterialStrength);
-        dc.DrawGeometry(_fill, null, _shape);
         if (Skin == PaperSkins.TracingPaper)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
@@ -136,6 +153,29 @@ internal sealed partial class SkinBorder : Border
             if (!_evidenceFrozen) { _cropDirty = true; RequestRefractionRender(); }
         }
         RefreshOpticalFinish();
+    }
+
+    private void PaintMaterialBase(DrawingContext dc)
+    {
+        if (PaperSkins.UsesNativeBackdrop(Skin))
+        {
+            // Weakening the optics must not thin the reading tint. Blend in paper
+            // first, then retain the recipe's base density (especially dense Mica).
+            if (PaperBackingOpacity > 0)
+            {
+                dc.PushOpacity(PaperBackingOpacity);
+                dc.DrawGeometry(Theme.PaperBrush, null, _shape);
+                dc.Pop();
+            }
+            dc.DrawGeometry(_fill, null, _shape);
+        }
+        else
+        {
+            // Opaque decorative skins retain their original paper/color blend.
+            dc.PushOpacity(MaterialStrength);
+            dc.DrawGeometry(_fill, null, _shape);
+            dc.Pop();
+        }
     }
 
     private void EnsureGeometry()

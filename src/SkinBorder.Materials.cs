@@ -105,6 +105,13 @@ internal sealed partial class SkinBorder
 
     private void PaintMaterialDetails(DrawingContext dc)
     {
+        if (UseLightweightMaterial && Skin is PaperSkins.Aero or PaperSkins.LiquidGlass)
+        {
+            // Preview changes size every frame. Keep the existing gradient and hairline,
+            // without rebuilding normal-map strips or subscribing to pointer lighting.
+            if (Skin == PaperSkins.LiquidGlass) dc.DrawGeometry(_glint, null, _glintRing);
+            return;
+        }
         if (Skin is PaperSkins.Aero or PaperSkins.LiquidGlass)
         {
             var dpi = VisualTreeHelper.GetDpi(this);

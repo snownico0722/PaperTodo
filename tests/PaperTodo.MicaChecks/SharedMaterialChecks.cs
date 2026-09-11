@@ -70,6 +70,21 @@ internal static class SharedMaterialChecks
                 "quiet capsule keeps its worker, scene and all optical stages, not a static fallback");
             var quiet = Snapshot(surface);
             Program.Assert(PixelDifference(full, quiet) > 500, "full/quiet capsule processing visibly differs");
+            CheckPaperDistance(full, quiet, surface, "liquid capsule");
+            // No desktop readback, pointer-light subscription or per-size normal strips
+            // while a preview surface is growing. The same HWND/content resumes afterwards.
+            surface.UseLightweightMaterial = true; surface.UpdateLayout(); Render(surface);
+            var previewFrames = surface.RefractionFrameCount;
+            for (var size = 0; size < 4; size++)
+            {
+                window.Width += 10; window.UpdateLayout(); Render(surface); Wait(20);
+                Program.Assert(!surface.HasRefractionWorker && !surface.HasRefractionRenderSubscription &&
+                    !surface.HasLensLightSubscription && surface.RefractionFrameCount == previewFrames &&
+                    typeof(SkinBorder).GetField("_relief", Program.Private)!.GetValue(surface) == null,
+                    "lightweight preview resizing has no capture, render retry, pointer light or normal-map rebuild");
+            }
+            window.Width = 360; window.UpdateLayout(); surface.UseLightweightMaterial = false;
+            Ready(surface, previewFrames, "leaving preview restores the regular capsule material");
             Program.Assert(new WindowInteropHelper(window).Handle == hwnd && ReferenceEquals(surface.Child, marker) &&
                 window.Opacity == 1 && marker.Opacity == 1 && VisualTreeHelper.HitTest(surface, new Point(180,50)) != null,
                 "material strength keeps the real foreground, HWND and hit target");
@@ -142,6 +157,7 @@ internal static class SharedMaterialChecks
                 controller.State.MatchAuxiliaryMaterialStrength = false; surface.RefreshSkin(); Wait(80); quiet = Snapshot(surface);
                 Program.Assert(surface.HasRefractionWorker && PixelDifference(full, quiet) > 500,
                     $"{skin} weak processing retains diffusion and transmission");
+                CheckPaperDistance(full, quiet, surface, skin);
                 Save(Render(surface), $"shared-{skin}-quiet");
             }
             controller.State.PaperSkin = PaperSkins.Aero; Theme.Invalidate(); surface.RefreshSkin(); Wait(80);
@@ -162,6 +178,22 @@ internal static class SharedMaterialChecks
                 controller.State.EnableAnimations, controller.State.LiquidGlassRefraction, controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
+    }
+    private static void CheckPaperDistance(byte[] full, byte[] quiet, SkinBorder surface, string name)
+    {
+        var image = Render(surface);
+        var paper = ((SolidColorBrush)Theme.PaperBrush).Color;
+        double fullDistance = 0, quietDistance = 0;
+        // Exclude the rim and central foreground marker; compare the actual composited face.
+        for (var y = 32; y < image.PixelHeight - 32; y++)
+        for (var x = 35; x < image.PixelWidth / 3; x++)
+        {
+            var i = (y * image.PixelWidth + x) * 4;
+            fullDistance += Math.Abs(full[i] - paper.B) + Math.Abs(full[i+1] - paper.G) + Math.Abs(full[i+2] - paper.R);
+            quietDistance += Math.Abs(quiet[i] - paper.B) + Math.Abs(quiet[i+1] - paper.G) + Math.Abs(quiet[i+2] - paper.R);
+        }
+        Program.Assert(fullDistance > 0 && quietDistance < fullDistance * .55,
+            $"{name}: weak material is closer to opaque paper, not more transparent ({quietDistance / fullDistance:F3})");
     }
     private static void CheckOpticalPixels(SkinBorder surface, FrameworkElement marker, string name)
     {

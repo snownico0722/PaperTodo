@@ -86,6 +86,6 @@ internal sealed partial class SkinBorder
     private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
         IsLoaded && IsVisible && !_highContrast && IsMaterialHostVisible &&
         DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
-    private bool RequestsLiveBackground => !SuppressLiveBackgroundForOpening && (Skin == PaperSkins.LiquidGlass ||
+    private bool RequestsLiveBackground => !UseLightweightMaterial && !SuppressLiveBackgroundForOpening && (Skin == PaperSkins.LiquidGlass ||
         IsAuxiliary && Skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic or PaperSkins.TracingPaper);
 }

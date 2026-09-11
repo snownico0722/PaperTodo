@@ -211,6 +211,10 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             return false;
         }
+        // The presented frame owns this choice, including the entire outgoing preview
+        // transition. Stop expensive material work BEFORE changing any surface geometry.
+        if (Chrome is SkinBorder skin)
+            skin.UseLightweightMaterial = frame.Surface == EdgeCapsuleSurfaceKind.DockedPreview;
         var window = Window;
         var root = Root;
         var nativeHostBounds = frame.HostBounds;

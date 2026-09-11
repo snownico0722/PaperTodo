@@ -17,7 +17,7 @@ internal sealed partial class SkinBorder
     // No idle clock and no effect or layout invalidation on the editor subtree.
     private void SyncLensLight()
     {
-        var root = !IsOutline && IsLoaded && IsVisible && !_highContrast && _animateReflection &&
+        var root = !IsOutline && !UseLightweightMaterial && IsLoaded && IsVisible && !_highContrast && _animateReflection &&
             Skin is PaperSkins.LiquidGlass or PaperSkins.Aero ? (PresentationSource.FromVisual(this) as HwndSource)?.RootVisual as UIElement : null;
         if (ReferenceEquals(root, _lensRoot) && _lightingSkin == Skin) return;
         DetachLensLight();

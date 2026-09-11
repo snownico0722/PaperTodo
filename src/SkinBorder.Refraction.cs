@@ -101,7 +101,7 @@ internal sealed partial class SkinBorder
         if (_evidenceFrozen) return;
         if (_requestedSkin != Skin)
         { _requestedSkin = Skin; _refractionFailed = false; RefractionFailure = null; }
-        var source = IsLoaded && !IsOutline && !_highContrast && PaperSkins.UsesNativeBackdrop(Skin)
+        var source = IsLoaded && !IsOutline && !UseLightweightMaterial && !_highContrast && PaperSkins.UsesNativeBackdrop(Skin)
             ? PresentationSource.FromVisual(this) as HwndSource : null;
         ObserveMaterialHost(source);
         var enabled = AppController.Current?.State.LiquidGlassRefraction != false;
@@ -303,8 +303,8 @@ internal sealed partial class SkinBorder
         if (_opticalFinish != null && (_finishVersion != _surfaceVersion || !ReferenceEquals(_finishBorderBrush, BorderBrush)))
         {
             using var dc = _opticalFinish.RenderOpen();
+            PaintMaterialBase(dc);
             dc.PushOpacity(MaterialStrength);
-            dc.DrawGeometry(_fill, null, _shape);
             if (Skin == PaperSkins.TracingPaper)
                 dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
             dc.DrawRectangle(_shine, null, new Rect(RenderSize));

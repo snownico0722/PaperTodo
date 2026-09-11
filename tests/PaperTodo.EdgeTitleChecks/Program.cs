@@ -105,6 +105,15 @@ internal static class Program
             Placement = new EdgeCapsulePlacement(0, 0, 1)
         };
         var pluginContent = new TextBlock { Text = "Plugin clock", Background = Brushes.Transparent };
+        var material = (SkinBorder)HostPart<Border>("Chrome");
+        var compact = EdgeCapsuleTargetPlanner.Calculate(model, layout).Docked.ToFrame();
+        Check(host.Apply(compact with { Surface = EdgeCapsuleSurfaceKind.DockedPreview }) && material.UseLightweightMaterial,
+            "Presented preview frame selects lightweight material before any geometry animation");
+        host.RefreshSkin();
+        Check(material.UseLightweightMaterial, "Theme refresh must not re-enable heavy preview material");
+        Check(host.Apply(compact) && !material.UseLightweightMaterial,
+            "Presented compact frame restores normal material without changing HWND authority");
+
         foreach (var hideTitle in new[] { false, true })
         foreach (var hovered in new[] { false, true })
         {
