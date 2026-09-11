@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -44,13 +46,15 @@ internal static class MaterialPresentationChecks
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
             var opens = 0; menu.Opened += (_, _) => opens++;
-            menu.IsOpen = true; menu.IsOpen = false; Wait(400);
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); menu.IsOpen = false; Wait(400);
             Program.Assert(!menu.IsOpen && opens == 0, "cancelling an async menu open never reopens it later");
-            menu.IsOpen = true; Until(() => menu.IsOpen && opens == 1, "reopen after cancellation"); Wait(80);
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); Until(() => menu.IsOpen && opens == 1, "reopen after cancellation"); Wait(80);
             var menuSurface = Find(menu);
             Program.Assert(menuSurface != null && menuSurface.FirstMenuRenderUsedBackground && menu.Opacity == 1,
                 "production tray menu opens with the real material, without a foreground fade");
             menu.IsOpen = false; Wait(60);
+
+            CheckRealRightClicks(controller);
 
             var pageType = typeof(AppController).GetNestedType("SettingsPage", BindingFlags.NonPublic)!;
             var show = typeof(AppController).GetMethod("ShowSettingsWindow", Program.Private, null, [pageType], null)!;
@@ -77,6 +81,50 @@ internal static class MaterialPresentationChecks
             Theme.Invalidate();
         }
     }
+    private static void CheckRealRightClicks(AppController controller)
+    {
+        var paper = new PaperData { Type = PaperTypes.Todo, Title = "Right-click regression",
+            X = 70, Y = 70, Width = 360, Height = 300 };
+        controller.State.Papers.Add(paper);
+        var window = new PaperWindow(paper, controller) { Topmost = true };
+        GetCursorPos(out var cursor);
+        try
+        {
+            window.Show(); window.Activate(); Wait(150);
+            foreach (var collapsed in new[] { false, true })
+            {
+                window.SetCollapsedState(collapsed, animate: false, saveGeometry: false); Wait(100);
+                var target = (FrameworkElement)typeof(PaperWindow).GetField(
+                    collapsed ? "_capsuleLeftArea" : "_paperChrome", Program.Private)!.GetValue(window)!;
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    var menu = target.ContextMenu;
+                    Program.Assert(menu != null, "real paper/capsule has its production menu");
+                    var point = target.PointToScreen(new Point(target.ActualWidth / 2, target.ActualHeight / 2));
+                    SetCursorPos((int)point.X, (int)point.Y); Wait(30);
+                    // Real input reaches WPF ContextMenuService rather than assigning IsOpen.
+                    mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
+                    Until(() => menu!.IsOpen, $"actual right click opens {(collapsed ? "capsule" : "paper")} menu");
+                    Wait(80);
+                    Program.Assert(Find(menu!)?.FirstMenuRenderUsedBackground == true,
+                        "service-opened menu retains its prepared first-frame material");
+                    menu!.SetCurrentValue(ContextMenu.IsOpenProperty, false); Wait(80);
+                    Program.Assert(!menu.IsOpen, "real right-click menu closes and can reopen");
+                }
+            }
+        }
+        finally
+        {
+            window.CloseForReal(); controller.State.Papers.Remove(paper);
+            SetCursorPos(cursor.X, cursor.Y);
+        }
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
     private static SkinBorder? Find(DependencyObject node)
     {
         if (node is SkinBorder surface) return surface;

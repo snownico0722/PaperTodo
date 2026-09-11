@@ -213,7 +213,7 @@ public sealed partial class PaperWindow
         {
             if (_themedContextMenus[i].TryGetTarget(out var menu))
             {
-                if (menu.IsOpen)
+                if (menu.IsOpen || menu is MaterialContextMenu { IsOpening: true })
                 {
                     return true;
                 }

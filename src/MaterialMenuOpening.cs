@@ -19,6 +19,7 @@ namespace PaperTodo;
 internal sealed class MaterialContextMenu : ContextMenu
 {
     private MaterialMenuOpening? _opening;
+    internal bool IsOpening => _opening?.IsPending == true;
     static MaterialContextMenu() => IsOpenProperty.OverrideMetadata(typeof(MaterialContextMenu),
         new FrameworkPropertyMetadata(false, null, CoerceOpen));
     private static object CoerceOpen(DependencyObject d, object value)
@@ -69,6 +70,7 @@ internal sealed class MaterialMenuOpening
     private FrameworkElement? _anchor;
     private bool _pending, _ready;
     private int _generation;
+    internal bool IsPending => _pending;
 
     internal static bool NeedsBackground => AppController.Current?.State.LiquidGlassRefraction != false &&
         PaperSkins.UsesNativeBackdrop(Theme.Skin) && Theme.Skin != PaperSkins.Aero &&
@@ -156,7 +158,11 @@ internal sealed class MaterialMenuOpening
                 if (!NeedsBackground) { frame?.Dispose(); frame = null; failed = false; }
                 if (surface != null) surface.PrepareMenuBackground(frame, failed);
                 else frame?.Dispose();
-                _owner.CoerceValue(_isOpen);
+                // ContextMenuService opens with SetCurrentValue, not SetValue. Its
+                // requested true is not the base value after we coerce it to false.
+                // Re-coercing would read the default false and cancel a real right click.
+                // Replay only this still-current request; preserve bindings on submenus.
+                _owner.SetCurrentValue(_isOpen, true);
             }
             cancel.Dispose();
         }
