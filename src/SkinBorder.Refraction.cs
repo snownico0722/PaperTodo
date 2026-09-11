@@ -235,8 +235,10 @@ internal sealed partial class SkinBorder
             slice.Effect.Extent = new Point4D(ActualWidth, ActualHeight, 1 / Math.Max(.001, metrics.Bezel),
                 1 - metrics.Magnification * _refractionStrength * MaterialStrength);
             var limit = Math.Min(ActualWidth, ActualHeight) * .5;
-            slice.Effect.Radii = new Point4D(Math.Min(limit, CornerRadius.TopLeft), Math.Min(limit, CornerRadius.TopRight),
-                Math.Min(limit, CornerRadius.BottomRight), Math.Min(limit, CornerRadius.BottomLeft));
+            slice.Effect.Radii = new Point4D(Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopLeft)),
+                Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopRight)),
+                Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomRight)),
+                Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomLeft)));
             slice.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
                 (window.X + geometry.OffsetX + target.X - bounds.X) / (double)bounds.Width,
                 (window.Y + geometry.OffsetY + target.Y - bounds.Y) / (double)bounds.Height);
@@ -249,7 +251,7 @@ internal sealed partial class SkinBorder
                 Math.Max(blur * dpi.DpiScaleX / bounds.Width, .5 / tile.PixelWidth),
                 Math.Max(blur * dpi.DpiScaleY / bounds.Height, .5 / tile.PixelHeight),
                 1 + (metrics.Saturation - 1) * MaterialStrength, 1);
-            slice.Effect.Dispersion = .24 * _dispersionStrength;
+            slice.Effect.Dispersion = GlassMetrics.ChromaticSpread * _dispersionStrength;
             // The same paint as the static fallback goes ABOVE this opaque scene.
             // Otherwise it disappears under the DrawingVisual, leaving just a bright rim.
         }
@@ -297,7 +299,7 @@ internal sealed partial class SkinBorder
     {
         _dispersionStrength = value;
         foreach (var slice in _slices)
-            slice.Effect.Dispersion = .24 * value;
+            slice.Effect.Dispersion = GlassMetrics.ChromaticSpread * value;
     }
     internal IDisposable FreezeRefractionForEvidence()
     {

@@ -10,6 +10,7 @@ internal sealed partial class SkinBorder
     private Window? _lensWindow;
     private UIElement? _lensRoot;
     private string? _lightingSkin;
+    private Point _lensPointer = new(.24, .05);
     internal bool HasLensLightSubscription => _lensRoot != null;
 
     // Event-driven optics only: lens pointer light and Aero world-space parallax.
@@ -25,14 +26,22 @@ internal sealed partial class SkinBorder
         _lensWindow = window;
         _lightingSkin = Skin;
         if (root == null) return;
-        if (Skin == PaperSkins.LiquidGlass) root.PreviewMouseMove += OnLensPointerMoved;
+        if (Skin == PaperSkins.LiquidGlass)
+        {
+            root.PreviewMouseMove += OnLensPointerMoved;
+            root.MouseLeave += OnLensPointerLeft;
+        }
         if (Skin == PaperSkins.Aero)
         { if (window != null) window.LocationChanged += OnAeroLocation; OnAeroLocation(window, EventArgs.Empty); }
         if (window != null) window.Closed += OnLensClosed;
     }
     private void DetachLensLight()
     {
-        if (_lensRoot != null) _lensRoot.PreviewMouseMove -= OnLensPointerMoved;
+        if (_lensRoot != null)
+        {
+            _lensRoot.PreviewMouseMove -= OnLensPointerMoved;
+            _lensRoot.MouseLeave -= OnLensPointerLeft;
+        }
         _lensRoot = null;
         if (_lensWindow != null)
         {
@@ -41,7 +50,7 @@ internal sealed partial class SkinBorder
         }
         _lensWindow = null;
         _reflectionShift.X = _reflectionShift.Y = 0;
-        _lensLight.Center = _lensLight.GradientOrigin = new Point(.24, .05);
+        ResetLensLight();
     }
     private void OnAeroLocation(object? sender, EventArgs e)
     {
@@ -58,7 +67,27 @@ internal sealed partial class SkinBorder
         if (ActualWidth <= 0 || ActualHeight <= 0 || _lensWindow?.WindowState == WindowState.Minimized) return;
         var pointer = e.GetPosition(this);
         var point = new Point(Math.Clamp(pointer.X / ActualWidth, 0, 1), Math.Clamp(pointer.Y / ActualHeight, 0, 1));
-        if ((point - _lensLight.Center).LengthSquared < .0004) return;
-        _lensLight.Center = _lensLight.GradientOrigin = point;
+        // Compare DIPs, not a percentage of the whole panel: on a wide paper the
+        // old threshold could jump a dozen pixels at a time.
+        var delta = new Vector((point.X - _lensPointer.X) * ActualWidth,
+            (point.Y - _lensPointer.Y) * ActualHeight);
+        if (delta.LengthSquared < 1) return;
+        _lensPointer = point;
+        UpdateLensLightGeometry();
+    }
+    private void OnLensPointerLeft(object sender, MouseEventArgs e) => ResetLensLight();
+    private void ResetLensLight()
+    {
+        _lensPointer = new Point(.24, .05);
+        UpdateLensLightGeometry();
+    }
+    private void UpdateLensLightGeometry()
+    {
+        // A circular light in DIPs stays circular on a long capsule, a tall menu and
+        // a wide reading panel. Only the existing mutable brush changes on input.
+        var radius = Math.Clamp(Math.Min(ActualWidth, ActualHeight) * .8, 64, 160);
+        _lensLight.RadiusX = _lensLight.RadiusY = radius;
+        _lensLight.Center = _lensLight.GradientOrigin =
+            new Point(_lensPointer.X * ActualWidth, _lensPointer.Y * ActualHeight);
     }
 }

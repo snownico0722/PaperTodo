@@ -174,6 +174,7 @@ internal static class RefractionChecks
     }
     private static void CheckOptics()
     {
+        OpticalProfileChecks.Run();
         var profile = LensDisplacement.ProfileBrush;
         Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBrush),
             "all lens sizes share a frozen one-dimensional optical profile");

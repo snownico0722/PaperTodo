@@ -34,11 +34,13 @@ internal static class LensDisplacement
         for (var x = 0; x < ProfileSamples; x++)
         {
             var p = ProfileAt(x / (double)(ProfileSamples - 1));
-            // RGB carries independent coefficients; opaque alpha prevents WPF's
-            // texture conversion from premultiplying these data channels.
+            // A single 8-bit channel visibly terraces a several-DIP bend. Encode the
+            // displacement in RG at 16-bit precision; a linear dot product in the
+            // shader reconstructs it even across a low-byte wrap during bilinear sampling.
+            var shift = (int)Math.Round(p.Shift * 65535);
             bytes[x * 4] = (byte)Math.Round(p.Fresnel * 255);
-            bytes[x * 4 + 1] = (byte)Math.Round(p.Slope * 255);
-            bytes[x * 4 + 2] = (byte)Math.Round(p.Shift * 255);
+            bytes[x * 4 + 1] = (byte)(shift & 255);
+            bytes[x * 4 + 2] = (byte)(shift >> 8);
             bytes[x * 4 + 3] = 255;
         }
         var bitmap = BitmapSource.Create(ProfileSamples, 1, 96, 96, PixelFormats.Bgra32, null, bytes, ProfileSamples * 4);
@@ -68,10 +70,11 @@ internal static class LensDisplacement
 
     internal static (Vector Offset, double Coverage) Sample(Point p, Size size, double radius)
     {
-        var (distance, normal) = Surface(p, size, radius);
         var metrics = GlassMetrics.For(size, false);
         var bezel = metrics.Bezel;
-        if (bezel <= 0 || distance < 0 || distance >= bezel) return (new Vector(), 0);
+        if (bezel <= 0 || Surface(p, size, radius).Distance < 0) return (new Vector(), 0);
+        var (distance, normal) = Surface(p, size, metrics.OpticalRadius(radius));
+        if (distance >= bezel) return (new Vector(), 0);
         var profile = ProfileAt(distance / bezel);
         return (-normal * (metrics.Displacement * profile.Shift), profile.Coverage);
     }

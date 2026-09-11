@@ -48,6 +48,14 @@ internal static class SharedMaterialChecks
                     SetCursorPos(448, 180); Wait(120); var nearRight = Pixels(Render(surface));
                     Program.Assert(PixelDifference(nearLeft, nearRight) > 100,
                         "real pointer movement changes the live highlight without moving or distorting content");
+                    var light = (RadialGradientBrush)typeof(SkinBorder).GetField("_lensLight", Program.Private)!.GetValue(surface)!;
+                    Program.Assert(light.MappingMode == BrushMappingMode.Absolute && light.RadiusX == light.RadiusY &&
+                        light.RadiusX is >= 64 and <= 160, "long capsule keeps a bounded circular light in DIPs");
+                    SetCursorPos(780, 550); Wait(120);
+                    Program.Assert((light.Center - new Point(surface.ActualWidth * .24, surface.ActualHeight * .05)).Length < .1,
+                        "pointer leave restores ambient light instead of leaving a stuck hotspot");
+                    Program.Assert(window.Opacity == 1 && marker.Opacity == 1 && ReferenceEquals(surface.Child, marker),
+                        "highlight interaction does not change foreground opacity or content ownership");
                 }
                 finally { SetCursorPos(oldPointer.X, oldPointer.Y); }
             }

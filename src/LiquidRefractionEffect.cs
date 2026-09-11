@@ -20,7 +20,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point4D), new Point4D(400, 340, 1d / 18, 1), 5);
     internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
     internal static readonly DependencyProperty ScatteringProperty = Constant(nameof(Scattering), typeof(Point4D), new Point4D(), 7);
-    internal static readonly DependencyProperty DispersionProperty = Constant(nameof(Dispersion), typeof(double), .24, 4);
+    internal static readonly DependencyProperty DispersionProperty = Constant(nameof(Dispersion), typeof(double), GlassMetrics.ChromaticSpread, 4);
     private static DependencyProperty Constant(string name, Type type, object value, int register) =>
         DependencyProperty.Register(name, type, typeof(LiquidRefractionEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
     public Brush Scene { get => (Brush)GetValue(SceneProperty); set => SetValue(SceneProperty, value); }
@@ -66,10 +66,11 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float len = length(outside);
             float distance = radius - len - min(max(q.x, q.y), 0);
             float t = saturate(distance * extent.z);
-            float3 optical = tex2D(opticalProfile, float2(t * (511.0/512.0) + .5/512.0, .5)).rgb;
+            float2 packed = tex2D(opticalProfile, float2(t * (511.0/512.0) + .5/512.0, .5)).rg;
+            float optical = dot(packed, float2(256.0/257.0, 1.0/257.0));
             float horizontal = saturate((q.x-q.y)*.5+.5);
             float2 normal = normalize(lerp(float2(horizontal, 1-horizontal), outside, step(.0001, len))) * (side*2-1);
-            float2 delta = -normal * optical.r * shift;
+            float2 delta = -normal * optical * shift;
             float2 at = ((uv - .5) * extent.w + .5) * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
             // Preserve a sharp shoulder: a blurred RGB fringe cannot read as dispersion.
@@ -77,7 +78,7 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float2 chroma = delta * dispersion;
             float3 refracted = float3(tex2D(scene, at + chroma).r,
                 tex2D(scene, at).g, tex2D(scene, at - chroma).b);
-            float2 spread = scattering.xy * (1 - .8 * optical.r);
+            float2 spread = scattering.xy * (1 - .8 * optical);
             float3 color = refracted * .7;
             color += (tex2D(scene, at + spread).rgb + tex2D(scene, at - spread).rgb
                 + tex2D(scene, at + spread * float2(1,-1)).rgb

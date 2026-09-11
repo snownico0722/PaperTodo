@@ -16,7 +16,7 @@ internal sealed partial class SkinBorder
     };
     private readonly RadialGradientBrush _lensLight = new(Colors.White, Colors.Transparent)
     {
-        Center = new Point(.24, .05), GradientOrigin = new Point(.24, .05), RadiusX = .65, RadiusY = .65
+        MappingMode = BrushMappingMode.Absolute, RadiusX = 96, RadiusY = 96
     };
     private DrawingGroup? _relief;
     private (Size Size, CornerRadius Radius, Thickness Border, double DpiX, double DpiY, string Skin, bool Dark)? _reliefKey;
@@ -85,10 +85,11 @@ internal sealed partial class SkinBorder
                 }, new Point(0, 0), new Point(.35, 1)));
                 _glint = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
-                    new(White(_dark ? 185 : 230), 0), new(White(18), .25),
-                    new(White(0), .55), new(White(_dark ? 95 : 145), 1)
+                    new(White(_dark ? 115 : 155), 0), new(White(12), .25),
+                    new(White(0), .55), new(White(_dark ? 65 : 100), 1)
                 }, new Point(0, 0), new Point(1, 1)));
-                _lensLight.GradientStops[0].Color = White(_dark ? 200 : 230);
+                _lensLight.GradientStops[0].Color = White(_dark ? 170 : 205);
+                UpdateLensLightGeometry();
                 break;
             case PaperSkins.Pixel:
                 var retro = Mix(paper, _dark ? Color.FromRgb(22, 29, 46) : Color.FromRgb(240, 235, 217), .42);
@@ -118,6 +119,8 @@ internal sealed partial class SkinBorder
         if (Skin == PaperSkins.LiquidGlass)
         {
             dc.DrawGeometry(_glint, null, _glintRing);
+            // Circular pointer light complements the cached curved-shoulder highlight;
+            // it does not add a full-panel opacity-mask intermediate.
             dc.DrawGeometry(_lensLight, null, _glintRing);
         }
         if (Skin == PaperSkins.Pixel && !IsCapsule && HeaderHeight > 0)
