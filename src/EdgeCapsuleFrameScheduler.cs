@@ -110,9 +110,18 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void UpdateRenderingSubscription()
     {
-        var shouldSubscribe = !_dispatcher.HasShutdownStarted &&
-            !_dispatcher.HasShutdownFinished &&
-            _presenters.Any(p => CanAdvanceQueue(p.NativeBatchGroup));
+        var shouldSubscribe = false;
+        if (!_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
+        {
+            for (var index = 0; index < _presenters.Count; index++)
+            {
+                if (CanAdvanceQueue(_presenters[index].NativeBatchGroup))
+                {
+                    shouldSubscribe = true;
+                    break;
+                }
+            }
+        }
         if (shouldSubscribe == _renderingSubscribed) return;
         if (shouldSubscribe)
         {

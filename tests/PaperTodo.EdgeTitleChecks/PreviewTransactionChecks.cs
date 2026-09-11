@@ -6,6 +6,7 @@ internal static partial class Program
 {
     private static void QueuedPreviewTransactions()
     {
+        ProxyInputReadiness();
         SharedFrameRenderingLiveness();
         var dispatcher = Dispatcher.CurrentDispatcher;
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
