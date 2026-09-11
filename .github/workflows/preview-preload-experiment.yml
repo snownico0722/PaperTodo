@@ -25,7 +25,7 @@ jobs:
       - name: Assemble isolated candidate
         run: |
           New-Item -ItemType Directory -Force results | Out-Null
-          python tests/preload-candidate/apply.py
+          python -X utf8 tests/preload-candidate/apply.py
           if ($LASTEXITCODE -ne 0) { throw 'Assembly failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace failure' }
@@ -58,8 +58,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $headers = @{Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json'}
-          $paths = @((git diff --name-only), 'src/EdgeCapsulePreview.Preload.cs', 'src/PaperWindow.EdgePreviewPreload.cs', 'tests/PaperTodo.EdgePreviewChecks/PreloadChecks.cs') | ForEach-Object { $_ } | Select-Object -Unique
-          $entries = foreach ($path in $paths) {
+          $paths = @((git diff --name-only)) + @('src/EdgeCapsulePreview.Preload.cs', 'src/PaperWindow.EdgePreviewPreload.cs', 'tests/PaperTodo.EdgePreviewChecks/PreloadChecks.cs')
+          $entries = foreach ($path in ($paths | Select-Object -Unique)) {
             $text = [IO.File]::ReadAllText("$pwd/$path").Replace("`r`n","`n")
             $body = @{content=$text; encoding='utf-8'} | ConvertTo-Json -Compress
             $blob = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
