@@ -269,7 +269,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                     truncated = steps.Current;
                     totalSteps++;
                     // The budget is cooperative, not a hard deadline. Long styled paragraphs
-                    // yield between inline batches and visible lines; fences yield per source line.
+                    // and code rows yield between visible lines; inline parsing also yields in batches.
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
                         maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
@@ -491,7 +491,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var renderMode = content.RenderMode;
         var code = new StringBuilder();
         var codeLineCount = 0;
-        Border? codeBlock = null;
+        StackPanel? codeRows = null;
         var insideFence = false;
         var renderedHeight = 0.0;
         var truncated = false;
@@ -506,10 +506,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             return template;
         }
 
-        IEnumerable<bool> AddParagraph(FrameworkElement block)
+        IEnumerable<bool> AddParagraph(FrameworkElement block, Panel? parent = null)
         {
             ApplyTextZoom(block, zoom);
-            target.Children.Add(block);
+            (parent ?? target).Children.Add(block);
             if (viewportSize is not { } size) yield break;
             block.Measure(new Size(size.Width, double.PositiveInfinity));
             if (paragraph != null)
@@ -536,32 +536,44 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
         }
 
-        void FlushCodeBlock()
+        IEnumerable<bool> AddCodeRow(string line)
         {
-            if (codeBlock == null)
+            if (codeRows == null)
             {
-                codeBlock = BuildCodeBlock(code.ToString());
-                AddBlock(codeBlock);
-                return;
+                // A fence remains one content block. Prepare each admitted row once instead of
+                // repeatedly measuring a growing TextBlock, including its invisible wrapped tail.
+                codeRows = new StackPanel();
+                var host = new Border { Child = codeRows };
+                host.SetResourceReference(Border.BackgroundProperty, "HoverBrushKey");
+                target.Children.Add(host);
             }
 
-            // Reuse one attached block while measuring only its visible prefix. Waiting for the
-            // closing fence would scan every admitted code line and layout the invisible tail.
-            if (viewportSize.HasValue)
+            var text = NewTextBlock(string.Empty, NoteTypography.CodeFontSize);
+            text.FontFamily = NoteTypography.CodeFontFamily;
+            FrameworkElement row;
+            if (line.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
             {
-                renderedHeight -= codeBlock.DesiredSize.Height;
+                row = paragraph = new MarkdownEdgePreviewParagraph(
+                    text, line, MarkdownRenderModes.Off, zoom, openExternal);
             }
-            // TextBlock.Text can discard an all-whitespace replacement in rich content mode.
-            // Keep the explicit Run created by BuildCodeBlock, including when its text is empty.
-            var codeText = (TextBlock)codeBlock.Child;
-            ((Run)codeText.Inlines.FirstInline!).Text = code.ToString();
-            if (viewportSize is { } size)
+            else
             {
-                // The child's text invalidation has not propagated through a layout pass yet.
-                // Explicitly invalidate the parent so same-width Measure cannot reuse old bounds.
-                codeBlock.InvalidateMeasure();
-                codeBlock.Measure(new Size(size.Width, double.PositiveInfinity));
-                renderedHeight += codeBlock.DesiredSize.Height;
+                // Explicit empty Runs preserve the first, middle and last blank code rows.
+                text.Inlines.Add(new Run(line));
+                row = text;
+            }
+            foreach (var step in AddParagraph(row, codeRows)) yield return step;
+        }
+
+        IEnumerable<bool> FinishCodeBlock()
+        {
+            if (!viewportSize.HasValue)
+            {
+                AddBlock(BuildCodeBlock(code.ToString()));
+            }
+            else if (codeRows == null)
+            {
+                foreach (var step in AddCodeRow(string.Empty)) yield return step;
             }
         }
 
@@ -591,25 +603,24 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 code.Clear();
                 codeLineCount = 0;
-                codeBlock = null;
+                codeRows = null;
                 insideFence = true;
             }
             else if (fenceKind == MarkdownFenceLineKind.Closing)
             {
-                FlushCodeBlock();
+                foreach (var step in FinishCodeBlock()) yield return step;
                 code.Clear();
                 insideFence = false;
             }
             else if (wasInsideFence)
             {
-                var codeLineTruncated = AppendCodeLine(code, line, codeLineCount++ > 0);
                 if (viewportSize.HasValue)
                 {
-                    FlushCodeBlock();
+                    foreach (var step in AddCodeRow(line)) yield return step;
                 }
-                if (codeLineTruncated)
+                else
                 {
-                    truncated = true;
+                    truncated |= AppendCodeLine(code, line, codeLineCount++ > 0);
                 }
             }
             else
@@ -623,10 +634,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             yield return false;
         }
-        if (renderMode == MarkdownRenderModes.Full &&
-            insideFence && codeBlock == null)
+        if (renderMode == MarkdownRenderModes.Full && insideFence)
         {
-            FlushCodeBlock();
+            foreach (var step in FinishCodeBlock()) yield return step;
         }
         if (target.Children.Count == 0)
         {
