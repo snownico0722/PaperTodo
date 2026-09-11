@@ -67,6 +67,15 @@ internal static partial class Program
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(heavy), "long dense row is classified high-load");
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(shortDense), "short style-dense rows are classified high-load");
             Console.WriteLine("PASS content-cost preload classifier: light skips, both heavy shapes qualify");
+            var exactly400Plain = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(new string('文', 400), MarkdownRenderModes.Full);
+            var over400Plain = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(new string('文', 401), MarkdownRenderModes.Full);
+            var exactly100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Concat(Enumerable.Repeat("**ab**", 50)), MarkdownRenderModes.Full);
+            var over100Styled = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Concat(Enumerable.Repeat("**ab**", 51)), MarkdownRenderModes.Full);
+            Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(exactly400Plain), "400 plain characters stay cold at the strict boundary");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(over400Plain), "401 total characters qualify for preload");
+            Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(exactly100Styled), "200+ source characters with exactly 100 styled characters stay cold");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(over100Styled), "200+ source characters with more than 100 styled characters qualify");
+            Console.WriteLine("PASS preload thresholds: >400 total OR >200 total plus >100 styled characters");
 
             Require(Warm(a) && Warm(b) && cache.BodyCount == 2, "two complete heavy bodies are warmed without opening a preview");
             Require(root.Children.Count == 0, "prewarm leaves no hidden holder or second mounted preview tree");
