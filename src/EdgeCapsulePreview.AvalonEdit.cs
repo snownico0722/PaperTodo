@@ -146,8 +146,8 @@ internal sealed class AvalonEditEdgePreviewViewport : Panel
         PreviewMouseLeftButtonDown += OnLinkDown;
         PreviewMouseLeftButtonUp += OnLinkUp;
         LostMouseCapture += (_, _) => _pressedLink = null;
-        MouseMove += (_, e) => Cursor = TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow;
-        MouseLeave += (_, _) => Cursor = Cursors.Arrow;
+        MouseMove += (sender, e) => Editor?.SetInteractionCursor(TryGetLink(e.GetPosition(this), out _) ? Cursors.Hand : Cursors.Arrow);
+        MouseLeave += (_, _) => Editor?.SetInteractionCursor(Cursors.Arrow);
     }
 
     internal void SetActive(bool active)
