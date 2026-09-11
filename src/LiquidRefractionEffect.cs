@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Media3D;
+using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
@@ -41,9 +42,24 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         var shader = new PixelShader();
         using (var stream = new MemoryStream(Bytecode.Value, false)) shader.SetStreamSource(stream);
         shader.Freeze(); PixelShader = shader;
-        Profile = LensDisplacement.ProfileBrush;
+        Profile = CreateSampler(LensDisplacement.ProfileBitmap);
         foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty,
                      DispersionProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
+    }
+
+    // WPF's ShaderEffect realizes an ImageBrush/VisualBrush into an intermediate
+    // sized to the OUTPUT surface, even when the original bitmap is unchanged.
+    // A resize then changes the input texel grid before our crop is applied. A
+    // BitmapCacheBrush uses its target's fixed local dimensions instead. Keep
+    // both the captured scene and the 512x1 optical table at their native pixels.
+    // The detached target owns no HWND, layout, frame callback or global root.
+    internal static BitmapCacheBrush CreateSampler(BitmapSource bitmap)
+    {
+        var target = new DrawingVisual();
+        RenderOptions.SetBitmapScalingMode(target, BitmapScalingMode.NearestNeighbor);
+        using (var dc = target.RenderOpen())
+            dc.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
+        return new BitmapCacheBrush(target) { BitmapCache = new BitmapCache(1), AutoLayoutContent = false };
     }
 
     // One screen-anchored scene covers a flat body and a curved shoulder. Never

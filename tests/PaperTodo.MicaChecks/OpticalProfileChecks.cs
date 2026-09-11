@@ -9,7 +9,7 @@ internal static class OpticalProfileChecks
     {
         // Decode the actual uploaded bytes, including low-byte wrap boundaries. Testing
         // only the analytic quintic missed both quantisation and RGB-channel foldover.
-        var bitmap = (BitmapSource)((ImageBrush)LensDisplacement.ProfileBrush).ImageSource;
+        var bitmap = LensDisplacement.ProfileBitmap;
         var bytes = new byte[bitmap.PixelWidth * 4];
         bitmap.CopyPixels(bytes, bytes.Length, 0);
         var values = new double[bitmap.PixelWidth];
@@ -72,7 +72,7 @@ internal static class OpticalProfileChecks
         var radius = metrics.OpticalRadius(8);
         var effect = new LiquidRefractionEffect
         {
-            Scene = new ImageBrush(scene),
+            Scene = LiquidRefractionEffect.CreateSampler(scene),
             Shift = new Point(metrics.Displacement / width, metrics.Displacement / height),
             Extent = new(width, height, 1 / metrics.Bezel, 1),
             Radii = new(radius, radius, radius, radius), Scattering = new(0, 0, 1, 0)

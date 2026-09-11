@@ -180,8 +180,8 @@ internal static class RefractionChecks
     private static void CheckOptics()
     {
         OpticalProfileChecks.Run();
-        var profile = LensDisplacement.ProfileBrush;
-        Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBrush),
+        var profile = LensDisplacement.ProfileBitmap;
+        Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBitmap),
             "all lens sizes share a frozen one-dimensional optical profile");
         var previous = 1d;
         for (var i = 0; i <= 512; i++)

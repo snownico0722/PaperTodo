@@ -21,7 +21,7 @@ internal sealed partial class SkinBorder
         internal Rect? ImageBounds;
         internal Size? LiquidSize;
         internal WriteableBitmap? Bitmap;
-        internal ImageBrush? SceneBrush;
+        internal BitmapCacheBrush? SceneBrush;
         internal LensCaptureLayout.Scene? Layout;
         internal (Size Size, CornerRadius Radius, double DpiX, double DpiY, int Width, int Height,
             int PixelsX, int PixelsY, bool Dark, double Strength, double Refraction, double Dispersion)? OpticalKey;
@@ -264,7 +264,7 @@ internal sealed partial class SkinBorder
             scene.Bitmap = bitmap;
             scene.ImageBounds = null;
             // Both the current effect and later recipe switches use this exact bitmap.
-            scene.SceneBrush = new ImageBrush(bitmap) { Stretch = Stretch.Fill };
+            scene.SceneBrush = LiquidRefractionEffect.CreateSampler(bitmap);
             if (Skin == PaperSkins.LiquidGlass) scene.Effect.Scene = scene.SceneBrush;
         }
         scene.Layout = layout;

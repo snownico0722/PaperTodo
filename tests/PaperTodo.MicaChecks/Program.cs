@@ -20,6 +20,11 @@ internal static class Program
         // pumping an App would start a second production controller in this test process.
         var noRaster = args.Contains("--no-raster", StringComparer.Ordinal);
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        if (args.Contains("--sampler-only", StringComparer.Ordinal))
+        {
+            try { ShaderSamplerChecks.Run(); OpticalProfileChecks.Run(); return 0; }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        }
         using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
         {
             var xaml = System.Xml.Linq.XDocument.Load(source);

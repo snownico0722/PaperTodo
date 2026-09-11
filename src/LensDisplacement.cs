@@ -10,8 +10,8 @@ namespace PaperTodo;
 internal static class LensDisplacement
 {
     private const int ProfileSamples = 512;
-    private static readonly Lazy<Brush> Profile = new(CreateProfile);
-    internal static Brush ProfileBrush => Profile.Value;
+    private static readonly Lazy<BitmapSource> Profile = new(CreateProfile);
+    internal static BitmapSource ProfileBitmap => Profile.Value;
 
     // A controlled UI lens, not a physical multi-interface ray tracer. A monotone
     // falloff avoids the old bright, folded band a few pixels inside the edge.
@@ -28,7 +28,7 @@ internal static class LensDisplacement
         return (shift, Math.Sqrt(u), u * u * u * u, coverage);
     }
 
-    private static Brush CreateProfile()
+    private static BitmapSource CreateProfile()
     {
         var bytes = new byte[ProfileSamples * 4];
         for (var x = 0; x < ProfileSamples; x++)
@@ -45,8 +45,7 @@ internal static class LensDisplacement
         }
         var bitmap = BitmapSource.Create(ProfileSamples, 1, 96, 96, PixelFormats.Bgra32, null, bytes, ProfileSamples * 4);
         bitmap.Freeze();
-        var brush = new ImageBrush(bitmap) { Stretch = Stretch.Fill }; brush.Freeze();
-        return brush;
+        return bitmap;
     }
 
     internal static (double Distance, Vector Normal) Surface(Point p, Size size, double radius)

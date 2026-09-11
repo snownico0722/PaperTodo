@@ -95,8 +95,11 @@ internal static class MaterialPipelineChecks
                 var replacement = SceneField<WriteableBitmap>(scene, "Bitmap");
                 Program.Assert(!ReferenceEquals(bitmap, replacement) && replacement.PixelWidth == 810,
                     "resized scene replaces its texture only after successful upload");
-                Program.Assert(ReferenceEquals(SceneField<ImageBrush>(scene, "SceneBrush").ImageSource, replacement),
-                    "recipe changes sample the committed texture, not an old bitmap");
+                var sampler = SceneField<BitmapCacheBrush>(scene, "SceneBrush");
+                var image = ((DrawingVisual)sampler.Target).Drawing.Children.OfType<ImageDrawing>().Single();
+                Program.Assert(ReferenceEquals(image.ImageSource, replacement) &&
+                    image.Rect == new Rect(0, 0, replacement.PixelWidth, replacement.PixelHeight) && sampler.BitmapCache.RenderAtScale == 1,
+                    "recipe changes sample the committed texture on its native pixel grid, not an old bitmap");
                 Program.Assert(ReferenceEquals(surface.Child, content) && surface.Effect == null && window.Opacity == 1,
                     "background optimization leaves foreground ownership and opacity unchanged");
                 Console.WriteLine("PIPELINE: 120 projections, 0 motion-driven scene recordings/uploads; texture reuse and recipe round-trip passed.");
