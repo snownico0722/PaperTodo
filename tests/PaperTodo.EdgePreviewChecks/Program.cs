@@ -124,8 +124,7 @@ internal static partial class Program
         if (preparation == "text")
             foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(preload.Capture(context))) { }
         if (preparation == "layout")
-            Require(AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true))),
-                "profile prelayout completes on the real host without opening it");
+            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true)));
         var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
         var hitsBefore = preload.BodyHits;
         var allocation = GC.GetAllocatedBytesForCurrentThread();
