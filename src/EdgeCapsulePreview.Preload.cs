@@ -59,9 +59,8 @@ internal sealed class MarkdownEdgePreviewPreload
     }
 
     // Preload policy is intentionally broader than the renderer's paragraph-path threshold.
-    // We only need to know whether doing the complete layout during idle time is worthwhile:
-    // >400 admitted source characters always qualifies; >200 qualifies when more than 100
-    // visible characters carry Markdown styling/link semantics. Thresholds are strict by design.
+    // Complete idle layout is worthwhile when the bounded excerpt is large, has substantial
+    // styled coverage, or has several distinct styled/link pieces. Thresholds are strict.
     internal static bool IsClearlyHighLoad(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
     {
         if (content.IsEmpty) return false;
@@ -70,21 +69,30 @@ internal sealed class MarkdownEdgePreviewPreload
         if (totalCharacters <= 200 || content.RenderMode == MarkdownRenderModes.Off) return false;
 
         var styledCharacters = 0;
+        var styledPieces = 0;
         foreach (var line in content.Lines)
         {
             if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
                 continue;
             if (line.WasInsideFence)
             {
-                styledCharacters += line.Text.Length;
+                if (line.Text.Length > 0)
+                {
+                    styledCharacters += line.Text.Length;
+                    styledPieces++;
+                }
             }
             else
             {
                 foreach (var piece in content.Inlines.Get(line.Text, content.RenderMode).Pieces)
-                    if (piece.Style != MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None || piece.Link != null)
-                        styledCharacters += piece.Text.Length;
+                {
+                    if (piece.Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None && piece.Link == null)
+                        continue;
+                    styledCharacters += piece.Text.Length;
+                    styledPieces++;
+                }
             }
-            if (styledCharacters > 100) return true;
+            if (styledCharacters > 100 || styledPieces > 3) return true;
         }
         return false;
     }

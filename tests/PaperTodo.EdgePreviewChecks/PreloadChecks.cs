@@ -75,7 +75,14 @@ internal static partial class Program
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(over400Plain), "401 total characters qualify for preload");
             Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(exactly100Styled), "200+ source characters with exactly 100 styled characters stay cold");
             Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(over100Styled), "200+ source characters with more than 100 styled characters qualify");
-            Console.WriteLine("PASS preload thresholds: >400 total OR >200 total plus >100 styled characters");
+            Console.WriteLine("PASS preload thresholds: total/styled-character boundaries");
+            var threeStyles = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+                "**a** " + "*b* " + "`c` " + new string('文', 205), MarkdownRenderModes.Full);
+            var fourStyles = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+                "**a** " + "*b* " + "`c` " + "~~d~~ " + new string('文', 205), MarkdownRenderModes.Full);
+            Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(threeStyles), ">200 characters with exactly three styled pieces stay cold when styled coverage is small");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(fourStyles), ">200 characters with more than three styled pieces qualify");
+            Console.WriteLine("PASS preload third threshold: >200 total plus >3 styled/link pieces");
 
             Require(Warm(a) && Warm(b) && cache.BodyCount == 2, "two complete heavy bodies are warmed without opening a preview");
             Require(root.Children.Count == 0, "prewarm leaves no hidden holder or second mounted preview tree");
