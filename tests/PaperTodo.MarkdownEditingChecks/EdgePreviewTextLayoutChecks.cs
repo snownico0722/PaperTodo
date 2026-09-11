@@ -33,11 +33,15 @@ internal static partial class Program
                     foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
                         foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
                             foreach (var prefix in new[] { "", "## ", "> ", "- [x] ", "```\n" })
+                            foreach (var shortDense in new[] { false, true })
                             {
                                 AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
                                     sharp ? 1.2 : 1.0, textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
                                 NoteTypography.Configure(sharp ? VisualTextSizes.Large : VisualTextSizes.Medium, sharp);
-                                var source = prefix + string.Concat(Enumerable.Repeat("**粗体** `code` [链接](https://example.com) 中文 ", 12)).TrimEnd();
+                                if (shortDense && (mode == MarkdownRenderModes.Off || prefix == "```\n")) continue;
+                                var source = prefix + (shortDense
+                                    ? string.Concat(Enumerable.Repeat("**a** *b* `c` ", 8)) + "[link](https://example.com)"
+                                    : string.Concat(Enumerable.Repeat("**粗体** `code` [链接](https://example.com) 中文 ", 12))).TrimEnd();
                                 var eager = new StackPanel { Background = Brushes.White }; var bounded = new StackPanel { Background = Brushes.White };
                                 var host = new Grid(); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) }); host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
                                 host.Resources["TextBrushKey"] = Brushes.Black;

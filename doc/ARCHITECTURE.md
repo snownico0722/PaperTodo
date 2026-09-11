@@ -257,6 +257,14 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
 
+### 内置笔记的边缘预览
+
+边缘预览是有界导航内容，不是第二个可编辑正文。`MarkdownEdgeCapsulePreviewRenderer` 先捕获一次受限文本，尺寸估算与显示使用相同内容预算；行内语法调用正文已有的 `MarkdownSemanticSnapshot`，只把结果适配为该次预览拥有的纯数据样式段。块级预览保留有限近似，不为悬停读取预算外引用定义或解析整篇笔记。
+
+普通短行使用精简的 WPF 文字元素；长行与短但样式密集的行使用系统 `TextFormatter`，只逐行准备可见区域并复用绘制结果。没有完整 AvalonEdit 预览控件、另一套行内正则解析器、精确同步排版尺寸后端或进程级排版缓存。
+
+`MarkdownEdgeCapsulePreviewViewport` 唯一拥有这一视图的准备/取消/一次发布：首次正文完整发布后才启用正文显示与交互，收起立即关闭交互并取消未完成工作；同一视图、同一内容、同一尺寸的完整结果可在收起/恢复间复用。内容或主题/字体/缩放的正常失效、DPI 变化、卸载撤销复用资格；新尺寸必须重新准备，旧的迟到任务不可覆盖新版。它不拥有队列、外壳动画、窗口交接或持久化状态。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。

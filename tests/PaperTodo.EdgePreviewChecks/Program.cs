@@ -9,7 +9,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
     private static int Main(string[] args)
@@ -17,7 +17,8 @@ internal static class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--profile")) Profile(args.Contains("--avalon"));
+            if (args.Contains("--profile")) Profile();
+            else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
             else { SharedPreviewSemanticChecks.Run(); Checks(); }
             return 0;
         }
@@ -48,91 +49,17 @@ internal static class Program
             foreach (var child in Elements(VisualTreeHelper.GetChild(root, i))) yield return child;
     }
 
-    private static void Checks()
-    {
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-            MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
-        {
-            var source = "[入口](https://example.com)\n" + string.Join('\n',
-                Enumerable.Range(1, 40).Select(i => $"第{i}行 **粗体** 和 `code`"));
-            var paper = new PaperData { Content = source, TextZoom = 1.3 };
-            var invalidation = new EdgeCapsulePreviewInvalidationSource();
-            var context = new EdgeCapsulePreviewContext(paper, () => "测试笔记", false,
-                () => source, () => mode, (_, _) => false, _ => false, () => new Style(),
-                () => "", _ => { }, invalidation);
-            var descriptor = AvalonEditEdgeCapsulePreviewProvider.Instance.Describe(context);
-            var view = (AvalonEditEdgeCapsulePreviewView)descriptor.CreateContent(descriptor.Size);
-            view.PrepareForFirstDisplay();
-            var window = new Window { Content = view, Width = 420, Height = 220,
-                ShowActivated = false, ShowInTaskbar = false };
-            try
-            {
-                window.Show(); Pump();
-                var viewport = view.Viewport;
-                var editor = viewport.Editor!;
-                var expected = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
-                Require(editor.Text == string.Join('\n', expected.Lines.Select(line => line.Text)),
-                    "same 16-block/6000-character excerpt");
-                Require(editor.Document.TextLength <= 6000 && viewport.HasPreparedContent, "bounded prepared document");
-                Require(viewport.HasOverflow, "omitted tail has an indicator");
-                Require(!Elements(view).Any(e => e is ScrollViewer or ScrollBar), "no scrolling control in template");
-                Require(editor.IsReadOnly && !editor.Focusable && !editor.TextArea.Focusable &&
-                    editor.TextArea.ActiveInputHandler == null, "no editing/selection input handler");
-                Require(Math.Abs(editor.FontSize - Math.Round(NoteTypography.FontSize * 1.3, 1)) < 0.01,
-                    "same note typography and zoom");
-                Require(editor.TextArea.TextView.VisualLines.Count < editor.Document.LineCount,
-                    "finite viewport avoids constructing the offscreen line tail");
-                var scrolling = (IScrollInfo)editor.TextArea.TextView;
-                scrolling.SetVerticalOffset(1000); scrolling.SetHorizontalOffset(1000);
-                scrolling.MouseWheelDown(); scrolling.PageDown();
-                editor.BringIntoView(); Pump();
-                Require(scrolling.VerticalOffset == 0 && scrolling.HorizontalOffset == 0, "offset remains pinned to zero");
-                Require(paper.Content == source && !editor.CanUndo, "preview never changes the actual note or adds undo history");
-                if (mode != MarkdownRenderModes.Off)
-                {
-                    Point? linkPoint = null;
-                    for (var y = 1; y < Math.Min(55, viewport.VisibleBodyHeight) && linkPoint == null; y += 2)
-                    for (var x = 1; x < Math.Min(150, viewport.ActualWidth); x += 2)
-                        if (viewport.TryGetLink(new Point(x, y), out var url) && url.StartsWith("https://example.com"))
-                        { linkPoint = new Point(x, y); break; }
-                    Require(linkPoint != null, "shared note link hit testing resolves visible label");
-                    Require(view.ConsumesPointerAt(viewport.TranslatePoint(linkPoint!.Value, view)),
-                        "point-based host input seam recognizes the same link");
-                    Require(!viewport.TryGetLink(new Point(1, viewport.VisibleBodyHeight + 1), out _),
-                        "footer/clipped area cannot activate a link");
-                    descriptor.SetVisibility?.Invoke(false);
-                    Require(!viewport.TryGetLink(linkPoint.Value, out _), "retracting content cannot activate links");
-                    descriptor.SetVisibility?.Invoke(true); Pump();
-                }
-                source = "更新后的正文";
-                paper.TextZoom = 0.8;
-                invalidation.Invalidate(); Pump();
-                Require(viewport.Editor!.Text == source, "live invalidation replaces the excerpt");
-                Require(Math.Abs(viewport.Editor.FontSize - Math.Round(NoteTypography.FontSize * 0.8, 1)) < 0.01,
-                    "live zoom changes are reflected");
-                source = ""; invalidation.Invalidate(); Pump();
-                Require(viewport.HasPreparedContent && !viewport.HasOverflow, "empty state has no stale overflow");
-                source = "重新加载"; invalidation.Invalidate(); Pump();
-                window.Content = null; Pump();
-                Require(viewport.Editor == null, "unload releases editor and semantic subscriptions");
-                window.Content = view; Pump();
-                Require(viewport.Editor?.Text == source && viewport.HasPreparedContent, "reattachment rebuilds current content");
-                Console.WriteLine("PASS AvalonEdit preview " + mode);
-            }
-            finally { window.Close(); Pump(); }
-        }
-        Console.WriteLine("PASS excerpt, real layout, no-scroll, read-only, links, clipping, invalidation, zoom, empty, unload/reload");
-    }
-
     private static EdgeCapsuleHost NewHost() => EdgeCapsuleHost.Create(new EdgeCapsuleHostOptions(
         4, 16, 15, 2, 1, 32, 6, 4, "✓", 13, 12, FontWeights.Normal, "Close",
         Brushes.White, Brushes.Gray, Brushes.Blue, Brushes.LightGray, Brushes.Gray, Brushes.Black, Brushes.Gray,
-        new FontFamily("Segoe UI"), new FontFamily("Segoe UI Symbol"), XmlLanguage.GetLanguage("en-US"), false, "avalon-experiment"));
+        new FontFamily("Segoe UI"), new FontFamily("Segoe UI Symbol"), XmlLanguage.GetLanguage("en-US"), false, "edge-preview-check"));
 
-    private static void Profile(bool avalon)
+    private static void Profile()
     {
         var fixtures = new (string Name, string Text)[]
         {
+            ("short-dense", string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd()),
+            ("short-dense-rows", string.Join('\n', Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd(), 12))),
             ("short-rows", string.Join('\n', Enumerable.Repeat("普通正文 **加粗** 与 `code`", 12))),
             ("distinct-rows", string.Join('\n', Enumerable.Range(1, 12).Select(i => $"第{i}行普通正文 **加粗** 与 `code`"))),
             ("dense-inline", string.Concat(Enumerable.Repeat("**加粗** *斜体* ~~删除~~ `code` [a **styled** link](https://example.com) 中文 ", 45))),
@@ -143,20 +70,20 @@ internal static class Program
         foreach (var fixture in fixtures)
         {
             var rows = new List<double[]>();
-            for (var i = 0; i < 9; i++)
+            for (var i = 0; i < 24; i++)
             {
-                var result = ProfileOne(fixture.Text, mode, avalon);
+                var result = ProfileOne(fixture.Text, mode);
                 Console.WriteLine("SAMPLE " + JsonSerializer.Serialize(new
-                { backend = avalon ? "avalon" : "legacy", fixture = fixture.Name, mode, iteration = i, metrics = result }));
-                if (i >= 2) rows.Add(result);
+                { backend = "bounded", fixture = fixture.Name, mode, iteration = i, metrics = result }));
+                if (i >= 3) rows.Add(result);
             }
             var names = new[] { "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
                 "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB" };
             Console.WriteLine("EDGE_PROFILE " + JsonSerializer.Serialize(new
             {
-                backend = avalon ? "avalon" : "legacy", fixture = fixture.Name, mode,
+                backend = "bounded", fixture = fixture.Name, mode,
                 characters = fixture.Text.Length, samples = rows.Count, viewport = "460x410 fixed card",
-                median = names.Select((name, i) => (name, value: rows.Select(row => row[i]).Order().ElementAt(3)))
+                median = names.Select((name, i) => (name, value: rows.Select(row => row[i]).Order().ElementAt(rows.Count / 2)))
                     .ToDictionary(x => x.name, x => x.value),
                 maximum = names.Select((name, i) => (name, value: rows.Max(row => row[i])))
                     .ToDictionary(x => x.name, x => x.value)
@@ -164,7 +91,7 @@ internal static class Program
         }
     }
 
-    private static double[] ProfileOne(string text, string mode, bool avalon)
+    private static double[] ProfileOne(string text, string mode)
     {
         using var host = NewHost();
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "profile monitor");
@@ -191,8 +118,7 @@ internal static class Program
             () => text, () => mode, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
         var allocation = GC.GetAllocatedBytesForCurrentThread();
         var started = Stopwatch.GetTimestamp();
-        IEdgeCapsulePreviewProvider provider = avalon ? AvalonEditEdgeCapsulePreviewProvider.Instance
-            : MarkdownEdgeCapsulePreviewProvider.Instance;
+        IEdgeCapsulePreviewProvider provider = MarkdownEdgeCapsulePreviewProvider.Instance;
         var descriptor = provider.Describe(context);
         var describeMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
         var createStarted = Stopwatch.GetTimestamp();
@@ -202,7 +128,6 @@ internal static class Program
         var settled = false; var timedOut = false; var readyAt = 0L;
         bool Published(DependencyObject element)
         {
-            if (element is AvalonEditEdgePreviewViewport av) return av.HasPreparedContent;
             if (element is MarkdownEdgeCapsulePreviewViewport old)
                 return old.IsArrangeValid && old.Children.OfType<StackPanel>().Any(panel =>
                     panel.Opacity > 0 && panel.Children.Count > 0 && panel.IsArrangeValid);

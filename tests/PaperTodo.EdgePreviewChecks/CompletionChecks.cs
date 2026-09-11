@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -215,7 +216,7 @@ internal static partial class Program
             var oldBody = PublishedBody(viewport);
             bool HasColor(Color color) => Elements(PublishedBody(viewport)).OfType<MarkdownEdgePreviewParagraph>()
                 .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
-                .Any(g => g.Brush is SolidColorBrush brush && brush.Color == color);
+                .Any(g => g.ForegroundBrush is SolidColorBrush brush && brush.Color == color);
             Require(HasColor(Colors.DarkRed), "prepared drawing uses host foreground");
             descriptor.SetVisibility?.Invoke(false);
             window.Resources["TextBrushKey"] = Brushes.DarkBlue;

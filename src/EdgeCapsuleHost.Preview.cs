@@ -937,14 +937,6 @@ internal sealed partial class EdgeCapsuleHost
             return false;
         }
 
-        // Text renderers can reuse their own link hit testing without synthetic controls.
-        // Bounds/lifecycle authority remains here; ask only about descendants of this preview.
-        if (_previewContent is IEdgeCapsulePreviewPointerTarget target &&
-            source != null && IsDescendantOfPreview(source))
-        {
-            return target.ConsumesPointerAt(Mouse.GetPosition(_previewContent));
-        }
-
         var current = source;
         while (current != null)
         {

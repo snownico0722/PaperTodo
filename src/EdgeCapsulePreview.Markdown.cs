@@ -8,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("PaperTodo.EdgePreviewChecks")]
+
 namespace PaperTodo;
 
 internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvider
@@ -127,6 +129,9 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private bool _previewActive = true;
     private Func<Panel, Size, IEnumerable<bool>>? _renderContent;
     private Size? _renderedSize;
+    // A completed body may survive a brief retract/resume at unchanged content and geometry.
+    // It is owned by this live view only; no per-note/global control or drawing cache exists.
+    private Size? _publishedSize;
     private long _renderVersion;
 
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
@@ -149,7 +154,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         Children.Add(_overflowIndicator);
         Loaded += (_, _) => InvalidateArrange();
         Unloaded += (_, _) => InvalidateContentBuild();
-        IsVisibleChanged += (_, _) => InvalidateContentBuild();
+        IsVisibleChanged += (_, _) => CancelPendingBuild();
     }
 
     public void SetContent(Func<Panel, Size, IEnumerable<bool>> renderContent)
@@ -165,15 +170,22 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             return;
         }
         _previewActive = active;
-        // The host can still be visible while the old card retracts. Stop its pending work at
-        // the existing preview visibility boundary, rather than waiting for WPF Unloaded.
-        InvalidateContentBuild();
+        IsHitTestVisible = active && Opacity > 0;
+        // Cancel unfinished work immediately, but keep a complete body at the same size.
+        // A content/DPI invalidation or unload separately revokes that reuse permission.
+        CancelPendingBuild();
     }
 
     private void InvalidateContentBuild()
     {
+        _publishedSize = null;
+        CancelPendingBuild();
+    }
+
+    private void CancelPendingBuild()
+    {
         _renderVersion++;
-        _renderedSize = null;
+        _renderedSize = _publishedSize;
         InvalidateArrange();
     }
 
@@ -257,7 +269,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                     truncated = steps.Current;
                     totalSteps++;
                     // The budget is cooperative, not a hard deadline. Long styled paragraphs
-                    // and code rows yield between visible lines; inline parsing also yields in batches.
+                    // and code rows yield between visible lines; copying prepared runs also yields in batches.
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
                         maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
@@ -288,6 +300,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             _body.Opacity = 1;
             _body.IsHitTestVisible = true;
             _sourceTruncated = truncated;
+            _publishedSize = size;
             Opacity = 1;
             IsHitTestVisible = true;
             published = true;
@@ -326,7 +339,6 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     private const int MaximumRenderedCharacters = 6000;
     private const int MaximumBlockCharacters = MaximumRenderedCharacters;
     private const int MaximumCodeCharacters = MaximumRenderedCharacters;
-    private const int MaximumInlineDepth = 6;
 
     private readonly record struct PreviewLine(string Text, bool Truncated);
 
@@ -534,7 +546,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
         FrameworkElement InlineBlock(TextBlock template, string text, string mode)
         {
-            if (viewportSize.HasValue && text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
+            if (viewportSize.HasValue && ShouldPrepareParagraph(text, mode, content.Inlines))
                 return paragraph = new MarkdownEdgePreviewParagraph(template, text, mode, zoom, openExternal, content.Inlines);
             if (mode == MarkdownRenderModes.Off) { template.Text = text; return template; }
             AddInlineContent(template.Inlines, text, openExternal, mode, content.Inlines);
@@ -678,6 +690,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             AddEmptyState(target);
         }
         yield return truncated || content.Truncated;
+    }
+
+    private static bool ShouldPrepareParagraph(string text, string mode, PreviewInlineCache cache)
+    {
+        if (text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength) return true;
+        // Tiny ordinary text stays on the simpler path. Reuse already-admitted inline values;
+        // a short source can still contain many expensive styled elements.
+        return text.Length >= 96 && mode != MarkdownRenderModes.Off &&
+            cache.Get(text, mode).Pieces.Count >= 24;
     }
 
     private static void AddEmptyState(Panel target)
@@ -994,7 +1015,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     private static void ApplyTextZoom(DependencyObject element, double zoom)
     {
-        if (element is MarkdownEdgePreviewParagraph or MarkdownEdgePreviewParagraph.MeasureElement) return;
+        if (element is MarkdownEdgePreviewParagraph) return;
         // Compose per-paper zoom with the unrounded global size once, just as MarkdownTextBox
         // does. Only local font sizes are scaled: inherited inline sizes must not be scaled twice.
         if (element.ReadLocalValue(TextElement.FontSizeProperty) is double size)

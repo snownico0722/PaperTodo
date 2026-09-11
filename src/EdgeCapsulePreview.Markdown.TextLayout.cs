@@ -8,73 +8,7 @@ using System.Windows.Media.TextFormatting;
 
 namespace PaperTodo;
 
-internal static partial class MarkdownEdgeCapsulePreviewRenderer
-{
-    internal static double MeasureContentHeight(PreviewContent content, double width, double textZoom)
-    {
-        var zoom = NormalizeTextZoom(textZoom);
-        var height = 0.0;
-        var measuredRows = new Dictionary<ContentLine, double>();
-        var code = new System.Text.StringBuilder();
-        var inside = false;
-        var codeLines = 0;
-        FrameworkElement Inline(TextBlock template, string text, string mode)
-        {
-            if (text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
-                return new MarkdownEdgePreviewParagraph.MeasureElement(template, text, mode, zoom, content.Inlines);
-            if (mode == MarkdownRenderModes.Off) template.Text += text;
-            else AddInlineContent(template.Inlines, text, _ => { }, mode, content.Inlines);
-            return template;
-        }
-        void Add(FrameworkElement block)
-        {
-            ApplyTextZoom(block, zoom);
-            block.Measure(new Size(width, double.PositiveInfinity));
-            height += block.DesiredSize.Height;
-        }
-        void AddRow(ContentLine line)
-        {
-            // Width, typography and render mode are fixed for this Describe call. Identical
-            // source rows (including their fence context) need not create/measure WPF twice.
-            if (!measuredRows.TryGetValue(line, out var rowHeight))
-            {
-                var before = height;
-                Add(content.RenderMode == MarkdownRenderModes.Full
-                    ? BuildBlock(line.Text.TrimEnd(), _ => { }, Inline)
-                    : BuildSourceBlock(line.Text, content.RenderMode, line.WasInsideFence, line.FenceKind, _ => { }, Inline));
-                measuredRows[line] = height - before;
-            }
-            else height += rowHeight;
-        }
-        void AddCode()
-        {
-            var template = NewTextBlock("", NoteTypography.CodeFontSize);
-            template.FontFamily = NoteTypography.CodeFontFamily;
-            Add(Inline(template, code.ToString(), MarkdownRenderModes.Off));
-        }
-        foreach (var line in content.Lines)
-        {
-            if (height >= 410) break;
-            if (content.RenderMode != MarkdownRenderModes.Full)
-                AddRow(line);
-            else if (line.FenceKind == MarkdownFenceLineKind.Opening)
-            { inside = true; code.Clear(); codeLines = 0; }
-            else if (line.FenceKind == MarkdownFenceLineKind.Closing)
-            { AddCode(); inside = false; }
-            else if (line.WasInsideFence)
-            {
-                if (codeLines++ > 0) code.Append('\n');
-                code.Append(line.Text.TrimEnd());
-            }
-            else AddRow(line);
-        }
-        if (inside && height < 410) AddCode();
-        return height;
-    }
-
-}
-
-// Only the viewport-bounded long-paragraph path uses this element. WPF TextFormatter owns
+// Bounded long or style-dense paragraphs use this element. WPF TextFormatter owns
 // wrapping/shaping; the completed vector drawing is replayed by Measure/Arrange/Render without
 // reformatting. This remains a child of the existing preview, never a window or a bitmap surface.
 internal sealed class MarkdownEdgePreviewParagraph : Canvas
@@ -190,39 +124,6 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         return pieces;
     }
 
-    internal sealed class MeasureElement(TextBlock template, string text, string mode, double zoom,
-        MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache inlineCache) : FrameworkElement
-    {
-        protected override Size MeasureOverride(Size available)
-        {
-            var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
-            var pieces = Prefix(template);
-            pieces.AddRange(inlineCache.Get(text, mode).Pieces);
-            if (pieces.Count == 0) pieces.Add(new(" ", 0));
-            var compiled = EdgeCapsulePerformanceDiagnostics.Timestamp();
-            // Describe is synchronous. Long paragraphs use the admitted visible text and block
-            // typography for a height estimate, without constructing/shaping hundreds of style
-            // runs here. Exact rich layout belongs to the cooperative visible-line preparation.
-            // Short source rows use their normal TextBlock metrics above, so a sixteen-row
-            // excerpt does not reserve the old estimated nineteen rows.
-            var properties = new RunProperties(template, 0, false, zoom);
-            var visibleText = string.Concat(pieces.Select(p => p.Text));
-            var formatted = new FormattedText("Ag国", properties.CultureInfo,
-                FlowDirection.LeftToRight, properties.Typeface, properties.FontRenderingEmSize, Brushes.Black,
-                null, AppTypography.TextFormattingMode, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            // Even a single unstyled CJK/Latin string can trigger expensive fallback shaping.
-            // Estimate wraps from the existing width units; measure only the block's line metric.
-            var unitsPerLine = Math.Max(1, available.Width / (properties.FontRenderingEmSize * (6.4 / 14)));
-            var lines = visibleText.Split('\n').Sum(line => Math.Max(1,
-                Math.Ceiling(EdgeCapsulePreviewMeasure.DisplayWidth(line) / unitsPerLine)));
-            var size = new Size(available.Width, Math.Min(460, lines * formatted.Height));
-            if (text.Length >= 256) EdgeCapsulePerformanceDiagnostics.Trace(
-                $"markdown.measure chars={text.Length} runs={pieces.Count} width={available.Width:F1} " +
-                $"compileMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(started, compiled):F3} " +
-                $"formatMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(compiled):F3}");
-            return size;
-        }
-    }
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);

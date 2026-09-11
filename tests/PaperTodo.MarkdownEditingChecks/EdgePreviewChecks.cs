@@ -485,7 +485,7 @@ internal static partial class Program
 
                 var paragraph = new string('文', 700);
                 var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(paragraph, mode);
-                Require(MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(content, 400, 1) > NoteTypography.FontSize * 4,
+                Require(MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(content, 400) > 4,
                     "an admitted paragraph is not capped at four visual lines");
                 Equal(410.0, Describe(paragraph, 1).HeightDip,
                     "a long paragraph can request the maximum card height instead of premature clipping");

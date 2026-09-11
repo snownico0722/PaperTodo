@@ -8,8 +8,15 @@ internal static partial class Program
 {
     private static void RunEdgePreviewInlinePreparationChecks(Action<string, Action> check)
     {
-        check("Repeated row measurements retain natural height and current width/zoom", () =>
+        check("Rendered repeated rows retain natural height and current width/zoom", () =>
         {
+            double MeasureRows(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content, double width, double zoom)
+            {
+                var panel = new StackPanel();
+                foreach (var step in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, content, _ => { }, textZoom: zoom)) { }
+                panel.Measure(new Size(width, double.PositiveInfinity));
+                return panel.DesiredSize.Height;
+            }
             foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
             foreach (var width in new[] { 180.0, 360.0 })
             foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
@@ -17,18 +24,18 @@ internal static partial class Program
                 const string line = "**bold** 正文 `code`";
                 var one = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(line, mode);
                 var repeated = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Join('\n', Enumerable.Repeat(line, 4)), mode);
-                var height = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(one, width, zoom);
-                var combined = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(repeated, width, zoom);
+                var height = MeasureRows(one, width, zoom);
+                var combined = MeasureRows(repeated, width, zoom);
                 Require(Math.Abs(height * 4 - combined) < 0.1, "repeated rows retain their measured metric");
                 var mixed = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("```\n" + line + "\n```\n" + line, mode);
                 var fence = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("```\n" + line + "\n```", mode);
-                var expected = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(fence, width, zoom) + height;
-                Require(Math.Abs(expected - MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(mixed, width, zoom)) < 0.1,
+                var expected = MeasureRows(fence, width, zoom) + height;
+                Require(Math.Abs(expected - MeasureRows(mixed, width, zoom)) < 0.1,
                     "the same source inside code and outside code keeps its own typography");
             }
         });
 
-        check("Preview width, height and both renderers reuse one inline preparation", () =>
+        check("Preview width and both renderers reuse one inline preparation", () =>
         {
             foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
             foreach (var repeats in new[] { 1, 24 })
@@ -36,7 +43,6 @@ internal static partial class Program
                 var source = string.Concat(Enumerable.Repeat("**bold** `code` [a *mixed* label](https://example.com) 文 ", repeats)).TrimEnd();
                 var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
                 _ = MarkdownEdgeCapsulePreviewRenderer.MeasureText(content);
-                _ = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(content, 360, 1);
                 var expected = content.Inlines.Get(source, mode);
                 var entries = content.Inlines.Count;
                 var small = new StackPanel();
