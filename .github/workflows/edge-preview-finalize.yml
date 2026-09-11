@@ -1,0 +1,110 @@
+name: Edge preview completion checks
+on:
+  push:
+    branches: [experiment/edge-preview-avalonedit]
+    paths:
+      - .github/workflows/edge-preview-finalize.yml
+      - tests/edge-preview-finalize.py
+      - tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs
+permissions:
+  contents: write
+jobs:
+  complete:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/checkout@v7
+        with:
+          path: baseline
+          ref: abc314deeb48a82b7b1f6cd70185a7bccf0f3f0a
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply reviewed finalization and copy identical control harness
+        run: |
+          python candidate/tests/edge-preview-finalize.py
+          if ($LASTEXITCODE -ne 0) { throw 'Finalization patch failed' }
+          Copy-Item candidate/tests/PaperTodo.EdgePreviewChecks baseline/tests/ -Recurse
+          '[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("PaperTodo.EdgePreviewChecks")]' | Set-Content baseline/src/EdgePreviewBenchmarkFriend.cs
+          git -C candidate diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+      - name: Release correctness suites
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $results = @{}
+          foreach ($name in @('EdgePreviewChecks','MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
+            dotnet run --project "candidate/tests/PaperTodo.$name" -c Release 2>&1 | Tee-Object "results/$name.log"
+            $results[$name] = $LASTEXITCODE
+          }
+          $results | ConvertTo-Json | Set-Content results/exit-codes.json
+          if (@($results.Values | Where-Object { $_ -ne 0 }).Count) { throw 'Correctness failure; do not approve candidate.' }
+      - name: Debug preview checks
+        run: |
+          dotnet run --project candidate/tests/PaperTodo.EdgePreviewChecks -c Debug 2>&1 | Tee-Object results/debug.log
+          if ($LASTEXITCODE -ne 0) { throw 'Debug preview checks failed' }
+      - name: Pixel exports
+        run: |
+          foreach ($name in @('baseline','candidate')) {
+            dotnet run --project "$name/tests/PaperTodo.EdgePreviewChecks" -c Release -- --export "$pwd/results/pixels-$name" 2>&1 | Tee-Object "results/export-$name.log"
+            if ($LASTEXITCODE -ne 0) { throw "$name pixel export failed" }
+          }
+      - name: Compare final appearance
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          rows=[]
+          for p in sorted(Path('results/pixels-baseline').glob('*.rgba')):
+              a=p.read_bytes(); b=(Path('results/pixels-candidate')/p.name).read_bytes()
+              assert len(a)==len(b)
+              d=[abs(x-y) for x,y in zip(a,b)]
+              rows.append(dict(fixture=p.name,exact=a==b,bytes=len(a),changed=sum(v>32 for v in d),maxChannel=max(d)))
+          assert len(rows)==160,len(rows)
+          Path('results/pixels.json').write_text(json.dumps(rows,indent=2))
+          print('PIXELS',len(rows),'exact',sum(r['exact'] for r in rows),'max_changed_fraction',max(r['changed']/r['bytes'] for r in rows))
+          assert all(r['changed']/r['bytes']<.02 for r in rows),[r for r in rows if r['changed']/r['bytes']>=.02]
+      - name: Same-machine forward and reverse profiles
+        run: |
+          foreach ($case in @(@('baseline','before-a'),@('candidate','after-a'),@('candidate','after-b'),@('baseline','before-b'))) {
+            dotnet run --project "$($case[0])/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- --profile 2>&1 | Tee-Object "results/$($case[1]).log"
+            if ($LASTEXITCODE -ne 0) { throw "Profile $($case[1]) failed" }
+          }
+      - name: Record tested files without moving any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json'}
+          $entries = foreach ($path in (Get-Content results/changed-paths.json | ConvertFrom-Json)) {
+            if (!(Test-Path "candidate/$path")) {
+              @{path=$path;sha=$null;mode='100644';type='blob'}
+              continue
+            }
+            $text=[IO.File]::ReadAllText("$pwd/candidate/$path").Replace("`r`n","`n")
+            $body=@{content=$text;encoding='utf-8'} | ConvertTo-Json -Compress
+            $blob=Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/blobs" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
+            @{path=$path;sha=$blob.sha;mode='100644';type='blob'}
+            $dest=Join-Path "$pwd/results/source" $path
+            New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+            [IO.File]::WriteAllText($dest,$text,[Text.UTF8Encoding]::new($false))
+          }
+          $entries | ConvertTo-Json -Depth 8 | Set-Content results/checked-blobs.json
+          git -C candidate diff | Set-Content results/candidate.diff
+          Copy-Item candidate/tests/edge-preview-finalize.py results/finalization.py
+          Copy-Item candidate/tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs results/CompletionChecks.cs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: edge-preview-completion-results
+          path: results/
+          retention-days: 7
