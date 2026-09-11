@@ -80,6 +80,7 @@ public sealed partial class AppController
     private void RefreshThemeSurfaces()
     {
         Theme.Invalidate();
+        SkinBorder.RefreshLoadedSurfaces();
         RefreshApplicationThemeResources();
         foreach (var window in _windows.Values)
         {

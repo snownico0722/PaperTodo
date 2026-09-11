@@ -1349,7 +1349,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-040 — Aero 低染色模糊 recipe 与材质光照分层
 
-**Status:** Partially superseded by D-042（Aero 后端；陶瓷分层和 state=3 黑底禁区保留）
+**Status:** Partially superseded by D-042 / D-043（后者移除旧釉面材质；state=3 黑底禁区保留）
 
 **Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
 
@@ -1381,7 +1381,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-042 — 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度
 
-**Status:** Experimental
+**Status:** Partially superseded by D-043（辅助表面真实背景处理及色散；Aero alpha 保留）
 
 **Context:** 用户反复反馈液态像一圈扭曲、Aero 仍过度磨砂。父 Border 的反光绘制位于不透明采样 DrawingVisual 之下，会被真正背景盖住；降低 state=4 的染色 alpha 也不能降低系统 Acrylic 的模糊半径。
 
@@ -1390,3 +1390,16 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Auxiliary surfaces / color:** 所有配色对云母和亚克力开放，Neutral 不改变原系统色，其他配色只增加外壳轻染色并保留不透明语义颜色。胶囊、右键菜单及子菜单复用材质绘制，`MatchAuxiliaryMaterialStrength` 关闭时为 0.4、打开为 1；普通主表面恒为 1。胶囊和菜单保留原有 layered/static 实色基底，不为了原生效果换 HWND 或扩展采样，完整强度指材质绘制强度而非这些表面开始使用原生背景。文字、图标、host 描边与命中不衰减。JSON 字段、恢复默认值和四语言提示归既有设置路径。
 
 **Validation / limits:** 原生互斥与失败回退、配色选择与旧配置、辅助表面强度及前景像素、菜单模板实例化、真实背景变化／清漆叠层和编辑器身份检查进入 `PaperTodo.MicaChecks`。Aero 必须响应真实后窗白／蓝对照且不占用 sampler，不再通过系统 Acrylic 也失败来跳过。Windows CI 不代替用户对真实 Windows 11、HDR、混合 DPI 和高刷新率流畅度的验收。
+
+
+## D-043 · 实际辅助窗口共用液态背景处理与材质清理（2026-09-11）
+
+**Status:** Experimental；替代 D-041 的取消色散和 D-042 的辅助面静态强度语义，保留其 Aero alpha 后端。
+
+**Context / Why:** 用户仍看不到边缘高光／色散，并明确要求胶囊与菜单的弱档也处理背景，而不是只给实色表面染色。
+
+**Decision:** 主面与辅助面共享背景 shader、曲面参数及实时高光；RGB 采用同一真实帧的不同折射坐标，中心不分色。`SkinBorder.CaptureHost` 使用每个表面的实际 `HwndSource`，避免捕获／排除菜单 owner。辅助强度为 1 或 0.4，两者都运行处理；不重建 HWND、编辑器或命中区域。分层云母／亚克力以局部 Gaussian 背景柔化近似而非伪称 native Mica。Aero 使用既有透明通道，不增加捕获。旧釉面材质删除其运行时代码、资源、选项和专属测试；旧数据走通用未知 ID 回退。
+
+**Lifetime / limits:** 沿用背景预算和单帧 mailbox；监听源 HWND、祖先 opacity 与卸载并逐源释放。实时处理有独立开关，并明确所有采样表面的截图／共享排除副作用。Mica/Acrylic 近似、SDR、混合 DPI 和主观审美边界不冒充原生或真人验收。
+
+**Validation:** 实际 layered 窗口、生产 popup／submenu 模板测试两个强度档、真实 RGB 分色与折射的开关像素对照、前景不变、所有者隔离及隐藏／半透明／关闭恢复；同时保留主纸片与编辑回归。

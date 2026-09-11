@@ -7,7 +7,7 @@ using System.Windows.Media.Imaging;
 namespace PaperTodo;
 
 /// <summary>Small, cached lighting strips for a single continuous curved surface.
-/// Normal-dependent glaze/reflection, not a stack of inset rectangular borders. No
+/// Normal-dependent glass reflection, not a stack of inset rectangular borders. No
 /// timer, screenshot, whole-surface shader or change to the host's shape/input area.</summary>
 internal static class MaterialRelief
 {
@@ -16,8 +16,7 @@ internal static class MaterialRelief
     {
         if (size.Width <= 0 || size.Height <= 0 || !double.IsFinite(size.Width) || !double.IsFinite(size.Height))
         { var empty = new DrawingGroup(); empty.Freeze(); return empty; }
-        var ceramic = skin == PaperSkins.Ceramic;
-        var bevel = Math.Min(ceramic ? 8 : 4, Math.Min(size.Width, size.Height) / 2);
+        var bevel = Math.Min(skin == PaperSkins.LiquidGlass ? 6 : 4, Math.Min(size.Width, size.Height) / 2);
         var band = Math.Min(Math.Max(bevel, Math.Max(Math.Max(corners.TopLeft, corners.TopRight),
             Math.Max(corners.BottomLeft, corners.BottomRight))) + 1, Math.Min(size.Width, size.Height) / 2);
         var areas = new List<Rect>
@@ -57,14 +56,14 @@ internal static class MaterialRelief
                 var nx = n.X * slope * nz; var ny = n.Y * slope * nz;
                 var diffuse = Math.Clamp(-.32 * nx - .46 * ny + .83 * nz, 0, 1);
                 var half = Math.Clamp(-.18 * nx - .26 * ny + .949 * nz, 0, 1);
-                var specular = Math.Pow(half, ceramic ? 38 : 70);
-                // Two clear-coat lobes over an opaque diffuse body for porcelain;
-                // glass keeps a much thinner specular rim and no broad dark frame.
-                var shadow = (ceramic ? .29 : .16) * rim * (1 - diffuse);
-                var gloss = specular * (ceramic ? .68 : .78) * rim;
+                var specular = Math.Pow(half, 55);
+                // A narrow highlight and transmitted shadow define glass thickness.
+                // Neither one creates a broad opaque inner frame.
+                var shadow = .16 * rim * (1 - diffuse);
+                var gloss = specular * .92 * rim;
                 var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .16;
                 gloss = Math.Clamp(gloss + bounce, 0, .75);
-                if (dark) gloss *= .45;
+                if (dark) gloss *= .72;
                 var alpha = gloss + shadow * (1 - gloss);
                 if (alpha <= 0) continue;
                 var i = (y * w + x) * 4;

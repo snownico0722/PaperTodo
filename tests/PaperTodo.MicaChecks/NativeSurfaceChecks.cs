@@ -42,7 +42,7 @@ internal static class NativeSurfaceChecks
             rear.Show();
             foreach (var mode in new[] { "light", "dark" })
             foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic,
-                PaperSkins.TracingPaper, PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Ceramic, PaperSkins.Pixel })
+                PaperSkins.TracingPaper, PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Pixel })
             {
                 controller.State.PaperSkin = skin; controller.State.Theme = mode; Theme.Invalidate();
                 // The fixture is about composited pixels, not activation-dependent Z order.
@@ -77,11 +77,13 @@ internal static class NativeSurfaceChecks
                     }
                     if (skin == PaperSkins.LiquidGlass)
                     {
-                        // Gentle body scattering should retain broad stripe contrast while
-                        // softening transitions; neither opaque Acrylic nor bare transparency.
+                        // The clear recipe can have more contrast than the former frosted lens.
+                        // Require rear detail AND a measurable material veil: lift black
+                        // stripes in light mode, attenuate white stripes in dark mode.
                         var row = image.Height - 90;
                         var values = Enumerable.Range(image.Width / 2 - 32, 64).Select(x => image.GetPixel(x, row).R).ToArray();
-                        Program.Assert(values.Max() - values.Min() is >= 120 and <= 225,
+                        Program.Assert(values.Max() - values.Min() >= 120 &&
+                            (mode == "light" ? values.Min() >= 12 : values.Max() <= 235),
                             $"{mode}: glass must retain rear detail AND a visible veil, neither opaque nor invisible ({values.Min()}..{values.Max()})");
                         Console.WriteLine($"CLEAR GLASS {mode}: sharp rear stripe range {values.Min()}..{values.Max()}");
                     }
@@ -91,14 +93,15 @@ internal static class NativeSurfaceChecks
                     var hwnd = new WindowInteropHelper(paper).Handle;
                     paper.Width += 20; paper.Height += 10; Wait();
                     paper.SetCollapsedState(true, false, false); Wait();
-                    Program.Assert(!paper.IsNativeMicaEffective, "capsule retains solid safe fallback");
+                    Program.Assert(!paper.IsNativeMicaEffective, "capsule leaves the expanded DWM path for the shared auxiliary material");
                     paper.SetCollapsedState(false, false, false); Wait();
                     Program.Assert(paper.IsNativeMicaEffective && new WindowInteropHelper(paper).Handle == hwnd,
                         "clear surface returns after resizing and collapse without a new HWND");
                     using var final = Capture(paper, output, $"desktop-{skin}-{mode}-restored");
                     var row = final.Height - 90;
                     var values = Enumerable.Range(final.Width / 2 - 32, 64).Select(x => final.GetPixel(x, row).R).ToArray();
-                    Program.Assert(values.Max() - values.Min() is >= 120 and <= 225, "resizing/collapse preserves the visible translucent lens");
+                    Program.Assert(values.Max() - values.Min() >= 120 &&
+                            (mode == "light" ? values.Min() >= 12 : values.Max() <= 235), "resizing/collapse preserves the visible translucent lens");
                 }
                 paper.CloseForReal(); paper = null;
             }

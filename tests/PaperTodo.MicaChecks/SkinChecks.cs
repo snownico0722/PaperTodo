@@ -14,11 +14,11 @@ internal static class SkinChecks
     private static readonly string[] Decorated = PaperSkins.All.Where(PaperSkins.IsDecorated).ToArray();
     internal static void Run(AppController controller)
     {
-        Program.Assert(PaperSkins.All.Distinct().Count() == 9 && Decorated.Length == 5, "unique skin choices");
+        Program.Assert(PaperSkins.All.Distinct().Count() == 8 && Decorated.Length == 4, "unique skin choices");
         Program.Assert(PaperSkins.Resolve(null, "mica", "clearAcrylic") == PaperSkins.ClearAcrylic, "legacy clear Acrylic");
         Program.Assert(PaperSkins.Resolve(null, "mica", "micaAlt") == PaperSkins.Mica, "retired material migration");
         Program.Assert(PaperSkins.Resolve(null, "forest", "acrylic") == PaperSkins.Paper, "ordinary legacy palette");
-        foreach (var id in new[] { PaperSkins.Paper, "future", "" })
+        foreach (var id in new[] { PaperSkins.Paper, "future", "ceramic", "" })
             Program.Assert(PaperSkins.Resolve(id, "mica", "acrylic") == PaperSkins.Paper, "explicit choice wins over legacy palette");
         foreach (var id in PaperSkins.All)
             Program.Assert(PaperSkins.IsValid(id) && PaperSkins.Normalize(id) == id && !PaperSkins.Decorate(id, true), "valid IDs / high contrast");
@@ -78,7 +78,7 @@ internal static class SkinChecks
                 }
                 Program.Assert(hashes.Count == Decorated.Length, "different surfaces, not renamed presets");
             }
-            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckLensAndGlaze(controller);
+            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckGlassAndAero(controller);
             Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders and editor identity.");
         }
         finally
@@ -160,7 +160,7 @@ internal static class SkinChecks
                         "foreground marker remains fully opaque and unchanged");
                     Program.Assert(surface.IsHitTestVisible && surface.Child.IsHitTestVisible &&
                         VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasRefractionWorker,
-                        "same auxiliary content remains hit-testable without capture ownership");
+                        "unattached auxiliary content remains hit-testable without starting a source-less worker");
                     var edge = (40*240)*4;
                     Program.Assert(quiet.AsSpan(edge,4).SequenceEqual(full.AsSpan(edge,4)), "host stroke does not fade with material strength");
                 }
@@ -318,7 +318,7 @@ internal static class SkinChecks
             Program.Assert(Math.Abs(bytes[(row * image.PixelWidth + x) * 4 + c] - bytes[above + c]) < 18,
                 "rendered header boundary has no bright strip or restarted texture");
     }
-    private static void CheckLensAndGlaze(AppController controller)
+    private static void CheckGlassAndAero(AppController controller)
     {
         foreach (var mode in new[] { "light", "dark" })
         {
@@ -330,7 +330,7 @@ internal static class SkinChecks
             // This is the requested clear variant, not the old opaque reading wash.
             // Universal black/white-backdrop contrast is incompatible with clear glass;
             // opaque/high-contrast fallback is still tested above in every palette.
-            Program.Assert(alpha >= (mode == "dark" ? 50 : 20) && alpha <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
+            Program.Assert(alpha >= (mode == "dark" ? 48 : 18) && alpha <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
             foreach (var rear in mode == "dark" ? new byte[] { 0, 48 } : new byte[] { 200, 255 })
             {
                 byte Channel(int c) => (byte)Math.Min(255, bytes[i + c] + rear * (255 - alpha) / 255);
@@ -340,15 +340,6 @@ internal static class SkinChecks
                 Program.Assert(Contrast(((SolidColorBrush)Theme.WeakTextBrush).Color, background) >= 3,
                     "secondary clear-lens text remains readable on its theme reference backdrops");
             }
-            controller.State.PaperSkin = PaperSkins.Ceramic; Theme.Invalidate();
-            var ceramic = new SkinBorder { Width = 240, Height = 160, CornerRadius = new CornerRadius(8),
-                Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1) };
-            var painted = Render(ceramic, 1); var pixels = Pixels(painted);
-            var baseColor = ((SolidColorBrush)Theme.PaperBrush).Color;
-            var bottom = (120 * painted.PixelWidth + 160) * 4;
-            Program.Assert(pixels[bottom + 3] == 255 && Math.Abs(pixels[bottom] - baseColor.B) >= 14,
-                "porcelain body differs visibly from flat default paper without adding an inset frame");
-            Save(painted, $"porcelain-volume-{mode}");
         }
     }
     private static RenderTargetBitmap Render(FrameworkElement element, double scale)

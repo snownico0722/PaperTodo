@@ -16,8 +16,8 @@ internal readonly record struct GlassMetrics(double Bezel, double Displacement, 
         var opticalSize = Math.Min(Math.Sqrt(size.Width * size.Height), shortSide * 1.35);
         var t = Math.Clamp((opticalSize - 160) / 640, 0, 1);
         t = t * t * (3 - 2 * t);
-        var shoulder = Math.Min(12 + 14 * t, shortSide * .22);
-        return new(shoulder, Math.Min(3 + 2.8 * t, shoulder * .32),
-            .75 + 1.3 * t, (dark ? .24 : .105) + .10 * t, 1.12 - .06 * t, .004 + .004 * t);
+        var shoulder = Math.Min(14 + 14 * t, shortSide * .28);
+        return new(shoulder, Math.Min(7.5 + 3.5 * t, shoulder * .55),
+            .45 + .65 * t, (dark ? .22 : .085) + .075 * t, 1.10 - .04 * t, .006 + .003 * t);
     }
 }

@@ -27,7 +27,7 @@ public sealed partial class AppController
             Text = Strings.Get(skin switch
             {
                 PaperSkins.TracingPaper => "TipSkinTracingPaper",
-                PaperSkins.LiquidGlass => "TipSkinLiquidGlass", PaperSkins.Ceramic => "TipSkinCeramic",
+                PaperSkins.LiquidGlass => "TipSkinLiquidGlass",
                 PaperSkins.Aero => "TipSkinAero", PaperSkins.Pixel => "TipSkinPixel", _ => "TipPaperSkin"
             }),
             TextWrapping = TextWrapping.Wrap, Foreground = TrayWeakTextBrush,
@@ -40,7 +40,7 @@ public sealed partial class AppController
                     State.MatchAuxiliaryMaterialStrength = !State.MatchAuxiliaryMaterialStrength;
                     SaveNow(); RefreshThemeSurfaces();
                 }), "TipMatchAuxiliaryMaterial"));
-        if (skin == PaperSkins.LiquidGlass)
+        if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
         {
             panel.Children.Add(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
             {
@@ -80,5 +80,6 @@ public sealed partial class AppController
         foreach (var window in _windows.Values) window.RefreshSkin();
         foreach (var master in _masterCapsules.Values) master.UpdateTheme();
         if (_settingsWindow?.Content is Border border) SkinBorder.Refresh(border);
+        SkinBorder.RefreshLoadedSurfaces();
     }
 }

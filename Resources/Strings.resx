@@ -1493,9 +1493,6 @@
   <data name="SkinLiquidGlass" xml:space="preserve">
     <value>仿液态玻璃</value>
   </data>
-  <data name="SkinCeramic" xml:space="preserve">
-    <value>陶瓷／奶油釉面</value>
-  </data>
   <data name="SkinAero" xml:space="preserve">
     <value>Aero 玻璃</value>
   </data>
@@ -1506,10 +1503,7 @@
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>浅曲面平滑过渡到中心，背景轻微放大并柔化，表面反光覆盖在背景之上。厚度和遮色随纸片大小变化，正文和按钮不参与变形。复杂背景下文字对比度仍会变化。实时效果仅用于展开纸片，胶囊和设置保留静态材质。并非苹果 Liquid Glass 的等同实现。</value>
-  </data>
-  <data name="TipSkinCeramic" xml:space="preserve">
-    <value>不透明的奶油白瓷底，叠加局部清釉反光与连续曲面边缘明暗。深色为深釉陶瓷，保留配色倾向；不是纸面渐变或多重内套框。</value>
+    <value>曲面边缘折射真实背景，边缘高光随指针变化，并有局部色散；中心保持轻微放大。主纸片、胶囊、右键及子菜单使用同一液态处理，按各自尺寸适配。正文不变形，清透效果的可读性取决于背景。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>清透的淡蓝玻璃，保留背景细节，不再叠加亚克力的重磨砂。柔化斜向反光带有轻微移动视差，宽度不随纸片拉伸，顶栏与正文背景连续。不采样桌面，不影响截图；合成不可用时回退静态表面。</value>
@@ -1524,21 +1518,21 @@
     <value>原生背景需要 Windows 11 22H2（22621）及以上；当前使用不透明外观。</value>
   </data>
   <data name="SkinNativeScope" xml:space="preserve">
-    <value>原生背景用于展开纸片和设置窗口。胶囊和菜单跟随所选材质，使用实色基底的静态版本；形态动画、半透明状态或系统关闭透明效果时也会回退。</value>
+    <value>展开纸片与设置保留原生背景；胶囊与菜单不更换窗口，液态玻璃共用实时折射，云母／亚克力使用局部背景柔化近似。Aero 共用透明染色与反光；接口不可用时保留可读回退。</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>云母和两种亚克力也可选择配色。配色用于文字、强调色和轻微表面染色；素灰保留系统原色。</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
-    <value>实时背景折射</value>
+    <value>实时背景处理</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>仅展开纸片使用。实时采样背后的局部桌面，只在本机内存中处理，不保存或上传。为避免自身重影，开启时该纸片会被部分截图、录屏和屏幕共享接口忽略；需要分享时关闭此项。隐藏、收起或切换皮肤后停止，超大窗口或采样失败时回退静态镜片。</value>
+    <value>液态玻璃的纸片、设置、胶囊和菜单，以及云母／亚克力／描图纸的胶囊和菜单，会实时采样局部桌面。仅在本机内存中处理，不保存或上传。为避免自身重影，这些开启采样的表面会被部分截图、录屏和屏幕共享接口忽略；需要分享时关闭此项。隐藏、最小化、部分透明或采样失败时停止并回退。Aero 不采样。</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
     <value>胶囊与右键使用完整材质强度</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>开启时胶囊、右键菜单和子菜单使用完整的染色、反光和纹理强度；关闭时效果更轻。只调材质层，不降低文字、图标或整窗透明度。胶囊和菜单使用无需桌面采样的静态版本。</value>
+    <value>开启时胶囊、右键和子菜单使用完整材质；关闭时仍处理真实背景，只减弱折射、色散、模糊、染色和高光。液态玻璃与主窗口共用处理；云母／亚克力在分层小窗口中使用局部背景柔化近似，非同一 DWM 算法。实时处理另受「实时背景处理」控制，不改变文字、图标、主纸片或点击区域。</value>
   </data>
 </root>

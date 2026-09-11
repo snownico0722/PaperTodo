@@ -22,12 +22,20 @@ internal sealed partial class SkinBorder : Border
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
     public static readonly DependencyProperty IsMenuProperty = DependencyProperty.Register(
         nameof(IsMenu), typeof(bool), typeof(SkinBorder),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, _) => ((SkinBorder)d).RefreshRefraction()));
     public bool IsMenu { get => (bool)GetValue(IsMenuProperty); set => SetValue(IsMenuProperty, value); }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
     internal double MaterialStrength => IsAuxiliary &&
         AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
     internal bool IsOutline { get; init; }
+    private static readonly System.Collections.Generic.List<WeakReference<SkinBorder>> LoadedSurfaces = new();
+    internal static void RefreshLoadedSurfaces()
+    {
+        LoadedSurfaces.RemoveAll(reference => !reference.TryGetTarget(out var surface) || !surface.IsLoaded);
+        foreach (var reference in LoadedSurfaces.ToArray())
+            if (reference.TryGetTarget(out var surface)) surface.RefreshSkin();
+    }
     private int _surfaceVersion;
     private bool _dark, _highContrast, _animateReflection;
     private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Paper, Size Size)? _brushKey;
@@ -46,8 +54,12 @@ internal sealed partial class SkinBorder : Border
     public SkinBorder()
     {
         InitializeRefraction();
-        Loaded += (_, _) => RefreshSkin();
-        Unloaded += (_, _) => DetachLensLight();
+        Loaded += (_, _) => { LoadedSurfaces.Add(new(this)); RefreshSkin(); };
+        Unloaded += (_, _) =>
+        {
+            DetachLensLight();
+            LoadedSurfaces.RemoveAll(reference => !reference.TryGetTarget(out var surface) || ReferenceEquals(surface, this));
+        };
         IsVisibleChanged += (_, _) => SyncLensLight();
         RefreshSkin();
     }
@@ -96,11 +108,12 @@ internal sealed partial class SkinBorder : Border
         }
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
-        EnsureBrushes(background);
+        EnsureBrushes(_refractionVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
         dc.PushClip(_shape);
-        // Attenuate material paint, never the controls, window opacity or hit region.
-        // Auxiliary layered HWNDs retain their opaque, readable base and ownership.
-        if (IsAuxiliary) dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
+        // Both auxiliary strengths retain actual background processing. Only an unavailable
+        // source falls back to an opaque base; no foreground or HWND opacity is altered.
+        if (IsAuxiliary && _refractionVisual == null && !HasAuxiliaryTransmission)
+            dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         dc.PushOpacity(MaterialStrength);
         dc.DrawGeometry(_fill, null, _shape);
         if (Skin == PaperSkins.TracingPaper)
@@ -112,6 +125,13 @@ internal sealed partial class SkinBorder : Border
         // left/right docked open edges stay open instead of acquiring a white seam.
         dc.DrawGeometry(BorderBrush, null, _borderRing);
         dc.Pop();
+        if (_refractionVisual != null)
+        {
+            _refractionVisual.Clip = _shape;
+            // Corner/outline changes can occur with an unchanged desktop frame.
+            // Reproject that frame once, without waiting for a new screen capture.
+            if (!_evidenceFrozen) { _cropDirty = true; RequestRefractionRender(); }
+        }
         RefreshOpticalFinish();
     }
 

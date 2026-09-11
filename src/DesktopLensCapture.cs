@@ -191,6 +191,7 @@ internal sealed class DesktopLensCapture : IDisposable
         if (GetWindowRect(hwnd, out var r)) { bounds = new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top); return true; }
         bounds = default; return false;
     }
+    internal static bool IsVisible(IntPtr hwnd) => hwnd != IntPtr.Zero && IsWindowVisible(hwnd) && !IsIconic(hwnd);
     internal static uint ReadAffinity(IntPtr hwnd) => GetWindowDisplayAffinity(hwnd, out var value) ? value : uint.MaxValue;
 
     private sealed class CaptureSurface : IDisposable

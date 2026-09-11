@@ -37,10 +37,14 @@ internal sealed partial class SkinBorder
             case PaperSkins.Mica:
             case PaperSkins.Acrylic:
             case PaperSkins.ClearAcrylic:
-                // Layered auxiliary surfaces cannot host system backdrops. Use the same
-                // selected palette and a quiet material finish without changing HWNDs.
+                // Transmitted background + diffuse color, shared by both auxiliary strengths.
+                // Main Mica/Acrylic keeps its DWM backdrop; a layered popup uses real local
+                // background diffusion instead of pretending an opaque gradient is blur.
                 var nativeHighlight = Skin == PaperSkins.Mica ? .035 : .075;
-                _fill = Gradient(0, Mix(paper, Colors.White, nativeHighlight), 1, paper);
+                var density = opaque ? (byte)255 : (byte)(Skin == PaperSkins.Mica ? 220 :
+                    Skin == PaperSkins.Acrylic ? (_dark ? 165 : 145) : (_dark ? 95 : 75));
+                _fill = Gradient(0, WithAlpha(Mix(paper, Colors.White, nativeHighlight), density),
+                    1, WithAlpha(paper, density));
                 _shine = Gradient(0, White(_dark ? 16 : 28), 1, White(0));
                 break;
             case PaperSkins.Aero:
@@ -81,38 +85,10 @@ internal sealed partial class SkinBorder
                 }, new Point(0, 0), new Point(.35, 1)));
                 _glint = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
-                    new(White(_dark ? 92 : 170), 0), new(White(18), .25),
-                    new(White(0), .55), new(White(_dark ? 36 : 78), 1)
+                    new(White(_dark ? 185 : 230), 0), new(White(18), .25),
+                    new(White(0), .55), new(White(_dark ? 95 : 145), 1)
                 }, new Point(0, 0), new Point(1, 1)));
-                _lensLight.GradientStops[0].Color = White(_dark ? 70 : 110);
-                break;
-            case PaperSkins.Ceramic:
-                // Separate opaque diffuse body and clear-coat specular. Most of the body
-                // has a stable ivory tone; a finite softbox reflection has a visible edge.
-                // Avoid the old top-to-bottom grey wash that only looked like dirty paper.
-                var body = Mix(paper, _dark ? Color.FromRgb(39, 43, 49) : Color.FromRgb(241, 229, 207), .78);
-                _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(Mix(body, Colors.White, _dark ? .016 : .035), 0),
-                    new(body, .30), new(body, .84),
-                    new(Mix(body, _dark ? Colors.Black : Color.FromRgb(219, 214, 205), .07), 1)
-                }, new Point(0, 0), new Point(.06, 1)));
-                var glaze = new DrawingGroup();
-                using (var dc = glaze.Open())
-                {
-                    var softbox = Frozen(new RadialGradientBrush(new GradientStopCollection
-                    {
-                        new(White(_dark ? 45 : 218), 0), new(White(_dark ? 41 : 204), .42),
-                        new(White(_dark ? 23 : 120), .67), new(White(0), 1)
-                    }) { Center = new Point(.25, IsCapsule ? .22 : .055),
-                        GradientOrigin = new Point(.20, IsCapsule ? .18 : .045),
-                        RadiusX = .71, RadiusY = IsCapsule ? .54 : .21 });
-                    dc.DrawRectangle(softbox, null, new Rect(0, 0, 1, 1));
-                    var bounce = Frozen(new RadialGradientBrush(White(_dark ? 10 : 30), Colors.Transparent)
-                    { Center = new Point(.95, .82), GradientOrigin = new Point(.95, .82), RadiusX = .48, RadiusY = .5 });
-                    dc.DrawRectangle(bounce, null, new Rect(0, 0, 1, 1));
-                }
-                _shine = Frozen(new DrawingBrush(glaze) { Stretch = Stretch.Fill });
+                _lensLight.GradientStops[0].Color = White(_dark ? 200 : 230);
                 break;
             case PaperSkins.Pixel:
                 var retro = Mix(paper, _dark ? Color.FromRgb(22, 29, 46) : Color.FromRgb(240, 235, 217), .42);
@@ -128,7 +104,7 @@ internal sealed partial class SkinBorder
 
     private void PaintMaterialDetails(DrawingContext dc)
     {
-        if (Skin is PaperSkins.Aero or PaperSkins.Ceramic || Skin == PaperSkins.LiquidGlass && _refractionVisual == null)
+        if (Skin is PaperSkins.Aero or PaperSkins.LiquidGlass)
         {
             var dpi = VisualTreeHelper.GetDpi(this);
             var key = (RenderSize, CornerRadius, BorderThickness, dpi.DpiScaleX, dpi.DpiScaleY, Skin, _dark);
@@ -139,7 +115,7 @@ internal sealed partial class SkinBorder
             }
             dc.DrawDrawing(_relief);
         }
-        if (Skin == PaperSkins.LiquidGlass && _refractionVisual == null)
+        if (Skin == PaperSkins.LiquidGlass)
         {
             dc.DrawGeometry(_glint, null, _glintRing);
             dc.DrawGeometry(_lensLight, null, _glintRing);

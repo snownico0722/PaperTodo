@@ -1444,9 +1444,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinLiquidGlass" xml:space="preserve">
     <value>リキッドガラス風</value>
   </data>
-  <data name="SkinCeramic" xml:space="preserve">
-    <value>陶器／クリーム釉</value>
-  </data>
   <data name="SkinAero" xml:space="preserve">
     <value>Aero ガラス</value>
   </data>
@@ -1457,10 +1454,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
   </data>
   <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>浅い曲面が中央へ滑らかにつながり、背景をわずかに拡大して柔らかく描き、その上に反射を重ねます。厚みと着色は用紙サイズに合わせて変化し、文字やボタンは変形しません。コントラストは背景に依存します。動的効果は展開した用紙のみで、カプセルと設定は静的素材を使用します。Apple Liquid Glass の完全な再現ではありません。</value>
-  </data>
-  <data name="TipSkinCeramic" xml:space="preserve">
-    <value>不透明なアイボリーの磁器に、局所的な透明釉の反射と滑らかな曲面の陰影を重ねます。ダークモードは深い色の釉薬です。配色を反映し、紙のような濃淡や多重の内枠は使いません。</value>
+    <value>曲面の縁が実際の背景を屈折させ、ポインターに応じたハイライトと局所的な色分散を描きます。中央はわずかに拡大。紙片、カプセル、メニューとサブメニューは同じ処理を各サイズに合わせて使用します。本文は変形せず、読みやすさは背景に依存します。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>Acrylic の強いすりガラス効果を使わず、背景の細部を残す青みがかった透明ガラスです。柔らかな斜め反射は移動に応じてわずかにずれ、サイズを変えても幅を保ちます。タイトルバーと本文の素材は連続します。デスクトップ取得やスクリーンショットからの除外は行いません。合成できない場合は静的な表面を使います。</value>
@@ -1475,21 +1469,21 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ネイティブ背景には Windows 11 22H2（22621）以降が必要です。この環境では不透明な外観を使用します。</value>
   </data>
   <data name="SkinNativeScope" xml:space="preserve">
-    <value>ネイティブ背景は展開した用紙と設定に適用されます。カプセルとメニューは選択した素材の静的版を不透明な下地に描きます。形状アニメーション、半透明状態、システムの透明効果が無効な場合も代替表示を使います。</value>
+    <value>紙片と設定はネイティブ背景を維持します。カプセルとメニューはウィンドウを交換せず、液体ガラスのリアルタイム屈折、マイカ／アクリルの局所ぼかし近似、Aero の透明な着色と反射を使用。利用できない場合は読みやすい代替表示になります。</value>
   </data>
   <data name="SkinSystemPalette" xml:space="preserve">
     <value>Mica と両方の Acrylic でも配色を選択できます。文字、アクセント、薄い表面の着色に適用され、「ニュートラル」ではシステム本来の色を保ちます。</value>
   </data>
   <data name="SettingsLiveRefraction" xml:space="preserve">
-    <value>背景のリアルタイム屈折</value>
+    <value>背景のリアルタイム処理</value>
   </data>
   <data name="TipLiveRefraction" xml:space="preserve">
-    <value>展開した紙のみ。背後の局所的なデスクトップをメモリー内で処理し、保存・送信しません。自己映り込みを防ぐため、有効時の紙は一部のスクリーンショット・録画・画面共有に映りません。共有時は無効にしてください。非表示・折りたたみ・スキン変更で停止し、大きすぎる窓や取得失敗時は静的なレンズに戻ります。</value>
+    <value>液体ガラスの紙片・設定・カプセル・メニューと、マイカ／アクリル／トレーシングペーパーのカプセル・メニューが、ローカルのデスクトップをメモリ内だけで取得します。保存・送信しません。自己反映を防ぐため、取得中の面は一部のスクリーンショット・録画・画面共有から除外されます。共有時はオフにしてください。非表示・最小化・半透明・失敗時は停止して代替表示に戻ります。Aero は取得しません。</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
     <value>カプセルとメニューを同じ素材強度にする</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>オンにすると、カプセル、右クリックメニュー、サブメニューに通常の着色・反射・テクスチャ強度を適用します。オフでは素材効果を弱めます。文字・アイコン・ウィンドウ全体の不透明度は変わりません。カプセルとメニューはデスクトップを取得しない静的な素材です。</value>
+    <value>オンでカプセルと各メニューに完全な材質を使用。オフでも実際の背景を処理し、屈折・色分散・ぼかし・着色・ハイライトだけを弱めます。液体ガラスは主ウィンドウと共通処理です。小型のレイヤードウィンドウのマイカ／アクリルは局所背景のぼかしによる近似で、同じ DWM 処理ではありません。別のリアルタイム処理設定にも従います。文字・アイコン・主紙片・クリック領域は変更しません。</value>
   </data>
 </root>

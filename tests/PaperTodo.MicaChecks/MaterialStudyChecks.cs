@@ -25,7 +25,7 @@ internal static class MaterialStudyChecks
             rear.Show(); Wait(150);
             using (NativeSurfaceChecks.Capture(rear, output, "study-rear-control")) { }
             foreach (var mode in new[] { "light", "dark" })
-            foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Ceramic, PaperSkins.Paper })
+            foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Paper })
             {
                 controller.State.PaperSkin = skin; controller.State.Theme = mode;
                 controller.State.ColorScheme = ColorSchemes.Neutral;
@@ -108,7 +108,7 @@ internal static class MaterialStudyChecks
     }
     private static void CheckRelief()
     {
-        foreach (var skin in new[] { PaperSkins.Ceramic, PaperSkins.Aero })
+        foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero })
         foreach (var scale in new[] { 1d, 1.25, 1.5, 2 })
         {
             var clock = Stopwatch.StartNew();

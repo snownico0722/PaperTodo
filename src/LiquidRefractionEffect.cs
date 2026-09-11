@@ -17,20 +17,20 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     internal static readonly DependencyProperty ProfileProperty = RegisterPixelShaderSamplerProperty(nameof(Profile), typeof(LiquidRefractionEffect), 1, SamplingMode.Bilinear);
     internal static readonly DependencyProperty CropProperty = Constant(nameof(Crop), typeof(Point4D), new Point4D(1, 1, 0, 0), 0);
     internal static readonly DependencyProperty ShiftProperty = Constant(nameof(Shift), typeof(Point), new Point(), 1);
-    internal static readonly DependencyProperty LightProperty = Constant(nameof(Light), typeof(Point), new Point(.24, .05), 3);
     internal static readonly DependencyProperty ExtentProperty = Constant(nameof(Extent), typeof(Point4D), new Point4D(400, 340, 1d / 18, 1), 5);
     internal static readonly DependencyProperty RadiiProperty = Constant(nameof(Radii), typeof(Point4D), new Point4D(8, 8, 8, 8), 6);
     internal static readonly DependencyProperty ScatteringProperty = Constant(nameof(Scattering), typeof(Point4D), new Point4D(), 7);
+    internal static readonly DependencyProperty DispersionProperty = Constant(nameof(Dispersion), typeof(double), .24, 4);
     private static DependencyProperty Constant(string name, Type type, object value, int register) =>
         DependencyProperty.Register(name, type, typeof(LiquidRefractionEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
     public Brush Scene { get => (Brush)GetValue(SceneProperty); set => SetValue(SceneProperty, value); }
     public Brush Profile { get => (Brush)GetValue(ProfileProperty); set => SetValue(ProfileProperty, value); }
     public Point4D Crop { get => (Point4D)GetValue(CropProperty); set => SetValue(CropProperty, value); }
     public Point Shift { get => (Point)GetValue(ShiftProperty); set => SetValue(ShiftProperty, value); }
-    public Point Light { get => (Point)GetValue(LightProperty); set => SetValue(LightProperty, value); }
     public Point4D Extent { get => (Point4D)GetValue(ExtentProperty); set => SetValue(ExtentProperty, value); }
     public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
     public Point4D Scattering { get => (Point4D)GetValue(ScatteringProperty); set => SetValue(ScatteringProperty, value); }
+    public double Dispersion { get => (double)GetValue(DispersionProperty); set => SetValue(DispersionProperty, value); }
     private static readonly Lazy<byte[]> Bytecode = new(Compile);
 
     internal LiquidRefractionEffect()
@@ -40,19 +40,19 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
         shader.Freeze(); PixelShader = shader;
         Profile = LensDisplacement.ProfileBrush;
         foreach (var property in new[] { SceneProperty, ProfileProperty, CropProperty, ShiftProperty,
-                     LightProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
+                     DispersionProperty, ExtentProperty, RadiiProperty, ScatteringProperty }) UpdateShaderValue(property);
     }
 
     // A single scene covers the body and shoulder, with a sub-percent body lens and
     // a smooth shoulder. The surface finish is composited above this background.
-    // Foreground text/controls never enter this effect. Five bilinear taps avoid a large
+    // Foreground text/controls never enter this effect. Bounded bilinear taps avoid a large
     // blur intermediate; overscan is reprojected in screen coordinates during dragging.
     private const string Source = """
         sampler2D scene : register(s0);
         sampler2D opticalProfile : register(s1);
         float4 crop : register(c0);
         float2 shift : register(c1);
-        float2 light : register(c3);
+        float dispersion : register(c4);
         float4 extent : register(c5);
         float4 radii : register(c6);
         float4 scattering : register(c7);
@@ -72,15 +72,19 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
             float2 delta = -normal * optical.r * shift;
             float2 at = ((uv - .5) * extent.w + .5) * crop.xy + crop.zw + delta;
             clip(float4(at, 1-at));
-            float2 spread = scattering.xy;
-            float3 color = tex2D(scene, at).rgb * .4;
+            // Preserve a sharp shoulder: a blurred RGB fringe cannot read as dispersion.
+            // RGB sample the SAME frame at slightly different refraction angles.
+            float2 chroma = delta * dispersion;
+            float3 refracted = float3(tex2D(scene, at + chroma).r,
+                tex2D(scene, at).g, tex2D(scene, at - chroma).b);
+            float2 spread = scattering.xy * (1 - .8 * optical.r);
+            float3 color = refracted * .7;
             color += (tex2D(scene, at + spread).rgb + tex2D(scene, at - spread).rgb
                 + tex2D(scene, at + spread * float2(1,-1)).rgb
-                + tex2D(scene, at + spread * float2(-1,1)).rgb) * .15;
+                + tex2D(scene, at + spread * float2(-1,1)).rgb) * .075;
             color = lerp(dot(color, float3(.2126,.7152,.0722)), color, scattering.z);
-            float lightness = saturate(dot(-normal, light-global) + .35);
-            float sheen = optical.b * (.025 + .105 * lightness);
-            color += sheen;
+            // Spatial highlights belong to the finish ABOVE this scene, not a second
+            // pass here. This also keeps the complete RGB lens within ps_2_0 limits.
             return float4(saturate(color), 1);
         }
         """;

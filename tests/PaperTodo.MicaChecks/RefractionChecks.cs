@@ -115,8 +115,10 @@ internal static class RefractionChecks
             Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0, "minimize releases worker and affinity");
             count = surface.RefractionFrameCount; window.WindowState = WindowState.Normal;
             Until(() => surface.RefractionFrameCount > count, surface, "restore resumes");
-            window.SetCollapsedState(true, false, false); Wait(80);
-            Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0, "capsule never acquires capture ownership");
+            count = surface.RefractionFrameCount; window.SetCollapsedState(true, false, false);
+            Until(() => surface.RefractionFrameCount > count, surface, "capsule uses the same live material path");
+            Program.Assert(surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0x11,
+                "collapse retains background processing rather than an opaque static substitute");
             count = surface.RefractionFrameCount; window.SetCollapsedState(false, false, false);
             Until(() => surface.RefractionFrameCount > count, surface, "expand resumes");
             controller.State.LiquidGlassRefraction = false; window.RefreshSkin(); Wait(80);
@@ -194,10 +196,10 @@ internal static class RefractionChecks
             var (a, f) = LensDisplacement.Sample(new Point(x, y), size, 8);
             var (b, _) = LensDisplacement.Sample(new Point(430-x, y), size, 8);
             Program.Assert(double.IsFinite(a.X) && double.IsFinite(a.Y) && f is >= 0 and <= 1 &&
-                Math.Abs(a.X) <= 7 && Math.Abs(a.Y) <= 7 && Math.Abs(a.X+b.X) < .001,
+                Math.Abs(a.X) <= GlassMetrics.For(size, false).Displacement && Math.Abs(a.Y) <= GlassMetrics.For(size, false).Displacement && Math.Abs(a.X+b.X) < .001,
                 "finite symmetric inward optical shoulder");
         }
-        Program.Assert(LensDisplacement.Sample(new Point(2, 175), size, 8).Offset.X is > 2 and < 5,
+        Program.Assert(LensDisplacement.Sample(new Point(2, 175), size, 8).Offset.X is > 6 and < 11,
             "reference inward edge profile displaces actual source pixels");
         foreach (var point in new[] { new Point(215,175), new Point(24,100), new Point(406,100) })
             Program.Assert(LensDisplacement.Sample(point, size, 8) == (new Vector(), 0d),
