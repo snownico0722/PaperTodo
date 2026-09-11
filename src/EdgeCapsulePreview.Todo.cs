@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -184,7 +183,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
     private readonly TextBlock _title;
     private readonly TextBlock _summary;
     private readonly StackPanel _items;
-    private readonly ScrollViewer _scrollViewer;
+    private readonly TodoEdgeCapsulePreviewViewport _viewport;
     private bool _rebuilding;
     private TodoEdgeCapsulePreviewSnapshot? _initialSnapshot;
 
@@ -235,23 +234,15 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         {
             Margin = new Thickness(0, 0, 2, 0)
         };
-        _scrollViewer = new ScrollViewer
-        {
-            Content = _items,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Focusable = false,
-            Padding = new Thickness(0)
-        };
-        Grid.SetRow(_scrollViewer, 1);
-        Children.Add(_scrollViewer);
+        _viewport = new TodoEdgeCapsulePreviewViewport(_items);
+        Grid.SetRow(_viewport, 1);
+        Children.Add(_viewport);
 
         InitializeLiveContent();
     }
 
     protected override void RebuildContent()
     {
-        var offset = _scrollViewer.VerticalOffset;
         var snapshot = _initialSnapshot ??
             TodoEdgeCapsulePreviewProvider.CaptureSnapshot(Context.Paper);
         _initialSnapshot = null;
@@ -291,9 +282,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             _rebuilding = false;
         }
 
-        Dispatcher.BeginInvoke(
-            (Action)(() => _scrollViewer.ScrollToVerticalOffset(offset)),
-            DispatcherPriority.Loaded);
+        _viewport.SetSourceTruncated(snapshot.Total > meaningful.Count);
     }
 
     private FrameworkElement BuildRow(PaperItem item)
@@ -460,5 +449,61 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             TextBlock.ForegroundProperty,
             "WeakTextBrushKey");
         return marker;
+    }
+}
+
+// A fixed top excerpt, not a hidden ScrollViewer. No offset, keyboard scrolling, wheel scrolling
+// or BringIntoView scrolling exists; clipping also keeps off-card controls out of pointer hit tests.
+internal sealed class TodoEdgeCapsulePreviewViewport : Panel
+{
+    private readonly StackPanel _items;
+    private readonly TextBlock _overflowIndicator;
+    private readonly RectangleGeometry _itemsClip = new();
+    private bool _sourceTruncated;
+
+    public TodoEdgeCapsulePreviewViewport(StackPanel items)
+    {
+        ClipToBounds = true;
+        _items = items;
+        _items.Clip = _itemsClip;
+        _overflowIndicator = new TextBlock
+        {
+            Text = "…",
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(14),
+            TextAlignment = TextAlignment.Center,
+            IsHitTestVisible = false
+        };
+        _overflowIndicator.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
+        Children.Add(_items);
+        Children.Add(_overflowIndicator);
+    }
+
+    public void SetSourceTruncated(bool truncated)
+    {
+        _sourceTruncated = truncated;
+        InvalidateArrange();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var naturalSize = new Size(availableSize.Width, double.PositiveInfinity);
+        _items.Measure(naturalSize);
+        _overflowIndicator.Measure(naturalSize);
+        return new Size(
+            Math.Min(availableSize.Width, Math.Max(_items.DesiredSize.Width, _overflowIndicator.DesiredSize.Width)),
+            Math.Min(availableSize.Height, _items.DesiredSize.Height));
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var overflow = _sourceTruncated || _items.DesiredSize.Height > finalSize.Height;
+        var indicatorHeight = overflow ? Math.Min(finalSize.Height, _overflowIndicator.DesiredSize.Height) : 0;
+        var visibleHeight = finalSize.Height - indicatorHeight;
+        _itemsClip.Rect = new Rect(0, 0, finalSize.Width, visibleHeight);
+        _items.Arrange(new Rect(0, 0, finalSize.Width, _items.DesiredSize.Height));
+        _overflowIndicator.Opacity = overflow ? 1 : 0;
+        _overflowIndicator.Arrange(new Rect(0, visibleHeight, finalSize.Width, indicatorHeight));
+        return finalSize;
     }
 }
