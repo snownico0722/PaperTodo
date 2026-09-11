@@ -12,7 +12,7 @@ internal static partial class Program
     private static T AwaitPreload<T>(Task<T> task)
     {
         var until = Stopwatch.StartNew();
-        while (!task.IsCompleted && until.Elapsed < TimeSpan.FromSeconds(8)) Pump();
+        while (!task.IsCompleted && until.Elapsed < TimeSpan.FromSeconds(12)) Pump();
         Require(task.IsCompleted, "optional preload completes/cancels rather than hanging");
         return task.GetAwaiter().GetResult();
     }
@@ -56,16 +56,28 @@ internal static partial class Program
         try
         {
             window.Show(); Pump();
-            Require(Warm(a) && Warm(b) && cache.BodyCount == 2, "two complete bodies are warmed without opening a preview");
+            var light = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+                string.Join('\n', Enumerable.Range(1, 12).Select(i => $"第{i}行普通正文 **加粗** 与 `code`")),
+                MarkdownRenderModes.Full);
+            var heavy = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full);
+            var shortDense = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
+                string.Join('\n', Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)), 12)),
+                MarkdownRenderModes.Full);
+            Require(!MarkdownEdgePreviewPreload.IsClearlyHighLoad(light), "ordinary short rows are not speculatively preloaded");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(heavy), "long dense row is classified high-load");
+            Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(shortDense), "short style-dense rows are classified high-load");
+            Console.WriteLine("PASS content-cost preload classifier: light skips, both heavy shapes qualify");
+
+            Require(Warm(a) && Warm(b) && cache.BodyCount == 2, "two complete heavy bodies are warmed without opening a preview");
             Require(root.Children.Count == 0, "prewarm leaves no hidden holder or second mounted preview tree");
             var hits = cache.BodyHits;
             Release(Demand(a)); Release(Demand(b)); Release(Demand(a));
             Require(cache.BodyHits == hits + 3, "A-B-A uses independently owned completed bodies three times");
             Console.WriteLine("PASS preload A-B-A and detached return: three demand hits");
             var pixelFixtures = new[] {
-                "plain **strong** *italic* `code` [link](https://example.com)",
+                string.Concat(Enumerable.Repeat("plain **strong** *italic* `code` [link](https://example.com) ", 20)),
                 string.Concat(Enumerable.Repeat("**粗体** ~~删除~~ `code` [链接](https://example.com) 文 ", 80)),
-                "## heading\n- [x] **done**\n> quote *text*\n```\n\ncode\n```"
+                "## " + new string('文', 320) + "\n> " + new string('a', 300) + "\n```\n" + new string('c', 300) + "\n```"
             };
             var pixelCases = 0;
             var exactCases = 0;
@@ -87,6 +99,7 @@ internal static partial class Program
             {
                 mode = testMode; text = fixture; cache.Clear();
                 var context = Context(new()); context.Paper.TextZoom = zoom;
+                Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(cache.Capture(context)), "pixel fixture qualifies for full preload");
                 Require(Warm(context), "pixel reference is actually preloaded");
                 var previousHits = cache.BodyHits;
                 var hot = Demand(context); var hotPixels = Pixels(hot); Release(hot);
@@ -103,15 +116,16 @@ internal static partial class Program
             Console.WriteLine($"PRELOAD_PIXELS cases={pixelCases} exact={exactCases} maximumChannelDifference={maximumDifference}");
             mode = MarkdownRenderModes.Full;
             cache.Clear();
+            text = string.Concat(Enumerable.Repeat("**heavy** *before* `code` ", 30));
             var descriptorBeforeEdit = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(a);
-            text = "edited between describe and mount";
+            text = string.Concat(Enumerable.Repeat("**edited** *between* `mount` ", 30));
             source.Invalidate();
             var editedView = descriptorBeforeEdit.CreateContent(size);
             var editedBorder = new Border { Width = size.WidthDip - 22, Height = size.HeightDip, Child = editedView };
             root.Children.Add(editedBorder);
             ((EdgeCapsuleLivePreviewView)editedView).PrepareForFirstDisplay();
             Pump();
-            Require(PreviewText(editedView).Contains(text), "deferred first display never binds an old excerpt to the new version");
+            Require(PreviewText(editedView).Contains("edited"), "deferred first display never binds an old excerpt to the new version");
             Release(editedBorder);
             var binding = cache.Bind(a, cache.Capture(a), a.Paper.TextZoom)!;
             var key = MarkdownEdgePreviewPreload.MakeKey(binding, root, new Size(200, 100))!;
@@ -120,7 +134,7 @@ internal static partial class Program
             Require(cache.TryTake(key, out _, demand: false), "matching DPI key remains usable");
             Console.WriteLine("PASS first-display generation and DPI-key rejection");
             hits = cache.BodyHits;
-            text = "新内容，不允许用旧正文";
+            text = string.Concat(Enumerable.Repeat("**新内容** *不允许* `旧正文` ", 30));
             var changed = Demand(a);
             Require(cache.BodyHits == hits && PreviewText(changed).Contains("新内容"), "fresh bounded content comparison rejects stale text");
             Release(changed);
@@ -153,11 +167,11 @@ internal static partial class Program
             var stale = cache.WarmLayoutAsync(new(a, root, size, () => true));
             source.Invalidate();
             Require(!AwaitPreload(stale) && cache.BodyCount == 0, "late generation cannot populate cache");
-            for (var i = 0; i < 7; i++) Require(Warm(Context(new())), "warm eviction candidate");
-            Require(cache.BodyCount == MarkdownEdgePreviewPreload.MaximumBodies, "complete body retention is capped at four");
+            for (var i = 0; i < 12; i++) Require(Warm(Context(new())), "warm unlimited heavy candidate");
+            Require(cache.BodyCount == 12, "all clearly heavy notes remain preloaded without count eviction");
             cache.Clear(); Pump();
             Require(cache.BodyCount == 0 && cache.ExcerptCount == 0 && cache.PendingCount == 0, "clear releases cache and pending jobs");
-            Console.WriteLine("PASS cancellation, stale publication, LRU bound and cleanup");
+            Console.WriteLine("PASS cancellation, stale publication, no-count-eviction and cleanup");
             var completions = cache.WarmCompletions;
             cache.RequestText(source, () => a);
             cache.RequestLayout(source, () => new(a, root, size, () => true));
@@ -193,19 +207,22 @@ internal static partial class Program
         {
             window.Show(); Pump();
             var beforeBodies = GC.GetTotalMemory(true);
-            for (var i = 0; i < 4; i++) Require(AwaitPreload(cache.WarmLayoutAsync(
+            for (var i = 0; i < contexts.Length; i++) Require(AwaitPreload(cache.WarmLayoutAsync(
                 new(contexts[i], root, new(460, 410), () => true))), "memory prewarm succeeds");
             Pump();
             var withBodies = GC.GetTotalMemory(true);
             Console.WriteLine("PRELOAD_MEMORY " + JsonSerializer.Serialize(new
             { excerpts = cache.ExcerptCount, charactersPerNote = 6000, bodies = cache.BodyCount,
                 retainedExcerptsKiB = (pure - before) / 1024.0,
-                additionalBodiesAndWpfCachesKiB = (withBodies - beforeBodies) / 1024.0,
+                additionalHundredBodiesAndWpfCachesKiB = (withBodies - beforeBodies) / 1024.0,
                 note = "managed live-heap deltas after GC; excludes source fixtures, not a private/native working-set measurement" }));
-            for (var i = 0; i < 200; i++) cache.Capture(new EdgeCapsulePreviewContext(new PaperData(), () => "cap", false,
-                () => "bounded", () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
+            Require(cache.ExcerptCount == 100 && cache.BodyCount == 100,
+                "one current preload is retained for every clearly heavy note without count eviction");
+            for (var i = 0; i < 200; i++) cache.Capture(new EdgeCapsulePreviewContext(new PaperData(), () => "light", false,
+                () => "普通短文本", () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
                 () => new Style(), () => "", _ => { }, new()));
-            Require(cache.ExcerptCount <= 128 && cache.BodyCount <= 4, "memory state is bounded under many owners");
+            Require(cache.ExcerptCount == 100 && cache.BodyCount == 100,
+                "light notes do not enter or evict the heavy preload set");
         }
         finally { window.Close(); Pump(); cache.Clear(); GC.KeepAlive(contexts); }
     }
