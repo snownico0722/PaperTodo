@@ -53,7 +53,7 @@ public sealed partial class PaperWindow : Window
     private bool _isShellBuilt;
 
     private Grid _windowHost = null!;
-    private Border _paperChrome = null!;
+    private PaperChromeBorder _paperChrome = null!;
     private readonly Grid _containerGrid = new();
     private readonly Grid _shell = new();
     private readonly ScaleTransform _shellScale = new(1.0, 1.0);
@@ -922,8 +922,8 @@ public sealed partial class PaperWindow : Window
         var dpiScale = dpi > 0 ? dpi / 96.0 : 1.0;
         // Keep resize bands at the original HWND edges. Moving the top band to the
         // mask boundary would intercept controls in the first 8 DIPs of the body.
-        if (_inactiveTitleBarMask is { HeaderOpacity: 0 } mask &&
-            pointerY < bounds.Top + (int)Math.Round(mask.HeaderBottom * dpiScale))
+        if (_paperChrome is { HeaderOpacity: 0 } chrome &&
+            pointerY < bounds.Top + (int)Math.Round((chrome.Margin.Top + chrome.HeaderExtent) * dpiScale))
         {
             return false;
         }
@@ -1815,7 +1815,7 @@ public sealed partial class PaperWindow : Window
         };
         Content = _windowHost;
 
-        _paperChrome = new Border
+        _paperChrome = new PaperChromeBorder
         {
             Margin = new Thickness(WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),

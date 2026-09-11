@@ -6,7 +6,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private bool _experimentalFocusPresentationInitialized;
-    private InactiveTitleBarMask? _inactiveTitleBarMask;
+    private bool _inactiveTitleBarPresentationAttached;
 
     internal void UpdateExperimentalFocusPresentationSettings()
     {
@@ -16,26 +16,31 @@ public sealed partial class PaperWindow
 
     internal void RestoreExperimentalInactiveTitleBarPresentation()
     {
-        if (_inactiveTitleBarMask == null)
+        if (!_inactiveTitleBarPresentationAttached)
         {
             return;
         }
 
-        _inactiveTitleBarMask.SetOpacity(1, 0);
-        _windowHost.OpacityMask = null;
+        _paperChrome.SetHeaderOpacity(1, 0);
+        _paperChrome.SetHeaderExtent(0);
         _windowHost.LayoutUpdated -= OnInactiveTitleBarLayoutUpdated;
-        _inactiveTitleBarMask = null;
+        _inactiveTitleBarPresentationAttached = false;
         _topBarHost!.IsHitTestVisible = true;
     }
 
     private void InitializeExperimentalFocusPresentation()
     {
-        if (_experimentalFocusPresentationInitialized)
+        if (_experimentalFocusPresentationInitialized || !_isShellBuilt)
         {
             return;
         }
 
         _experimentalFocusPresentationInitialized = true;
+        _topBarHost!.SetBinding(OpacityProperty, new System.Windows.Data.Binding
+        {
+            Source = _paperChrome,
+            Path = new PropertyPath(PaperChromeBorder.HeaderOpacityProperty)
+        });
         // Hover reveals optional action buttons; the whole title bar follows focus.
         MouseEnter += (_, _) => RefreshExperimentalFocusPresentation();
         MouseLeave += (_, _) => RefreshExperimentalFocusPresentation();
@@ -91,7 +96,7 @@ public sealed partial class PaperWindow
         }
 
         _topBarHost.IsHitTestVisible = !hidden;
-        if (!hidden && _inactiveTitleBarMask == null)
+        if (!hidden && !_inactiveTitleBarPresentationAttached)
         {
             return;
         }
@@ -102,16 +107,14 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (_inactiveTitleBarMask == null)
+        if (!_inactiveTitleBarPresentationAttached)
         {
-            _inactiveTitleBarMask = new InactiveTitleBarMask();
-            // Apply outside _paperChrome.Effect. Masking only the controls leaves the
-            // paper background/shadow nonzero and the layered HWND still blocks clicks.
+            _inactiveTitleBarPresentationAttached = true;
             _windowHost.LayoutUpdated += OnInactiveTitleBarLayoutUpdated;
         }
 
-        UpdateInactiveTitleBarMaskBounds();
-        _inactiveTitleBarMask.SetOpacity(
+        UpdateInactiveTitleBarExtent();
+        _paperChrome.SetHeaderOpacity(
             hidden ? 0 : 1,
             animate && _controller.State.EnableAnimations
                 ? ExperimentalOpacityTransitionMilliseconds : 0,
@@ -120,29 +123,24 @@ public sealed partial class PaperWindow
 
     private void OnInactiveTitleBarLayoutUpdated(object? sender, EventArgs e)
     {
-        // Typography, zoom, resize and DPI changes can move the boundary. Layout stays
-        // owned by the original shell; this only updates the mask after layout settles.
+        // Typography and DPI changes can change the title row's extent. The shell
+        // retains its original layout; only the background surface gets shorter.
         if (!CanFadeInactiveTitleBar())
         {
             RestoreExperimentalInactiveTitleBarPresentation();
             return;
         }
-        UpdateInactiveTitleBarMaskBounds();
+        UpdateInactiveTitleBarExtent();
     }
 
-    private void UpdateInactiveTitleBarMaskBounds()
+    private void UpdateInactiveTitleBarExtent()
     {
-        if (_inactiveTitleBarMask == null || _topBarHost == null ||
+        if (!_inactiveTitleBarPresentationAttached || _topBarHost == null ||
             _shell.RowDefinitions.Count == 0 || _shell.RowDefinitions[0].ActualHeight <= 0)
         {
             return;
         }
 
-        var boundary = _shell.TransformToAncestor(_windowHost).Transform(
-            new Point(0, _shell.RowDefinitions[0].ActualHeight)).Y;
-        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleY;
-        _inactiveTitleBarMask.UpdateBounds(
-            _windowHost.RenderSize, Math.Round(boundary * dpi) / dpi);
-        _windowHost.OpacityMask = _inactiveTitleBarMask.MaskBrush;
+        _paperChrome.SetHeaderExtent(_shell.RowDefinitions[0].ActualHeight);
     }
 }
