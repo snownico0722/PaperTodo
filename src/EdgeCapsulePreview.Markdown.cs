@@ -132,6 +132,10 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
         ClipToBounds = true;
+        // The shell/title may appear immediately, but the body must not expose an empty first
+        // frame while cooperative Markdown preparation is still in flight.
+        Opacity = 0;
+        IsHitTestVisible = false;
         _body = body;
         _body.Clip = _bodyClip;
         _overflowIndicator = new TextBlock
@@ -272,6 +276,10 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             _body.Opacity = 1;
             _body.IsHitTestVisible = true;
             _sourceTruncated = truncated;
+            // First publication flips only the body lane. Later refreshes keep the already
+            // published excerpt visible until their replacement is atomically ready.
+            Opacity = 1;
+            IsHitTestVisible = true;
             InvalidateMeasure();
         }
         catch (Exception ex)
@@ -1228,7 +1236,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var ordered = OrderedListPattern.Match(trimmed);
         if (ordered.Success)
         {
-            return ordered.Groups[2].Value;
+            // Full mode renders this marker in an Auto-sized column. Keep its visible width in
+            // the lightweight width/wrap estimate so unusually long numbers cannot steal space
+            // from the body without the card geometry noticing.
+            return $"{ordered.Groups[1].Value}. {ordered.Groups[2].Value}";
         }
         var unordered = UnorderedListPattern.Match(trimmed);
         if (unordered.Success)
