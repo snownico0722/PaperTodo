@@ -32,23 +32,41 @@ jobs:
         run: |
           from pathlib import Path
           import subprocess, textwrap, shutil
-          # Reuse the exact reviewed temporary assembly/export script, not mutable remote input.
           previous=subprocess.check_output(['git','-C','candidate','show','ca726f3bbdd5dc9d84c4820f6d3ae912b68c9523:.github/workflows/edge-preview-research.yml'],encoding='utf-8')
           block=previous.split('      - name: Prepare isolated candidate and identical measurement harness\n',1)[1]
           script=textwrap.dedent(block.split('        run: |\n',1)[1].split('      - name:',1)[0])
           exec(compile(script,'fixed-experiment-assembly.py','exec'))
+          # Isolate object-tree savings. The earlier two-variable run is retained as evidence,
+          # not accepted as proof that removing copy checkpoints improves every workload.
+          source='src/EdgeCapsulePreview.Markdown.TextLayout.cs'
+          Path('candidate/'+source).write_text(Path('baseline/'+source).read_text(encoding='utf-8-sig'),encoding='utf-8',newline='\n')
+          p=Path('candidate/src/EdgeCapsulePreview.Markdown.Inlines.cs')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('// One Run carries the combined style; keep real Hyperlinks for input/resources.',
+                      '// Apply font styles directly; keep real Hyperlinks for input and resources.')
+          a=s.index('            if (Has(InlineStyle.Strike) && Has(InlineStyle.Underline))')
+          end='            (activeLink?.Inlines ?? target).Add(run);'
+          b=s.index(end,a)+len(end)
+          replacement='''            // Decorations retain their original scope: moving them onto a font-sized Run
+                      // changes WPF underline/strikethrough metrics even when glyphs are identical.
+                      Inline inline = run;
+                      if (Has(InlineStyle.Strike)) inline = new Span(inline) { TextDecorations = TextDecorations.Strikethrough };
+                      if (Has(InlineStyle.Underline)) inline = new Span(inline) { TextDecorations = TextDecorations.Underline };
+                      (activeLink?.Inlines ?? target).Add(inline);'''
+          replacement='\n'.join(line[10:] if line.startswith('                      ') else line for line in replacement.split('\n'))
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8',newline='\n')
           edit('candidate/tests/PaperTodo.MarkdownEditingChecks/EdgePreviewAppearanceChecks.cs',
               'var bold = row.Inlines.OfType<Bold>().Single();',
               'var bold = row.Inlines.OfType<Run>().Single(run => run.Text == "strong");')
           edit('candidate/tests/PaperTodo.MarkdownEditingChecks/EdgePreviewAppearanceChecks.cs',
               'var code = row.Inlines.OfType<Span>().First(span => span is not Bold);',
               'var code = row.Inlines.OfType<Run>().Single(run => run.Text == "code");')
-          p=Path('results/changed-paths.txt')
-          p.write_text(p.read_text()+'tests/PaperTodo.MarkdownEditingChecks/EdgePreviewAppearanceChecks.cs\n')
+          Path('results/changed-paths.txt').write_text('src/EdgeCapsulePreview.Markdown.Inlines.cs\ntests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs\ntests/PaperTodo.MarkdownEditingChecks/EdgePreviewAppearanceChecks.cs\n')
           Path('results/harness').mkdir()
           for file in ['Program.cs','ResearchExport.cs']:
               shutil.copyfile('candidate/tests/PaperTodo.EdgePreviewExperimentChecks/'+file,'results/harness/'+file)
           Path('results/assembly.py').write_text(script,encoding='utf-8')
+          shutil.copyfile('candidate/.github/workflows/edge-preview-research.yml','results/exact-workflow.yml')
       - name: Candidate correctness and existing regressions
         run: |
           $ErrorActionPreference = 'Stop'
