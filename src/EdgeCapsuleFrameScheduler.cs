@@ -13,7 +13,9 @@ namespace PaperTodo;
 /// </summary>
 internal sealed class EdgeCapsuleFrameScheduler
 {
-    private const int TransitionLivenessWatchdogMilliseconds = 12;
+    // A missing-render safety timeout, not a target frame interval. The former 12 ms deadline
+    // raced ordinary 60 Hz composition callbacks and effectively supplied a second frame clock.
+    private const int TransitionLivenessWatchdogMilliseconds = 100;
     private static readonly ConditionalWeakTable<Dispatcher, EdgeCapsuleFrameScheduler> Schedulers = new();
 
     private readonly Dispatcher _dispatcher;
@@ -22,6 +24,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     private readonly List<List<EdgeCapsulePresenter>> _frameGroups = new();
     private readonly Dictionary<EdgeCapsuleNativeBatchGroup, int> _frameGroupIndices = new();
     private readonly Timer _transitionLivenessWatchdog;
+    private bool _transitionLivenessWatchdogScheduled;
     private DispatcherOperation? _transitionLivenessRescueOperation;
     private int _transitionLivenessThreadPoolWakeQueued;
     private long _transitionLivenessThreadPoolWakeTimestamp;
@@ -133,6 +136,12 @@ internal sealed class EdgeCapsuleFrameScheduler
             CompositionTarget.Rendering += OnRendering;
             _renderingSubscribed = true;
         }
+        // Cover a missing first Rendering callback too. Repeated activation must not postpone
+        // an already-armed deadline; only an accepted shared frame records actual progress.
+        if (_transitionLivenessWatchdogDeadlineTimestamp == 0 && presenter.HasActiveTransition)
+        {
+            ArmTransitionLivenessWatchdog();
+        }
     }
 
     public void Deactivate(EdgeCapsulePresenter presenter)
@@ -145,6 +154,10 @@ internal sealed class EdgeCapsuleFrameScheduler
 
         _presenters.Remove(presenter);
         StopWhenEmpty();
+        if (!HasActiveTransitionPresenter())
+        {
+            DisarmTransitionLivenessWatchdog();
+        }
     }
 
     internal bool TryEnqueuePostCommit(Action callback)
@@ -260,9 +273,8 @@ internal sealed class EdgeCapsuleFrameScheduler
             "accepted");
 #endif
 
-        // A genuine composition callback arrived before the one-shot rescue. Cancel it first;
-        // this keeps the watchdog demand-driven rather than turning it into a second frame clock.
-        CancelTransitionLivenessWatchdogSchedule();
+        // Accepted composition frames slide the rescue deadline after committing. The existing
+        // one-shot wake rechecks that deadline; do not cancel/change a ThreadPool timer per frame.
         AdvanceSharedFrame(renderingTime, source: "render");
     }
 
@@ -295,6 +307,9 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void OnTransitionLivenessWatchdogDispatcherWake()
     {
+        // This flag is UI-thread-owned, including when a stale wake outlives cancellation.
+        // Such a wake can only inspect/reschedule the latest deadline, never replay old work.
+        _transitionLivenessWatchdogScheduled = false;
         Interlocked.Exchange(
             ref _transitionLivenessThreadPoolWakeQueued,
             0);
@@ -565,15 +580,19 @@ internal sealed class EdgeCapsuleFrameScheduler
             return;
         }
 
-        CancelTransitionLivenessWatchdogSchedule();
         var generation = ++_transitionLivenessWatchdogGeneration;
         var nowTimestamp = Stopwatch.GetTimestamp();
         var deadlineTimestamp = nowTimestamp +
             MillisecondsToTimestampTicks(TransitionLivenessWatchdogMilliseconds);
         _transitionLivenessWatchdogDeadlineTimestamp = deadlineTimestamp;
-        ScheduleTransitionLivenessWatchdog(
-            generation,
-            deadlineTimestamp - nowTimestamp);
+        // Normal frames only update the deadline. A single outstanding one-shot wake covers
+        // many frames and reschedules itself only when it discovers more recent progress.
+        if (!_transitionLivenessWatchdogScheduled)
+        {
+            ScheduleTransitionLivenessWatchdog(
+                generation,
+                deadlineTimestamp - nowTimestamp);
+        }
     }
 
     private void ScheduleTransitionLivenessWatchdog(
@@ -595,6 +614,7 @@ internal sealed class EdgeCapsuleFrameScheduler
         _transitionLivenessWatchdog.Change(
             TimeSpan.FromMilliseconds(delayMilliseconds),
             Timeout.InfiniteTimeSpan);
+        _transitionLivenessWatchdogScheduled = true;
     }
 
     private void QueueExpiredTransitionLivenessRescue(string trigger)
@@ -682,9 +702,11 @@ internal sealed class EdgeCapsuleFrameScheduler
 #endif
             if (!blockedByPendingReconcile)
             {
+                // Never poll a native/dispatcher transaction at 1 ms. A genuine Rendering
+                // callback may resume immediately; absent one, retain only the slow safety wake.
                 ScheduleTransitionLivenessWatchdog(
                     expectedGeneration,
-                    MillisecondsToTimestampTicks(1));
+                    MillisecondsToTimestampTicks(TransitionLivenessWatchdogMilliseconds));
             }
             return;
         }
@@ -700,9 +722,13 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void CancelTransitionLivenessWatchdogSchedule()
     {
-        _transitionLivenessWatchdog.Change(
-            Timeout.InfiniteTimeSpan,
-            Timeout.InfiniteTimeSpan);
+        if (_transitionLivenessWatchdogScheduled)
+        {
+            _transitionLivenessWatchdog.Change(
+                Timeout.InfiniteTimeSpan,
+                Timeout.InfiniteTimeSpan);
+            _transitionLivenessWatchdogScheduled = false;
+        }
         var rescueOperation = _transitionLivenessRescueOperation;
         _transitionLivenessRescueOperation = null;
         if (rescueOperation != null &&
@@ -714,6 +740,12 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void DisarmTransitionLivenessWatchdog()
     {
+        if (_transitionLivenessWatchdogDeadlineTimestamp == 0 &&
+            !_transitionLivenessWatchdogScheduled &&
+            _transitionLivenessRescueOperation == null)
+        {
+            return;
+        }
         CancelTransitionLivenessWatchdogSchedule();
         _transitionLivenessWatchdogDeadlineTimestamp = 0;
         _transitionLivenessWatchdogGeneration++;
