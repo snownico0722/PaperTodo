@@ -22,6 +22,7 @@ jobs:
         with:
           path: baseline
           ref: f7709dbc2ff727c1a169745a84ad1a649e32e609
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
@@ -30,167 +31,19 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import shutil
-          Path('results').mkdir()
-          def edit(folder,path,old,new):
-              p=Path(folder)/path; s=p.read_text(encoding='utf-8-sig')
-              assert s.count(old)==1,(folder,path,s.count(old))
-              p.write_text(s.replace(old,new),encoding='utf-8',newline='\n')
-          edit('candidate','src/EdgeCapsulePreview.Markdown.TextLayout.cs',
-              '                if (lineDrawing.CanFreeze) lineDrawing.Freeze();',
-              '''                // Drawing commands reference the host's brushes. Freeze a snapshot, never
-                          // freeze those shared resources as a side effect of preparing this paragraph.
-                          if (lineDrawing.CanFreeze) lineDrawing = (DrawingGroup)lineDrawing.GetAsFrozen();'''.replace('\n                          ','\n                '))
-          edit('candidate','src/EdgeCapsulePreview.Markdown.SemanticInlines.cs',
-              '        var snapshot = MarkdownSemanticSnapshot.Parse(text);\n        var styles',
-              '''        var snapshot = MarkdownSemanticSnapshot.Parse(text);
-                  // Recognition still decides what is plain. Without inline semantics there is no need
-                  // for per-character style/link arrays or rebuilding an identical output string.
-                  if (!snapshot.Spans.Any() && !snapshot.Links.Any())
-                  {
-                      yield return new InlinePiece(text, InlineStyle.None);
-                      yield break;
-                  }
-                  var styles'''.replace('\n                  ','\n        '))
-          edit('candidate','src/EdgeCapsulePreview.Markdown.cs',
-              '                markdown[lineStart..lineEnd],\n                truncated);',
-              '                markdown[lineStart..SafePrefixEnd(markdown, lineEnd)],\n                truncated);')
-          edit('candidate','src/EdgeCapsulePreview.Markdown.cs',
-              '        return value[..(maximumLength - 1)] + "…";\n    }',
-              '''        return value[..SafePrefixEnd(value, maximumLength - 1)] + "…";
-              }
-
-              // Character budgets use UTF-16 units, but never split a valid surrogate pair at the edge.
-              private static int SafePrefixEnd(string value, int end) =>
-                  end > 0 && end < value.Length &&
-                  char.IsHighSurrogate(value[end - 1]) && char.IsLowSurrogate(value[end]) ? end - 1 : end;'''.replace('\n              ','\n    '))
-          test=r'''using System.Text;
-          using System.Windows;
-          using System.Windows.Controls;
-          using System.Windows.Media;
-          using PaperTodo;
-
-          internal static partial class Program
-          {
-              private static void ReviewBoundaryChecks()
-              {
-                  var failures = new List<string>();
-                  void Check(string name, Action check)
-                  {
-                      try { check(); Console.WriteLine("PASS review " + name); }
-                      catch (Exception ex) { failures.Add(name); Console.Error.WriteLine("FAIL review " + name + ": " + ex.Message); }
-                  }
-                  Check("borrowed-brushes", CheckBorrowedBrushes);
-                  Check("unicode-excerpt", CheckUnicodeExcerpt);
-                  Check("plain-inline-reuse", CheckPlainInlineReuse);
-                  if (failures.Count > 0) throw new InvalidOperationException("Review failures: " + string.Join(", ", failures));
-              }
-
-              private static void CheckBorrowedBrushes()
-              {
-                  var root = new StackPanel();
-                  var foreground = new SolidColorBrush(Colors.DarkRed);
-                  var background = new SolidColorBrush(Colors.LightGray);
-                  var link = new SolidColorBrush(Colors.Blue);
-                  root.Resources["TextBrushKey"] = foreground;
-                  root.Resources["HoverBrushKey"] = background;
-                  root.Resources["LinkBrushKey"] = link;
-                  var window = new Window { Content = root, Width = 420, Height = 260,
-                      ShowActivated = false, ShowInTaskbar = false };
-                  var text = string.Concat(Enumerable.Repeat("正文 **粗体** `code` [link](https://example.com) ", 40));
-                  void Render()
-                  {
-                      MarkdownEdgeCapsulePreviewRenderer.RenderInto(root, text, _ => { },
-                          MarkdownRenderModes.Full, new Size(390, 200));
-                      window.UpdateLayout(); Pump();
-                  }
-                  bool HasColor(Color color) => root.Children.OfType<MarkdownEdgePreviewParagraph>()
-                      .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
-                      .Any(g => g.ForegroundBrush is SolidColorBrush b && b.Color == color);
-                  try
-                  {
-                      window.Show(); Pump(); Render();
-                      Require(root.Children.OfType<MarkdownEdgePreviewParagraph>().Any(), "fixture uses prepared paragraph path");
-                      Require(!foreground.IsFrozen && !background.IsFrozen && !link.IsFrozen,
-                          "preparing text must not freeze caller-owned color resources");
-                      Require(HasColor(Colors.DarkRed), "first draw uses the original resource value");
-                      foreground.Color = Colors.DarkGreen;
-                      background.Color = Colors.Beige;
-                      link.Color = Colors.Purple;
-                      Require(HasColor(Colors.DarkRed), "completed drawing retains its own immutable snapshot");
-                      Render();
-                      Require(HasColor(Colors.DarkGreen) && HasColor(Colors.Purple), "rebuild captures the changed resource values");
-                  }
-                  finally { window.Close(); Pump(); }
-              }
-
-              private static void CheckUnicodeExcerpt()
-              {
-                  var fixtures = new[] {
-                      new string('文', 5999) + "😀tail",
-                      "prefix\n" + new string('文', 5991) + "😀tail",
-                      new string('文', 5998) + "😀",
-                      "```\n" + new string('文', 5995) + "😀tail\n```"
-                  };
-                  var strictUtf8 = new UTF8Encoding(false, true);
-                  foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-                      MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
-                  foreach (var source in fixtures)
-                  {
-                      var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
-                      var excerpt = string.Join('\n', content.Lines.Select(line => line.Text));
-                      Require(excerpt.Length <= 6000, "valid Unicode never exceeds the existing source budget");
-                      _ = strictUtf8.GetBytes(excerpt);
-                      if (source.Length == 6000)
-                          Require(!content.Truncated && excerpt == source, "a complete pair fitting exactly is retained");
-                      else Require(content.Truncated, "omission remains reported after moving to a safe boundary");
-                  }
-              }
-
-              private static void CheckPlainInlineReuse()
-              {
-                  var text = string.Concat(Enumerable.Repeat("普通文字 English e\u0301 العربية 😀 ", 20));
-                  foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-                      MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
-                  {
-                      var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
-                      Require(pieces.Length == 1 && pieces[0].Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None &&
-                          pieces[0].Link == null && ReferenceEquals(pieces[0].Text, text),
-                          "semantic plain text reuses the original string instead of per-character reconstruction");
-                  }
-                  var styled = MarkdownEdgeCapsulePreviewRenderer.InlinePieces("**正文** " + text, MarkdownRenderModes.Full).ToArray();
-                  Require(styled.Any(p => (p.Style & MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strong) != 0) &&
-                      string.Concat(styled.Select(p => p.Text)) == "正文 " + text, "styled input still uses the shared recognizer");
-              }
-
-              private static void ProfilePlainInlineAllocation()
-              {
-                  foreach (var length in new[] { 300, 6000 })
-                  foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
-                  {
-                      var text = new string('文', length);
-                      long Sample()
-                      {
-                          var before = GC.GetAllocatedBytesForCurrentThread();
-                          var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
-                          GC.KeepAlive(pieces);
-                          return GC.GetAllocatedBytesForCurrentThread() - before;
-                      }
-                      for (var i = 0; i < 5; i++) Sample();
-                      var bytes = Enumerable.Range(0, 21).Select(_ => Sample()).Order().ToArray();
-                      Console.WriteLine($"INLINE_ALLOC length={length} mode={mode} medianBytes={bytes[bytes.Length/2]}");
-                  }
-              }
-          }
-          '''
-          for folder in ['baseline','candidate']:
-              Path(folder+'/tests/PaperTodo.EdgePreviewChecks/ReviewBoundaryChecks.cs').write_text(test,encoding='utf-8',newline='\n')
-              edit(folder,'tests/PaperTodo.EdgePreviewChecks/Program.cs',
-                  'if (args.Contains("--preload-profile"))',
-                  'if (args.Contains("--review-only")) ReviewBoundaryChecks();\n            else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();\n            else if (args.Contains("--preload-profile"))')
-              edit(folder,'tests/PaperTodo.EdgePreviewChecks/Program.cs',
-                  'Checks(); PreloadAuditChecks();','Checks(); ReviewBoundaryChecks(); PreloadAuditChecks();')
-          Path('results/changed-paths.txt').write_text('src/EdgeCapsulePreview.Markdown.cs\nsrc/EdgeCapsulePreview.Markdown.SemanticInlines.cs\nsrc/EdgeCapsulePreview.Markdown.TextLayout.cs\ntests/PaperTodo.EdgePreviewChecks/Program.cs\ntests/PaperTodo.EdgePreviewChecks/ReviewBoundaryChecks.cs\n')
+          import subprocess, textwrap, shutil
+          previous=subprocess.check_output(['git','-C','candidate','show','06f807ae72ed871f606aedac883dece2c53c787b:.github/workflows/pr245-review.yml'],encoding='utf-8')
+          block=previous.split('      - name: Assemble isolated candidate and identical regression harness\n',1)[1]
+          script=textwrap.dedent(block.split('        run: |\n',1)[1].split('      - name:',1)[0])
+          exec(compile(script,'fixed-review-assembly.py','exec'))
+          edit('candidate','CHANGELOG.md','按可见空间分批准备文字，密集样式短行也避免一次性构造大量文字对象；',
+              '按可见空间分批准备文字，纯文本减少不必要的临时分配，密集样式短行也避免一次性构造大量文字对象；')
+          edit('candidate','doc/CHANGELOG.en.md','Visible text is prepared in batches, including short rows with dense styles.',
+              'Visible text is prepared in batches, including short rows with dense styles; plain text avoids unnecessary temporary allocations.')
+          edit('candidate','doc/CHANGELOG.en.md','The card does not scroll and shows an ellipsis on overflow.',
+              'The card does not scroll and shows an ellipsis on overflow. After startup restoration and content changes, longer or more styled edge-note previews are prepared during idle time to reduce first-hover waiting; light content is not actively preloaded, and leaving the edge queue releases its cache.')
+          p=Path('results/changed-paths.txt'); p.write_text(p.read_text()+'CHANGELOG.md\ndoc/CHANGELOG.en.md\n')
+          Path('results/assembly.py').write_text(script,encoding='utf-8')
           shutil.copyfile('candidate/.github/workflows/pr245-review.yml','results/exact-workflow.yml')
       - name: Reproduce on unmodified production baseline
         run: |
