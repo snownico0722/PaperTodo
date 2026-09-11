@@ -313,6 +313,7 @@ public sealed partial class AppController
             return false;
         }
 
+        TraceEdgeCapsuleQueueVisibility(proxy, "before-start");
         if (!proxy.TryStart(out realHostMayHaveChanged))
         {
 #if DEBUG
@@ -335,8 +336,47 @@ public sealed partial class AppController
             }
             return false;
         }
+        TraceEdgeCapsuleQueueVisibility(proxy, "started");
         return true;
     }
+
+    [Conditional("DEBUG")]
+    private void TraceEdgeCapsuleQueueVisibility(
+        EdgeCapsuleQueueCompositionProxy proxy,
+        string phase)
+    {
+#if DEBUG
+        // Include stationary peers: the transparent output can overlap windows it does not wrap.
+        // These are lifecycle observations, not proof that a desktop frame has been presented.
+        try
+        {
+            var startedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
+            var members = proxy.Members.Select(member => member.Window).ToHashSet();
+            var context = $"phase={phase} session={proxy.SessionOrdinal}";
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"proxy.visibility {context} role=output queue={proxy.QueueKey} " +
+                WindowNative.DescribeCompositionVisibility(proxy.OutputHandle));
+            foreach (var window in _windows.Values)
+            {
+                if (!window.IsClosed && string.Equals(
+                    QueueKey(window.EdgeCapsulePreviewPaper), proxy.QueueKey,
+                    StringComparison.Ordinal))
+                {
+                    window.TraceEdgeCapsuleCompositionVisibility(
+                        $"{context} wrapped={members.Contains(window)}");
+                }
+            }
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"proxy.visibility {context} role=diagnostic " +
+                $"elapsedMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(startedAt):F3}");
+        }
+        catch
+        {
+            // Diagnostics must not interrupt an authority handoff.
+        }
+#endif
+    }
+
     private bool PublishEdgeCapsuleQueueCompositionProxy(
         string queueKey,
         EdgeCapsuleQueueCompositionProxy successor,
@@ -596,6 +636,7 @@ public sealed partial class AppController
             return false;
         }
 
+        TraceEdgeCapsuleQueueVisibility(current, "before-release");
         if (!current.TryReleaseForHandoff())
         {
             current.ScheduleCompletionRetry(
@@ -614,6 +655,7 @@ public sealed partial class AppController
                     .Remove(window);
             }
         }
+        TraceEdgeCapsuleQueueVisibility(current, "released");
         try
         {
             current.Dispose();

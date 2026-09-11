@@ -4,6 +4,24 @@ namespace PaperTodo;
 
 internal static partial class WindowNative
 {
+#if DEBUG
+    // Read-only observation: do not flush composition or change visibility for diagnostics.
+    internal static string DescribeCompositionVisibility(IntPtr handle)
+    {
+        var alive = handle != IntPtr.Zero && IsWindow(handle);
+        var bounds = alive && GetWindowRect(handle, out var rect)
+            ? $"{rect.Left},{rect.Top},{rect.Right - rect.Left}x{rect.Bottom - rect.Top}"
+            : "<unknown>";
+        var cloakFlags = alive && DwmGetWindowAttribute(
+            handle, DwmWaCloaked, out int flags, Marshal.SizeOf<int>()) == 0
+            ? flags.ToString()
+            : "<unknown>";
+        return $"hwnd={handle.ToInt64():X} alive={alive} " +
+            $"nativeVisible={alive && IsWindowVisible(handle)} " +
+            $"cloakFlags={cloakFlags} nativeBounds={bounds}";
+    }
+#endif
+
     /// <summary>
     /// One member of an all-or-rollback DWM cloak transaction. Callers provide the known state to
     /// restore because every queue handoff already owns a uniform source state: newly acquired
