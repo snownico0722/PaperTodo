@@ -52,7 +52,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void OnSampleTimerTick(object? sender, EventArgs e)
     {
-        if (_disposed || _finishing || _successorHeld ||
+        if (_disposed || _starting || !_coverPublished || _finishing || _successorHeld ||
             !RoutesPointerInput)
         {
             return;
@@ -203,7 +203,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 (durationTicks - elapsedTicks) *
                 1000.0 /
                 Stopwatch.Frequency));
-        _sampleTimer.Start();
+        if (RoutesPointerInput) _sampleTimer.Start();
         _completionTimer.Interval =
             TimeSpan.FromMilliseconds(
                 remainingMilliseconds +

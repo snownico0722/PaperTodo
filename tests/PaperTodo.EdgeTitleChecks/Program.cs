@@ -11,11 +11,12 @@ internal static partial class Program
     private static int assertions;
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
+            if (args.Contains("--profile")) return RunEdgePreviewProfile();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");
             Persistence();

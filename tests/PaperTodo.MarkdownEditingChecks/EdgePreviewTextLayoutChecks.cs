@@ -10,6 +10,7 @@ internal static partial class Program
 {
     private static void RunEdgePreviewTextLayoutChecks(Action<string, Action> check)
     {
+        RunEdgePreviewInlinePreparationChecks(check);
         check("Sixteen admitted rows reserve their actual height and one overflow indicator", () =>
         {
             try

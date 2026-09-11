@@ -340,7 +340,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
 #endif
 
-            _sampleTimer.Start();
+            if (RoutesPointerInput) _sampleTimer.Start();
             var elapsed = Stopwatch.GetElapsedTime(
                 _animationStartedAtTimestamp,
                 Stopwatch.GetTimestamp()).TotalMilliseconds;

@@ -20,9 +20,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         FrameworkElement Inline(TextBlock template, string text, string mode)
         {
             if (text.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength)
-                return new MarkdownEdgePreviewParagraph.MeasureElement(template, text, mode, zoom);
+                return new MarkdownEdgePreviewParagraph.MeasureElement(template, text, mode, zoom, content.Inlines);
             if (mode == MarkdownRenderModes.Off) template.Text += text;
-            else AddInlineContent(template.Inlines, text, _ => { }, 0, mode);
+            else AddInlineContent(template.Inlines, text, _ => { }, mode, content.Inlines);
             return template;
         }
         void Add(FrameworkElement block)
@@ -57,64 +57,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         return height;
     }
 
-    [Flags]
-    internal enum InlineStyle { None = 0, Strong = 1, Italic = 2, Strike = 4, Code = 8, Weak = 16, Syntax = 32 }
-    internal readonly record struct InlinePiece(string Text, InlineStyle Style, Uri? Link = null);
 
-    // The same bounded inline grammar as the small TextBlock renderer. Value runs let long
-    // paragraphs format one visible line per cooperative step, without a document-sized WPF
-    // Inline tree (whose Measure and Render each revisit the entire paragraph).
-    internal static IEnumerable<InlinePiece> InlinePieces(
-        string text, string mode, InlineStyle style = InlineStyle.None, Uri? link = null, int depth = 0)
-    {
-        string Display(string value) => mode == MarkdownRenderModes.Full ? MarkdownInlineSyntax.Unescape(value) : value;
-        if (mode == MarkdownRenderModes.Off || depth >= MaximumInlineDepth)
-        {
-            yield return new InlinePiece(Display(text), style, link);
-            yield break;
-        }
-        var scan = MarkdownInlineSyntax.MaskEscapedPunctuation(text);
-        var cursor = 0;
-        foreach (System.Text.RegularExpressions.Match match in InlinePattern.Matches(scan))
-        {
-            if (match.Index > cursor)
-                yield return new InlinePiece(Display(text[cursor..match.Index]), style, link);
-            var index = Enumerable.Range(1, 12).First(i => match.Groups[i].Success);
-            var group = match.Groups[index];
-            var value = text.Substring(group.Index, group.Length);
-            var syntaxStyle = mode == MarkdownRenderModes.Enhanced ? style | InlineStyle.Syntax : style;
-            if (mode != MarkdownRenderModes.Full)
-                yield return new InlinePiece(text[match.Index..group.Index], syntaxStyle, link);
-            if (index == 1)
-            {
-                var label = Display(value);
-                yield return new InlinePiece(mode == MarkdownRenderModes.Full
-                    ? string.IsNullOrWhiteSpace(label) ? "▧" : $"▧ {label}" : label, style | InlineStyle.Weak, link);
-            }
-            else if (index == 10)
-                yield return new InlinePiece(value, style | InlineStyle.Code, link);
-            else
-            {
-                var nestedStyle = style | (index switch
-                {
-                    5 or 6 => InlineStyle.Strong | InlineStyle.Italic,
-                    7 or 8 => InlineStyle.Strong,
-                    9 => InlineStyle.Strike,
-                    11 or 12 => InlineStyle.Italic,
-                    _ => InlineStyle.None
-                });
-                var nestedLink = link;
-                if (index == 3 && Uri.TryCreate(MarkdownInlineSyntax.Unescape(
-                    text.Substring(match.Groups[4].Index, match.Groups[4].Length)), UriKind.Absolute, out var uri) &&
-                    uri.Scheme is "http" or "https" or "mailto") nestedLink = uri;
-                foreach (var part in InlinePieces(value, mode, nestedStyle, nestedLink, depth + 1)) yield return part;
-            }
-            cursor = match.Index + match.Length;
-            if (mode != MarkdownRenderModes.Full)
-                yield return new InlinePiece(text[(group.Index + group.Length)..cursor], syntaxStyle, link);
-        }
-        if (cursor < text.Length) yield return new InlinePiece(Display(text[cursor..]), style, link);
-    }
 }
 
 // Only the viewport-bounded long-paragraph path uses this element. WPF TextFormatter owns
@@ -126,6 +69,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
     private readonly TextBlock _template;
     private readonly string _source;
     private readonly string _mode;
+    private readonly MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache _inlineCache;
     private readonly double _zoom;
     private readonly Action<string> _openExternal;
     private readonly DrawingGroup _drawing = new();
@@ -135,9 +79,10 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
     internal int FormattedLines { get; private set; }
 
     internal MarkdownEdgePreviewParagraph(TextBlock template, string source, string mode,
-        double zoom, Action<string> openExternal)
+        double zoom, Action<string> openExternal, MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache inlineCache)
     {
         _template = template; _source = source; _mode = mode; _zoom = zoom; _openExternal = openExternal;
+        _inlineCache = inlineCache;
         Margin = template.Margin;
         template.Margin = new Thickness();
         // A small template carries the normal paragraph/prefix typography and resource inheritance.
@@ -151,7 +96,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
     {
         var pieces = Prefix(_template);
         var count = 0;
-        foreach (var piece in MarkdownEdgeCapsulePreviewRenderer.InlinePieces(_source, _mode))
+        foreach (var piece in _inlineCache.Get(_source, _mode).Pieces)
         {
             if (piece.Text.Length > 0) pieces.Add(piece);
             if (++count % 32 == 0) yield return false;
@@ -165,6 +110,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         TextLineBreak? previous = null;
         var offset = 0;
         var height = 0.0;
+        var nextLink = 0;
         var width = Math.Max(1, viewport.Width);
         try
         {
@@ -177,8 +123,11 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                 if (lineDrawing.CanFreeze) lineDrawing.Freeze();
                 _drawing.Children.Add(lineDrawing);
                 var end = Math.Min(source.Text.Length, offset + line.Length);
-                foreach (var range in source.Links)
+                // Link ranges are ordered; do not rescan offscreen links for every visible line.
+                while (nextLink < source.Links.Count && source.Links[nextLink].End <= offset) nextLink++;
+                for (var i = nextLink; i < source.Links.Count && source.Links[i].Start < end; i++)
                 {
+                    var range = source.Links[i];
                     var start = Math.Max(offset, range.Start); var stop = Math.Min(end, range.End);
                     if (stop <= start) continue;
                     foreach (var bounds in line.GetTextBounds(start, stop - start))
@@ -227,13 +176,14 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         return pieces;
     }
 
-    internal sealed class MeasureElement(TextBlock template, string text, string mode, double zoom) : FrameworkElement
+    internal sealed class MeasureElement(TextBlock template, string text, string mode, double zoom,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache inlineCache) : FrameworkElement
     {
         protected override Size MeasureOverride(Size available)
         {
             var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
             var pieces = Prefix(template);
-            pieces.AddRange(MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).Where(p => p.Text.Length > 0));
+            pieces.AddRange(inlineCache.Get(text, mode).Pieces);
             if (pieces.Count == 0) pieces.Add(new(" ", 0));
             var compiled = EdgeCapsulePerformanceDiagnostics.Timestamp();
             // Describe is synchronous. Long paragraphs use the admitted visible text and block
@@ -286,7 +236,12 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                 if (!styles.TryGetValue(key, out var properties))
                     styles[key] = properties = new RunProperties(template, piece.Style, key.Item2, zoom) { PixelsPerDip = dpi };
                 _runs[i] = (offset, offset + piece.Text.Length, properties);
-                if (piece.Link != null) Links.Add(new(offset, offset + piece.Text.Length, piece.Link));
+                if (piece.Link != null)
+                {
+                    if (Links.Count > 0 && Links[^1].End == offset && ReferenceEquals(Links[^1].Uri, piece.Link))
+                        Links[^1] = Links[^1] with { End = offset + piece.Text.Length };
+                    else Links.Add(new(offset, offset + piece.Text.Length, piece.Link));
+                }
                 offset += piece.Text.Length;
             }
         }
