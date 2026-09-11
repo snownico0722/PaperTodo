@@ -30,6 +30,17 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Correct test API references
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('candidate/tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs')
+          s=p.read_text(encoding='utf-8-sig')
+          assert 'using System.Windows.Controls.Primitives;' not in s
+          s=s.replace('using System.Windows.Controls;', 'using System.Windows.Controls;\nusing System.Windows.Controls.Primitives;')
+          assert s.count('g.Brush is SolidColorBrush')==1
+          s=s.replace('g.Brush is SolidColorBrush','g.ForegroundBrush is SolidColorBrush')
+          p.write_text(s,encoding='utf-8',newline='\n')
       - name: Apply reviewed finalization and copy identical control harness
         run: |
           python candidate/tests/edge-preview-finalize.py
@@ -107,4 +118,4 @@ jobs:
         with:
           name: edge-preview-completion-results
           path: results/
-          retention-days: 7
+          retention-days: 2
