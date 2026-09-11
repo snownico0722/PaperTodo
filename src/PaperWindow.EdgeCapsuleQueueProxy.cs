@@ -2,6 +2,16 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    [System.Diagnostics.Conditional("DEBUG")]
+    internal void TraceEdgeCapsuleCompositionVisibility(string context)
+    {
+#if DEBUG
+        _edgeCapsuleHost?.TraceCompositionVisibility(
+            $"{context} paper={_paper.Id} " +
+            $"authority={CurrentEdgeCapsuleVisualAuthority}");
+#endif
+    }
+
     internal EdgeCapsuleVisualAuthority CurrentEdgeCapsuleVisualAuthority
     {
         get

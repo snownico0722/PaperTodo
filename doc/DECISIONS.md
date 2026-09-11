@@ -24,7 +24,7 @@
 | D-009 | Visual authority 显式交接 | Accepted | Edge handoff |
 | D-010 | Successor 继承 predecessor live authority | Accepted | Edge transaction |
 | D-011 | Floating drag 使用独立持久 HWND | Accepted | Edge drag |
-| D-012 | Rendering cadence + rescue-only watchdog | Accepted | Edge animation |
+| D-012 | Rendering cadence + rescue-only watchdog | Superseded by D-032 | Edge animation |
 | D-013 | Proxy handoff 等待真实 WPF terminal presentation | Accepted | Edge handoff |
 | D-014 | Pointer truth 来自 `InteractiveBounds` | Accepted | Edge input |
 | D-015 | AGENTS / Architecture / Decisions / 注释分工 | Accepted | 文档体系 |
@@ -44,6 +44,7 @@
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
+| D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Accepted | Edge animation |
 
 ## 维护规则
 
@@ -413,7 +414,7 @@ Docked capsule 有 wall-side straight edge、close segment、bounded capacity �
 
 ## D-012 — Presenter transition 使用 Rendering cadence；watchdog 只救活
 
-**Status:** Accepted
+**Status:** Superseded by D-032
 
 ### Decision
 
@@ -1180,3 +1181,33 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - `src/WebPluginPopupContent.cs`。
 - 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
 - 当前合同与用法见 `plugin-samples/README.md`。
+
+
+---
+
+## D-032 — Edge 帧调度由 owner 解除阻挡后恢复 Rendering，不保留补帧计时器
+
+**Status:** Accepted
+
+### Context
+
+D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截止时间、过期 generation、dispatcher wake 与受阻重试。#238 的 `4d94c251` 降低了救援频率，但没有消除第二个推进入口。检查同时发现，单个 pending reconcile 会阻挡整个 Dispatcher 的动画，而实际原子单位是 native batch group。
+
+### Decision
+
+- Presenter 的 transition 仅由共享 scheduler 的 `CompositionTarget.Rendering` 推进；移除 liveness timer、rescue callback 与轮询，不改成另一种固定节拍或自我排队的 dispatcher 循环。
+- reconcile registration 记录 owner，按 owner 当前的 native batch group 阻挡；visual transaction deferral 同样只阻挡关联组。跨队列 transaction group 仍是不可拆的原子单位；原生 apply 同步重入保护不放宽。
+- 没有就绪组时取消 Rendering 订阅。最后一个 callback/deferral 释放后直接重新检查就绪状态、恢复订阅；首次 activation 使用同一入口。WPF 的 Rendering add accessor 会请求 render，不靠超时猜测何时恢复。
+- 普通源内容继续按已测成本与 WPF ownership 准备，不为去掉计时器恢复每篇常驻 parser worker。此项不改变 D-027 的正文语义发布，也不改变 D-008 的 WPF shape / DComp translation 分工。
+- proxy completion/input timers 的业务职责不属于补帧；末帧交接仍必须完成既有 apply/layout/render/verify 边界，不能用 timer 到期代替。
+
+### Why
+
+补一条最终仍回到 UI Dispatcher 的回调不能解除 UI 阻塞；与显示帧竞争还会掩盖真正的队列阻挡。由 owner 明确恢复帧源，既减少并行状态，又避免一个队列的待处理工作拖住无关队列。没有实际帧呈现证据时，不把 functional checks 通过解释成任意机器都不掉帧。
+
+### Evidence
+
+- `src/EdgeCapsuleFrameScheduler.cs`：owner registration、queue readiness、Rendering 订阅边界。
+- `src/EdgeCapsulePresenter.cs`：exactly-once registration 与 visual transaction deferral 释放。
+- `tests/PaperTodo.EdgeTitleChecks/SharedFrameRenderingChecks.cs`：无辅助 Rendering listener 的真实 WPF 完成、阻挡/恢复、无关队列、取消及 cloaked source 检查。
+- WPF `CompositionTarget.Rendering` add accessor 与 `MediaContext.RenderMessageHandlerCore`：订阅请求 render，实际帧由 WPF 接续。

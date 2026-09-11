@@ -50,19 +50,65 @@ internal sealed class EdgeCapsulePresenter
     private sealed class RenderReconcileRegistration
     {
         private EdgeCapsuleFrameScheduler? _scheduler;
+        private readonly EdgeCapsulePresenter _owner;
 
-        internal RenderReconcileRegistration(EdgeCapsuleFrameScheduler scheduler)
+        internal RenderReconcileRegistration(EdgeCapsuleFrameScheduler scheduler, EdgeCapsulePresenter owner)
         {
             _scheduler = scheduler;
-            scheduler.RegisterRenderReconcile();
+            _owner = owner;
+            scheduler.RegisterRenderReconcile(owner);
         }
 
         internal void Complete()
         {
             var scheduler = _scheduler;
             _scheduler = null;
-            scheduler?.CompleteRenderReconcile();
+            scheduler?.CompleteRenderReconcile(_owner);
         }
+    }
+
+    private sealed class VisualTransactionDeferral(
+        EdgeCapsulePresenter owner, RenderReconcileRegistration registration) : IDisposable
+    {
+        private EdgeCapsulePresenter? _owner = owner;
+
+        public void Dispose()
+        {
+            var presenter = _owner;
+            _owner = null;
+            if (presenter == null) return;
+            try { presenter.ReleaseVisualTransactionDeferral(); }
+            finally { registration.Complete(); }
+        }
+    }
+
+    private int _visualTransactionDeferrals;
+
+    internal IDisposable DeferReconcileToVisualTransaction()
+    {
+        _visualTransactionDeferrals++;
+        // A staged member may not yet be animated. Register its queue barrier independently of
+        // the active presenter list so an existing sibling cannot publish this generation early.
+        _frameScheduler ??= EdgeCapsuleFrameScheduler.For(_dispatcher ?? Dispatcher.CurrentDispatcher);
+        var registration = new RenderReconcileRegistration(_frameScheduler, this);
+        // Retain dirty input/measure work, but retire its earlier Send/Render callback. Otherwise
+        // it can see the newly staged Preview model before the queue installs its shared motion.
+        CancelQueuedReconcile();
+        return new VisualTransactionDeferral(this, registration);
+    }
+
+    private void ReleaseVisualTransactionDeferral()
+    {
+        _visualTransactionDeferrals--;
+        if (_visualTransactionDeferrals == 0 && _dirty != EdgeCapsuleDirty.None &&
+            _dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } dispatcher &&
+            _reconcile is { } reconcile)
+        {
+            // Also drain unconsumed work after cancellation or a failed queue admission.
+            QueueReconcile(EdgeCapsuleDirty.None, dispatcher, reconcile, beforeNextRender: false);
+        }
+        // The deferral releases its registration after any remaining work is queued. Even if
+        // Flush consumed all dirty flags, that release resumes an active transition directly.
     }
 
     private EdgeCapsuleDirty _dirty;
@@ -167,9 +213,8 @@ internal sealed class EdgeCapsulePresenter
             return;
         }
 
-        // Queue endpoint settlement happens while compositor authority still covers the real
-        // HWND. No animation frame has been published yet, so the full WPF transition begins at
-        // the same post-endpoint QPC used by DirectComposition.
+        // Queue endpoint settlement and the blocking cover publication have finished. No motion
+        // has been published yet, so WPF and DirectComposition share this fresh animation start.
         Transition = active with
         {
             Start = AppliedPresentation,
@@ -444,7 +489,7 @@ internal sealed class EdgeCapsulePresenter
         _dirty |= dirty;
         Configure(dispatcher, reconcile);
         CancelQueuedReconcile();
-        RunReconcile(nowTimestamp);
+        RunReconcile(nowTimestamp, synchronousFlush: true);
     }
 
     public void ClearDeferredWork()
@@ -652,6 +697,11 @@ internal sealed class EdgeCapsulePresenter
             return;
         }
 
+        if (_visualTransactionDeferrals > 0)
+        {
+            return;
+        }
+
         if (_reconcileScheduled)
         {
             if (beforeNextRender &&
@@ -677,7 +727,7 @@ internal sealed class EdgeCapsulePresenter
         {
             _frameScheduler ??= EdgeCapsuleFrameScheduler.For(_dispatcher);
             reconcileRegistration =
-                new RenderReconcileRegistration(_frameScheduler);
+                new RenderReconcileRegistration(_frameScheduler, this);
         }
         _reconcileRegistration = reconcileRegistration;
 
@@ -726,10 +776,16 @@ internal sealed class EdgeCapsulePresenter
         // If input promotes one callback to Send, the same registration drains there.
     }
 
-    private void RunReconcile(long? nowTimestamp = null)
+    private void RunReconcile(long? nowTimestamp = null, bool synchronousFlush = false)
     {
         if (_reconcile == null)
         {
+            return;
+        }
+        if (_visualTransactionDeferrals > 0 && !synchronousFlush)
+        {
+            // Only the owner's explicit Flush may consume a staged queue generation. This also
+            // covers shared frame callbacks, whose native batch alone is not that owner.
             return;
         }
         if (_nativeBatchRetryPending && !_nativeBatchApplyActive)
@@ -840,6 +896,9 @@ internal sealed class EdgeCapsulePresenter
         }
         if (_frameSchedulerActive)
         {
+            // Layout refresh or joining a cross-queue transaction can change the current group
+            // while this presenter is already registered, including while Rendering is paused.
+            _frameScheduler?.ReconcileReadinessChanged();
             return;
         }
 
@@ -915,6 +974,7 @@ internal sealed class EdgeCapsulePresenter
         {
             StopFrameScheduler();
         }
+        _frameScheduler?.ReconcileReadinessChanged();
     }
 
     internal void AbortNativeBatchTransactionGroup(long groupId)
@@ -1160,8 +1220,7 @@ internal sealed class EdgeCapsulePresenter
         {
             _dirty |= EdgeCapsuleDirty.Frame;
         }
-        _reconcileGeneration++;
-        _reconcileScheduled = false;
+        CancelQueuedReconcile();
         _hasFramePointerOverride = true;
         _framePointerOverride = pointer;
         _advancingSharedFrameScheduler = scheduler;

@@ -327,9 +327,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             previousFrame.Bounds.Height != frame.Bounds.Height ||
             Math.Abs(previousFrame.DpiScaleX - frame.DpiScaleX) > 0.001 ||
             Math.Abs(previousFrame.DpiScaleY - frame.DpiScaleY) > 0.001;
-        var visualSurfaceOffsetChanged =
-            previousNativeHostBounds.Top != nativeHostBounds.Top ||
-            previousFrame.Bounds.Top - previousNativeHostBounds.Top != visualOffsetYDevice;
         var segmentLayoutChanged = visualSurfaceSizeChanged ||
             previousFrame.BodyWindowWidthDevice != frame.BodyWindowWidthDevice ||
             Math.Abs(previousFrame.MaximumCloseWidthDip - frame.MaximumCloseWidthDip) > 0.001;
@@ -391,7 +388,9 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             ApplyFixedLayout(frame.Edge);
         }
-        if (visualSurfaceSizeChanged || visualSurfaceOffsetChanged)
+        // The local WPF surface stays at (0, 0); queue translation is supplied by DComp.
+        // A changing screen-space offset does not require reapplying identical local dimensions.
+        if (visualSurfaceSizeChanged)
         {
             ApplyVisualSurface(frame);
         }

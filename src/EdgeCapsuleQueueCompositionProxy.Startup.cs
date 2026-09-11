@@ -111,7 +111,6 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     RollbackCloaked: true)));
 
             var hostPromoted = false;
-            long animationTimestamp = 0;
 
             // Cold startup has no compositor authority yet, so publish its exact-start root
             // before any real HWND is cloaked. A successor normally keeps the predecessor root
@@ -195,15 +194,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 EdgeCapsuleColdStartDiagnostics.Boundary("endpoint-ready");
 #endif
 
-                // Endpoint work is deliberately excluded from animation time. Rebase both WPF
-                // transitions and DComp live-surface offsets from one fresh post-endpoint QPC.
-                animationTimestamp = Stopwatch.GetTimestamp();
-                RebaseVisualStarts(animationTimestamp);
-                if (!_animationStartRequested(animationTimestamp))
-                {
-                    return false;
-                }
-                ConfigureAnimations(animationTimestamp);
+                // Publish the live cover at its start position. The coordinated DwmFlush below
+                // blocks this UI thread; starting autonomous DComp motion here would let peers
+                // move while WPF is still unable to produce the first shape frame.
+                RebaseVisualStarts(Stopwatch.GetTimestamp());
 
                 if (_predecessor != null)
                 {
@@ -219,7 +213,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
                 _device.Commit().CheckError();
 #if DEBUG
-                EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
+                EdgeCapsuleColdStartDiagnostics.Boundary("start-cover-published");
 #endif
 
                 if (!_coverReady(this))
@@ -319,7 +313,6 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
             // The batch DwmFlush has now made the final successor root authoritative.
             ReleaseSuccessorAdmissionCover();
-            _animationStartedAtTimestamp = animationTimestamp;
             foreach (var handle in successorHandles)
             {
                 _cloakedRealSourceHandles.Add(handle);
@@ -331,7 +324,23 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             }
             _coverPublished = true;
 
-            _sampleTimer.Start();
+            // All blocking publication work is finished. Start shape and translation together
+            // from this fresh QPC, keeping the same curve and full duration for both. Do not
+            // flush again after starting: WPF must be free to produce its first frame. The cover
+            // already owns its sources, so a failure here uses the normal published-cover handoff.
+            var animationTimestamp = Stopwatch.GetTimestamp();
+            if (!_animationStartRequested(animationTimestamp))
+            {
+                return false;
+            }
+            ConfigureAnimations(animationTimestamp);
+            _device.Commit().CheckError();
+            _animationStartedAtTimestamp = animationTimestamp;
+#if DEBUG
+            EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
+#endif
+
+            if (RoutesPointerInput) _sampleTimer.Start();
             var elapsed = Stopwatch.GetElapsedTime(
                 _animationStartedAtTimestamp,
                 Stopwatch.GetTimestamp()).TotalMilliseconds;

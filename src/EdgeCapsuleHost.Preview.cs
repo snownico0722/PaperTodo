@@ -13,6 +13,7 @@ namespace PaperTodo;
 internal sealed partial class EdgeCapsuleHost
 {
     private Border? _previewViewportLayer;
+    private (Size Size, CornerRadius Corners)? _previewClipGeometry;
     private Border? _previewContentLayer;
     private FrameworkElement? _previewContent;
     private int _previewContentStageGeneration;
@@ -372,6 +373,13 @@ internal sealed partial class EdgeCapsuleHost
         var topRight = Math.Clamp(corners.TopRight, 0, maximumRadius);
         var bottomRight = Math.Clamp(corners.BottomRight, 0, maximumRadius);
         var bottomLeft = Math.Clamp(corners.BottomLeft, 0, maximumRadius);
+        var geometryKey = (new Size(width, height), new CornerRadius(topLeft, topRight, bottomRight, bottomLeft));
+        if (_previewClipGeometry == geometryKey && _previewViewportLayer.Clip != null)
+        {
+            // DComp movement and content-only invalidation do not change local clipping. Reuse
+            // the frozen geometry instead of rebuilding it and invalidating WPF's visual again.
+            return;
+        }
 
         var clip = new StreamGeometry();
         using (var geometry = clip.Open())
@@ -467,6 +475,7 @@ internal sealed partial class EdgeCapsuleHost
         }
         clip.Freeze();
         _previewViewportLayer.Clip = clip;
+        _previewClipGeometry = geometryKey;
     }
 
     private bool ApplyPreviewPresentation(
@@ -767,6 +776,14 @@ internal sealed partial class EdgeCapsuleHost
 
     private void RestoreCompactContentAnchor()
     {
+        if (double.IsNaN(_compactContentAnchorWidthDip) &&
+            double.IsNaN(_compactPluginContentAnchorWidthDip) &&
+            double.IsNaN(_compactContentAnchorCloseWidthDip))
+        {
+            // Ordinary moving peers have no preview anchor to release. Their title/plugin layout
+            // is already compact; avoid rewriting its dependency properties on every queue frame.
+            return;
+        }
         _compactContentAnchorWidthDip = double.NaN;
         _compactPluginContentAnchorWidthDip = double.NaN;
         _compactContentAnchorCloseWidthDip = double.NaN;

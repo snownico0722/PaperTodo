@@ -6,7 +6,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using PaperTodo;
 
-internal static class Program
+internal static partial class Program
 {
     private static int assertions;
 
@@ -24,7 +24,9 @@ internal static class Program
             Console.WriteLine("PASS title-presentation-and-transition-geometry");
             HostContentVisibility();
             Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
-            Console.WriteLine($"Edge title checks: 4/4 groups, {assertions} assertions passed.");
+            QueuedPreviewTransactions();
+            Console.WriteLine("PASS queued-preview-transaction-ordering");
+            Console.WriteLine($"Edge title checks: 5/5 groups, {assertions} assertions passed.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -156,6 +158,7 @@ internal static class Program
         host.SetDefaultIconSlotWidth(0);
         Check(host.DefaultIconSlotWidthForChecks < 0.01,
             "Script/natural icon layout can release the default slot");
+        PreviewClipReuse(host);
     }
 
     private static void Geometry()

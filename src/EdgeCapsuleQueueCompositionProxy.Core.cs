@@ -97,7 +97,12 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             TimeSpan.FromMilliseconds(16),
             DispatcherPriority.Input,
             OnSampleTimerTick,
-            dispatcher);
+            dispatcher)
+        {
+            // The interval constructor starts immediately. Staged proxies do not own visible
+            // input yet and must not post pointer work during a nested publication render turn.
+            IsEnabled = false
+        };
         _completionTimer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(
                 plan.DurationMilliseconds + CompletionGuardMilliseconds),
