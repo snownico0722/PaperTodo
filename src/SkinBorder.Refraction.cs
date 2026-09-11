@@ -44,21 +44,41 @@ internal sealed partial class SkinBorder
     internal void PrepareMenuBackground(DesktopLensCapture.Frame? frame, bool failed)
     {
         _preparedFrame?.Dispose(); _preparedFrame = frame;
+        StopRefraction();
         SuppressLiveBackgroundForOpening = failed; _menuRendered = false; MenuFallbackRenderCount = 0;
+        FirstMenuRenderUsedBackground = false;
+        if (frame == null) return;
+        try
+        {
+            // Build the bitmap/visual graph BEFORE IsOpen. A scene object created in
+            // OnRender is not proof that its bitmap reached the compositor that frame.
+            // Freezing the first bitmap publishes immutable pixels, not a pending
+            // WriteableBitmap back-to-front copy. Only final positioning waits for HWND.
+            if (UploadRefraction(frame, immutable: true))
+            { frame.Dispose(); _preparedFrame = null; }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
+        {
+            _preparedFrame?.Dispose(); _preparedFrame = null;
+            SuppressLiveBackgroundForOpening = true; FailRefraction(ex);
+        }
     }
 
-    // The popup's initial scene was captured while no popup HWND existed. Upload it
-    // in its first render, at the FINAL WPF placement, without a UI-thread capture/wait.
+    // The scene is already uploaded before the popup exists. Arrange/Loaded only
+    // project it at FINAL WPF placement; no desktop readback or first-upload delay.
     private void PresentPreparedMenuBackground()
     {
-        if (_preparedFrame == null || ActualWidth < 8 || ActualHeight < 8 ||
+        if (!IsMenu || _capture != null || (_preparedFrame == null && _scene?.Layout == null) ||
+            ActualWidth < 8 || ActualHeight < 8 ||
             PresentationSource.FromVisual(this) is not HwndSource source || source.IsDisposed) return;
         try
         {
             _captureHwnd = source.Handle;
             _captureGeometry = CaptureRegion(source.Handle);
-            if (_captureGeometry != null && PresentRefraction(_preparedFrame))
+            if (_captureGeometry == null) return;
+            if (_preparedFrame != null && UploadRefraction(_preparedFrame, immutable: true))
             { _preparedFrame.Dispose(); _preparedFrame = null; }
+            UpdateRefractionCrop();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
         { _preparedFrame?.Dispose(); _preparedFrame = null; FailRefraction(ex); }
@@ -198,12 +218,18 @@ internal sealed partial class SkinBorder
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.ExternalException or ArgumentException)
         { FailRefraction(ex); }
     }
-    private unsafe bool PresentRefraction(DesktopLensCapture.Frame frame)
+    private bool PresentRefraction(DesktopLensCapture.Frame frame) => UploadRefraction(frame, immutable: false);
+
+    private unsafe bool UploadRefraction(DesktopLensCapture.Frame frame, bool immutable)
     {
         var scene = _scene ??= new LensScene();
         var layout = frame.Layout;
         var bitmap = scene.Bitmap;
-        var replaceBitmap = bitmap == null || bitmap.PixelWidth != layout.PixelWidth || bitmap.PixelHeight != layout.PixelHeight;
+        // A bitmap's pixels and its world-space mapping form one version. Updating an
+        // in-use bitmap for a SAME-SIZED but recentered scene lets the render thread
+        // observe new pixels with old crop constants. Replace on any mapping change;
+        // stationary samples still reuse their bitmap and zero-wait lock.
+        var replaceBitmap = immutable || bitmap == null || bitmap.IsFrozen || scene.Layout != layout;
         if (replaceBitmap)
             bitmap = new WriteableBitmap(layout.PixelWidth, layout.PixelHeight, 96, 96, PixelFormats.Bgr32, null);
         // Prepare the replacement privately. A busy render thread must not expose an
@@ -225,6 +251,7 @@ internal sealed partial class SkinBorder
             bitmap.AddDirtyRect(new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
         }
         finally { bitmap.Unlock(); }
+        if (immutable) bitmap.Freeze();
         if (replaceBitmap)
         {
             scene.Bitmap = bitmap;
@@ -249,7 +276,8 @@ internal sealed partial class SkinBorder
     }
     private void UpdateRefractionCrop()
     {
-        if (_captureHwnd == IntPtr.Zero || _scene?.Layout == null || _refractionVisual == null) return;
+        if (_captureHwnd == IntPtr.Zero || _scene?.Layout == null || _refractionVisual == null ||
+            PresentationSource.FromVisual(this) is not HwndSource { IsDisposed: false }) return;
         var origin = PointToScreen(new Point()); // retain the fractional screen position
         var dpi = VisualTreeHelper.GetDpi(this);
         EnsureGeometry(); EnsureBrushes(Colors.Transparent);

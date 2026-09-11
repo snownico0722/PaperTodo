@@ -15,6 +15,8 @@ internal static class MaterialPipelineChecks
     internal static void Run(AppController controller)
     {
         CheckLayoutReuse();
+        Program.Assert(DesktopLensCapture.CaptureRasterOperation == 0x00CC0020,
+            "all background reads use SRCCOPY without the cursor-disrupting CAPTUREBLT flag");
         var first = new LiquidRefractionEffect(); var second = new LiquidRefractionEffect();
         var shaderProperty = typeof(ShaderEffect).GetProperty("PixelShader", Program.Private)!;
         var shader = (PixelShader)shaderProperty.GetValue(first)!;
@@ -29,6 +31,8 @@ internal static class MaterialPipelineChecks
         controller.State.LiquidGlassRefraction = false;
         try
         {
+            CheckPreparedMenu(controller);
+            CheckCaptureExclusion();
             // A recipe round trip on the SAME visual detects stale drawing-kind caches.
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light"; Theme.Invalidate();
             var content = new TextBlock { Text = "Unchanged foreground" };
@@ -49,7 +53,7 @@ internal static class MaterialPipelineChecks
                 var bitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
                 var visual = SceneField<DrawingVisual>(scene, "Visual");
                 WriteFrame(surface, layout, 47);
-                Program.Assert(ReferenceEquals(bitmap, SceneField<WriteableBitmap>(scene, "Bitmap")), "same-sized samples reuse the bitmap");
+                Program.Assert(ReferenceEquals(bitmap, SceneField<WriteableBitmap>(scene, "Bitmap")), "samples of the same world-space region reuse the bitmap");
 
                 foreach (var skin in new[] { PaperSkins.Acrylic, PaperSkins.LiquidGlass, PaperSkins.Acrylic })
                 {
@@ -66,6 +70,18 @@ internal static class MaterialPipelineChecks
                     Program.Assert(skin == PaperSkins.LiquidGlass ? visual.Offset == new Vector() : visual.Offset.X != 0,
                         skin + ": liquid uses uniforms; diffusion uses a world-space visual offset");
                 }
+                // A new origin is a different pixel version even if its dimensions match.
+                // Never overwrite pixels still referenced by the old crop/visual commands.
+                var recentered = layout with { Bounds = new Int32Rect(bounds.X + 128, bounds.Y, bounds.Width, bounds.Height) };
+                WriteFrame(surface, recentered, 63);
+                var movedBitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
+                Program.Assert(!ReferenceEquals(bitmap, movedBitmap), "same-size recenter publishes a new mapped texture");
+                var retainedPixels = new byte[layout.PixelWidth * layout.PixelHeight * 4];
+                bitmap.CopyPixels(retainedPixels, layout.PixelWidth * 4, 0);
+                Program.Assert(retainedPixels.All(b => b == 47), "recenter does not mutate pixels referenced by previous drawing commands");
+                WriteFrame(surface, recentered, 71);
+                Program.Assert(ReferenceEquals(movedBitmap, SceneField<WriteableBitmap>(scene, "Bitmap")),
+                    "after recenter, stationary updates resume bitmap reuse");
                 var larger = layout with { Bounds = new Int32Rect(bounds.X, bounds.Y, 810, 700), PixelWidth = 810 };
                 WriteFrame(surface, larger, 79);
                 var replacement = SceneField<WriteableBitmap>(scene, "Bitmap");
@@ -85,6 +101,64 @@ internal static class MaterialPipelineChecks
             (controller.State.PaperSkin, controller.State.Theme, controller.State.LiquidGlassRefraction) = saved;
             Theme.Invalidate();
         }
+    }
+    private static void CheckPreparedMenu(AppController controller)
+    {
+        controller.State.PaperSkin = PaperSkins.LiquidGlass; Theme.Invalidate();
+        var surface = new SkinBorder { IsMenu = true, Width = 240, Height = 160 };
+        surface.Measure(new Size(240, 160)); surface.Arrange(new Rect(0, 0, 240, 160));
+        var layout = new LensCaptureLayout.Scene(new Int32Rect(0, 0, 240, 160), 240, 160);
+        var pixels = ArrayPool<byte>.Shared.Rent(240 * 160 * 4);
+        pixels.AsSpan(0, 240 * 160 * 4).Fill(83);
+        // Ownership transfers to the surface. It must upload and release the pooled
+        // frame before a popup/window exists, not only record a successful OnRender.
+        surface.PrepareMenuBackground(new DesktopLensCapture.Frame(layout, pixels), false);
+        var scene = typeof(SkinBorder).GetField("_scene", Program.Private)!.GetValue(surface)!;
+        var bitmap = SceneField<WriteableBitmap>(scene, "Bitmap");
+        Program.Assert(PresentationSource.FromVisual(surface) == null && !surface.HasRefractionWorker && bitmap.IsFrozen,
+            "detached menu has immutable initial pixels without a hidden HWND or capture worker");
+        Program.Assert(typeof(SkinBorder).GetField("_preparedFrame", Program.Private)!.GetValue(surface) == null,
+            "first render has no remaining pooled-frame upload");
+        var copy = new byte[240 * 160 * 4]; bitmap.CopyPixels(copy, 240 * 4, 0);
+        Program.Assert(copy.All(b => b == 83), "frozen first scene retains its pixels after pooled input is released");
+        surface.PrepareMenuBackground(null, true);
+        Program.Assert(typeof(SkinBorder).GetField("_scene", Program.Private)!.GetValue(surface) == null,
+            "cancelled/fallback preparation releases the staged scene");
+        Console.WriteLine("MENU PREP: immutable pixels ready before HWND; pooled input released; fallback cleans scene.");
+    }
+    private static void CheckCaptureExclusion()
+    {
+        // Check only raw capture bytes and exclusion, not screenshot/rasterized aesthetics.
+        // Removing CAPTUREBLT must not turn the lens into recursively captured content.
+        var blue = Color.FromRgb(20, 90, 180);
+        var rear = new Window { Left = 90, Top = 90, Width = 240, Height = 180,
+            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = new SolidColorBrush(blue),
+            ShowInTaskbar = false, Topmost = true };
+        var lens = new Window { Left = 130, Top = 130, Width = 100, Height = 80,
+            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Red,
+            ShowInTaskbar = false, Topmost = true };
+        try
+        {
+            rear.Show(); lens.Show(); Program.Pump();
+            Exception? failure = null;
+            using var capture = new DesktopLensCapture(new WindowInteropHelper(lens).Handle,
+                new DesktopLensCapture.Region(0, 0, 100, 80, 0), lens.Dispatcher, ex => failure = ex);
+            var until = Environment.TickCount64 + 3000;
+            var matched = false;
+            while (!matched && Environment.TickCount64 < until)
+            {
+                Program.Pump(); Thread.Sleep(15);
+                if (failure != null) throw new InvalidOperationException("cursor-safe capture failed", failure);
+                using var frame = capture.TakeLatest();
+                if (frame == null) continue;
+                var offset = ((frame.Layout.PixelHeight / 2) * frame.Layout.PixelWidth + frame.Layout.PixelWidth / 2) * 4;
+                var b = frame.Pixels[offset]; var g = frame.Pixels[offset + 1]; var r = frame.Pixels[offset + 2];
+                matched = Math.Abs(b - blue.B) < 12 && Math.Abs(g - blue.G) < 12 && Math.Abs(r - blue.R) < 12;
+                Console.WriteLine($"CAPTURE SRCCOPY: rear BGR={b}/{g}/{r}; excluded red lens; match={matched}");
+            }
+            Program.Assert(matched, "cursor-safe capture preserves DWM layered background and excludes the capturing lens");
+        }
+        finally { lens.Close(); rear.Close(); }
     }
     private static void CheckLayoutReuse()
     {

@@ -42,6 +42,10 @@ internal sealed class DesktopLensCapture : IDisposable
     private int _disposed;
     private long _motionUntil, _captures, _published, _sampledPixels;
     private static long ClockMilliseconds => (long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency));
+    // CAPTUREBLT can hide/show the hardware/software cursor during every readback.
+    // This path already requires DWM composition; copy the composed desktop without
+    // that legacy layered-window flag. Never hide, move or redraw the user's cursor.
+    internal const uint CaptureRasterOperation = 0x00CC0020; // SRCCOPY
     internal const int ActiveInterval = 100;
     internal const int MovingInterval = ActiveInterval;
     internal static int CaptureInterval(bool moving, int quiet) => !moving && quiet >= 10 ? 250 : ActiveInterval;
@@ -248,8 +252,8 @@ internal sealed class DesktopLensCapture : IDisposable
                 b.Y + b.Height > desktop.Y + desktop.Height)
                 ClearPixels();
             var ok = b.Width == _width && b.Height == _height
-                ? BitBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, 0x40CC0020)
-                : StretchBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, b.Width, b.Height, 0x40CC0020);
+                ? BitBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, CaptureRasterOperation)
+                : StretchBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, b.Width, b.Height, CaptureRasterOperation);
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
         private unsafe void ClearPixels() => new Span<byte>((void*)_bits, checked(_width * _height * 4)).Clear();

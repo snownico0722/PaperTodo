@@ -25,6 +25,7 @@ internal sealed class MaterialContextMenu : ContextMenu
     private static object CoerceOpen(DependencyObject d, object value)
     {
         var menu = (MaterialContextMenu)d;
+        menu.ConfigurePopupAnimation();
         menu._opening ??= new MaterialMenuOpening(menu, IsOpenProperty, () => menu,
             () => menu.PlacementTarget, () => menu.Placement);
         return menu._opening.Coerce((bool)value);
@@ -32,9 +33,15 @@ internal sealed class MaterialContextMenu : ContextMenu
     protected override void OnVisualParentChanged(DependencyObject oldParent)
     {
         base.OnVisualParentChanged(oldParent);
+        ConfigurePopupAnimation();
+    }
+    private void ConfigurePopupAnimation()
+    {
         if (LogicalTreeHelper.GetParent(this) is Popup popup)
         {
-            if (MaterialMenuOpening.NeedsBackground) popup.SetCurrentValue(Popup.PopupAnimationProperty, PopupAnimation.None);
+            // SetCurrentValue retains WPF's dynamic system-animation expression;
+            // reparenting/resource invalidation can bring Fade back during opening.
+            if (MaterialMenuOpening.NeedsBackground) popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.None);
             else popup.SetResourceReference(Popup.PopupAnimationProperty, SystemParameters.MenuPopupAnimationKey);
         }
     }
@@ -52,7 +59,7 @@ internal sealed class MaterialSubmenuPopup : Popup
         var popup = (MaterialSubmenuPopup)d;
         // Retain Popup's own disconnected-tree/Loaded guard.
         var requested = (bool)(BaseOpenCoercion?.Invoke(d, value) ?? value);
-        popup.SetCurrentValue(PopupAnimationProperty, MaterialMenuOpening.NeedsBackground ? PopupAnimation.None : PopupAnimation.Fade);
+        popup.SetValue(PopupAnimationProperty, MaterialMenuOpening.NeedsBackground ? PopupAnimation.None : PopupAnimation.Fade);
         popup._opening ??= new MaterialMenuOpening(popup, IsOpenProperty, () => popup.Child as FrameworkElement,
             () => popup.PlacementTarget, () => popup.Placement);
         return popup._opening.Coerce(requested);

@@ -137,11 +137,22 @@ internal static class MaterialPresentationChecks
         var master = new MasterCapsuleWindow(controller, EdgeCapsuleEdge.Left, "");
         GetCursorPos(out var cursor);
         ContextMenu? menu = null;
+        RoutedEventHandler? opened = null;
+        EventHandler? rendered = null;
+        var observedFrames = 0;
         try
         {
             master.ShowPlaced(1, false, false); Wait(120);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
+            opened = (_, _) => AssertNoPopupFade(menu);
+            rendered = (_, _) =>
+            {
+                if (!menu.IsOpen) return;
+                AssertNoPopupFade(menu); observedFrames++;
+            };
+            menu.Opened += opened;
+            CompositionTarget.Rendering += rendered;
             // The very same detached template survives Paper -> Mica -> Acrylic.
             menu.ApplyTemplate();
             foreach (var theme in new[] { "light", "dark" })
@@ -153,12 +164,18 @@ internal static class MaterialPresentationChecks
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
                     controller.State.MatchAuxiliaryMaterialStrength = attempt == 1;
+                    var beforeFrames = observedFrames;
                     var point = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
                     SetCursorPos((int)point.X, (int)point.Y); Wait(25);
                     mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
                     Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
                     Wait(180);
+                    Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
+                    // Resource reevaluation must not restore system Fade on reused popups.
+                    menu.Resources[SystemParameters.MenuPopupAnimationKey] = PopupAnimation.Fade;
+                    AssertNoPopupFade(menu);
+                    menu.Resources.Remove(SystemParameters.MenuPopupAnimationKey);
                     var surface = Find(menu)!;
                     var opacityOwners = new List<string>();
                     for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
@@ -173,12 +190,28 @@ internal static class MaterialPresentationChecks
         }
         finally
         {
-            if (menu != null) menu.IsOpen = false;
+            if (rendered != null) CompositionTarget.Rendering -= rendered;
+            if (menu != null)
+            {
+                if (opened != null) menu.Opened -= opened;
+                menu.IsOpen = false;
+            }
             master.CloseForReal(); SetCursorPos(cursor.X, cursor.Y);
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
                 controller.State.MatchAuxiliaryMaterialStrength) = original;
             Theme.Invalidate();
         }
+    }
+    private static void AssertNoPopupFade(ContextMenu menu)
+    {
+        var popup = LogicalTreeHelper.GetParent(menu) as Popup;
+        Program.Assert(popup != null && popup.PopupAnimation == PopupAnimation.None &&
+            !DependencyPropertyHelper.GetValueSource(popup, Popup.PopupAnimationProperty).IsExpression,
+            "live popup animation is a local None, not a dynamic system Fade expression");
+        for (DependencyObject? node = menu; node is Visual; node = VisualTreeHelper.GetParent(node))
+            if (node is UIElement ui)
+                Program.Assert(ui.Opacity == 1 && !DependencyPropertyHelper.GetValueSource(ui, UIElement.OpacityProperty).IsAnimated,
+                    "menu and PopupRoot have no fade at Opened or during composition");
     }
     [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
