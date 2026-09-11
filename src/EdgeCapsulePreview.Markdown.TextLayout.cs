@@ -14,6 +14,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     {
         var zoom = NormalizeTextZoom(textZoom);
         var height = 0.0;
+        var measuredRows = new Dictionary<ContentLine, double>();
         var code = new System.Text.StringBuilder();
         var inside = false;
         var codeLines = 0;
@@ -31,6 +32,20 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             block.Measure(new Size(width, double.PositiveInfinity));
             height += block.DesiredSize.Height;
         }
+        void AddRow(ContentLine line)
+        {
+            // Width, typography and render mode are fixed for this Describe call. Identical
+            // source rows (including their fence context) need not create/measure WPF twice.
+            if (!measuredRows.TryGetValue(line, out var rowHeight))
+            {
+                var before = height;
+                Add(content.RenderMode == MarkdownRenderModes.Full
+                    ? BuildBlock(line.Text.TrimEnd(), _ => { }, Inline)
+                    : BuildSourceBlock(line.Text, content.RenderMode, line.WasInsideFence, line.FenceKind, _ => { }, Inline));
+                measuredRows[line] = height - before;
+            }
+            else height += rowHeight;
+        }
         void AddCode()
         {
             var template = NewTextBlock("", NoteTypography.CodeFontSize);
@@ -41,7 +56,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         {
             if (height >= 410) break;
             if (content.RenderMode != MarkdownRenderModes.Full)
-                Add(BuildSourceBlock(line.Text, content.RenderMode, line.WasInsideFence, line.FenceKind, _ => { }, Inline));
+                AddRow(line);
             else if (line.FenceKind == MarkdownFenceLineKind.Opening)
             { inside = true; code.Clear(); codeLines = 0; }
             else if (line.FenceKind == MarkdownFenceLineKind.Closing)
@@ -51,12 +66,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 if (codeLines++ > 0) code.Append('\n');
                 code.Append(line.Text.TrimEnd());
             }
-            else Add(BuildBlock(line.Text.TrimEnd(), _ => { }, Inline));
+            else AddRow(line);
         }
         if (inside && height < 410) AddCode();
         return height;
     }
-
 
 }
 

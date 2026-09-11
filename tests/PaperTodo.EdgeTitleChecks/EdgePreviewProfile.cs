@@ -17,6 +17,7 @@ internal static partial class Program
         var fixtures = new (string Name, string Text)[]
         {
             ("short-rows", string.Join('\n', Enumerable.Repeat("普通正文 **加粗** 与 `code`", 12))),
+            ("distinct-rows", string.Join('\n', Enumerable.Range(1, 12).Select(i => $"第{i}行普通正文 **加粗** 与 `code`"))),
             ("dense-inline", string.Concat(Enumerable.Repeat("**加粗** *斜体* ~~删除~~ `code` [a **styled** link](https://example.com) 中文 ", 45))),
             ("long-code", "```\n" + new string('文', 5500) + "\n```"),
             ("many-links", string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ", 120)))

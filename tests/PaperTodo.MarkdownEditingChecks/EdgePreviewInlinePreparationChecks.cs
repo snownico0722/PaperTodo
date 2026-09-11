@@ -8,6 +8,26 @@ internal static partial class Program
 {
     private static void RunEdgePreviewInlinePreparationChecks(Action<string, Action> check)
     {
+        check("Repeated row measurements retain natural height and current width/zoom", () =>
+        {
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            foreach (var width in new[] { 180.0, 360.0 })
+            foreach (var zoom in new[] { 0.7, 1.0, 1.3 })
+            {
+                const string line = "**bold** 正文 `code`";
+                var one = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(line, mode);
+                var repeated = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(string.Join('\n', Enumerable.Repeat(line, 4)), mode);
+                var height = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(one, width, zoom);
+                var combined = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(repeated, width, zoom);
+                Require(Math.Abs(height * 4 - combined) < 0.1, "repeated rows retain their measured metric");
+                var mixed = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("```\n" + line + "\n```\n" + line, mode);
+                var fence = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("```\n" + line + "\n```", mode);
+                var expected = MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(fence, width, zoom) + height;
+                Require(Math.Abs(expected - MarkdownEdgeCapsulePreviewRenderer.MeasureContentHeight(mixed, width, zoom)) < 0.1,
+                    "the same source inside code and outside code keeps its own typography");
+            }
+        });
+
         check("Preview width, height and both renderers reuse one inline preparation", () =>
         {
             foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
