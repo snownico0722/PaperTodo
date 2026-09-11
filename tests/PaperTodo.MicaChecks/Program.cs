@@ -14,10 +14,11 @@ internal static class Program
     internal const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         // Read the real resource definitions, but not the Application subclass/BAML root:
         // pumping an App would start a second production controller in this test process.
+        var noRaster = args.Contains("--no-raster", StringComparer.Ordinal);
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
         {
@@ -316,14 +317,22 @@ internal static class Program
                         finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
                     }
                 });
-                Check("experimental skins", () => SkinChecks.Run(controller));
-                Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
-                Check("real background refraction and capture lifecycle", () => RefractionChecks.Run(controller));
-                Check("shared live capsule and popup materials, RGB dispersion and lifecycle", () => SharedMaterialChecks.Run(controller));
-                Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
+                if (!noRaster)
+                {
+                    Check("experimental skins", () => SkinChecks.Run(controller));
+                    Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
+                    Check("real background refraction and capture lifecycle", () => RefractionChecks.Run(controller));
+                    Check("shared live capsule and popup materials, RGB dispersion and lifecycle", () => SharedMaterialChecks.Run(controller));
+                    Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
+                }
+                Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
-                Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
-                Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));
+                if (!noRaster)
+                {
+                    Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
+                    Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));
+                }
+                else Console.WriteLine("SKIP raster/desktop-image assertions (--no-raster); no screenshot artifacts.");
                 Check("non-Mica startup keeps the original layered paper", () =>
                 {
                     typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, false);

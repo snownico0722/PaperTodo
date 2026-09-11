@@ -16,17 +16,16 @@ namespace PaperTodo;
 internal sealed class DesktopLensCapture : IDisposable
 {
     internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
-    internal sealed record Tile(LensCaptureLayout.Tile Layout, byte[] Pixels);
     internal sealed class Frame : IDisposable
     {
-        internal readonly Tile[] Tiles;
-        internal readonly Region Geometry;
+        internal readonly LensCaptureLayout.Scene Layout;
+        internal readonly byte[] Pixels;
         private int _disposed;
-        internal Frame(Tile[] tiles, Region geometry) => (Tiles, Geometry) = (tiles, geometry);
+        internal Frame(LensCaptureLayout.Scene layout, byte[] pixels) => (Layout, Pixels) = (layout, pixels);
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            foreach (var tile in Tiles) ArrayPool<byte>.Shared.Return(tile.Pixels, clearArray: true);
+            ArrayPool<byte>.Shared.Return(Pixels, clearArray: true);
         }
     }
     private readonly IntPtr _hwnd;
@@ -77,18 +76,21 @@ internal sealed class DesktopLensCapture : IDisposable
     internal void MarkMoving()
     {
         if (IsStopped) return;
-        Interlocked.Exchange(ref _motionUntil, ClockMilliseconds + 160);
-        _wake.Set();
+        var now = ClockMilliseconds;
+        // One wake per motion burst, not one kernel wake per WM_WINDOWPOSCHANGED.
+        // The worker still reads the latest region on its independent 100ms cadence.
+        if (Interlocked.Exchange(ref _motionUntil, now + 160) <= now) _wake.Set();
     }
     private void CaptureLoop()
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
-        var surfaces = new CaptureSurface[1];
+        CaptureSurface? surface = null;
         try
         {
             var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
             var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L; var lastSample = next - ActiveInterval;
-            LensCaptureLayout.Tile[]? oldLayout = null;
+            LensCaptureLayout.Scene? oldLayout = null;
+            Int32Rect oldDesktop = default;
             Region? oldGeometry = null;
             DwmFlush(); // Exclusion is established before the first background sample.
             while (!_cancel.IsCancellationRequested)
@@ -111,38 +113,27 @@ internal sealed class DesktopLensCapture : IDisposable
                 if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
                     throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
                 var desktop = DesktopBounds;
-                var layout = LensCaptureLayout.Create(window, geometry, desktop);
-                if (layout.Length == 0) continue;
-                var changed = oldGeometry != geometry || oldLayout == null || !layout.AsSpan().SequenceEqual(oldLayout);
-                for (var i = 0; i < layout.Length; i++)
-                {
-                    surfaces[i] ??= new CaptureSurface();
-                    surfaces[i].Capture(layout[i]);
-                    Interlocked.Add(ref _sampledPixels, (long)layout[i].PixelWidth * layout[i].PixelHeight);
-                }
-                GdiFlush(); // One readback/completion, never four separately sampled edges.
-                for (var i = 0; i < layout.Length; i++) changed |= surfaces[i].RememberChangedPixels();
+                var layout = LensCaptureLayout.Create(window, geometry, desktop,
+                    oldGeometry == geometry && oldDesktop == desktop ? oldLayout : null);
+                if (layout == null) continue;
+                var changed = oldLayout != layout;
+                surface ??= new CaptureSurface();
+                surface.Capture(layout);
+                Interlocked.Add(ref _sampledPixels, (long)layout.PixelWidth * layout.PixelHeight);
+                GdiFlush();
+                changed |= surface.RememberChangedPixels();
                 Interlocked.Increment(ref _captures);
                 if (_cancel.IsCancellationRequested) break;
                 if (changed)
                 {
-                    var tiles = new Tile[layout.Length]; var count = 0;
-                    try
-                    {
-                        for (; count < tiles.Length; count++) tiles[count] = new Tile(layout[count], surfaces[count].Snapshot());
-                        var frame = new Frame(tiles, geometry);
-                        Interlocked.Exchange(ref _latest, frame)?.Dispose();
-                        Interlocked.Increment(ref _published);
-                        NotifyFrameReady();
-                    }
-                    catch
-                    {
-                        for (var i = 0; i < count; i++) ArrayPool<byte>.Shared.Return(tiles[i].Pixels, clearArray: true);
-                        throw;
-                    }
-                    quiet = 0; oldGeometry = geometry; oldLayout = layout;
+                    var frame = new Frame(layout, surface.Snapshot());
+                    Interlocked.Exchange(ref _latest, frame)?.Dispose();
+                    Interlocked.Increment(ref _published);
+                    NotifyFrameReady();
+                    quiet = 0;
                 }
                 else quiet++;
+                oldGeometry = geometry; oldLayout = layout; oldDesktop = desktop;
                 // Unchanged pixels never enter WPF. A still desktop gradually drops to
                 // low-rate change detection; motion wakes it. Expensive GDI drivers also
                 // get breathing room rather than a continuous GPU-readback loop.
@@ -166,7 +157,7 @@ internal sealed class DesktopLensCapture : IDisposable
         }
         finally
         {
-            foreach (var surface in surfaces) surface?.Dispose();
+            surface?.Dispose();
             if (IsStopped) Interlocked.Exchange(ref _latest, null)?.Dispose();
             if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
         }
@@ -206,11 +197,11 @@ internal sealed class DesktopLensCapture : IDisposable
             if (liquid) LiquidRefractionEffect.PrepareBytecode();
             var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
             var layout = LensCaptureLayout.Create(requested, geometry, DesktopBounds);
-            if (layout.Length == 0) return null;
+            if (layout == null) return null;
             using var surface = new CaptureSurface();
-            surface.Capture(layout[0]); GdiFlush(); surface.RememberChangedPixels();
+            surface.Capture(layout); GdiFlush(); surface.RememberChangedPixels();
             token.ThrowIfCancellationRequested();
-            return new Frame([new Tile(layout[0], surface.Snapshot())], geometry);
+            return new Frame(layout, surface.Snapshot());
         }
         finally { if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi); }
     }, token);
@@ -234,7 +225,7 @@ internal sealed class DesktopLensCapture : IDisposable
             if (_screen != IntPtr.Zero) _dc = CreateCompatibleDC(_screen);
             if (_dc == IntPtr.Zero) { Dispose(); throw new Win32Exception(Marshal.GetLastWin32Error()); }
         }
-        internal void Capture(LensCaptureLayout.Tile tile)
+        internal void Capture(LensCaptureLayout.Scene tile)
         {
             if (_width != tile.PixelWidth || _height != tile.PixelHeight)
             {

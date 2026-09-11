@@ -132,6 +132,16 @@ internal sealed partial class SkinBorder : Border
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
         EnsureBrushes(_refractionVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
+        if (_refractionVisual != null)
+        {
+            // Keep a cheap base for pixels temporarily outside the cached scene. The
+            // actual finish belongs only above the scene, never duplicated underneath.
+            PaintMaterialBase(dc);
+            _refractionVisual.Clip = _shape;
+            if (!_evidenceFrozen) { _cropDirty = true; RequestRefractionRender(); }
+            RefreshOpticalFinish();
+            return;
+        }
         dc.PushClip(_shape);
         // Both auxiliary strengths retain actual background processing. Only an unavailable
         // source falls back to an opaque base; no foreground or HWND opacity is altered.
@@ -148,14 +158,6 @@ internal sealed partial class SkinBorder : Border
         // left/right docked open edges stay open instead of acquiring a white seam.
         dc.DrawGeometry(BorderBrush, null, _borderRing);
         dc.Pop();
-        if (_refractionVisual != null)
-        {
-            _refractionVisual.Clip = _shape;
-            // Corner/outline changes can occur with an unchanged desktop frame.
-            // Reproject that frame once, without waiting for a new screen capture.
-            if (!_evidenceFrozen) { _cropDirty = true; RequestRefractionRender(); }
-        }
-        RefreshOpticalFinish();
     }
 
     private void PaintMaterialBase(DrawingContext dc)

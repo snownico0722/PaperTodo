@@ -105,7 +105,7 @@ internal static class RefractionChecks
             for (var move = 0; move < 20; move++) { window.Left += 2; Wait(16); }
             Program.Assert(surface.RefractionProjectionCount - projectionStart > surface.RefractionFrameCount - captureStart,
                 "moving glass reprojects between source samples instead of running at the capture rate");
-            window.Left += 100; window.Top += 30; count = surface.RefractionFrameCount;
+            window.Left += 300; window.Top += 30; count = surface.RefractionFrameCount;
             Until(() => surface.RefractionFrameCount > count, surface, "movement resamples new physical background");
             Save(Render(window), "lens-moved");
             window.Width += 70; window.Height += 30; count = surface.RefractionFrameCount;
@@ -158,7 +158,7 @@ internal static class RefractionChecks
                     Wait(30);
                     using var frame = capture.TakeLatest();
                     if (frame == null) continue;
-                    var tile = frame.Tiles[0]; var pixel = (70 * tile.Layout.PixelWidth + 80) * 4;
+                    var tile = frame; var pixel = (70 * tile.Layout.PixelWidth + 80) * 4;
                     sample = Color.FromRgb(tile.Pixels[pixel + 2], tile.Pixels[pixel + 1], tile.Pixels[pixel]); frames++;
                 }
                 Program.Assert(failure == null && frames == 1 && sample.G > 230 && sample.R < 10 && sample.B < 10,
@@ -170,7 +170,7 @@ internal static class RefractionChecks
                     "stationary change detection runs without allocating or publishing duplicate frames");
                 rear.Background = Brushes.Blue; Wait(400);
                 using var latest = capture.TakeLatest();
-                Program.Assert(latest != null && capture.TakeLatest() == null && latest.Tiles[0].Pixels[0] > 230,
+                Program.Assert(latest != null && capture.TakeLatest() == null && latest.Pixels[0] > 230,
                     "one-slot mailbox resumes on real background changes");
             }
             Program.Assert(DesktopLensCapture.ReadAffinity(hwnd) == 0, "capture lease restores prior affinity");
@@ -233,11 +233,12 @@ internal static class RefractionChecks
             var width = (int)Math.Ceiling(size.Width*dpi); var height = (int)Math.Ceiling(size.Height*dpi);
             var region = new DesktopLensCapture.Region(1,1,width,height,(int)Math.Ceiling(48*dpi));
             var layout = LensCaptureLayout.Create(new Int32Rect(-700,50,width,height), region, new Int32Rect(-8192,-2160,16384,8640));
-            Program.Assert(layout.Length == 1 && layout.Sum(t => (long)t.PixelWidth*t.PixelHeight) <= LensCaptureLayout.PixelBudget,
+            Program.Assert(layout != null && (long)layout.PixelWidth * layout.PixelHeight <= LensCaptureLayout.PixelBudget,
                 "negative screen origins / DPI / large surfaces retain bounded physical capture budget");
-            Program.Assert(layout[0].Target == new Int32Rect(0,0,width,height),
-                "body and edge come from one time-coherent source, without tile seams");
-            var tile = layout[0];
+            var tile = layout!;
+            Program.Assert(tile.Bounds.X <= -699 && tile.Bounds.Y <= 51 &&
+                tile.Bounds.X + tile.Bounds.Width >= -699 + width && tile.Bounds.Y + tile.Bounds.Height >= 51 + height,
+                "one coherent scene covers the complete optical surface");
             var step = tile.Bounds.Width / tile.PixelWidth;
             Program.Assert(tile.Bounds.Width == tile.PixelWidth * step && tile.Bounds.Height == tile.PixelHeight * step &&
                 tile.Bounds.X % step == 0 && tile.Bounds.Y % step == 0,

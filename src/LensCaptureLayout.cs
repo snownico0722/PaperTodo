@@ -8,9 +8,9 @@ namespace PaperTodo;
 internal static class LensCaptureLayout
 {
     internal const long PixelBudget = 1_048_576;
-    internal sealed record Tile(Int32Rect Target, Int32Rect Bounds, int PixelWidth, int PixelHeight);
+    internal sealed record Scene(Int32Rect Bounds, int PixelWidth, int PixelHeight);
 
-    internal static Tile[] Create(Int32Rect window, DesktopLensCapture.Region region, Int32Rect desktop)
+    internal static Scene? Create(Int32Rect window, DesktopLensCapture.Region region, Int32Rect desktop, Scene? previous = null)
     {
         var w = region.Width; var h = region.Height;
         if (w <= 0 || h <= 0 || w > 32768 || h > 32768 || region.Padding is < 0 or > 1024)
@@ -19,7 +19,7 @@ internal static class LensCaptureLayout
         var top = Math.Max(desktop.Y, window.Y + region.OffsetY - region.Padding);
         var right = Math.Min(desktop.X + desktop.Width, window.X + region.OffsetX + w + region.Padding);
         var bottom = Math.Min(desktop.Y + desktop.Height, window.Y + region.OffsetY + h + region.Padding);
-        if (right <= left || bottom <= top) return [];
+        if (right <= left || bottom <= top) return null;
         // Pick density from the WHOLE surface, not its changing onscreen intersection.
         // Ordinary papers/menus stay 1:1. Large surfaces use integral source-pixel cells.
         var fullWidth = (long)w + 2 * region.Padding;
@@ -30,10 +30,27 @@ internal static class LensCaptureLayout
         // before intersecting the desktop, so crossing a grid cell never changes density.
         while (step > 1 && (((fullWidth + step - 1) / step + 1) * ((fullHeight + step - 1) / step + 1) > PixelBudget ||
             (fullWidth + step - 1) / step + 1 > 2048 || (fullHeight + step - 1) / step + 1 > 2048)) step++;
+        // Keep the world-space scene while the surface fits inside its inner guard.
+        // Otherwise every tiny drag changes all pixels, defeats duplicate detection,
+        // and can alternate bitmap dimensions at a downsample-cell boundary.
+        // The caller invalidates previous on geometry/DPI or desktop changes.
+        if (previous != null && previous.Bounds.Width / previous.PixelWidth == step &&
+            previous.Bounds.Height / previous.PixelHeight == step)
+        {
+            var guard = region.Padding / 2;
+            var needed = new Int32Rect(
+                Math.Max(desktop.X, window.X + region.OffsetX - guard),
+                Math.Max(desktop.Y, window.Y + region.OffsetY - guard), 0, 0);
+            var neededRight = Math.Min(desktop.X + desktop.Width, window.X + region.OffsetX + w + guard);
+            var neededBottom = Math.Min(desktop.Y + desktop.Height, window.Y + region.OffsetY + h + guard);
+            var b = previous.Bounds;
+            if (needed.X >= b.X && needed.Y >= b.Y && neededRight <= b.X + b.Width && neededBottom <= b.Y + b.Height)
+                return previous;
+        }
         var x = (int)Math.Floor(left / (double)step) * step;
         var y = (int)Math.Floor(top / (double)step) * step;
         var pw = (int)Math.Ceiling(right / (double)step) - x / step;
         var ph = (int)Math.Ceiling(bottom / (double)step) - y / step;
-        return [new(new Int32Rect(0, 0, w, h), new Int32Rect(x, y, pw * step, ph * step), pw, ph)];
+        return new(new Int32Rect(x, y, pw * step, ph * step), pw, ph);
     }
 }

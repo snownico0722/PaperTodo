@@ -31,6 +31,8 @@ internal sealed class LiquidRefractionEffect : ShaderEffect
     public Point4D Radii { get => (Point4D)GetValue(RadiiProperty); set => SetValue(RadiiProperty, value); }
     public Point4D Scattering { get => (Point4D)GetValue(ScatteringProperty); set => SetValue(ScatteringProperty, value); }
     public double Dispersion { get => (double)GetValue(DispersionProperty); set => SetValue(DispersionProperty, value); }
+    // Share bytecode, not PixelShader: WPF bytecode events strongly reference
+    // attached ShaderEffects even when the shader is frozen. Keep their lifetime local.
     private static readonly Lazy<byte[]> Bytecode = new(Compile);
     internal static void PrepareBytecode() => _ = Bytecode.Value;
 

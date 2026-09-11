@@ -15,16 +15,16 @@ internal static class MaterialPresentationChecks
     {
         var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
         var ordinary = LensCaptureLayout.Create(new Int32Rect(100, 100, 560, 440),
-            new DesktopLensCapture.Region(0, 0, 560, 440, 64), desktop)[0];
+            new DesktopLensCapture.Region(0, 0, 560, 440, 64), desktop)!;
         Program.Assert(ordinary.PixelWidth == ordinary.Bounds.Width && ordinary.PixelHeight == ordinary.Bounds.Height,
             "ordinary glass keeps physical 1:1 detail rather than spending most of its resolution on overscan");
         foreach (var size in new[] { new Size(2400, 1200), new Size(2048, 2048), new Size(3968, 896) })
         {
             var region = new DesktopLensCapture.Region(0, 0, (int)size.Width, (int)size.Height, 64);
-            var a = LensCaptureLayout.Create(new Int32Rect(-3500, 100, region.Width, region.Height), region, desktop)[0];
+            var a = LensCaptureLayout.Create(new Int32Rect(-3500, 100, region.Width, region.Height), region, desktop)!;
             for (var offset = 1; offset < 100; offset++)
             {
-                var b = LensCaptureLayout.Create(new Int32Rect(-3500 + offset, 100 + offset, region.Width, region.Height), region, desktop)[0];
+                var b = LensCaptureLayout.Create(new Int32Rect(-3500 + offset, 100 + offset, region.Width, region.Height), region, desktop)!;
                 var step = a.Bounds.Width / a.PixelWidth;
                 Program.Assert(b.Bounds.Width / b.PixelWidth == step && (b.Bounds.X - a.Bounds.X) % step == 0 &&
                     (b.Bounds.Y - a.Bounds.Y) % step == 0 && (long)b.PixelWidth * b.PixelHeight <= LensCaptureLayout.PixelBudget,
@@ -34,7 +34,7 @@ internal static class MaterialPresentationChecks
         Program.Assert(DesktopLensCapture.CaptureInterval(false, 0) == 100 && DesktopLensCapture.CaptureInterval(true, 20) == 100 &&
             DesktopLensCapture.CaptureInterval(false, 20) >= 100, "readback stays at 100ms even while motion reprojects each frame");
         var overscan = LensCaptureLayout.Create(new Int32Rect(400, 400, 360, 300),
-            new DesktopLensCapture.Region(0, 0, 360, 300, 256), desktop)[0];
+            new DesktopLensCapture.Region(0, 0, 360, 300, 256), desktop)!;
         Program.Assert(overscan.Bounds.X <= 400-200 && overscan.Bounds.Y <= 400-200 &&
             overscan.Bounds.X+overscan.Bounds.Width >= 400+360+200 &&
             (long)overscan.PixelWidth*overscan.PixelHeight <= LensCaptureLayout.PixelBudget,
