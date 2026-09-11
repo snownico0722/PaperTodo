@@ -27,6 +27,8 @@ jobs:
           New-Item -ItemType Directory -Force results | Out-Null
           python -X utf8 tests/preload-candidate/apply.py
           if ($LASTEXITCODE -ne 0) { throw 'Assembly failed' }
+          python -X utf8 tests/preload-candidate/finish.py
+          if ($LASTEXITCODE -ne 0) { throw 'Cache validation assembly failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace failure' }
       - name: Release behavior checks
