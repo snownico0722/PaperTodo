@@ -61,7 +61,6 @@ jobs:
                       else if (Has(InlineStyle.Strike)) run.TextDecorations = TextDecorations.Strikethrough;
                       else if (Has(InlineStyle.Underline)) run.TextDecorations = TextDecorations.Underline;
                       (activeLink?.Inlines ?? target).Add(run);'''
-          # Dedent embedded replacement to ordinary member-body indentation.
           replacement='\n'.join(line[10:] if line.startswith('                      ') else line for line in replacement.split('\n'))
           p.write_text(s[:a]+replacement+s[b:],encoding='utf-8',newline='\n')
           p=Path('candidate/src/EdgeCapsulePreview.Markdown.TextLayout.cs')
@@ -74,11 +73,10 @@ jobs:
           edit('candidate/tests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs',
               'Require(text.Inlines.OfType<Bold>().Any(), "enabled modes style emphasis");',
               'Require(text.Inlines.OfType<Run>().Any(run => run.Text == "粗体" && run.FontWeight == (AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight)), "enabled modes retain effective strong typography without wrappers");')
-          # Identical harness in both worktrees. Never compare different sample policies.
           for folder in ['baseline','candidate']:
               path=folder+'/tests/PaperTodo.EdgePreviewExperimentChecks/Program.cs'
               edit(path,'internal static class Program','internal static partial class Program')
-              edit(path,'else { Checks(); SharedPreviewSemanticChecks.Run(); }','else if (args.Contains("--export")) ExportPreviewPixels(args.Last());\n            else { Checks(); SharedPreviewSemanticChecks.Run(); }')
+              edit(path,'else { SharedPreviewSemanticChecks.Run(); Checks(); }','else if (args.Contains("--export")) ExportPreviewPixels(args.Last());\n            else { SharedPreviewSemanticChecks.Run(); Checks(); }')
               edit(path,'for (var i = 0; i < 9; i++)','for (var i = 0; i < 24; i++)')
               edit(path,'if (i >= 2) rows.Add(result);','if (i >= 3) rows.Add(result);')
               edit(path,'.Order().ElementAt(3)','.Order().ElementAt(rows.Count / 2)')
