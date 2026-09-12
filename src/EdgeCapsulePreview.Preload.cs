@@ -45,7 +45,8 @@ internal sealed class MarkdownEdgePreviewPreload
     // Height is canonicalized to zero by MakeKey. The artifact is prepared through the current
     // 410-DIP card envelope and is clipped by the real viewport, so only layout width is reusable geometry.
     internal sealed record Key(Binding Binding, Size Size, DpiScale Dpi, string Appearance);
-    // Body is now only an ephemeral adapter for the existing viewport mount seam. It is never cached.
+    // Body is an ephemeral mount value for the viewport seam. For artifact hits Panel is the
+    // single drawing surface itself and has no child visual tree; it is never cached.
     internal sealed record Body(Key Key, StackPanel Panel, bool Truncated);
     private sealed record ArtifactEntry(Key Key, MarkdownPreviewArtifact Artifact);
 
@@ -169,11 +170,13 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         if (candidate.Key != key) return false;
 
-        // Materialize only the final lightweight surface. The immutable artifact remains reusable,
-        // so A-B-A never transfers ownership of a retained WPF visual tree.
-        var panel = new StackPanel { IsHitTestVisible = false };
-        panel.Children.Add(new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal));
-        body = new Body(key, panel, candidate.Artifact.Truncated);
+        // Materialize exactly one final lightweight drawing surface. The immutable artifact remains
+        // reusable, so A-B-A never transfers ownership of a retained WPF visual tree.
+        var surface = new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal)
+        {
+            IsHitTestVisible = false
+        };
+        body = new Body(key, surface, candidate.Artifact.Truncated);
         if (demand) BodyHits++;
         return true;
     }
@@ -181,11 +184,11 @@ internal sealed class MarkdownEdgePreviewPreload
     internal bool Store(Body body)
     {
         _dispatcher.VerifyAccess();
-        // The viewport still calls this seam while it is being migrated away from #246 ownership.
-        // Accept only an adapter that was materialized from our immutable artifact; never retain WPF.
+        // The viewport may offer a detached published body on unload. Only acknowledge our direct
+        // artifact surface; cold legacy StackPanels are deliberately not retained.
         if (!body.Key.Binding.Current || body.Panel.Parent != null ||
-            body.Panel.Children.Count != 1 ||
-            body.Panel.Children[0] is not MarkdownPreviewArtifactSurface surface ||
+            body.Panel is not MarkdownPreviewArtifactSurface surface ||
+            surface.Children.Count != 0 ||
             !_artifacts.TryGetValue(body.Key.Binding.Source, out var candidate) ||
             candidate.Key != body.Key || !ReferenceEquals(candidate.Artifact, surface.Artifact)) return false;
         return true;
