@@ -72,6 +72,8 @@ public sealed partial class PaperWindow
         ApplyExperimentalAuxiliaryPassiveState();
         if (wasPassive && !IsExperimentalPassive)
         {
+            // Preview preloading is discardable and resumes from edge/host lifecycle events;
+            // passive-mode restoration does not own Markdown-specific scheduling.
             _experimentalPassiveNeedsZOrderRestore = true;
         }
         RefreshEffectiveTopmost();
