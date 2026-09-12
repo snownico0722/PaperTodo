@@ -24,7 +24,7 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 - WPF 是主 UI；Windows Forms 只作为兼容依赖。
 - 进程 DPI 策略：`PerMonitorV2,PerMonitor`。
 - 主项目入口为根目录 `PaperTodo.csproj`。
-- 不含运行时的单文件发布使用 Costura 压缩内嵌 `Microsoft.Windows.SDK.NET`；普通构建不启用，包含运行时的单文件包沿用 .NET 自带压缩。`PaperTodoCompressWindowsSdk=false` 可关闭定向压缩。两种模式使用独立编译中间目录，NuGet 还原输入保持一致。
+- 普通构建与不含运行时的发布默认使用 Costura 压缩内嵌 `Microsoft.Windows.SDK.NET`；包含运行时的单文件包沿用 .NET 自带压缩。`PaperTodoCompressWindowsSdk=false` 可关闭定向压缩。两种模式使用独立编译中间目录，NuGet 还原输入保持一致。
 
 ## 2. 系统形态与 ownership
 

@@ -34,11 +34,11 @@
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
   <PropertyGroup>
-    <!-- The SDK's built-in bundle compression requires a self-contained app. Compress only
-         the WinRT projection in no-runtime single-file builds; allow an uncompressed comparison. -->
+    <!-- Compress the WinRT projection in ordinary builds and no-runtime packages.
+         Self-contained packages use the SDK's built-in bundle compression instead. -->
     <PaperTodoCompressWindowsSdk Condition="'$(PaperTodoCompressWindowsSdk)' == ''">true</PaperTodoCompressWindowsSdk>
     <_PaperTodoSdkCompressionEnabled>false</_PaperTodoSdkCompressionEnabled>
-    <_PaperTodoSdkCompressionEnabled Condition="'$(PaperTodoCompressWindowsSdk)' == 'true' And '$(PublishSingleFile)' == 'true' And '$(SelfContained)' != 'true' And '$(DisableFody)' != 'true'">true</_PaperTodoSdkCompressionEnabled>
+    <_PaperTodoSdkCompressionEnabled Condition="'$(PaperTodoCompressWindowsSdk)' == 'true' And '$(SelfContained)' != 'true' And '$(DisableFody)' != 'true'">true</_PaperTodoSdkCompressionEnabled>
     <DisableFody Condition="'$(_PaperTodoSdkCompressionEnabled)' != 'true'">true</DisableFody>
     <!-- Fody rewrites the intermediate assembly and caches which references it removed.
          Keep both modes separate so switching publish options never reuses a woven assembly/cache. -->

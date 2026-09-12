@@ -158,7 +158,8 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
-- 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件；本地打包只生成 no-runtime。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
+- 用户只说“打个包”时，默认生成用于测试的 Windows x64 单文件、不含 .NET 运行时且启用压缩的包；明确指定其他形式时按要求处理。
+- 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
 - 普通 build/publish 使用仓库内默认 `papertodo_lmdb.dll`；GitHub Release 必须先从仓库内 LMDB 源码 `-ForceRebuild`，不能把默认 DLL 冒充云端编译产物。
 - 稳定正式版只通过完成真实多屏/混合 DPI 等发布前手测后的 `workflow_dispatch` 发布；稳定 tag push 不是发布步骤。`rc` / `alpha` / `beta` / `preview` tag 可以发布预发行版。
 
