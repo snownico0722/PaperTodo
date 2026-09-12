@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Temporary benchmark-only parity with release.yml when DebugType=none. -->
+    <EmbedAllSources>false</EmbedAllSources>
+    <EmbedUntrackedSources>false</EmbedUntrackedSources>
+  </PropertyGroup>
+</Project>
