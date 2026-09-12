@@ -1,0 +1,46 @@
+name: Temporary cold-start packaging benchmark
+
+on:
+  push:
+    branches: [perf/cold-start-r2r-benchmark-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build native LMDB library
+        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Run packaging and lifecycle benchmark
+        run: .\.github\cold-start-benchmark.ps1
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cold-start-packaging-benchmark
+          if-no-files-found: error
+          retention-days: 2
+          path: benchmark-output/
