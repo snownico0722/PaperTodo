@@ -303,7 +303,7 @@ internal sealed class MarkdownEdgePreviewPreload
         target.Anchor.IsVisibleChanged += VisibilityChanged;
         try
         {
-            MarkdownPreviewArtifactDraft draft;
+            MarkdownEdgeCapsulePreviewRenderer.MarkdownPreviewArtifactDraft draft;
             try
             {
                 draft = await MarkdownEdgeCapsulePreviewRenderer.BuildArtifactDraftAsync(
