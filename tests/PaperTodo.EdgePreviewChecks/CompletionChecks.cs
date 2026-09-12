@@ -117,6 +117,7 @@ internal static partial class Program
         CheckThemeInvalidation();
         CheckHostPublication();
         CheckPendingBoundaries();
+        CheckSourceGenerationBeforeRefresh();
     }
 
     private static void CheckReuseAndInvalidation()
@@ -187,6 +188,35 @@ internal static partial class Program
             finally { window.Close(); Pump(); }
         }
         Console.WriteLine("PASS pending replace/retract/unload/cache-clear boundaries");
+    }
+
+    private static void CheckSourceGenerationBeforeRefresh()
+    {
+        var source = new EdgeCapsulePreviewInvalidationSource();
+        var viewport = new MarkdownEdgeCapsulePreviewViewport();
+        var window = new Window { Content = viewport, Width = 320, Height = 180,
+            ShowActivated = false, ShowInTaskbar = false };
+        void Set(string text) => viewport.SetContent(
+            MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full),
+            _ => { }, sourceGeneration: (source, source.Version));
+        try
+        {
+            UntilReview(() => MarkdownLayoutWorker.OutstandingRequests == 0, "previous worker consumers have drained");
+            using (HoldWorker(MarkdownLayoutWorker.Shared))
+            {
+                Set("obsolete source");
+                source.Invalidate(); // The live owner has not delivered its deferred SetContent yet.
+                window.Show(); Pump();
+                Require(MarkdownLayoutWorker.OutstandingRequests == 0 && viewport.Opacity == 0,
+                    "an invalidated source cannot prepare or publish through a null preload binding");
+                Set("current source");
+                UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "the current source can prepare normally");
+            }
+            Require(PreviewText(PublishedBody(viewport)).Contains("current source"),
+                "deferred source refresh publishes the current generation");
+        }
+        finally { window.Close(); Pump(); }
+        Console.WriteLine("PASS source generation is independent of deferred refresh and optional cache membership");
     }
 
     private static void CheckThemeInvalidation()

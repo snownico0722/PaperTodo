@@ -111,12 +111,14 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         _title.ToolTip = title;
         // Capture once on the owning Dispatcher. Deferred work never rereads a different paper
         // or mutable editor halfway through a build, and never touches WPF on a worker thread.
-        var content = _initialContent != null && _initialVersion == Context.InvalidationSource.Version
+        var contentVersion = Context.InvalidationSource.Version;
+        var content = _initialContent != null && _initialVersion == contentVersion
             ? _initialContent : MarkdownEdgePreviewPreload.For(Dispatcher).Capture(Context);
         _initialContent = null;
         var textZoom = Context.Paper.TextZoom;
         _viewport.SetContent(content, Context.OpenExternal, textZoom,
-            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));
+            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom),
+            (Context.InvalidationSource, contentVersion));
     }
 }
 
@@ -134,6 +136,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private Size? _publishedSize;
     private long _renderVersion;
     private MarkdownEdgePreviewPreload.Binding? _preloadBinding;
+    private (EdgeCapsulePreviewInvalidationSource Source, long Version)? _sourceGeneration;
 
     public MarkdownEdgeCapsulePreviewViewport()
     {
@@ -161,12 +164,14 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     internal void SetContent(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content,
         Action<string> openExternal, double textZoom = 1,
-        MarkdownEdgePreviewPreload.Binding? preloadBinding = null)
+        MarkdownEdgePreviewPreload.Binding? preloadBinding = null,
+        (EdgeCapsulePreviewInvalidationSource Source, long Version)? sourceGeneration = null)
     {
         _content = content;
         _openExternal = openExternal;
         _textZoom = textZoom;
         _preloadBinding = preloadBinding;
+        _sourceGeneration = sourceGeneration;
         InvalidateContentBuild();
     }
 
@@ -174,7 +179,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     {
         if (_previewActive == active) return;
         _previewActive = active;
-        IsHitTestVisible = active && _publishedSize != null;
+        IsHitTestVisible = active && _publishedSize != null && IsSourceCurrent;
         // Only this mounted view may reuse its completed surface on a brief retract/resume.
         CancelPendingBuild();
     }
@@ -194,10 +199,12 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         InvalidateArrange();
     }
 
-    // Demand owns its generation independently of the optional preload cache. Clearing a cache
-    // must not strand an active preview; content changes arrive through the live view's owner.
+    // Source invalidation is immediate; its live-view rebuild may still be queued. Check the
+    // captured source version, not cache membership, before preparing or publishing old text.
+    private bool IsSourceCurrent => _sourceGeneration is not { } generation ||
+        generation.Source.Version == generation.Version;
     private bool IsBuildCurrent(long version) => version == _renderVersion && _previewActive &&
-        IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;
+        IsSourceCurrent && IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
@@ -216,7 +223,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        if (_content != null && _previewActive && IsLoaded && IsVisible &&
+        if (_content != null && IsSourceCurrent && _previewActive && IsLoaded && IsVisible &&
             _renderedSize != finalSize && finalSize.Width > 0 && finalSize.Height > 0)
         {
             _buildCancellation?.Cancel();
