@@ -39,7 +39,8 @@ jobs:
           $text = Get-Content -LiteralPath $path -Raw
           $text = $text.Replace('/p:PublishTrimmed=false /p:DebugType=none', '/p:PublishTrimmed=false /p:EmbedAllSources=false /p:EmbedUntrackedSources=false /p:DebugType=none')
           $text = $text.Replace("'/p:PublishTrimmed=false','/p:DebugType=none'", "'/p:PublishTrimmed=false','/p:EmbedAllSources=false','/p:EmbedUntrackedSources=false','/p:DebugType=none'")
-          $text = $text.Replace("using System.Diagnostics;`nusing System.Runtime.CompilerServices;", "using System.Diagnostics;`nusing System.IO;`nusing System.Runtime.CompilerServices;")
+          $text = [regex]::Replace($text, 'using System\.Diagnostics;\r?\nusing System\.Runtime\.CompilerServices;', "using System.Diagnostics;`nusing System.IO;`nusing System.Runtime.CompilerServices;", 1)
+          if ($text -notmatch 'using System\.IO;') { throw 'Startup probe System.IO patch did not apply' }
           Set-Content -LiteralPath $path -Value $text -Encoding utf8
 
       - name: Run packaging and lifecycle benchmark
