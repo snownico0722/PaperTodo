@@ -7,7 +7,7 @@
   "targets": {
     ".NETCoreApp,Version=v10.0": {},
     ".NETCoreApp,Version=v10.0/win-x64": {
-      "PaperTodo.Plugin.CodexCliBridge/1.0.0": {
+      "PaperTodo.Plugin.CodexCliBridge/1.1.0": {
         "dependencies": {
           "PaperTodo.Plugin.Abstractions": "1.0.0"
         },
@@ -26,7 +26,7 @@
     }
   },
   "libraries": {
-    "PaperTodo.Plugin.CodexCliBridge/1.0.0": {
+    "PaperTodo.Plugin.CodexCliBridge/1.1.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
