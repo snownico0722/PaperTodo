@@ -26,10 +26,8 @@ internal sealed class MarkdownEdgePreviewPreload
     private bool _enabled = true;
     internal int ExcerptCount => _excerpts.Count;
     internal int ArtifactCount => _artifacts.Count;
-    // Keep the diagnostic names while #246-era probes are migrated; these count artifacts now.
-    internal int BodyCount => ArtifactCount;
     internal int PendingCount => _pendingLayout.Count;
-    internal long BodyHits { get; private set; }
+    internal long ArtifactHits { get; private set; }
     internal long WarmCompletions { get; private set; }
 
     internal sealed record Target(EdgeCapsulePreviewContext Context, Panel Anchor,
@@ -45,9 +43,6 @@ internal sealed class MarkdownEdgePreviewPreload
     // Height is canonicalized to zero by MakeKey. The artifact is prepared through the current
     // 410-DIP card envelope and is clipped by the real viewport, so only layout width is reusable geometry.
     internal sealed record Key(Binding Binding, Size Size, DpiScale Dpi, string Appearance);
-    // Body is an ephemeral mount value for the viewport seam. For artifact hits Panel is the
-    // single drawing surface itself and has no child visual tree; it is never cached.
-    internal sealed record Body(Key Key, StackPanel Panel, bool Truncated);
     private sealed record ArtifactEntry(Key Key, MarkdownPreviewArtifact Artifact);
 
     private MarkdownEdgePreviewPreload(Dispatcher dispatcher)
@@ -144,8 +139,10 @@ internal sealed class MarkdownEdgePreviewPreload
         if (Theme.SyntaxFadeBrush is not SolidColorBrush syntax || syntax.HasAnimatedProperties ||
             !syntax.Transform.Value.IsIdentity || !syntax.RelativeTransform.Value.IsIdentity) return null;
         stamps.Add(syntax.Color + ":" + syntax.Opacity.ToString("R", CultureInfo.InvariantCulture));
-        stamps.Add(string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.CodeFontFamily.Source,
+        stamps.Add(string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.FontFamily.BaseUri,
+            NoteTypography.CodeFontFamily.Source, NoteTypography.CodeFontFamily.BaseUri,
             AppTypography.FontFamilyFor(content: true, bold: true).Source,
+            AppTypography.FontFamilyFor(content: true, bold: true).BaseUri,
             AppTypography.FontWeightFor(true), AppTypography.UsesCustomBoldFace(true),
             NoteTypography.FontWeight, NoteTypography.FontStyle, NoteTypography.FontStretch,
             NoteTypography.Language.IetfLanguageTag, NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
@@ -158,10 +155,10 @@ internal sealed class MarkdownEdgePreviewPreload
         return new(binding, new Size(size.Width, 0), dpi, string.Join("|", stamps));
     }
 
-    internal bool TryTake(Key key, out Body? body, bool demand = true)
+    internal bool TryCreateSurface(Key key, out MarkdownPreviewArtifactSurface? surface, bool demand = true)
     {
         _dispatcher.VerifyAccess();
-        body = null;
+        surface = null;
         if (!key.Binding.Current || !_artifacts.TryGetValue(key.Binding.Source, out var candidate)) return false;
         if (!candidate.Key.Binding.Current)
         {
@@ -170,27 +167,12 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         if (candidate.Key != key) return false;
 
-        // Materialize exactly one final lightweight drawing surface. The immutable artifact remains
-        // reusable, so A-B-A never transfers ownership of a retained WPF visual tree.
-        var surface = new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal)
+        // The artifact stays immutable and cached. Native input elements belong only to this mount.
+        surface = new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal)
         {
             IsHitTestVisible = false
         };
-        body = new Body(key, surface, candidate.Artifact.Truncated);
-        if (demand) BodyHits++;
-        return true;
-    }
-
-    internal bool Store(Body body)
-    {
-        _dispatcher.VerifyAccess();
-        // The viewport may offer a detached published body on unload. Only acknowledge our direct
-        // artifact surface; cold legacy StackPanels are deliberately not retained.
-        if (!body.Key.Binding.Current || body.Panel.Parent != null ||
-            body.Panel is not MarkdownPreviewArtifactSurface surface ||
-            surface.Children.Count != 0 ||
-            !_artifacts.TryGetValue(body.Key.Binding.Source, out var candidate) ||
-            candidate.Key != body.Key || !ReferenceEquals(candidate.Artifact, surface.Artifact)) return false;
+        if (demand) ArtifactHits++;
         return true;
     }
 
@@ -295,14 +277,7 @@ internal sealed class MarkdownEdgePreviewPreload
         var plan = MarkdownEdgeCapsulePreviewRenderer.CaptureArtifactPlan(
             target.Anchor, content, width, key.Binding.Zoom);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        var listenerOpen = true;
-        void CancelLifetime()
-        {
-            // WPF may already have snapshotted an IsVisibleChanged invocation when we unsubscribe.
-            // Close this local gate before detaching handlers so a late callback never touches the
-            // linked CTS after the using scope disposes it.
-            if (listenerOpen && !lifetime.IsCancellationRequested) lifetime.Cancel();
-        }
+        void CancelLifetime() => lifetime.Cancel();
         Action invalidated = CancelLifetime;
         RoutedEventHandler unloaded = (_, _) => CancelLifetime();
         DependencyPropertyChangedEventHandler visibilityChanged = (_, args) =>
@@ -315,7 +290,6 @@ internal sealed class MarkdownEdgePreviewPreload
 
         async Task DetachListenersAsync()
         {
-            listenerOpen = false;
             void Detach()
             {
                 target.Context.InvalidationSource.Invalidated -= invalidated;
@@ -346,7 +320,7 @@ internal sealed class MarkdownEdgePreviewPreload
             var operation = _dispatcher.InvokeAsync(() =>
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (!_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                if (lifetime.IsCancellationRequested || !_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
                     !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
                     MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 

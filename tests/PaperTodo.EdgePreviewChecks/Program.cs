@@ -25,7 +25,7 @@ internal static partial class Program
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            else { ArtifactSurfaceChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -99,7 +99,7 @@ internal static partial class Program
 
     private static double[] ProfileOne(string text, string mode, string preparation = "cold")
     {
-        using var host = NewHost();
+        using var host = NewHost(EdgeCapsuleLayout.WindowChromeMargin);
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "profile monitor");
         var dispatcher = Dispatcher.CurrentDispatcher;
         var fixedSize = new EdgeCapsulePreviewSize(460, 410);
@@ -130,7 +130,7 @@ internal static partial class Program
         if (preparation == "layout")
             AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true)));
         var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
-        var hitsBefore = preload.BodyHits;
+        var hitsBefore = preload.ArtifactHits;
         var allocation = GC.GetAllocatedBytesForCurrentThread();
         var started = Stopwatch.GetTimestamp();
         IEdgeCapsulePreviewProvider provider = MarkdownEdgeCapsulePreviewProvider.Instance;
@@ -144,8 +144,8 @@ internal static partial class Program
         bool Published(DependencyObject element)
         {
             if (element is MarkdownEdgeCapsulePreviewViewport old)
-                return old.IsArrangeValid && old.Children.OfType<StackPanel>().Any(panel =>
-                    panel.Opacity > 0 && panel.Children.Count > 0 && panel.IsArrangeValid);
+                return old.IsArrangeValid && old.Children.OfType<Panel>().Any(panel =>
+                    panel.Opacity > 0 && (panel is MarkdownPreviewArtifactSurface || panel.Children.Count > 0) && panel.IsArrangeValid);
             for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
                 if (Published(VisualTreeHelper.GetChild(element, i))) return true;
             return false;
@@ -178,7 +178,7 @@ internal static partial class Program
                 Stopwatch.GetElapsedTime(stageStarted, readyAt).TotalMilliseconds,
                 times.Count > 1 ? Stopwatch.GetElapsedTime(motionStarted, times[1]).TotalMilliseconds : 0,
                 gaps.DefaultIfEmpty(0).Max(), costs.DefaultIfEmpty(0).Max(),
-                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.BodyHits - hitsBefore };
+                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore };
         }
         finally
         {

@@ -1,15 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
 
 namespace PaperTodo;
 
 internal readonly record struct MarkdownPreviewArtifactLink(
     Rect Bounds,
-    string Target,
-    int Occurrence);
+    string Target);
 
 // The speculative product is immutable and has no visual-tree ownership. A demand hit creates
 // one lightweight drawing surface; no TextBlock/Border/Button tree is retained by the cache.
@@ -20,118 +18,56 @@ internal sealed record MarkdownPreviewArtifact(
     bool Truncated,
     IReadOnlyList<MarkdownPreviewArtifactLink> Links);
 
-// One hit-test surface replaces per-link Buttons. This derives from StackPanel only because the
-// existing viewport's body seam is typed that way; it has no children and is itself the mounted body.
-// Outside link rectangles this element returns no hit, so the existing background gesture still opens the paper.
-internal sealed class MarkdownPreviewArtifactSurface : StackPanel
+// The cache owns only drawings. Each demand owns this small surface and native link buttons;
+// WPF, rather than another hand-written state machine, owns focus, capture and release semantics.
+internal sealed class MarkdownPreviewArtifactSurface : Panel
 {
-    private readonly MarkdownPreviewArtifact _artifact;
-    private readonly Action<string> _openExternal;
-    private int _pressedOccurrence = -1;
-    private int _keyboardOccurrence = -1;
+    static MarkdownPreviewArtifactSurface() => ClipProperty.OverrideMetadata(
+        typeof(MarkdownPreviewArtifactSurface),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsArrange));
 
-    internal MarkdownPreviewArtifact Artifact => _artifact;
+    internal MarkdownPreviewArtifact Artifact { get; }
 
-    internal MarkdownPreviewArtifactSurface(
-        MarkdownPreviewArtifact artifact,
-        Action<string> openExternal)
+    internal MarkdownPreviewArtifactSurface(MarkdownPreviewArtifact artifact, Action<string> openExternal)
     {
         if (!artifact.Drawing.IsFrozen)
             throw new ArgumentException("Markdown preview artifacts must be frozen.", nameof(artifact));
-        _artifact = artifact;
-        _openExternal = openExternal;
-        Focusable = artifact.Links.Count > 0;
-        EdgeCapsulePreviewInteraction.SetConsumesPointer(this, true);
+        Artifact = artifact;
         NoteTypography.ApplyTextRendering(this);
+        foreach (var link in artifact.Links)
+            Children.Add(MarkdownPreviewLinkHit.Create(link.Target, link.Bounds.Size, openExternal));
     }
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        for (var i = 0; i < Children.Count; i++) Children[i].Measure(Artifact.Links[i].Bounds.Size);
         var width = double.IsFinite(availableSize.Width)
-            ? Math.Min(Math.Max(0, availableSize.Width), _artifact.LayoutWidth)
-            : _artifact.LayoutWidth;
-        return new Size(width, _artifact.ContentHeight);
+            ? Math.Min(Math.Max(0, availableSize.Width), Artifact.LayoutWidth)
+            : Artifact.LayoutWidth;
+        return new Size(width, Artifact.ContentHeight);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var visible = Clip?.Bounds ?? new Rect(finalSize);
+        for (var i = 0; i < Children.Count; i++)
+        {
+            // Height-independent artifacts also contain rows below a smaller viewport. Those
+            // links must not enter keyboard navigation while their text is clipped away.
+            Children[i].IsEnabled = Artifact.Links[i].Bounds.IntersectsWith(visible);
+            Children[i].Arrange(Artifact.Links[i].Bounds);
+        }
+        return finalSize;
     }
 
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
-        drawingContext.DrawDrawing(_artifact.Drawing);
+        drawingContext.DrawDrawing(Artifact.Drawing);
     }
 
-    private int LinkAt(Point point)
-    {
-        for (var i = 0; i < _artifact.Links.Count; i++)
-            if (_artifact.Links[i].Bounds.Contains(point)) return i;
-        return -1;
-    }
-
-    protected override HitTestResult? HitTestCore(PointHitTestParameters hitTestParameters) =>
-        LinkAt(hitTestParameters.HitPoint) >= 0
-            ? new PointHitTestResult(this, hitTestParameters.HitPoint)
-            : null;
-
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-        var index = LinkAt(e.GetPosition(this));
-        Cursor = index >= 0 ? Cursors.Hand : Cursors.Arrow;
-        ToolTip = index >= 0 ? _artifact.Links[index].Target : null;
-        if (index >= 0) _keyboardOccurrence = _artifact.Links[index].Occurrence;
-    }
-
-    protected override void OnMouseLeave(MouseEventArgs e)
-    {
-        base.OnMouseLeave(e);
-        if (!IsMouseCaptured)
-        {
-            Cursor = null;
-            ToolTip = null;
-        }
-    }
-
-    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
-    {
-        base.OnMouseLeftButtonDown(e);
-        var index = LinkAt(e.GetPosition(this));
-        if (index < 0) return;
-        _pressedOccurrence = _artifact.Links[index].Occurrence;
-        _keyboardOccurrence = _pressedOccurrence;
-        _ = Focus();
-        CaptureMouse();
-        e.Handled = true;
-    }
-
-    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
-    {
-        base.OnMouseLeftButtonUp(e);
-        if (_pressedOccurrence < 0) return;
-        var pressed = _pressedOccurrence;
-        _pressedOccurrence = -1;
-        var index = LinkAt(e.GetPosition(this));
-        if (IsMouseCaptured) ReleaseMouseCapture();
-        if (index >= 0 && _artifact.Links[index].Occurrence == pressed)
-            _openExternal(_artifact.Links[index].Target);
-        e.Handled = true;
-    }
-
-    protected override void OnLostMouseCapture(MouseEventArgs e)
-    {
-        _pressedOccurrence = -1;
-        base.OnLostMouseCapture(e);
-    }
-
-    protected override void OnKeyDown(KeyEventArgs e)
-    {
-        base.OnKeyDown(e);
-        if (e.Key is not (Key.Enter or Key.Space) || _artifact.Links.Count == 0) return;
-        var occurrence = _keyboardOccurrence >= 0
-            ? _keyboardOccurrence
-            : _artifact.Links[0].Occurrence;
-        var link = _artifact.Links.FirstOrDefault(candidate => candidate.Occurrence == occurrence);
-        if (!string.IsNullOrEmpty(link.Target)) _openExternal(link.Target);
-        e.Handled = true;
-    }
+    // Only the native link children consume input. Gaps/text keep the host's paper-open gesture.
+    protected override HitTestResult? HitTestCore(PointHitTestParameters hitTestParameters) => null;
 }
 
 internal static partial class MarkdownEdgeCapsulePreviewRenderer
@@ -213,7 +149,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         internal readonly Brush Hover;
         internal readonly Brush Border;
         private readonly Brush _syntax;
-        private readonly Dictionary<(ArtifactBaseStyle Base, InlineStyle Flags, bool Link), int> _indices = new();
+        private readonly Dictionary<(ArtifactBaseStyle Base, InlineStyle Flags, bool Link, bool ScopedUnderline), int> _indices = new();
         private readonly List<MarkdownRunStyle> _styles = new();
 
         private sealed record BaseSpec(
@@ -289,9 +225,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             };
         }
 
-        internal int Style(ArtifactBaseStyle @base, InlineStyle flags, bool link)
+        internal int Style(ArtifactBaseStyle @base, InlineStyle flags, bool link, bool scopedUnderline = false)
         {
-            var key = (@base, flags, link);
+            scopedUnderline &= link || (flags & InlineStyle.Underline) != 0;
+            var key = (@base, flags, link, scopedUnderline);
             if (_indices.TryGetValue(key, out var existing)) return existing;
             bool Has(InlineStyle flag) => (flags & flag) != 0;
             var spec = Base(@base);
@@ -319,7 +256,18 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 void Add(TextDecorationCollection source)
                 {
                     foreach (var decoration in source)
-                        collection.Add((TextDecoration)decoration.CloneCurrentValue());
+                    {
+                        var copy = (TextDecoration)decoration.CloneCurrentValue();
+                        // Short cold rows carry underlines on a Hyperlink/Span. Preserve their
+                        // full-formatting decoration metrics, rather than WPF's simplified ASCII
+                        // underline rounding. The ordinary paragraph path stays unchanged.
+                        if (scopedUnderline && copy.Location == TextDecorationLocation.Underline)
+                        {
+                            copy.Pen = new Pen(foreground, 1);
+                            copy.Pen.Freeze();
+                        }
+                        collection.Add(copy);
+                    }
                 }
                 if (strike) Add(TextDecorations.Strikethrough);
                 if (underline) Add(TextDecorations.Underline);
@@ -373,7 +321,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             ArtifactBaseStyle @base,
             InlineStyle flags = InlineStyle.None)
         {
-            if (text.Length == 0) return Array.Empty<MarkdownLayoutPiece>();
+            // A blank TextBlock still reserves a natural text line. Keep the same metrics
+            // without painting a glyph, including blank source rows inside a fence.
+            if (text.Length == 0) text = "\u200B";
             return Array.AsReadOnly(new[]
             {
                 new MarkdownLayoutPiece(text, styles.Style(@base, flags, link: false), -1)
@@ -386,13 +336,14 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             ArtifactBaseStyle @base)
         {
             var values = new List<MarkdownLayoutPiece>();
+            var scopedUnderline = !ShouldPrepareParagraph(text, mode, content.Inlines);
             foreach (var piece in content.Inlines.Get(text, mode).Pieces)
             {
                 if (piece.Text.Length == 0) continue;
                 var link = LinkIndex(piece.Link);
                 values.Add(new MarkdownLayoutPiece(
                     piece.Text,
-                    styles.Style(@base, piece.Style, link >= 0),
+                    styles.Style(@base, piece.Style, link >= 0, scopedUnderline),
                     link));
             }
             return Array.AsReadOnly(values.ToArray());
@@ -436,7 +387,10 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     content.RenderMode == MarkdownRenderModes.Enhanced
                     ? InlineStyle.Syntax : InlineStyle.None;
                 blocks.Add(new(ArtifactBlockKind.Text,
-                    Raw(line, ArtifactBaseStyle.CodeSource, syntax), RowBackground: true));
+                    Raw(line, previewLine.FenceKind == MarkdownFenceLineKind.None &&
+                        line.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength
+                            ? ArtifactBaseStyle.CodeSource : ArtifactBaseStyle.CodeBlock, syntax),
+                    RowBackground: true));
                 return;
             }
 
@@ -486,8 +440,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 return;
             }
 
-            blocks.Add(new(ArtifactBlockKind.Text,
-                PrefixAndInline(renderedPrefix ?? line[..prefixLength], prefixStyle,
+            blocks.Add(new(ArtifactBlockKind.Text, line.Length == 0
+                ? Raw(string.Empty, baseStyle)
+                : PrefixAndInline(renderedPrefix ?? line[..prefixLength], prefixStyle,
                     line[prefixLength..], content.RenderMode, baseStyle)));
         }
 
@@ -496,7 +451,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var trimmed = line.Trim();
             if (trimmed.Length == 0)
             {
-                blocks.Add(new(ArtifactBlockKind.Text, Array.Empty<MarkdownLayoutPiece>()));
+                blocks.Add(new(ArtifactBlockKind.Text, Raw(string.Empty, ArtifactBaseStyle.Normal)));
                 return;
             }
             if (HorizontalRulePattern.IsMatch(trimmed))
@@ -656,7 +611,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 if (hit.LinkIndex < 0 || hit.LinkIndex >= plan.LinkTargets.Count) continue;
                 var bounds = hit.Bounds;
                 bounds.Offset(x, top);
-                links.Add(new(bounds, plan.LinkTargets[hit.LinkIndex], hit.LinkIndex));
+                links.Add(new(bounds, plan.LinkTargets[hit.LinkIndex]));
             }
         }
 

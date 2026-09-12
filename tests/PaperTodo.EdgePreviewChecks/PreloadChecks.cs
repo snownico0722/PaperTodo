@@ -87,27 +87,29 @@ internal static partial class Program
 
             Require(Warm(a) && Warm(b) && cache.ArtifactCount == 2, "two complete heavy artifacts warm without opening a preview");
             Require(root.Children.Count == 0, "prewarm leaves no hidden holder or mounted preview tree");
-            var hits = cache.BodyHits;
+            var hits = cache.ArtifactHits;
             var firstA = Demand(a);
             var firstSurface = Elements(firstA).OfType<MarkdownPreviewArtifactSurface>().Single();
-            Require(firstSurface.Children.Count == 0 && firstSurface.Artifact.Drawing.IsFrozen,
-                "artifact hit mounts one frozen zero-child drawing surface");
+            Require(firstSurface.Children.OfType<Button>().Count() == firstSurface.Artifact.Links.Count && firstSurface.Artifact.Drawing.IsFrozen,
+                "artifact hit mounts one frozen drawing surface with native link hits");
             Release(firstA); Release(Demand(b)); Release(Demand(a));
-            Require(cache.BodyHits == hits + 3, "A-B-A reuses immutable artifacts while materializing fresh surfaces");
-            Console.WriteLine("PASS artifact preload A-B-A and direct single-surface mount");
+            Require(cache.ArtifactHits == hits + 3, "A-B-A reuses immutable artifacts while materializing fresh surfaces");
+            Console.WriteLine("PASS artifact preload A-B-A and direct drawing surface mount");
 
             var mixedBlocks = "# Heading **bold**\n> quote [q](https://example.com/q)\n- [x] done `code`\n12) ordered *italic*\n- bullet ~~strike~~\n---\n![图](i:asset)\n```\n\nliteral **code**\n```\n" + new string('文', 450);
             var pixelFixtures = new[] {
                 string.Concat(Enumerable.Repeat("plain **strong** *italic* `code` [link](https://example.com) ", 20)),
                 string.Concat(Enumerable.Repeat("**粗体** ~~删除~~ `code` [链接](https://example.com) 文 ", 80)),
                 "## " + new string('文', 320) + "\n> " + new string('a', 300) + "\n```\n" + new string('c', 300) + "\n```",
-                mixedBlocks
+                mixedBlocks,
+                "first\n\nlast\n```\n\n\n```\n" + new string('文', 450)
             };
             var pixelCases = 0;
             var exactCases = 0;
             var maximumDifference = 0;
             byte[] Pixels(FrameworkElement element)
             {
+                element.UpdateLayout();
                 var dpi = VisualTreeHelper.GetDpi(element);
                 int width = (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX);
                 int height = (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY);
@@ -117,26 +119,33 @@ internal static partial class Program
                 bitmap.CopyPixels(bytes, width * 4, 0);
                 return bytes;
             }
+            foreach (var sharp in new[] { false, true })
             foreach (var testMode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
             foreach (var zoom in new[] { 0.7, 1.3 })
             foreach (var fixture in pixelFixtures)
             {
+                AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
+                    sharp ? 1.25 : 1, textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
+                NoteTypography.Configure(sharp ? VisualTextSizes.Large : VisualTextSizes.Medium, sharp);
                 mode = testMode; text = fixture; cache.Clear();
                 var context = Context(new()); context.Paper.TextZoom = zoom;
                 Require(MarkdownEdgePreviewPreload.IsClearlyHighLoad(cache.Capture(context)), "pixel fixture qualifies for whole-artifact preload");
                 Require(Warm(context), "pixel reference artifact is actually preloaded");
-                var previousHits = cache.BodyHits;
+                var previousHits = cache.ArtifactHits;
                 var hot = Demand(context); var hotPixels = Pixels(hot); Release(hot);
-                Require(cache.BodyHits == previousHits + 1, "pixel comparison traverses the artifact-hit path");
+                Require(cache.ArtifactHits == previousHits + 1, "pixel comparison traverses the artifact-hit path");
                 cache.Clear();
                 var cold = Demand(context); var coldPixels = Pixels(cold); Release(cold);
                 Require(hotPixels.Length == coldPixels.Length, "artifact preserves rendered pixel dimensions");
                 var differences = hotPixels.Zip(coldPixels).Select(pair => Math.Abs(pair.First - pair.Second)).ToArray();
                 maximumDifference = Math.Max(maximumDifference, differences.Max());
                 if (hotPixels.SequenceEqual(coldPixels)) exactCases++;
+                Console.WriteLine($"ARTIFACT_PIXEL_CASE sharp={sharp} mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} max={differences.Max()}");
                 Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");
                 pixelCases++;
             }
+            AppTypography.Configure(UiFontPresets.Default);
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
             Console.WriteLine($"ARTIFACT_PIXELS cases={pixelCases} exact={exactCases} maximumChannelDifference={maximumDifference}");
 
             mode = MarkdownRenderModes.Full;
@@ -157,37 +166,37 @@ internal static partial class Program
             var binding = cache.Bind(a, cache.Capture(a), a.Paper.TextZoom)!;
             var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(size);
             var key = MarkdownEdgePreviewPreload.MakeKey(binding, root, new Size(width, 0))!;
-            Require(!cache.TryTake(key with { Dpi = new DpiScale(key.Dpi.DpiScaleX * 1.5, key.Dpi.DpiScaleY * 1.5) }, out _),
+            Require(!cache.TryCreateSurface(key with { Dpi = new DpiScale(key.Dpi.DpiScaleX * 1.5, key.Dpi.DpiScaleY * 1.5) }, out _),
                 "different DPI cannot reuse old drawing");
-            Require(cache.TryTake(key, out var matching, demand: false) &&
-                    matching!.Panel is MarkdownPreviewArtifactSurface matchingSurface &&
-                    matchingSurface.Children.Count == 0,
+            Require(cache.TryCreateSurface(key, out var matching, demand: false) &&
+                    matching is { } matchingSurface &&
+                    matchingSurface.Children.OfType<Button>().Count() == matchingSurface.Artifact.Links.Count,
                 "matching DPI materializes one direct artifact surface");
             Console.WriteLine("PASS first-display generation, direct artifact mount and DPI-key rejection");
 
-            hits = cache.BodyHits;
+            hits = cache.ArtifactHits;
             text = string.Concat(Enumerable.Repeat("**新内容** *不允许* `旧正文` ", 30));
             var changed = Demand(a);
-            Require(cache.BodyHits == hits && PreviewText(changed).Contains("新内容"), "fresh bounded content comparison rejects stale artifact");
+            Require(cache.ArtifactHits == hits && PreviewText(changed).Contains("新内容"), "fresh bounded content comparison rejects stale artifact");
             Release(changed);
             source.Invalidate();
-            hits = cache.BodyHits; Release(Demand(a));
-            Require(cache.BodyHits == hits, "version invalidation rejects even equal-text artifacts");
+            hits = cache.ArtifactHits; Release(Demand(a));
+            Require(cache.ArtifactHits == hits, "version invalidation rejects even equal-text artifacts");
             Require(Warm(a), "prepare a resource-key candidate");
-            hits = cache.BodyHits;
+            hits = cache.ArtifactHits;
             Release(Demand(a, new EdgeCapsulePreviewSize(size.WidthDip, 300)));
-            Require(cache.BodyHits == hits + 1, "same-width smaller-height demand reuses the whole artifact and clips locally");
+            Require(cache.ArtifactHits == hits + 1, "same-width smaller-height demand reuses the whole artifact and clips locally");
             root.Resources["TextBrushKey"] = Brushes.DarkBlue;
-            hits = cache.BodyHits; Release(Demand(a));
-            Require(cache.BodyHits == hits, "theme replacement without notification cannot hit frozen old drawing");
-            hits = cache.BodyHits; Release(Demand(a, new(350, 300)));
-            Require(cache.BodyHits == hits, "changed width cannot reuse old layout");
+            hits = cache.ArtifactHits; Release(Demand(a));
+            Require(cache.ArtifactHits == hits, "theme replacement without notification cannot hit frozen old drawing");
+            hits = cache.ArtifactHits; Release(Demand(a, new(350, 300)));
+            Require(cache.ArtifactHits == hits, "changed width cannot reuse old layout");
             a.Paper.TextZoom = 1.3;
-            hits = cache.BodyHits; Release(Demand(a, new(350, 300)));
-            Require(cache.BodyHits == hits, "changed zoom cannot reuse old layout");
+            hits = cache.ArtifactHits; Release(Demand(a, new(350, 300)));
+            Require(cache.ArtifactHits == hits, "changed zoom cannot reuse old layout");
             mode = MarkdownRenderModes.Enhanced;
-            hits = cache.BodyHits; Release(Demand(a, new(350, 300)));
-            Require(cache.BodyHits == hits, "changed render mode cannot reuse old layout");
+            hits = cache.ArtifactHits; Release(Demand(a, new(350, 300)));
+            Require(cache.ArtifactHits == hits, "changed render mode cannot reuse old layout");
             Console.WriteLine("PASS source, version, theme, height reuse, width, zoom and mode invalidation");
 
             cache.Clear();
@@ -216,7 +225,12 @@ internal static partial class Program
                 "one-shot artifact preload queue drains without periodic idle polling");
             cache.Clear();
         }
-        finally { window.Close(); Pump(); cache.SetEnabledForChecks(true); }
+        finally
+        {
+            window.Close(); Pump(); cache.SetEnabledForChecks(true);
+            AppTypography.Configure(UiFontPresets.Default);
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
+        }
     }
 
     private static void PreloadMemory()

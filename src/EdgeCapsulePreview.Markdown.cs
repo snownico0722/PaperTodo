@@ -106,7 +106,6 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
     }
 
     internal void SetPreviewActive(bool active) => _viewport.SetPreviewActive(active);
-    internal MarkdownEdgeCapsulePreviewViewport PreloadViewport => _viewport;
 
     protected override void RebuildContent()
     {
@@ -127,7 +126,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
 
 internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 {
-    private StackPanel _body;
+    private Panel _body;
     private readonly TextBlock _overflowIndicator;
     private readonly RectangleGeometry _bodyClip = new();
     private bool _sourceTruncated;
@@ -136,14 +135,11 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private CancellationTokenSource? _buildCancellation;
     private Size? _renderedSize;
     // A completed body may survive a brief retract/resume at unchanged content and geometry.
-    // Published bodies stay view-owned while mounted. On detach the optional bounded preload
-    // cache may take exclusive ownership; no body can belong to two live trees.
+    // Mounted drawings and input elements stay view-owned; the optional cache retains only
+    // immutable artifacts, never a detached WPF body.
     private Size? _publishedSize;
     private long _renderVersion;
     private MarkdownEdgePreviewPreload.Binding? _preloadBinding;
-    private MarkdownEdgePreviewPreload.Key? _publishedKey;
-    internal Func<bool>? PreloadStillCurrent { get; set; }
-    internal event Action<bool>? PreparationFinished;
 
     public MarkdownEdgeCapsulePreviewViewport(StackPanel body)
     {
@@ -164,7 +160,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         Children.Add(_body);
         Children.Add(_overflowIndicator);
         Loaded += (_, _) => InvalidateArrange();
-        Unloaded += (_, _) => { ReturnBodyToPreload(); InvalidateContentBuild(); };
+        Unloaded += (_, _) => { ReleaseBody(); InvalidateContentBuild(); };
         IsVisibleChanged += (_, _) => CancelPendingBuild();
     }
 
@@ -180,23 +176,14 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         InvalidateContentBuild();
     }
 
-    internal bool ReturnBodyToPreload()
+    private void ReleaseBody()
     {
-        if (_publishedKey is not { } key || _publishedSize == null || !key.Binding.Current) return false;
-        var body = _body;
-        Children.Remove(body);
-        body.Clip = null;
-        body.IsHitTestVisible = false;
+        Children.Remove(_body);
         _body = new StackPanel { Clip = _bodyClip };
         Children.Add(_body);
-        var retained = key.Binding.Owner.Store(new(key, body, _sourceTruncated));
         _sourceTruncated = false;
-        _publishedKey = null;
-        _publishedSize = _renderedSize = null;
-        _renderVersion++;
         Opacity = 0;
         IsHitTestVisible = false;
-        return retained;
     }
 
     internal void SetPreviewActive(bool active)
@@ -215,7 +202,6 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private void InvalidateContentBuild()
     {
         _publishedSize = null;
-        _publishedKey = null;
         CancelPendingBuild();
     }
 
@@ -229,8 +215,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     private bool IsBuildCurrent(long version) =>
         version == _renderVersion && _previewActive && IsLoaded && IsVisible &&
-        !Dispatcher.HasShutdownStarted && _preloadBinding?.Current != false &&
-        PreloadStillCurrent?.Invoke() != false;
+        !Dispatcher.HasShutdownStarted && _preloadBinding?.Current != false;
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
@@ -253,24 +238,22 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     protected override Size ArrangeOverride(Size finalSize)
     {
         if (_renderedSize != finalSize && _previewActive && IsLoaded && IsVisible &&
-            finalSize.Width > 0 && finalSize.Height > 0 && PreloadStillCurrent?.Invoke() != false &&
+            finalSize.Width > 0 && finalSize.Height > 0 &&
             MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, finalSize) is { } cachedKey &&
-            cachedKey.Binding.Owner.TryTake(cachedKey, out var cached, PreloadStillCurrent == null))
+            cachedKey.Binding.Owner.TryCreateSurface(cachedKey, out var cached))
         {
             Children.Remove(_body);
-            _body = cached!.Panel;
+            _body = cached!;
             Children.Add(_body);
             _body.Clip = _bodyClip;
             _body.Opacity = 1;
             _body.IsHitTestVisible = true;
             _body.Measure(new Size(finalSize.Width, double.PositiveInfinity));
-            _sourceTruncated = cached.Truncated;
+            _sourceTruncated = cached!.Artifact.Truncated;
             _publishedSize = _renderedSize = finalSize;
-            _publishedKey = cachedKey;
             _renderVersion++;
             Opacity = 1;
             IsHitTestVisible = true;
-            PreparationFinished?.Invoke(true);
         }
         var overflow = _sourceTruncated || _body.DesiredSize.Height > finalSize.Height;
         var indicatorHeight = overflow ? Math.Min(finalSize.Height, _overflowIndicator.DesiredSize.Height) : 0;
@@ -298,20 +281,18 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         using var cancellation = new CancellationTokenSource();
         _buildCancellation?.Cancel();
         _buildCancellation = cancellation;
-        var preparation = new MarkdownPreviewPreparation(PreloadStillCurrent != null, cancellation.Token,
+        var preparation = new MarkdownPreviewPreparation(false, cancellation.Token,
             () => IsBuildCurrent(version), InvalidateContentBuild);
         var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var maxBatchMs = 0.0;
         var publicationMs = 0.0;
         var totalSteps = 0;
         var published = false;
-        var preparedKey = MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, size);
         try
         {
             // Yield even before creating the iterator: shell layout/Render and input have higher
             // priority. Moving one monolithic RenderInto to Background would still block them.
-            await Dispatcher.Yield(PreloadStillCurrent == null
-                ? DispatcherPriority.Background : DispatcherPriority.ContextIdle);
+            await Dispatcher.Yield(DispatcherPriority.Background);
             if (!IsBuildCurrent(version))
             {
                 return;
@@ -350,8 +331,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
                         maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
-                        await Dispatcher.Yield(PreloadStillCurrent == null
-                ? DispatcherPriority.Background : DispatcherPriority.ContextIdle);
+                        await Dispatcher.Yield(DispatcherPriority.Background);
                         batchSteps = 0;
                         batchStarted = Stopwatch.GetTimestamp();
                     }
@@ -379,9 +359,6 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             _body.IsHitTestVisible = true;
             _sourceTruncated = truncated;
             _publishedSize = size;
-            // A resource/DPI change during preparation makes this result non-cacheable.
-            _publishedKey = preparedKey == MarkdownEdgePreviewPreload.MakeKey(_preloadBinding, this, size)
-                ? preparedKey : null;
             Opacity = 1;
             IsHitTestVisible = true;
             published = true;
@@ -412,9 +389,6 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             {
                 Children.Remove(staging);
             }
-            // Only the current build may complete this viewport's preparation. An older
-            // cancelled/resource-invalidated build must not retire its replacement preload.
-            if (version == _renderVersion) PreparationFinished?.Invoke(published);
         }
     }
 }

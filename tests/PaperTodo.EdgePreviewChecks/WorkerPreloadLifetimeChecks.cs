@@ -29,18 +29,19 @@ internal static partial class Program
                 warming = cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true), cancellation.Token);
                 UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0,
                     "preload reaches the real pending paragraph worker");
-                // No source-version notification: the paragraph's resource observer detects this
-                // change and invalidates its own build when the old worker result arrives.
+                // No source notification: immutable artifacts must reject the old resource snapshot.
                 foreground.Color = Colors.Red;
             }
             UntilReview(() => warming.IsCompleted, "resource-invalidated preload settles");
-            Require(warming.GetAwaiter().GetResult(),
-                "preload must survive stale generation completion");
-            Require(cache.BodyCount == 1 && root.Children.Count == 0,
-                "the replacement generation is cached once and the hidden holder is removed");
+            Require(!warming.GetAwaiter().GetResult() && cache.ArtifactCount == 0,
+                "optional preload discards changed resources rather than caching stale colors");
+            Require(AwaitPreload(cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true))),
+                "a later lifecycle request can prepare the current resources");
+            Require(cache.ArtifactCount == 1 && root.Children.Count == 0,
+                "the current artifact is cached once without mounting a hidden holder");
             Require(!foreground.IsFrozen && source.Version == 0,
-                "retry does not freeze the host brush or mutate the source version");
-            Console.WriteLine("PASS worker preload ignores superseded completion and caches the current resource generation");
+                "preload does not freeze the host brush or mutate the source version");
+            Console.WriteLine("PASS worker preload discards stale resources and accepts a later current request");
         }
         finally { cancellation.Cancel(); cache.Clear(); window.Close(); Pump(); }
     }

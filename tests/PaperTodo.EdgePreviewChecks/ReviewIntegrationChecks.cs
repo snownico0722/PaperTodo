@@ -47,7 +47,7 @@ internal static partial class Program
                     "never-opened artifact completes preload");
                 Require(cache.ArtifactCount == 1 && host.MarkdownPreloadAnchor!.Children.Count > 0,
                     "preload retains one immutable artifact without mounting a hidden preview child");
-                var hits = cache.BodyHits;
+                var hits = cache.ArtifactHits;
                 var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
                 var request = new EdgeCapsulePreviewRequest(size, descriptor.CreateContent(size), descriptor.SetVisibility);
                 var contentSize = request.Size.ContentSize;
@@ -59,10 +59,10 @@ internal static partial class Program
                 request.SetVisibility?.Invoke(true);
                 var viewport = Elements(request.Content).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
                 UntilReview(() => viewport.Opacity == 1 && viewport.IsHitTestVisible, "first real host display publishes");
-                Require(cache.BodyHits == hits + 1, "FIRST live-host display must take the preloaded artifact, not rebuild it");
+                Require(cache.ArtifactHits == hits + 1, "FIRST live-host display must take the preloaded artifact, not rebuild it");
                 var surface = Elements(viewport).OfType<MarkdownPreviewArtifactSurface>().Single();
-                Require(surface.Children.Count == 0 && surface.Artifact.Drawing.IsFrozen,
-                    "live host mounts exactly one frozen drawing surface with no WPF block tree");
+                Require(surface.Children.OfType<Button>().Count() == surface.Artifact.Links.Count && surface.Artifact.Drawing.IsFrozen,
+                    "live host mounts one frozen drawing surface with native link hits but no WPF block tree");
                 request.SetVisibility?.Invoke(false); host.ClearPreviewContent(); Pump();
             }
             Console.WriteLine("PASS first artifact preload-to-live-host geometry/direct mount (2 edges/2 sizes/2 zooms)");

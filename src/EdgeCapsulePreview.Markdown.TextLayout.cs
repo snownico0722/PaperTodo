@@ -12,17 +12,6 @@ namespace PaperTodo;
 internal sealed class MarkdownEdgePreviewParagraph : Canvas
 {
     internal const int MinimumSourceLength = 256;
-    [ThreadStatic] private static ControlTemplate? _linkHitTemplate;
-    private static ControlTemplate LinkHitTemplate
-    {
-        get
-        {
-            if (_linkHitTemplate != null) return _linkHitTemplate;
-            var border = new FrameworkElementFactory(typeof(Border));
-            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-            return _linkHitTemplate = new ControlTemplate(typeof(Button)) { VisualTree = border };
-        }
-    }
     private readonly TextBlock _template;
     private readonly string _source;
     private readonly string _mode;
@@ -222,15 +211,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         {
             var uri = snapshot.Request.LinkTargets[link.LinkIndex];
             var rect = link.Bounds;
-            var hit = new Button
-            {
-                Background = Brushes.Transparent, Template = LinkHitTemplate, ClickMode = ClickMode.Release,
-                Padding = new Thickness(), BorderThickness = new Thickness(),
-                Width = rect.Width, Height = rect.Height, Cursor = Cursors.Hand,
-                Focusable = true, ToolTip = uri
-            };
-            EdgeCapsulePreviewInteraction.SetConsumesPointer(hit, true);
-            hit.Click += (_, e) => { _openExternal(uri); e.Handled = true; };
+            var hit = MarkdownPreviewLinkHit.Create(uri, rect.Size, _openExternal);
             SetLeft(hit, rect.X); SetTop(hit, rect.Y); Children.Add(hit);
         }
         InvalidateMeasure(); InvalidateVisual();
