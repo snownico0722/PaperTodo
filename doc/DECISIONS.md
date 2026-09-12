@@ -45,8 +45,9 @@
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
 | D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Accepted | Edge animation |
-| D-033 | 有界预览重段落使用共享 STA 排版 | Accepted | Edge performance |
-| D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Accepted | Edge performance / lifecycle |
+| D-033 | 有界预览重段落使用共享 STA 排版 | Superseded by D-035 | Edge performance |
+| D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
+| D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 
 ## 维护规则
 
@@ -1219,7 +1220,7 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 
 ## D-033 — 有界预览的重段落在共享 STA 排版，UI 保留发布与编辑语义
 
-**Status:** Accepted
+**Status:** Superseded by D-035
 
 ### Context
 
@@ -1249,7 +1250,7 @@ D-032 消除了动画救援，但协作式 UI 分批不能抢占一次正在执�
 
 ## D-034 — 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文
 
-**Status:** Accepted
+**Status:** Superseded by D-035
 
 ### Context
 
@@ -1272,3 +1273,26 @@ D-033 移走了单个重段落的排版，但先前完整预热仍在 UI 构建�
 - `src/EdgeCapsulePreview.Preload.cs`：来源缓存、延迟队列、UI 发布及取消边界。
 - `src/EdgeCapsulePreview.Markdown.cs` / `src/MarkdownPreviewLinkHit.cs`：单一 viewport 发布与共享原生交互。
 - `tests/PaperTodo.EdgePreviewChecks`：显式链接行为检查、冷/热像素矩阵、真实 host 首次命中、资源/DPI/版本失效、取消与 worker/动画检查；运行方法和历史数据见 `PRELOAD.md`。
+
+
+---
+
+## D-035 — 冷渲染与预热共用唯一 artifact renderer
+
+**Status:** Accepted
+
+### Context
+
+D-034 去掉隐藏正文缓存，但保留冷 WPF renderer 与热 artifact renderer 两套完整块实现。它减轻了控件 ownership，却扩大了总体维护面，不能当作结构精简的终点。用户随后明确要求在 #251 完成替代并删除旧路径。
+
+### Decision
+
+- 冷 miss 与 speculative preload 共用 `PrepareArtifactAsync`；所有正文块都变成同一种冻结 artifact，由同一 viewport `Publish` 挂载。删除 WPF block 构建器、`MarkdownEdgePreviewParagraph`、`MarkdownPreviewPreparation` 和渲染 iterator 桥接，不把旧实现搬到另一目录继续维护。
+- 预热仍必要，只缓存到当前卡片上限的完整结果；冷 miss 按实际可见高度准备。同一视图的短暂收起/恢复可复用已完成 surface，不恢复跨视图 Body 借出/归还。
+- 单一共享 STA、原生链接输入、有限语义预算及 UI 发布边界继续保留。旧短/长行的背景、下划线等排版差异属于画面兼容数据，不是第二套 renderer。
+- 源版本由需求独立捕获，不能用可选缓存的 membership 代替有效性。缓存清空不使活动需求失效，源真正更新则立即拒绝旧代发布。
+- 缓存/现场生成像素对照只证明缓存一致性；独立的手写 WPF 期望图及语义/预算/交互/取消检查承担内容正确性，测试中不复制整套旧 parser。正文布局就绪与 Host 实际开放输入分别计时，不把前者当作端到端可点击时间。
+
+### Why / Evidence
+
+统一的价值在删除重复 ownership 和块生成规则，不是以压缩行数、拆文件或移到测试目录伪装精简。#251 的 `868c81e6` 是双 renderer 对照，`1b8844d6` 是已验证统一实现；结构统计、同机成对性能与验证日志见 `tests/PaperTodo.EdgePreviewChecks/PRELOAD.md`。当前入口为 `src/EdgeCapsulePreview.Markdown.cs`、`src/EdgeCapsulePreview.Markdown.Artifact.cs` 与 `src/EdgeCapsulePreview.Preload.cs`；回归集中在 `CompletionChecks`、`ArtifactRenderingChecks`、`PreloadChecks` 和 worker/Host 检查。D-033 的共享 STA 与 D-034 的不可变缓存原则沿用，被替代的是分段控件桥和永久双 renderer。
