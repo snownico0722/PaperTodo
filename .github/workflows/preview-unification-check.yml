@@ -1,203 +1,170 @@
-name: Preview unification check
+name: Preview unification documentation
 on:
   push:
     branches: [perf/whole-preview-artifact-preload-20260912]
 permissions:
   contents: write
-env:
-  PYTHONUTF8: '1'
-  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-  DOTNET_NOLOGO: 'true'
 jobs:
-  validate:
-    if: contains(github.event.head_commit.message, '[unify-final-check]')
-    runs-on: windows-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: pwsh
+  finish:
+    if: contains(github.event.head_commit.message, '[unify-docs]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          submodules: recursive
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-      - name: Retain the captured source version without retaining cache ownership
+      - name: Preserve the verified implementation and finalize its documentation
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force evidence | Out-Null
-          @'
+          git diff --exit-code 1b8844d62a069eb263609029e712fea3a4938d04 HEAD -- src tests
+          python - <<'PY'
           from pathlib import Path
           import subprocess
-          def edit(path, old, new):
-              p=Path(path); s=p.read_text(encoding='utf-8'); assert s.count(old)==1,(path,old,s.count(old)); p.write_bytes(s.replace(old,new).encode())
-          path='src/EdgeCapsulePreview.Markdown.cs'
-          edit(path, '        var content = _initialContent != null && _initialVersion == Context.InvalidationSource.Version', '        var contentVersion = Context.InvalidationSource.Version;\n        var content = _initialContent != null && _initialVersion == contentVersion')
-          edit(path, '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));', '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom),\n            (Context.InvalidationSource, contentVersion));')
-          edit(path, '    private MarkdownEdgePreviewPreload.Binding? _preloadBinding;', '    private MarkdownEdgePreviewPreload.Binding? _preloadBinding;\n    private (EdgeCapsulePreviewInvalidationSource Source, long Version)? _sourceGeneration;')
-          edit(path, '        MarkdownEdgePreviewPreload.Binding? preloadBinding = null)\n    {', '        MarkdownEdgePreviewPreload.Binding? preloadBinding = null,\n        (EdgeCapsulePreviewInvalidationSource Source, long Version)? sourceGeneration = null)\n    {')
-          edit(path, '        _preloadBinding = preloadBinding;\n        InvalidateContentBuild();', '        _preloadBinding = preloadBinding;\n        _sourceGeneration = sourceGeneration;\n        InvalidateContentBuild();')
-          edit(path, '        IsHitTestVisible = active && _publishedSize != null;', '        IsHitTestVisible = active && _publishedSize != null && IsSourceCurrent;')
-          edit(path, '''    // Demand owns its generation independently of the optional preload cache. Clearing a cache
-              // must not strand an active preview; content changes arrive through the live view's owner.
-              private bool IsBuildCurrent(long version) => version == _renderVersion && _previewActive &&
-                  IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;''', '''    // Source invalidation is immediate; its live-view rebuild may still be queued. Check the
-              // captured source version, not cache membership, before preparing or publishing old text.
-              private bool IsSourceCurrent => _sourceGeneration is not { } generation ||
-                  generation.Source.Version == generation.Version;
-              private bool IsBuildCurrent(long version) => version == _renderVersion && _previewActive &&
-                  IsSourceCurrent && IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;''')
-          edit(path, '        if (_content != null && _previewActive && IsLoaded && IsVisible &&', '        if (_content != null && IsSourceCurrent && _previewActive && IsLoaded && IsVisible &&')
-          path='tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs'
-          edit(path, '        CheckPendingBoundaries();', '        CheckPendingBoundaries();\n        CheckSourceGenerationBeforeRefresh();')
-          method = '''    private static void CheckSourceGenerationBeforeRefresh()
-              {
-                  var source = new EdgeCapsulePreviewInvalidationSource();
-                  var viewport = new MarkdownEdgeCapsulePreviewViewport();
-                  var window = new Window { Content = viewport, Width = 320, Height = 180,
-                      ShowActivated = false, ShowInTaskbar = false };
-                  void Set(string text) => viewport.SetContent(
-                      MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full),
-                      _ => { }, sourceGeneration: (source, source.Version));
-                  try
-                  {
-                      UntilReview(() => MarkdownLayoutWorker.OutstandingRequests == 0, "previous worker consumers have drained");
-                      using (HoldWorker(MarkdownLayoutWorker.Shared))
-                      {
-                          Set("obsolete source");
-                          source.Invalidate(); // The live owner has not delivered its deferred SetContent yet.
-                          window.Show(); Pump();
-                          Require(MarkdownLayoutWorker.OutstandingRequests == 0 && viewport.Opacity == 0,
-                              "an invalidated source cannot prepare or publish through a null preload binding");
-                          Set("current source");
-                          UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "the current source can prepare normally");
-                      }
-                      Require(PreviewText(PublishedBody(viewport)).Contains("current source"),
-                          "deferred source refresh publishes the current generation");
-                  }
-                  finally { window.Close(); Pump(); }
-                  Console.WriteLine("PASS source generation is independent of deferred refresh and optional cache membership");
-              }
+          def write(path, text):
+              target = Path(path)
+              newline = b'\r\n' if b'\r\n' in target.read_bytes() else b'\n'
+              target.write_bytes(text.replace('\r\n', '\n').encode('utf-8').replace(b'\n', newline))
+          def once(text, old, new):
+              assert text.count(old) == 1, (old, text.count(old))
+              return text.replace(old, new)
+          s = Path('doc/ARCHITECTURE.md').read_text(encoding='utf-8')
+          a = s.index('### 内置笔记的边缘预览\n')
+          b = s.index('## 6. Edge Capsule V3 Lite', a)
+          s = s[:a] + '''### 内置笔记的边缘预览
 
+          边缘预览是有界导航内容，不是第二个可编辑正文。`MarkdownEdgeCapsulePreviewRenderer` 捕获一次受限文本，尺寸估算与显示使用相同内容预算；行内语法复用正文的 `MarkdownSemanticSnapshot`，块级保留现有有限预览语义，不解析预算外正文或引用定义。
+
+          冷渲染与预热共用唯一的 `PrepareArtifactAsync`：UI 捕获内容、样式、字体、DPI 和资源冻结副本，共享 `MarkdownLayoutWorker` STA 完成 `TextFormatter` 排版，UI 校验外观后组合冻结 Drawing、尺寸、截断状态与全局链接矩形。普通短行也走这条路径，不保留 WPF block renderer、重段落控件或同步渲染退路。保留的短/长行装饰差异只用于兼容既有画面，不再决定 renderer。Worker 不持有 UI 控件、可变语义缓存或业务回调；需求优先于预热，按可见行短批次让出并检查取消，空闲时等待 Dispatcher。
+
+          `MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact，沿用共享一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
+
+          `MarkdownEdgeCapsulePreviewViewport` 是唯一的准备、取消和发布 owner：命中取 artifact，未命中异步调用同一个 builder，两者都进入 `Publish`，挂载一个正文绘制面及原生链接控件。只有完整结果发布后才启用正文输入；链接的捕获、释放、焦点和键盘由 `MarkdownPreviewLinkHit` 保留 WPF 行为，完全裁掉的链接禁用，背景仍交给打开纸片手势。同一视图、内容和尺寸可短暂收起后复用；内容、外观、DPI 或尺寸失效重新准备，卸载释放挂载元素。
+
+          需求的源版本与可选预热缓存资格分开：清空缓存不能阻止当前预览正常生成，但源已失效、上层刷新尚未送达时，旧版本仍不得准备或发布。关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队，失败或失效目标不持续轮询。Host 仍提供资源、DPI、尺寸和实际输入边界，`Describe` 仍在 UI；正文等待不持有动画/窗口交接屏障，不改变 D-027 的编辑正文语义。当前选择及历史取舍见 D-035。
+
+          ''' + s[b:]
+          write('doc/ARCHITECTURE.md', s)
+          s = Path('doc/DECISIONS.md').read_text(encoding='utf-8')
+          for n in ('033', '034'):
+              title = next(line for line in s.splitlines() if line.startswith('| D-' + n + ' |'))
+              s = once(s, title, title.replace('| Accepted |', '| Superseded by D-035 |'))
+              start = s.index('## D-' + n + ' —')
+              status = s.index('**Status:** Accepted', start)
+              s = s[:status] + s[status:].replace('**Status:** Accepted', '**Status:** Superseded by D-035', 1)
+          index_line = next(line for line in s.splitlines() if line.startswith('| D-034 |'))
+          s = once(s, index_line, index_line + '\n| D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |')
+          assert '## D-035 —' not in s
+          s = s.rstrip() + '''
+
+
+          ---
+
+          ## D-035 — 冷渲染与预热共用唯一 artifact renderer
+
+          **Status:** Accepted
+
+          ### Context
+
+          D-034 去掉隐藏正文缓存，但保留冷 WPF renderer 与热 artifact renderer 两套完整块实现。它减轻了控件 ownership，却扩大了总体维护面，不能当作结构精简的终点。用户随后明确要求在 #251 完成替代并删除旧路径。
+
+          ### Decision
+
+          - 冷 miss 与 speculative preload 共用 `PrepareArtifactAsync`；所有正文块都变成同一种冻结 artifact，由同一 viewport `Publish` 挂载。删除 WPF block 构建器、`MarkdownEdgePreviewParagraph`、`MarkdownPreviewPreparation` 和渲染 iterator 桥接，不把旧实现搬到另一目录继续维护。
+          - 预热仍必要，只缓存到当前卡片上限的完整结果；冷 miss 按实际可见高度准备。同一视图的短暂收起/恢复可复用已完成 surface，不恢复跨视图 Body 借出/归还。
+          - 单一共享 STA、原生链接输入、有限语义预算及 UI 发布边界继续保留。旧短/长行的背景、下划线等排版差异属于画面兼容数据，不是第二套 renderer。
+          - 源版本由需求独立捕获，不能用可选缓存的 membership 代替有效性。缓存清空不使活动需求失效，源真正更新则立即拒绝旧代发布。
+          - 缓存/现场生成像素对照只证明缓存一致性；独立的手写 WPF 期望图及语义/预算/交互/取消检查承担内容正确性，测试中不复制整套旧 parser。正文布局就绪与 Host 实际开放输入分别计时，不把前者当作端到端可点击时间。
+
+          ### Why / Evidence
+
+          统一的价值在删除重复 ownership 和块生成规则，不是以压缩行数、拆文件或移到测试目录伪装精简。#251 的 `868c81e6` 是双 renderer 对照，`1b8844d6` 是已验证统一实现；结构统计、同机成对性能与验证日志见 `tests/PaperTodo.EdgePreviewChecks/PRELOAD.md`。当前入口为 `src/EdgeCapsulePreview.Markdown.cs`、`src/EdgeCapsulePreview.Markdown.Artifact.cs` 与 `src/EdgeCapsulePreview.Preload.cs`；回归集中在 `CompletionChecks`、`ArtifactRenderingChecks`、`PreloadChecks` 和 worker/Host 检查。D-033 的共享 STA 与 D-034 的不可变缓存原则沿用，被替代的是分段控件桥和永久双 renderer。
           '''
-          edit(path, '    private static void CheckThemeInvalidation()', method + '    private static void CheckThemeInvalidation()')
-          subprocess.run(['git','add','--','src/EdgeCapsulePreview.Markdown.cs',path],check=True)
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          write('doc/DECISIONS.md', s)
+          s = Path('CHANGELOG.md').read_text(encoding='utf-8')
+          s = once(s, '按可见空间分批准备文字，长段落、长代码行和样式密集段落在独立后台线程排版，减少对界面响应的占用，纯文本减少不必要的临时分配，密集样式短行也避免一次性构造大量文字对象；', '普通短行、长段落和代码块统一按可见空间在后台排版，减少对界面响应的占用及不必要的文字对象分配；')
+          write('CHANGELOG.md', s)
+          write('tests/PaperTodo.EdgePreviewChecks/PRELOAD.md', '''# 边缘预览预热检查
+
+          当前架构与 ownership 见 [ARCHITECTURE](../../doc/ARCHITECTURE.md)「内置笔记的边缘预览」，历史取舍见 D-033～D-035。本文只记录检查入口、实测口径与可追溯证据，不是另一份架构或发布批准。
+
+          ## 预热规则
+
+          仅为存活、可见、实际属于边缘队列的内置 Markdown Note 排队；要求胶囊模式、边缘胶囊和悬停预览开启。有界摘要最多 16 块 / 6000 字符，满足任意一条才预热：
+
+          - 总源字符数 >400；
+          - 总源字符数 >200 且样式/链接覆盖字符 >100；
+          - 总源字符数 >200 且样式/链接片段 >3。
+
+          全部严格大于；总字符数按摘要各行长度之和、不另加换行，覆盖与片段按去掉语法标记后的语义内容计数。嵌套样式不重复累计，链接目标不冒充样式正文，围栏内非空行按代码样式计数。Off 只使用总字符数条件。
+
+          启动恢复结束、入队、形态或内容变化只提交最新延后读取请求；分类与准备在共享 500ms 一次性合并延迟后执行。每来源一份当前 artifact，无固定数量/LRU 淘汰、鼠标邻居预测、产品预解析队列或 idle 轮询。需求优先，中断的有效请求保留；旧完成回调不能删掉新请求或绕过新的合并延迟。
+
+          冷 miss 与预热共用唯一 artifact builder；预热准备到当前卡片上限，冷 miss 按实际可见区域生成。缓存不保留隐藏卡片/正文树，挂载使用绘制面与原生链接，较矮区域裁剪并禁用完全不可见链接。版本、实际摘要、宽度、字体、缩放、DPI 和资源失配拒绝复用。关闭、离队或清空后的迟到结果不得重入缓存；活动需求的源版本独立于缓存资格，清空缓存不妨碍当前正文生成。
+
+          ## 当前检查
+
+          `ArtifactRenderingChecks` 覆盖严格摘要预算、Unicode、代码块、空行、截断、有限 block 词汇、冻结资源和装饰作用域；其中 44 组手写 WPF 期望图是独立内容参考，不调用 artifact builder 生成期望值，也不复制旧 Markdown renderer。
+
+          `PreloadChecks` 的 80 组像素矩阵覆盖四种渲染模式、两种字体/显示配置、两档缩放和五类正文，逐个确认真实命中并在截图前完成布局。冷/热现在共用 builder，因此这组检查证明的是缓存与现场生成一致，不能再称作“旧 WPF renderer 对新 artifact”。
+
+          `CompletionChecks`、原生链接和 worker/Host 检查覆盖：首次发布前不开放输入、普通冷短行也使用 worker、重排不生成 WPF 正文块、收起/恢复、编辑、卸载重挂、主题/宽度/DPI/源版本失效、清空缓存不阻塞需求、取消及迟到结果、链接独立命中/背景穿透/裁剪/键盘/焦点，以及 worker 被阻塞时真实 Host 外壳仍能完成动画。`PreloadAuditChecks` 保留严格 OR 边界、延后读取、启动式排队、取消续做、新请求合并延迟、异常隔离和来源撤销。四个 DPI 参数检查不冒充多显示器硬件手测。
+
+          ```powershell
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-profile
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-profile --reverse
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-memory
+          ```
+
+          性能探针仅比较 `cold` / `layout`，不再保留已被否定的 `text` 预解析对照。每个样本输出真实命中数；`--preload-memory` 是托管存活堆增量，不是工作集或原生/GPU 内存。
+
+          ## 统一 renderer 的收口验证
+
+          [Windows 专用验证 34703402596](https://github.com/snownico0722/PaperTodo/actions/runs/34703402596) 的受测源码已推送为 `1b8844d62a069eb263609029e712fea3a4938d04`，artifact 包内保存受测源码、推送 SHA、原始样本、成对统计及结构差异。七组 Release 检查（EdgePreview、MarkdownSemantic、MarkdownEditing、TodoNavigation、EdgeTitle、Threading、Persistence）和 Debug EdgePreview 均通过；独立期望图 44 组通过，缓存/现场生成 80/80 字节一致、最大通道差 0。临时移除源版本保护的反向对照确实触发对应回归失败，恢复保护后通过。
+
+          相对 #251 双 renderer 提交 `868c81e6`，生产 `src` 为 **+182/-1157，净减少 975 行**；相对 #249 基线 `2ad8ece9`，整个 #251 的生产 `src` 为 **+1090/-1247，净减少 157 行**。统计包含新增 artifact builder，不把测试删除混算为产品精简，也不拿 #246 某一次审查的局部差异与整个 PR 比较。移除了旧 WPF block renderer、段落控件桥及同步/iterator 入口；测试按新职责集中，不把旧实现复制到测试目录。
+
+          ### 同机成对性能
+
+          同一 Windows runner 分别运行统一实现与 `868c81e6` 双 renderer 对照；旧产品源码不变，只统一探针计时入口与实际命中检查。真实 Host/Presenter、460×410 卡片、160ms 外壳动画，正反策略顺序各 9 次，剔除各自前 2 次后每组 14 个样本。每个版本的全部 108 个原始 `layout` 样本均命中，`cold` 均未命中。
+
+          下表为中位数，单位 ms。正文 Ready 指发布绘制面已完成布局，不是 GPU 呈现；Stage 起点是实际 Host staging 前，Total 起点是 Describe 前。
+
+          | 场景 | 模式 | 旧冷 Stage→Ready | 统一冷 Stage→Ready | 旧热 Stage→Ready | 统一热 Stage→Ready | 统一热 Total Ready |
+          |---|---|---:|---:|---:|---:|---:|
+          | 普通多行，少量样式 | Enhanced | 40.47 | 31.74 | 1.58 | 1.50 | 2.01 |
+          | 普通多行，少量样式 | Full | 20.19 | 19.92 | 1.00 | 1.17 | 1.41 |
+          | 密集长行 | Enhanced | 99.36 | 88.27 | 2.10 | 2.06 | 3.29 |
+          | 密集长行 | Full | 87.55 | 80.57 | 2.01 | 2.06 | 2.39 |
+          | 短密集多行 | Enhanced | 48.66 | 35.13 | 1.13 | 1.19 | 1.63 |
+          | 短密集多行 | Full | 34.70 | 33.50 | 0.91 | 0.95 | 1.17 |
+
+          统一后的预热墙钟中位数约 44–120ms，包含等待与调度；冷计算没有消失。这里验证的是人为确保预热完成后的命中收益，不是自然使用命中率或所有机器每次小于 3ms。几十分之一毫秒的组间波动不是稳定回退/提升证明。
+
+          UI 分配从 Describe 前量到正文就绪且外壳结束，包含该时间窗内 UI Dispatcher 工作、不含 worker 分配。统一热路径约 0.31–0.75MiB，与旧热路径接近；冷普通多行 Enhanced 从约 1.49MiB 降至 0.36MiB，Full 从约 1.02MiB 降至 0.32MiB。不能将 UI 分配下降解释为整个进程总分配等比例下降。
+
+          探针第 12 项另记 Stage→实际开放输入：统一热路径各场景中位数约 1.84–17.73ms，旧对照约 1.75–20.36ms。Host/祖先的交互门可能晚于正文布局就绪，因此不能把 1–3ms 的正文 Ready 宣称为每次 1–3ms 已可点击，更不等于物理屏幕呈现。输入门及动画机制未由本次 renderer 统一接管。
+
+          ## 历史证据与边界
+
+          #251 双 renderer 阶段的 [34675779886](https://github.com/snownico0722/PaperTodo/actions/runs/34675779886) 完成旧 WPF 对 artifact 的 80 组像素对照；[34676344587](https://github.com/snownico0722/PaperTodo/actions/runs/34676344587) / [34693460918](https://github.com/snownico0722/PaperTodo/actions/runs/34693460918) 是当时清理后的普通 Release CI，不是统一 renderer 的新验证。该阶段 100 张重笔记的额外托管存活堆从 #249 对照约 105.49MiB 降至 92.57MiB（约 12.2%），不能标成此次重新测出的整进程内存。
+
+          #246 的 [34647584124](https://github.com/snownico0722/PaperTodo/actions/runs/34647584124) 保存完整 Body 预热的审查证据；[34644485740](https://github.com/snownico0722/PaperTodo/actions/runs/34644485740) 的旧阈值性能对照证明仅行内准备收益有限。原始历史表可在 `868c81e6` 的本文件查阅，不能与此次不同就绪边界的样本直接相减。
+
+          本次完成的是 Markdown Preview 唯一 renderer 与可选完整 artifact 预热，不取消预热、不删除 Host 的资源/DPI/真实交互边界，也不代表 #250 的所有恢复问题已自动解决。真机混合 DPI、真实指针/键盘与 GPU 呈现的发布前手测仍单独进行。
+          ''')
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          PY
+          git add CHANGELOG.md doc/ARCHITECTURE.md doc/DECISIONS.md tests/PaperTodo.EdgePreviewChecks/PRELOAD.md
           git diff --cached --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify the source-generation regression test catches the missing guard
+          git diff --cached --stat
+      - name: Push only the documentation update to the existing PR
+        shell: bash
         run: |
-          $path = 'src/EdgeCapsulePreview.Markdown.cs'
-          $original = Get-Content $path -Raw -Encoding utf8
-          $old = "    private bool IsSourceCurrent => _sourceGeneration is not { } generation ||`n        generation.Source.Version == generation.Version;"
-          if (-not $original.Contains($old)) { throw 'Source guard marker missing' }
-          try {
-            Set-Content $path ($original.Replace($old, '    private bool IsSourceCurrent => true;')) -NoNewline -Encoding utf8
-            dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/source-negative-control.log
-            $result = $LASTEXITCODE
-            $log = Get-Content evidence/source-negative-control.log -Raw
-            if ($result -eq 0 -or -not $log.Contains('an invalidated source cannot prepare or publish through a null preload binding')) {
-              throw 'Negative control did not detect the removed guard'
-            }
-          } finally { Set-Content $path $original -NoNewline -Encoding utf8 }
-          exit 0
-      - name: Release regression suites and Debug preview
-        run: |
-          foreach ($suite in @('EdgePreview', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
-            dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release 2>&1 | Tee-Object "evidence/$suite.log"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug 2>&1 | Tee-Object evidence/debug-edge.log
-          exit $LASTEXITCODE
-      - name: Prepare the old product with matching measurement boundaries only
-        run: |
-          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
-          git worktree add --detach $base 868c81e6255645bb1c151a3731fd0b23329de812
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git -C $base submodule update --init --recursive
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          @'
-          import os
-          from pathlib import Path
-          base=Path(os.environ['RUNNER_TEMP'])/'pr251-baseline'
-          for name, marker in [('Program.cs','    private static double[] ProfileOne('),('PreloadChecks.cs','    private static void ProfilePreload(')]:
-              relative=Path('tests/PaperTodo.EdgePreviewChecks')/name
-              current=relative.read_text(encoding='utf-8'); old=(base/relative).read_text(encoding='utf-8')
-              method=current[current.index(marker):current.rfind('\n}')]
-              if name=='Program.cs':
-                  before='viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);'
-                  after='viewport.Children.OfType<Panel>().Any(panel => panel.Opacity > 0 && panel.IsArrangeValid && (panel is MarkdownPreviewArtifactSurface || panel.Children.Count > 0));'
-                  assert method.count(before)==1
-                  method=method.replace(before,after)
-              (base/relative).write_bytes((old[:old.index(marker)]+method+old[old.rfind('\n}'):]).encode())
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git -C $base diff --exit-code -- src
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build "$base/tests/PaperTodo.EdgePreviewChecks" -c Release
-          exit $LASTEXITCODE
-      - name: Paired current and old product performance
-        run: |
-          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
-          foreach ($order in @('forward', 'reverse')) {
-            $arguments = @('--preload-profile')
-            if ($order -eq 'reverse') { $arguments += '--reverse' }
-            dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release --no-build -- @arguments 2>&1 | Tee-Object "evidence/current-$order.log"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- @arguments 2>&1 | Tee-Object "evidence/baseline-$order.log"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Check real hits, identical timing boundaries and the final source diff
-        run: |
-          @'
-          import collections,json,pathlib,statistics,subprocess
-          groups=collections.defaultdict(list)
-          for p in pathlib.Path('evidence').glob('*-*.log'):
-              revision=p.name.split('-')[0]
-              if revision not in ('current','baseline'): continue
-              for line in p.read_text(encoding='utf-8-sig').splitlines():
-                  if not line.startswith('PRELOAD_SAMPLE '): continue
-                  r=json.loads(line.split(' ',1)[1])
-                  assert r['metrics'][10] == (1 if r['preparation']=='layout' else 0), r
-                  assert r['metrics'][11]>=r['metrics'][4], r
-                  if r['iteration']>=2: groups[(revision,r['fixture'],r['mode'],r['preparation'])].append(r['metrics'])
-          assert len(groups)==24 and all(len(rows)==14 for rows in groups.values())
-          report=[dict(revision=k[0],fixture=k[1],mode=k[2],preparation=k[3],median=[statistics.median(r[i] for r in rows) for i in range(12)],maximum=[max(r[i] for r in rows) for i in range(12)]) for k,rows in sorted(groups.items())]
-          for (revision,fixture,mode,preparation),rows in groups.items():
-              if revision=='current' and preparation=='layout':
-                  old=groups[('baseline',fixture,mode,preparation)]
-                  assert statistics.median(r[4] for r in rows)<=max(5,statistics.median(r[4] for r in old)*1.5+1), (fixture,mode)
-          pathlib.Path('evidence/paired-metrics.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
-          counts=subprocess.check_output(['git','diff','868c81e6255645bb1c151a3731fd0b23329de812','--numstat','--','src'],text=True)
-          pathlib.Path('evidence/runtime-counts.txt').write_text(counts,encoding='utf-8')
-          print(counts)
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git add src/EdgeCapsulePreview.Markdown.cs tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs
-          git diff --cached --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $tree = git write-tree
-          git archive --format=zip --output=evidence/tested-source.zip $tree
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Push the verified source-generation boundary
-        run: |
-          $branch = 'perf/whole-preview-artifact-preload-20260912'
-          $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
-          if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent changes.' }
+          branch='perf/whole-preview-artifact-preload-20260912'
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = '${{ github.sha }}'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(preview): reject obsolete source generations without coupling demand to optional cache'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git commit -m 'docs(preview): finalize unique artifact renderer and paired validation'
           git push origin "HEAD:refs/heads/$branch"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git rev-parse HEAD | Tee-Object evidence/pushed-head.txt
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: preview-unification-verification
-          path: evidence/
-          retention-days: 2
