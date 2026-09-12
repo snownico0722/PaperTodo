@@ -98,6 +98,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                         {
                             Background = Brushes.Transparent,
                             Template = LinkHitTemplate,
+                            ClickMode = ClickMode.Release,
                             Padding = new Thickness(),
                             BorderThickness = new Thickness(),
                             Width = rect.Width,

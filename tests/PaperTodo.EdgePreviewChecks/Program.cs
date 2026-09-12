@@ -54,8 +54,8 @@ internal static partial class Program
             foreach (var child in Elements(VisualTreeHelper.GetChild(root, i))) yield return child;
     }
 
-    private static EdgeCapsuleHost NewHost() => EdgeCapsuleHost.Create(new EdgeCapsuleHostOptions(
-        4, 16, 15, 2, 1, 32, 6, 4, "✓", 13, 12, FontWeights.Normal, "Close",
+    private static EdgeCapsuleHost NewHost(double chromeMargin = 4) => EdgeCapsuleHost.Create(new EdgeCapsuleHostOptions(
+        chromeMargin, 16, 15, 2, 1, 32, 6, 4, "✓", 13, 12, FontWeights.Normal, "Close",
         Brushes.White, Brushes.Gray, Brushes.Blue, Brushes.LightGray, Brushes.Gray, Brushes.Black, Brushes.Gray,
         new FontFamily("Segoe UI"), new FontFamily("Segoe UI Symbol"), XmlLanguage.GetLanguage("en-US"), false, "edge-preview-check"));
 

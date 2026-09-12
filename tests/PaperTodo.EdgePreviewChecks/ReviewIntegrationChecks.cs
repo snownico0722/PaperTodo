@@ -18,7 +18,7 @@ internal static partial class Program
     {
         var cache = MarkdownEdgePreviewPreload.For(System.Windows.Threading.Dispatcher.CurrentDispatcher);
         cache.SetEnabledForChecks(true);
-        using var host = NewHost();
+        using var host = NewHost(EdgeCapsuleLayout.WindowChromeMargin);
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
         var paper = new PaperData();
         var markdown = string.Concat(Enumerable.Repeat("**正文** [链接](https://example.com) `code` 中文 ", 45));
@@ -79,6 +79,7 @@ internal static partial class Program
             buttons[1].RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Require(opened.SequenceEqual(new[] { "https://example.com/b" }), "completed B click activates B once");
             Console.WriteLine("PASS heavy-link unpaired-release rejection and completed-click routing");
+            ReviewLinkGestureChecks();
         }
         finally { host.ClearPreviewContent(); cache.Clear(); }
     }
