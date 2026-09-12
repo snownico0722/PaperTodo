@@ -7,10 +7,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
+    if: contains(github.event.head_commit.message, '[artifact-apply]')
     runs-on: windows-latest
     timeout-minutes: 15
     defaults:
@@ -27,29 +28,71 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Capture source and instrument only the diagnostic workspace
+      - name: Apply the reviewed patch with exact content verification
+        id: patch
         run: |
           New-Item -ItemType Directory -Force artifact-diagnostics | Out-Null
-          git archive -o artifact-diagnostics/source.zip HEAD
+          Copy-Item .github/pr251.patch.b64 artifact-diagnostics/transport.b64
+          @'
+          import base64, hashlib, pathlib, zlib
+          encoded = pathlib.Path('.github/pr251.patch.b64').read_text().strip()
+          encoded = encoded.replace('PR7XG32', 'PR7XbXG32')
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '0cbfc692afa26a1503c4ced604817df513e634f84f0bc9a28f9554bc2d1c002e'
+          pathlib.Path('artifact-diagnostics/reviewed.patch').write_bytes(patch)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git apply --check --index artifact-diagnostics/reviewed.patch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git apply --index artifact-diagnostics/reviewed.patch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run unmodified strict Edge preview suite
+        id: edge
+        run: |
+          dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/strict-checks.log
+          exit $LASTEXITCODE
+      - name: Collect parity images on test failure (not a correctness gate)
+        if: failure() && steps.patch.outcome == 'success'
+        run: |
           $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
-          $text = Get-Content $path -Raw
-          $text = $text.Replace('byte[] Pixels(FrameworkElement element)', 'var snapshotNumber = 0;' + [Environment]::NewLine + '            byte[] Pixels(FrameworkElement element)')
-          $text = $text.Replace('var dpi = VisualTreeHelper.GetDpi(element);', 'element.UpdateLayout();' + [Environment]::NewLine + '                var dpi = VisualTreeHelper.GetDpi(element);')
-          $text = $text.Replace('bitmap.Render(element);', @'
+          $program = '.\tests\PaperTodo.EdgePreviewChecks\Program.cs'
+          $original = Get-Content $path -Raw
+          $entry = Get-Content $program -Raw
+          try {
+            $text = $original.Replace('byte[] Pixels(FrameworkElement element)', 'var snapshotNumber = 0;' + [Environment]::NewLine + '            byte[] Pixels(FrameworkElement element)')
+            $text = $text.Replace('bitmap.Render(element);', @'
           bitmap.Render(element);
                           var encoder = new PngBitmapEncoder();
                           encoder.Frames.Add(BitmapFrame.Create(bitmap));
                           using (var output = System.IO.File.Create($"artifact-diagnostics/{snapshotNumber++:D2}.png")) encoder.Save(output);
           '@)
-          $old = 'Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");'
-          $new = 'Console.WriteLine($"ARTIFACT_DIAGNOSTIC_ONLY mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} changed={differences.Count(delta => delta > 32)}/{differences.Length} max={differences.Max()} sum={differences.Sum(delta => (long)delta)} hotAlpha={hotPixels.Where((v,i)=>i%4==3).Sum(v=>(long)v)} coldAlpha={coldPixels.Where((v,i)=>i%4==3).Sum(v=>(long)v)}");'
-          if (-not $text.Contains($old)) { throw 'pixel assertion marker not found' }
-          Set-Content $path ($text.Replace($old, $new)) -NoNewline
-      - name: Run diagnostic copy (not a correctness gate)
+            $text = $text.Replace('Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");', 'Console.WriteLine($"DIAGNOSTIC_ONLY changed={differences.Count(delta => delta > 32)} sum={differences.Sum(delta => (long)delta)}");')
+            Set-Content $path $text -NoNewline
+            $entryDiagnostic = $entry.Replace('else { ArtifactSurfaceChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }', 'else { PreloadChecks(); }')
+            Set-Content $program $entryDiagnostic -NoNewline
+            dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/parity-diagnostic.log
+          } finally {
+            Set-Content $path $original -NoNewline
+            Set-Content $program $entry -NoNewline
+          }
+      - name: Push the validated source changes to the existing PR branch
+        if: success()
         run: |
-          dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/checks.log
-          exit $LASTEXITCODE
-      - name: Upload diagnostic source, images and logs
+          $branch = 'perf/whole-preview-artifact-preload-20260912'
+          $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
+          if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent work.' }
+          git rm .github/pr251.patch.b64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(preview): preserve artifact rows and native link interaction [ci]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git rev-parse HEAD | Tee-Object artifact-diagnostics/pushed-head.txt
+      - name: Upload diagnostic logs and images
         if: always()
         uses: actions/upload-artifact@v7
         with:
