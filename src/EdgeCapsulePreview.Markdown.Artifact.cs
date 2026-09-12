@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -19,9 +20,10 @@ internal sealed record MarkdownPreviewArtifact(
     bool Truncated,
     IReadOnlyList<MarkdownPreviewArtifactLink> Links);
 
-// One hit-test surface replaces per-link Buttons. Outside link rectangles this element returns
-// no hit, so the existing preview background gesture still opens the paper normally.
-internal sealed class MarkdownPreviewArtifactSurface : FrameworkElement
+// One hit-test surface replaces per-link Buttons. This derives from StackPanel only because the
+// existing viewport's body seam is typed that way; it has no children and is itself the mounted body.
+// Outside link rectangles this element returns no hit, so the existing background gesture still opens the paper.
+internal sealed class MarkdownPreviewArtifactSurface : StackPanel
 {
     private readonly MarkdownPreviewArtifact _artifact;
     private readonly Action<string> _openExternal;
