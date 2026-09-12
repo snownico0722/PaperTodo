@@ -117,6 +117,7 @@ internal static partial class Program
                 Require(cancelled.IsCanceled, "cancelled request cannot publish");
             }
         }
+        WorkerPreloadLifetimeChecks();
         WorkerResourceInvalidation();
         WorkerLiveAnimation();
         worker.Dispose(); UntilReview(() => worker.Completion.IsCompleted, "worker shuts down without a UI Join");

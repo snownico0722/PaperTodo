@@ -412,7 +412,9 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             {
                 Children.Remove(staging);
             }
-            PreparationFinished?.Invoke(published);
+            // Only the current build may complete this viewport's preparation. An older
+            // cancelled/resource-invalidated build must not retire its replacement preload.
+            if (version == _renderVersion) PreparationFinished?.Invoke(published);
         }
     }
 }
