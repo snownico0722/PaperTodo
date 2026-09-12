@@ -29,7 +29,6 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - name: Apply verified source patches
-        id: patch
         run: |
           New-Item -ItemType Directory -Force artifact-diagnostics | Out-Null
           @'
@@ -46,6 +45,23 @@ jobs:
           patch = zlib.decompress(base64.b64decode(encoded, validate=True))
           assert hashlib.sha256(patch).hexdigest() == 'c8ba1ce82c44fd8e832541457c1b7afcd912f45c0f946e998e0ca356a1da54e9'
           pathlib.Path('artifact-diagnostics/pr251-underline.patch').write_bytes(patch)
+          p = pathlib.Path('tests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs')
+          text = p.read_bytes()
+          old = b'                            Require(ReferenceEquals(original, body), "cancelled build keeps the prior published surface");'
+          new = '''                            if (boundary == "retract")
+                                          Require(ReferenceEquals(original, body), "retraction keeps the view-owned surface");
+                                      else
+                                      {
+                                          Require(!ReferenceEquals(original, body) && original.Parent == null,
+                                              "unload releases the prior view-owned surface rather than retaining a cached body");
+                                          Require(body.Children.Count == 0 && viewport.Opacity == 0 && !viewport.IsHitTestVisible,
+                                              "unloaded viewport has no published text or active input");
+                                      }'''
+          lines = new.splitlines()
+          new = lines[0] + '\n' + '\n'.join(line[10:] for line in lines[1:])
+          encoded_new = new.encode().replace(b'\n', b'\r\n' if b'\r\n' in text else b'\n')
+          assert text.count(old) == 1
+          p.write_bytes(text.replace(old, encoded_new))
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -c core.autocrlf=true add --renormalize -- tests/PaperTodo.EdgePreviewChecks/ReviewIntegrationChecks.cs
@@ -56,10 +72,10 @@ jobs:
             git apply --index "artifact-diagnostics/$name.patch"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+          git add tests/PaperTodo.MarkdownEditingChecks/EdgePreviewChecks.cs
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run strict Edge preview suite
-        id: edge
         run: |
           dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/strict-checks.log
           exit $LASTEXITCODE
@@ -79,30 +95,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Release --no-build -- --preload-memory 2>&1 | Tee-Object artifact-diagnostics/memory.log
           exit $LASTEXITCODE
-      - name: Collect failure images (diagnostics only)
-        if: failure() && steps.patch.outcome == 'success' && steps.edge.outcome == 'failure'
+      - name: Measure unchanged base retention in a separate worktree
         run: |
-          $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
-          $program = '.\tests\PaperTodo.EdgePreviewChecks\Program.cs'
-          $original = Get-Content $path -Raw
-          $entry = Get-Content $program -Raw
-          try {
-            $text = $original.Replace('byte[] Pixels(FrameworkElement element)', 'var snapshotNumber = 0;' + [Environment]::NewLine + '            byte[] Pixels(FrameworkElement element)')
-            $text = $text.Replace('bitmap.Render(element);', @'
-          bitmap.Render(element);
-                          var encoder = new PngBitmapEncoder();
-                          encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                          using (var output = System.IO.File.Create($"artifact-diagnostics/{snapshotNumber++:D3}.png")) encoder.Save(output);
-          '@)
-            $text = $text.Replace('Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");', 'Console.WriteLine($"DIAGNOSTIC_ONLY changed={differences.Count(delta => delta > 32)} sum={differences.Sum(delta => (long)delta)}");')
-            Set-Content $path $text -NoNewline
-            $entryDiagnostic = $entry.Replace('else { ArtifactSurfaceChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }', 'else { PreloadChecks(); }')
-            Set-Content $program $entryDiagnostic -NoNewline
-            dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/parity-diagnostic.log
-          } finally {
-            Set-Content $path $original -NoNewline
-            Set-Content $program $entry -NoNewline
-          }
+          $base = Join-Path $env:RUNNER_TEMP 'pr249-memory-base'
+          git worktree add --detach $base 2ad8ece961cba86455547cc643c3a3b93e168cb6
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $base submodule update --init --recursive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj" -c Release -- --preload-memory 2>&1 | Tee-Object artifact-diagnostics/base-memory.log
+          exit $LASTEXITCODE
       - name: Push validated changes to the existing PR
         if: success()
         run: |
