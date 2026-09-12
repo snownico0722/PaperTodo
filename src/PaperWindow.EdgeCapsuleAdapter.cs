@@ -173,6 +173,8 @@ public sealed partial class PaperWindow
         [CallerMemberName] string reason = "")
     {
         var wasPointerOver = _edgeCapsule.PointerOverSurface;
+        var couldPreload = !_markdownPreloadCloseHook ||
+            (CanEnterEdgeCapsulePreview && !IsEdgeCapsulePreviewOpen);
         var result = _edgeCapsule.Dispatch(intent, reason);
         if (!result.Accepted)
         {
@@ -188,6 +190,7 @@ public sealed partial class PaperWindow
                 this,
                 _edgeCapsule.PointerOverSurface);
         }
+        if (result.Changed && !couldPreload) ResumeMarkdownPreviewPreload();
         AssertDeepCapsuleModelInvariants();
         return true;
     }

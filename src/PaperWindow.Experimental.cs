@@ -73,6 +73,7 @@ public sealed partial class PaperWindow
         if (wasPassive && !IsExperimentalPassive)
         {
             _experimentalPassiveNeedsZOrderRestore = true;
+            ResumeMarkdownPreviewPreload();
         }
         RefreshEffectiveTopmost();
     }

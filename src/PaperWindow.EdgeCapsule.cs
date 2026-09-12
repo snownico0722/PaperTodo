@@ -55,6 +55,7 @@ public sealed partial class PaperWindow
                 _paper.CapsuleMonitorDeviceName) == IntPtr.Zero,
             EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)));
         var host = _edgeCapsuleHost;
+        ObserveMarkdownPreloadHost(host.MarkdownPreloadLifecycleAnchor);
         _ = MeasureDeepCapsuleIconSlotWidth(DeepCapsuleSlotDpi().PixelsPerDip);
         _edgeCapsule.SetNativeBatchApplyRejectedCallback(
             RejectEdgeCapsuleNativeBatchApply);
@@ -274,6 +275,7 @@ public sealed partial class PaperWindow
             _edgeCapsuleHostCapacityDpiY = monitor.DpiScaleY;
             _edgeCapsuleHostCapacityWidthDip = requiredWidthDip;
             _edgeCapsuleHostCapacityHeightDip = requiredHeightDip;
+            ResumeMarkdownPreviewPreload();
             return true;
         }
 
@@ -295,6 +297,7 @@ public sealed partial class PaperWindow
 
         _edgeCapsuleHostCapacityWidthDip = width;
         _edgeCapsuleHostCapacityHeightDip = height;
+        ResumeMarkdownPreviewPreload();
         return true;
     }
 
@@ -638,6 +641,7 @@ public sealed partial class PaperWindow
         _edgeCapsule.Reset();
         _edgeCapsuleHost?.Dispose();
         _edgeCapsuleHost = null;
+        ObserveMarkdownPreloadHost(null);
         _edgeCapsuleHostCapacityMonitor = null;
         _edgeCapsuleHostCapacityWidthDip = 0;
         _edgeCapsuleHostCapacityHeightDip = 0;

@@ -289,6 +289,7 @@ public sealed partial class PaperWindow
             host.LocationChanged -= OnDeepCapsuleFloatingDragHostLocationChanged;
             _deepCapsuleFloatingFullscreenAvoidanceWindow = IntPtr.Zero;
             host.ReturnToPool();
+            ResumeMarkdownPreviewPreload();
         }
     }
 

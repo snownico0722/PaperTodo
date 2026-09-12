@@ -20,7 +20,8 @@ internal sealed class MarkdownEdgePreviewPreload
     private readonly Dispatcher _dispatcher;
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, MarkdownEdgeCapsulePreviewRenderer.PreviewContent> _excerpts = new();
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Body> _bodies = new();
-    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<Target?>> _pendingLayout = new();
+    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<ReadResult>> _pendingLayout = new();
+    private readonly HashSet<EdgeCapsulePreviewInvalidationSource> _deferred = new();
     private readonly DispatcherTimer _debounce;
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
@@ -28,8 +29,18 @@ internal sealed class MarkdownEdgePreviewPreload
     internal int ExcerptCount => _excerpts.Count;
     internal int BodyCount => _bodies.Count;
     internal int PendingCount => _pendingLayout.Count;
+    internal int DeferredCount => _deferred.Count;
+    private int RunnableCount => PendingCount - DeferredCount;
     internal long BodyHits { get; private set; }
     internal long WarmCompletions { get; private set; }
+
+    internal enum Readiness { Discard, Deferred, Ready }
+    internal readonly record struct ReadResult(Readiness State, Target? Target = null)
+    {
+        internal static ReadResult Ready(Target target) => new(Readiness.Ready, target);
+        internal static ReadResult Deferred => new(Readiness.Deferred);
+        internal static ReadResult Discard => default;
+    }
 
     internal sealed record Target(EdgeCapsulePreviewContext Context, Panel Anchor,
         EdgeCapsulePreviewSize Size, Func<bool> StillEligible);
@@ -177,30 +188,45 @@ internal sealed class MarkdownEdgePreviewPreload
     internal void Forget(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
-        _excerpts.Remove(source); _bodies.Remove(source); _pendingLayout.Remove(source);
+        _excerpts.Remove(source); _bodies.Remove(source); _pendingLayout.Remove(source); _deferred.Remove(source);
         if (ReferenceEquals(_workingSource, source)) _work?.Cancel();
-        if (PendingCount == 0) _debounce.Stop();
+        if (RunnableCount == 0) _debounce.Stop();
     }
 
-    internal void RequestLayout(EdgeCapsulePreviewInvalidationSource source, Func<Target?> read)
+    internal void RequestLayout(EdgeCapsulePreviewInvalidationSource source, Func<ReadResult> read)
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || _dispatcher.HasShutdownStarted) return;
         // Keep only the newest request. Capturing/classifying text happens after the debounce,
         // never on a keystroke or pointer callback. A running drain cannot bypass a new 500ms wait.
         _pendingLayout[source] = read;
+        _deferred.Remove(source);
         _work?.Cancel();
         Arm();
     }
 
-    private void Arm() { _debounce.Stop(); _debounce.Start(); }
+    // Resume only an existing suspended intent. Normal input does not create speculative work,
+    // and a permanently ineligible/deleted source cannot be resurrected by a late event.
+    internal void Resume(EdgeCapsulePreviewInvalidationSource source)
+    {
+        _dispatcher.VerifyAccess();
+        if (!_enabled || _dispatcher.HasShutdownStarted) return;
+        var resumed = _deferred.Remove(source);
+        if (!resumed && !ReferenceEquals(_workingSource, source)) return;
+        // A real ready transition can precede the old drain's Deferred registration. Cancel
+        // that drain so its finally cannot discard the request after this one-shot wake-up.
+        _work?.Cancel();
+        Arm();
+    }
+
+    private void Arm() { _debounce.Stop(); if (RunnableCount > 0) _debounce.Start(); }
 
     internal void BeginDemand()
     {
         _dispatcher.VerifyAccess();
         _work?.Cancel();
         _debounce.Stop();
-        if (PendingCount > 0) Arm();
+        if (RunnableCount > 0) Arm();
     }
 
     private async void Drain()
@@ -210,35 +236,44 @@ internal sealed class MarkdownEdgePreviewPreload
         _work = work;
         try
         {
-            while (!work.IsCancellationRequested && PendingCount > 0)
+            while (!work.IsCancellationRequested && RunnableCount > 0)
             {
                 await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                if (work.IsCancellationRequested || PendingCount == 0) break;
-                var pair = _pendingLayout.First();
+                if (work.IsCancellationRequested || RunnableCount == 0) break;
+                var pair = _pendingLayout.First(item => !_deferred.Contains(item.Key));
+                var defer = false;
                 _workingSource = pair.Key;
                 try
                 {
-                    var target = pair.Value();
-                    if (target != null) await WarmLayoutAsync(target, work.Token);
+                    var read = pair.Value();
+                    defer = read.State == Readiness.Deferred;
+                    if (read.State == Readiness.Ready && read.Target is { } target)
+                    {
+                        var prepared = await WarmLayoutAsync(target, work.Token);
+                        defer = !prepared && (!target.StillEligible() ||
+                            !target.Anchor.IsLoaded || !target.Anchor.IsVisible);
+                    }
                 }
                 catch (OperationCanceledException) when (work.IsCancellationRequested) { }
                 catch (Exception ex) { Trace.TraceWarning("Markdown preview preload failed: {0}", ex.GetType().Name); }
                 finally
                 {
                     _workingSource = null;
-                    // Retain interrupted work. A newer edit replaces the delegate and must not
-                    // be removed by the completion of the older request. Failed/ineligible work
-                    // is retired, not polled forever; host/content lifecycle supplies a new event.
+                    // Temporary loss of eligibility keeps the weak reader dormant, without a
+                    // timer. New content supersedes it; explicit lifecycle events resume it.
                     if (!work.IsCancellationRequested &&
                         _pendingLayout.TryGetValue(pair.Key, out var current) && ReferenceEquals(current, pair.Value))
-                        _pendingLayout.Remove(pair.Key);
+                    {
+                        if (defer) _deferred.Add(pair.Key);
+                        else _pendingLayout.Remove(pair.Key);
+                    }
                 }
             }
         }
         finally
         {
             _work = null;
-            if (PendingCount > 0 && !_dispatcher.HasShutdownStarted && !_debounce.IsEnabled) Arm();
+            if (RunnableCount > 0 && !_dispatcher.HasShutdownStarted && !_debounce.IsEnabled) Arm();
         }
     }
 
@@ -314,7 +349,7 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         _debounce.Stop(); _work?.Cancel();
-        _pendingLayout.Clear(); _bodies.Clear(); _excerpts.Clear();
+        _pendingLayout.Clear(); _deferred.Clear(); _bodies.Clear(); _excerpts.Clear();
     }
 
     // Same-binary A/B probe; no settings, environment switch or persistent product option.
