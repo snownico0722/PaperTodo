@@ -1,0 +1,40 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0/win-x64",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {},
+    ".NETCoreApp,Version=v10.0/win-x64": {
+      "PaperTodo.Plugin.CodexCliBridge/1.0.0": {
+        "dependencies": {
+          "PaperTodo.Plugin.Abstractions": "1.0.0"
+        },
+        "runtime": {
+          "PaperTodo.Plugin.CodexCliBridge.dll": {}
+        }
+      },
+      "PaperTodo.Plugin.Abstractions/1.0.0": {
+        "runtime": {
+          "PaperTodo.Plugin.Abstractions.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PaperTodo.Plugin.CodexCliBridge/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PaperTodo.Plugin.Abstractions/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
