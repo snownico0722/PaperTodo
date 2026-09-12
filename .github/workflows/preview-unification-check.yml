@@ -6,15 +6,12 @@ permissions:
   contents: write
 jobs:
   validate:
-    if: contains(github.event.head_commit.message, '[unify-check]')
+    if: contains(github.event.head_commit.message, '[unify-layout-check]')
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
       run:
         shell: pwsh
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-      DOTNET_NOLOGO: 'true'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -23,92 +20,46 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Apply content-verified changes
+      - name: Keep cache-hit publication within the current layout pass
         run: |
           New-Item -ItemType Directory -Force evidence | Out-Null
           @'
-          import base64, hashlib, json, pathlib, subprocess, zlib
-          encoded = ''.join(pathlib.Path(f'.github/preview-unification-parts/{i}.txt').read_text().strip() for i in range(9))
-          raw = zlib.decompress(base64.b64decode(encoded, validate=True))
-          assert hashlib.sha256(raw).hexdigest() == '2607da9e79e54002f7f5040c12f3aaf9704339c15fbba199b905db1b151a7705'
-          changes = json.loads(raw)
-          digest = lambda s: hashlib.sha256(s.encode()).hexdigest()
-          for change in changes:
-              path = pathlib.Path(change['path'])
-              assert str(path.as_posix()).startswith(('src/', 'tests/'))
-              old = path.read_text(encoding='utf-8') if path.exists() else None
-              assert (digest(old) if old is not None else None) == change['old'], str(path)
-              if change.get('delete'):
-                  path.unlink()
-              else:
-                  if 'content' in change: result = change['content']
-                  else:
-                      lines = old.splitlines(keepends=True)
-                      for start, end, replacement in reversed(change['edits']): lines[start:end] = [replacement]
-                      result = ''.join(lines)
-                  assert digest(result) == change['new'], str(path)
-                  path.write_bytes(result.encode())
-              subprocess.run(['git', 'add', '--', str(path)], check=True)
-          pathlib.Path('evidence/source-manifest.json').write_bytes(raw)
+          from pathlib import Path
+          import subprocess
+          p = Path('src/EdgeCapsulePreview.Markdown.cs')
+          text = p.read_text(encoding='utf-8')
+          old = '        IsHitTestVisible = _previewActive;\n        InvalidateMeasure();\n    }'
+          new = '        IsHitTestVisible = _previewActive;\n    }'
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+          old = '                Publish(artifact, size);\n                published = true;'
+          new = '                Publish(artifact, size);\n                // Async completion needs a new layout; a cache hit is already inside Arrange.\n                InvalidateMeasure();\n                published = true;'
+          assert text.count(old) == 1
+          p.write_bytes(text.replace(old, new).encode())
+          subprocess.run(['git', 'add', '--', str(p)], check=True)
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          subprocess.run(['git', 'archive', '--format=zip', '--output=evidence/tested-source.zip', tree], check=True)
           '@ | python -
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python .github/preview-unification-fixes.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --cached --numstat | Tee-Object evidence/change-counts.txt
-      - name: Build and strict Edge checks
+      - name: Release checks and Debug preview
         run: |
-          dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object evidence/build.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/edge.log
-          exit $LASTEXITCODE
-      - name: Standard regression suites and Debug Edge
-        run: |
-          foreach ($suite in @('MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
+          foreach ($suite in @('EdgePreview', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
             dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release 2>&1 | Tee-Object "evidence/$suite.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug 2>&1 | Tee-Object evidence/debug-edge.log
           exit $LASTEXITCODE
-      - name: Independent old-renderer versus unified-renderer pixels
+      - name: Compare current and pre-unification production paths
         run: |
-          $base = Join-Path $env:RUNNER_TEMP 'pr251-old-renderer'
+          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
           git worktree add --detach $base 868c81e6255645bb1c151a3731fd0b23329de812
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C $base submodule update --init --recursive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # Give both independent exporters the same explicit complete host palette.
-          $reference = Join-Path $base 'tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs'
-          $text = Get-Content $reference -Raw
-          $old = 'panel.Resources["HoverBrushKey"] = Brushes.LightGray;'
-          if (-not $text.Contains($old)) { throw 'baseline exporter resource marker missing' }
-          Set-Content $reference ($text.Replace($old, $old + [Environment]::NewLine + '                panel.Resources["PaperBorderBrushKey"] = Brushes.Gray;')) -NoNewline
-          $before = Join-Path $pwd 'evidence/before'
-          $after = Join-Path $pwd 'evidence/after'
-          dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release -- --export $before 2>&1 | Tee-Object evidence/before-export.log
+          dotnet build "$base/tests/PaperTodo.EdgePreviewChecks" -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release --no-build -- --export $after 2>&1 | Tee-Object evidence/after-export.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          @'
-          import json, pathlib
-          before = {p.name:p for p in pathlib.Path('evidence/before').glob('*.rgba')}
-          after = {p.name:p for p in pathlib.Path('evidence/after').glob('*.rgba')}
-          assert len(before) == 160 and before.keys() == after.keys(), (len(before), len(after))
-          results = []
-          for name, path in before.items():
-              old, new = path.read_bytes(), after[name].read_bytes()
-              assert len(old) == len(new), name
-              maximum = max(abs(a-b) for a,b in zip(old,new))
-              results.append({'case':name, 'exact':old==new, 'maxChannelDifference':maximum})
-          pathlib.Path('evidence/independent-pixels.json').write_text(json.dumps(results, indent=2))
-          print('CROSS_COMMIT_PIXELS', len(results), 'exact', sum(r['exact'] for r in results), 'max', max(r['maxChannelDifference'] for r in results))
-          assert all(r['maxChannelDifference'] <= 32 for r in results), [r for r in results if r['maxChannelDifference'] > 32]
-          '@ | python -
-          exit $LASTEXITCODE
-      - name: Current and baseline production-host profiles
-        run: |
-          $base = Join-Path $env:RUNNER_TEMP 'pr251-old-renderer'
           foreach ($order in @('forward', 'reverse')) {
             $arguments = @('--preload-profile')
             if ($order -eq 'reverse') { $arguments += '--reverse' }
@@ -117,21 +68,45 @@ jobs:
             dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- @arguments 2>&1 | Tee-Object "evidence/baseline-$order.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-      - name: Push validated implementation to the existing PR
+      - name: Reject a deferred-frame cache-hit regression
+        run: |
+          @'
+          import collections, json, pathlib, statistics
+          groups = collections.defaultdict(list)
+          for p in pathlib.Path('evidence').glob('*-*.log'):
+              revision = p.name.split('-')[0]
+              if revision not in ('current', 'baseline'): continue
+              for line in p.read_text(encoding='utf-8-sig').splitlines():
+                  if not line.startswith('PRELOAD_SAMPLE '): continue
+                  row = json.loads(line.split(' ', 1)[1])
+                  if row['preparation'] != 'layout': continue
+                  assert row['metrics'][10] == 1, row
+                  if row['iteration'] >= 2:
+                      groups[(revision, row['fixture'], row['mode'])].append(row['metrics'][4])
+          report = []
+          for (revision, fixture, mode), values in groups.items():
+              if revision != 'current': continue
+              baseline = groups[('baseline', fixture, mode)]
+              assert len(values) == len(baseline) == 14
+              report.append(dict(fixture=fixture, mode=mode, current=statistics.median(values), baseline=statistics.median(baseline)))
+          assert len(report) == 6
+          pathlib.Path('evidence/hot-layout-gate.json').write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          assert all(r['current'] <= max(5.0, r['baseline'] * 1.5 + 1.0) for r in report), 'cache hits still wait for a later frame'
+          '@ | python -
+          exit $LASTEXITCODE
+      - name: Push verified publication fix
         run: |
           $branch = 'perf/whole-preview-artifact-preload-20260912'
           $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
-          if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent work.' }
-          git rm -r .github/preview-unification-parts .github/preview-unification-fixes.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent changes.' }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'refactor(preview): unify cold and preloaded artifact rendering; remove legacy WPF body pipeline [ci]'
+          git commit -m 'fix(preview): publish cached artifacts without invalidating the active layout pass'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git rev-parse HEAD | Tee-Object evidence/pushed-head.txt
-          Remove-Item evidence/before,evidence/after -Recurse
       - uses: actions/upload-artifact@v7
         if: always()
         with:
