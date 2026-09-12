@@ -57,46 +57,33 @@ internal sealed class MarkdownEdgePreviewPreload
     private MarkdownEdgePreviewPreload(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
-        // One-shot editing/interest debounce, stopped as soon as it fires; no idle polling.
         _debounce = new DispatcherTimer(DispatcherPriority.ContextIdle, dispatcher)
         { Interval = TimeSpan.FromMilliseconds(500) };
         _debounce.Tick += (_, _) => { _debounce.Stop(); Drain(); };
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
-    // Preload policy is intentionally broader than the renderer's paragraph-path threshold.
-    // Complete idle layout is worthwhile when the bounded excerpt is large, has substantial
-    // styled coverage, or has several distinct styled/link pieces. Thresholds are strict.
     internal static bool IsClearlyHighLoad(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
     {
         if (content.IsEmpty) return false;
         var totalCharacters = content.Lines.Sum(line => line.Text.Length);
         if (totalCharacters > 400) return true;
         if (totalCharacters <= 200 || content.RenderMode == MarkdownRenderModes.Off) return false;
-
         var styledCharacters = 0;
         var styledPieces = 0;
         foreach (var line in content.Lines)
         {
-            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
-                continue;
+            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing) continue;
             if (line.WasInsideFence)
             {
-                if (line.Text.Length > 0)
-                {
-                    styledCharacters += line.Text.Length;
-                    styledPieces++;
-                }
+                if (line.Text.Length > 0) { styledCharacters += line.Text.Length; styledPieces++; }
             }
             else
             {
                 foreach (var piece in content.Inlines.Get(line.Text, MarkdownRenderModes.Full).Pieces)
                 {
-                    // Count semantic content, never Enhanced-mode delimiter/URL styling.
-                    if ((piece.Style & ~MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) == 0 && piece.Link == null)
-                        continue;
-                    styledCharacters += piece.Text.Length;
-                    styledPieces++;
+                    if ((piece.Style & ~MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) == 0 && piece.Link == null) continue;
+                    styledCharacters += piece.Text.Length; styledPieces++;
                 }
             }
             if (styledCharacters > 100 || styledPieces > 3) return true;
@@ -107,13 +94,10 @@ internal sealed class MarkdownEdgePreviewPreload
     internal MarkdownEdgeCapsulePreviewRenderer.PreviewContent Capture(EdgeCapsulePreviewContext context)
     {
         _dispatcher.VerifyAccess();
-        // Check the bounded excerpt even when a caller forgot to invalidate. Never retain the
-        // entire editor string or match only by paper ID/version when the visible text changed.
         var candidate = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(
             context.ReadMarkdownText(), context.ReadMarkdownRenderMode());
         if (!_enabled) return candidate;
         var source = context.InvalidationSource;
-        // Compare the bounded source BEFORE classifying: unchanged previews must not reparse.
         if (_excerpts.TryGetValue(source, out var entry) &&
             entry.RenderMode == candidate.RenderMode && entry.Truncated == candidate.Truncated &&
             entry.Lines.SequenceEqual(candidate.Lines)) return entry;
@@ -132,8 +116,6 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         if (binding is not { Current: true } || !binding.Owner._enabled) return null;
         var dpi = VisualTreeHelper.GetDpi(surface);
-        // Frozen drawings keep concrete resources. Compare values as well as notifications, so
-        // replacing/mutating a brush between preload and demand cannot reuse yesterday's colors.
         var stamps = new List<string>();
         foreach (var name in new[] { "TextBrushKey", "WeakTextBrushKey", "LinkBrushKey", "HoverBrushKey", "PaperBorderBrushKey" })
         {
@@ -197,26 +179,30 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || _dispatcher.HasShutdownStarted) return;
-        // Keep only the newest request. Capturing/classifying text happens after the debounce,
-        // never on a keystroke or pointer callback. A running drain cannot bypass a new 500ms wait.
         _pendingLayout[source] = read;
         _deferred.Remove(source);
         _work?.Cancel();
         Arm();
     }
 
-    // Resume only an existing suspended intent. Normal input does not create speculative work,
-    // and a permanently ineligible/deleted source cannot be resurrected by a late event.
     internal void Resume(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || _dispatcher.HasShutdownStarted) return;
+        var sameSourceRunning = ReferenceEquals(_workingSource, source);
         var resumed = _deferred.Remove(source);
-        if (!resumed && !ReferenceEquals(_workingSource, source)) return;
-        // A real ready transition can precede the old drain's Deferred registration. Cancel
-        // that drain so its finally cannot discard the request after this one-shot wake-up.
-        _work?.Cancel();
-        Arm();
+        if (!resumed && !sameSourceRunning) return;
+        // A wake for another source must not cancel useful work already running. Only interrupt
+        // the same source when readiness changed before its old reader could register Deferred.
+        if (sameSourceRunning)
+        {
+            _work?.Cancel();
+            Arm();
+        }
+        else if (_work == null)
+        {
+            Arm();
+        }
     }
 
     private void Arm() { _debounce.Stop(); if (RunnableCount > 0) _debounce.Start(); }
@@ -259,8 +245,6 @@ internal sealed class MarkdownEdgePreviewPreload
                 finally
                 {
                     _workingSource = null;
-                    // Temporary loss of eligibility keeps the weak reader dormant, without a
-                    // timer. New content supersedes it; explicit lifecycle events resume it.
                     if (!work.IsCancellationRequested &&
                         _pendingLayout.TryGetValue(pair.Key, out var current) && ReferenceEquals(current, pair.Value))
                     {
@@ -277,8 +261,6 @@ internal sealed class MarkdownEdgePreviewPreload
         }
     }
 
-    // An invisible zero-sized holder inherits the real target host's DPI/resources. It never
-    // stages host preview content, changes geometry, takes focus or enlarges the input area.
     internal async Task<bool> WarmLayoutAsync(Target target, CancellationToken cancellation = default)
     {
         _dispatcher.VerifyAccess();
@@ -292,8 +274,6 @@ internal sealed class MarkdownEdgePreviewPreload
         var holder = new Canvas { Width = 0, Height = 0, ClipToBounds = true,
             Opacity = 0, IsHitTestVisible = false, Focusable = false,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
-        // Hidden speculative content cannot join keyboard navigation, even though opacity zero
-        // keeps it eligible for WPF layout and inheriting the target host's resources.
         KeyboardNavigation.SetTabNavigation(holder, KeyboardNavigationMode.None);
         KeyboardNavigation.SetControlTabNavigation(holder, KeyboardNavigationMode.None);
         KeyboardNavigation.SetDirectionalNavigation(holder, KeyboardNavigationMode.None);
@@ -352,6 +332,5 @@ internal sealed class MarkdownEdgePreviewPreload
         _pendingLayout.Clear(); _deferred.Clear(); _bodies.Clear(); _excerpts.Clear();
     }
 
-    // Same-binary A/B probe; no settings, environment switch or persistent product option.
     internal void SetEnabledForChecks(bool enabled) { Clear(); _enabled = enabled; }
 }
