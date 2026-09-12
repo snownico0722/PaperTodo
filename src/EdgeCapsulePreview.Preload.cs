@@ -295,11 +295,19 @@ internal sealed class MarkdownEdgePreviewPreload
         var plan = MarkdownEdgeCapsulePreviewRenderer.CaptureArtifactPlan(
             target.Anchor, content, width, key.Binding.Zoom);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        Action invalidated = () => lifetime.Cancel();
-        RoutedEventHandler unloaded = (_, _) => lifetime.Cancel();
+        var listenerOpen = true;
+        void CancelLifetime()
+        {
+            // WPF may already have snapshotted an IsVisibleChanged invocation when we unsubscribe.
+            // Close this local gate before detaching handlers so a late callback never touches the
+            // linked CTS after the using scope disposes it.
+            if (listenerOpen && !lifetime.IsCancellationRequested) lifetime.Cancel();
+        }
+        Action invalidated = CancelLifetime;
+        RoutedEventHandler unloaded = (_, _) => CancelLifetime();
         DependencyPropertyChangedEventHandler visibilityChanged = (_, args) =>
         {
-            if (args.NewValue is false) lifetime.Cancel();
+            if (args.NewValue is false) CancelLifetime();
         };
         target.Context.InvalidationSource.Invalidated += invalidated;
         target.Anchor.Unloaded += unloaded;
@@ -333,6 +341,7 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         finally
         {
+            listenerOpen = false;
             target.Context.InvalidationSource.Invalidated -= invalidated;
             target.Anchor.Unloaded -= unloaded;
             target.Anchor.IsVisibleChanged -= visibilityChanged;
