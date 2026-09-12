@@ -66,7 +66,6 @@ public sealed partial class PaperWindow
 
         _edgeCapsuleHost?.SetInteractionLocked(locked);
         UpdateAdvancedInteractionLockVisuals();
-        if (changed && !locked) ResumeMarkdownPreviewPreload();
     }
 
     private void EnsureAdvancedInteractionLockVisuals()
