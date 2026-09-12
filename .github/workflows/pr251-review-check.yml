@@ -1,0 +1,95 @@
+name: Temporary PR251 artifact review
+
+on:
+  push:
+    branches: [fix/pr251-artifact-readiness-review-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply reviewed source delta
+        run: |
+          git config core.autocrlf false
+          git reset --hard HEAD
+          New-Item -ItemType Directory -Force review-output | Out-Null
+          @'
+          import base64, gzip, hashlib, subprocess
+          from pathlib import Path
+          payload = Path('.github/pr251-review.patch.gz.b64').read_text().strip()
+          payload = payload.replace('S544yyJw', 'S544zJw').replace('mRvylC0', 'mRvylvC0')
+          patch = gzip.decompress(base64.b64decode(payload))
+          assert hashlib.sha256(patch).hexdigest() == '951f5e4f6d5fcf0c6bf87753cc5576e2fad7ec81e8adf4770f822a9a1fe4e6c1'
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          path = Path('doc/ARCHITECTURE.md')
+          text = path.read_text(encoding='utf-8')
+          before = '关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队，失败或失效目标不持续轮询。'
+          after = '关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队。Host 尚未就绪或尺寸暂不可用的 reader 休眠保留，只由 Host Loaded/Visible 或容量恢复唤醒；菜单、输入锁和手势不再被当作 artifact 准备资格。恢复一个来源不会打断另一个来源正在进行的预热，失败或永久失效目标不持续轮询。'
+          assert text.count(before) == 1
+          path.write_text(text.replace(before, after), encoding='utf-8', newline='\n')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Reviewed patch did not apply exactly' }
+      - name: Prove the clipped-link counterexample
+        run: |
+          $path = 'src/EdgeCapsulePreview.Markdown.Artifact.cs'
+          $fixed = [IO.File]::ReadAllText($path)
+          $old = $fixed.Replace('var intersection = Rect.Intersect(Artifact.Links[i].Bounds, visible);', 'var intersection = Rect.Intersect(Artifact.Links[i].Bounds, visible);').Replace('Children[i].IsEnabled = !intersection.IsEmpty && intersection.Width > 0 && intersection.Height > 0;', 'Children[i].IsEnabled = Artifact.Links[i].Bounds.IntersectsWith(visible);')
+          try {
+            [IO.File]::WriteAllText($path, $old, [Text.UTF8Encoding]::new($false))
+            dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --artifact-readiness *> review-output/negative-clip.log
+            $code = $LASTEXITCODE
+            $log = Get-Content review-output/negative-clip.log -Raw
+            if ($code -eq 0 -or -not $log.Contains('links touching the clip edge have no visible pixels')) {
+              Get-Content review-output/negative-clip.log
+              throw 'The negative control did not fail at the expected clipped-link assertion'
+            }
+          }
+          finally { [IO.File]::WriteAllText($path, $fixed, [Text.UTF8Encoding]::new($false)) }
+      - name: Build and run seven Release suites
+        run: |
+          dotnet build PaperTodo.csproj -c Release *> review-output/build.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/build.log; throw 'Build failed' }
+          foreach ($suite in @('MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'EdgePreview', 'Threading', 'Persistence')) {
+            dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release *> "review-output/$suite.log"
+            if ($LASTEXITCODE -ne 0) { Get-Content "review-output/$suite.log"; throw "$suite failed" }
+          }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug *> review-output/debug-edge.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/debug-edge.log; throw 'Debug EdgePreview failed' }
+      - name: Commit only verified source and remove review machinery
+        run: |
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/EdgeCapsuleHost.Preview.cs src/EdgeCapsulePreview.Markdown.Artifact.cs src/EdgeCapsulePreview.Preload.cs src/PaperWindow.EdgeCapsule.cs src/PaperWindow.EdgePreviewPreload.cs tests/PaperTodo.EdgePreviewChecks/ArtifactReadinessChecks.cs tests/PaperTodo.EdgePreviewChecks/ArtifactSmokeChecks.cs tests/PaperTodo.EdgePreviewChecks/PreloadAuditChecks.cs tests/PaperTodo.EdgePreviewChecks/PreloadChecks.cs tests/PaperTodo.EdgePreviewChecks/Program.cs doc/ARCHITECTURE.md
+          git rm .github/workflows/pr251-review-check.yml .github/pr251-review.patch.gz.b64
+          git commit -m 'fix(preview): recover artifact readiness without gesture hooks [ci]'
+          if ($LASTEXITCODE -ne 0) { throw 'Verified commit failed' }
+          git rev-parse HEAD | Set-Content review-output/tested-head.txt
+          git diff --stat afd9b48f8bbed5001aff030b483efd854bdd4922 HEAD | Set-Content review-output/changes.txt
+          git archive --format=zip -o review-output/tested-source.zip HEAD
+          git push origin HEAD:fix/pr251-artifact-readiness-review-20260913
+          if ($LASTEXITCODE -ne 0) { throw 'Branch moved or checked source could not be pushed; no force push attempted' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr251-artifact-review
+          path: review-output/
+          retention-days: 5
