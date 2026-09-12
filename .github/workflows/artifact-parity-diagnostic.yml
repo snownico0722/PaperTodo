@@ -1,0 +1,38 @@
+name: Artifact parity diagnostic
+
+on:
+  push:
+    branches:
+      - perf/whole-preview-artifact-preload-20260912
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Inject pixel diagnostics in runner workspace
+        run: |
+          $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
+          $text = Get-Content $path -Raw
+          $old = 'Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");'
+          $new = 'Console.WriteLine($"ARTIFACT_PIXEL_CASE mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} changed={differences.Count(delta => delta > 32)}/{differences.Length} max={differences.Max()} sum={differences.Sum(delta => (long)delta)}");' + [Environment]::NewLine + '                ' + $old
+          if (-not $text.Contains($old)) { throw 'pixel assertion marker not found' }
+          Set-Content $path ($text.Replace($old, $new)) -NoNewline
+      - name: Run Edge preview checks
+        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
