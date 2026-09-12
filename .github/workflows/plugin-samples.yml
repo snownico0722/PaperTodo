@@ -8,6 +8,7 @@ on:
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
+      - "tests/PaperTodo.CodexCliBridgeChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
@@ -28,6 +29,7 @@ on:
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
+      - "tests/PaperTodo.CodexCliBridgeChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
@@ -69,6 +71,10 @@ jobs:
       - name: Run menu image and popup checks
         shell: pwsh
         run: dotnet run --project .\tests\PaperTodo.PluginApiChecks\PaperTodo.PluginApiChecks.csproj -c Release
+
+      - name: Run Codex CLI Bridge prompt checks
+        shell: pwsh
+        run: dotnet run --project ./tests/PaperTodo.CodexCliBridgeChecks/PaperTodo.CodexCliBridgeChecks.csproj -c Release
 
       - name: Validate plugin manifests
         shell: pwsh

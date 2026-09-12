@@ -266,7 +266,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         private readonly PaperPluginRuntimeContext _context;
         private readonly IDisposable _workspaceSubscription;
         private readonly IDisposable _runtimePaperSubscription;
-        private RuntimeState _state;
+        private CodexPromptState _state;
         private bool _disposed;
 
         private static readonly PaperTodoAction[] TodoAction =
@@ -286,7 +286,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         public Runtime(PaperPluginRuntimeContext context)
         {
             _context = context;
-            _state = RuntimeState.Read(context.State.Json);
+            _state = CodexPromptState.Read(context.State.Json);
 
             context.TodoActions.SetActionHandler(OnTodoAction);
             context.GlobalTopBar.SetActionHandler(OnTopBarAction);
@@ -389,8 +389,9 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 : string.Empty;
             if (!string.Equals(_state.DefaultPrompt, prompt, StringComparison.Ordinal))
             {
-                _state = _state with { DefaultPrompt = prompt };
-                _context.State.Save(JsonSerializer.Serialize(_state));
+                var next = _state with { DefaultPrompt = prompt };
+                _context.State.Save(JsonSerializer.Serialize(next));
+                _state = next;
             }
             PostPromptToBody(value.PaperId, saved: true);
         }
@@ -402,7 +403,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 JsonSerializer.SerializeToElement(new
                 {
                     type = saved ? "defaultPromptSaved" : "defaultPrompt",
-                    prompt = _state.DefaultPrompt
+                    prompt = _state.EffectivePrompt
                 }));
         }
 
@@ -473,21 +474,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             });
         }
 
-        private string AddDefaultPrompt(string content)
-        {
-            if (string.IsNullOrWhiteSpace(_state.DefaultPrompt))
-            {
-                return content;
-            }
-
-            var builder = new StringBuilder();
-            builder.AppendLine("[PaperTodo 默认提示词]");
-            builder.AppendLine(_state.DefaultPrompt.Trim());
-            builder.AppendLine();
-            builder.AppendLine("[本次内容]");
-            builder.Append(content);
-            return builder.ToString();
-        }
+        private string AddDefaultPrompt(string content) =>
+            _state.PrependTo(content, Path.GetDirectoryName(typeof(CodexCliBridgePlugin).Assembly.Location)!);
 
         private string BuildTodoPrompt(TodoSnapshot todo)
         {
@@ -606,30 +594,6 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             _context.TodoActions.Clear();
             _context.GlobalTopBar.SetActionHandler(null);
             _context.GlobalTopBar.Clear();
-        }
-    }
-
-    private sealed record RuntimeState(string DefaultPrompt)
-    {
-        internal static RuntimeState Read(string json)
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-                var root = document.RootElement;
-                var prompt = root.TryGetProperty("DefaultPrompt", out var pascal) &&
-                             pascal.ValueKind == JsonValueKind.String
-                    ? pascal.GetString() ?? string.Empty
-                    : root.TryGetProperty("defaultPrompt", out var camel) &&
-                      camel.ValueKind == JsonValueKind.String
-                        ? camel.GetString() ?? string.Empty
-                        : string.Empty;
-                return new RuntimeState(prompt);
-            }
-            catch
-            {
-                return new RuntimeState(string.Empty);
-            }
         }
     }
 

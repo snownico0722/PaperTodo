@@ -30,6 +30,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Capsule Sizing & Master Count**: Todo and note edge capsules share a consistent icon slot and title start position, and hiding the close button no longer leaves a dead blank area. The master capsule always shows the exact queue count in both expanded and collapsed states; counts from 1–99 keep a compact fixed two-digit slot, while 100+ expands only as needed so arrow/count changes no longer make the capsule jitter in width.
 
 - **Plugin System & Desktop Micro-Apps**
+  - **Codex CLI Bridge**: Send todo items or whole papers to the local Codex CLI, including image attachments, linked paths and related-paper context. Its dedicated paper edits the default prompt: untouched prompts use the built-in text, while edits and intentional clearing are preserved. Includes a PaperTodo plugin creation Skill and development guide, invoked by the default prompt for plugin-building requests.
   - **Desktop Micro-App Container**: Note papers can be transformed on demand into dedicated desktop micro-apps (such as Pomodoro timers, analog clocks, review pools, or system monitors). Added a dedicated "Plugins" management center in Settings, with data safely isolated and stored under `plugins/data/`.
     - **Web / Native Dual-Mode Runtime Architecture**:
       - **Web Plugins**: Built on Windows WebView2 using standard web technologies (HTML/CSS/JS), ready to run without compilation.

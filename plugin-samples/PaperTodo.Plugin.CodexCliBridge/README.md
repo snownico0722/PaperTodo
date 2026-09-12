@@ -9,7 +9,8 @@
 - Todo 绑定其他本地文件或目录时，会把路径写进 prompt，并优先把对应 Git 仓库根目录（找不到 Git 根时为文件父目录/目录本身）作为 Codex 工作目录。
 - Todo 如果绑定另一张 PaperTodo 纸片，会把可读的 Todo / Markdown 内容一起加入上下文。
 - 所有 PaperTodo 纸片顶栏增加 `>_`：点击后把当前 Todo/Markdown 纸片全文通过 stdin 发送给 `codex exec`，并显示一个前台 PowerShell 窗口查看结果。窗口在 Codex 结束后保持打开。
-- 自动创建的 `Codex CLI` 插件纸片现在是默认提示词编辑器；内容保存在 provider Runtime state 中，每次调用都会放到本次 Todo/Note 内容前面。
+- 自动创建的 `Codex CLI` 插件纸片是默认提示词编辑器；从未编辑时显示并使用内置默认提示词，用户编辑后使用保存在 provider Runtime state 的内容，每次调用都会放到本次 Todo/Note 内容前面。
+- 内置 `papertodo-plugin-creator` Skill，默认提示词会让 Codex 在收到制作 PaperTodo 插件的任务时先读取它，再按文档制作和交付插件。
 - 如果安装后的插件目录中存在 `AGENTS.md` / `AGENT.md` / `agent.md`，会优先把它作为 Codex 的 `developer_instructions`。不存在时不加覆盖，Codex 正常读取用户自己的全局配置与项目规则。
 
 插件不使用 `--dangerously-bypass-approvals-and-sandbox`，Codex 仍沿用用户自己的登录状态、sandbox 和 approval 策略。
@@ -19,6 +20,20 @@
 Protocol 2.1 的 Global Top Bar / TodoActions 属于 provider Runtime；当前 Runtime 只有 provider 至少存在一张真实插件 Paper 时才存活。因此 manifest 默认用 `startupPaper` 创建一张折叠的 `Codex CLI` 纸片。删除最后一张该插件纸片后，全局按钮会随 Runtime 一起撤下。
 
 这张纸同时承载“默认传入提示词”的编辑入口；不建立第二套全局 AI 管理页。
+
+## 内置 Skill 与默认提示词
+
+Skill 安装在 `skills/papertodo-plugin-creator/SKILL.md`，包含 Web / Native 选择、最小 Web 示例、状态与 Runtime 边界、构建安装和验证方法。`references/plugin-development.md` 是构建时从仓库 `plugin-samples/README.md` 直接复制的完整开发手册，随插件离线携带；维护 API 说明仍只修改原手册。
+
+默认提示词要求：用户提出为 PaperTodo 制作、创建或开发插件（如“做个番茄钟插件”）时，先读取并遵循这个 Skill；其他任务正常处理。每次发送时根据插件 DLL 所在目录生成 Skill 的绝对路径，前台和后台调用共用这套逻辑。Skill 通过任务中的文档入口按需读取，不写入用户的全局 Codex skills/config，也不把开发手册全文塞进每次请求。
+
+| 状态 | 纸片显示与本次调用 |
+| --- | --- |
+| 从未编辑，无保存的提示词 | 使用当前插件内置默认提示词；仅打开纸片不会把它保存为用户自定义内容 |
+| 已编辑 | 使用用户保存的提示词，重启及插件更新不覆盖；即使改回与内置文本相同，也视为用户自定义 |
+| 主动清空 | 保持为空，只发送本次待办/纸片内容，不补回提示词或 Skill 目录 |
+
+旧版 `DefaultPrompt` / `defaultPrompt` 字符串原样保留，包括空字符串；缺失或 `null` 才表示未编辑。损坏的 JSON 会交给宿主的 Runtime 失败流程，不生成可覆盖旧内容的默认状态。
 
 ## 设置
 
