@@ -42,11 +42,15 @@ jobs:
               patch = zlib.decompress(base64.b64decode(encoded, validate=True))
               assert hashlib.sha256(patch).hexdigest() == expected, name
               pathlib.Path(f'artifact-diagnostics/{name}.patch').write_bytes(patch)
+          encoded = 'eNq1VltP4zgUfu+vOPPCpmpqWihzEVPEZZYFqaNBlN19HBnntLUITmU7hewM/32PnbRN06Q7SKxf4iT2d27fuURyMoFudyot8H2jxf7v0RQv+NykMd5oXEh8Yl+5foiSJ8XOtJUTLiwTBu5fc7olVYTPcNSPBvcfBGMDIaKPPYR+r/d+MGh1u93XSW91Op1XanB6Ct3+4FP4ATr5gz5IZVErHoOx3EoBc04X6FXE3BhYwmxLuEUyR6NuwXKtkDTyKFFxBuc6NTO4Shaoj//73Hmio42Dcy0X3GL13HeTKcufj1vdxoNfpLAyUVxnn4OlA865wbHNYgS3C+FaxVIVXy5jPjUh3CdJDCOpHtqh0/IEvlPMpEADQ1D4FLSPW53/TWaxHYtkjtGfzrnubLMmzW4aSWM/LyN3myovjyCMe5YRtjEM8hgjghIUDK/0eI4i8Mw5ODgKP0HHPfq9t6WOWy8lk15It+4WX2gD3pYa/57ebzl4UnJw7IK6Dt5bQRZbsxkz8vCExwbba4N+rM1xa8E1PGBGB4NCSoHs9SyxzK0q+t7QH4OfPyHw12CvrCRbcwfeDaFXQdspOqwKK/PMO24CwZKK7E5nf6D9i8cpBgQZQpJaj4/PxECppu02McmmWq2+VOC89664CapObsPwZG1d/iU3BqrGGCIoWePilltEOnu6Hh25Qndw9D7sf3x7unrxiYzgLIqCO3y2X1zOcFcCLpI4Rl8MwCSpFmUirAkBdWuSUBaLGQTOsmiFSLqvoLrQsMRKLHM6VZRqr9HYRZwovEi1RlWEr10l3VrPTpM8pyKxxVPpVbKOmzH392E8S7R1xlAZSp4MCK51BumSkQbIHRyusrl/f9gfz7liQLEyqBcIdoZS7xQwSeO4S45+5NZRsuzmR7RaCkoGep+hJjCu4O+by98MGPk4j+VEUnU8G19cX+8UsdKWTKA9SWFwN0Ogoipdh3Dc41PN5zPa2ZljZGboliB5U4xYM7hLwK2CsOfjwEaJyM0YDmEzIMs/pdrQLGJHyHOakagbVHkfAdoFjrVTb2kI/V3hLd9nlxrxn910eGn+VWG7Q21Cemn9yifvWQr/A9XN7Zw2bOz/2RnZOZ1V6+ISIF3X3jqMcl11NerwYBD2D6FzeEhFavD2RaqhqW00pq2cXrgsLcaEzVlixDMq8TcSBZ5sxc3X4q1G+I7SOY0j0pIswZsl7QNLngnhMYmoAYmEjFaW5U3AVH27URPnTrgrh5VLjDpRCbTNvJamUnl/1EfNgzIXLDZCNaWEpAzqtb0MqVKsCbbTxXfhoR/ert1sX+CM8h5ec8X51bPVebbGqUF9U1irF9ZX/3ywY/kgU3T1/JL/lPd2OHE2hfUp8usI2yNCWK+1H2WqfqjkXTEdnGnNM3ZmbmmC/UYTbFC46i7xf3x3+hf0EwJs'
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'c8ba1ce82c44fd8e832541457c1b7afcd912f45c0f946e998e0ca356a1da54e9'
+          pathlib.Path('artifact-diagnostics/pr251-underline.patch').write_bytes(patch)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -c core.autocrlf=true add --renormalize -- tests/PaperTodo.EdgePreviewChecks/ReviewIntegrationChecks.cs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($name in @('pr251', 'pr251-cleanup')) {
+          foreach ($name in @('pr251', 'pr251-cleanup', 'pr251-underline')) {
             git apply --check --index "artifact-diagnostics/$name.patch"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git apply --index "artifact-diagnostics/$name.patch"
@@ -59,8 +63,24 @@ jobs:
         run: |
           dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/strict-checks.log
           exit $LASTEXITCODE
+      - name: Release regression suites and Debug preview
+        run: |
+          foreach ($suite in @('MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
+            dotnet run --project "tests/PaperTodo.${suite}Checks/PaperTodo.${suite}Checks.csproj" -c Release 2>&1 | Tee-Object "artifact-diagnostics/$suite.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Debug 2>&1 | Tee-Object artifact-diagnostics/debug-edge.log
+          exit $LASTEXITCODE
+      - name: Same-binary production-host performance and memory
+        run: |
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Release --no-build -- --preload-profile 2>&1 | Tee-Object artifact-diagnostics/profile-forward.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Release --no-build -- --preload-profile --reverse 2>&1 | Tee-Object artifact-diagnostics/profile-reverse.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Release --no-build -- --preload-memory 2>&1 | Tee-Object artifact-diagnostics/memory.log
+          exit $LASTEXITCODE
       - name: Collect failure images (diagnostics only)
-        if: failure() && steps.patch.outcome == 'success'
+        if: failure() && steps.patch.outcome == 'success' && steps.edge.outcome == 'failure'
         run: |
           $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
           $program = '.\tests\PaperTodo.EdgePreviewChecks\Program.cs'
@@ -98,7 +118,7 @@ jobs:
           git push origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git rev-parse HEAD | Tee-Object artifact-diagnostics/pushed-head.txt
-      - name: Upload logs and failure images
+      - name: Upload verification logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
