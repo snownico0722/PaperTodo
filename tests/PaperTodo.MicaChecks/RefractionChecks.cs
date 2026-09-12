@@ -108,8 +108,10 @@ internal static class RefractionChecks
             window.Left += 300; window.Top += 30; count = surface.RefractionFrameCount;
             Until(() => surface.RefractionFrameCount > count, surface, "movement resamples new physical background");
             Save(Render(window), "lens-moved");
-            window.Width += 70; window.Height += 30; count = surface.RefractionFrameCount;
-            Until(() => surface.RefractionFrameCount > count, surface, "resize replaces geometry without editor recreation");
+            var resizeProjection = surface.RefractionProjectionCount;
+            window.Width += 70; window.Height += 30;
+            Until(() => surface.RefractionProjectionCount > resizeProjection, surface,
+                "resize reprojects retained geometry without editor recreation");
             Program.Assert(ReferenceEquals(editor, typeof(PaperWindow).GetProperty("_noteBox", Program.Private)!.GetValue(window)) &&
                 new WindowInteropHelper(window).Handle == hwnd, "live refraction preserves content/undo owner and HWND");
             window.Hide(); Wait(80);
