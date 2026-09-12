@@ -42,9 +42,11 @@ internal static partial class Program
                     size.WidthDip + 8, size.HeightDip + 8, false, 1, null, 480, 440);
                 Require(host.Apply(EdgeCapsuleTargetPlanner.Calculate(initial, layout).Docked.ToFrame()), "real bounded host starts docked");
                 Pump();
-                Require(host.MarkdownPreloadAnchor != null, "preload uses the actual live host anchor");
+                Require(host.MarkdownPreloadAnchor != null, "preload uses the actual live host anchor for resources/DPI only");
                 Require(AwaitPreload(cache.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, size, () => true))),
-                    "never-opened body completes preload");
+                    "never-opened artifact completes preload");
+                Require(cache.ArtifactCount == 1 && host.MarkdownPreloadAnchor!.Children.Count > 0,
+                    "preload retains one immutable artifact without mounting a hidden preview child");
                 var hits = cache.BodyHits;
                 var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
                 var request = new EdgeCapsulePreviewRequest(size, descriptor.CreateContent(size), descriptor.SetVisibility);
@@ -53,32 +55,37 @@ internal static partial class Program
                     "card contract deducts both horizontal and vertical chrome");
                 Require(host.StagePreviewContent(request.Content, contentSize.Width, contentSize.Height), "stage using production content geometry");
                 Require(host.Apply(EdgeCapsuleTargetPlanner.Calculate(initial with { Preview = EdgeCapsulePreviewState.Open }, layout).Docked.ToFrame()),
-                    "real host displays the staged body");
+                    "real host displays the staged artifact surface");
                 request.SetVisibility?.Invoke(true);
                 var viewport = Elements(request.Content).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
                 UntilReview(() => viewport.Opacity == 1 && viewport.IsHitTestVisible, "first real host display publishes");
-                Require(cache.BodyHits == hits + 1, "FIRST live-host display must take the preloaded body, not rebuild it");
-                Require(PreviewText(viewport).Contains("正文"), "cached body keeps visible text");
+                Require(cache.BodyHits == hits + 1, "FIRST live-host display must take the preloaded artifact, not rebuild it");
+                var surface = Elements(viewport).OfType<MarkdownPreviewArtifactSurface>().Single();
+                Require(surface.Children.Count == 0 && surface.Artifact.Drawing.IsFrozen,
+                    "live host mounts exactly one frozen drawing surface with no WPF block tree");
                 request.SetVisibility?.Invoke(false); host.ClearPreviewContent(); Pump();
             }
-            Console.WriteLine("PASS first-preload-to-live-host geometry and cache hit (2 edges/2 sizes/2 zooms)");
+            Console.WriteLine("PASS first artifact preload-to-live-host geometry/direct mount (2 edges/2 sizes/2 zooms)");
+
+            // Keep the legacy cold-path paragraph gesture check: #249 still owns cold heavy paragraph
+            // interaction when no whole artifact is ready. Artifact-specific hit testing is checked separately.
             var panel = new StackPanel();
             var opened = new List<string>();
             MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel,
                 "[first](https://example.com/a) [second](https://example.com/b) " + new string('文', 300),
                 opened.Add, MarkdownRenderModes.Full, new Size(360, 200));
             var targets = Elements(panel).OfType<FrameworkElement>().Where(EdgeCapsulePreviewInteraction.GetConsumesPointer).ToArray();
-            Require(targets.Length >= 2, "heavy text provides distinct link targets");
+            Require(targets.Length >= 2, "cold heavy text provides distinct link targets");
             foreach (var target in targets)
                 target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
                 { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
-            Require(opened.Count == 0, "unpaired releases over A or B must not open either link");
+            Require(opened.Count == 0, "unpaired cold releases over A or B must not open either link");
             var buttons = targets.OfType<Button>().ToArray();
             Require(buttons.Length == targets.Length && buttons.All(b => b.ClickMode == ClickMode.Release),
-                "heavy links use WPF button capture/release rather than bespoke MouseUp actions");
+                "cold heavy links retain WPF button capture/release");
             buttons[1].RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-            Require(opened.SequenceEqual(new[] { "https://example.com/b" }), "completed B click activates B once");
-            Console.WriteLine("PASS heavy-link unpaired-release rejection and completed-click routing");
+            Require(opened.SequenceEqual(new[] { "https://example.com/b" }), "completed cold B click activates B once");
+            Console.WriteLine("PASS cold heavy-link gesture remains intact beside artifact hot path");
             ReviewLinkGestureChecks();
         }
         finally { host.ClearPreviewContent(); cache.Clear(); }
