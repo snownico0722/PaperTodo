@@ -42,6 +42,8 @@ jobs:
           pathlib.Path('artifact-diagnostics/reviewed.patch').write_bytes(patch)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -c core.autocrlf=true add --renormalize -- tests/PaperTodo.EdgePreviewChecks/ReviewIntegrationChecks.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git apply --check --index artifact-diagnostics/reviewed.patch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git apply --index artifact-diagnostics/reviewed.patch
