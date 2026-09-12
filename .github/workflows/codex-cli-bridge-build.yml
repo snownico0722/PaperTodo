@@ -25,23 +25,35 @@ jobs:
         shell: pwsh
         run: |
           $log = "plugin-samples/PaperTodo.Plugin.CodexCliBridge/build-result.log"
-          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
-            -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj `
-            *> $log
-          $code = $LASTEXITCODE
-          Get-Content $log | Write-Host
+          $code = 0
+          try {
+            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+              -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj `
+              *> $log
+            $code = $LASTEXITCODE
+          }
+          catch {
+            $_ | Out-String | Add-Content -Path $log -Encoding UTF8
+            $code = 1
+          }
+
+          if (Test-Path $log) {
+            Get-Content $log | Write-Host
+          }
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if ($code -ne 0) {
             git add $log
-            git commit -m "chore: capture Codex bridge build failure [skip ci]" || $true
-            git push origin HEAD:feature/codex-cli-bridge-plugin
+            if (-not (git diff --cached --quiet)) {
+              git commit -m "chore: capture Codex bridge build failure [skip ci]"
+              git push origin HEAD:feature/codex-cli-bridge-plugin
+            }
             exit $code
           }
 
-          Remove-Item $log -Force
+          Remove-Item $log -Force -ErrorAction SilentlyContinue
           git add plugins/tools.codex-cli-bridge.native
           if (-not (git diff --cached --quiet)) {
             git commit -m "build(plugin): refresh Codex CLI bridge runtime [skip ci]"
