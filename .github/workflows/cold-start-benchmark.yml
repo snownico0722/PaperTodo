@@ -33,6 +33,14 @@ jobs:
       - name: Build native LMDB library
         run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
 
+      - name: Align benchmark publish flags with release
+        run: |
+          $path = '.\.github\cold-start-benchmark.ps1'
+          $text = Get-Content -LiteralPath $path -Raw
+          $text = $text.Replace('/p:PublishTrimmed=false /p:DebugType=none', '/p:PublishTrimmed=false /p:EmbedAllSources=false /p:EmbedUntrackedSources=false /p:DebugType=none')
+          $text = $text.Replace("'/p:PublishTrimmed=false','/p:DebugType=none'", "'/p:PublishTrimmed=false','/p:EmbedAllSources=false','/p:EmbedUntrackedSources=false','/p:DebugType=none'")
+          Set-Content -LiteralPath $path -Value $text -Encoding utf8
+
       - name: Run packaging and lifecycle benchmark
         run: .\.github\cold-start-benchmark.ps1
 
