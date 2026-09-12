@@ -52,6 +52,24 @@ internal static partial class Program
             cache.Resume(source);
             Until(() => cache.BodyCount == 2 && cache.PendingCount == 0, "eligibility recovery completes preload without content edits");
             Require(reads == 2 && cache.DeferredCount == 0, "one recovery performs exactly one new read");
+
+            cache.Clear();
+            blocked = true;
+            cache.RequestLayout(source, () => blocked ? MarkdownEdgePreviewPreload.ReadResult.Deferred : Ready(context));
+            Until(() => cache.DeferredCount == 1, "suspend before peer progress check");
+            var peer = new EdgeCapsulePreviewInvalidationSource();
+            var peerReads = 0;
+            blocked = false;
+            cache.RequestLayout(peer, () =>
+            {
+                peerReads++;
+                cache.Resume(source);
+                return Ready(Context(peer));
+            });
+            Until(() => cache.BodyCount == 2 && cache.PendingCount == 0,
+                "resuming one source cannot cancel an unrelated active preload");
+            Require(peerReads == 1, "peer stays in the same drain instead of being cancelled and retried");
+
             cache.Clear();
             cache.RequestLayout(source, () => MarkdownEdgePreviewPreload.ReadResult.Deferred);
             Until(() => cache.DeferredCount == 1, "suspend before replacement");
@@ -83,7 +101,7 @@ internal static partial class Program
             Until(() => cache.BodyCount == 1 && cache.PendingCount == 0,
                 "a ready event cannot be lost before Deferred registration");
             Require(reentrantReads == 2, "one readiness event produces one replacement attempt");
-            Console.WriteLine("PASS preload Deferred/Ready/Discard, no polling, independent progress, event resume, replacement, retirement and in-flight wake");
+            Console.WriteLine("PASS preload Deferred/Ready/Discard, no polling, peer-safe resume, replacement, retirement and in-flight wake");
         }
         finally { cache.Clear(); window.Close(); Pump(); }
     }
