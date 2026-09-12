@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using PaperTodo.Plugin;
 
 namespace PaperTodo.Plugin.CodexCliBridge;
@@ -17,26 +19,51 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
 
     private sealed class Session : IPaperBodySession
     {
+        private readonly PaperBodyContext _context;
         private readonly TextBlock _title;
         private readonly TextBlock _description;
+        private readonly TextBlock _status;
+        private readonly TextBox _promptBox;
+        private readonly DispatcherTimer _saveTimer;
+        private bool _suppressPromptChanged;
+        private bool _receivedRuntimePrompt;
+        private bool _hasLocalEdit;
+        private bool _disposed;
 
         public Session(PaperBodyContext context)
         {
+            _context = context;
+
             _title = new TextBlock
             {
                 Text = "Codex CLI Bridge",
                 FontSize = 17,
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 10)
+                Margin = new Thickness(0, 0, 0, 8)
             };
             _description = new TextBlock
             {
-                Text = "保持这张纸存在即可启用全局桥接。\n\n" +
-                       "• 待办项 >_：静默发送给 codex exec。\n" +
-                       "• 纸片顶栏 >_：把当前纸片全文发送给 Codex，并打开前台窗口。\n" +
-                       "• 待办绑定本地图片时，会自动通过 --image 作为附件发送；其他绑定文件/目录会作为本地工作上下文交给 Codex。",
+                Text = "这里的内容会作为默认提示词，在每次从待办项或纸片发送给 Codex 时自动放到最前面。",
                 TextWrapping = TextWrapping.Wrap,
-                LineHeight = 22
+                LineHeight = 20,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            _promptBox = new TextBox
+            {
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MinHeight = 180,
+                Padding = new Thickness(10),
+                BorderThickness = new Thickness(1),
+                ToolTip = "默认传入提示词。留空则只发送待办/纸片本身。"
+            };
+            _status = new TextBlock
+            {
+                Margin = new Thickness(0, 8, 0, 0),
+                Text = "正在读取默认提示词…",
+                TextWrapping = TextWrapping.Wrap
             };
 
             View = new StackPanel
@@ -45,9 +72,22 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 Children =
                 {
                     _title,
-                    _description
+                    _description,
+                    _promptBox,
+                    _status
                 }
             };
+
+            _saveTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(450)
+            };
+            _saveTimer.Tick += (_, _) =>
+            {
+                _saveTimer.Stop();
+                SendPromptToRuntime();
+            };
+            _promptBox.TextChanged += OnPromptChanged;
 
             context.Paper.SetHeaderText("Codex CLI");
             context.Paper.SetCapsulePresentation(new PaperCapsulePresentation
@@ -65,10 +105,65 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     }
                 ]
             });
+
             ApplyTheme(context.Body.Theme);
+            RequestPromptFromRuntime();
         }
 
         public FrameworkElement View { get; }
+
+        public bool OnRuntimeMessage(JsonElement message)
+        {
+            if (_disposed ||
+                message.ValueKind != JsonValueKind.Object ||
+                !message.TryGetProperty("type", out var typeValue))
+            {
+                return false;
+            }
+
+            var type = typeValue.GetString() ?? string.Empty;
+            if (string.Equals(type, "defaultPrompt", StringComparison.Ordinal))
+            {
+                _receivedRuntimePrompt = true;
+                if (!_hasLocalEdit)
+                {
+                    var prompt = message.TryGetProperty("prompt", out var promptValue) &&
+                                 promptValue.ValueKind == JsonValueKind.String
+                        ? promptValue.GetString() ?? string.Empty
+                        : string.Empty;
+                    _suppressPromptChanged = true;
+                    _promptBox.Text = prompt;
+                    _suppressPromptChanged = false;
+                }
+                _status.Text = "默认提示词已载入。修改后会自动保存。";
+                return true;
+            }
+
+            if (string.Equals(type, "defaultPromptSaved", StringComparison.Ordinal))
+            {
+                _status.Text = "默认提示词已保存。";
+                return true;
+            }
+
+            return false;
+        }
+
+        public void OnActivated()
+        {
+            if (!_receivedRuntimePrompt)
+            {
+                RequestPromptFromRuntime();
+            }
+        }
+
+        public void Commit()
+        {
+            if (_saveTimer.IsEnabled)
+            {
+                _saveTimer.Stop();
+                SendPromptToRuntime();
+            }
+        }
 
         public void OnThemeChanged(PaperBodyTheme theme) => ApplyTheme(theme);
 
@@ -76,12 +171,78 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
 
         public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _saveTimer.Stop();
+            _promptBox.TextChanged -= OnPromptChanged;
+        }
+
+        private void OnPromptChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_suppressPromptChanged || _disposed)
+            {
+                return;
+            }
+
+            _hasLocalEdit = true;
+            _status.Text = "等待保存…";
+            _saveTimer.Stop();
+            _saveTimer.Start();
+        }
+
+        private void RequestPromptFromRuntime()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var sent = _context.Runtime.Post(JsonSerializer.SerializeToElement(new
+            {
+                type = "getDefaultPrompt"
+            }));
+            if (!sent)
+            {
+                _status.Text = "Codex Runtime 暂不可用；重新打开这张纸后会再次读取。";
+            }
+        }
+
+        private void SendPromptToRuntime()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var sent = _context.Runtime.Post(JsonSerializer.SerializeToElement(new
+            {
+                type = "setDefaultPrompt",
+                prompt = _promptBox.Text ?? string.Empty
+            }));
+            _status.Text = sent
+                ? "正在保存…"
+                : "保存失败：Codex Runtime 暂不可用。";
         }
 
         private void ApplyTheme(PaperBodyTheme theme)
         {
-            _title.Foreground = BrushFrom(theme.TextColor, Brushes.Black);
-            _description.Foreground = BrushFrom(theme.WeakTextColor, _title.Foreground);
+            var text = BrushFrom(theme.TextColor, Brushes.Black);
+            var weak = BrushFrom(theme.WeakTextColor, Brushes.Gray);
+            var border = BrushFrom(theme.BorderColor, Brushes.Gray);
+            var paper = BrushFrom(theme.PaperColor, Brushes.Transparent);
+
+            _title.Foreground = text;
+            _description.Foreground = weak;
+            _status.Foreground = weak;
+            _promptBox.Foreground = text;
+            _promptBox.Background = paper;
+            _promptBox.BorderBrush = border;
+            _promptBox.FontFamily = new FontFamily(theme.FontFamily);
+            _promptBox.FontSize = 14 * Math.Clamp(theme.FontScale, 0.85, 1.3);
         }
 
         private static Brush BrushFrom(string value, Brush fallback)
@@ -104,6 +265,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
 
         private readonly PaperPluginRuntimeContext _context;
         private readonly IDisposable _workspaceSubscription;
+        private readonly IDisposable _runtimePaperSubscription;
+        private RuntimeState _state;
         private bool _disposed;
 
         private static readonly PaperTodoAction[] TodoAction =
@@ -123,6 +286,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         public Runtime(PaperPluginRuntimeContext context)
         {
             _context = context;
+            _state = RuntimeState.Read(context.State.Json);
 
             context.TodoActions.SetActionHandler(OnTodoAction);
             context.GlobalTopBar.SetActionHandler(OnTopBarAction);
@@ -150,6 +314,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     ExcludeOwnOperations = false
                 },
                 OnWorkspaceEvent);
+            _runtimePaperSubscription = context.Papers.Subscribe(OnRuntimePaperEvent);
         }
 
         private void PublishTodoActions()
@@ -195,6 +360,52 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
         }
 
+        private void OnRuntimePaperEvent(PaperPluginRuntimeEvent value)
+        {
+            if (_disposed ||
+                value.Kind != PaperPluginRuntimeEventKind.Message ||
+                value.Message is not JsonElement message ||
+                message.ValueKind != JsonValueKind.Object ||
+                !message.TryGetProperty("type", out var typeValue))
+            {
+                return;
+            }
+
+            var type = typeValue.GetString() ?? string.Empty;
+            if (string.Equals(type, "getDefaultPrompt", StringComparison.Ordinal))
+            {
+                PostPromptToBody(value.PaperId, saved: false);
+                return;
+            }
+
+            if (!string.Equals(type, "setDefaultPrompt", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var prompt = message.TryGetProperty("prompt", out var promptValue) &&
+                         promptValue.ValueKind == JsonValueKind.String
+                ? promptValue.GetString() ?? string.Empty
+                : string.Empty;
+            if (!string.Equals(_state.DefaultPrompt, prompt, StringComparison.Ordinal))
+            {
+                _state = _state with { DefaultPrompt = prompt };
+                _context.State.Save(JsonSerializer.Serialize(_state));
+            }
+            PostPromptToBody(value.PaperId, saved: true);
+        }
+
+        private void PostPromptToBody(string paperId, bool saved)
+        {
+            _context.Papers.PostToBody(
+                paperId,
+                JsonSerializer.SerializeToElement(new
+                {
+                    type = saved ? "defaultPromptSaved" : "defaultPrompt",
+                    prompt = _state.DefaultPrompt
+                }));
+        }
+
         private void OnTodoAction(PaperTodoActionInvocation invocation)
         {
             if (_disposed || !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal))
@@ -208,7 +419,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 try
                 {
                     var settings = CodexBridgeSettings.Read(_context.Settings.Json);
-                    var prompt = BuildTodoPrompt(todo);
+                    var prompt = AddDefaultPrompt(BuildTodoPrompt(todo));
                     var linkedPath = CodexCliLauncher.ResolveExistingPath(todo.LinkedPath);
                     var imageAttachment = CodexCliLauncher.IsSupportedImage(linkedPath)
                         ? linkedPath
@@ -218,7 +429,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                         linkedPath,
                         todo.LinkedPathIsDirectory);
                     await CodexCliLauncher.RunSilentAsync(
-                        settings.CodexPath,
+                        settings,
                         workingDirectory,
                         prompt,
                         imageAttachment);
@@ -244,13 +455,13 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 try
                 {
                     var settings = CodexBridgeSettings.Read(_context.Settings.Json);
-                    var prompt = BuildPaperPrompt(paperId);
+                    var prompt = AddDefaultPrompt(BuildPaperPrompt(paperId));
                     var workingDirectory = CodexCliLauncher.ResolveWorkingDirectory(
                         settings.WorkingDirectory,
                         linkedPath: null,
                         linkedPathIsDirectory: null);
                     CodexCliLauncher.RunForeground(
-                        settings.CodexPath,
+                        settings,
                         workingDirectory,
                         prompt,
                         imageAttachment: null);
@@ -260,6 +471,22 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     Trace.WriteLine($"[CodexCliBridge] Foreground send failed: {ex}");
                 }
             });
+        }
+
+        private string AddDefaultPrompt(string content)
+        {
+            if (string.IsNullOrWhiteSpace(_state.DefaultPrompt))
+            {
+                return content;
+            }
+
+            var builder = new StringBuilder();
+            builder.AppendLine("[PaperTodo 默认提示词]");
+            builder.AppendLine(_state.DefaultPrompt.Trim());
+            builder.AppendLine();
+            builder.AppendLine("[本次内容]");
+            builder.Append(content);
+            return builder.ToString();
         }
 
         private string BuildTodoPrompt(TodoSnapshot todo)
@@ -373,6 +600,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
 
             _disposed = true;
+            _runtimePaperSubscription.Dispose();
             _workspaceSubscription.Dispose();
             _context.TodoActions.SetActionHandler(null);
             _context.TodoActions.Clear();
@@ -381,7 +609,35 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         }
     }
 
-    private sealed record CodexBridgeSettings(string CodexPath, string WorkingDirectory)
+    private sealed record RuntimeState(string DefaultPrompt)
+    {
+        internal static RuntimeState Read(string json)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+                var root = document.RootElement;
+                var prompt = root.TryGetProperty("DefaultPrompt", out var pascal) &&
+                             pascal.ValueKind == JsonValueKind.String
+                    ? pascal.GetString() ?? string.Empty
+                    : root.TryGetProperty("defaultPrompt", out var camel) &&
+                      camel.ValueKind == JsonValueKind.String
+                        ? camel.GetString() ?? string.Empty
+                        : string.Empty;
+                return new RuntimeState(prompt);
+            }
+            catch
+            {
+                return new RuntimeState(string.Empty);
+            }
+        }
+    }
+
+    private sealed record CodexBridgeSettings(
+        string CodexPath,
+        string WorkingDirectory,
+        string Model,
+        string ReasoningEffort)
     {
         internal static CodexBridgeSettings Read(string json)
         {
@@ -390,23 +646,25 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
                 var root = document.RootElement;
                 return new CodexBridgeSettings(
-                    Text(root, "codexPath", "codex"),
-                    Text(root, "workingDirectory", string.Empty));
+                    Text(root, "codexPath", "codex", allowEmpty: false),
+                    Text(root, "workingDirectory", string.Empty, allowEmpty: true),
+                    Text(root, "model", "gpt-5.6-sol", allowEmpty: true),
+                    Text(root, "reasoningEffort", "xhigh", allowEmpty: true));
             }
             catch
             {
-                return new CodexBridgeSettings("codex", string.Empty);
+                return new CodexBridgeSettings("codex", string.Empty, "gpt-5.6-sol", "xhigh");
             }
         }
 
-        private static string Text(JsonElement root, string name, string fallback)
+        private static string Text(JsonElement root, string name, string fallback, bool allowEmpty)
         {
             if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
             {
                 return fallback;
             }
             var text = (value.GetString() ?? string.Empty).Trim();
-            return string.IsNullOrWhiteSpace(text) ? fallback : text;
+            return allowEmpty || !string.IsNullOrWhiteSpace(text) ? text : fallback;
         }
     }
 
@@ -425,6 +683,15 @@ $ErrorActionPreference = 'Stop'
 try { $Host.UI.RawUI.WindowTitle = 'Codex CLI - PaperTodo' } catch {}
 $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $argsList = @('exec', '--skip-git-repo-check')
+if ($env:PAPERTODO_CODEX_MODEL) {
+  $argsList += @('-m', $env:PAPERTODO_CODEX_MODEL)
+}
+if ($env:PAPERTODO_CODEX_REASONING) {
+  $argsList += @('-c', ('model_reasoning_effort=' + $env:PAPERTODO_CODEX_REASONING))
+}
+if ($env:PAPERTODO_CODEX_DEVELOPER_INSTRUCTIONS) {
+  $argsList += @('-c', ('developer_instructions=' + $env:PAPERTODO_CODEX_DEVELOPER_INSTRUCTIONS))
+}
 if ($env:PAPERTODO_CODEX_CWD) {
   $argsList += @('-C', $env:PAPERTODO_CODEX_CWD)
 }
@@ -455,7 +722,7 @@ else {
 """;
 
         internal static async Task RunSilentAsync(
-            string codexPath,
+            CodexBridgeSettings settings,
             string workingDirectory,
             string prompt,
             string? imageAttachment)
@@ -464,7 +731,7 @@ else {
             try
             {
                 using var process = StartPowerShell(
-                    codexPath,
+                    settings,
                     workingDirectory,
                     promptPath,
                     imageAttachment,
@@ -488,7 +755,7 @@ else {
         }
 
         internal static void RunForeground(
-            string codexPath,
+            CodexBridgeSettings settings,
             string workingDirectory,
             string prompt,
             string? imageAttachment)
@@ -497,7 +764,7 @@ else {
             try
             {
                 _ = StartPowerShell(
-                    codexPath,
+                    settings,
                     workingDirectory,
                     promptPath,
                     imageAttachment,
@@ -511,7 +778,7 @@ else {
         }
 
         private static Process StartPowerShell(
-            string codexPath,
+            CodexBridgeSettings settings,
             string workingDirectory,
             string promptPath,
             string? imageAttachment,
@@ -540,10 +807,14 @@ else {
             startInfo.ArgumentList.Add("-Command");
             startInfo.ArgumentList.Add(PowerShellScript);
             startInfo.Environment["PAPERTODO_CODEX_PATH"] =
-                string.IsNullOrWhiteSpace(codexPath) ? "codex" : codexPath.Trim();
+                string.IsNullOrWhiteSpace(settings.CodexPath) ? "codex" : settings.CodexPath.Trim();
             startInfo.Environment["PAPERTODO_CODEX_CWD"] = workingDirectory;
             startInfo.Environment["PAPERTODO_CODEX_PROMPT"] = promptPath;
             startInfo.Environment["PAPERTODO_CODEX_IMAGE"] = imageAttachment ?? string.Empty;
+            startInfo.Environment["PAPERTODO_CODEX_MODEL"] = settings.Model;
+            startInfo.Environment["PAPERTODO_CODEX_REASONING"] = settings.ReasoningEffort;
+            startInfo.Environment["PAPERTODO_CODEX_DEVELOPER_INSTRUCTIONS"] =
+                ResolvePluginAgentInstructions() ?? string.Empty;
             startInfo.Environment["PAPERTODO_CODEX_FOREGROUND"] = foreground ? "1" : "0";
 
             var process = new Process { StartInfo = startInfo };
@@ -553,6 +824,48 @@ else {
                 throw new InvalidOperationException("无法启动 PowerShell/Codex CLI。请检查插件设置中的 Codex CLI 命令。");
             }
             return process;
+        }
+
+        private static string? ResolvePluginAgentInstructions()
+        {
+            try
+            {
+                var assemblyPath = typeof(CodexCliBridgePlugin).Assembly.Location;
+                var pluginDirectory = Path.GetDirectoryName(assemblyPath);
+                if (string.IsNullOrWhiteSpace(pluginDirectory) || !Directory.Exists(pluginDirectory))
+                {
+                    return null;
+                }
+
+                foreach (var fileName in new[] { "AGENTS.md", "AGENT.md", "agent.md" })
+                {
+                    var path = Path.Combine(pluginDirectory, fileName);
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    var content = File.ReadAllText(path, Encoding.UTF8).Trim();
+                    if (string.IsNullOrWhiteSpace(content))
+                    {
+                        return null;
+                    }
+
+                    if (content.Length <= 12_000)
+                    {
+                        return content;
+                    }
+
+                    return $"Before doing the task, read and follow the full instructions in this file first: {path}. " +
+                           "Treat those plugin-local instructions as higher priority than ordinary project guidance when they conflict.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[CodexCliBridge] Failed to read plugin AGENTS.md: {ex}");
+            }
+
+            return null;
         }
 
         private static string WritePromptFile(string prompt)
