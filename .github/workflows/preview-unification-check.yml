@@ -98,6 +98,7 @@ jobs:
               throw 'Negative control did not detect the removed guard'
             }
           } finally { Set-Content $path $original -NoNewline }
+          exit 0
       - name: Release regression suites and Debug preview
         run: |
           foreach ($suite in @('EdgePreview', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
