@@ -217,7 +217,7 @@ internal static partial class Program
             Require(cache.ArtifactCount == 0 && cache.ExcerptCount == 0 && cache.PendingCount == 0, "clear releases artifacts, excerpts and pending jobs");
             Console.WriteLine("PASS artifact cancellation, stale publication, no-count-eviction and cleanup");
             var completions = cache.WarmCompletions;
-            cache.RequestLayout(source, () => new(a, root, size, () => true));
+            cache.RequestLayout(source, () => MarkdownEdgePreviewPreload.ReadResult.Ready(new(a, root, size, () => true)));
             var watch = Stopwatch.StartNew();
             while ((cache.WarmCompletions == completions || cache.PendingCount > 0) && watch.Elapsed < TimeSpan.FromSeconds(4)) Pump();
             Require(cache.WarmCompletions > completions && cache.PendingCount == 0,

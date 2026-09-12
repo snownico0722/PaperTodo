@@ -47,6 +47,18 @@ internal static partial class Program
             surface.UpdateLayout();
             Require(Hit(new Point(100, 12)) == null && !buttons[1].IsEnabled,
                 "clipped links cannot receive pointer or keyboard input");
+            // Rect.IntersectsWith includes touching edges. Zero visible pixels are not an
+            // accessible link, including while the shared clip geometry is being changed.
+            var clip = new RectangleGeometry(new Rect(0, 0, 200, 7));
+            surface.Clip = clip;
+            surface.UpdateLayout();
+            Require(buttons.All(button => !button.IsEnabled), "links touching the clip edge have no visible pixels");
+            clip.Rect = new Rect(0, 0, 200, 8);
+            surface.UpdateLayout();
+            Require(buttons.All(button => button.IsEnabled), "partially visible links regain native input");
+            clip.Rect = new Rect(0, 0, 200, 0);
+            surface.UpdateLayout();
+            Require(buttons.All(button => !button.IsEnabled), "zero-height clips expose no keyboard targets");
             surface.Clip = null;
             surface.UpdateLayout();
             Require(buttons.All(b => b.ClickMode == ClickMode.Release), "inherited styles cannot make links activate on press");

@@ -55,7 +55,8 @@ internal sealed class MarkdownPreviewArtifactSurface : Panel
         {
             // Height-independent artifacts also contain rows below a smaller viewport. Those
             // links must not enter keyboard navigation while their text is clipped away.
-            Children[i].IsEnabled = Artifact.Links[i].Bounds.IntersectsWith(visible);
+            var intersection = Rect.Intersect(Artifact.Links[i].Bounds, visible);
+            Children[i].IsEnabled = !intersection.IsEmpty && intersection.Width > 0 && intersection.Height > 0;
             Children[i].Arrange(Artifact.Links[i].Bounds);
         }
         return finalSize;
