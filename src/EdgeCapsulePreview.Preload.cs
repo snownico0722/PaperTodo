@@ -3,14 +3,13 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace PaperTodo;
 
-// Dispatcher-local, discardable prelayout of eligible edge notes. This cache never owns
-// presentation, input or persistence. One current body per source, with no count-based eviction.
+// Dispatcher-local, discardable prelayout of eligible edge notes. The retained product is one
+// immutable whole-preview artifact per source: never a detached WPF body or hidden preview tree.
 internal sealed class MarkdownEdgePreviewPreload
 {
     private static readonly ConditionalWeakTable<Dispatcher, MarkdownEdgePreviewPreload> Instances = new();
@@ -19,14 +18,16 @@ internal sealed class MarkdownEdgePreviewPreload
 
     private readonly Dispatcher _dispatcher;
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, MarkdownEdgeCapsulePreviewRenderer.PreviewContent> _excerpts = new();
-    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Body> _bodies = new();
+    private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, ArtifactEntry> _artifacts = new();
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<Target?>> _pendingLayout = new();
     private readonly DispatcherTimer _debounce;
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
     internal int ExcerptCount => _excerpts.Count;
-    internal int BodyCount => _bodies.Count;
+    internal int ArtifactCount => _artifacts.Count;
+    // Keep the diagnostic names while #246-era probes are migrated; these count artifacts now.
+    internal int BodyCount => ArtifactCount;
     internal int PendingCount => _pendingLayout.Count;
     internal long BodyHits { get; private set; }
     internal long WarmCompletions { get; private set; }
@@ -35,13 +36,18 @@ internal sealed class MarkdownEdgePreviewPreload
         EdgeCapsulePreviewSize Size, Func<bool> StillEligible);
     internal sealed record Binding(MarkdownEdgePreviewPreload Owner,
         EdgeCapsulePreviewInvalidationSource Source, long Version,
-        MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom)
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom,
+        Action<string> OpenExternal)
     {
         internal bool Current => Owner._enabled && Source.Version == Version &&
             Owner._excerpts.TryGetValue(Source, out var current) && ReferenceEquals(current, Content);
     }
+    // Height is canonicalized to zero by MakeKey. The artifact is prepared through the current
+    // 410-DIP card envelope and is clipped by the real viewport, so only layout width is reusable geometry.
     internal sealed record Key(Binding Binding, Size Size, DpiScale Dpi, string Appearance);
+    // Body is now only an ephemeral adapter for the existing viewport mount seam. It is never cached.
     internal sealed record Body(Key Key, StackPanel Panel, bool Truncated);
+    private sealed record ArtifactEntry(Key Key, MarkdownPreviewArtifact Artifact);
 
     private MarkdownEdgePreviewPreload(Dispatcher dispatcher)
     {
@@ -53,9 +59,9 @@ internal sealed class MarkdownEdgePreviewPreload
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
-    // Preload policy is intentionally broader than the renderer's paragraph-path threshold.
-    // Complete idle layout is worthwhile when the bounded excerpt is large, has substantial
-    // styled coverage, or has several distinct styled/link pieces. Thresholds are strict.
+    // Preload policy is intentionally broader than the renderer's former paragraph-path threshold.
+    // Whole-preview work is worthwhile when the bounded excerpt is large, has substantial styled
+    // coverage, or has several distinct styled/link pieces. Thresholds are strict.
     internal static bool IsClearlyHighLoad(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
     {
         if (content.IsEmpty) return false;
@@ -106,7 +112,7 @@ internal sealed class MarkdownEdgePreviewPreload
         if (_excerpts.TryGetValue(source, out var entry) &&
             entry.RenderMode == candidate.RenderMode && entry.Truncated == candidate.Truncated &&
             entry.Lines.SequenceEqual(candidate.Lines)) return entry;
-        _bodies.Remove(source);
+        _artifacts.Remove(source);
         _excerpts.Remove(source);
         if (IsClearlyHighLoad(candidate)) _excerpts[source] = candidate;
         return candidate;
@@ -115,11 +121,13 @@ internal sealed class MarkdownEdgePreviewPreload
     internal Binding? Bind(EdgeCapsulePreviewContext context,
         MarkdownEdgeCapsulePreviewRenderer.PreviewContent content, double zoom) =>
         _enabled && _excerpts.TryGetValue(context.InvalidationSource, out var entry) && ReferenceEquals(entry, content)
-            ? new(this, context.InvalidationSource, context.InvalidationSource.Version, content, zoom) : null;
+            ? new(this, context.InvalidationSource, context.InvalidationSource.Version,
+                content, zoom, context.OpenExternal) : null;
 
     internal static Key? MakeKey(Binding? binding, FrameworkElement surface, Size size)
     {
-        if (binding is not { Current: true } || !binding.Owner._enabled) return null;
+        if (binding is not { Current: true } || !binding.Owner._enabled ||
+            !double.IsFinite(size.Width) || size.Width <= 0) return null;
         var dpi = VisualTreeHelper.GetDpi(surface);
         // Frozen drawings keep concrete resources. Compare values as well as notifications, so
         // replacing/mutating a brush between preload and demand cannot reuse yesterday's colors.
@@ -144,18 +152,28 @@ internal sealed class MarkdownEdgePreviewPreload
             NoteTypography.Heading1FontSize, NoteTypography.Heading2FontSize, NoteTypography.Heading3FontSize,
             AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection,
             TextOptions.GetTextRenderingMode(surface), TextOptions.GetTextHintingMode(surface)));
-        return new(binding, size, dpi, string.Join("|", stamps));
+        // Whole artifacts are height-independent inside the current card envelope. Demand clips
+        // the same immutable drawing to its actual row height and owns the overflow indicator.
+        return new(binding, new Size(size.Width, 0), dpi, string.Join("|", stamps));
     }
 
     internal bool TryTake(Key key, out Body? body, bool demand = true)
     {
         _dispatcher.VerifyAccess();
         body = null;
-        if (!key.Binding.Current || !_bodies.TryGetValue(key.Binding.Source, out var candidate)) return false;
-        if (!candidate.Key.Binding.Current) { _bodies.Remove(key.Binding.Source); return false; }
+        if (!key.Binding.Current || !_artifacts.TryGetValue(key.Binding.Source, out var candidate)) return false;
+        if (!candidate.Key.Binding.Current)
+        {
+            _artifacts.Remove(key.Binding.Source);
+            return false;
+        }
         if (candidate.Key != key) return false;
-        _bodies.Remove(key.Binding.Source);
-        body = candidate;
+
+        // Materialize only the final lightweight surface. The immutable artifact remains reusable,
+        // so A-B-A never transfers ownership of a retained WPF visual tree.
+        var panel = new StackPanel { IsHitTestVisible = false };
+        panel.Children.Add(new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal));
+        body = new Body(key, panel, candidate.Artifact.Truncated);
         if (demand) BodyHits++;
         return true;
     }
@@ -163,21 +181,33 @@ internal sealed class MarkdownEdgePreviewPreload
     internal bool Store(Body body)
     {
         _dispatcher.VerifyAccess();
-        if (!body.Key.Binding.Current || body.Panel.Parent != null) return false;
-        _bodies[body.Key.Binding.Source] = body;
+        // The viewport still calls this seam while it is being migrated away from #246 ownership.
+        // Accept only an adapter that was materialized from our immutable artifact; never retain WPF.
+        if (!body.Key.Binding.Current || body.Panel.Parent != null ||
+            body.Panel.Children.Count != 1 ||
+            body.Panel.Children[0] is not MarkdownPreviewArtifactSurface surface ||
+            !_artifacts.TryGetValue(body.Key.Binding.Source, out var candidate) ||
+            candidate.Key != body.Key || !ReferenceEquals(candidate.Artifact, surface.Artifact)) return false;
+        return true;
+    }
+
+    private bool StoreArtifact(Key key, MarkdownPreviewArtifact artifact)
+    {
+        if (!key.Binding.Current) return false;
+        _artifacts[key.Binding.Source] = new(key, artifact);
         return true;
     }
 
     internal void Invalidate(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
-        _bodies.Remove(source);
+        _artifacts.Remove(source);
     }
 
     internal void Forget(EdgeCapsulePreviewInvalidationSource source)
     {
         _dispatcher.VerifyAccess();
-        _excerpts.Remove(source); _bodies.Remove(source); _pendingLayout.Remove(source);
+        _excerpts.Remove(source); _artifacts.Remove(source); _pendingLayout.Remove(source);
         if (ReferenceEquals(_workingSource, source)) _work?.Cancel();
         if (PendingCount == 0) _debounce.Stop();
     }
@@ -242,71 +272,67 @@ internal sealed class MarkdownEdgePreviewPreload
         }
     }
 
-    // An invisible zero-sized holder inherits the real target host's DPI/resources. It never
-    // stages host preview content, changes geometry, takes focus or enlarges the input area.
     internal async Task<bool> WarmLayoutAsync(Target target, CancellationToken cancellation = default)
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || cancellation.IsCancellationRequested || !target.StillEligible() ||
             !target.Anchor.IsLoaded || !target.Anchor.IsVisible) return false;
+
         var version = target.Context.InvalidationSource.Version;
         var content = Capture(target.Context);
         if (!IsClearlyHighLoad(content)) return false;
-        var view = new MarkdownEdgeCapsulePreviewView(target.Context, target.Size, content, version);
-        var viewport = view.PreloadViewport;
-        var holder = new Canvas { Width = 0, Height = 0, ClipToBounds = true,
-            Opacity = 0, IsHitTestVisible = false, Focusable = false,
-            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
-        // Hidden speculative content cannot join keyboard navigation, even though opacity zero
-        // keeps it eligible for WPF layout and inheriting the target host's resources.
-        KeyboardNavigation.SetTabNavigation(holder, KeyboardNavigationMode.None);
-        KeyboardNavigation.SetControlTabNavigation(holder, KeyboardNavigationMode.None);
-        KeyboardNavigation.SetDirectionalNavigation(holder, KeyboardNavigationMode.None);
-        var contentSize = target.Size.ContentSize;
-        var sized = new Border { Width = contentSize.Width, Height = contentSize.Height,
-            IsHitTestVisible = false, Focusable = false, Child = view };
-        holder.Children.Add(sized);
-        var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Finished(bool success) => complete.TrySetResult(success);
-        viewport.PreparationFinished += Finished;
-        bool Current() => _enabled && !cancellation.IsCancellationRequested && target.StillEligible() &&
-            target.Context.InvalidationSource.Version == version && target.Anchor.IsLoaded && target.Anchor.IsVisible;
-        viewport.PreloadStillCurrent = Current;
-        void Abandoned(object? sender, EventArgs args)
+        var binding = Bind(target.Context, content, target.Context.Paper.TextZoom);
+        var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size);
+        var key = MakeKey(binding, target.Anchor, new Size(width, 0));
+        if (key == null) return false;
+        if (_artifacts.TryGetValue(key.Binding.Source, out var current) && current.Key == key) return true;
+
+        // Capture resources, inline values and DPI once on the owning Dispatcher. After this point
+        // the shared STA sees only immutable values/frozen Freezables; no hidden WPF host is built.
+        var plan = MarkdownEdgeCapsulePreviewRenderer.CaptureArtifactPlan(
+            target.Anchor, content, width, key.Binding.Zoom);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        void Invalidated() => lifetime.Cancel();
+        void Unloaded(object? sender, RoutedEventArgs args) => lifetime.Cancel();
+        void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs args)
         {
-            if (!Current()) complete.TrySetResult(false);
+            if (args.NewValue is false) lifetime.Cancel();
         }
-        void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs args) => Abandoned(sender, EventArgs.Empty);
-        void Invalidated() => complete.TrySetResult(false);
-        target.Anchor.Unloaded += Abandoned;
-        target.Anchor.IsVisibleChanged += VisibilityChanged;
         target.Context.InvalidationSource.Invalidated += Invalidated;
-        using var registration = cancellation.Register(() => complete.TrySetCanceled(cancellation));
+        target.Anchor.Unloaded += Unloaded;
+        target.Anchor.IsVisibleChanged += VisibilityChanged;
         try
         {
-            target.Anchor.Children.Add(holder);
-            view.PrepareForFirstDisplay();
-            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-            if (!Current()) return false;
-            sized.Measure(new Size(sized.Width, sized.Height));
-            sized.Arrange(new Rect(0, 0, sized.Width, sized.Height));
-            if (!viewport.IsLoaded || viewport.RenderSize.Width <= 0 || viewport.RenderSize.Height <= 0) return false;
-            var success = await complete.Task;
-            if (!success || !Current()) return false;
-            var retained = viewport.ReturnBodyToPreload();
-            if (retained) WarmCompletions++;
-            return retained;
+            MarkdownPreviewArtifactDraft draft;
+            try
+            {
+                draft = await MarkdownEdgeCapsulePreviewRenderer.BuildArtifactDraftAsync(
+                    plan, speculative: true, lifetime.Token);
+            }
+            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+            {
+                return false;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            _dispatcher.VerifyAccess();
+            if (!_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
+                MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
+
+            // Aggregating frozen child drawings is the only final UI-thread operation; no layout,
+            // Measure/Arrange or visual-tree publication occurs during speculative preparation.
+            var artifact = MarkdownEdgeCapsulePreviewRenderer.ComposeArtifact(draft);
+            if (!target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                !key.Binding.Current || MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
+            if (!StoreArtifact(key, artifact)) return false;
+            WarmCompletions++;
+            return true;
         }
         finally
         {
-            target.Anchor.Unloaded -= Abandoned;
-            target.Anchor.IsVisibleChanged -= VisibilityChanged;
             target.Context.InvalidationSource.Invalidated -= Invalidated;
-            viewport.PreparationFinished -= Finished;
-            viewport.SetPreviewActive(false);
-            viewport.PreloadStillCurrent = () => false;
-            target.Anchor.Children.Remove(holder);
-            sized.Child = null;
+            target.Anchor.Unloaded -= Unloaded;
+            target.Anchor.IsVisibleChanged -= VisibilityChanged;
         }
     }
 
@@ -314,7 +340,7 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         _debounce.Stop(); _work?.Cancel();
-        _pendingLayout.Clear(); _bodies.Clear(); _excerpts.Clear();
+        _pendingLayout.Clear(); _artifacts.Clear(); _excerpts.Clear();
     }
 
     // Same-binary A/B probe; no settings, environment switch or persistent product option.
