@@ -9,17 +9,17 @@ public sealed partial class AppController
     private const int SmallPrewarmPaperLimit = 10;
     private Task _startupShellPrewarmTask = Task.CompletedTask;
 
-    private void ScheduleStartupShellPrewarm(IEnumerable<PaperData> papers)
+    private void ScheduleStartupShellPrewarm(IEnumerable<PaperData> papers, bool startPreviewPreload = false)
     {
         var pending = new Queue<(PaperData Paper, PaperWindow Window)>();
         foreach (var paper in papers)
             if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed && !window.IsShellBuilt)
                 pending.Enqueue((paper, window));
         var generation = ++_startupShellPrewarmGeneration;
-        _startupShellPrewarmTask = PrewarmShellsAsync(pending, generation);
+        _startupShellPrewarmTask = PrewarmShellsAsync(pending, generation, startPreviewPreload);
     }
 
-    private async Task PrewarmShellsAsync(Queue<(PaperData Paper, PaperWindow Window)> pending, int generation)
+    private async Task PrewarmShellsAsync(Queue<(PaperData Paper, PaperWindow Window)> pending, int generation, bool startPreviewPreload)
     {
         var dispatcher = Application.Current.Dispatcher;
         var batchLimit = pending.Count <= SmallPrewarmPaperLimit ? SmallPrewarmPaperLimit : 1;
@@ -52,5 +52,9 @@ public sealed partial class AppController
             // owns its normal error path; this queue does not retry a failed shell indefinitely.
             Trace.TraceWarning("Startup shell prewarm failed: {0}", ex);
         }
+        // Only the startup batch bypasses the editor debounce. A runtime show/restore must not
+        // shorten another note's typing coalescing window. The existing cache still owns the drain.
+        if (startPreviewPreload && !IsExiting && generation == _startupShellPrewarmGeneration)
+            MarkdownEdgePreviewPreload.For(dispatcher).StartStartupWork();
     }
 }

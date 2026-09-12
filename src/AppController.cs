@@ -393,11 +393,10 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTrayMenu();
-        ScheduleStartupShellPrewarm(papersToRestore);
-        // The restored batch is stable. Register every reader before starting the existing
-        // low-priority drain; later edits still use its normal 500ms coalescing delay.
+        // Shell construction can invalidate preview resources. Queue every reader now, but
+        // release the startup debounce only after those shells finish, not just before they reset it.
         foreach (var window in _windows.Values) window.RequestMarkdownPreviewLayoutPreload();
-        MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).StartStartupWork();
+        ScheduleStartupShellPrewarm(papersToRestore, startPreviewPreload: true);
     }
 
     private void ApplyInitialStartupVisibility(StartupCommandKind command)

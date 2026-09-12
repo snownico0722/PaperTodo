@@ -195,9 +195,19 @@ internal static class Program
             {
                 controller.HideAllPapers();
                 var savedGeometry = controller.State.Papers.Single(paper => paper.Id == "missing-screen").X;
-                await Task.Delay(350);
+                // Cross the original settle deadline, not just its first polling interval.
+                await Task.Delay(5500);
                 Require(!windows.ContainsKey("missing-screen") && controller.State.Papers.Single(paper => paper.Id == "missing-screen").X == savedGeometry,
                     "cancelled display restore resurrected/relocated a hidden paper");
+            }
+            if (name == "missing-monitor" && !baseline)
+            {
+                await Until(() => windows.TryGetValue("missing-screen", out var missing) && missing.HasVisibleSurface,
+                    "deferred display timeout recovery");
+                var recovered = controller.State.Papers.Single(paper => paper.Id == "missing-screen");
+                Require(recovered.X != 1_000_000, "unplugged-monitor paper never reached normal rescue");
+                Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
+                    "deferred rescue hid or duplicated an already-restored paper");
             }
             if (name == "scripts")
             {
