@@ -8,7 +8,7 @@ namespace PaperTodo;
 // Dispatcher work is finite and event-driven; no polling timer or per-paper thread is used.
 internal sealed class MarkdownLayoutWorker : IDisposable
 {
-    private const int MaxStepsPerTurn = 4;
+    private const int MaxLinesPerTurn = 4;
     private const double MaxTurnMilliseconds = 1.5;
     private static readonly Lazy<MarkdownLayoutWorker> Instance = new(() => new());
     internal static MarkdownLayoutWorker Shared => Instance.Value;
@@ -134,7 +134,7 @@ internal sealed class MarkdownLayoutWorker : IDisposable
             // paying one DispatcherOperation per line, while keeping a short priority/cancel boundary.
             using (Dispatcher.CurrentDispatcher.DisableProcessing())
             {
-                for (var step = 0; step < MaxStepsPerTurn; step++)
+                for (var line = 0; line < MaxLinesPerTurn; line++)
                 {
                     if (_lifetime.IsCancellationRequested || job.Tickets.All(ticket => ticket.Token.IsCancellationRequested))
                     {
