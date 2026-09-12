@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   validate:
-    if: contains(github.event.head_commit.message, '[unify-timing-check]')
+    if: contains(github.event.head_commit.message, '[unify-final-check]')
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
@@ -20,64 +20,120 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Measure identical publication and input boundaries in both revisions
+      - name: Retain the captured source version without retaining cache ownership
         run: |
-          git diff --exit-code b67d7dae449393830365dbac6d1cb7a8f0e12dde HEAD -- src
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force evidence | Out-Null
+          @'
+          from pathlib import Path
+          import subprocess
+          def edit(path, old, new):
+              p=Path(path); s=p.read_text(); assert s.count(old)==1,(path,old,s.count(old)); p.write_bytes(s.replace(old,new).encode())
+          path='src/EdgeCapsulePreview.Markdown.cs'
+          edit(path, '        var content = _initialContent != null && _initialVersion == Context.InvalidationSource.Version', '        var contentVersion = Context.InvalidationSource.Version;\n        var content = _initialContent != null && _initialVersion == contentVersion')
+          edit(path, '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));', '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom),\n            (Context.InvalidationSource, contentVersion));')
+          edit(path, '    private MarkdownEdgePreviewPreload.Binding? _preloadBinding;', '    private MarkdownEdgePreviewPreload.Binding? _preloadBinding;\n    private (EdgeCapsulePreviewInvalidationSource Source, long Version)? _sourceGeneration;')
+          edit(path, '        MarkdownEdgePreviewPreload.Binding? preloadBinding = null)\n    {', '        MarkdownEdgePreviewPreload.Binding? preloadBinding = null,\n        (EdgeCapsulePreviewInvalidationSource Source, long Version)? sourceGeneration = null)\n    {')
+          edit(path, '        _preloadBinding = preloadBinding;\n        InvalidateContentBuild();', '        _preloadBinding = preloadBinding;\n        _sourceGeneration = sourceGeneration;\n        InvalidateContentBuild();')
+          edit(path, '        IsHitTestVisible = active && _publishedSize != null;', '        IsHitTestVisible = active && _publishedSize != null && IsSourceCurrent;')
+          edit(path, '''    // Demand owns its generation independently of the optional preload cache. Clearing a cache
+              // must not strand an active preview; content changes arrive through the live view's owner.
+              private bool IsBuildCurrent(long version) => version == _renderVersion && _previewActive &&
+                  IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;''', '''    // Source invalidation is immediate; its live-view rebuild may still be queued. Check the
+              // captured source version, not cache membership, before preparing or publishing old text.
+              private bool IsSourceCurrent => _sourceGeneration is not { } generation ||
+                  generation.Source.Version == generation.Version;
+              private bool IsBuildCurrent(long version) => version == _renderVersion && _previewActive &&
+                  IsSourceCurrent && IsLoaded && IsVisible && !Dispatcher.HasShutdownStarted;''')
+          edit(path, '        if (_content != null && _previewActive && IsLoaded && IsVisible &&', '        if (_content != null && IsSourceCurrent && _previewActive && IsLoaded && IsVisible &&')
+          path='tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs'
+          edit(path, '        CheckPendingBoundaries();', '        CheckPendingBoundaries();\n        CheckSourceGenerationBeforeRefresh();')
+          method = '''    private static void CheckSourceGenerationBeforeRefresh()
+              {
+                  var source = new EdgeCapsulePreviewInvalidationSource();
+                  var viewport = new MarkdownEdgeCapsulePreviewViewport();
+                  var window = new Window { Content = viewport, Width = 320, Height = 180,
+                      ShowActivated = false, ShowInTaskbar = false };
+                  void Set(string text) => viewport.SetContent(
+                      MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full),
+                      _ => { }, sourceGeneration: (source, source.Version));
+                  try
+                  {
+                      UntilReview(() => MarkdownLayoutWorker.OutstandingRequests == 0, "previous worker consumers have drained");
+                      using (HoldWorker(MarkdownLayoutWorker.Shared))
+                      {
+                          Set("obsolete source");
+                          source.Invalidate(); // The live owner has not delivered its deferred SetContent yet.
+                          window.Show(); Pump();
+                          Require(MarkdownLayoutWorker.OutstandingRequests == 0 && viewport.Opacity == 0,
+                              "an invalidated source cannot prepare or publish through a null preload binding");
+                          Set("current source");
+                          UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "the current source can prepare normally");
+                      }
+                      Require(PreviewText(PublishedBody(viewport)).Contains("current source"),
+                          "deferred source refresh publishes the current generation");
+                  }
+                  finally { window.Close(); Pump(); }
+                  Console.WriteLine("PASS source generation is independent of deferred refresh and optional cache membership");
+              }
+
+          '''
+          edit(path, '    private static void CheckThemeInvalidation()', method + '    private static void CheckThemeInvalidation()')
+          subprocess.run(['git','add','--','src/EdgeCapsulePreview.Markdown.cs',path],check=True)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify the source-generation regression test catches the missing guard
+        run: |
+          $path = 'src/EdgeCapsulePreview.Markdown.cs'
+          $original = Get-Content $path -Raw
+          $old = "    private bool IsSourceCurrent => _sourceGeneration is not { } generation ||`n        generation.Source.Version == generation.Version;"
+          if (-not $original.Contains($old)) { throw 'Source guard marker missing' }
+          try {
+            Set-Content $path ($original.Replace($old, '    private bool IsSourceCurrent => true;')) -NoNewline
+            dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/source-negative-control.log
+            $result = $LASTEXITCODE
+            $log = Get-Content evidence/source-negative-control.log -Raw
+            if ($result -eq 0 -or -not $log.Contains('an invalidated source cannot prepare or publish through a null preload binding')) {
+              throw 'Negative control did not detect the removed guard'
+            }
+          } finally { Set-Content $path $original -NoNewline }
+      - name: Release regression suites and Debug preview
+        run: |
+          foreach ($suite in @('EdgePreview', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
+            dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release 2>&1 | Tee-Object "evidence/$suite.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug 2>&1 | Tee-Object evidence/debug-edge.log
+          exit $LASTEXITCODE
+      - name: Prepare the old product with matching measurement boundaries only
+        run: |
           $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
           git worktree add --detach $base 868c81e6255645bb1c151a3731fd0b23329de812
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C $base submodule update --init --recursive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @'
-          from pathlib import Path
           import os
-          def patch(root):
-              p = Path(root) / 'tests/PaperTodo.EdgePreviewChecks/Program.cs'
-              s = p.read_text(encoding='utf-8')
-              def edit(old, new):
-                  nonlocal s
-                  assert s.count(old) == 1, (str(p), old, s.count(old))
-                  s = s.replace(old, new)
-              if 'viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&' in s:
-                  edit('viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&', 'viewport.IsArrangeValid && viewport.Opacity > 0 &&')
-              else:
-                  edit('old.IsArrangeValid && old.Children.OfType<Panel>().Any(panel =>', 'old.IsArrangeValid && old.Opacity > 0 && old.Children.OfType<Panel>().Any(panel =>')
-              edit('var settled = false; var timedOut = false; var readyAt = 0L;', '''var settled = false; var timedOut = false; var readyAt = 0L; var interactiveAt = 0L;
-                  var profileViewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-                  // Layout readiness is local to the published body. Effective input also depends on
-                  // the ancestor host's animation gate; measure it separately, not as formatting cost.''')
-              edit('''            if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
-                      if (readyAt != 0 && settled) loop.Continue = false;''', '''            if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
-                      if (interactiveAt == 0 && readyAt != 0 && profileViewport.IsHitTestVisible)
-                          interactiveAt = Stopwatch.GetTimestamp();
-                      if (readyAt != 0 && interactiveAt != 0 && settled) loop.Continue = false;''')
-              edit('        view.LayoutUpdated += Observe;', '''        DependencyPropertyChangedEventHandler inputChanged = (_, _) => Observe(null, EventArgs.Empty);
-                  view.LayoutUpdated += Observe;
-                  profileViewport.IsHitTestVisibleChanged += inputChanged;''')
-              edit('Require(!timedOut && settled && readyAt != 0, "profile completes without an extra Rendering driver");', 'Require(!timedOut && settled && readyAt != 0 && interactiveAt != 0, "profile observes both layout and input without an extra Rendering driver");')
-              edit('(GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore };', '(GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore,\n                Stopwatch.GetElapsedTime(stageStarted, interactiveAt).TotalMilliseconds };')
-              edit('            timeout.Stop(); view.LayoutUpdated -= Observe;', '            timeout.Stop(); view.LayoutUpdated -= Observe;\n            profileViewport.IsHitTestVisibleChanged -= inputChanged;')
-              p.write_bytes(s.encode())
-          patch('.')
-          patch(Path(os.environ['RUNNER_TEMP']) / 'pr251-baseline')
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])/'pr251-baseline'
+          for name, marker in [('Program.cs','    private static double[] ProfileOne('),('PreloadChecks.cs','    private static void ProfilePreload(')]:
+              relative=Path('tests/PaperTodo.EdgePreviewChecks')/name
+              current=relative.read_text(); old=(base/relative).read_text()
+              method=current[current.index(marker):current.rfind('\n}')]
+              if name=='Program.cs':
+                  before='viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);'
+                  after='viewport.Children.OfType<Panel>().Any(panel => panel.Opacity > 0 && panel.IsArrangeValid && (panel is MarkdownPreviewArtifactSurface || panel.Children.Count > 0));'
+                  assert method.count(before)==1
+                  method=method.replace(before,after)
+              (base/relative).write_bytes((old[:old.index(marker)]+method+old[old.rfind('\n}'):]).encode())
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git add tests/PaperTodo.EdgePreviewChecks/Program.cs
-          git diff --cached --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $tree = git write-tree
-          git archive --format=zip --output=evidence/tested-source.zip $tree
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build both probes and check the unified preview
-        run: |
-          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
-          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/edge.log
+          git -C $base diff --exit-code -- src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build "$base/tests/PaperTodo.EdgePreviewChecks" -c Release
           exit $LASTEXITCODE
-      - name: Paired production-host profiles
+      - name: Paired current and old product performance
         run: |
           $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
           foreach ($order in @('forward', 'reverse')) {
@@ -88,45 +144,48 @@ jobs:
             dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- @arguments 2>&1 | Tee-Object "evidence/baseline-$order.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-      - name: Verify hits and report layout separately from input activation
+      - name: Check real hits, identical timing boundaries and the final source diff
         run: |
           @'
-          import collections, json, pathlib, statistics
-          groups = collections.defaultdict(list)
+          import collections,json,pathlib,statistics,subprocess
+          groups=collections.defaultdict(list)
           for p in pathlib.Path('evidence').glob('*-*.log'):
-              revision = p.name.split('-')[0]
-              if revision not in ('current', 'baseline'): continue
+              revision=p.name.split('-')[0]
+              if revision not in ('current','baseline'): continue
               for line in p.read_text(encoding='utf-8-sig').splitlines():
                   if not line.startswith('PRELOAD_SAMPLE '): continue
-                  row = json.loads(line.split(' ', 1)[1])
-                  if row['preparation'] != 'layout': continue
-                  assert row['metrics'][10] == 1, row
-                  assert row['metrics'][11] >= row['metrics'][4], row
-                  if row['iteration'] >= 2:
-                      groups[(revision, row['fixture'], row['mode'])].append(row['metrics'])
-          report = []
-          for (revision, fixture, mode), values in groups.items():
-              if revision != 'current': continue
-              baseline = groups[('baseline', fixture, mode)]
-              assert len(values) == len(baseline) == 14
-              median = lambda rows, index: statistics.median(row[index] for row in rows)
-              report.append(dict(fixture=fixture, mode=mode, currentLayout=median(values,4), baselineLayout=median(baseline,4), currentInput=median(values,11), baselineInput=median(baseline,11)))
-          assert len(report) == 6
-          pathlib.Path('evidence/timing-boundaries.json').write_text(json.dumps(report, indent=2))
-          print(json.dumps(report, indent=2))
-          assert all(r['currentLayout'] <= max(5.0, r['baselineLayout'] * 1.5 + 1.0) for r in report), 'layout regression'
+                  r=json.loads(line.split(' ',1)[1])
+                  assert r['metrics'][10] == (1 if r['preparation']=='layout' else 0), r
+                  assert r['metrics'][11]>=r['metrics'][4], r
+                  if r['iteration']>=2: groups[(revision,r['fixture'],r['mode'],r['preparation'])].append(r['metrics'])
+          assert len(groups)==24 and all(len(rows)==14 for rows in groups.values())
+          report=[dict(revision=k[0],fixture=k[1],mode=k[2],preparation=k[3],median=[statistics.median(r[i] for r in rows) for i in range(12)],maximum=[max(r[i] for r in rows) for i in range(12)]) for k,rows in sorted(groups.items())]
+          for (revision,fixture,mode,preparation),rows in groups.items():
+              if revision=='current' and preparation=='layout':
+                  old=groups[('baseline',fixture,mode,preparation)]
+                  assert statistics.median(r[4] for r in rows)<=max(5,statistics.median(r[4] for r in old)*1.5+1), (fixture,mode)
+          pathlib.Path('evidence/paired-metrics.json').write_text(json.dumps(report,indent=2))
+          counts=subprocess.check_output(['git','diff','868c81e6255645bb1c151a3731fd0b23329de812','--numstat','--','src'],text=True)
+          pathlib.Path('evidence/runtime-counts.txt').write_text(counts)
+          print(counts)
           '@ | python -
-          exit $LASTEXITCODE
-      - name: Push the corrected probe without changing product code
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add src/EdgeCapsulePreview.Markdown.cs tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tree = git write-tree
+          git archive --format=zip --output=evidence/tested-source.zip $tree
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Push the verified source-generation boundary
         run: |
           $branch = 'perf/whole-preview-artifact-preload-20260912'
           $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
           if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent changes.' }
-          git diff --exit-code b67d7dae449393830365dbac6d1cb7a8f0e12dde -- src
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'test(preview): distinguish body layout readiness from ancestor-gated input'
+          git commit -m 'fix(preview): reject obsolete source generations without coupling demand to optional cache'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
