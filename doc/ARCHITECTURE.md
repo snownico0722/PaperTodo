@@ -24,7 +24,6 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 - WPF 是主 UI；Windows Forms 只作为兼容依赖。
 - 进程 DPI 策略：`PerMonitorV2,PerMonitor`。
 - 主项目入口为根目录 `PaperTodo.csproj`。
-- 普通构建与不含运行时的发布默认使用 Costura 压缩内嵌 `Microsoft.Windows.SDK.NET`；包含运行时的单文件包沿用 .NET 自带压缩。`PaperTodoCompressWindowsSdk=false` 可关闭定向压缩。两种模式使用独立编译中间目录，NuGet 还原输入保持一致。
 
 ## 2. 系统形态与 ownership
 
@@ -260,13 +259,15 @@ Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验
 
 ### 内置笔记的边缘预览
 
-边缘预览是有界导航内容，不是第二个可编辑正文。`MarkdownEdgeCapsulePreviewRenderer` 先捕获一次受限文本，尺寸估算与显示使用相同内容预算；行内语法调用正文已有的 `MarkdownSemanticSnapshot`，只把结果适配为该次预览拥有的纯数据样式段。块级预览保留有限近似，不为悬停读取预算外引用定义或解析整篇笔记。
+边缘预览是有界导航内容，不是第二个可编辑正文。`MarkdownEdgeCapsulePreviewRenderer` 捕获一次受限文本，尺寸估算与显示使用相同内容预算；行内语法复用正文的 `MarkdownSemanticSnapshot`，块级保留现有有限预览语义，不解析预算外正文或引用定义。
 
-普通短行使用精简的 WPF 文字元素；长行与短但样式密集的行使用系统 `TextFormatter`，只逐行准备可见区域并复用绘制结果。没有完整 AvalonEdit 预览控件、另一套行内正则解析器或精确同步排版尺寸后端。
+冷渲染与预热共用唯一的 `PrepareArtifactAsync`：UI 捕获内容、样式、字体、DPI 和资源冻结副本，共享 `MarkdownLayoutWorker` STA 完成 `TextFormatter` 排版，UI 校验外观后组合冻结 Drawing、尺寸、截断状态与全局链接矩形。普通短行也走这条路径，不保留 WPF block renderer、重段落控件或同步渲染退路。保留的短/长行装饰差异只用于兼容既有画面，不再决定 renderer。Worker 不持有 UI 控件、可变语义缓存或业务回调；需求优先于预热，按可见行短批次让出并检查取消，空闲时等待 Dispatcher。
 
-`MarkdownEdgeCapsulePreviewViewport` 唯一拥有这一视图的准备/取消/一次发布：首次正文完整发布后才启用正文显示与交互，收起立即关闭交互并取消未完成工作；同一视图、同一内容、同一尺寸的完整结果可在收起/恢复间复用。内容或主题/字体/缩放的正常失效、DPI 变化、卸载撤销复用资格；新尺寸必须重新准备，旧的迟到任务不可覆盖新版。它不拥有队列、外壳动画、窗口交接或持久化状态。
+`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact，沿用共享一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
 
-`MarkdownEdgePreviewPreload` 只拥有可丢弃的、Dispatcher 内的预排版工作和未挂载正文；按有界摘要的字符量与样式内容筛选，不按鼠标邻居预测或固定数量淘汰。每个合格来源最多保留一份当前正文，挂载时把唯一 ownership 交给 viewport，卸载可归还；版本、摘要或外观/尺寸不符时拒绝复用，离开边缘队列或关闭后撤销保留资格。启动恢复完成和后续入队/内容变化只提交延后读取请求，实际解析与排版在共享合并延迟后逐个进行。正式预览优先，被打断的有效请求留在队列；不引入第二套动画、输入或持久化状态。
+`MarkdownEdgeCapsulePreviewViewport` 是唯一的准备、取消和发布 owner：命中取 artifact，未命中异步调用同一个 builder，两者都进入 `Publish`，挂载一个正文绘制面及原生链接控件。只有完整结果发布后才启用正文输入；链接的捕获、释放、焦点和键盘由 `MarkdownPreviewLinkHit` 保留 WPF 行为，完全裁掉的链接禁用，背景仍交给打开纸片手势。同一视图、内容和尺寸可短暂收起后复用；内容、外观、DPI 或尺寸失效重新准备，卸载释放挂载元素。
+
+需求的源版本与可选预热缓存资格分开：清空缓存不能阻止当前预览正常生成，但源已失效、上层刷新尚未送达时，旧版本仍不得准备或发布。关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队。Host 尚未就绪或尺寸暂不可用的 reader 休眠保留，只由 Host Loaded/Visible 或容量恢复唤醒；菜单、输入锁和手势不再被当作 artifact 准备资格。恢复一个来源不会打断另一个来源正在进行的预热，失败或永久失效目标不持续轮询。Host 仍提供资源、DPI、尺寸和实际输入边界，`Describe` 仍在 UI；正文等待不持有动画/窗口交接屏障，不改变 D-027 的编辑正文语义。当前选择及历史取舍见 D-035。
 
 ## 6. Edge Capsule V3 Lite
 

@@ -50,10 +50,10 @@ internal static partial class Program
             var context = Context(source);
             var calls = 0;
             var requestedAt = Stopwatch.GetTimestamp();
-            cache.RequestLayout(source, () => { calls++; return Target(context); });
+            cache.RequestLayout(source, () => { calls++; return MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context)); });
             Require(calls == 0, "queuing does not read or parse content synchronously");
             window.Show(); Pump();
-            Until(() => cache.BodyCount == 1 && cache.PendingCount == 0, "startup request completes without mouse activity");
+            Until(() => cache.ArtifactCount == 1 && cache.PendingCount == 0, "startup request completes without mouse activity");
             Require(calls == 1 && Stopwatch.GetElapsedTime(requestedAt).TotalMilliseconds >= 490,
                 "shared half-second debounce precedes startup prelayout");
             var first = cache.Capture(context);
@@ -61,8 +61,8 @@ internal static partial class Program
             var binding = cache.Bind(context, first, 1)!;
             var key = MarkdownEdgePreviewPreload.MakeKey(binding, root, new Size(200, 100))!;
             cache.Forget(source);
-            Require(!binding.Current && !cache.Store(new(key, new StackPanel(), false)), "forgotten body cannot be returned late");
-            Require(cache.BodyCount == 0 && cache.ExcerptCount == 0, "retirement releases both retained layers");
+            Require(!binding.Current && !cache.TryGetArtifact(key, out _), "forgotten artifact cannot create a late mount");
+            Require(cache.ArtifactCount == 0 && cache.ExcerptCount == 0, "retirement releases both retained layers");
             Console.WriteLine("PASS startup-like late host, deferred readers, semantic reuse and retirement");
 
             calls = 0;
@@ -70,9 +70,9 @@ internal static partial class Program
             {
                 calls++;
                 if (calls == 1) cache.BeginDemand();
-                return Target(context);
+                return MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context));
             });
-            Until(() => calls == 2 && cache.BodyCount == 1 && cache.PendingCount == 0,
+            Until(() => calls == 2 && cache.ArtifactCount == 1 && cache.PendingCount == 0,
                 "demand interruption retains and resumes the active item without a mouse retry");
             cache.Clear();
             var oldReads = 0;
@@ -87,11 +87,11 @@ internal static partial class Program
                 {
                     newReads++;
                     replacementReadAt = Stopwatch.GetTimestamp();
-                    return Target(context);
+                    return MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context));
                 });
-                return Target(context);
+                return MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context));
             });
-            Until(() => newReads == 1 && cache.BodyCount == 1 && cache.PendingCount == 0,
+            Until(() => newReads == 1 && cache.ArtifactCount == 1 && cache.PendingCount == 0,
                 "replacement request survives the old drain and eventually completes");
             Require(oldReads == 1 && Stopwatch.GetElapsedTime(replacementAt, replacementReadAt).TotalMilliseconds >= 490,
                 "an already-running drain does not bypass the replacement's 500ms debounce");
@@ -99,18 +99,18 @@ internal static partial class Program
             cache.RequestLayout(source, () =>
             {
                 cache.Forget(source);
-                return Target(context);
+                return MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context));
             });
             Until(() => cache.PendingCount == 0, "removed active item retires");
             Pump();
-            Require(cache.BodyCount == 0 && root.Children.Count == 0, "removed active work cannot leave hidden controls or cache");
+            Require(cache.ArtifactCount == 0 && root.Children.Count == 0, "removed active work cannot leave hidden controls or cache");
             Console.WriteLine("PASS queue interruption, replacement debounce and active Forget");
             cache.RequestLayout(new(), () => throw new InvalidOperationException("expected optional failure"));
-            cache.RequestLayout(source, () => Target(context));
-            Until(() => cache.BodyCount == 1 && cache.PendingCount == 0, "one failed target does not stall the queue");
+            cache.RequestLayout(source, () => MarkdownEdgePreviewPreload.ReadResult.Ready(Target(context)));
+            Until(() => cache.ArtifactCount == 1 && cache.PendingCount == 0, "one failed target does not stall the queue");
             cache.Clear();
             var light = Context(new(), () => "short text");
-            Require(!AwaitPreload(cache.WarmLayoutAsync(Target(light))) && cache.ExcerptCount == 0 && cache.BodyCount == 0,
+            Require(!AwaitPreload(cache.WarmLayoutAsync(Target(light))) && cache.ExcerptCount == 0 && cache.ArtifactCount == 0,
                 "light content retains no speculative body or semantic entry");
             Console.WriteLine("PASS failure isolation and light-note exclusion");
         }

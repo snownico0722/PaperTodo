@@ -7,30 +7,48 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using PaperTodo;
 
 internal static partial class Program
 {
-    private static StackPanel PublishedBody(MarkdownEdgeCapsulePreviewViewport viewport) =>
-        viewport.Children.OfType<StackPanel>().Single(panel => panel.Opacity > 0);
+    private static MarkdownPreviewArtifactSurface PublishedBody(MarkdownEdgeCapsulePreviewViewport viewport)
+    {
+        UntilReview(() => viewport.Opacity == 1 && viewport.IsHitTestVisible && viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(),
+            "the complete artifact is published");
+        viewport.UpdateLayout();
+        return viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Single();
+    }
+
+    private static IEnumerable<GlyphRunDrawing> Glyphs(Drawing? drawing)
+    {
+        if (drawing is GlyphRunDrawing glyph) yield return glyph;
+        if (drawing is DrawingGroup group)
+            foreach (var child in group.Children)
+                foreach (var nested in Glyphs(child)) yield return nested;
+    }
 
     private static string PreviewText(DependencyObject element)
     {
-        if (element is MarkdownEdgePreviewParagraph paragraph) return paragraph.VisibleText;
+        if (element is MarkdownPreviewArtifactSurface surface)
+            return string.Concat(Glyphs(surface.Artifact.Drawing).Select(g =>
+                new string(g.GlyphRun.Characters?.ToArray() ?? Array.Empty<char>()))).Replace("\u200B", "");
         if (element is TextBlock text) return new TextRange(text.ContentStart, text.ContentEnd).Text;
         return string.Concat(Enumerable.Range(0, VisualTreeHelper.GetChildrenCount(element))
             .Select(i => PreviewText(VisualTreeHelper.GetChild(element, i))));
     }
 
-    private static IEnumerable<Hyperlink> Links(InlineCollection inlines)
+    // Test-only completed-task adapter. Product has no synchronous renderer or iterator seam.
+    private static bool RenderForCheck(Panel target, string source, Action<string> openExternal,
+        string mode = MarkdownRenderModes.Full, Size? viewport = null, double textZoom = 1)
     {
-        foreach (var inline in inlines)
-        {
-            if (inline is Hyperlink link) yield return link;
-            if (inline is Span span)
-                foreach (var nested in Links(span.Inlines)) yield return nested;
-        }
+        var size = viewport ?? new Size(double.IsFinite(target.Width) ? target.Width : 420, 10000);
+        var artifact = AwaitWorkerCheck(MarkdownEdgeCapsulePreviewRenderer.PrepareArtifactAsync(target,
+            MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode), size, textZoom, false, default));
+        Require(artifact != null, "stable input builds an artifact");
+        target.Children.Clear();
+        target.Children.Add(new MarkdownPreviewArtifactSurface(artifact!, openExternal));
+        target.UpdateLayout();
+        return artifact!.Truncated;
     }
 
     private static void Checks()
@@ -50,21 +68,14 @@ internal static partial class Program
             var view = (EdgeCapsuleLivePreviewView)descriptor.CreateContent(descriptor.Size);
             view.PrepareForFirstDisplay();
             var viewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-            Require(viewport.Opacity == 0 && !viewport.IsHitTestVisible,
-                "unprepared first body is neither visible nor interactive");
+            Require(viewport.Opacity == 0 && !viewport.IsHitTestVisible, "unprepared body is inert");
             var window = new Window { Content = view, Width = 420, Height = 220,
                 ShowActivated = false, ShowInTaskbar = false };
             try
             {
-                window.Show(); Pump();
-                var body = PublishedBody(viewport);
-                Require(viewport.Opacity == 1 && viewport.IsHitTestVisible && body.Children.Count > 0,
-                    "first body publishes atomically and becomes interactive");
-                var excerpt = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
-                Require(excerpt.Lines.Count <= 16 &&
-                    string.Join('\n', excerpt.Lines.Select(line => line.Text)).Length <= 6000,
-                    "same 16-block/6000-character excerpt budget");
-                Require(!PreviewText(body).Contains("第40行"), "off-budget content is never realized");
+                window.Show(); var body = PublishedBody(viewport);
+                Require(viewport.IsHitTestVisible && body.Artifact.Drawing.IsFrozen, "one complete immutable result publishes");
+                Require(!PreviewText(body).Contains("第40行"), "off-budget text is never realized");
                 Require(!Elements(view).Any(e => e is ScrollViewer or ScrollBar), "no scrolling controls");
                 Require(viewport.Children.OfType<TextBlock>().Single().Opacity == 1, "omitted tail is indicated");
                 var top = body.TranslatePoint(new Point(), viewport);
@@ -72,159 +83,162 @@ internal static partial class Program
                     body.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta)
                     { RoutedEvent = Mouse.MouseWheelEvent });
                 body.BringIntoView(); Pump();
-                Require(body.TranslatePoint(new Point(), viewport) == top, "wheel and bring-into-view cannot scroll");
-                Require(paper.Content == source, "preview never edits the source note");
+                Require(body.TranslatePoint(new Point(), viewport) == top && paper.Content == source,
+                    "wheel and bring-into-view neither scroll nor edit the note");
                 if (mode != MarkdownRenderModes.Off)
                 {
-                    var link = Elements(body).OfType<TextBlock>().SelectMany(t => Links(t.Inlines)).First();
-                    Require(EdgeCapsulePreviewInteraction.GetConsumesPointer(link), "real link retains host input routing");
-                    link.RaiseEvent(new RequestNavigateEventArgs(link.NavigateUri, "")
-                    { RoutedEvent = Hyperlink.RequestNavigateEvent });
-                    Require(opened == "https://example.com/", "link invokes the existing callback without opening a browser");
+                    var link = body.Children.OfType<Button>().First();
+                    Require(EdgeCapsulePreviewInteraction.GetConsumesPointer(link), "links retain host input routing");
+                    link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Require(opened == "https://example.com/", "link invokes the existing callback");
                 }
                 descriptor.SetVisibility?.Invoke(false);
-                Require(!viewport.IsHitTestVisible, "retract immediately disables old links");
+                Require(!viewport.IsHitTestVisible, "retract immediately disables links");
                 descriptor.SetVisibility?.Invoke(true); Pump();
-                Require(ReferenceEquals(body, PublishedBody(viewport)), "unchanged reactivation reuses its completed body");
-
+                Require(ReferenceEquals(body, PublishedBody(viewport)), "unchanged resume reuses its own surface");
                 source = "更新后的正文"; paper.TextZoom = 0.8;
-                invalidation.Invalidate(); Pump();
-                body = PublishedBody(viewport);
-                Require(PreviewText(body).Contains(source), "live invalidation replaces content");
-                var text = body.Children.OfType<TextBlock>().Single();
-                Require(Math.Abs(text.FontSize - Math.Round(NoteTypography.FontSize * 0.8, 1)) < 0.01,
-                    "new body uses current zoom");
-                source = ""; invalidation.Invalidate(); Pump();
-                Require(PreviewText(PublishedBody(viewport)).Contains("—") &&
-                    viewport.Children.OfType<TextBlock>().Single().Opacity == 0, "empty state clears overflow");
-                source = "卸载后的新正文";
-                window.Content = null; Pump();
                 invalidation.Invalidate();
-                window.Content = view; Pump();
-                Require(PreviewText(PublishedBody(viewport)).Contains(source), "reattachment rebuilds current content");
-                Console.WriteLine("PASS production preview " + mode);
+                UntilReview(() => PreviewText(viewport).Contains(source) && viewport.IsHitTestVisible, "live edit replaces content");
+                body = PublishedBody(viewport);
+                Require(Glyphs(body.Artifact.Drawing).All(g => Math.Abs(g.GlyphRun.FontRenderingEmSize -
+                    Math.Round(NoteTypography.FontSize * 0.8, 1)) < 0.01), "fresh result uses current zoom");
+                source = ""; invalidation.Invalidate();
+                UntilReview(() => PreviewText(viewport).Contains("—") && viewport.IsHitTestVisible, "empty state publishes");
+                viewport.UpdateLayout();
+                Require(viewport.Children.OfType<TextBlock>().Single().Opacity == 0, "empty state clears overflow");
+                source = "卸载后的新正文";
+                window.Content = null; Pump(); invalidation.Invalidate(); window.Content = view;
+                UntilReview(() => PreviewText(viewport).Contains(source) && viewport.IsHitTestVisible, "reattach reads current source");
+                Console.WriteLine("PASS production artifact preview " + mode);
             }
             finally { window.Close(); Pump(); }
         }
         CheckReuseAndInvalidation();
-        CheckDenseDispatch();
         CheckThemeInvalidation();
         CheckHostPublication();
+        CheckPendingBoundaries();
+        CheckSourceGenerationBeforeRefresh();
     }
 
     private static void CheckReuseAndInvalidation()
     {
-        var viewport = new MarkdownEdgeCapsulePreviewViewport(new StackPanel());
-        var window = new Window { Content = viewport, Width = 320, Height = 180,
-            ShowActivated = false, ShowInTaskbar = false };
-        var builds = 0;
-        IEnumerable<bool> Render(Panel target, Size bounds)
-        {
-            builds++;
-            foreach (var step in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(target,
-                "**当前内容** [link](https://example.com)", _ => { }, MarkdownRenderModes.Full, bounds)) yield return step;
-        }
-        viewport.SetContent(Render);
+        var viewport = new MarkdownEdgeCapsulePreviewViewport();
+        var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("**当前内容**", MarkdownRenderModes.Full);
+        viewport.SetContent(content, _ => { });
+        var window = new Window { Content = viewport, Width = 320, Height = 180, ShowInTaskbar = false, ShowActivated = false };
+        void WaitForNew(MarkdownPreviewArtifactSurface old) => UntilReview(() => viewport.IsHitTestVisible &&
+            viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(p => !ReferenceEquals(old, p)), "invalidated result is replaced");
         try
         {
-            window.Show(); Pump();
-            var body = PublishedBody(viewport); var initialBuilds = builds;
-            for (var i = 0; i < 5; i++)
-            {
-                viewport.SetPreviewActive(false); Pump();
-                viewport.SetPreviewActive(true); Pump();
-            }
-            Require(builds == initialBuilds && ReferenceEquals(body, PublishedBody(viewport)),
-                "five retract/resume cycles perform no extra preparation");
-            viewport.Visibility = Visibility.Hidden; Pump();
-            viewport.Visibility = Visibility.Visible; Pump();
-            Require(builds == initialBuilds, "visibility-only cycle reuses the current completed result");
-
-            viewport.SetPreviewActive(false);
-            viewport.SetContent(Render); Pump();
-            Require(builds == initialBuilds, "inactive content changes do not run background preparation");
-            viewport.SetPreviewActive(true); Pump();
-            Require(builds == initialBuilds + 1 && !ReferenceEquals(body, PublishedBody(viewport)),
-                "content invalidation revokes reuse even when the excerpt text is equal");
-            var priorBuilds = builds;
-            viewport.SetPreviewActive(false); window.Width += 70; Pump();
-            viewport.SetPreviewActive(true); Pump();
-            Require(builds == priorBuilds + 1, "new width never reuses old wrapping");
-            priorBuilds = builds;
-            // Exercise the protected notification boundary, not a pretend mixed-monitor test.
-            typeof(MarkdownEdgeCapsulePreviewViewport).GetMethod("OnDpiChanged",
-                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(viewport,
-                new object[] { new DpiScale(1, 1), new DpiScale(1.5, 1.5) });
-            Pump();
-            Require(builds == priorBuilds + 1, "DPI notification invalidates the completed result");
-            priorBuilds = builds;
-            window.Content = null; Pump(); window.Content = viewport; Pump();
-            Require(builds == priorBuilds + 1, "unload revokes reuse and cancels ownership of pending work");
-            Console.WriteLine($"PASS same-view reuse: 5 cycles, extra builds=0; content/width/DPI notification/unload each rebuild");
+            window.Show(); var body = PublishedBody(viewport);
+            for (var i = 0; i < 5; i++) { viewport.SetPreviewActive(false); Pump(); viewport.SetPreviewActive(true); Pump(); }
+            Require(ReferenceEquals(body, PublishedBody(viewport)), "five unchanged resumes do not rebuild");
+            viewport.Visibility = Visibility.Hidden; Pump(); viewport.Visibility = Visibility.Visible; Pump();
+            Require(ReferenceEquals(body, PublishedBody(viewport)), "visibility-only cycle reuses completed result");
+            viewport.SetPreviewActive(false); viewport.SetContent(content, _ => { }); Pump();
+            Require(ReferenceEquals(body, viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Single()) && !viewport.IsHitTestVisible,
+                "inactive invalidation does not run preparation or enable stale input");
+            viewport.SetPreviewActive(true); WaitForNew(body); body = PublishedBody(viewport);
+            window.Width += 70; WaitForNew(body); body = PublishedBody(viewport);
+            typeof(MarkdownEdgeCapsulePreviewViewport).GetMethod("OnDpiChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(viewport, new object[] { new DpiScale(1, 1), new DpiScale(1.5, 1.5) });
+            WaitForNew(body); body = PublishedBody(viewport);
+            window.Content = null; Pump();
+            Require(body.Parent == null && !viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(), "unload releases the mounted surface");
+            window.Content = viewport; WaitForNew(body);
+            Console.WriteLine("PASS same-view reuse; content/width/DPI/unload revoke it");
         }
         finally { window.Close(); Pump(); }
     }
 
-    private static void CheckDenseDispatch()
+    private static void CheckPendingBoundaries()
     {
-        var dense = string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd();
-        Require(dense.Length < 256, "the density fixture is short source text");
-        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var boundary in new[] { "replace", "retract", "unload", "clear-cache" })
         {
-            var panel = new StackPanel();
-            var prepared = 0;
-            foreach (var step in MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, dense, _ => { }, mode, new Size(160, 90)))
+            var viewport = new MarkdownEdgeCapsulePreviewViewport();
+            var window = new Window { Content = viewport, Width = 320, Height = 180, ShowInTaskbar = false, ShowActivated = false };
+            void Set(string text) => viewport.SetContent(MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full), _ => { });
+            try
             {
-                var count = Elements(panel).OfType<MarkdownEdgePreviewParagraph>().Sum(p => p.FormattedLines);
-                Require(count - prepared <= 1, "dense short row yields between real visual lines");
-                prepared = count;
+                Set("previous"); window.Show(); var old = PublishedBody(viewport);
+                using (HoldWorker(MarkdownLayoutWorker.Shared))
+                {
+                    Set("obsolete " + new string('文', 1000));
+                    UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "cold demand awaits the real STA");
+                    Require(ReferenceEquals(old, viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Single()) && !viewport.IsHitTestVisible,
+                        "pending result has no partial UI or stale interactive links");
+                    if (boundary == "replace") Set("replacement");
+                    if (boundary == "retract") viewport.SetPreviewActive(false);
+                    if (boundary == "unload") window.Content = null;
+                    if (boundary == "clear-cache") MarkdownEdgePreviewPreload.For(viewport.Dispatcher).Clear();
+                    Pump();
+                }
+                if (boundary == "replace")
+                    UntilReview(() => PreviewText(viewport).Contains("replacement") && viewport.IsHitTestVisible, "replacement wins");
+                else if (boundary == "clear-cache")
+                    UntilReview(() => PreviewText(viewport).Contains("obsolete") && viewport.IsHitTestVisible, "optional cache clear does not cancel demand ownership");
+                else
+                {
+                    UntilReview(() => MarkdownLayoutWorker.OutstandingRequests == 0, "cancelled consumers drain");
+                    Require(!PreviewText(viewport).Contains("obsolete") && !viewport.IsHitTestVisible, "late result is never published");
+                    Set("recovered"); viewport.SetPreviewActive(true); window.Content = viewport;
+                    UntilReview(() => PreviewText(viewport).Contains("recovered") && viewport.IsHitTestVisible, "next active demand recovers");
+                }
             }
-            Require(Elements(panel).OfType<MarkdownEdgePreviewParagraph>().Any() && prepared > 0,
-                "short dense rows use bounded line preparation");
-            var ordinary = new StackPanel();
-            MarkdownEdgeCapsulePreviewRenderer.RenderInto(ordinary, new string('a', 150), _ => { }, mode, new Size(160, 90));
-            Require(!Elements(ordinary).OfType<MarkdownEdgePreviewParagraph>().Any(),
-                "ordinary short rows retain the simple text path");
+            finally { window.Close(); Pump(); }
         }
-        Console.WriteLine("PASS short dense paragraphs and plain short rows use appropriate existing paths");
+        Console.WriteLine("PASS pending replace/retract/unload/cache-clear boundaries");
     }
 
-    private static IEnumerable<GlyphRunDrawing> Glyphs(Drawing? drawing)
+    private static void CheckSourceGenerationBeforeRefresh()
     {
-        if (drawing is GlyphRunDrawing glyph) yield return glyph;
-        if (drawing is DrawingGroup group)
-            foreach (var child in group.Children)
-                foreach (var nested in Glyphs(child)) yield return nested;
+        var source = new EdgeCapsulePreviewInvalidationSource();
+        var viewport = new MarkdownEdgeCapsulePreviewViewport();
+        var window = new Window { Content = viewport, Width = 320, Height = 180,
+            ShowActivated = false, ShowInTaskbar = false };
+        void Set(string text) => viewport.SetContent(
+            MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full),
+            _ => { }, sourceGeneration: (source, source.Version));
+        try
+        {
+            UntilReview(() => MarkdownLayoutWorker.OutstandingRequests == 0, "previous worker consumers have drained");
+            using (HoldWorker(MarkdownLayoutWorker.Shared))
+            {
+                Set("obsolete source");
+                source.Invalidate(); // The live owner has not delivered its deferred SetContent yet.
+                window.Show(); Pump();
+                Require(MarkdownLayoutWorker.OutstandingRequests == 0 && viewport.Opacity == 0,
+                    "an invalidated source cannot prepare or publish through a null preload binding");
+                Set("current source");
+                UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "the current source can prepare normally");
+            }
+            Require(PreviewText(PublishedBody(viewport)).Contains("current source"),
+                "deferred source refresh publishes the current generation");
+        }
+        finally { window.Close(); Pump(); }
+        Console.WriteLine("PASS source generation is independent of deferred refresh and optional cache membership");
     }
 
     private static void CheckThemeInvalidation()
     {
-        var source = string.Concat(Enumerable.Repeat("**内容** plain text ", 70));
-        var invalidation = new EdgeCapsulePreviewInvalidationSource();
-        var context = new EdgeCapsulePreviewContext(new PaperData(), () => "主题", false,
-            () => source, () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
-            () => new Style(), () => "", _ => { }, invalidation);
-        var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
-        var view = (EdgeCapsuleLivePreviewView)descriptor.CreateContent(descriptor.Size);
-        var window = new Window { Content = view, Width = 420, Height = 220,
-            ShowActivated = false, ShowInTaskbar = false };
-        window.Resources["TextBrushKey"] = Brushes.DarkRed;
+        var viewport = new MarkdownEdgeCapsulePreviewViewport();
+        var window = new Window { Content = viewport, Width = 320, Height = 180, ShowInTaskbar = false, ShowActivated = false };
+        var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("普通短行", MarkdownRenderModes.Full);
+        var brush = new SolidColorBrush(Colors.DarkRed);
+        window.Resources["TextBrushKey"] = brush;
         try
         {
-            view.PrepareForFirstDisplay(); window.Show(); Pump();
-            var viewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-            var oldBody = PublishedBody(viewport);
-            bool HasColor(Color color) => Elements(PublishedBody(viewport)).OfType<MarkdownEdgePreviewParagraph>()
-                .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
-                .Any(g => g.ForegroundBrush is SolidColorBrush brush && brush.Color == color);
-            Require(HasColor(Colors.DarkRed), "prepared drawing uses host foreground");
-            descriptor.SetVisibility?.Invoke(false);
-            window.Resources["TextBrushKey"] = Brushes.DarkBlue;
-            invalidation.Invalidate(); Pump();
-            descriptor.SetVisibility?.Invoke(true); Pump();
-            Require(!ReferenceEquals(oldBody, PublishedBody(viewport)) && HasColor(Colors.DarkBlue),
-                "theme invalidation while inactive replaces frozen drawing with new resources");
-            Console.WriteLine("PASS frozen drawing follows theme invalidation during retraction");
+            window.Show();
+            using (HoldWorker(MarkdownLayoutWorker.Shared))
+            {
+                viewport.SetContent(content, _ => { });
+                UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "ordinary short text also awaits STA");
+                brush.Color = Colors.DarkBlue;
+            }
+            var body = PublishedBody(viewport);
+            Require(Glyphs(body.Artifact.Drawing).Any(g => g.ForegroundBrush is SolidColorBrush b && b.Color == Colors.DarkBlue),
+                "resource mutation discards stale short-row work and publishes current color");
+            Require(!brush.IsFrozen, "caller resource remains mutable");
         }
         finally { window.Close(); Pump(); }
     }
@@ -232,22 +246,15 @@ internal static partial class Program
     private static void CheckHostPublication()
     {
         using var host = NewHost();
-        var source = string.Concat(Enumerable.Repeat("**a** *b* `c` [link](https://example.com) ", 100));
-        var context = new EdgeCapsulePreviewContext(new PaperData(), () => "真实宿主", false,
-            () => source, () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
-            () => new Style(), () => "", _ => { }, new());
+        var context = new EdgeCapsulePreviewContext(new(), () => "host", false, () => new string('文', 500),
+            () => MarkdownRenderModes.Full, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
         var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
-        var view = descriptor.CreateContent(new EdgeCapsulePreviewSize(420, 300));
-        Require(host.StagePreviewContent(view, 398, 300), "real host stages production body");
+        var view = descriptor.CreateContent(new(420, 300));
+        Require(host.StagePreviewContent(view, 398, 300), "real host stages the preview");
         var viewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-        Require(viewport.Opacity == 0 && !viewport.IsHitTestVisible,
-            "staging host never exposes an unprepared interactive body");
-        // ProfileOne additionally exercises visible Host/Presenter expansion without a fake frame driver.
-        descriptor.SetVisibility?.Invoke(false);
-        host.ClearPreviewContent(); Pump();
-        Require(viewport.Children.OfType<StackPanel>().All(p => p.Children.Count == 0),
-            "clearing an unready host cancels publication");
-        Console.WriteLine("PASS real Host staging/clearing preserves first-publication boundary");
+        Require(viewport.Opacity == 0 && !viewport.IsHitTestVisible, "staging never formats or exposes partial body");
+        descriptor.SetVisibility?.Invoke(false); host.ClearPreviewContent(); Pump();
+        Require(!viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(), "clearing unready host leaves no result");
     }
 
     private static void ExportPreviewPixels(string folder)
@@ -279,11 +286,12 @@ internal static partial class Program
                 panel.Resources["WeakTextBrushKey"] = Brushes.Gray;
                 panel.Resources["LinkBrushKey"] = Brushes.Blue;
                 panel.Resources["HoverBrushKey"] = Brushes.LightGray;
+                panel.Resources["PaperBorderBrushKey"] = Brushes.Gray;
                 var window = new Window { Content = panel, Width = 500, Height = 420, ShowActivated = false, ShowInTaskbar = false };
                 try
                 {
                     window.Show(); Pump();
-                    MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel, fixtures[i], _ => { }, mode, new Size(420, 320), zoom);
+                    RenderForCheck(panel, fixtures[i], _ => { }, mode, new Size(420, 320), zoom);
                     Pump(); window.UpdateLayout();
                     var dpi = VisualTreeHelper.GetDpi(panel);
                     var width = (int)Math.Ceiling(420 * dpi.DpiScaleX);
