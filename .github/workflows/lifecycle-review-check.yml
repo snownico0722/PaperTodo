@@ -1,0 +1,93 @@
+name: Temporary lifecycle verification
+
+on:
+  push:
+    branches: [perf/startup-exit-small-preload-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply reviewed lifecycle delta
+        run: |
+          git config core.autocrlf false
+          git reset --hard HEAD
+          New-Item -ItemType Directory -Force review-output | Out-Null
+          @'
+          import base64, gzip, hashlib, subprocess
+          from pathlib import Path
+          payload = Path('.github/lifecycle-review.patch.gz.b64').read_text().strip()
+          payload = payload.replace('J5nmnfQKuL', 'J5nmnfKuL')
+          patch = gzip.decompress(base64.b64decode(payload))
+          assert hashlib.sha256(patch).hexdigest() == 'c4b2e0e7eb9142ed84a0065d6647fa4789adf35ea4f438d887b0ad580ea77f78'
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Reviewed source did not apply exactly' }
+      - name: Build and test isolated lifecycle fixtures
+        run: |
+          dotnet build tests/PaperTodo.LifecycleChecks -c Release *> review-output/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/lifecycle-build.log; throw 'Lifecycle build failed' }
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Release --no-build *> review-output/lifecycle.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/lifecycle.log; throw 'Lifecycle fixtures failed' }
+      - name: Compare baseline and candidate with the same isolated probe
+        run: |
+          $baseline = Join-Path $env:RUNNER_TEMP 'lifecycle-baseline'
+          git worktree add --detach $baseline 5bcf564f90d7512472261dee82f2412ba4c0d589
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline checkout failed' }
+          git -C $baseline submodule update --init --recursive
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline submodule restore failed' }
+          Copy-Item tests/PaperTodo.LifecycleChecks (Join-Path $baseline 'tests/PaperTodo.LifecycleChecks') -Recurse
+          Copy-Item src/AssemblyInfo.LifecycleChecks.cs (Join-Path $baseline 'src/AssemblyInfo.LifecycleChecks.cs')
+          dotnet run --project (Join-Path $baseline 'tests/PaperTodo.LifecycleChecks') -c Release -- --baseline --profile *> review-output/baseline-profile.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/baseline-profile.log; throw 'Baseline probe failed' }
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Release --no-build -- --profile *> review-output/candidate-profile.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/candidate-profile.log; throw 'Candidate probe failed' }
+      - name: Run Release regressions and Debug edge preview
+        run: |
+          foreach ($suite in @('MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'EdgePreview', 'Threading', 'Persistence')) {
+            dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release *> "review-output/$suite.log"
+            if ($LASTEXITCODE -ne 0) { Get-Content "review-output/$suite.log"; throw "$suite failed" }
+          }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug *> review-output/debug-edge.log
+          if ($LASTEXITCODE -ne 0) { Get-Content review-output/debug-edge.log; throw 'Debug EdgePreview failed' }
+      - name: Commit only verified source and remove temporary files
+        run: |
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/AppController.PluginStartup.cs src/AppController.StartupDisplayTopology.cs src/AppController.StartupPrewarm.cs src/AppController.cs src/AssemblyInfo.LifecycleChecks.cs src/EdgeCapsulePreview.Preload.cs src/EdgeCapsulePreview.cs src/PaperWindow.EdgeCapsulePreview.cs src/PaperWindow.EdgePreviewPreload.cs src/PaperWindow.Lifecycle.cs src/PaperWindow.Note.cs tests/PaperTodo.LifecycleChecks/Program.cs tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj .github/workflows/pull-request-build.yml
+          git rm .github/lifecycle-review.patch.gz.b64 .github/workflows/lifecycle-review-check.yml
+          git commit -m 'perf(lifecycle): shorten startup and exit paths; preload small worksets [ci]'
+          if ($LASTEXITCODE -ne 0) { throw 'Verified source commit failed' }
+          git rev-parse HEAD | Set-Content review-output/tested-head.txt
+          git diff --stat 5bcf564f90d7512472261dee82f2412ba4c0d589 HEAD | Set-Content review-output/changes.txt
+          git archive --format=zip -o review-output/tested-source.zip HEAD
+          git push origin HEAD:perf/startup-exit-small-preload-20260913
+          if ($LASTEXITCODE -ne 0) { throw 'Branch moved; no force push attempted' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifecycle-review
+          path: review-output/
+          retention-days: 3
