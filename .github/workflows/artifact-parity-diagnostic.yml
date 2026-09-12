@@ -28,34 +28,38 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Apply the reviewed patch with exact content verification
+      - name: Apply verified source patches
         id: patch
         run: |
           New-Item -ItemType Directory -Force artifact-diagnostics | Out-Null
-          Copy-Item .github/pr251.patch.b64 artifact-diagnostics/transport.b64
           @'
           import base64, hashlib, pathlib, zlib
-          encoded = pathlib.Path('.github/pr251.patch.b64').read_text().strip()
-          encoded = encoded.replace('PR7XG32', 'PR7XbXG32')
-          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
-          assert hashlib.sha256(patch).hexdigest() == '0cbfc692afa26a1503c4ced604817df513e634f84f0bc9a28f9554bc2d1c002e'
-          pathlib.Path('artifact-diagnostics/reviewed.patch').write_bytes(patch)
+          for name, expected in [
+              ('pr251', '0cbfc692afa26a1503c4ced604817df513e634f84f0bc9a28f9554bc2d1c002e'),
+              ('pr251-cleanup', 'f2f274f1a330b3d72946af9b0247486f1aa1ffb5ca697ee5800aa0fa201400b2')]:
+              encoded = ''.join(pathlib.Path(f'.github/{name}.patch.b64').read_text().split())
+              if name == 'pr251': encoded = encoded.replace('PR7XG32', 'PR7XbXG32')
+              patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+              assert hashlib.sha256(patch).hexdigest() == expected, name
+              pathlib.Path(f'artifact-diagnostics/{name}.patch').write_bytes(patch)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -c core.autocrlf=true add --renormalize -- tests/PaperTodo.EdgePreviewChecks/ReviewIntegrationChecks.cs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git apply --check --index artifact-diagnostics/reviewed.patch
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git apply --index artifact-diagnostics/reviewed.patch
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($name in @('pr251', 'pr251-cleanup')) {
+            git apply --check --index "artifact-diagnostics/$name.patch"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git apply --index "artifact-diagnostics/$name.patch"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Run unmodified strict Edge preview suite
+      - name: Run strict Edge preview suite
         id: edge
         run: |
           dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/strict-checks.log
           exit $LASTEXITCODE
-      - name: Collect parity images on test failure (not a correctness gate)
+      - name: Collect failure images (diagnostics only)
         if: failure() && steps.patch.outcome == 'success'
         run: |
           $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
@@ -68,7 +72,7 @@ jobs:
           bitmap.Render(element);
                           var encoder = new PngBitmapEncoder();
                           encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                          using (var output = System.IO.File.Create($"artifact-diagnostics/{snapshotNumber++:D2}.png")) encoder.Save(output);
+                          using (var output = System.IO.File.Create($"artifact-diagnostics/{snapshotNumber++:D3}.png")) encoder.Save(output);
           '@)
             $text = $text.Replace('Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");', 'Console.WriteLine($"DIAGNOSTIC_ONLY changed={differences.Count(delta => delta > 32)} sum={differences.Sum(delta => (long)delta)}");')
             Set-Content $path $text -NoNewline
@@ -79,22 +83,22 @@ jobs:
             Set-Content $path $original -NoNewline
             Set-Content $program $entry -NoNewline
           }
-      - name: Push the validated source changes to the existing PR branch
+      - name: Push validated changes to the existing PR
         if: success()
         run: |
           $branch = 'perf/whole-preview-artifact-preload-20260912'
           $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
           if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent work.' }
-          git rm .github/pr251.patch.b64
+          git rm .github/pr251.patch.b64 .github/pr251-cleanup.patch.b64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(preview): preserve artifact rows and native link interaction [ci]'
+          git commit -m 'fix(preview): preserve artifact rendering and native input; remove obsolete body ownership [ci]'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git rev-parse HEAD | Tee-Object artifact-diagnostics/pushed-head.txt
-      - name: Upload diagnostic logs and images
+      - name: Upload logs and failure images
         if: always()
         uses: actions/upload-artifact@v7
         with:
