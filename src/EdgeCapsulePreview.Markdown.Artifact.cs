@@ -142,7 +142,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     internal static double ArtifactBodyWidth(EdgeCapsulePreviewSize cardSize) =>
         Math.Max(1, cardSize.ContentSize.Width - ArtifactViewHorizontalInsets);
 
-    private enum ArtifactBlockKind
+    internal enum ArtifactBlockKind
     {
         Text,
         Quote,
@@ -168,7 +168,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         EmptyState
     }
 
-    private sealed record ArtifactBlock(
+    internal sealed record ArtifactBlock(
         ArtifactBlockKind Kind,
         IReadOnlyList<MarkdownLayoutPiece> Pieces,
         IReadOnlyList<MarkdownLayoutPiece>? Marker = null,
@@ -190,7 +190,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         double ListGap,
         bool SourceTruncated);
 
-    private abstract record ArtifactCommand;
+    internal abstract record ArtifactCommand;
     private sealed record DrawingCommand(Drawing Drawing, double X, double Y) : ArtifactCommand;
     private sealed record RectangleCommand(Brush Brush, Rect Bounds, double Radius) : ArtifactCommand;
     private sealed record LineCommand(Pen Pen, Point Start, Point End) : ArtifactCommand;
@@ -429,7 +429,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
             if (previewLine.WasInsideFence || previewLine.FenceKind == MarkdownFenceLineKind.Opening)
             {
-                var syntax = previewLine.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing &&
+                var syntax =
+                    (previewLine.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing) &&
                     content.RenderMode == MarkdownRenderModes.Enhanced
                     ? InlineStyle.Syntax : InlineStyle.None;
                 blocks.Add(new(ArtifactBlockKind.Text,
