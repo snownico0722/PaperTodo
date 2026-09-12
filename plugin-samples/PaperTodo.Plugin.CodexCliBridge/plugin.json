@@ -3,7 +3,7 @@
   "id": "tools.codex-cli-bridge.native",
   "name": "Codex CLI Bridge",
   "description": "从 PaperTodo 待办项和纸片顶栏把内容直接发送给本机 Codex CLI。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": "2.1",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.CodexCliBridge.dll",
@@ -28,13 +28,30 @@
       "quick": true
     },
     {
+      "id": "model",
+      "type": "string",
+      "name": "模型",
+      "description": "传给 Codex CLI 的模型 ID。默认 gpt-5.6-sol；留空则不覆盖 Codex 自己的模型配置。",
+      "default": "gpt-5.6-sol",
+      "maxLength": 128,
+      "quick": true
+    },
+    {
+      "id": "reasoningEffort",
+      "type": "string",
+      "name": "推理",
+      "description": "传给 model_reasoning_effort。默认 xhigh（极高）；留空则不覆盖 Codex 自己的推理配置。",
+      "default": "xhigh",
+      "maxLength": 32,
+      "quick": true
+    },
+    {
       "id": "codexPath",
       "type": "string",
       "name": "Codex CLI 命令",
       "description": "默认使用 PATH 中的 codex。也可以填写 codex.cmd 或绝对路径。",
       "default": "codex",
-      "maxLength": 512,
-      "quick": true
+      "maxLength": 512
     },
     {
       "id": "workingDirectory",
@@ -42,8 +59,7 @@
       "name": "默认工作目录",
       "description": "没有绑定本地路径时使用。留空则使用用户目录；支持 %USERPROFILE% 等环境变量。",
       "default": "",
-      "maxLength": 1024,
-      "quick": true
+      "maxLength": 1024
     }
   ],
   "startupPaper": {
