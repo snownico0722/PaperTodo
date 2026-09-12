@@ -1389,4 +1389,8 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
+  <data name="NoteHtmlExport" xml:space="preserve"><value>Export note as HTML</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
+The original note is kept.</value></data>
+  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>Cannot export: an image is missing or unsupported.</value></data>
 </root>

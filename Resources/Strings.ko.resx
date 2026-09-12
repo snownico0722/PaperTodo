@@ -1389,4 +1389,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>선택한 이미지 내용이 너무 커서 이번에는 텍스트만 복사했습니다.</value>
   </data>
+  <data name="NoteHtmlExport" xml:space="preserve"><value>노트를 HTML로 내보내기</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
+원본 노트는 유지됩니다.</value></data>
+  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>내보낼 수 없습니다. 이미지가 없거나 지원되지 않습니다.</value></data>
 </root>
