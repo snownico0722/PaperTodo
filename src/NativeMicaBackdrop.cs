@@ -71,6 +71,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _opacity = DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(UIElement));
         _opacity.AddValueChanged(window, OnOpacityChanged);
         window.SourceInitialized += OnSourceInitialized;
+        window.ContentRendered += OnContentRendered;
         window.IsVisibleChanged += OnVisibilityChanged;
         window.StateChanged += OnStateChanged;
         window.Closed += OnClosed;
@@ -223,6 +224,17 @@ internal sealed class NativeMicaBackdrop : IDisposable
         QueueRefresh(); // WindowChrome and startup shell styles have now been installed.
     }
 
+    private void OnContentRendered(object? sender, EventArgs e)
+    {
+        // A fresh Clear Acrylic HWND can enter alpha/redirection mode before WPF has
+        // populated its first redirected bitmap. Switching an existing HWND works because
+        // that bitmap already exists. Reapply exactly once after the first real WPF present
+        // so DWM receives the premultiplied-alpha content instead of an empty transparent map.
+        _window.ContentRendered -= OnContentRendered;
+        if (!_disposed && _requested && _material == MicaBackdropTypes.ClearAcrylic)
+            Refresh(_requested, _dark, force: true);
+    }
+
     private void ObserveChrome(Border? chrome)
     {
         if (ReferenceEquals(chrome, _observedChrome)) return;
@@ -286,6 +298,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         if (_disposed) return;
         _disposed = true;
         _window.SourceInitialized -= OnSourceInitialized;
+        _window.ContentRendered -= OnContentRendered;
         _window.IsVisibleChanged -= OnVisibilityChanged;
         _window.StateChanged -= OnStateChanged;
         _window.Closed -= OnClosed;
