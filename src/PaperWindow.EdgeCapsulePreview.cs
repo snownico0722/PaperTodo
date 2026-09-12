@@ -501,18 +501,13 @@ public sealed partial class PaperWindow
         CancelDeferredEdgeCapsulePreviewContentRenderWait();
         var contentGeneration = ++_edgeCapsulePreviewContentGeneration;
         _edgeCapsulePreviewRequest = request;
-        var previewContentWidth = Math.Max(
-            1,
-            request.Size.WidthDip - CapsuleCloseWidth - WindowChromeMargin);
-        var previewContentHeight = Math.Max(
-            1,
-            request.Size.HeightDip - WindowChromeMargin * 2);
+        var previewContentSize = request.Size.ContentSize;
         var host = EnsureDeepCapsuleSlotHost();
         var stageStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var staged = host.StagePreviewContent(
             request.Content,
-            previewContentWidth,
-            previewContentHeight);
+            previewContentSize.Width,
+            previewContentSize.Height);
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"preview.open.stage paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
             $"ms={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(stageStartedAt):F3} " +
@@ -728,19 +723,14 @@ public sealed partial class PaperWindow
 
                     content.HorizontalAlignment = HorizontalAlignment.Stretch;
                     content.VerticalAlignment = VerticalAlignment.Stretch;
-                    var previewContentWidth = Math.Max(
-                        1,
-                        request.Size.WidthDip - CapsuleCloseWidth - WindowChromeMargin);
-                    var previewContentHeight = Math.Max(
-                        1,
-                        request.Size.HeightDip - WindowChromeMargin * 2);
+                    var previewContentSize = request.Size.ContentSize;
                     var host = EnsureDeepCapsuleSlotHost();
                     var replaceStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
                     if (!host.ReplacePreviewContent(
                             request.Content,
                             content,
-                            previewContentWidth,
-                            previewContentHeight))
+                            previewContentSize.Width,
+                            previewContentSize.Height))
                     {
                         return;
                     }
