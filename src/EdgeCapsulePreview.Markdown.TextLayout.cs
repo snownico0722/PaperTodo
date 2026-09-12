@@ -87,7 +87,9 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                 try
                 {
                     if (result == null || !preparation.IsCurrent()) return;
-                    if (changed || !snapshot.Appearance.SequenceEqual(Capture(viewport).Appearance))
+                    // Mutable resources are observed while the worker runs; this lightweight stamp
+                    // catches replacement of frozen/resources without rebuilding pieces/styles.
+                    if (changed || !snapshot.Appearance.SequenceEqual(CaptureAppearance(viewport)))
                     {
                         preparation.Invalidate();
                         return;
@@ -109,14 +111,39 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
     private sealed record Snapshot(MarkdownParagraphRequest Request, Brush? Background,
         IReadOnlyList<object?> Appearance, IReadOnlyList<Freezable> Observed);
 
+    private IReadOnlyList<object?> CaptureAppearance(Size viewport)
+    {
+        Dispatcher.VerifyAccess();
+        Brush Resource(string key, Brush fallback) => _template.TryFindResource(key) as Brush ?? fallback;
+        var strongFamily = AppTypography.FontFamilyFor(content: true, bold: true);
+        var codeFamily = NoteTypography.CodeFontFamily;
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        return Array.AsReadOnly(new object?[]
+        {
+            viewport,
+            _template.FontFamily.Source, _template.FontFamily.BaseUri,
+            _template.FontWeight, _template.FontStyle, _template.FontStretch, _template.FontSize,
+            _template.Language.IetfLanguageTag,
+            _template.Foreground, _template.Background, _template.TextDecorations,
+            Resource("WeakTextBrushKey", _template.Foreground),
+            Resource("LinkBrushKey", _template.Foreground),
+            Resource("HoverBrushKey", Brushes.Transparent),
+            Theme.SyntaxFadeBrush,
+            strongFamily.Source, strongFamily.BaseUri,
+            AppTypography.UsesCustomBoldFace(true), AppTypography.FontWeightFor(true),
+            NoteTypography.HeadingFontWeight,
+            codeFamily.Source, codeFamily.BaseUri, NoteTypography.CodeFontSize,
+            _zoom, dpi, AppTypography.TextFormattingMode
+        });
+    }
+
     private Snapshot Capture(Size viewport)
     {
         Dispatcher.VerifyAccess();
-        var appearance = new List<object?>();
+        var appearance = CaptureAppearance(viewport);
         var observed = new HashSet<Freezable>(ReferenceEqualityComparer.Instance);
         T? FreezeCopy<T>(T? value) where T : Freezable
         {
-            appearance.Add(value);
             if (value == null) return null;
             if (value.IsFrozen) return value;
             observed.Add(value);
@@ -137,8 +164,6 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
             var fontStyle = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Italic) ? FontStyles.Italic : _template.FontStyle;
             var fontSize = Math.Round((code ? NoteTypography.CodeFontSize : _template.FontSize) * _zoom, 1);
             var culture = _template.Language.GetEquivalentCulture().Name;
-            appearance.AddRange(new object?[] { family.Source, family.BaseUri, weight, fontStyle,
-                _template.FontStretch, fontSize, culture });
             Brush Resource(string key, Brush fallback) => _template.TryFindResource(key) as Brush ?? fallback;
             var foreground = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) ? Theme.SyntaxFadeBrush
                 : Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Weak) ? Resource("WeakTextBrushKey", _template.Foreground)
@@ -180,9 +205,8 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         var backgroundSnapshot = FreezeCopy(_template.Background);
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var mode = AppTypography.TextFormattingMode;
-        appearance.Add(dpi); appearance.Add(mode);
         return new(new(inputs, styles, links, viewport, dpi, mode), backgroundSnapshot,
-            appearance.AsReadOnly(), Array.AsReadOnly(observed.ToArray()));
+            appearance, Array.AsReadOnly(observed.ToArray()));
     }
 
     private void Apply(Snapshot snapshot, MarkdownParagraphResult result)
