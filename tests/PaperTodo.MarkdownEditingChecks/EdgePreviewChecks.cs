@@ -431,14 +431,14 @@ internal static partial class Program
                         else
                         {
                             if (boundary == "retract")
-                      Require(ReferenceEquals(original, body), "retraction keeps the view-owned surface");
-                  else
-                  {
-                      Require(!ReferenceEquals(original, body) && original.Parent == null,
-                          "unload releases the prior view-owned surface rather than retaining a cached body");
-                      Require(body.Children.Count == 0 && viewport.Opacity == 0 && !viewport.IsHitTestVisible,
-                          "unloaded viewport has no published text or active input");
-                  }
+                                Require(ReferenceEquals(original, body), "retraction keeps the view-owned surface");
+                            else
+                            {
+                                Require(!ReferenceEquals(original, body) && original.Parent == null,
+                                    "unload releases the prior view-owned surface rather than retaining a cached body");
+                                Require(body.Children.Count == 0 && viewport.Opacity == 0 && !viewport.IsHitTestVisible,
+                                    "unloaded viewport has no published text or active input");
+                            }
                             viewport.SetContent((panel, bounds) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(panel, "恢复", _ => { }, MarkdownRenderModes.Full, bounds));
                             viewport.SetPreviewActive(true);
                             window.Content = viewport;

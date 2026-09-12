@@ -45,6 +45,8 @@
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
 | D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Accepted | Edge animation |
+| D-033 | 有界预览重段落使用共享 STA 排版 | Accepted | Edge performance |
+| D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Accepted | Edge performance / lifecycle |
 
 ## 维护规则
 
@@ -1229,7 +1231,7 @@ D-032 消除了动画救援，但协作式 UI 分批不能抢占一次正在执�
 - Worker 不接收 TextBlock、Visual、可变 PreviewInlineCache、实时资源查询或 UI 业务回调。结果必须冻结，不可通过冻结宿主原始画刷来满足要求。
 - Viewport 继续拥有取消、过期检查与一次发布。它异步等待，不同步阻塞，也不跨等待持有 Presenter/visual-transaction 屏障。
 - Demand 优先于 speculative work；等价在途请求共用一次计算。后台按行让出自身 Dispatcher，取消后不再继续离屏工作；无轮询、每纸片线程或独立结果缓存。
-- 普通短行、同步卡片尺寸估算和最终 UI 挂载保留。D-027 的编辑正文同步语义快照不变，预热的筛选/合并延迟/UI 控件树独占移交不变。
+- 普通短行、同步卡片尺寸估算和最终 UI 挂载保留。D-027 的编辑正文同步语义快照不变，预热的筛选/合并延迟/UI 控件树独占移交不变。整体预热的 UI 控件树移交随后由 D-034 的不可变 artifact 缓存取代；本条的共享 STA 与发布边界继续有效。
 
 ### Why
 
@@ -1241,3 +1243,32 @@ D-032 消除了动画救援，但协作式 UI 分批不能抢占一次正在执�
 - `src/EdgeCapsulePreview.Markdown.TextLayout.cs` 的上下文快照与结果应用。
 - `src/EdgeCapsulePreview.Markdown.cs` 的异步准备与版本取消。
 - `tests/PaperTodo.EdgePreviewChecks/MarkdownWorkerChecks.cs`：线程归属、冻结结果、像素、优先级、取消及 worker 被阻塞时真实宿主动画完成。
+
+
+---
+
+## D-034 — 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文
+
+**Status:** Accepted
+
+### Context
+
+D-033 移走了单个重段落的排版，但先前完整预热仍在 UI 构建并保留未挂载的 WPF 正文树。只提前解析行内语法不能省掉主要排版工作；另一方面，把缓存优化解释成“正式显示也必须零子控件”，又会迫使绘制面重写链接捕获、焦点、按下/释放与键盘操作。
+
+### Decision
+
+- 对已符合预热条件的有界预览，在既有共享 STA 上准备文字排版，并缓存冻结 Drawing、尺寸、截断状态和链接矩形；不缓存隐藏卡片或 WPF 正文树。每来源一份当前结果，沿用合并延迟和 demand 优先级，不新增调度器或固定数量淘汰。
+- 热显示使用新的轻量绘制面，链接仍使用与冷重段落共用的原生 Button 命中元素；缓存层不拥有这些控件。删除旧的正文借出/归还、预热 viewport 回调与独占控件树移交接口。
+- 资源、字体、DPI、内容版本和正文宽度决定结果是否可用。当前卡片上限内按实际高度裁剪；被裁掉的链接不参与键盘输入。来源失效后的迟到结果不可重新写入缓存，资源变化直接丢弃旧结果，由正常生命周期请求恢复。
+- 正常未命中保留原有有界分批 WPF 路径。冷/热画面对照以实际布局完成为前提，性能探针以正文发布为准，不能用子控件数量判断绘制面是否就绪。
+
+### Why / Rejected
+
+目标是从悬停时移走排版，并减少长期保留的 UI 对象，不是最小化任意单次挂载中的控件数量。拒绝用手写键盘/鼠标状态机换取“零子控件”；也不通过隐藏 WPF 树回退、降低像素断言或第二套动画机制来掩盖未完成的 artifact。空行必须保留自然行高，源代码行的整行背景与重段落的行内背景不能重复套用。
+
+### Evidence
+
+- `src/EdgeCapsulePreview.Markdown.Artifact.cs`：有界计划、冻结绘制结果与原生链接挂载。
+- `src/EdgeCapsulePreview.Preload.cs`：来源缓存、延迟队列、UI 发布及取消边界。
+- `src/EdgeCapsulePreview.Markdown.cs` / `src/MarkdownPreviewLinkHit.cs`：单一 viewport 发布与共享原生交互。
+- `tests/PaperTodo.EdgePreviewChecks`：显式链接行为检查、冷/热像素矩阵、真实 host 首次命中、资源/DPI/版本失效、取消与 worker/动画检查；运行方法和历史数据见 `PRELOAD.md`。
