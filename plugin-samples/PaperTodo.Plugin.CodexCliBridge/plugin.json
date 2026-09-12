@@ -1,0 +1,55 @@
+{
+  "kind": "native",
+  "id": "tools.codex-cli-bridge.native",
+  "name": "Codex CLI Bridge",
+  "description": "从 PaperTodo 待办项和纸片顶栏把内容直接发送给本机 Codex CLI。",
+  "version": "1.0.0",
+  "apiVersion": "2.1",
+  "stateVersion": 1,
+  "entry": "PaperTodo.Plugin.CodexCliBridge.dll",
+  "maxPaperInstances": 1,
+  "capabilities": [
+    "runtime"
+  ],
+  "permissions": [
+    "papers.read",
+    "papers.observe",
+    "todos.read",
+    "todos.observe",
+    "notes.read"
+  ],
+  "settings": [
+    {
+      "id": "autoStart",
+      "type": "boolean",
+      "name": "启动后自动启用",
+      "description": "自动创建一张折叠的 Codex CLI 插件纸片，用于保持全局待办按钮和顶栏按钮可用。",
+      "default": true,
+      "quick": true
+    },
+    {
+      "id": "codexPath",
+      "type": "string",
+      "name": "Codex CLI 命令",
+      "description": "默认使用 PATH 中的 codex。也可以填写 codex.cmd 或绝对路径。",
+      "default": "codex",
+      "maxLength": 512,
+      "quick": true
+    },
+    {
+      "id": "workingDirectory",
+      "type": "string",
+      "name": "默认工作目录",
+      "description": "没有绑定本地路径时使用。留空则使用用户目录；支持 %USERPROFILE% 等环境变量。",
+      "default": "",
+      "maxLength": 1024,
+      "quick": true
+    }
+  ],
+  "startupPaper": {
+    "enabledSetting": "autoStart",
+    "instanceKey": "main",
+    "presentation": "capsule",
+    "title": "Codex CLI"
+  }
+}
