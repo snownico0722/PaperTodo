@@ -1,0 +1,36 @@
+name: Temporary Codex CLI bridge build
+
+on:
+  push:
+    branches:
+      - feature/codex-cli-bridge-plugin
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: feature/codex-cli-bridge-plugin
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build and install plugin
+        shell: pwsh
+        run: |
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/tools.codex-cli-bridge.native
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "build(plugin): refresh Codex CLI bridge runtime [skip ci]"
+            git push origin HEAD:feature/codex-cli-bridge-plugin
+          }
