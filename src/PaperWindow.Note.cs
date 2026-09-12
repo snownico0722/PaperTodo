@@ -1637,76 +1637,54 @@ public sealed partial class PaperWindow
     }
 
 
-    internal static void StopPersistentScriptProcesses()
+    internal static void StopPersistentScriptProcesses() =>
+        StopPersistentScriptProcessesAsync().GetAwaiter().GetResult();
+
+    private static Task StopPersistentScriptProcessesAsync()
     {
-        List<Process> processes;
+        Process[] processes;
         lock (PersistentScriptProcessLock)
         {
-            processes = PersistentScriptProcesses.Values.ToList();
+            processes = PersistentScriptProcesses.Values.Distinct().ToArray();
             PersistentScriptProcesses.Clear();
         }
-
-        foreach (var process in processes)
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    try
-                    {
-                        if (process.StartInfo.RedirectStandardInput)
-                        {
-                            process.StandardInput.Close();
-                        }
-                    }
-                    catch
-                    {
-                        // The process may already be exiting or the pipe may be broken.
-                    }
-
-                    if (!process.WaitForExit(250))
-                    {
-                        process.Kill(entireProcessTree: true);
-                        process.WaitForExit(1000);
-                    }
-                }
-            }
-            catch
-            {
-                // Persistent script sessions are optional and disposable.
-            }
-            finally
-            {
-                process.Dispose();
-            }
-        }
+        return Task.WhenAll(processes.Select(process => StopScriptProcessAsync(process, persistent: true)));
     }
 
-    internal static void StopAllScriptProcesses()
+    internal static Task StopAllScriptProcessesAsync()
     {
-        StopPersistentScriptProcesses();
-
-        List<Process> activeProcesses;
+        var persistent = StopPersistentScriptProcessesAsync();
+        Process[] active;
         lock (ActiveScriptProcessLock)
         {
-            activeProcesses = ActiveScriptProcesses.Values.Distinct().ToList();
+            active = ActiveScriptProcesses.Values.Distinct().ToArray();
             ActiveScriptProcesses.Clear();
         }
-
-        foreach (var process in activeProcesses)
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(1000);
-                }
-            }
-            catch
-            {
-                // The execution task owns disposal and temporary-file cleanup in its finally.
-            }
-        }
+        return Task.WhenAll(active.Select(process => StopScriptProcessAsync(process, persistent: false)).Append(persistent));
     }
+
+    private static Task StopScriptProcessAsync(Process process, bool persistent) => Task.Run(async () =>
+    {
+        try
+        {
+            if (process.HasExited) return;
+            if (persistent)
+            {
+                try { if (process.StartInfo.RedirectStandardInput) process.StandardInput.Close(); }
+                catch { /* A broken pipe/already-exiting process needs no graceful request. */ }
+                using var grace = new System.Threading.CancellationTokenSource(250);
+                try { await process.WaitForExitAsync(grace.Token).ConfigureAwait(false); return; }
+                catch (OperationCanceledException) when (grace.IsCancellationRequested) { }
+            }
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            using var deadline = new System.Threading.CancellationTokenSource(1000);
+            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch { /* Process exit/disposal can race the execution task. Other processes still stop. */ }
+        finally
+        {
+            // Active execution owns its process disposal and temporary-file cleanup.
+            if (persistent) process.Dispose();
+        }
+    });
 }

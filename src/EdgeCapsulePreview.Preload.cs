@@ -61,7 +61,7 @@ internal sealed class MarkdownEdgePreviewPreload
         // One-shot editing/interest debounce, stopped as soon as it fires; no idle polling.
         _debounce = new DispatcherTimer(DispatcherPriority.ContextIdle, dispatcher)
         { Interval = TimeSpan.FromMilliseconds(500) };
-        _debounce.Tick += (_, _) => { _debounce.Stop(); Drain(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); _debounce.Interval = TimeSpan.FromMilliseconds(500); Drain(); };
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
@@ -105,6 +105,10 @@ internal sealed class MarkdownEdgePreviewPreload
         return false;
     }
 
+    internal static bool ShouldPreload(EdgeCapsulePreviewContext context,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent content) =>
+        !content.IsEmpty && (context.PreloadLightContent?.Invoke() == true || IsClearlyHighLoad(content));
+
     internal MarkdownEdgeCapsulePreviewRenderer.PreviewContent Capture(EdgeCapsulePreviewContext context)
     {
         _dispatcher.VerifyAccess();
@@ -120,7 +124,7 @@ internal sealed class MarkdownEdgePreviewPreload
             entry.Lines.SequenceEqual(candidate.Lines)) return entry;
         _artifacts.Remove(source);
         _excerpts.Remove(source);
-        if (IsClearlyHighLoad(candidate)) _excerpts[source] = candidate;
+        if (ShouldPreload(context, candidate)) _excerpts[source] = candidate;
         return candidate;
     }
 
@@ -213,7 +217,23 @@ internal sealed class MarkdownEdgePreviewPreload
         else if (_work == null) Arm();
     }
 
-    private void Arm() { _debounce.Stop(); if (RunnableCount > 0) _debounce.Start(); }
+    private void Arm()
+    {
+        _debounce.Stop();
+        _debounce.Interval = TimeSpan.FromMilliseconds(500);
+        if (RunnableCount > 0) _debounce.Start();
+    }
+
+    internal void StartStartupWork()
+    {
+        _dispatcher.VerifyAccess();
+        if (!_enabled || _dispatcher.HasShutdownStarted || RunnableCount == 0) return;
+        // Restoration supplies a stable batch, not a keystroke stream. Reuse the same one-shot
+        // timer/owner but do not impose the editing debounce on the first startup batch.
+        _debounce.Stop();
+        _debounce.Interval = TimeSpan.Zero;
+        _debounce.Start();
+    }
 
     internal void BeginDemand()
     {
@@ -280,7 +300,7 @@ internal sealed class MarkdownEdgePreviewPreload
 
         var version = target.Context.InvalidationSource.Version;
         var content = Capture(target.Context);
-        if (!IsClearlyHighLoad(content)) return false;
+        if (!ShouldPreload(target.Context, content)) return false;
         var binding = Bind(target.Context, content, target.Context.Paper.TextZoom);
         var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size);
         var key = MakeKey(binding, target.Anchor, new Size(width, 0));

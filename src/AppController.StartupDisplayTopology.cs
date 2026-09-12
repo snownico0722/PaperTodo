@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Diagnostics;
 using System.Windows;
 
 namespace PaperTodo;
@@ -10,87 +8,113 @@ public sealed partial class AppController
     private static readonly TimeSpan StartupDisplayTopologyPollInterval = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan StartupDisplayTopologySettleTimeout = TimeSpan.FromSeconds(5);
     private const int StartupDisplayTopologyReadySamples = 2;
+    private readonly HashSet<PaperData> _startupDisplayDeferredPapers = new();
+    private CancellationTokenSource? _startupDisplayRestore;
 
-    internal async Task WaitForStartupDisplayTopologyAsync()
+    private void DeferStartupPapersWithoutMonitor()
     {
-        if (!HasPaperGeometryOutsideConnectedWorkAreas())
-        {
-            return;
-        }
-
-        // During Windows logon the primary monitor can be enumerable a little before a secondary
-        // monitor. Starting the normal off-screen rescue against that transient topology would
-        // permanently overwrite the secondary-screen X/Y in data.json. Only the ambiguous case
-        // waits; ordinary startup continues immediately, and timeout keeps the existing unplugged-
-        // monitor rescue behavior intact.
-        var deadline = DateTimeOffset.UtcNow + StartupDisplayTopologySettleTimeout;
-        var readySamples = 0;
-        while (!IsExiting && DateTimeOffset.UtcNow < deadline)
-        {
-            await Task.Delay(StartupDisplayTopologyPollInterval);
-            WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
-
-            if (HasPaperGeometryOutsideConnectedWorkAreas())
-            {
-                readySamples = 0;
-                continue;
-            }
-
-            if (++readySamples >= StartupDisplayTopologyReadySamples)
-            {
-                return;
-            }
-        }
-
-        // The existing StartAsync rescue remains the authority after timeout. Make sure it reads
-        // a fresh monitor snapshot rather than the incomplete topology that triggered this wait.
-        WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+        CancelStartupDisplayRestore();
+        var workAreas = ConnectedStartupWorkAreas();
+        foreach (var paper in State.Papers)
+            if (PaperAwaitsStartupMonitor(paper, workAreas))
+                _startupDisplayDeferredPapers.Add(paper);
     }
 
-    private bool HasPaperGeometryOutsideConnectedWorkAreas()
+    private bool PaperAwaitsStartupMonitor(PaperData paper, List<Rect> workAreas)
     {
-        var workAreas = ConnectedStartupWorkAreas();
+        // Deep capsules use persisted queue identity, not the parked PaperWindow coordinates.
+        if (paper.IsCollapsed && State.UseCapsuleMode && State.UseDeepCapsuleMode && CanPaperDisplayAsCapsule(paper))
+            return false;
+        if (!IsFinite(paper.X) || !IsFinite(paper.Y) || !IsFinite(paper.Width) || !IsFinite(paper.Height) ||
+            paper.Width <= 0 || paper.Height <= 0)
+            return false; // corrupt geometry can be rescued immediately
+        var center = new Point(paper.X + paper.Width / 2, paper.Y + paper.Height / 2);
+        return !workAreas.Exists(area => area.Contains(center));
+    }
 
-        foreach (var paper in State.Papers)
+    private async void CompleteDeferredStartupDisplayRestore()
+    {
+        if (_startupDisplayDeferredPapers.Count == 0 || IsExiting) return;
+        using var cancellation = new CancellationTokenSource();
+        _startupDisplayRestore = cancellation;
+        var generation = _paperSurfaceRestoreGeneration;
+        var started = Stopwatch.GetTimestamp();
+        var readySamples = 0;
+        try
         {
-            // Deep-capsule placement is owned by its persisted queue/monitor identity, not ordinary
-            // PaperData X/Y. Do not delay startup because of a parked deep-capsule paper window.
-            if (paper.IsCollapsed &&
-                State.UseCapsuleMode &&
-                State.UseDeepCapsuleMode &&
-                CanPaperDisplayAsCapsule(paper))
+            // Only ambiguous papers wait. The tray, safe paper surfaces and single-instance
+            // command handling are already usable; no coordinates are guessed during this wait.
+            while (_startupDisplayDeferredPapers.Count > 0 &&
+                Stopwatch.GetElapsedTime(started) < StartupDisplayTopologySettleTimeout)
             {
-                continue;
+                await Task.Delay(StartupDisplayTopologyPollInterval, cancellation.Token);
+                if (IsExiting || generation != _paperSurfaceRestoreGeneration) return;
+                _startupDisplayDeferredPapers.RemoveWhere(paper => !State.Papers.Contains(paper));
+                WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+                var workAreas = ConnectedStartupWorkAreas();
+                if (_startupDisplayDeferredPapers.Any(paper => PaperAwaitsStartupMonitor(paper, workAreas)))
+                    readySamples = 0;
+                else if (++readySamples >= StartupDisplayTopologyReadySamples)
+                    break;
             }
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (IsExiting || generation != _paperSurfaceRestoreGeneration) return;
 
-            if (!IsFinite(paper.X) ||
-                !IsFinite(paper.Y) ||
-                !IsFinite(paper.Width) ||
-                !IsFinite(paper.Height) ||
-                paper.Width <= 0 ||
-                paper.Height <= 0)
+            var pending = _startupDisplayDeferredPapers.ToArray();
+            _startupDisplayDeferredPapers.Clear();
+            WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+            var wasSuppressingDirty = _suppressDirty;
+            _suppressDirty = true;
+            _trayRefreshSuppressionDepth++;
+            var rescued = false;
+            var shown = false;
+            try
             {
-                // Invalid geometry is unambiguous corruption; let the normal rescue fix it now.
-                continue;
+                foreach (var paper in pending)
+                {
+                    var index = State.Papers.IndexOf(paper);
+                    if (index < 0) continue;
+                    rescued |= RescuePaperIfOffScreen(paper, index);
+                    // Hide/delete/explicit show during the wait wins over this continuation.
+                    if (!paper.IsVisible || (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed))
+                        continue;
+                    ShowPaper(paper, activate: false);
+                    shown = true;
+                }
             }
-
-            // Treat the paper center as its monitor ownership point. A paper that only clips the
-            // primary screen by a few pixels can still belong to a secondary monitor that Windows
-            // has not enumerated yet; using any rectangle intersection would miss that #187 path.
-            // Conversely, an ordinary paper whose center is on a live monitor should not pay the
-            // startup wait merely because part of its window is intentionally near/off an edge.
-            var center = new Point(
-                paper.X + (paper.Width / 2.0),
-                paper.Y + (paper.Height / 2.0));
-            if (workAreas.Exists(area => area.Contains(center)))
+            finally
             {
-                continue;
+                _trayRefreshSuppressionDepth--;
+                _suppressDirty = wasSuppressingDirty;
             }
-
-            return true;
+            if (shown)
+            {
+                ArrangeDeepCapsules(animate: State.EnableAnimations, flushInitialPresentations: true);
+                ScheduleStartupShellPrewarm(State.Papers.Where(paper => paper.IsVisible));
+                RefreshTrayMenu();
+            }
+            if (rescued) SaveNow();
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("Deferred startup display restore failed: {0}", ex);
+        }
+        finally
+        {
+            if (ReferenceEquals(_startupDisplayRestore, cancellation))
+            {
+                _startupDisplayRestore = null;
+                _startupDisplayDeferredPapers.Clear();
+            }
+        }
+    }
 
-        return false;
+    private void CancelStartupDisplayRestore()
+    {
+        _startupDisplayRestore?.Cancel();
+        _startupDisplayRestore = null;
+        _startupDisplayDeferredPapers.Clear();
     }
 
     private static List<Rect> ConnectedStartupWorkAreas()
@@ -99,14 +123,9 @@ public sealed partial class AppController
         foreach (var monitor in WindowWorkAreaHelper.ConnectedMonitorGeometries())
         {
             var area = WindowWorkAreaHelper.WorkAreaForDevice(monitor.DeviceName);
-            if (!area.HasValue || area.Value.IsEmpty || area.Value.Width <= 0 || area.Value.Height <= 0)
-            {
-                continue;
-            }
-
-            result.Add(area.Value);
+            if (area.HasValue && !area.Value.IsEmpty && area.Value.Width > 0 && area.Value.Height > 0)
+                result.Add(area.Value);
         }
-
         return result;
     }
 }

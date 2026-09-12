@@ -226,7 +226,8 @@ public sealed partial class PaperWindow
             CurrentTodoCheckBoxStyle,
             CurrentPluginStatusForEdgeCapsulePreview,
             OpenExternalFromEdgeCapsulePreview,
-            _edgeCapsulePreviewInvalidationSource);
+            _edgeCapsulePreviewInvalidationSource,
+            () => CanPreloadMarkdownText && _controller.PreloadAllEdgeMarkdownNotes);
 
     private bool TryGetRuntimeVariableEdgeCapsulePreviewCapacity(
         out EdgeCapsulePreviewSize size,

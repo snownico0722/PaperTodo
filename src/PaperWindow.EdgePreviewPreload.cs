@@ -7,7 +7,7 @@ public sealed partial class PaperWindow
     private bool _markdownPreloadCloseHook;
     private FrameworkElement? _markdownPreloadLifecycleAnchor;
 
-    private bool CanPreloadMarkdownText =>
+    internal bool CanPreloadMarkdownText =>
         _windowLifecycle == PaperWindowLifecycleState.Alive && _controller.MarkdownPreviewPreloadingAllowed &&
         _controller.State.ExperimentalEdgeCapsuleHoverPreview && _paper.IsVisible &&
         _controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode && HasDeepCapsuleSlotPlacement &&
@@ -87,7 +87,8 @@ public sealed partial class PaperWindow
         var host = _edgeCapsuleHost;
         var generation = _bodySessionGeneration;
         var context = CreateEdgeCapsulePreviewContext();
-        if (!MarkdownEdgePreviewPreload.IsClearlyHighLoad(cache.Capture(context))) return MarkdownEdgePreviewPreload.ReadResult.Discard;
+        if (!MarkdownEdgePreviewPreload.ShouldPreload(context, cache.Capture(context)))
+            return MarkdownEdgePreviewPreload.ReadResult.Discard;
         var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
         var size = descriptor.Size.Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
@@ -103,4 +104,9 @@ public sealed partial class PaperWindow
 public sealed partial class AppController
 {
     internal bool MarkdownPreviewPreloadingAllowed => !IsExiting;
+
+    // Count actual live, eligible edge notes, not all persisted papers or cached artifacts.
+    // This is also read after edits; light notes do not lose eligibility after their first warm.
+    internal bool PreloadAllEdgeMarkdownNotes => !IsExiting &&
+        _windows.Values.Count(window => window.CanPreloadMarkdownText) is > 0 and <= SmallPrewarmPaperLimit;
 }

@@ -96,7 +96,8 @@ internal sealed record EdgeCapsulePreviewContext(
     Func<Style> ReadTodoCheckStyle,
     Func<string> ReadPluginStatus,
     Action<string> OpenExternal,
-    EdgeCapsulePreviewInvalidationSource InvalidationSource)
+    EdgeCapsulePreviewInvalidationSource InvalidationSource,
+    Func<bool>? PreloadLightContent = null)
 {
     public string Title => ReadTitle();
 }
