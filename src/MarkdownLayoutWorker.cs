@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -7,6 +8,8 @@ namespace PaperTodo;
 // Dispatcher work is finite and event-driven; no polling timer or per-paper thread is used.
 internal sealed class MarkdownLayoutWorker : IDisposable
 {
+    private const int MaxStepsPerTurn = 4;
+    private const double MaxTurnMilliseconds = 1.5;
     private static readonly Lazy<MarkdownLayoutWorker> Instance = new(() => new());
     internal static MarkdownLayoutWorker Shared => Instance.Value;
     internal static int OutstandingRequests => Instance.IsValueCreated ? Instance.Value.OutstandingCount : 0;
@@ -124,11 +127,32 @@ internal sealed class MarkdownLayoutWorker : IDisposable
         try
         {
             job.Steps ??= MarkdownParagraphLayout.Prepare(job.Request).GetEnumerator();
-            // Native font/layout calls must not run a nested worker queue inside this iterator.
+            MarkdownParagraphResult? result = null;
+            var cancelled = false;
+            var turnStarted = Stopwatch.GetTimestamp();
+            // This is a dedicated worker Dispatcher. Batch a few visible lines per turn instead of
+            // paying one DispatcherOperation per line, while keeping a short priority/cancel boundary.
             using (Dispatcher.CurrentDispatcher.DisableProcessing())
-                if (!job.Steps.MoveNext()) throw new InvalidOperationException("Paragraph ended without a result.");
-            if (job.Steps.Current is { } result) Retire(job, result, null);
-            else Schedule(job); // yield on THIS STA, never a per-line round trip to the UI
+            {
+                for (var step = 0; step < MaxStepsPerTurn; step++)
+                {
+                    if (_lifetime.IsCancellationRequested || job.Tickets.All(ticket => ticket.Token.IsCancellationRequested))
+                    {
+                        cancelled = true;
+                        break;
+                    }
+                    if (!job.Steps.MoveNext()) throw new InvalidOperationException("Paragraph ended without a result.");
+                    if (job.Steps.Current is { } completed)
+                    {
+                        result = completed;
+                        break;
+                    }
+                    if (Stopwatch.GetElapsedTime(turnStarted).TotalMilliseconds >= MaxTurnMilliseconds) break;
+                }
+            }
+            if (cancelled) Retire(job, null, null);
+            else if (result != null) Retire(job, result, null);
+            else Schedule(job);
         }
         catch (Exception ex) { Retire(job, null, ex); }
     }
