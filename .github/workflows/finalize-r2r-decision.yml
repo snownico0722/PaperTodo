@@ -19,8 +19,9 @@ jobs:
           fetch-depth: 0
 
       - name: Record measured R2R decision
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('doc/DECISIONS.md')
@@ -88,6 +89,7 @@ R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 ->
 - `.github/workflows/release.yml`：当前正式 self-contained / framework-dependent 单文件发布参数。
 '''
           path.write_text(text.rstrip() + decision + '\n', encoding='utf-8', newline='\n')
+          PY
 
       - name: Commit decision to lifecycle PR branch
         run: |
