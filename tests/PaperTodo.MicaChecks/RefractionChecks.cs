@@ -10,7 +10,7 @@ internal static class RefractionChecks
 {
     internal static void Run(AppController controller)
     {
-        CheckOptics(); CheckCaptureLayout(); CheckExcludedSource();
+        OpticalProfileChecks.Run(); CheckCaptureLayout(); CheckExcludedSource();
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
             controller.State.EnableAnimations, controller.State.LiquidGlassRefraction, controller.State.UseCapsuleMode);
         PaperWindow? window = null;
@@ -177,9 +177,8 @@ internal static class RefractionChecks
         }
         finally { front.Close(); rear.Close(); }
     }
-    private static void CheckOptics()
+    internal static void CheckOptics()
     {
-        OpticalProfileChecks.Run();
         var profile = LensDisplacement.ProfileBitmap;
         Program.Assert(profile.IsFrozen && ReferenceEquals(profile, LensDisplacement.ProfileBitmap),
             "all lens sizes share a frozen one-dimensional optical profile");
@@ -210,12 +209,28 @@ internal static class RefractionChecks
         foreach (var point in new[] { new Point(215,175), new Point(24,100), new Point(406,100) })
             Program.Assert(LensDisplacement.Sample(point, size, 8) == (new Vector(), 0d),
                 "the shoulder profile joins the body at zero offset and coverage; body magnification is a separate shader transform");
-        var small = GlassMetrics.For(new Size(240, 160), false);
-        var large = GlassMetrics.For(new Size(1000, 800), false);
-        var narrow = GlassMetrics.For(new Size(160, 1000), false);
-        Program.Assert(large.Bezel > small.Bezel && large.Blur > small.Blur && large.Tint > small.Tint &&
-            narrow.Bezel < large.Bezel && narrow.Blur < large.Blur,
-            "large reading surfaces gain depth/scattering, long narrow surfaces stay light");
+        foreach (var dark in new[] { false, true })
+        {
+            var small = GlassMetrics.For(new Size(240, 160), dark);
+            var large = GlassMetrics.For(new Size(1000, 800), dark);
+            var narrow = GlassMetrics.For(new Size(160, 1000), dark);
+            Program.Assert(large.Bezel > small.Bezel && narrow.Bezel < large.Bezel &&
+                small.Bezel > 0 && narrow.Bezel > 0 &&
+                large.Displacement > small.Displacement && small.Displacement > 0 &&
+                narrow.Displacement > 0,
+                "larger reading surfaces deepen the shoulder; narrow surfaces retain a shallower rim");
+            foreach (var candidate in new[] { large, narrow })
+            {
+                Program.Assert(candidate.Blur == small.Blur && candidate.Tint == small.Tint &&
+                    candidate.Saturation == small.Saturation,
+                    "size changes shoulder geometry, not body blur, tint or saturation");
+            }
+            Program.Assert(small.Blur > 0 && small.Tint is > 0 and < 1 && small.Saturation >= 1,
+                "body filtering is still enabled, not removed to satisfy resize invariance");
+        }
+        Program.Assert(GlassMetrics.For(new Size(240, 160), true).Tint >
+            GlassMetrics.For(new Size(240, 160), false).Tint,
+            "dark and light modes retain distinct transmission recipes");
         var last = GlassMetrics.For(new Size(200, 180), false);
         for (var width = 201; width <= 1600; width++)
         {

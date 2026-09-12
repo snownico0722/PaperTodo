@@ -22,7 +22,7 @@ internal static class Program
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         if (args.Contains("--sampler-only", StringComparer.Ordinal))
         {
-            try { ShaderSamplerChecks.Run(); OpticalProfileChecks.Run(); return 0; }
+            try { ShaderSamplerChecks.Run(); RefractionChecks.CheckOptics(); OpticalProfileChecks.Run(); return 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         }
         using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
@@ -38,6 +38,7 @@ internal static class Program
         Directory.CreateDirectory(temp);
         try
         {
+            Check("size-independent optical contract", RefractionChecks.CheckOptics);
             Check("skin normalization and data compatibility", () =>
             {
                 foreach (var id in new[] { "warm", "ink", "forest", "rose", "mica" })

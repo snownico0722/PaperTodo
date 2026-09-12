@@ -50,6 +50,19 @@ public sealed partial class AppController
             return;
         }
 
+        // A settings-triggered restart must not discard unpersisted edits. Unlike an
+        // explicit Exit, a failed preflight leaves the running application intact.
+        CommitSettingsExternalMarkdownEditor(saveImmediately: false);
+        foreach (var window in _windows.Values.ToList())
+        {
+            window.CommitPendingEditsForSave();
+        }
+        if (!TrySaveNow(sync: true))
+        {
+            _skinRestartPromptDeferred = false;
+            return;
+        }
+
         if (!AppRestart.TryLaunchAfterCurrentProcessExit(out var error))
         {
             _skinRestartPromptDeferred = false;
