@@ -26,13 +26,33 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Inject pixel diagnostics in runner workspace
+      - name: Capture source and instrument only the diagnostic workspace
         run: |
+          New-Item -ItemType Directory -Force artifact-diagnostics | Out-Null
+          git archive -o artifact-diagnostics/source.zip HEAD
           $path = '.\tests\PaperTodo.EdgePreviewChecks\PreloadChecks.cs'
           $text = Get-Content $path -Raw
+          $text = $text.Replace('byte[] Pixels(FrameworkElement element)', 'var snapshotNumber = 0;' + [Environment]::NewLine + '            byte[] Pixels(FrameworkElement element)')
+          $text = $text.Replace('var dpi = VisualTreeHelper.GetDpi(element);', 'element.UpdateLayout();' + [Environment]::NewLine + '                var dpi = VisualTreeHelper.GetDpi(element);')
+          $text = $text.Replace('bitmap.Render(element);', @'
+          bitmap.Render(element);
+                          var encoder = new PngBitmapEncoder();
+                          encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                          using (var output = System.IO.File.Create($"artifact-diagnostics/{snapshotNumber++:D2}.png")) encoder.Save(output);
+          '@)
           $old = 'Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");'
-          $new = 'Console.WriteLine($"ARTIFACT_PIXEL_CASE mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} changed={differences.Count(delta => delta > 32)}/{differences.Length} max={differences.Max()} sum={differences.Sum(delta => (long)delta)}");' + [Environment]::NewLine + '                ' + $old
+          $new = 'Console.WriteLine($"ARTIFACT_DIAGNOSTIC_ONLY mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} changed={differences.Count(delta => delta > 32)}/{differences.Length} max={differences.Max()} sum={differences.Sum(delta => (long)delta)} hotAlpha={hotPixels.Where((v,i)=>i%4==3).Sum(v=>(long)v)} coldAlpha={coldPixels.Where((v,i)=>i%4==3).Sum(v=>(long)v)}");'
           if (-not $text.Contains($old)) { throw 'pixel assertion marker not found' }
           Set-Content $path ($text.Replace($old, $new)) -NoNewline
-      - name: Run Edge preview checks
-        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
+      - name: Run diagnostic copy (not a correctness gate)
+        run: |
+          dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release 2>&1 | Tee-Object artifact-diagnostics/checks.log
+          exit $LASTEXITCODE
+      - name: Upload diagnostic source, images and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifact-parity-diagnostics
+          path: artifact-diagnostics/
+          retention-days: 1
+          if-no-files-found: error
