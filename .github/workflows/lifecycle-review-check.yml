@@ -34,7 +34,10 @@ jobs:
       - name: Apply reviewed lifecycle delta
         run: |
           git config core.autocrlf false
+          git config core.eol lf
           git reset --hard HEAD
+          git checkout-index --all --force
+          if ($LASTEXITCODE -ne 0) { throw 'Exact source checkout failed' }
           New-Item -ItemType Directory -Force review-output | Out-Null
           @'
           import base64, gzip, hashlib, subprocess
