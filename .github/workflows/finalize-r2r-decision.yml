@@ -1,0 +1,102 @@
+name: Finalize R2R packaging decision
+
+on:
+  push:
+    branches: [perf/cold-start-r2r-benchmark-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out lifecycle PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          fetch-depth: 0
+
+      - name: Record measured R2R decision
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('doc/DECISIONS.md')
+          text = path.read_text(encoding='utf-8')
+          if '## D-036 — 单文件正式发布保持 ReadyToRun 关闭' in text:
+              raise SystemExit(0)
+
+          index_line = '| D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |'
+          replacement = index_line + '\n| D-036 | 单文件正式发布保持 ReadyToRun 关闭 | Accepted | 启动性能 / 发布 |'
+          if text.count(index_line) != 1:
+              raise SystemExit('D-035 index anchor missing or duplicated')
+          text = text.replace(index_line, replacement, 1)
+
+          decision = r'''
+
+---
+
+## D-036 — 单文件正式发布保持 ReadyToRun 关闭
+
+**Status:** Accepted
+
+### Context
+
+PaperTodo 的 Windows Release 同时提供 self-contained 与 framework-dependent 单文件。2026-07 的提交 `feb311cdf712d24f5b7cefb023a0f7d87150004d` 曾关闭 `PublishReadyToRun`，当时直接原因是单文件体积显著膨胀。2026-09 在 .NET 10 上重新做了端到端 A/B，避免继续只依赖旧版本经验。
+
+本轮以 10 个已折叠 Edge Note 为固定工作集，在同一 Windows Server 2025 runner 上比较 8 种发布形态。每种形态执行 3 组 fresh/warm 新进程样本；外部计时从 `CreateProcess` 开始，进程内记录最早 module initializer、`App.OnStartup`、`AppController`、surface restore、WPF `CompositionTarget.Rendering`，最后用 `DwmFlush` 作为“已提交到 DWM”的边界。该边界不是物理显示器真正扫描出像素的时间，也不是用户机器的绝对性能保证。
+
+### Decision
+
+- 正式 self-contained + single-file + compression 发布继续使用 `PublishReadyToRun=false`。
+- framework-dependent 单文件当前也保持 `PublishReadyToRun=false`；其 R2R 版本虽有可测启动收益，但包体增幅过大，不作为默认发布形态。
+- 不把 ReadyToRun 本身列为永久禁用能力。若未来改成多文件部署、安装器式部署、NativeAOT 或显著改变单文件 host/运行时版本，应重新 A/B，而不是机械沿用本条数字。
+
+### Why
+
+当前正式形态（self-contained + single-file + compression）在本轮中：
+
+- no-R2R EXE 约 80.2 MiB；fresh `CreateProcess -> DwmFlush` 中位约 1452 ms，warm 约 1415 ms；最早托管入口约 302 ms；ready 时 working set 约 235 MB。
+- R2R EXE 约 106.1 MiB（约 +32%）；fresh `CreateProcess -> DwmFlush` 约 1470 ms，warm 约 1493 ms；最早托管入口约 658 ms（约 +118%）；working set 约 279 MB（约 +19%）。
+
+因此在当前正式单文件压缩组合中，R2R 不仅没有带来端到端启动收益，还把主要额外成本推到了最早托管代码之前。该 probe 无法仅凭这些时间点把这段成本进一步归因到 host、bundle 映射、解压或 loader 的某一个内部步骤，因此长期结论只写“当前组合负优化”，不臆测具体内部原因。
+
+R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 -> 1100 ms（约 -27%），framework-dependent 单文件约 1193 -> 1041 ms（约 -13%）。但对应发布体积也分别从约 200 -> 240 MB、17.1 -> 51.6 MB。对 PaperTodo 当前“单 EXE、尽量小、即时启动”的发布目标，这些收益不足以推翻单文件边界。
+
+单文件压缩本身也做了对照：关闭压缩把 self-contained 单文件从约 80.2 MiB 放大到约 192.0 MiB（约 +139%），fresh DWM 只从约 1452 降到约 1416 ms。当前不为约几十毫秒的 runner 差异把正式完整包扩大到两倍以上。
+
+### Rejected / Pitfalls
+
+- 不因为“R2R 理论上减少 JIT”就在当前 single-file/compressed Release 中直接打开；先看端到端 `CreateProcess -> presentation` 数据。
+- 不把“R2R 在当前正式组合负优化”扩张成“R2R 永远更慢”。多文件/FDD 对照已经证明不同打包边界下结论会反转。
+- 不把 CI runner 的 DWM 数字当成用户机器的绝对启动时长；它只用于同机同轮相对比较。
+- 不用一次 publish 耗时判断运行时性能；R2R/压缩产物会受到增量构建和缓存顺序影响，长期决策看运行样本和产物体积。
+
+### Consequences
+
+- `.github/workflows/release.yml` 中的 `PublishReadyToRun=false` 是有实测依据的发布决策，不应在普通“启动优化”中随手改回 true。
+- 若继续优化冷启动，优先测 PaperTodo 自身 `AppController` / PaperWindow / Edge Host 与单文件 host 的真实阶段，而不是先假设 JIT 是主瓶颈。
+- framework-dependent 包天然绕过大部分 self-contained bundle 启动成本，可继续作为对启动速度敏感且已安装匹配 .NET Runtime 用户的轻量选择；是否为它单独启用 R2R 需要重新权衡约 3 倍 EXE 体积。
+
+### Evidence
+
+- benchmark workflow run `34723619518`，commit `524b3fd9ce1eb6bb388a1c6ffab81caef32cfd88`：8 种发布形态、48 个 fresh/warm 启动样本，最终 job 成功。
+- benchmark artifact `cold-start-packaging-benchmark`：`summary.csv` / `startup-samples.csv` / `publish-results.csv`。
+- `feb311cdf712d24f5b7cefb023a0f7d87150004d`：历史上因单文件体积膨胀关闭 ReadyToRun。
+- `.github/workflows/release.yml`：当前正式 self-contained / framework-dependent 单文件发布参数。
+'''
+          path.write_text(text.rstrip() + decision + '\n', encoding='utf-8', newline='\n')
+
+      - name: Commit decision to lifecycle PR branch
+        run: |
+          if git diff --quiet -- doc/DECISIONS.md; then
+            echo "Decision already present"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add doc/DECISIONS.md
+          git commit -m 'docs: record ReadyToRun single-file benchmark decision'
+          git push origin HEAD:perf/startup-exit-small-preload-20260913
