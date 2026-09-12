@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   validate:
-    if: contains(github.event.head_commit.message, '[unify-layout-check]')
+    if: contains(github.event.head_commit.message, '[unify-timing-check]')
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
@@ -20,46 +20,66 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Keep cache-hit publication within the current layout pass
+      - name: Measure identical publication and input boundaries in both revisions
         run: |
+          git diff --exit-code b67d7dae449393830365dbac6d1cb7a8f0e12dde HEAD -- src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force evidence | Out-Null
-          @'
-          from pathlib import Path
-          import subprocess
-          p = Path('src/EdgeCapsulePreview.Markdown.cs')
-          text = p.read_text(encoding='utf-8')
-          old = '        IsHitTestVisible = _previewActive;\n        InvalidateMeasure();\n    }'
-          new = '        IsHitTestVisible = _previewActive;\n    }'
-          assert text.count(old) == 1
-          text = text.replace(old, new)
-          old = '                Publish(artifact, size);\n                published = true;'
-          new = '                Publish(artifact, size);\n                // Async completion needs a new layout; a cache hit is already inside Arrange.\n                InvalidateMeasure();\n                published = true;'
-          assert text.count(old) == 1
-          p.write_bytes(text.replace(old, new).encode())
-          subprocess.run(['git', 'add', '--', str(p)], check=True)
-          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
-          subprocess.run(['git', 'archive', '--format=zip', '--output=evidence/tested-source.zip', tree], check=True)
-          '@ | python -
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --cached --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Release checks and Debug preview
-        run: |
-          foreach ($suite in @('EdgePreview', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Persistence')) {
-            dotnet run --project "tests/PaperTodo.${suite}Checks" -c Release 2>&1 | Tee-Object "evidence/$suite.log"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug 2>&1 | Tee-Object evidence/debug-edge.log
-          exit $LASTEXITCODE
-      - name: Compare current and pre-unification production paths
-        run: |
           $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
           git worktree add --detach $base 868c81e6255645bb1c151a3731fd0b23329de812
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C $base submodule update --init --recursive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build "$base/tests/PaperTodo.EdgePreviewChecks" -c Release
+          @'
+          from pathlib import Path
+          import os
+          def patch(root):
+              p = Path(root) / 'tests/PaperTodo.EdgePreviewChecks/Program.cs'
+              s = p.read_text(encoding='utf-8')
+              def edit(old, new):
+                  nonlocal s
+                  assert s.count(old) == 1, (str(p), old, s.count(old))
+                  s = s.replace(old, new)
+              if 'viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&' in s:
+                  edit('viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&', 'viewport.IsArrangeValid && viewport.Opacity > 0 &&')
+              else:
+                  edit('old.IsArrangeValid && old.Children.OfType<Panel>().Any(panel =>', 'old.IsArrangeValid && old.Opacity > 0 && old.Children.OfType<Panel>().Any(panel =>')
+              edit('var settled = false; var timedOut = false; var readyAt = 0L;', '''var settled = false; var timedOut = false; var readyAt = 0L; var interactiveAt = 0L;
+                  var profileViewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
+                  // Layout readiness is local to the published body. Effective input also depends on
+                  // the ancestor host's animation gate; measure it separately, not as formatting cost.''')
+              edit('''            if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
+                      if (readyAt != 0 && settled) loop.Continue = false;''', '''            if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
+                      if (interactiveAt == 0 && readyAt != 0 && profileViewport.IsHitTestVisible)
+                          interactiveAt = Stopwatch.GetTimestamp();
+                      if (readyAt != 0 && interactiveAt != 0 && settled) loop.Continue = false;''')
+              edit('        view.LayoutUpdated += Observe;', '''        DependencyPropertyChangedEventHandler inputChanged = (_, _) => Observe(null, EventArgs.Empty);
+                  view.LayoutUpdated += Observe;
+                  profileViewport.IsHitTestVisibleChanged += inputChanged;''')
+              edit('Require(!timedOut && settled && readyAt != 0, "profile completes without an extra Rendering driver");', 'Require(!timedOut && settled && readyAt != 0 && interactiveAt != 0, "profile observes both layout and input without an extra Rendering driver");')
+              edit('(GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore };', '(GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore,\n                Stopwatch.GetElapsedTime(stageStarted, interactiveAt).TotalMilliseconds };')
+              edit('            timeout.Stop(); view.LayoutUpdated -= Observe;', '            timeout.Stop(); view.LayoutUpdated -= Observe;\n            profileViewport.IsHitTestVisibleChanged -= inputChanged;')
+              p.write_bytes(s.encode())
+          patch('.')
+          patch(Path(os.environ['RUNNER_TEMP']) / 'pr251-baseline')
+          '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add tests/PaperTodo.EdgePreviewChecks/Program.cs
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tree = git write-tree
+          git archive --format=zip --output=evidence/tested-source.zip $tree
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build both probes and check the unified preview
+        run: |
+          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/edge.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build "$base/tests/PaperTodo.EdgePreviewChecks" -c Release
+          exit $LASTEXITCODE
+      - name: Paired production-host profiles
+        run: |
+          $base = Join-Path $env:RUNNER_TEMP 'pr251-baseline'
           foreach ($order in @('forward', 'reverse')) {
             $arguments = @('--preload-profile')
             if ($order -eq 'reverse') { $arguments += '--reverse' }
@@ -68,7 +88,7 @@ jobs:
             dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release --no-build -- @arguments 2>&1 | Tee-Object "evidence/baseline-$order.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-      - name: Reject a deferred-frame cache-hit regression
+      - name: Verify hits and report layout separately from input activation
         run: |
           @'
           import collections, json, pathlib, statistics
@@ -81,28 +101,32 @@ jobs:
                   row = json.loads(line.split(' ', 1)[1])
                   if row['preparation'] != 'layout': continue
                   assert row['metrics'][10] == 1, row
+                  assert row['metrics'][11] >= row['metrics'][4], row
                   if row['iteration'] >= 2:
-                      groups[(revision, row['fixture'], row['mode'])].append(row['metrics'][4])
+                      groups[(revision, row['fixture'], row['mode'])].append(row['metrics'])
           report = []
           for (revision, fixture, mode), values in groups.items():
               if revision != 'current': continue
               baseline = groups[('baseline', fixture, mode)]
               assert len(values) == len(baseline) == 14
-              report.append(dict(fixture=fixture, mode=mode, current=statistics.median(values), baseline=statistics.median(baseline)))
+              median = lambda rows, index: statistics.median(row[index] for row in rows)
+              report.append(dict(fixture=fixture, mode=mode, currentLayout=median(values,4), baselineLayout=median(baseline,4), currentInput=median(values,11), baselineInput=median(baseline,11)))
           assert len(report) == 6
-          pathlib.Path('evidence/hot-layout-gate.json').write_text(json.dumps(report, indent=2))
+          pathlib.Path('evidence/timing-boundaries.json').write_text(json.dumps(report, indent=2))
           print(json.dumps(report, indent=2))
-          assert all(r['current'] <= max(5.0, r['baseline'] * 1.5 + 1.0) for r in report), 'cache hits still wait for a later frame'
+          assert all(r['currentLayout'] <= max(5.0, r['baselineLayout'] * 1.5 + 1.0) for r in report), 'layout regression'
           '@ | python -
           exit $LASTEXITCODE
-      - name: Push verified publication fix
+      - name: Push the corrected probe without changing product code
         run: |
           $branch = 'perf/whole-preview-artifact-preload-20260912'
           $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
           if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent changes.' }
+          git diff --exit-code b67d7dae449393830365dbac6d1cb7a8f0e12dde -- src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(preview): publish cached artifacts without invalidating the active layout pass'
+          git commit -m 'test(preview): distinguish body layout readiness from ancestor-gated input'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
