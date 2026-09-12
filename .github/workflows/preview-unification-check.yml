@@ -52,6 +52,8 @@ jobs:
           pathlib.Path('evidence/source-manifest.json').write_bytes(raw)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/preview-unification-fixes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --cached --numstat | Tee-Object evidence/change-counts.txt
@@ -76,6 +78,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C $base submodule update --init --recursive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Give both independent exporters the same explicit complete host palette.
+          $reference = Join-Path $base 'tests/PaperTodo.EdgePreviewChecks/CompletionChecks.cs'
+          $text = Get-Content $reference -Raw
+          $old = 'panel.Resources["HoverBrushKey"] = Brushes.LightGray;'
+          if (-not $text.Contains($old)) { throw 'baseline exporter resource marker missing' }
+          Set-Content $reference ($text.Replace($old, $old + [Environment]::NewLine + '                panel.Resources["PaperBorderBrushKey"] = Brushes.Gray;')) -NoNewline
           $before = Join-Path $pwd 'evidence/before'
           $after = Join-Path $pwd 'evidence/after'
           dotnet run --project "$base/tests/PaperTodo.EdgePreviewChecks" -c Release -- --export $before 2>&1 | Tee-Object evidence/before-export.log
@@ -114,7 +122,7 @@ jobs:
           $branch = 'perf/whole-preview-artifact-preload-20260912'
           $remote = (git ls-remote origin "refs/heads/$branch") -split '\s+'
           if ($LASTEXITCODE -ne 0 -or $remote[0] -ne '${{ github.sha }}') { throw 'Branch advanced; do not overwrite concurrent work.' }
-          git rm -r .github/preview-unification-parts
+          git rm -r .github/preview-unification-parts .github/preview-unification-fixes.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
