@@ -138,11 +138,14 @@ internal static partial class Program
         var view = descriptor.CreateContent(fixedSize);
         var createMs = Stopwatch.GetElapsedTime(createStarted).TotalMilliseconds;
         var loop = new DispatcherFrame();
-        var settled = false; var timedOut = false; var readyAt = 0L;
+        var settled = false; var timedOut = false; var readyAt = 0L; var interactiveAt = 0L;
+        var profileViewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
+        // Layout readiness is local to the published body. Effective input also depends on
+        // the ancestor host's animation gate; measure it separately, not as formatting cost.
         bool Published(DependencyObject element)
         {
             if (element is MarkdownEdgeCapsulePreviewViewport viewport)
-                return viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&
+                return viewport.IsArrangeValid && viewport.Opacity > 0 &&
                     viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);
             for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
                 if (Published(VisualTreeHelper.GetChild(element, i))) return true;
@@ -151,9 +154,13 @@ internal static partial class Program
         void Observe(object? sender, EventArgs e)
         {
             if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
-            if (readyAt != 0 && settled) loop.Continue = false;
+            if (interactiveAt == 0 && readyAt != 0 && profileViewport.IsHitTestVisible)
+                interactiveAt = Stopwatch.GetTimestamp();
+            if (readyAt != 0 && interactiveAt != 0 && settled) loop.Continue = false;
         }
+        DependencyPropertyChangedEventHandler inputChanged = (_, _) => Observe(null, EventArgs.Empty);
         view.LayoutUpdated += Observe;
+        profileViewport.IsHitTestVisibleChanged += inputChanged;
         var timeout = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = TimeSpan.FromSeconds(5) };
         timeout.Tick += (_, _) => { timedOut = true; timeout.Stop(); loop.Continue = false; };
         try
@@ -170,17 +177,19 @@ internal static partial class Program
             { Require(success, "transition settles"); settled = true; Observe(null, EventArgs.Empty); });
             timeout.Start();
             if (loop.Continue) Dispatcher.PushFrame(loop);
-            Require(!timedOut && settled && readyAt != 0, "profile completes without an extra Rendering driver");
+            Require(!timedOut && settled && readyAt != 0 && interactiveAt != 0, "profile observes both layout and input without an extra Rendering driver");
             var gaps = times.Zip(times.Skip(1)).Select(pair => Stopwatch.GetElapsedTime(pair.First, pair.Second).TotalMilliseconds);
             return new[] { describeMs, createMs, stageMs, Stopwatch.GetElapsedTime(started, readyAt).TotalMilliseconds,
                 Stopwatch.GetElapsedTime(stageStarted, readyAt).TotalMilliseconds,
                 times.Count > 1 ? Stopwatch.GetElapsedTime(motionStarted, times[1]).TotalMilliseconds : 0,
                 gaps.DefaultIfEmpty(0).Max(), costs.DefaultIfEmpty(0).Max(),
-                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore };
+                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore,
+                Stopwatch.GetElapsedTime(stageStarted, interactiveAt).TotalMilliseconds };
         }
         finally
         {
             timeout.Stop(); view.LayoutUpdated -= Observe;
+            profileViewport.IsHitTestVisibleChanged -= inputChanged;
             presenter.ClearPresentationSettleNotification();
             presenter.CancelTransition(); presenter.ClearDeferredWork();
             descriptor.SetVisibility?.Invoke(false);
