@@ -28,9 +28,11 @@ artifact 留在缓存中，每次挂载创建自己的绘制面和原生链接�
 
 ## #251 收口验证与实测
 
-[Windows 验证运行 34675779886](https://github.com/snownico0722/PaperTodo/actions/runs/34675779886) 测试了最终产品修改并推送为 `3d70b13428c1caa7727a7fbf8fac37fc91c3f50a`。七组 Release 检查（EdgePreview、MarkdownSemantic、MarkdownEditing、TodoNavigation、EdgeTitle、Threading、Persistence）和 Debug EdgePreview 全部通过；Release 与 Debug 的冷/热像素对照均为 **80/80 字节一致，最大通道差 0**，没有放宽原有像素断言。该运行不代替最终清理后的普通 Release CI。
+[Windows 验证运行 34675779886](https://github.com/snownico0722/PaperTodo/actions/runs/34675779886) 测试了最终产品修改并推送为 `3d70b13428c1caa7727a7fbf8fac37fc91c3f50a`。七组 Release 检查（EdgePreview、MarkdownSemantic、MarkdownEditing、TodoNavigation、EdgeTitle、Threading、Persistence）和 Debug EdgePreview 全部通过；Release 与 Debug 的冷/热像素对照均为 **80/80 字节一致，最大通道差 0**，没有放宽原有像素断言。
 
-同一 Windows runner、真实 Host/Presenter、460×410 卡片、160ms 动画；正反策略顺序分别运行新进程，每场景/策略各 9 次，剔除各自前 2 次后合计 14 个样本。下表是正文**布局就绪**中位数（ms），不是 GPU 呈现或端到端指针响应时间：
+删除临时诊断 workflow 和补丁传输文件后，`aa3d329aeaaaa55979aad7aadb625348c9db3ebc` 的[标准 Windows Release CI 34676344587](https://github.com/snownico0722/PaperTodo/actions/runs/34676344587) 也已全部通过：Restore、Build、MarkdownSemantic、MarkdownEditing、TodoNavigation、EdgeTitle、EdgePreview、Threading。诊断运行不是用来代替最终提交的正常构建。下列性能数字来自前述专用验证运行；最后清理未修改产品代码，不把普通 CI 当作重新运行的性能实验。
+
+同一 Windows runner、真实 Host/Presenter、460×410 卡片、160ms 动画；正反策略顺序分别运行新进程，每场景/策略各 9 次，剔除各自前 2 次后合计 14 个样本。下表是从 `Describe` 开始到正文**布局就绪**的中位数（Total Ready，ms），不是 GPU 呈现或端到端指针响应时间：
 
 | 场景 | 模式 | 不预热 | 仅行内准备 | artifact 命中 |
 |---|---|---:|---:|---:|
@@ -41,9 +43,24 @@ artifact 留在缓存中，每次挂载创建自己的绘制面和原生链接�
 | 短密集多行 | 增强 | 38.73 | 42.14 | 1.40 |
 | 短密集多行 | 完全渲染 | 39.30 | 39.15 | 1.13 |
 
-全部 108 个 `layout` 原始样本（包含前两次）均为实际 artifact 命中；`cold`/`text` 未命中。该实验人为先完成预热，因此证明命中收益，不是自然使用命中率，也不证明 240Hz 始终无掉帧。各场景预热墙钟中位数约 40–112ms，包含等待与调度；工作被前移，没有消失。仅行内准备在少数场景的中位数反而稍慢，不能把几毫秒的差别当作稳定收益。
+同一批 artifact 命中样本按不同计时边界拆开如下。`Stage → Ready` 从实际 Host staging 前开始；UI 线程分配则是 `GC.GetAllocatedBytesForCurrentThread()` 从 `Describe` 前到正文就绪且外壳动画完成后的增量，包含该窗口内 Dispatcher 工作，不是只测 Surface 构造，也不包含 worker 线程分配。
+
+| 场景 | 模式 | Stage → Ready 中位数（ms） | Total Ready 中位数（ms） | UI 线程分配中位数（MiB） |
+|---|---|---:|---:|---:|
+| 普通多行（含少量样式） | 增强 | 1.40 | 1.75 | 0.327 |
+| 普通多行（含少量样式） | 完全渲染 | 0.95 | 1.15 | 0.343 |
+| 密集长行 | 增强 | 1.91 | 2.89 | 0.751 |
+| 密集长行 | 完全渲染 | 2.06 | 2.39 | 0.697 |
+| 短密集多行 | 增强 | 1.07 | 1.40 | 0.399 |
+| 短密集多行 | 完全渲染 | 0.94 | 1.13 | 0.356 |
+
+这不是最初“零链接控件、跳过 Describe”的最简性能原型。最终实现保留原生链接控件和现有卡片尺寸入口，以避免另写鼠标捕获、键盘、焦点及自动化输入协议。密集链接场景的分配高于最初 0.36–0.64MiB 的设想，不能宣称全部达到原型约 0.26MiB，也不能将不同采样窗口的数字直接等同。这里接受的取舍是正文统一 Drawing、缓存不持有 WPF 树、命中延迟保持约 1–3ms，同时保住原生交互；不是以“零子控件”为硬性目标。
+
+全部 108 个 `layout` 原始样本（包含前两次）均为实际 artifact 命中；`cold`/`text` 未命中。该实验人为先完成预热，因此证明命中收益，不是自然使用命中率，也不证明 240Hz 始终无掉帧。去掉热身后的最大 Stage → Ready 为 3.04ms、最大 Total Ready 为 3.78ms；中位数不能解释为每次都小于 3ms。各场景预热墙钟中位数约 40–112ms，包含等待与调度；工作被前移，没有消失。仅行内准备在少数场景的中位数反而稍慢，不能把几毫秒的差别当作稳定收益。
 
 同一 runner 的独立进程分别测量 #249 `2ad8ece9` 和最终 #251；输入都是 100 张各 6000 字符的重样式 Note。完整 GC 后，摘要/语义增量均约 6.23MiB；额外的 100 份排版结果与该阶段 WPF 缓存从 **105.49MiB 降到 92.57MiB**，减少约 12.92MiB（12.2%）。这是相同压力输入的托管存活堆增量，不是工作集、原生/GPU 内存或所有输入的上界。结果不支持“artifact 带来数量级内存下降”；采用这条路线主要是保持预排版命中、移除隐藏 UI 树及其独占移交，并让输入继续由原生控件处理。
+
+当前范围是替换完整 WPF Body 的预热与跨视图移交，不是删除所有冷渲染代码。未命中仍使用 #249 的现有 renderer；Host 仍提供当前资源、DPI 和尺寸约束，不能将“不缓存 Host/Body”描述成“完全不依赖 Host”。冷路径也作为独立像素参考，不能改成新路径和自身对比来获得通过。自动化检查不替代多显示器混合 DPI、真实指针/键盘与 GPU 呈现手测；#251 的完成不代表 #249 已合并或 #250 所有恢复问题已自动解决。
 
 ## #246 阶段的历史审查验证
 
