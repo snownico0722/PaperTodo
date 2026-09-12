@@ -34,8 +34,7 @@ internal sealed class MarkdownEdgePreviewPreload
         EdgeCapsulePreviewSize Size, Func<bool> StillEligible);
     internal sealed record Binding(MarkdownEdgePreviewPreload Owner,
         EdgeCapsulePreviewInvalidationSource Source, long Version,
-        MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom,
-        Action<string> OpenExternal)
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom)
     {
         internal bool Current => Owner._enabled && Source.Version == Version &&
             Owner._excerpts.TryGetValue(Source, out var current) && ReferenceEquals(current, Content);
@@ -118,7 +117,7 @@ internal sealed class MarkdownEdgePreviewPreload
         MarkdownEdgeCapsulePreviewRenderer.PreviewContent content, double zoom) =>
         _enabled && _excerpts.TryGetValue(context.InvalidationSource, out var entry) && ReferenceEquals(entry, content)
             ? new(this, context.InvalidationSource, context.InvalidationSource.Version,
-                content, zoom, context.OpenExternal) : null;
+                content, zoom) : null;
 
     internal static Key? MakeKey(Binding? binding, FrameworkElement surface, Size size)
     {
@@ -139,39 +138,20 @@ internal sealed class MarkdownEdgePreviewPreload
         if (Theme.SyntaxFadeBrush is not SolidColorBrush syntax || syntax.HasAnimatedProperties ||
             !syntax.Transform.Value.IsIdentity || !syntax.RelativeTransform.Value.IsIdentity) return null;
         stamps.Add(syntax.Color + ":" + syntax.Opacity.ToString("R", CultureInfo.InvariantCulture));
-        stamps.Add(string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.FontFamily.BaseUri,
-            NoteTypography.CodeFontFamily.Source, NoteTypography.CodeFontFamily.BaseUri,
-            AppTypography.FontFamilyFor(content: true, bold: true).Source,
-            AppTypography.FontFamilyFor(content: true, bold: true).BaseUri,
-            AppTypography.FontWeightFor(true), AppTypography.UsesCustomBoldFace(true),
-            NoteTypography.FontWeight, NoteTypography.FontStyle, NoteTypography.FontStretch,
-            NoteTypography.Language.IetfLanguageTag, NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
-            NoteTypography.FontSize, NoteTypography.CodeFontSize,
-            NoteTypography.Heading1FontSize, NoteTypography.Heading2FontSize, NoteTypography.Heading3FontSize,
-            AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection,
-            TextOptions.GetTextRenderingMode(surface), TextOptions.GetTextHintingMode(surface)));
+        stamps.Add(MarkdownEdgeCapsulePreviewRenderer.TypographyStamp(surface));
         // Whole artifacts are height-independent inside the current card envelope. Demand clips
         // the same immutable drawing to its actual row height and owns the overflow indicator.
         return new(binding, new Size(size.Width, 0), dpi, string.Join("|", stamps));
     }
 
-    internal bool TryCreateSurface(Key key, out MarkdownPreviewArtifactSurface? surface, bool demand = true)
+    internal bool TryGetArtifact(Key key, out MarkdownPreviewArtifact? artifact, bool demand = true)
     {
         _dispatcher.VerifyAccess();
-        surface = null;
+        artifact = null;
         if (!key.Binding.Current || !_artifacts.TryGetValue(key.Binding.Source, out var candidate)) return false;
-        if (!candidate.Key.Binding.Current)
-        {
-            _artifacts.Remove(key.Binding.Source);
-            return false;
-        }
+        if (!candidate.Key.Binding.Current) { _artifacts.Remove(key.Binding.Source); return false; }
         if (candidate.Key != key) return false;
-
-        // The artifact stays immutable and cached. Native input elements belong only to this mount.
-        surface = new MarkdownPreviewArtifactSurface(candidate.Artifact, key.Binding.OpenExternal)
-        {
-            IsHitTestVisible = false
-        };
+        artifact = candidate.Artifact;
         if (demand) ArtifactHits++;
         return true;
     }
@@ -274,10 +254,9 @@ internal sealed class MarkdownEdgePreviewPreload
 
         // Capture resources, inline values and DPI once on the owning Dispatcher. After this point
         // the shared STA sees only immutable values/frozen Freezables; no hidden WPF host is built.
-        var plan = MarkdownEdgeCapsulePreviewRenderer.CaptureArtifactPlan(
-            target.Anchor, content, width, key.Binding.Zoom);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        void CancelLifetime() => lifetime.Cancel();
+        var listening = true;
+        void CancelLifetime() { if (listening) lifetime.Cancel(); }
         Action invalidated = CancelLifetime;
         RoutedEventHandler unloaded = (_, _) => CancelLifetime();
         DependencyPropertyChangedEventHandler visibilityChanged = (_, args) =>
@@ -292,6 +271,7 @@ internal sealed class MarkdownEdgePreviewPreload
         {
             void Detach()
             {
+                listening = false;
                 target.Context.InvalidationSource.Invalidated -= invalidated;
                 target.Anchor.Unloaded -= unloaded;
                 target.Anchor.IsVisibleChanged -= visibilityChanged;
@@ -302,17 +282,19 @@ internal sealed class MarkdownEdgePreviewPreload
 
         try
         {
-            MarkdownEdgeCapsulePreviewRenderer.MarkdownPreviewArtifactDraft draft;
+            MarkdownPreviewArtifact? artifact;
             try
             {
-                draft = await MarkdownEdgeCapsulePreviewRenderer.BuildArtifactDraftAsync(
-                    plan, speculative: true, lifetime.Token).ConfigureAwait(false);
+                artifact = await MarkdownEdgeCapsulePreviewRenderer.PrepareArtifactAsync(
+                    target.Anchor, content, new Size(width, MarkdownEdgeCapsulePreviewRenderer.ArtifactMaximumBodyHeight),
+                    key.Binding.Zoom, speculative: true, lifetime.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
             {
                 return false;
             }
             cancellation.ThrowIfCancellationRequested();
+            if (artifact == null) return false;
 
             // Do not rely on a DispatcherSynchronizationContext being installed. Tests and some
             // host paths can await the worker without one, so every WPF read and final composition
@@ -324,11 +306,6 @@ internal sealed class MarkdownEdgePreviewPreload
                     !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
                     MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 
-                // Aggregating frozen child drawings is the only final UI-thread operation; no layout,
-                // Measure/Arrange or visual-tree publication occurs during speculative preparation.
-                var artifact = MarkdownEdgeCapsulePreviewRenderer.ComposeArtifact(draft);
-                if (!target.StillEligible() || target.Context.InvalidationSource.Version != version ||
-                    !key.Binding.Current || MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
                 if (!StoreArtifact(key, artifact)) return false;
                 WarmCompletions++;
                 return true;

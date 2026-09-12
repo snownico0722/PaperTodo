@@ -67,11 +67,10 @@ internal static partial class Program
             }
             Console.WriteLine("PASS first artifact preload-to-live-host geometry/direct mount (2 edges/2 sizes/2 zooms)");
 
-            // Keep the legacy cold-path paragraph gesture check: #249 still owns cold heavy paragraph
-            // interaction when no whole artifact is ready. Artifact-specific hit testing is checked separately.
+            // A freshly built artifact must use the same native link contract as a cache hit.
             var panel = new StackPanel();
             var opened = new List<string>();
-            MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel,
+            RenderForCheck(panel,
                 "[first](https://example.com/a) [second](https://example.com/b) " + new string('文', 300),
                 opened.Add, MarkdownRenderModes.Full, new Size(360, 200));
             var targets = Elements(panel).OfType<FrameworkElement>().Where(EdgeCapsulePreviewInteraction.GetConsumesPointer).ToArray();
@@ -85,7 +84,7 @@ internal static partial class Program
                 "cold heavy links retain WPF button capture/release");
             buttons[1].RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Require(opened.SequenceEqual(new[] { "https://example.com/b" }), "completed cold B click activates B once");
-            Console.WriteLine("PASS cold heavy-link gesture remains intact beside artifact hot path");
+            Console.WriteLine("PASS freshly built artifact retains native link gestures");
             ReviewLinkGestureChecks();
         }
         finally { host.ClearPreviewContent(); cache.Clear(); }

@@ -25,7 +25,7 @@ internal static partial class Program
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { ArtifactSurfaceChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -125,8 +125,6 @@ internal static partial class Program
         var preload = MarkdownEdgePreviewPreload.For(dispatcher);
         preload.SetEnabledForChecks(preparation != "cold");
         var warmStarted = Stopwatch.GetTimestamp();
-        if (preparation == "text")
-            foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(preload.Capture(context))) { }
         if (preparation == "layout")
             AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true)));
         var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
@@ -143,9 +141,9 @@ internal static partial class Program
         var settled = false; var timedOut = false; var readyAt = 0L;
         bool Published(DependencyObject element)
         {
-            if (element is MarkdownEdgeCapsulePreviewViewport old)
-                return old.IsArrangeValid && old.Children.OfType<Panel>().Any(panel =>
-                    panel.Opacity > 0 && (panel is MarkdownPreviewArtifactSurface || panel.Children.Count > 0) && panel.IsArrangeValid);
+            if (element is MarkdownEdgeCapsulePreviewViewport viewport)
+                return viewport.IsArrangeValid && viewport.Opacity > 0 && viewport.IsHitTestVisible &&
+                    viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);
             for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
                 if (Published(VisualTreeHelper.GetChild(element, i))) return true;
             return false;

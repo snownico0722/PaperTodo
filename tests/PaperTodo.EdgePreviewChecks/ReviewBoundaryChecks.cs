@@ -34,17 +34,17 @@ internal static partial class Program
         var text = string.Concat(Enumerable.Repeat("正文 **粗体** `code` [link](https://example.com) ", 40));
         void Render()
         {
-            MarkdownEdgeCapsulePreviewRenderer.RenderInto(root, text, _ => { },
+            RenderForCheck(root, text, _ => { },
                 MarkdownRenderModes.Full, new Size(390, 200));
             window.UpdateLayout(); Pump();
         }
-        bool HasColor(Color color) => root.Children.OfType<MarkdownEdgePreviewParagraph>()
-            .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
+        bool HasColor(Color color) => root.Children.OfType<MarkdownPreviewArtifactSurface>()
+            .SelectMany(p => Glyphs(p.Artifact.Drawing))
             .Any(g => g.ForegroundBrush is SolidColorBrush b && b.Color == color);
         try
         {
             window.Show(); Pump(); Render();
-            Require(root.Children.OfType<MarkdownEdgePreviewParagraph>().Any(), "fixture uses prepared paragraph path");
+            Require(root.Children.OfType<MarkdownPreviewArtifactSurface>().Any(), "fixture uses prepared paragraph path");
             Require(!foreground.IsFrozen && !background.IsFrozen && !link.IsFrozen,
                 "preparing text must not freeze caller-owned color resources");
             Require(HasColor(Colors.DarkRed), "first draw uses the original resource value");

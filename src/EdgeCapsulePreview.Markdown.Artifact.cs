@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -219,7 +220,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 ArtifactBaseStyle.Done => new(normalFamily, normalStyle, normalWeight, normalStretch,
                     Scale(NoteTypography.FontSize), _weak, null, true),
                 ArtifactBaseStyle.EmptyState => new(normalFamily, normalStyle, normalWeight, normalStretch,
-                    Scale(AppTypography.Scale(16)), _weak, null, false),
+                    AppTypography.Scale(16), _weak, null, false),
                 _ => new(normalFamily, normalStyle, normalWeight, normalStretch,
                     Scale(NoteTypography.FontSize), _text, null, false)
             };
@@ -263,7 +264,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                         // underline rounding. The ordinary paragraph path stays unchanged.
                         if (scopedUnderline && copy.Location == TextDecorationLocation.Underline)
                         {
-                            copy.Pen = new Pen(foreground, 1);
+                            // Syntax fades the child glyph, not the enclosing underline.
+                            copy.Pen = new Pen(link ? _link : spec.Foreground, 1);
                             copy.Pen.Freeze();
                         }
                         collection.Add(copy);
@@ -289,6 +291,64 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 decorations));
             _indices.Add(key, index);
             return index;
+        }
+    }
+
+    internal static string TypographyStamp(FrameworkElement surface) =>
+        string.Join("|", NoteTypography.FontFamily.Source, NoteTypography.FontFamily.BaseUri,
+            NoteTypography.CodeFontFamily.Source, NoteTypography.CodeFontFamily.BaseUri,
+            AppTypography.FontFamilyFor(content: true, bold: true).Source,
+            AppTypography.FontFamilyFor(content: true, bold: true).BaseUri,
+            AppTypography.FontWeightFor(true), AppTypography.UsesCustomBoldFace(true),
+            NoteTypography.FontWeight, NoteTypography.FontStyle, NoteTypography.FontStretch,
+            NoteTypography.Language.IetfLanguageTag, NoteTypography.HeadingFontWeight, AppTypography.TextFormattingMode,
+            NoteTypography.FontSize, NoteTypography.CodeFontSize,
+            NoteTypography.Heading1FontSize, NoteTypography.Heading2FontSize, NoteTypography.Heading3FontSize,
+            AppTypography.Scale(1), surface.Language.IetfLanguageTag, surface.FlowDirection,
+            TextOptions.GetTextRenderingMode(surface), TextOptions.GetTextHintingMode(surface));
+
+    // Preserve the established underline/background metrics on old short versus long rows.
+    // This is typography compatibility only: both sizes now use the same artifact builder.
+    private const int LegacyParagraphLength = 256;
+    private static bool UsesInlineDecorationScope(string text, string mode, PreviewInlineCache cache) =>
+        text.Length < LegacyParagraphLength &&
+        (text.Length < 96 || mode == MarkdownRenderModes.Off || cache.Get(text, mode).Pieces.Count < 24);
+
+    internal static async Task<MarkdownPreviewArtifact?> PrepareArtifactAsync(
+        FrameworkElement owner, PreviewContent content, Size viewport, double zoom,
+        bool speculative, CancellationToken cancellation)
+    {
+        owner.Dispatcher.VerifyAccess();
+        cancellation.ThrowIfCancellationRequested();
+        object?[] Appearance() => new object?[]
+        {
+            owner.TryFindResource("TextBrushKey"), owner.TryFindResource("WeakTextBrushKey"),
+            owner.TryFindResource("LinkBrushKey"), owner.TryFindResource("HoverBrushKey"),
+            owner.TryFindResource("PaperBorderBrushKey"), Theme.SyntaxFadeBrush,
+            VisualTreeHelper.GetDpi(owner), TypographyStamp(owner)
+        };
+        var appearance = Appearance();
+        var plan = CaptureArtifactPlan(owner, content, viewport.Width, zoom) with { MaximumHeight = viewport.Height };
+        var changed = false;
+        var observed = appearance.OfType<Freezable>().Where(value => !value.IsFrozen).Distinct().ToArray();
+        EventHandler handler = (_, _) => changed = true;
+        foreach (var resource in observed) resource.Changed += handler;
+        try
+        {
+            var draft = await BuildArtifactDraftAsync(plan, speculative, cancellation).ConfigureAwait(false);
+            return await owner.Dispatcher.InvokeAsync(() =>
+            {
+                cancellation.ThrowIfCancellationRequested();
+                // Only reread the small appearance stamp, never rebuild semantic/style inputs.
+                return changed || !appearance.SequenceEqual(Appearance()) ? null : ComposeArtifact(draft);
+            }, speculative ? DispatcherPriority.ContextIdle : DispatcherPriority.Background);
+        }
+        finally
+        {
+            await owner.Dispatcher.InvokeAsync(() =>
+            {
+                foreach (var resource in observed) resource.Changed -= handler;
+            }, DispatcherPriority.Send);
         }
     }
 
@@ -336,7 +396,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             ArtifactBaseStyle @base)
         {
             var values = new List<MarkdownLayoutPiece>();
-            var scopedUnderline = !ShouldPrepareParagraph(text, mode, content.Inlines);
+            var scopedUnderline = UsesInlineDecorationScope(text, mode, content.Inlines);
             foreach (var piece in content.Inlines.Get(text, mode).Pieces)
             {
                 if (piece.Text.Length == 0) continue;
@@ -346,7 +406,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     styles.Style(@base, piece.Style, link >= 0, scopedUnderline),
                     link));
             }
-            return Array.AsReadOnly(values.ToArray());
+            return values.Count == 0 ? Raw(string.Empty, @base) : Array.AsReadOnly(values.ToArray());
         }
 
         IReadOnlyList<MarkdownLayoutPiece> PrefixAndInline(
@@ -388,7 +448,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     ? InlineStyle.Syntax : InlineStyle.None;
                 blocks.Add(new(ArtifactBlockKind.Text,
                     Raw(line, previewLine.FenceKind == MarkdownFenceLineKind.None &&
-                        line.Length >= MarkdownEdgePreviewParagraph.MinimumSourceLength
+                        line.Length >= LegacyParagraphLength
                             ? ArtifactBaseStyle.CodeSource : ArtifactBaseStyle.CodeBlock, syntax),
                     RowBackground: true));
                 return;

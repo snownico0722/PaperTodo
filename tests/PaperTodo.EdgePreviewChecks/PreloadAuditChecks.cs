@@ -61,7 +61,7 @@ internal static partial class Program
             var binding = cache.Bind(context, first, 1)!;
             var key = MarkdownEdgePreviewPreload.MakeKey(binding, root, new Size(200, 100))!;
             cache.Forget(source);
-            Require(!binding.Current && !cache.TryCreateSurface(key, out _), "forgotten artifact cannot create a late mount");
+            Require(!binding.Current && !cache.TryGetArtifact(key, out _), "forgotten artifact cannot create a late mount");
             Require(cache.ArtifactCount == 0 && cache.ExcerptCount == 0, "retirement releases both retained layers");
             Console.WriteLine("PASS startup-like late host, deferred readers, semantic reuse and retirement");
 

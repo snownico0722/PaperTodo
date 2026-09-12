@@ -96,7 +96,7 @@ internal static partial class Program
             Require(cache.ArtifactHits == hits + 3, "A-B-A reuses immutable artifacts while materializing fresh surfaces");
             Console.WriteLine("PASS artifact preload A-B-A and direct drawing surface mount");
 
-            var mixedBlocks = "# Heading **bold**\n> quote [q](https://example.com/q)\n- [x] done `code`\n12) ordered *italic*\n- bullet ~~strike~~\n---\n![图](i:asset)\n```\n\nliteral **code**\n```\n" + new string('文', 450);
+            var mixedBlocks = "# Heading **bold**\n> quote [q](https://example.com/q)\n- [x] done `code`\n12) ordered *italic*\n- bullet ~~strike~~\n---\n![图](i:123456)\n```\n\nliteral **code**\n```\n" + new string('文', 450);
             var pixelFixtures = new[] {
                 string.Concat(Enumerable.Repeat("plain **strong** *italic* `code` [link](https://example.com) ", 20)),
                 string.Concat(Enumerable.Repeat("**粗体** ~~删除~~ `code` [链接](https://example.com) 文 ", 80)),
@@ -141,7 +141,7 @@ internal static partial class Program
                 maximumDifference = Math.Max(maximumDifference, differences.Max());
                 if (hotPixels.SequenceEqual(coldPixels)) exactCases++;
                 Console.WriteLine($"ARTIFACT_PIXEL_CASE sharp={sharp} mode={testMode} zoom={zoom} fixture={Array.IndexOf(pixelFixtures, fixture)} max={differences.Max()}");
-                Require(differences.All(delta => delta <= 32), "artifact preserves visible text/decoration pixels");
+                Require(differences.All(delta => delta <= 32), "cold and warm artifact publication preserve the same pixels");
                 pixelCases++;
             }
             AppTypography.Configure(UiFontPresets.Default);
@@ -166,12 +166,11 @@ internal static partial class Program
             var binding = cache.Bind(a, cache.Capture(a), a.Paper.TextZoom)!;
             var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(size);
             var key = MarkdownEdgePreviewPreload.MakeKey(binding, root, new Size(width, 0))!;
-            Require(!cache.TryCreateSurface(key with { Dpi = new DpiScale(key.Dpi.DpiScaleX * 1.5, key.Dpi.DpiScaleY * 1.5) }, out _),
+            Require(!cache.TryGetArtifact(key with { Dpi = new DpiScale(key.Dpi.DpiScaleX * 1.5, key.Dpi.DpiScaleY * 1.5) }, out _),
                 "different DPI cannot reuse old drawing");
-            Require(cache.TryCreateSurface(key, out var matching, demand: false) &&
-                    matching is { } matchingSurface &&
-                    matchingSurface.Children.OfType<Button>().Count() == matchingSurface.Artifact.Links.Count,
-                "matching DPI materializes one direct artifact surface");
+            Require(cache.TryGetArtifact(key, out var matching, demand: false) &&
+                    matching is { Drawing.IsFrozen: true },
+                "matching DPI returns the immutable artifact without UI creation");
             Console.WriteLine("PASS first-display generation, direct artifact mount and DPI-key rejection");
 
             hits = cache.ArtifactHits;
@@ -243,27 +242,21 @@ internal static partial class Program
             return new EdgeCapsulePreviewContext(new PaperData(), () => "Memory", false, () => text,
                 () => MarkdownRenderModes.Full, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
         }).ToArray();
-        foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(cache.Capture(contexts[0]))) { }
         cache.Clear(); Pump();
         var before = GC.GetTotalMemory(true);
-        foreach (var context in contexts)
-            foreach (var step in MarkdownEdgeCapsulePreviewRenderer.WarmInlineSteps(cache.Capture(context))) { }
-        var pure = GC.GetTotalMemory(true);
         var root = new Grid();
         root.Resources["TextBrushKey"] = Brushes.Black;
         var window = new Window { Content = root, Width = 550, Height = 500, ShowActivated = false, ShowInTaskbar = false };
         try
         {
             window.Show(); Pump();
-            var beforeArtifacts = GC.GetTotalMemory(true);
             for (var i = 0; i < contexts.Length; i++) Require(AwaitPreload(cache.WarmLayoutAsync(
                 new(contexts[i], root, new(460, 410), () => true))), "memory artifact prewarm succeeds");
             Pump();
             var withArtifacts = GC.GetTotalMemory(true);
             Console.WriteLine("PRELOAD_MEMORY " + JsonSerializer.Serialize(new
             { excerpts = cache.ExcerptCount, charactersPerNote = 6000, artifacts = cache.ArtifactCount,
-                retainedExcerptsKiB = (pure - before) / 1024.0,
-                additionalHundredArtifactsAndWpfCachesKiB = (withArtifacts - beforeArtifacts) / 1024.0,
+                retainedHundredExcerptsArtifactsAndWpfCachesKiB = (withArtifacts - before) / 1024.0,
                 note = "managed live-heap deltas after GC; excludes source fixtures, not a private/native working-set measurement" }));
             Require(cache.ExcerptCount == 100 && cache.ArtifactCount == 100,
                 "one current artifact is retained for every clearly heavy note without count eviction");
@@ -283,7 +276,7 @@ internal static partial class Program
             (Name: "plain", Text: string.Join('\n', Enumerable.Range(1,12).Select(i=>$"第{i}行 **内容** `code`"))),
             (Name: "dense", Text: string.Concat(Enumerable.Repeat("**加粗** *italic* ~~删除~~ `code` [链接](https://example.com) 文 ", 80))),
             (Name: "short-dense", Text: string.Join('\n',Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)),12))) })
-        foreach (var preparation in reverse ? new[] { "layout", "text", "cold" } : new[] { "cold", "text", "layout" })
+        foreach (var preparation in reverse ? new[] { "layout", "cold" } : new[] { "cold", "layout" })
         {
             for (var i = 0; i < 9; i++)
             {

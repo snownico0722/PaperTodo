@@ -127,27 +127,29 @@ internal static partial class Program
 
     private static void WorkerResourceInvalidation()
     {
-        var brush = new SolidColorBrush(Colors.Black);
-        var template = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, Foreground = brush };
-        var paragraph = new MarkdownEdgePreviewParagraph(template, new string('文', 600), MarkdownRenderModes.Off,
-            1, _ => { }, new());
-        var window = new Window { Content = paragraph, Width = 320, Height = 200, ShowActivated = false, ShowInTaskbar = false };
-        var invalidated = false;
-        try
+        foreach (var replace in new[] { false, true })
         {
-            window.Show(); Pump();
-            Task prepare;
-            using (HoldWorker(MarkdownLayoutWorker.Shared))
+            var root = new Grid();
+            var brush = new LinearGradientBrush(Colors.Black, Colors.Blue, 0);
+            root.Resources["TextBrushKey"] = brush;
+            var window = new Window { Content = root, Width = 320, Height = 200, ShowActivated = false, ShowInTaskbar = false };
+            try
             {
-                prepare = paragraph.PrepareAsync(new Size(280, 160),
-                    new MarkdownPreviewPreparation(false, default, () => true, () => invalidated = true));
-                brush.Color = Colors.Red;
+                window.Show(); Pump();
+                Task<MarkdownPreviewArtifact?> task;
+                using (HoldWorker(MarkdownLayoutWorker.Shared))
+                {
+                    task = MarkdownEdgeCapsulePreviewRenderer.PrepareArtifactAsync(root,
+                        MarkdownEdgeCapsulePreviewRenderer.CaptureContent("short gradient", MarkdownRenderModes.Off),
+                        new Size(280, 160), 1, false, default);
+                    if (replace) root.Resources["TextBrushKey"] = Brushes.Red;
+                    else brush.GradientStops[0].Color = Colors.Red;
+                }
+                Require(AwaitWorkerCheck(task) == null && !brush.IsFrozen,
+                    "in-place or replacement non-cacheable resources reject stale drafts without freezing the host");
             }
-            UntilReview(() => prepare.IsCompleted, "resource invalidation completes"); prepare.GetAwaiter().GetResult();
-            Require(invalidated && paragraph.FormattingThreadId == 0 && !brush.IsFrozen,
-                "mutated host resource rejects the stale result and remains mutable");
+            finally { window.Close(); Pump(); }
         }
-        finally { window.Close(); Pump(); }
     }
 
     private static void WorkerLiveAnimation()
@@ -193,8 +195,8 @@ internal static partial class Program
             Require(!viewport.IsHitTestVisible, "retract keeps stale results noninteractive");
             descriptor.SetVisibility?.Invoke(true);
             UntilReview(() => viewport.Opacity == 1 && PreviewText(viewport).Contains("latest"), "resume publishes only current text");
-            Require(Elements(viewport).OfType<MarkdownEdgePreviewParagraph>().All(p => p.FormattingThreadId != Environment.CurrentManagedThreadId),
-                "live heavy paragraphs, not only a test kernel, formatted off UI");
+            Require(Elements(viewport).OfType<MarkdownPreviewArtifactSurface>().Count() == 1,
+                "live cold demand publishes exactly one artifact after the worker gate releases");
         }
         finally
         {

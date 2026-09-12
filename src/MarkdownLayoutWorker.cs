@@ -4,7 +4,7 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
-// One lazy STA for all built-in edge-preview heavy paragraphs. It owns formatting, not UI state.
+// One lazy STA for all built-in edge-preview text. It owns formatting, not UI state.
 // Dispatcher work is finite and event-driven; no polling timer or per-paper thread is used.
 internal sealed class MarkdownLayoutWorker : IDisposable
 {

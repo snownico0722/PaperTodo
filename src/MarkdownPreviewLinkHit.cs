@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace PaperTodo;
 
-// The two drawing paths share the same native interaction contract, not just the same URL policy.
+// Every artifact mount uses the same native link interaction contract.
 internal static class MarkdownPreviewLinkHit
 {
     [ThreadStatic] private static ControlTemplate? _template;
