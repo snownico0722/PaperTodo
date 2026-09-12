@@ -15,7 +15,7 @@ internal readonly record struct MarkdownLayoutPiece(string Text, int StyleIndex,
 internal readonly record struct MarkdownLinkHit(Rect Bounds, int LinkIndex);
 internal sealed record MarkdownParagraphResult(
     DrawingGroup Drawing, Size Size, string VisibleText, int FormattedLines, bool Truncated,
-    IReadOnlyList<MarkdownLinkHit> Links, int FormattingThreadId);
+    IReadOnlyList<MarkdownLinkHit> Links, double ContentWidth, int FormattingThreadId);
 
 internal sealed class MarkdownParagraphRequest : IEquatable<MarkdownParagraphRequest>
 {
@@ -101,7 +101,7 @@ internal static class MarkdownParagraphLayout
         var drawing = new DrawingGroup();
         var links = new List<MarkdownLinkHit>();
         TextLineBreak? previous = null;
-        var offset = 0; var height = 0.0; var nextLink = 0; var lines = 0;
+        var offset = 0; var height = 0.0; var contentWidth = 0.0; var nextLink = 0; var lines = 0;
         var width = request.Viewport.Width;
         try
         {
@@ -114,6 +114,7 @@ internal static class MarkdownParagraphLayout
                 // Inputs are frozen copies. Freezing this owned result cannot freeze a host brush.
                 if (!lineDrawing.CanFreeze) throw new InvalidOperationException("Text drawing is not free-threaded.");
                 lineDrawing.Freeze(); drawing.Children.Add(lineDrawing);
+                contentWidth = Math.Max(contentWidth, line.WidthIncludingTrailingWhitespace);
                 var end = Math.Min(source.Text.Length, offset + line.Length);
                 if (end <= offset) throw new InvalidOperationException("TextFormatter made no progress.");
                 while (nextLink < source.Links.Count && source.Links[nextLink].End <= offset) nextLink++;
@@ -135,7 +136,8 @@ internal static class MarkdownParagraphLayout
         finally { previous?.Dispose(); }
         drawing.Freeze();
         yield return new(drawing, new(width, height), source.Text[..offset], lines,
-            offset < source.Text.Length, Array.AsReadOnly(links.ToArray()), Environment.CurrentManagedThreadId);
+            offset < source.Text.Length, Array.AsReadOnly(links.ToArray()), contentWidth,
+            Environment.CurrentManagedThreadId);
     }
 
     private sealed class ParagraphSource : TextSource
