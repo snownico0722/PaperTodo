@@ -213,6 +213,8 @@ internal static partial class Program
         {
             view.PrepareForFirstDisplay(); window.Show(); Pump();
             var viewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
+            UntilReview(() => viewport.Opacity == 1, "initial asynchronous themed body publishes");
+            window.UpdateLayout(); Pump();
             var oldBody = PublishedBody(viewport);
             bool HasColor(Color color) => Elements(PublishedBody(viewport)).OfType<MarkdownEdgePreviewParagraph>()
                 .SelectMany(p => Glyphs(VisualTreeHelper.GetDrawing(p)))
@@ -221,7 +223,10 @@ internal static partial class Program
             descriptor.SetVisibility?.Invoke(false);
             window.Resources["TextBrushKey"] = Brushes.DarkBlue;
             invalidation.Invalidate(); Pump();
-            descriptor.SetVisibility?.Invoke(true); Pump();
+            descriptor.SetVisibility?.Invoke(true);
+            UntilReview(() => viewport.Opacity == 1 && !ReferenceEquals(oldBody, PublishedBody(viewport)),
+                "new asynchronous themed body publishes after reactivation");
+            window.UpdateLayout(); Pump();
             Require(!ReferenceEquals(oldBody, PublishedBody(viewport)) && HasColor(Colors.DarkBlue),
                 "theme invalidation while inactive replaces frozen drawing with new resources");
             Console.WriteLine("PASS frozen drawing follows theme invalidation during retraction");

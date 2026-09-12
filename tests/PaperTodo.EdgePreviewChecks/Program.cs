@@ -17,14 +17,15 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--review-integration")) ReviewIntegrationChecks();
+            if (args.Contains("--worker-checks")) MarkdownWorkerChecks();
+            else if (args.Contains("--review-integration")) ReviewIntegrationChecks();
             else if (args.Contains("--review-only")) ReviewBoundaryChecks();
             else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();
             else if (args.Contains("--preload-profile")) ProfilePreload(args.Contains("--reverse"));
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); }
+            else { SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

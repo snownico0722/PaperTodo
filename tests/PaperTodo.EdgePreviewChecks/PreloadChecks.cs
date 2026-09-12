@@ -48,8 +48,7 @@ internal static partial class Program
             ((EdgeCapsuleLivePreviewView)view).PrepareForFirstDisplay();
             border.Measure(new Size(border.Width, border.Height));
             border.Arrange(new Rect(0, 0, border.Width, border.Height));
-            Pump();
-            Require(Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single().Opacity == 1, "demand publishes complete body");
+            UntilReview(() => Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single().Opacity == 1, "demand publishes complete body");
             return border;
         }
         void Release(Border border) { root.Children.Remove(border); border.Child = null; Pump(); }
@@ -140,7 +139,7 @@ internal static partial class Program
             var editedBorder = new Border { Width = size.ContentSize.Width, Height = size.ContentSize.Height, Child = editedView };
             root.Children.Add(editedBorder);
             ((EdgeCapsuleLivePreviewView)editedView).PrepareForFirstDisplay();
-            Pump();
+            UntilReview(() => Elements(editedView).OfType<MarkdownEdgeCapsulePreviewViewport>().Single().Opacity == 1, "edited demand publishes");
             Require(PreviewText(editedView).Contains("edited"), "deferred first display never binds an old excerpt to the new version");
             Release(editedBorder);
             var binding = cache.Bind(a, cache.Capture(a), a.Paper.TextZoom)!;

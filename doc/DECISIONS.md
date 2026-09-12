@@ -1211,3 +1211,33 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 - `src/EdgeCapsulePresenter.cs`：exactly-once registration 与 visual transaction deferral 释放。
 - `tests/PaperTodo.EdgeTitleChecks/SharedFrameRenderingChecks.cs`：无辅助 Rendering listener 的真实 WPF 完成、阻挡/恢复、无关队列、取消及 cloaked source 检查。
 - WPF `CompositionTarget.Rendering` add accessor 与 `MediaContext.RenderMessageHandlerCore`：订阅请求 render，实际帧由 WPF 接续。
+
+
+---
+
+## D-033 — 有界预览的重段落在共享 STA 排版，UI 保留发布与编辑语义
+
+**Status:** Accepted
+
+### Context
+
+D-032 消除了动画救援，但协作式 UI 分批不能抢占一次正在执行的 `TextFormatter.FormatLine`。已有 `MarkdownEdgePreviewParagraph` 为长文本和短密集样式保留绘制结果，提供了局部计算边界；不需要引入独立文字进程或更换编辑器。
+
+### Decision
+
+- 只迁移现有重段落路径：在 UI 捕获已物化片段与冻结资源快照，一个惰性共享 STA 完成换行、绘制和链接矩形，返回不可变结果。
+- Worker 不接收 TextBlock、Visual、可变 PreviewInlineCache、实时资源查询或 UI 业务回调。结果必须冻结，不可通过冻结宿主原始画刷来满足要求。
+- Viewport 继续拥有取消、过期检查与一次发布。它异步等待，不同步阻塞，也不跨等待持有 Presenter/visual-transaction 屏障。
+- Demand 优先于 speculative work；等价在途请求共用一次计算。后台按行让出自身 Dispatcher，取消后不再继续离屏工作；无轮询、每纸片线程或独立结果缓存。
+- 普通短行、同步卡片尺寸估算和最终 UI 挂载保留。D-027 的编辑正文同步语义快照不变，预热的筛选/合并延迟/UI 控件树独占移交不变。
+
+### Why
+
+隔离目标是移走一类 UI 重计算，不是把所有 WPF 控件变成多线程，也不是承诺任意场景不卡顿。正式文本显示时间、UI 挂载成本与图形合成都仍需独立观察。
+
+### Evidence
+
+- `src/MarkdownLayoutWorker.cs` / `src/MarkdownParagraphLayout.cs`。
+- `src/EdgeCapsulePreview.Markdown.TextLayout.cs` 的上下文快照与结果应用。
+- `src/EdgeCapsulePreview.Markdown.cs` 的异步准备与版本取消。
+- `tests/PaperTodo.EdgePreviewChecks/MarkdownWorkerChecks.cs`：线程归属、冻结结果、像素、优先级、取消及 worker 被阻塞时真实宿主动画完成。

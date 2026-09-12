@@ -119,8 +119,8 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
             ? _initialContent : MarkdownEdgePreviewPreload.For(Dispatcher).Capture(Context);
         _initialContent = null;
         var textZoom = Context.Paper.TextZoom;
-        _viewport.SetContent((target, size) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
-            target, content, Context.OpenExternal, size, textZoom),
+        _viewport.SetContent((target, size, preparation) => MarkdownEdgeCapsulePreviewRenderer.RenderSteps(
+            target, content, Context.OpenExternal, size, textZoom, preparation),
             MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));
     }
 }
@@ -132,7 +132,8 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     private readonly RectangleGeometry _bodyClip = new();
     private bool _sourceTruncated;
     private bool _previewActive = true;
-    private Func<Panel, Size, IEnumerable<bool>>? _renderContent;
+    private Func<Panel, Size, MarkdownPreviewPreparation, IEnumerable<bool>>? _renderContent;
+    private CancellationTokenSource? _buildCancellation;
     private Size? _renderedSize;
     // A completed body may survive a brief retract/resume at unchanged content and geometry.
     // Published bodies stay view-owned while mounted. On detach the optional bounded preload
@@ -168,6 +169,10 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     }
 
     public void SetContent(Func<Panel, Size, IEnumerable<bool>> renderContent,
+        MarkdownEdgePreviewPreload.Binding? preloadBinding = null) =>
+        SetContent((target, size, _) => renderContent(target, size), preloadBinding);
+
+    internal void SetContent(Func<Panel, Size, MarkdownPreviewPreparation, IEnumerable<bool>> renderContent,
         MarkdownEdgePreviewPreload.Binding? preloadBinding = null)
     {
         _renderContent = renderContent;
@@ -216,6 +221,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
 
     private void CancelPendingBuild()
     {
+        _buildCancellation?.Cancel();
         _renderVersion++;
         _renderedSize = _publishedSize;
         InvalidateArrange();
@@ -284,11 +290,16 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
     }
 
     private async void BuildContentAsync(
-        Func<Panel, Size, IEnumerable<bool>> renderContent,
+        Func<Panel, Size, MarkdownPreviewPreparation, IEnumerable<bool>> renderContent,
         Size size,
         long version)
     {
         StackPanel? staging = null;
+        using var cancellation = new CancellationTokenSource();
+        _buildCancellation?.Cancel();
+        _buildCancellation = cancellation;
+        var preparation = new MarkdownPreviewPreparation(PreloadStillCurrent != null, cancellation.Token,
+            () => IsBuildCurrent(version), InvalidateContentBuild);
         var started = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var maxBatchMs = 0.0;
         var publicationMs = 0.0;
@@ -313,7 +324,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             var truncated = false;
             var batchSteps = 0;
             var batchStarted = Stopwatch.GetTimestamp();
-            using (var steps = renderContent(staging, size).GetEnumerator())
+            using (var steps = renderContent(staging, size, preparation).GetEnumerator())
             {
                 while (IsBuildCurrent(version) && steps.MoveNext())
                 {
@@ -323,8 +334,19 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
                     }
                     truncated = steps.Current;
                     totalSteps++;
-                    // The budget is cooperative, not a hard deadline. Long styled paragraphs
-                    // and code rows yield between visible lines; copying prepared runs also yields in batches.
+                    if (preparation.Pending is { } pending)
+                    {
+                        preparation.Pending = null;
+                        maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
+                        // Await without an animation/reconcile barrier. The worker owns no UI
+                        // object and only this viewport may publish its completed generation.
+                        await pending;
+                        if (!IsBuildCurrent(version)) return;
+                        batchSteps = 0;
+                        batchStarted = Stopwatch.GetTimestamp();
+                    }
+                    // Ordinary rows still use cooperative UI work. Heavy paragraphs now yield
+                    // one asynchronous operation; their line steps stay on the layout STA.
                     if (++batchSteps >= 4 || Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 2)
                     {
                         maxBatchMs = Math.Max(maxBatchMs, Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
@@ -366,6 +388,7 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
             InvalidateMeasure();
             publicationMs = Stopwatch.GetElapsedTime(publicationStarted).TotalMilliseconds;
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested || !IsBuildCurrent(version)) { }
         catch (Exception ex)
         {
             // Preserve an already-published excerpt on an optional refresh failure. No automatic
@@ -379,6 +402,9 @@ internal sealed class MarkdownEdgeCapsulePreviewViewport : Panel
         }
         finally
         {
+            cancellation.Cancel();
+            if (ReferenceEquals(_buildCancellation, cancellation)) _buildCancellation = null;
+            maxBatchMs = Math.Max(maxBatchMs, preparation.MaxResumeUiMilliseconds);
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"markdown.prepare version={version} published={published} steps={totalSteps} " +
                 $"maxBatchMs={maxBatchMs:F3} publishMs={publicationMs:F3} elapsedMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(started):F3}");
@@ -613,7 +639,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         PreviewContent content,
         Action<string> openExternal,
         Size? viewportSize = null,
-        double textZoom = 1.0)
+        double textZoom = 1.0,
+        MarkdownPreviewPreparation? preparation = null)
     {
         target.Children.Clear();
         if (content.IsEmpty)
@@ -650,10 +677,20 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             block.Measure(new Size(size.Width, double.PositiveInfinity));
             if (paragraph != null)
             {
-                foreach (var omitted in paragraph.Prepare(new Size(paragraph.MeasuredWidth, Math.Max(0, size.Height - renderedHeight))))
+                var paragraphSize = new Size(paragraph.MeasuredWidth, Math.Max(0, size.Height - renderedHeight));
+                if (preparation != null)
                 {
-                    truncated |= omitted;
-                    yield return false;
+                    preparation.Pending = paragraph.PrepareAsync(paragraphSize, preparation);
+                    yield return false; // viewport awaits before advancing this iterator
+                    truncated |= paragraph.Truncated;
+                }
+                else
+                {
+                    foreach (var omitted in paragraph.Prepare(paragraphSize))
+                    {
+                        truncated |= omitted;
+                        yield return false;
+                    }
                 }
                 block.InvalidateMeasure();
                 block.Measure(new Size(size.Width, double.PositiveInfinity));

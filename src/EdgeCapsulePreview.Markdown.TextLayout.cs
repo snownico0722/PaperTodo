@@ -1,16 +1,14 @@
-using System.Globalization;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.TextFormatting;
 
 namespace PaperTodo;
 
-// Bounded long or style-dense paragraphs use this element. WPF TextFormatter owns
-// wrapping/shaping; the completed vector drawing is replayed by Measure/Arrange/Render without
-// reformatting. This remains a child of the existing preview, never a window or a bitmap surface.
+// The UI element owns resources, input and publication. Heavy formatting uses immutable requests;
+// the worker never sees this Canvas, its template, the mutable inline cache, or its callbacks.
 internal sealed class MarkdownEdgePreviewParagraph : Canvas
 {
     internal const int MinimumSourceLength = 256;
@@ -22,7 +20,7 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
             if (_linkHitTemplate != null) return _linkHitTemplate;
             var border = new FrameworkElementFactory(typeof(Border));
             border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-            return _linkHitTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button)) { VisualTree = border };
+            return _linkHitTemplate = new ControlTemplate(typeof(Button)) { VisualTree = border };
         }
     }
     private readonly TextBlock _template;
@@ -31,11 +29,13 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
     private readonly MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache _inlineCache;
     private readonly double _zoom;
     private readonly Action<string> _openExternal;
-    private readonly DrawingGroup _drawing = new();
+    private DrawingGroup _drawing = new();
     private Size _size;
     internal double MeasuredWidth { get; private set; }
     internal string VisibleText { get; private set; } = "";
     internal int FormattedLines { get; private set; }
+    internal int FormattingThreadId { get; private set; }
+    internal bool Truncated { get; private set; }
 
     internal MarkdownEdgePreviewParagraph(TextBlock template, string source, string mode,
         double zoom, Action<string> openExternal, MarkdownEdgeCapsulePreviewRenderer.PreviewInlineCache inlineCache)
@@ -44,83 +44,172 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         _inlineCache = inlineCache;
         Margin = template.Margin;
         template.Margin = new Thickness();
-        // A small template carries the normal paragraph/prefix typography and resource inheritance.
-        // It is never measured or painted, and is removed once its values have been captured.
         template.Opacity = 0; template.IsHitTestVisible = false;
         Children.Add(template);
         NoteTypography.ApplyTextRendering(this);
     }
 
+    // Explicit eager renderer/checks use the SAME kernel locally; the live viewport never calls
+    // this path or blocks on a worker Task. It supplies a preparation context and awaits below.
     internal IEnumerable<bool> Prepare(Size viewport)
     {
-        var pieces = Prefix(_template);
-        var count = 0;
-        foreach (var piece in _inlineCache.Get(_source, _mode).Pieces)
+        var snapshot = Capture(viewport);
+        FormattedLines = 0;
+        foreach (var result in MarkdownParagraphLayout.Prepare(snapshot.Request))
         {
-            if (piece.Text.Length > 0) pieces.Add(piece);
-            if (++count % 32 == 0) yield return false;
+            if (result != null) Apply(snapshot, result);
+            else FormattedLines++; // One null kernel step is one completed visible line.
+            yield return result?.Truncated ?? false;
         }
-        var source = new ParagraphSource(pieces, _template, _zoom, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        Background = _template.Background;
-        Children.Remove(_template);
-        using var formatter = TextFormatter.Create(AppTypography.TextFormattingMode);
-        var runCache = new TextRunCache();
-        var paragraph = new ParagraphProperties(source.DefaultProperties);
-        TextLineBreak? previous = null;
-        var offset = 0;
-        var height = 0.0;
-        var nextLink = 0;
-        var width = Math.Max(1, viewport.Width);
+    }
+
+    internal async Task PrepareAsync(Size viewport, MarkdownPreviewPreparation preparation)
+    {
+        Dispatcher.VerifyAccess();
+        var snapshot = Capture(viewport);
+        var changed = false;
+        EventHandler changedHandler = (_, _) => changed = true;
+        foreach (var resource in snapshot.Observed) resource.Changed += changedHandler;
+        MarkdownParagraphResult? result = null;
         try
         {
-            while (offset < source.Text.Length && height <= viewport.Height)
-            {
-                using var line = formatter.FormatLine(source, offset, width, paragraph, previous, runCache);
-                previous?.Dispose(); previous = line.GetTextLineBreak();
-                var lineDrawing = new DrawingGroup();
-                using (var drawing = lineDrawing.Open()) line.Draw(drawing, new Point(0, height), InvertAxes.None);
-                // Drawing commands reference the host's brushes. Freeze a snapshot, never
-                // freeze those shared resources as a side effect of preparing this paragraph.
-                if (lineDrawing.CanFreeze) lineDrawing = (DrawingGroup)lineDrawing.GetAsFrozen();
-                _drawing.Children.Add(lineDrawing);
-                var end = Math.Min(source.Text.Length, offset + line.Length);
-                // Link ranges are ordered; do not rescan offscreen links for every visible line.
-                while (nextLink < source.Links.Count && source.Links[nextLink].End <= offset) nextLink++;
-                for (var i = nextLink; i < source.Links.Count && source.Links[i].Start < end; i++)
-                {
-                    var range = source.Links[i];
-                    var start = Math.Max(offset, range.Start); var stop = Math.Min(end, range.End);
-                    if (stop <= start) continue;
-                    foreach (var bounds in line.GetTextBounds(start, stop - start))
-                    {
-                        var rect = bounds.Rectangle; rect.Offset(0, height);
-                        var hit = new System.Windows.Controls.Button
-                        {
-                            Background = Brushes.Transparent,
-                            Template = LinkHitTemplate,
-                            ClickMode = ClickMode.Release,
-                            Padding = new Thickness(),
-                            BorderThickness = new Thickness(),
-                            Width = rect.Width,
-                            Height = rect.Height,
-                            Cursor = Cursors.Hand,
-                            Focusable = true,
-                            ToolTip = range.Uri.AbsoluteUri
-                        };
-                        EdgeCapsulePreviewInteraction.SetConsumesPointer(hit, true);
-                        hit.Click += (_, e) => { _openExternal(range.Uri.AbsoluteUri); e.Handled = true; };
-                        SetLeft(hit, rect.X); SetTop(hit, rect.Y); Children.Add(hit);
-                    }
-                }
-                height += line.Height; offset = end; FormattedLines++;
-                yield return false;
-            }
+            result = await MarkdownLayoutWorker.Shared.PrepareAsync(
+                snapshot.Request, preparation.Speculative, preparation.Cancellation).ConfigureAwait(false);
         }
-        finally { previous?.Dispose(); }
-        _size = new Size(width, height);
-        VisibleText = source.Text[..offset];
+        finally
+        {
+            // A caller may own a Dispatcher without an installed SynchronizationContext.
+            // Both publication AND event removal must return to the captured UI Dispatcher.
+            // Use a low-priority operation; this is not an animation barrier or a synchronous wait.
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var resumedAt = Stopwatch.GetTimestamp();
+                try
+                {
+                    if (result == null || !preparation.IsCurrent()) return;
+                    if (changed || !snapshot.Appearance.SequenceEqual(Capture(viewport).Appearance))
+                    {
+                        preparation.Invalidate();
+                        return;
+                    }
+                    Apply(snapshot, result);
+                }
+                finally
+                {
+                    foreach (var resource in snapshot.Observed) resource.Changed -= changedHandler;
+                    preparation.MaxResumeUiMilliseconds = Math.Max(preparation.MaxResumeUiMilliseconds,
+                        Stopwatch.GetElapsedTime(resumedAt).TotalMilliseconds);
+                }
+            }, preparation.Speculative
+                ? System.Windows.Threading.DispatcherPriority.ContextIdle
+                : System.Windows.Threading.DispatcherPriority.Background);
+        }
+    }
+
+    private sealed record Snapshot(MarkdownParagraphRequest Request, Brush? Background,
+        IReadOnlyList<object?> Appearance, IReadOnlyList<Freezable> Observed);
+
+    private Snapshot Capture(Size viewport)
+    {
+        Dispatcher.VerifyAccess();
+        var appearance = new List<object?>();
+        var observed = new HashSet<Freezable>(ReferenceEqualityComparer.Instance);
+        T? FreezeCopy<T>(T? value) where T : Freezable
+        {
+            appearance.Add(value);
+            if (value == null) return null;
+            if (value.IsFrozen) return value;
+            observed.Add(value);
+            var copy = (T)value.CloneCurrentValue();
+            if (!copy.CanFreeze) throw new InvalidOperationException("Preview resource cannot form a frozen snapshot.");
+            copy.Freeze(); return copy;
+        }
+        var styles = new List<MarkdownRunStyle>();
+        var indices = new Dictionary<(MarkdownEdgeCapsulePreviewRenderer.InlineStyle, bool), int>();
+        int Style(MarkdownEdgeCapsulePreviewRenderer.InlineStyle flags, bool link)
+        {
+            if (indices.TryGetValue((flags, link), out var index)) return index;
+            bool Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle flag) => (flags & flag) != 0;
+            var strong = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strong);
+            var code = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Code);
+            var family = code ? NoteTypography.CodeFontFamily : strong ? AppTypography.FontFamilyFor(content: true, bold: true) : _template.FontFamily;
+            var weight = strong ? AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight : _template.FontWeight;
+            var fontStyle = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Italic) ? FontStyles.Italic : _template.FontStyle;
+            var fontSize = Math.Round((code ? NoteTypography.CodeFontSize : _template.FontSize) * _zoom, 1);
+            var culture = _template.Language.GetEquivalentCulture().Name;
+            appearance.AddRange(new object?[] { family.Source, family.BaseUri, weight, fontStyle,
+                _template.FontStretch, fontSize, culture });
+            Brush Resource(string key, Brush fallback) => _template.TryFindResource(key) as Brush ?? fallback;
+            var foreground = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) ? Theme.SyntaxFadeBrush
+                : Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Weak) ? Resource("WeakTextBrushKey", _template.Foreground)
+                : link ? Resource("LinkBrushKey", _template.Foreground) : _template.Foreground;
+            var background = code ? Resource("HoverBrushKey", Brushes.Transparent) : _template.Background;
+            var frozenForeground = FreezeCopy(foreground)!;
+            var frozenBackground = FreezeCopy(background);
+            var decorations = new TextDecorationCollection();
+            void Add(TextDecorationCollection? values)
+            {
+                if (FreezeCopy(values) is { } frozen) foreach (var item in frozen) decorations.Add(item);
+            }
+            Add(_template.TextDecorations);
+            if (Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strike)) Add(TextDecorations.Strikethrough);
+            if (link || Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Underline)) Add(TextDecorations.Underline);
+            decorations.Freeze();
+            index = styles.Count;
+            styles.Add(new(family.Source, family.BaseUri, fontStyle, weight, _template.FontStretch, fontSize,
+                culture, frozenForeground, frozenBackground, decorations.Count == 0 ? null : decorations));
+            indices[(flags, link)] = index;
+            return index;
+        }
+        Style(0, false); // slot zero is the paragraph default
+        var pieces = Prefix(_template);
+        pieces.AddRange(_inlineCache.Get(_source, _mode).Pieces.Where(piece => piece.Text.Length > 0));
+        var links = new List<string>();
+        var linkIndices = new Dictionary<Uri, int>(ReferenceEqualityComparer.Instance);
+        var inputs = new List<MarkdownLayoutPiece>();
+        foreach (var piece in pieces)
+        {
+            var linkIndex = -1;
+            if (piece.Link != null && !linkIndices.TryGetValue(piece.Link, out linkIndex))
+            {
+                linkIndex = links.Count;
+                links.Add(piece.Link.AbsoluteUri); linkIndices.Add(piece.Link, linkIndex);
+            }
+            inputs.Add(new(piece.Text, Style(piece.Style, piece.Link != null), linkIndex));
+        }
+        var backgroundSnapshot = FreezeCopy(_template.Background);
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var mode = AppTypography.TextFormattingMode;
+        appearance.Add(dpi); appearance.Add(mode);
+        return new(new(inputs, styles, links, viewport, dpi, mode), backgroundSnapshot,
+            appearance.AsReadOnly(), Array.AsReadOnly(observed.ToArray()));
+    }
+
+    private void Apply(Snapshot snapshot, MarkdownParagraphResult result)
+    {
+        Dispatcher.VerifyAccess();
+        if (!result.Drawing.IsFrozen) throw new InvalidOperationException("Unfrozen paragraph result.");
+        Children.Clear();
+        Background = snapshot.Background;
+        _drawing = result.Drawing; _size = result.Size;
+        VisibleText = result.VisibleText; FormattedLines = result.FormattedLines;
+        FormattingThreadId = result.FormattingThreadId; Truncated = result.Truncated;
+        foreach (var link in result.Links)
+        {
+            var uri = snapshot.Request.LinkTargets[link.LinkIndex];
+            var rect = link.Bounds;
+            var hit = new Button
+            {
+                Background = Brushes.Transparent, Template = LinkHitTemplate, ClickMode = ClickMode.Release,
+                Padding = new Thickness(), BorderThickness = new Thickness(),
+                Width = rect.Width, Height = rect.Height, Cursor = Cursors.Hand,
+                Focusable = true, ToolTip = uri
+            };
+            EdgeCapsulePreviewInteraction.SetConsumesPointer(hit, true);
+            hit.Click += (_, e) => { _openExternal(uri); e.Handled = true; };
+            SetLeft(hit, rect.X); SetTop(hit, rect.Y); Children.Add(hit);
+        }
         InvalidateMeasure(); InvalidateVisual();
-        yield return offset < source.Text.Length;
     }
 
     protected override Size MeasureOverride(Size constraint)
@@ -129,7 +218,6 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
         base.MeasureOverride(constraint);
         return _size;
     }
-
     private static List<MarkdownEdgeCapsulePreviewRenderer.InlinePiece> Prefix(TextBlock template)
     {
         var pieces = new List<MarkdownEdgeCapsulePreviewRenderer.InlinePiece>();
@@ -139,97 +227,22 @@ internal sealed class MarkdownEdgePreviewParagraph : Canvas
                     ? MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax : 0));
         return pieces;
     }
-
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
         drawingContext.DrawDrawing(_drawing);
     }
+}
 
-    private sealed class ParagraphSource : TextSource
-    {
-        private readonly (int Start, int End, RunProperties Properties)[] _runs;
-        internal readonly record struct LinkRange(int Start, int End, Uri Uri);
-        internal string Text { get; }
-        internal List<LinkRange> Links { get; } = new();
-        internal RunProperties DefaultProperties { get; }
-        internal ParagraphSource(List<MarkdownEdgeCapsulePreviewRenderer.InlinePiece> pieces, TextBlock template, double zoom, double dpi)
-        {
-            PixelsPerDip = dpi;
-            DefaultProperties = new RunProperties(template, 0, false, zoom) { PixelsPerDip = dpi };
-            Text = string.Concat(pieces.Select(p => p.Text));
-            _runs = new (int, int, RunProperties)[pieces.Count];
-            var styles = new Dictionary<(MarkdownEdgeCapsulePreviewRenderer.InlineStyle, bool), RunProperties>();
-            var offset = 0;
-            for (var i = 0; i < pieces.Count; i++)
-            {
-                var piece = pieces[i]; var key = (piece.Style, piece.Link != null);
-                if (!styles.TryGetValue(key, out var properties))
-                    styles[key] = properties = new RunProperties(template, piece.Style, key.Item2, zoom) { PixelsPerDip = dpi };
-                _runs[i] = (offset, offset + piece.Text.Length, properties);
-                if (piece.Link != null)
-                {
-                    if (Links.Count > 0 && Links[^1].End == offset && ReferenceEquals(Links[^1].Uri, piece.Link))
-                        Links[^1] = Links[^1] with { End = offset + piece.Text.Length };
-                    else Links.Add(new(offset, offset + piece.Text.Length, piece.Link));
-                }
-                offset += piece.Text.Length;
-            }
-        }
-        public override TextRun GetTextRun(int index)
-        {
-            if (index >= Text.Length) return new TextEndOfParagraph(1, DefaultProperties);
-            var low = 0; var high = _runs.Length - 1;
-            while (low < high) { var middle = (low + high) / 2; if (_runs[middle].End <= index) low = middle + 1; else high = middle; }
-            var run = _runs[low];
-            return new TextCharacters(Text, index, run.End - index, run.Properties);
-        }
-        public override TextSpan<CultureSpecificCharacterBufferRange> GetPrecedingText(int limit) =>
-            new(limit, new CultureSpecificCharacterBufferRange(DefaultProperties.CultureInfo, new CharacterBufferRange(Text, 0, Math.Min(limit, Text.Length))));
-        public override int GetTextEffectCharacterIndexFromTextSourceCharacterIndex(int index) => index;
-    }
-
-    private sealed class ParagraphProperties(TextRunProperties properties) : TextParagraphProperties
-    {
-        public override FlowDirection FlowDirection => FlowDirection.LeftToRight;
-        public override TextAlignment TextAlignment => TextAlignment.Left;
-        public override double LineHeight => 0;
-        public override bool FirstLineInParagraph => false;
-        public override TextRunProperties DefaultTextRunProperties => properties;
-        public override TextWrapping TextWrapping => TextWrapping.Wrap;
-        public override TextMarkerProperties? TextMarkerProperties => null;
-        public override double Indent => 0;
-    }
-    private sealed class RunProperties : TextRunProperties
-    {
-        public override Typeface Typeface { get; }
-        public override double FontRenderingEmSize { get; }
-        public override double FontHintingEmSize => FontRenderingEmSize;
-        public override TextDecorationCollection? TextDecorations { get; }
-        public override Brush ForegroundBrush { get; }
-        public override Brush? BackgroundBrush { get; }
-        public override CultureInfo CultureInfo { get; }
-        public override TextEffectCollection? TextEffects => null;
-        internal RunProperties(TextBlock template, MarkdownEdgeCapsulePreviewRenderer.InlineStyle style, bool link, double zoom)
-        {
-            CultureInfo = template.Language.GetEquivalentCulture();
-            bool Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle flag) => (style & flag) != 0;
-            var strong = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strong);
-            var code = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Code);
-            var family = code ? NoteTypography.CodeFontFamily : strong ? AppTypography.FontFamilyFor(content: true, bold: true) : template.FontFamily;
-            var weight = strong ? AppTypography.UsesCustomBoldFace(true) ? AppTypography.FontWeightFor(true) : NoteTypography.HeadingFontWeight : template.FontWeight;
-            Typeface = new Typeface(family, Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Italic) ? FontStyles.Italic : template.FontStyle, weight, template.FontStretch);
-            FontRenderingEmSize = Math.Round((code ? NoteTypography.CodeFontSize : template.FontSize) * zoom, 1);
-            Brush Resource(string key, Brush fallback) => template.TryFindResource(key) as Brush ?? fallback;
-            ForegroundBrush = Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) ? Theme.SyntaxFadeBrush
-                : Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Weak) ? Resource("WeakTextBrushKey", template.Foreground)
-                : link ? Resource("LinkBrushKey", template.Foreground) : template.Foreground;
-            BackgroundBrush = code ? Resource("HoverBrushKey", Brushes.Transparent) : template.Background;
-            var decorations = new TextDecorationCollection();
-            if (template.TextDecorations != null) foreach (var item in template.TextDecorations) decorations.Add(item);
-            if (Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strike)) foreach (var item in System.Windows.TextDecorations.Strikethrough) decorations.Add(item);
-            if (link || Has(MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Underline)) foreach (var item in System.Windows.TextDecorations.Underline) decorations.Add(item);
-            TextDecorations = decorations.Count == 0 ? null : decorations;
-        }
-    }
+// UI-owned bridge for a single viewport build. Its pending operation is awaited by that existing
+// owner, never by Measure/Arrange or the animation scheduler. Not a second publication manager.
+internal sealed class MarkdownPreviewPreparation(
+    bool speculative, CancellationToken cancellation, Func<bool> isCurrent, Action invalidate)
+{
+    internal bool Speculative { get; } = speculative;
+    internal CancellationToken Cancellation { get; } = cancellation;
+    internal Func<bool> IsCurrent { get; } = isCurrent;
+    internal Action Invalidate { get; } = invalidate;
+    internal Task? Pending { get; set; }
+    internal double MaxResumeUiMilliseconds { get; set; }
 }
