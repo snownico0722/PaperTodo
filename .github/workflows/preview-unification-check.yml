@@ -4,6 +4,10 @@ on:
     branches: [perf/whole-preview-artifact-preload-20260912]
 permissions:
   contents: write
+env:
+  PYTHONUTF8: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: 'true'
 jobs:
   validate:
     if: contains(github.event.head_commit.message, '[unify-final-check]')
@@ -27,7 +31,7 @@ jobs:
           from pathlib import Path
           import subprocess
           def edit(path, old, new):
-              p=Path(path); s=p.read_text(); assert s.count(old)==1,(path,old,s.count(old)); p.write_bytes(s.replace(old,new).encode())
+              p=Path(path); s=p.read_text(encoding='utf-8'); assert s.count(old)==1,(path,old,s.count(old)); p.write_bytes(s.replace(old,new).encode())
           path='src/EdgeCapsulePreview.Markdown.cs'
           edit(path, '        var content = _initialContent != null && _initialVersion == Context.InvalidationSource.Version', '        var contentVersion = Context.InvalidationSource.Version;\n        var content = _initialContent != null && _initialVersion == contentVersion')
           edit(path, '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom));', '            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom),\n            (Context.InvalidationSource, contentVersion));')
@@ -86,18 +90,18 @@ jobs:
       - name: Verify the source-generation regression test catches the missing guard
         run: |
           $path = 'src/EdgeCapsulePreview.Markdown.cs'
-          $original = Get-Content $path -Raw
+          $original = Get-Content $path -Raw -Encoding utf8
           $old = "    private bool IsSourceCurrent => _sourceGeneration is not { } generation ||`n        generation.Source.Version == generation.Version;"
           if (-not $original.Contains($old)) { throw 'Source guard marker missing' }
           try {
-            Set-Content $path ($original.Replace($old, '    private bool IsSourceCurrent => true;')) -NoNewline
+            Set-Content $path ($original.Replace($old, '    private bool IsSourceCurrent => true;')) -NoNewline -Encoding utf8
             dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release 2>&1 | Tee-Object evidence/source-negative-control.log
             $result = $LASTEXITCODE
             $log = Get-Content evidence/source-negative-control.log -Raw
             if ($result -eq 0 -or -not $log.Contains('an invalidated source cannot prepare or publish through a null preload binding')) {
               throw 'Negative control did not detect the removed guard'
             }
-          } finally { Set-Content $path $original -NoNewline }
+          } finally { Set-Content $path $original -NoNewline -Encoding utf8 }
           exit 0
       - name: Release regression suites and Debug preview
         run: |
@@ -120,7 +124,7 @@ jobs:
           base=Path(os.environ['RUNNER_TEMP'])/'pr251-baseline'
           for name, marker in [('Program.cs','    private static double[] ProfileOne('),('PreloadChecks.cs','    private static void ProfilePreload(')]:
               relative=Path('tests/PaperTodo.EdgePreviewChecks')/name
-              current=relative.read_text(); old=(base/relative).read_text()
+              current=relative.read_text(encoding='utf-8'); old=(base/relative).read_text(encoding='utf-8')
               method=current[current.index(marker):current.rfind('\n}')]
               if name=='Program.cs':
                   before='viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);'
@@ -165,9 +169,9 @@ jobs:
               if revision=='current' and preparation=='layout':
                   old=groups[('baseline',fixture,mode,preparation)]
                   assert statistics.median(r[4] for r in rows)<=max(5,statistics.median(r[4] for r in old)*1.5+1), (fixture,mode)
-          pathlib.Path('evidence/paired-metrics.json').write_text(json.dumps(report,indent=2))
+          pathlib.Path('evidence/paired-metrics.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
           counts=subprocess.check_output(['git','diff','868c81e6255645bb1c151a3731fd0b23329de812','--numstat','--','src'],text=True)
-          pathlib.Path('evidence/runtime-counts.txt').write_text(counts)
+          pathlib.Path('evidence/runtime-counts.txt').write_text(counts,encoding='utf-8')
           print(counts)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
