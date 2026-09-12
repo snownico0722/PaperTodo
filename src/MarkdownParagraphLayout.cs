@@ -47,6 +47,13 @@ internal sealed class MarkdownParagraphRequest : IEquatable<MarkdownParagraphReq
         var hash = new HashCode(); hash.Add(Viewport); hash.Add(PixelsPerDip); hash.Add(FormattingMode);
         foreach (var piece in Pieces) hash.Add(piece);
         foreach (var link in LinkTargets) hash.Add(link);
+        // Keep the cheap hash aligned with the fields used by deep equality. Resource drawings are
+        // still compared conservatively below; typography alone removes the common cross-style collisions.
+        foreach (var style in Styles)
+        {
+            hash.Add(style.FontFamily); hash.Add(style.FontBaseUri); hash.Add(style.FontStyle);
+            hash.Add(style.FontWeight); hash.Add(style.FontStretch); hash.Add(style.FontSize); hash.Add(style.Culture);
+        }
         _hash = hash.ToHashCode();
     }
 
