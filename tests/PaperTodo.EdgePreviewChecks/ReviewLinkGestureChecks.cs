@@ -15,7 +15,7 @@ internal static partial class Program
         inherited.Setters.Add(new Setter(ButtonBase.ClickModeProperty, ClickMode.Press));
         panel.Resources[typeof(Button)] = inherited;
         var opened = new List<string>();
-        MarkdownEdgeCapsulePreviewRenderer.RenderInto(panel,
+        RenderForCheck(panel,
             "[first](https://example.com/a) [second](https://example.com/b) " + new string('文', 300),
             opened.Add, MarkdownRenderModes.Full, new Size(360, 200));
         var window = new Window { Content = panel, Width = 390, Height = 240,

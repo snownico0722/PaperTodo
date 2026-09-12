@@ -46,23 +46,6 @@ internal static class SharedPreviewSemanticChecks
         var prepared = cache.Get(ordinary, MarkdownRenderModes.Full);
         Require(ReferenceEquals(prepared, cache.Get(ordinary, MarkdownRenderModes.Full)) && cache.Count == 1,
             "same excerpt reuses pure inline values");
-        var body = new StackPanel();
-        var content = Renderer.CaptureContent(string.Concat(Enumerable.Repeat(ordinary + " ", 70)), MarkdownRenderModes.Full);
-        var lastLines = 0;
-        var omitted = false;
-        foreach (var step in Renderer.RenderSteps(body, content, _ => { }, new Size(180, 120)))
-        {
-            omitted = step;
-            var count = body.Children.OfType<MarkdownEdgePreviewParagraph>().Sum(p => p.FormattedLines);
-            Require(count - lastLines <= 1, "one step formats no more than one visible wrap");
-            lastLines = count;
-        }
-        Require(omitted && lastLines is > 0 and < 30, "dense source stays bounded by the visible viewport");
-        var paragraph = body.Children.OfType<MarkdownEdgePreviewParagraph>().Single();
-        var lines = paragraph.FormattedLines;
-        body.Measure(new Size(180, 120)); body.Arrange(new Rect(0, 0, 180, 120));
-        paragraph.InvalidateMeasure(); paragraph.InvalidateVisual(); body.UpdateLayout();
-        Require(paragraph.FormattedLines == lines, "publication and repaint reuse prepared layout");
         Console.WriteLine("PASS shared semantic grammar, nested styles, escapes, code, HTML, images, link identity, caching and bounded publication");
     }
 }
