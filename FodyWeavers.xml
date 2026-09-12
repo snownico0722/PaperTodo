@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Weavers>
+<Weavers GenerateXsd="false">
   <Costura IncludeAssemblies="Microsoft.Windows.SDK.NET"
            IncludeDebugSymbols="false"
            IncludeRuntimeReferences="false" />

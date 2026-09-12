@@ -33,6 +33,17 @@
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- The SDK's built-in bundle compression requires a self-contained app. Compress only
+         the WinRT projection in no-runtime single-file builds; allow an uncompressed comparison. -->
+    <PaperTodoCompressWindowsSdk Condition="'$(PaperTodoCompressWindowsSdk)' == ''">true</PaperTodoCompressWindowsSdk>
+    <_PaperTodoSdkCompressionEnabled>false</_PaperTodoSdkCompressionEnabled>
+    <_PaperTodoSdkCompressionEnabled Condition="'$(PaperTodoCompressWindowsSdk)' == 'true' And '$(PublishSingleFile)' == 'true' And '$(SelfContained)' != 'true' And '$(DisableFody)' != 'true'">true</_PaperTodoSdkCompressionEnabled>
+    <DisableFody Condition="'$(_PaperTodoSdkCompressionEnabled)' != 'true'">true</DisableFody>
+    <!-- Fody rewrites the intermediate assembly and caches which references it removed.
+         Keep both modes separate so switching publish options never reuses a woven assembly/cache. -->
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\sdk-compression-$(_PaperTodoSdkCompressionEnabled)\</IntermediateOutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets\PaperTodo.ico" />
     <!-- Repository plugin outputs are available to normal development builds, but plugins are
@@ -53,8 +64,7 @@
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <!-- Markdig is the semantic parser only; AvalonEdit remains the source document and renderer. -->
     <PackageReference Include="Markdig" Version="1.3.2" />
-    <!-- Experimental branch only: compress the oversized WinRT projection assembly into the
-         PaperTodo assembly while keeping WebView2CompositionControl and every product surface unchanged. -->
+    <!-- Keep restore inputs independent of publish options, including publish --no-restore. -->
     <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
