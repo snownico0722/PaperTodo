@@ -312,39 +312,58 @@ internal sealed class MarkdownEdgePreviewPreload
         target.Context.InvalidationSource.Invalidated += invalidated;
         target.Anchor.Unloaded += unloaded;
         target.Anchor.IsVisibleChanged += visibilityChanged;
+
+        async Task DetachListenersAsync()
+        {
+            listenerOpen = false;
+            void Detach()
+            {
+                target.Context.InvalidationSource.Invalidated -= invalidated;
+                target.Anchor.Unloaded -= unloaded;
+                target.Anchor.IsVisibleChanged -= visibilityChanged;
+            }
+            if (_dispatcher.CheckAccess()) Detach();
+            else await _dispatcher.InvokeAsync(Detach, DispatcherPriority.Send);
+        }
+
         try
         {
             MarkdownEdgeCapsulePreviewRenderer.MarkdownPreviewArtifactDraft draft;
             try
             {
                 draft = await MarkdownEdgeCapsulePreviewRenderer.BuildArtifactDraftAsync(
-                    plan, speculative: true, lifetime.Token);
+                    plan, speculative: true, lifetime.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
             {
                 return false;
             }
             cancellation.ThrowIfCancellationRequested();
-            _dispatcher.VerifyAccess();
-            if (!_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
-                !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
-                MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 
-            // Aggregating frozen child drawings is the only final UI-thread operation; no layout,
-            // Measure/Arrange or visual-tree publication occurs during speculative preparation.
-            var artifact = MarkdownEdgeCapsulePreviewRenderer.ComposeArtifact(draft);
-            if (!target.StillEligible() || target.Context.InvalidationSource.Version != version ||
-                !key.Binding.Current || MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
-            if (!StoreArtifact(key, artifact)) return false;
-            WarmCompletions++;
-            return true;
+            // Do not rely on a DispatcherSynchronizationContext being installed. Tests and some
+            // host paths can await the worker without one, so every WPF read and final composition
+            // explicitly returns to the owning Dispatcher.
+            var operation = _dispatcher.InvokeAsync(() =>
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if (!_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                    !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
+                    MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
+
+                // Aggregating frozen child drawings is the only final UI-thread operation; no layout,
+                // Measure/Arrange or visual-tree publication occurs during speculative preparation.
+                var artifact = MarkdownEdgeCapsulePreviewRenderer.ComposeArtifact(draft);
+                if (!target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                    !key.Binding.Current || MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
+                if (!StoreArtifact(key, artifact)) return false;
+                WarmCompletions++;
+                return true;
+            }, DispatcherPriority.ContextIdle);
+            return await operation.Task.ConfigureAwait(false);
         }
         finally
         {
-            listenerOpen = false;
-            target.Context.InvalidationSource.Invalidated -= invalidated;
-            target.Anchor.Unloaded -= unloaded;
-            target.Anchor.IsVisibleChanged -= visibilityChanged;
+            await DetachListenersAsync().ConfigureAwait(false);
         }
     }
 
