@@ -295,15 +295,15 @@ internal sealed class MarkdownEdgePreviewPreload
         var plan = MarkdownEdgeCapsulePreviewRenderer.CaptureArtifactPlan(
             target.Anchor, content, width, key.Binding.Zoom);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        void Invalidated() => lifetime.Cancel();
-        void Unloaded(object? sender, RoutedEventArgs args) => lifetime.Cancel();
-        void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs args)
+        Action invalidated = () => lifetime.Cancel();
+        RoutedEventHandler unloaded = (_, _) => lifetime.Cancel();
+        DependencyPropertyChangedEventHandler visibilityChanged = (_, args) =>
         {
             if (args.NewValue is false) lifetime.Cancel();
-        }
-        target.Context.InvalidationSource.Invalidated += Invalidated;
-        target.Anchor.Unloaded += Unloaded;
-        target.Anchor.IsVisibleChanged += VisibilityChanged;
+        };
+        target.Context.InvalidationSource.Invalidated += invalidated;
+        target.Anchor.Unloaded += unloaded;
+        target.Anchor.IsVisibleChanged += visibilityChanged;
         try
         {
             MarkdownEdgeCapsulePreviewRenderer.MarkdownPreviewArtifactDraft draft;
@@ -333,9 +333,9 @@ internal sealed class MarkdownEdgePreviewPreload
         }
         finally
         {
-            target.Context.InvalidationSource.Invalidated -= Invalidated;
-            target.Anchor.Unloaded -= Unloaded;
-            target.Anchor.IsVisibleChanged -= VisibilityChanged;
+            target.Context.InvalidationSource.Invalidated -= invalidated;
+            target.Anchor.Unloaded -= unloaded;
+            target.Anchor.IsVisibleChanged -= visibilityChanged;
         }
     }
 
