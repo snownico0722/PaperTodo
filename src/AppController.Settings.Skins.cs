@@ -6,6 +6,8 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
+    private bool _skinRestartPromptDeferred;
+
     private void SetPaperSkin(string id)
     {
         if (!PaperSkins.IsValid(id) || PaperSkins.Resolve(State) == id) return;
@@ -14,6 +16,69 @@ public sealed partial class AppController
         if (PaperSkins.IsSystemMaterial(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
         SaveNow();
         RefreshThemeSurfaces();
+
+        var restartRequired = PaperSkins.UsesNativeBackdrop(id) &&
+            NativeMicaBackdrop.IsSupported &&
+            !UsesNativeMicaWindows;
+        if (!restartRequired)
+        {
+            _skinRestartPromptDeferred = false;
+            return;
+        }
+        if (_skinRestartPromptDeferred)
+        {
+            return;
+        }
+
+        _skinRestartPromptDeferred = true;
+        var result = _settingsWindow != null
+            ? MessageBox.Show(
+                _settingsWindow,
+                Strings.Get("SkinRestartRequired"),
+                Strings.Get("SettingsPaperSkin"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Question,
+                MessageBoxResult.Cancel)
+            : MessageBox.Show(
+                Strings.Get("SkinRestartRequired"),
+                Strings.Get("SettingsPaperSkin"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Question,
+                MessageBoxResult.Cancel);
+        if (result != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        if (!AppRestart.TryLaunchAfterCurrentProcessExit(out var error))
+        {
+            _skinRestartPromptDeferred = false;
+            var message = Strings.Get("SkinRestartRequired");
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                message += $"{Environment.NewLine}{Environment.NewLine}{error}";
+            }
+            if (_settingsWindow != null)
+            {
+                MessageBox.Show(
+                    _settingsWindow,
+                    message,
+                    Strings.Get("SettingsPaperSkin"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            else
+            {
+                MessageBox.Show(
+                    message,
+                    Strings.Get("SettingsPaperSkin"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            return;
+        }
+
+        Exit();
     }
     private UIElement CreateSkinSettings()
     {

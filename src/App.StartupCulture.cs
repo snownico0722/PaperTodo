@@ -6,6 +6,10 @@ public partial class App
 {
     static App()
     {
+        // A self-restarted process must not reach the single-instance mutex while the previous
+        // process still owns it, or it would forward its arguments to the old instance and exit.
+        AppRestart.WaitForPreviousInstance();
+
         // OnStartup is async void. Setting CurrentUICulture only inside that async execution
         // context can be restored to the OS culture when control returns to the WPF Dispatcher.
         // Establish the persisted UI culture on the root UI thread before App is constructed,
