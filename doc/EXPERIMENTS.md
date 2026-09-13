@@ -13,6 +13,7 @@
 | --- | --- | --- | --- | --- |
 | E-001 | 2026-09-13 | Windows 发布形态：Single-file / Compression / ReadyToRun / Multi-file | Completed | D-036 |
 | E-002 | 2026-09-13 | Edge Host 首次呈现：菜单延后与批量首帧 | Completed | — |
+| E-003 | 2026-09-13 | 实机录制：代理常驻复用及封版后的历史版本对照 | Completed | D-037 |
 
 ---
 
@@ -301,3 +302,108 @@ E-002 说明真正值得继续拆的是 `Host.Apply`，而不是 `EdgeCapsuleHos
 - Profile + Host probe：Actions run `34727969772`，artifact `e002-startup-batch-profiled-evidence`。
 - Menu vs batch isolation：Actions run `34728469483`，artifact `e002-menu-vs-batch-isolation`。
 
+
+---
+
+## E-003 — 实机录制、代理常驻复用与历史版本对照
+
+**日期：** 2026-09-13
+**状态：** Completed
+**目的：** 使用用户 PR254 正式包的数据与已录制动作，区分代理接管成本和动画更新间隔，并比较代理路线封版后的关键版本。实际保留的预接管/复用机制见 D-037；本节只记录这次实测。
+
+### 方法与可比范围
+
+- 输入来自 `输出/实机数据`；原始正式 EXE、`data.json`、`note-assets.lmdb` 和 `输出/数据.exe` 均保留且 SHA-256 未变。每次回放使用独立数据副本；直接运行用户的录制 EXE，约 27 秒，没有使用截图判断卡顿。
+- 7 个历史版本均从本地精确 commit 与固定子模块归档重建；不修改历史源码，不 fetch、不推送。每版两个独立新进程，第一轮正序、第二轮逆序；每次启动后等待 6 秒，再运行同一录制。
+- 所有比较包使用优化 Debug、win-x64、framework-dependent、single-file、R2R=false、trim=false、Fody/SDK 压缩关闭。当前 SDK 拒绝 framework-dependent 与 bundle compression 的组合，因此统一使用未压缩包。诊断包形态与用户原正式包不同，不能将绝对耗时直接等同于正式包。
+- Windows NT 10.0.26200、16 个逻辑处理器、实测 DPI 1.25。详细构建参数、SDK、源码哈希与环境保存在下述本地产物。
+- 各版均完成 24 次展开；最早两版的最后一次命中对象与后续版本不同。主表只比较 **16 轮日志中逐项核对相同的前 23 次展开**；全程统计也独立保留。
+- 本地实现含 `f64d63f`（正文 artifact 缓存）及 `1d55939`（常驻预接管和容量管理）。当前包两轮在同一进程运行，中间静置 60 秒，以验证复用持续性；其进程条件与历史两次冷进程不同，已保留完整运行身份，不混称严格冷启动 A/B。
+
+### 相同前 23 次展开的结果
+
+各列为两轮实测范围，单位 ms。事务中位数是 `transaction.commit totalMs`；Rendering 列是连续活动区段内 accepted Rendering 处理完成附近的 QPC 间隔 P95。
+
+| 版本 | commit | 事务中位数 | Rendering 处理间隔 P95 |
+| --- | --- | ---: | ---: |
+| PR94，V3 Lite 合入主干 | `899f3cd` | 32.969–34.310 | 25.493–25.495 |
+| V3 Lite + 首用轻量预热 | `440941d` | 33.976–35.634 | 25.450–25.760 |
+| PR242，bounded / 无滚动预览 | `dbf1f87` | 34.800–39.166 | 25.388–25.620 |
+| PR245，重正文合并预热 | `07eeb01` | 32.694–37.635 | 25.433–25.656 |
+| PR238，Rendering 调度与共同起始时钟 | `a563a25` | 36.242–36.486 | 31.782–32.811 |
+| PR251，统一 artifact renderer | `5bcf564` | 39.887–42.009 | 32.893–33.608 |
+| PR254，用户数据对应基线 | `416a6fd` | 34.990–37.617 | 32.757–34.282 |
+| 本地预接管与复用 | `1d55939` | 2.076–2.350 | 30.343–30.440 |
+
+按本地实际合入顺序，PR245 在 PR238 前。PR238 后处理间隔长尾有所增加，数据没有证明“以前完全不卡”，也不能把不同版本的全部差异归因于某一个调度函数。
+
+### 当前包的持续复用与代价
+
+两轮完整录制各完成 36 次事务，全部使用 successor 复用；交互过程中冷创建 0 次，fallback/retry 0 次。事务中位数分别 2.350 / 2.379 ms、P95 19.833 / 15.587 ms。每轮正文 artifact 命中 10 次、miss 0 次。启动阶段仍需要一次真实准备，10 个 source 的 prepare 为 50.725 ms，controller 总计 64.062 ms；这是把成本移到可取消的后台准备，并非消除成本或保证任意新对象 100% 命中。
+
+静置 60.022 秒，整个进程 CPU 增加 390.625 ms，约单个逻辑核心的 0.65%；private bytes 145,461,248 → 136,605,696，handles 867 → 856，第二轮结束 859。该短期记录不证明长期 GPU/内存无泄漏。插件按最大值准备会增加真实 WPF backing surface；未声明最大值的 Native 首次报告更大尺寸仍需要安全交接和扩容。真实多屏多缓存未验收，不承诺跨屏命中率。
+
+### 统计陷阱与验证边界
+
+旧版含 12ms watchdog。PR94 第一轮的 changed 样本中 447/920（48.6%）来自 watchdog；因此混合软件更新的 14–16ms 间隔不能与后来的 Rendering-only 约 31–34ms 直接换算为显示帧率减半。
+
+原 v1 分析还会误取紧邻、未改变的 frame 为间隔起点。原脚本及 JSON 原样保留，主表使用追加的 v2：按 QPC 重新计算、仅在连续 active fingerprint 区段内连接、真正 changed 才更新 changed 基准；完成 endpoint 先计入再清空。fingerprint 不是每次动画唯一编号。分别保留 ShapeChangedGap、RenderingOpportunityGap、RenderingShapeChangedGap 和 raw accepted/duplicate/suppression 计数。
+
+这些日志描述软件状态和 Rendering 处理节拍，**不测量 DWM 物理呈现或显示器 FPS**。行为验证包括 Release build 0 警告/错误、EdgeTitleChecks 6/6 组 3145 断言，以及 EdgePreviewChecks 全套通过（96 组 WPF 宽度/DPI/舍入、80 组冷热像素完全一致等）。多屏与长期 GPU 成本仍未实测。
+
+### 本地保留的证据
+
+所有原始及中间试验均位于 `输出/edge-replay-20260913/`，用户要求只在本地保留；这些大体积产物不纳入 git，也未上传：
+
+- `历史版本对照-结果.md`、`历史版本对照-候选.md`、`历史回放-帧间隔统计口径.md`：完整结果、历史选择与口径核查。
+- `history/packages-uniform-20260913-02.json`、`history/README.md`：7 个精确源码归档、固定依赖、构建参数/日志/包/哈希及失败提取尝试。
+- `history-<commit>-r1/`、`history-<commit>-r2/`：14 次实际运行包、数据副本、原始日志、时间边界、v1/v2/common23 分析。
+- `current-final-idle-1/`：最终包两轮及中间静置的原始记录；`history/replay-results-v2.json`：历史与当前共 32 份全程/同前缀结果。
+- `baseline-*`、`resident*`、`final-idle-*`、`prewarm-*`、`defererase-*` 等此前原始记录、失败/撤回试验与报告全部保留。
+- `Run-Replay.ps1`、`Run-IdleReplay.ps1`、`Run-History.ps1`、`Analyze-Replay-v2.ps1`、`original-hashes.json`：可复跑入口和原始文件身份。
+- `输出/边缘浏览预热完成-诊断包-20260913/`：含原始数据副本及最终诊断 EXE。EXE SHA-256 `5867E1E145E5319A47F3E948CF0A9B179D164679784F74EE0C74D391EC22D652`；发布早于本地 commit，源码内容对应 `1d55939`，运行身份以包哈希为准。
+
+### 追加的有界订阅合并 A/B
+
+尝试将短暂全队列阻塞的 Rendering 退订合并到单次 Loaded 操作，并保留逐队列屏障、无动画 retry 和 shutdown 清理。检查曾通过 3167 断言；最后两项夹具稳健性调整尚未重跑即随实验撤回。
+
+一轮实验后紧接新进程基线，前 23 次展开一致。基线/实验的事务中位数为 2.430/2.612ms，Rendering 间隔 P95 为 32.376/36.665ms，changed 间隔 P95 为 32.670/37.290ms。样本没有支持稳定收益，因此撤回额外调度逻辑，最终仍交付 1d55939。没有根据一个最大值改善就保留实验；原始 patch、包、检查日志与 subscription-baseline-1、subscription-coalesce-1 数据均保留。
+
+### 追加取样纠正与 16 个历史版本的最终对照
+
+最初把 PR94 当作代理路线封版起点，漏掉了用户记忆中的 V2.5。按本地代码核对：PR88 的 1a239c3 是 V2.5 初成，PR90 分支 a402a80 是 V2.5 后期修正版；它们仍使用 snapshot、native clip、reveal/conceal。d4af6af 开始切到 V3 Lite，PR94 的 899f3cd 是 WPF shape + 同尺寸 live DComp translation 的合入点，后者才是当前代码沿用的路线。
+
+追加 9 版全部以未改动的历史源码重新构建，含切换路线的两个中间点、hover intent、锚点布局、回墙 endpoint、Markdown 扩预算与裁剪 viewport。用户数据开启 hover intent（low），故 PR112 也纳入。每版两轮新进程，追加批次第一轮按历史正序、第二轮逆序；期间没有构建或其他测试竞争 CPU。
+
+最终 32 轮历史 + 当前 2 轮全部完成。PR214 第一轮后段命中不同，只展开 23 次；其第二轮和其他版本均为 24 次。逐项核对 **34 轮的前 22 次 owner 完全一致**，最终表仅比较此范围。首批的前 23 次统计和所有全程数据原样保留，不能把表内不同裁切范围的数字交叉相减。
+| 版本 | commit | 事务中位数 ms | 事务 P95 ms | Rendering 间隔 P95 ms |
+| --- | --- | ---: | ---: | ---: |
+| PR88，V2.5 初成 | 1a239c3 | 58.115–62.640 | 151.170–153.234 | N/A |
+| PR90 分支，V2.5 后期修正 | a402a80 | 59.929–60.565 | 141.990–142.231 | N/A |
+| V3 Lite 首次完整切换 | d4af6af | 27.430–27.566 | 32.334–43.385 | N/A |
+| V3 Lite Render 优先级与 watchdog | 849c9bb | 33.697–36.954 | 51.393–51.611 | N/A |
+| PR94，V3 Lite 合入 | 899f3cd | 32.969–34.310 | 44.719–45.422 | 25.490–25.526 |
+| 首用轻量预热 | 440941d | 34.463–35.634 | 67.021–72.457 | 25.450–25.763 |
+| PR112，hover intent 与 capture | 254158c | 33.231–35.334 | 46.301–54.823 | 24.869–25.057 |
+| PR199，预览锚点与排布 | 8a2c87b | 33.873–38.630 | 46.856–57.130 | 25.204–25.299 |
+| PR214，回墙 endpoint 几何 | 3f7e19e | 37.174–37.863 | 62.072–62.083 | 25.261–25.736 |
+| PR234，Markdown 模式与扩预算 | f481eb6 | 35.000–39.952 | 46.611–48.869 | 25.560–25.749 |
+| PR236，裁剪 viewport | a550e14 | 37.013–43.881 | 49.208–66.189 | 25.481–26.019 |
+| PR242，bounded / 无滚动预览 | dbf1f87 | 34.800–39.166 | 59.297–61.694 | 25.345–25.620 |
+| PR245，重正文合并预热 | 07eeb01 | 32.694–37.901 | 51.318–62.677 | 25.200–25.450 |
+| PR238，Rendering-only 调度 | a563a25 | 36.242–36.515 | 60.446–60.715 | 31.547–32.811 |
+| PR251，统一 artifact | 5bcf564 | 39.887–42.009 | 57.783–58.934 | 32.891–33.581 |
+| PR254，实机数据基线 | 416a6fd | 35.192–38.253 | 49.545–61.058 | 32.415–34.151 |
+| 本地预接管与持续复用 | 1d55939 | 2.350–2.379 | 15.587–19.833 | 29.957–30.269 |
+
+N/A 表示最早四个版本没有 wpfChanged / wpfTransitionId 等同口径字段，不能从日志计算后版的连续活动 Rendering 间隔，也不能填 0。V2.5 的形状主要由 DComp 更新，即使另取 WPF callback 数也不等同于其动画出屏。transaction.commit totalMs 是同步提交调用成本，不是动画完成时间；proxy prepareMs 也不是包含所有更早资源创建/快照准备的完整首用成本。历史 renderer、正文预算及功能工作量不同，固定输入和打包参数并未抹平这些产品差异。
+
+结果解释：
+
+- V2.5 的事务中位数约 58–63ms，后期版约 60ms；切换到 V3 Lite 后约 27.5ms。它们说明同步接管成本变化，**没有证明用户记忆中的 V2.5 动画更顺或更卡**。
+- 在可用的同口径 Rendering 指标中，PR94 至 PR245 多数为约 25–26ms，PR238 后约 32–34ms；这段长尾差异值得继续定位。旧 watchdog 改变软件采样来源，不能由混合 gap 宣称 FPS 减半。
+- 当前预接管和复用将 PR254 约 35–38ms 的同步事务中位数降到约 2.35–2.38ms，Rendering 间隔 P95 仍约 30ms。交互接管优化成立，所有动画卡顿已解决的结论不成立。
+- 34 轮在相应回放时间内没有记录到明确 fallback、retry、verify/endpoints failure 或 WPF apply failure。V2.5 初版分别有 11/8 次 requestedSuccess=False 完成，但 endpointsReady=True；该字段可能对应取消/替换，单凭它不判作交接失败。
+- PR214 针对拖拽回墙 endpoint；普通浏览录制不能证明完整覆盖该新增分支，列入该版用于核对产品整体回归。两轮样本也不足以证明所有设备或长期资源行为。
+
+新增机器可读产物：history/replay-results-all-v2.json（68 份全程/共同前缀记录）、history/comparison-all-common22.csv、history/sequence-equivalence-all.json、history/run-outcomes-all.json；原首批 replay-results-v2.json 不覆盖。追加包的身份与构建日志见 history/packages-supplement-20260913-03.json。所有快照、包、输入副本、原始日志、失败试验、脚本及旧统计均保留。
