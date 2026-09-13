@@ -1,0 +1,186 @@
+name: Temporary E-002 startup batch profiled experiment
+
+on:
+  push:
+    branches: [perf/e002-startup-batch-probe2-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  e002-profiled:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out experiment tools
+        uses: actions/checkout@v7
+        with:
+          ref: perf/e002-startup-batch-probe2-20260913
+          path: tools
+
+      - name: Check out target PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          fetch-depth: 0
+          submodules: recursive
+          path: target
+
+      - name: Check out baseline copy
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          fetch-depth: 0
+          submodules: recursive
+          path: baseline
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Prepare output and native LMDB
+        run: |
+          New-Item -ItemType Directory -Force .\e002-output | Out-Null
+          .\baseline\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+          .\target\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Baseline lifecycle profile
+        run: |
+          Push-Location .\baseline
+          try {
+            dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release -- --profile 2>&1 | Tee-Object ..\e002-output\baseline-profile.log
+            if ($LASTEXITCODE -ne 0) { throw 'baseline profile failed' }
+          }
+          finally { Pop-Location }
+
+      - name: Apply production candidate
+        run: python .\tools\.github\e002-apply.py
+
+      - name: Build and profile candidate
+        run: |
+          Push-Location .\target
+          try {
+            dotnet build .\PaperTodo.csproj -c Release /p:EmbedAllSources=false /p:EmbedUntrackedSources=false 2>&1 | Tee-Object ..\e002-output\candidate-build.log
+            if ($LASTEXITCODE -ne 0) { throw 'candidate build failed' }
+            dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release -- --profile 2>&1 | Tee-Object ..\e002-output\candidate-profile.log
+            if ($LASTEXITCODE -ne 0) { throw 'candidate profile failed' }
+          }
+          finally { Pop-Location }
+
+      - name: Commit verified production source locally
+        id: production
+        run: |
+          Push-Location .\target
+          try {
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add CHANGELOG.md src/AppController.cs src/AppController.StartupEdgePresentation.cs src/EdgeCapsuleHost.cs src/EdgeCapsuleHost.StartupBatch.cs src/PaperWindow.EdgeCapsule.cs src/PaperWindow.EdgeCapsuleContextMenu.cs src/PaperWindow.StartupEdgePresentation.cs
+            git commit -m 'perf(startup): batch first edge capsule presentation [ci]'
+            "sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+          }
+          finally { Pop-Location }
+
+      - name: Add temporary host-phase instrumentation
+        run: |
+          python .\tools\.github\e002-instrument.py
+          $path = '.\target\src\StartupHostProbe.cs'
+          $text = Get-Content -LiteralPath $path -Raw
+          $text = $text.Replace("using System.Diagnostics;`n", "using System.Diagnostics;`nusing System.IO;`n")
+          if ($text -notmatch 'using System\.IO;') { throw 'System.IO probe repair failed' }
+          Set-Content -LiteralPath $path -Value $text -Encoding utf8
+
+      - name: Publish instrumented probe build
+        run: |
+          $pub = Join-Path $env:RUNNER_TEMP 'e002-probe-publish'
+          Remove-Item $pub -Recurse -Force -ErrorAction SilentlyContinue
+          dotnet publish .\target\PaperTodo.csproj -c Release -r win-x64 --self-contained true -o $pub /p:PublishSingleFile=false /p:PublishReadyToRun=false /p:PublishTrimmed=false /p:EmbedAllSources=false /p:EmbedUntrackedSources=false /p:DebugType=none /p:DebugSymbols=false 2>&1 | Tee-Object .\e002-output\probe-publish.log
+          if ($LASTEXITCODE -ne 0) { throw 'probe publish failed' }
+
+      - name: Run three detailed 10-capsule probes
+        run: |
+          $pub = Join-Path $env:RUNNER_TEMP 'e002-probe-publish'
+          $rows = @()
+          function DeltaMs([long]$a, [long]$b) {
+            return (($b - $a) * 1000.0 / [Diagnostics.Stopwatch]::Frequency)
+          }
+          function Write-Fixture([string]$dir) {
+            $papers = @()
+            for ($i = 0; $i -lt 10; $i++) {
+              $papers += [ordered]@{ id="e002-$i"; type='note'; content="short benchmark note $i"; isVisible=$true; isCollapsed=$true; x=120.0; y=120.0; width=300.0; height=240.0; capsuleSide='right' }
+            }
+            $state = [ordered]@{ telemetryEnabled=$false; enableAnimations=$true; useCapsuleMode=$true; useDeepCapsuleMode=$true; experimentalEdgeCapsuleHoverPreview=$true; usePersistentPowerShellProcess=$false; mcpEnabled=$false; papers=$papers }
+            $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $dir 'data.json') -Encoding utf8
+          }
+
+          for ($sample = 1; $sample -le 3; $sample++) {
+            $runDir = Join-Path $env:RUNNER_TEMP ("e002-run-{0}-{1}" -f $sample,[guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Force $runDir | Out-Null
+            Copy-Item (Join-Path $pub '*') $runDir -Recurse -Force
+            Write-Fixture $runDir
+            $prefix = Join-Path $runDir 'host-probe'
+            $psi = [Diagnostics.ProcessStartInfo]::new((Join-Path $runDir 'PaperTodo.exe'))
+            $psi.WorkingDirectory = $runDir
+            $psi.UseShellExecute = $false
+            $psi.Environment['PAPERTODO_E002_PROBE'] = $prefix
+            $t0 = [Diagnostics.Stopwatch]::GetTimestamp()
+            $proc = [Diagnostics.Process]::Start($psi)
+            $idlePath = "$prefix-idle.json"
+            $deadline = [DateTime]::UtcNow.AddSeconds(20)
+            while (-not (Test-Path $idlePath)) {
+              if ($proc.HasExited) { throw "sample $sample exited before idle probe: $($proc.ExitCode)" }
+              if ([DateTime]::UtcNow -gt $deadline) { try { $proc.Kill($true) } catch {}; throw "sample $sample idle probe timeout" }
+              Start-Sleep -Milliseconds 10
+            }
+            $visible = Get-Content "$prefix-visible.json" -Raw | ConvertFrom-Json
+            $idle = Get-Content $idlePath -Raw | ConvertFrom-Json
+            Copy-Item "$prefix-visible.json" ".\e002-output\probe-$sample-visible.json"
+            Copy-Item $idlePath ".\e002-output\probe-$sample-idle.json"
+
+            $exitPsi = [Diagnostics.ProcessStartInfo]::new((Join-Path $runDir 'PaperTodo.exe'))
+            $exitPsi.WorkingDirectory = $runDir
+            $exitPsi.UseShellExecute = $false
+            $exitPsi.ArgumentList.Add('--exit')
+            $secondary = [Diagnostics.Process]::Start($exitPsi)
+            $secondary.WaitForExit(10000) | Out-Null
+            if (-not $proc.WaitForExit(15000)) { try { $proc.Kill($true) } catch {}; throw "sample $sample exit timeout" }
+
+            $rows += [pscustomobject]@{
+              sample = $sample
+              createToVisibleMs = DeltaMs $t0 ([long]$visible.dumpTimestamp)
+              createToIdleMs = DeltaMs $t0 ([long]$idle.dumpTimestamp)
+              visibleWorkingSet = [long]$visible.workingSet
+              idleWorkingSet = [long]$idle.workingSet
+            }
+            Remove-Item $runDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          $rows | Export-Csv .\e002-output\probe-summary.csv -NoTypeInformation
+          $rows | Format-Table | Out-String | Write-Host
+
+      - name: Restore production tree and push verified commit
+        run: |
+          Push-Location .\target
+          try {
+            $expected = '${{ steps.production.outputs.sha }}'
+            git reset --hard $expected
+            Remove-Item .\src\StartupHostProbe.cs -Force -ErrorAction SilentlyContinue
+            if ((git status --porcelain | Measure-Object).Count -ne 0) { git status --short; throw 'target tree not clean after removing probe' }
+            git push origin HEAD:perf/startup-exit-small-preload-20260913
+          }
+          finally { Pop-Location }
+
+      - name: Upload E-002 evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e002-startup-batch-profiled-evidence
+          retention-days: 2
+          if-no-files-found: error
+          path: e002-output/
