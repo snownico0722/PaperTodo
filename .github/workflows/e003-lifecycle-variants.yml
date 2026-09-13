@@ -2,7 +2,7 @@ name: Temporary E-003 scheduling comparison
 on:
   push:
     branches: [perf/e003-lifecycle-profile-20260913]
-    paths: ['.github/e003-variants.py', '.github/workflows/e003-lifecycle-variants.yml']
+    paths: ['.github/e003-variants.py', '.github/e003-refine.py', '.github/workflows/e003-lifecycle-variants.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,18 +29,18 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force evidence | Out-Null
           dotnet --info | Set-Content evidence/dotnet.txt
-          foreach ($variant in @('baseline','preview','idle','combined')) {
+          foreach ($variant in @('baseline','preview','combined')) {
             git -C tools worktree add --detach "../$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
             if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
             git -C $variant submodule update --init --recursive
             if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
             Copy-Item tools/.github/e003-*.py "$variant/.github/"
-            python tools/.github/e003-variants.py $variant $variant
+            python tools/.github/e003-refine.py $variant $variant
             if ($LASTEXITCODE -ne 0) { throw 'variant failed' }
             git -C $variant diff -- src | Set-Content "evidence/$variant-product.diff"
             python tools/.github/e003-detail.py $variant
             if ($LASTEXITCODE -ne 0) { throw 'profile failed' }
-            python tools/.github/e003-variants.py $variant measure
+            python tools/.github/e003-refine.py $variant measure
             if ($LASTEXITCODE -ne 0) { throw 'measurement failed' }
             dotnet build "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release 2>&1 | Tee-Object "evidence/$variant-build.log"
             if ($LASTEXITCODE -ne 0) { throw "$variant build failed" }
@@ -48,18 +48,16 @@ jobs:
       - name: Interleave new process samples
         run: |
           foreach ($round in 0..5) {
-            $order = if ($round % 2 -eq 0) { @('baseline','preview','idle','combined') } else { @('combined','idle','preview','baseline') }
+            $order = if ($round % 2 -eq 0) { @('baseline','preview','combined') } else { @('combined','preview','baseline') }
             foreach ($variant in $order) {
               dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- --e003-case=capsules-10 2>&1 | Tee-Object "evidence/$round-$variant-capsules-10.log"
               if ($LASTEXITCODE -ne 0) { throw "sample $round $variant failed" }
             }
           }
           foreach ($round in 0..2) {
-            foreach ($variant in @('baseline','preview','idle','combined')) {
-              foreach ($case in @('early-expand','real-exit')) {
-                dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- "--e003-case=$case" 2>&1 | Tee-Object "evidence/extra-$round-$variant-$case.log"
-                if ($LASTEXITCODE -ne 0) { throw "$variant $case failed" }
-              }
+            foreach ($variant in @('baseline','preview','combined')) {
+              dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- --e003-case=early-expand 2>&1 | Tee-Object "evidence/extra-$round-$variant-early-expand.log"
+              if ($LASTEXITCODE -ne 0) { throw "$variant early-expand failed" }
             }
           }
       - name: Summarize independent milestones
@@ -81,6 +79,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: e003-scheduling-comparison
+          name: e003-scheduling-refined
           path: evidence/
           retention-days: 14
