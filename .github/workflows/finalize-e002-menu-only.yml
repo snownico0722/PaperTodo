@@ -1,0 +1,94 @@
+name: Finalize E-002 menu-only result
+
+on:
+  push:
+    branches: [perf/e002-isolate-menu-batch-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out tools
+        uses: actions/checkout@v7
+        with:
+          ref: perf/e002-isolate-menu-batch-20260913
+          fetch-depth: 0
+          path: tools
+
+      - name: Check out PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          fetch-depth: 0
+          submodules: recursive
+          path: target
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Collapse candidate to menu-only
+        run: |
+          Push-Location .\target
+          try {
+            git checkout 8ca1276efb760314394ba5763ad768e61bfb99bd -- `
+              src/AppController.cs `
+              src/EdgeCapsuleHost.cs `
+              src/PaperWindow.EdgeCapsule.cs `
+              src/PaperWindow.EdgeCapsuleContextMenu.cs
+            git rm -f `
+              src/AppController.StartupEdgePresentation.cs `
+              src/EdgeCapsuleHost.StartupBatch.cs `
+              src/PaperWindow.StartupEdgePresentation.cs
+          }
+          finally { Pop-Location }
+          python .\tools\.github\e002-isolate.py .\target menu
+          python .\tools\.github\finalize-e002-menu-only.py .\target\doc\EXPERIMENTS.md
+
+      - name: Build native LMDB
+        run: .\target\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Build and focused regressions
+        run: |
+          Push-Location .\target
+          try {
+            dotnet build .\PaperTodo.csproj -c Release /p:EmbedAllSources=false /p:EmbedUntrackedSources=false
+            if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+            $projects = @(
+              '.\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj',
+              '.\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj',
+              '.\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj',
+              '.\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj'
+            )
+            foreach ($project in $projects) {
+              dotnet run --project $project -c Release
+              if ($LASTEXITCODE -ne 0) { throw "regression failed: $project" }
+            }
+          }
+          finally { Pop-Location }
+
+      - name: Commit and push menu-only result
+        working-directory: target
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/PaperWindow.EdgeCapsule.cs src/PaperWindow.EdgeCapsuleContextMenu.cs doc/EXPERIMENTS.md
+          git add -u src
+          if (git diff --cached --quiet) {
+            echo 'No changes to commit'
+            exit 0
+          }
+          git commit -m 'perf(startup): defer edge capsule menus after first frame [ci]'
+          git push origin HEAD:perf/startup-exit-small-preload-20260913
