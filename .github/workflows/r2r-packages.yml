@@ -71,6 +71,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: PaperTodo-r2r-multifile-self-contained
+          archive: false
           if-no-files-found: error
           path: artifacts/r2r/*-r2r-multifile-self-contained.zip
 
@@ -78,6 +79,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: PaperTodo-r2r-multifile-no-runtime
+          archive: false
           if-no-files-found: error
           path: artifacts/r2r/*-r2r-multifile-no-runtime.zip
 
