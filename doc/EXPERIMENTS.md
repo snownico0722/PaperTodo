@@ -154,7 +154,7 @@
 
 因此没有理由仅为这几十毫秒把完整包扩大到两倍以上。
 
-#### C. Multi-file + R2R 是有效候选，不是当前决策
+#### C. Multi-file + R2R 技术上有效，但不进入当前分发
 
 相对 SC multi-file no-R2R：
 
@@ -169,13 +169,54 @@
 - SC multi-file：128,696,320 / 128,847,872 / 122,478,592 bytes；
 - SC multi-file + R2R：120,840,192 / 128,147,456 / 120,967,168 bytes。
 
-这证明 multi-file + R2R 值得作为未来发布形态候选继续评估，但它会失去“单 EXE”便携性，所以本实验**不把它自动升级为当前正式发布方案**。
+这证明 multi-file + R2R 的技术性能是有效的；但用户真正会比较的高性能/小体积方案不是 SC multi-file no-R2R，而是现有的 FD single-file no-R2R。结合后续 #255 补测后，这条路线不再作为当前分发候选；只有部署边界、安装方式或运行时发生明显变化时才值得重新测。
 
 #### D. Framework-dependent 仍是最快、最小的轻量路线之一
 
 FD single-file no-R2R 已把 Fresh DWM 降到 1193.38 ms；R2R 后进一步到 1041.10 ms，但发布目录约 17.2 -> 50.1 MiB，约 3 倍。
 
-因此“是否给 no-runtime 包单独启用 R2R”是独立产品/发布取舍，不能因为速度更快就直接采用。
+结合后续 #255 补测，FD single-file no-R2R 已经承担“更快/更小、但要求已安装 .NET”这档用户选择；R2R 的额外收益不足以再增加一档正式分发。
+
+#### E. #255 后续补测：R2R 技术有效，但无额外分发价值
+
+#255 原计划增加 `SC multi-file + R2R` 与 `FD multi-file + R2R` 两种独立 ZIP 打包入口。为判断它们是否值得成为长期分发能力，又做了一轮窄范围补测；补测仍沿用 E-001 的 10 Note fixture、`CreateProcess -> DwmFlush` 边界和每变体 3 组 fresh/warm pair。
+
+补测 run `34728040332`（Windows Server 2025、.NET SDK 10.0.401 / runtime 10.0.12）的启动结果：
+
+| 变体 | Fresh managed entry | Fresh DWM | Warm DWM | Fresh Exit | Fresh WS MiB | Warm WS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SC + multi-file + R2R | 124.27 ms | 1182.58 ms | 1073.19 ms | 673.47 ms | 115.54 | 115.36 |
+| FD + single-file + R2R | 107.39 ms | **1027.88 ms** | 1029.93 ms | 675.90 ms | 115.77 | 115.52 |
+| FD + multi-file + R2R | **99.62 ms** | 1045.49 ms | **1013.35 ms** | **662.02 ms** | **115.30** | 115.37 |
+
+FD multi-file + R2R 与 FD single-file + R2R 属于同一性能档位：Fresh 只差约 17.6 ms（1.7%），Warm 反而快约 16.6 ms（1.6%）。不能据此宣称其中一个稳定更快；可确认的是 no-runtime R2R 展开为多文件没有观察到明显启动或工作集惩罚。
+
+SC multi-file + R2R 在本次补测 Fresh 为 1182.58 ms，而 E-001 原轮为 1100.33 ms；Warm 1073.19 ms 与原轮 1078.64 ms 很接近。这个跨 run 差异再次说明 hosted runner 的 Fresh 绝对数不能跨运行做个位数百分比精确比较。因此产品取舍仍优先使用 E-001 同一矩阵内部的对照。
+
+未插桩的 #255 独立打包验证 run `34728463445` 实际得到：
+
+| 打包方式 | 解压后文件数 | 解压后大小 | ZIP 大小 |
+| --- | ---: | ---: | ---: |
+| SC + multi-file + R2R | 342 | 229.31 MiB | **90.83 MiB** |
+| FD + multi-file + R2R | 60 | 27.51 MiB | **14.49 MiB** |
+
+但是“R2R 相对同形态 no-R2R 提升很大”不是用户真正的分发决策。把现有两档正式选择放回同一 E-001 矩阵后：
+
+| 用户可选形态 | Fresh DWM | Warm DWM | 体积 / 特点 |
+| --- | ---: | ---: | --- |
+| **SC + compressed single-file + no-R2R** | 1452.10 ms | 1414.87 ms | 约 77.4 MiB，开箱即用 |
+| **FD + single-file + no-R2R** | 1193.38 ms | 1162.40 ms | 约 17.2 MiB，需要匹配的 .NET Desktop Runtime |
+| SC + multi-file + R2R | 1100.33 ms | 1078.64 ms | 约 229.3 MiB 解压目录；补测 ZIP 约 90.8 MiB |
+| FD + single-file + R2R | 1041.10 ms | 1087.06 ms | 约 50.1 MiB |
+
+从真实用户选择看，想要“更快/更小”的用户已经可以选 FD single-file no-R2R。SC multi-file + R2R 相比它在同一 E-001 run 里只再快约 93 ms Fresh / 84 ms Warm，却从约 17 MiB 单文件变成 229 MiB 多文件目录（即使 ZIP 下载也约 91 MiB）。FD single-file + R2R 则把约 17.2 MiB 放大到 50.1 MiB，换来的额外收益约 152 ms Fresh / 75 ms Warm。对启动约一秒量级的 PaperTodo，这些边际收益不足以支付额外包型、下载页选择、体积和维护成本。
+
+**最终产品结论：R2R 有实验价值，但在 PaperTodo 当前两档分发体系里没有额外分发价值。** 正式分发保持：
+
+- SC compressed single-file + no-R2R：面向开箱即用；
+- FD single-file + no-R2R：面向更小、更快且已安装匹配 .NET 的用户。
+
+不新增 SC/FD R2R 包，也不把 R2R 暴露成正式“打包选项”。#255 的实验和打包验证数据吸收进 E-001 后关闭；若未来改成安装器、多文件部署、运行时/host 明显变化，再重新 A/B。
 
 ### 当前可得的启动预算
 
@@ -217,6 +258,8 @@ CreateProcess
   - `raw.json`；
   - 各变体 publish logs；
   - 未插桩真实源码 R2R publish log。
+- #255 后续启动补测：Actions run `34728040332`。
+- #255 未插桩 R2R ZIP 打包验证：Actions run `34728463445`，head `67a09b339fc3fe49ada88ab17cb741076d157e6e`。
 
 GitHub artifact 有保留期限，因此长期判断应以本文保留的实验条件和关键数值为准；需要重新做发布选择时，优先在当时的 runtime / Windows / PaperTodo 版本上复跑，而不是机械沿用 2026-09 的绝对毫秒数。
 
