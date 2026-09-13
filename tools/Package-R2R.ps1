@@ -97,7 +97,9 @@ function New-R2RPackage([string]$Kind, [bool]$SelfContained) {
 
 Push-Location $repoRoot
 try {
-    Invoke-DotNet @('restore', $projectPath, '-r', 'win-x64')
+    # ReadyToRun needs the crossgen/runtime packs in assets.json. A normal RID restore is not enough
+    # when publish uses --no-restore, so request R2R during restore explicitly.
+    Invoke-DotNet @('restore', $projectPath, '-r', 'win-x64', '/p:PublishReadyToRun=true')
 
     $results = @()
     if ($Mode -in @('All', 'SelfContained')) {
