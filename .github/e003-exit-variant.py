@@ -11,7 +11,7 @@ a='''        try
         {
             Environment.Exit(0);
         }'''
-b='''        Application.Current.Shutdown();'''
+b='''            Application.Current.Shutdown();'''
 if s.count(a)!=1:raise RuntimeError('exit anchor missing')
 p.write_text(s.replace(a,b,1),encoding='utf-8',newline='\n')
 p=root/'tests/PaperTodo.LifecycleChecks/Program.cs'
