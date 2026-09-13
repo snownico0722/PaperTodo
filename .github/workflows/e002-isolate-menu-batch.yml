@@ -23,12 +23,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: perf/e002-isolate-menu-batch-20260913
+          fetch-depth: 0
           path: tools
 
       - name: Check out original baseline
         uses: actions/checkout@v7
         with:
           ref: 8ca1276efb760314394ba5763ad768e61bfb99bd
+          fetch-depth: 0
           submodules: recursive
           path: baseline
 
@@ -36,6 +38,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: 8ca1276efb760314394ba5763ad768e61bfb99bd
+          fetch-depth: 0
           submodules: recursive
           path: menu
 
@@ -43,6 +46,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: 20b007d716b6abf9af72a26919dcb0baf754ba00
+          fetch-depth: 0
           submodules: recursive
           path: batch
 
