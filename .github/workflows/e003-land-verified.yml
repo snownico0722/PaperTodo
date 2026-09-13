@@ -80,10 +80,6 @@ jobs:
 
           普通退出不再强制终止潜在的第三方前台线程；本轮确认了 PaperTodo 自身线程、脚本子进程、正常 OnExit 及重复启动，未覆盖任意第三方插件自建的前台线程。真实 WebView/第三方插件组合仍需针对性验证，不把隔离用例的通过扩大成所有插件均已实测。
           '''
-          # Keep the added prose at normal Markdown indentation.
-          text = text[:text.index('          ### 复核资料与落盘验证')] + '\n'.join(
-              line[10:] if line.startswith('          ') else line
-              for line in text[text.index('          ### 复核资料与落盘验证'):].splitlines()) + '\n'
           p.write_text(text, encoding='utf-8', newline='\n')
           PY
           git -C target diff -- src tests > evidence/unexpected-source.diff
