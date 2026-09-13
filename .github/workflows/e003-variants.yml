@@ -29,22 +29,23 @@ jobs:
           New-Item -ItemType Directory -Force evidence | Out-Null
           dotnet --info | Set-Content evidence/dotnet.txt
           Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | Format-List | Out-File evidence/cpu.txt
-          foreach ($variant in @('baseline','no-entry-animation','drag-idle','delayed-shell','graceful-exit')) {
+          foreach ($variant in @('baseline','no-entry-animation','drag-idle','preview-first','combined','graceful-exit')) {
             git worktree add --detach "variants/$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
             if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
             git -C "variants/$variant" submodule update --init --recursive
             if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
             python .github/e003.py "variants/$variant"
             if ($LASTEXITCODE -ne 0) { throw 'instrumentation failed' }
-            python .github/e003-variants.py "variants/$variant" $variant
+            python .github/e003-variants2.py "variants/$variant" $variant
             if ($LASTEXITCODE -ne 0) { throw 'variant failed' }
             dotnet build "variants/$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release 2>&1 | Tee-Object "evidence/build-$variant.log"
             if ($LASTEXITCODE -ne 0) { throw "$variant build failed" }
           }
       - name: Interleaved samples and real exit
         run: |
+          $failures = @()
           foreach ($round in 1..5) {
-            $variants = @('baseline','no-entry-animation','drag-idle','delayed-shell','graceful-exit')
+            $variants = @('baseline','no-entry-animation','drag-idle','preview-first','combined','graceful-exit')
             if ($round % 2 -eq 0) { [array]::Reverse($variants) }
             foreach ($variant in $variants) {
               foreach ($case in @('capsules-10','real-exit')) {
@@ -52,10 +53,12 @@ jobs:
                 New-Item -ItemType Directory -Force $dir | Out-Null
                 $env:PAPERTODO_E003_DIR = $dir
                 dotnet run --project "variants/$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release --no-build -- --case $case 2>&1 | Tee-Object "$dir/result.log"
-                if ($LASTEXITCODE -ne 0) { throw "$variant $case round $round failed" }
+                if ($LASTEXITCODE -ne 0) { $failures += "$variant $case round $round failed" }
               }
             }
           }
+          $failures | Set-Content evidence/failures.txt
+          if ($failures.Count -gt 0) { throw ($failures -join '; ') }
       - name: Upload experiment evidence
         if: always()
         uses: actions/upload-artifact@v7
