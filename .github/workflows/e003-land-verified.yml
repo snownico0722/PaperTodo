@@ -1,0 +1,102 @@
+name: Land verified E-003 lifecycle changes
+on:
+  push:
+    branches: [perf/e003-lifecycle-profile-20260913]
+    paths: ['.github/workflows/e003-land-verified.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  land:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read experiment tools from tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: a4abb1741ced32f6bd362514e8443290f5115a3b
+          path: tools
+      - name: Check out target PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          path: target
+          fetch-depth: 0
+      - name: Verify successful validation steps and immutable evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import hashlib, io, json, os, urllib.request, zipfile
+          from pathlib import Path
+          api = 'https://api.github.com/repos/snownico0722/PaperTodo'
+          def get(path):
+              request = urllib.request.Request(api + path, headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request) as response:
+                  return response.read()
+          job = json.loads(get('/actions/jobs/103664982265'))
+          assert job['run_id'] == 34735095310
+          steps = {step['name']: step['conclusion'] for step in job['steps']}
+          for name in ('Apply measured candidate', 'Release build and behavioral regressions',
+                       'Real App shutdown and repeated startup'):
+              assert steps[name] == 'success', (name, steps.get(name))
+          assert steps['Retain measurements and verify final diff'] == 'failure'
+          data = get('/actions/artifacts/10310961672/zip')
+          assert hashlib.sha256(data).hexdigest() == 'f10c98d6947b74d423c7279140614854cb01f7e4f56f55b8e99d2ea0116ad606'
+          destination = Path('evidence')
+          destination.mkdir()
+          with zipfile.ZipFile(io.BytesIO(data)) as archive:
+              for name in archive.namelist():
+                  assert '/' not in name and '\\' not in name and name not in ('.', '..')
+              archive.extractall(destination)
+          text = (destination / 'product-before-validation.diff').read_text(encoding='utf-8-sig')
+          (destination / 'verified.patch').write_text(text, encoding='utf-8', newline='\n')
+          print('Reusing exact source patch: 8 Release suites, Debug EdgePreview, actual App A/B passed.')
+          PY
+      - name: Apply exact tested source and record results
+        run: |
+          test "$(git -C target rev-parse HEAD)" = '416a6fdbf931612ffdb7f066149001c4100a9a4c'
+          git -C target apply --check ../evidence/verified.patch
+          git -C target apply --index ../evidence/verified.patch
+          git -C target diff --cached -- src tests > evidence/tested-source.diff
+          python tools/.github/e003-record.py target evidence
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('target/doc/EXPERIMENTS.md')
+          text = p.read_text(encoding='utf-8')
+          start = text.index('## E-003 ')
+          text = text[:start] + '\n'.join(line.rstrip() for line in text[start:].splitlines()) + '\n'
+          text += '''
+          ### 复核资料与落盘验证
+
+          - Microsoft [Application.Shutdown](https://learn.microsoft.com/en-us/dotnet/api/system.windows.application.shutdown?view=windowsdesktop-10.0)：正常应用退出及 Exit 生命周期。
+          - Microsoft [Environment.Exit](https://learn.microsoft.com/en-us/dotnet/api/system.environment.exit?view=net-10.0)：与正常返回不同的强制进程退出语义；不是所有程序都会有本实验相同的时间差。
+          - Microsoft [DispatcherPriority](https://learn.microsoft.com/en-us/dotnet/api/system.windows.threading.dispatcherpriority?view=windowsdesktop-10.0)：ApplicationIdle/SystemIdle 是相对队列优先级，不表示 CPU 空闲，也不使单次 UI 构建可抢占。
+
+          最终 Windows 验证 run `34735095310` 的 Release 构建（0 警告/0 错误）、8 组 Release 回归、Debug EdgePreview 和真实 App A/B 均通过；之后仅实验文档两处 Markdown 行尾空格触发 `git diff --check` 失败，未执行推送。落盘流程复用其 artifact `10310961672` 中的原始受测源代码补丁并验证 SHA-256，仅修正文档格式，不替换受测代码。真实 App 对照表来自同一 artifact 的 `real-app-summary.csv`。
+
+          普通退出不再强制终止潜在的第三方前台线程；本轮确认了 PaperTodo 自身线程、脚本子进程、正常 OnExit 及重复启动，未覆盖任意第三方插件自建的前台线程。真实 WebView/第三方插件组合仍需针对性验证，不把隔离用例的通过扩大成所有插件均已实测。
+          '''
+          # Keep the added prose at normal Markdown indentation.
+          text = text[:text.index('          ### 复核资料与落盘验证')] + '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in text[text.index('          ### 复核资料与落盘验证'):].splitlines()) + '\n'
+          p.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          git -C target diff -- src tests > evidence/unexpected-source.diff
+          test ! -s evidence/unexpected-source.diff
+          git -C target add doc/EXPERIMENTS.md
+          git -C target diff --cached -- src tests > evidence/final-source.diff
+          cmp evidence/tested-source.diff evidence/final-source.diff
+          git -C target diff --cached --check
+          git -C target diff --cached --stat
+      - name: Commit and push only the PR branch
+        run: |
+          git -C target config user.name 'github-actions[bot]'
+          git -C target config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C target commit -m 'perf(lifecycle): prepare previews before optional shells and finish WPF shutdown [ci]'
+          git -C target push origin HEAD:perf/startup-exit-small-preload-20260913
+          git -C target rev-parse HEAD
