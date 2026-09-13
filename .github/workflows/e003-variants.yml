@@ -1,0 +1,66 @@
+name: Temporary E-003 lifecycle tradeoffs
+on:
+  push:
+    branches: [perf/e003-lifecycle-measure-20260913]
+    paths: [.github/workflows/e003-variants.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare independent builds
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          dotnet --info | Set-Content evidence/dotnet.txt
+          Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | Format-List | Out-File evidence/cpu.txt
+          foreach ($variant in @('baseline','no-entry-animation','drag-idle','delayed-shell','graceful-exit')) {
+            git worktree add --detach "variants/$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
+            git -C "variants/$variant" submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
+            python .github/e003.py "variants/$variant"
+            if ($LASTEXITCODE -ne 0) { throw 'instrumentation failed' }
+            python .github/e003-variants.py "variants/$variant" $variant
+            if ($LASTEXITCODE -ne 0) { throw 'variant failed' }
+            dotnet build "variants/$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release 2>&1 | Tee-Object "evidence/build-$variant.log"
+            if ($LASTEXITCODE -ne 0) { throw "$variant build failed" }
+          }
+      - name: Interleaved samples and real exit
+        run: |
+          foreach ($round in 1..5) {
+            $variants = @('baseline','no-entry-animation','drag-idle','delayed-shell','graceful-exit')
+            if ($round % 2 -eq 0) { [array]::Reverse($variants) }
+            foreach ($variant in $variants) {
+              foreach ($case in @('capsules-10','real-exit')) {
+                $dir = Join-Path (Resolve-Path evidence) "$variant-$case-$round"
+                New-Item -ItemType Directory -Force $dir | Out-Null
+                $env:PAPERTODO_E003_DIR = $dir
+                dotnet run --project "variants/$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release --no-build -- --case $case 2>&1 | Tee-Object "$dir/result.log"
+                if ($LASTEXITCODE -ne 0) { throw "$variant $case round $round failed" }
+              }
+            }
+          }
+      - name: Upload experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e003-lifecycle-tradeoffs
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: error
