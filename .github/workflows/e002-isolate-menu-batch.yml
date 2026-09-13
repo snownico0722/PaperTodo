@@ -1,0 +1,105 @@
+name: Temporary E-002 menu vs batch isolation
+
+on:
+  push:
+    branches: [perf/e002-isolate-menu-batch-20260913]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolate:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out tools
+        uses: actions/checkout@v7
+        with:
+          ref: perf/e002-isolate-menu-batch-20260913
+          path: tools
+
+      - name: Check out original baseline
+        uses: actions/checkout@v7
+        with:
+          ref: 8ca1276efb760314394ba5763ad768e61bfb99bd
+          submodules: recursive
+          path: baseline
+
+      - name: Check out menu-only baseline
+        uses: actions/checkout@v7
+        with:
+          ref: 8ca1276efb760314394ba5763ad768e61bfb99bd
+          submodules: recursive
+          path: menu
+
+      - name: Check out menu plus batch candidate
+        uses: actions/checkout@v7
+        with:
+          ref: 20b007d716b6abf9af72a26919dcb0baf754ba00
+          submodules: recursive
+          path: batch
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Prepare variants
+        run: |
+          New-Item -ItemType Directory -Force .\isolation-output | Out-Null
+          python .\tools\.github\e002-isolate.py .\menu menu
+          foreach ($dir in @('.\baseline','.\menu','.\batch')) {
+            python .\tools\.github\e002-isolate.py $dir profile
+          }
+
+      - name: Run five 10-capsule samples per variant
+        run: |
+          foreach ($variant in @('baseline','menu','batch')) {
+            Push-Location ".\$variant"
+            try {
+              dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release -- --capsules10-profile 2>&1 | Tee-Object "..\isolation-output\$variant.log"
+              if ($LASTEXITCODE -ne 0) { throw "$variant profile failed" }
+            }
+            finally { Pop-Location }
+          }
+
+      - name: Summarize isolation result
+        run: |
+          $summary = @()
+          foreach ($variant in @('baseline','menu','batch')) {
+            $rows = @()
+            foreach ($line in Get-Content ".\isolation-output\$variant.log") {
+              if ($line -match '^LIFECYCLE_SAMPLE (\{.*\})$') {
+                $rows += ($Matches[1] | ConvertFrom-Json)
+              }
+            }
+            if ($rows.Count -ne 5) { throw "$variant expected 5 rows, got $($rows.Count)" }
+            $restore = @($rows.restoreMs | Sort-Object)
+            $shell = @($rows.shellsReadyMs | Sort-Object)
+            $preload = @($rows.preloadReadyMs | Sort-Object)
+            $summary += [pscustomobject]@{
+              variant = $variant
+              restoreMedianMs = $restore[2]
+              shellMedianMs = $shell[2]
+              preloadMedianMs = $preload[2]
+              restoreSamples = ($restore -join ';')
+            }
+          }
+          $summary | Export-Csv .\isolation-output\summary.csv -NoTypeInformation
+          $summary | Format-Table -AutoSize | Out-String | Write-Host
+
+      - name: Upload isolation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e002-menu-vs-batch-isolation
+          retention-days: 2
+          if-no-files-found: error
+          path: isolation-output/
