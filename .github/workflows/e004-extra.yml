@@ -1,0 +1,71 @@
+name: Temporary E-004 packaging boundary comparison
+on:
+  push:
+    branches: [perf/e004-first-frame-editor-20260913]
+    paths: ['.github/e004-extra.py', '.github/workflows/e004-extra.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare the same tested product candidate
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          dotnet --info > evidence/dotnet.txt
+          foreach ($name in @('baseline','candidate')) {
+            git worktree add --detach $name 92e835a5fb259519fa41403e8eb41cc4bfec969e
+            if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
+            git -C $name submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
+          }
+          python .github/e004-apply.py candidate
+          if ($LASTEXITCODE -ne 0) { throw 'candidate failed' }
+          git -C candidate add -N src/StartupCompilationProfile.cs
+          git -C candidate diff > evidence/product.diff
+          python .github/e004-extra.py
+          if ($LASTEXITCODE -ne 0) { throw 'packaging variant failed' }
+          Copy-Item .github/e004-app.ps1 evidence/experiment.ps1
+      - name: Compare published executable startup and exit
+        run: ./.github/e004-app.ps1 -Workspace .
+      - name: Summarize new packaging combinations
+        shell: python
+        run: |
+          import csv,statistics,json,struct
+          from pathlib import Path
+          rows=list(csv.DictReader(Path('evidence/real-app.csv').open(encoding='utf-8-sig')))
+          assert len(rows)==30,len(rows)
+          keys=['renderingMs','readyMs','cacheMs','shellMs','exitMs','idleWorkingSet','idlePrivateBytes','cpuMs','profileAfter']
+          summary=[]
+          for fmt in ('fddsingle','scr2r'):
+              for mode in ('baseline','fresh','recorded'):
+                  rs=[r for r in rows if r['format']==fmt and r['mode']==mode and int(r['sampleIndex'])>0]
+                  assert len(rs)==4
+                  item=dict(format=fmt,mode=mode,n=len(rs))
+                  item.update({k:statistics.median(float(r[k]) for r in rs) for k in keys})
+                  summary.append(item)
+                  print(json.dumps(item))
+          with Path('evidence/medians.csv').open('w',newline='',encoding='utf-8') as f:
+              w=csv.DictWriter(f,fieldnames=list(summary[0]));w.writeheader();w.writerows(summary)
+          for p in Path('evidence').glob('*.prof'):
+              data=p.read_bytes();print(p.name,len(data),'first 16 DWORDs',struct.unpack('<16I',data[:64]))
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e004-packaging-boundaries
+          path: evidence/
+          retention-days: 2
