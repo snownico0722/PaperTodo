@@ -38,6 +38,17 @@ jobs:
       - name: Build native LMDB library
         run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
 
+      - name: Align benchmark restore with ReadyToRun publish
+        run: |
+          $path = '.\.github\r2r-package-benchmark.ps1'
+          $text = Get-Content -LiteralPath $path -Raw
+          $old = 'dotnet restore .\PaperTodo.csproj -r win-x64'
+          $new = 'dotnet restore .\PaperTodo.csproj -r win-x64 /p:PublishReadyToRun=true'
+          if ($text.IndexOf($old, [StringComparison]::Ordinal) -lt 0) {
+            throw 'Benchmark restore command not found.'
+          }
+          Set-Content -LiteralPath $path -Value $text.Replace($old, $new) -Encoding utf8
+
       - name: Run R2R packaging benchmark
         run: .\.github\r2r-package-benchmark.ps1
 
