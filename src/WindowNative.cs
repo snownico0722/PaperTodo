@@ -1056,6 +1056,9 @@ internal static partial class WindowNative
 
             _nativeCommitAttempted = true;
 #if DEBUG
+            var nativeLatency = EdgeNativeLatencyObservation.BeginBatch(_pendingBounds.Keys);
+            var nativeJournal = EdgeNativeLatencyObservation.Enabled
+                ? EdgeDiagnosticObservation.Begin("native.end-defer", this) : default;
             var previousMessageProbe = BeginNativeGeometryMessageProbe(IntPtr.Zero);
             var messageProbe = default(NativeGeometryMessageProbe);
             var endStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
@@ -1073,6 +1076,8 @@ internal static partial class WindowNative
             finally
             {
                 messageProbe = EndNativeGeometryMessageProbe(previousMessageProbe);
+                nativeJournal.Dispose();
+                nativeLatency.Dispose();
             }
             _endMilliseconds = EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(
                 endStartedAt,

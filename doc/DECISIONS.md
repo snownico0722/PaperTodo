@@ -1213,6 +1213,8 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 
 2026-09-13 的 E-005 补充了另一种丢推进路径：不同 WPF Rendering 通知可能复用预计呈现时间，按值去重会丢掉已经到来的合法通知。新回归在旧条件下复现第二次通知无法推进，在移除该条件后通过；同包开关对照也支持应用更新间隔改善。纯 Pointer 回调不设队列屏障的实验则减少了屏障次数，却没有改善更新间隔，单独与组合测试均未采用。不能将更少的屏障、退订或 watchdog 次数替代完整的更新节拍对照，也不能把 Rendering-only 统计中排除的旧 watchdog 更新视作无效工作。
 
+E-006 将临时退订的另一个成本定位到实际 WPF 调用点：在 WaitingForResponse 期间没有 Rendering 订阅，`ScheduleNextRenderOp` 可退出 interlock，经 `LeaveInterlockedPresentation → CompleteRender → Channel.WaitForNextMessage` 同步等待。另有重新进入呈现调度时的 Inactive/Input promotion 间隔。因而恢复订阅后操作很快开始，并不能证明整个退订/恢复周期没有成本。此证据补充原因，不改变当前 owner、shape 与 translation 的职责；此前删除 Pointer 屏障仍是未获性能支持的候选，不能仅凭同步等待栈直接恢复该实验或引入补帧。完整采样、对照和仍未知的合成端延迟见 E-006。
+
 ### Evidence
 
 - `src/EdgeCapsuleFrameScheduler.cs`：owner registration、queue readiness、Rendering 订阅边界。

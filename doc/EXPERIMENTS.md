@@ -15,6 +15,8 @@
 | E-002 | 2026-09-13 | Edge Host 首次呈现：菜单延后与批量首帧 | Completed | — |
 | E-003 | 2026-09-13 | 实机录制：代理常驻复用及封版后的历史版本对照 | Completed | D-037 |
 | E-004 | 2026-09-13 | 统一内存日志、扰动检查与 16 版历史对照 | Completed | — |
+| E-005 | 2026-09-13 | Rendering 预计呈现时间误去重与同机单变量回放 | Completed | D-032 |
+| E-006 | 2026-09-13 | 原生消息、WPF 呈现等待和 Dispatcher promotion 定位 | Completed | D-032 |
 
 ---
 
@@ -547,3 +549,46 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 - 旧 `duplicateCallbacks` 字段保留为 0 以兼容日志 schema，表示没有按预计时间过滤；不表示原始 RenderingTime 没有重复。旧版 watchdog 的真实更新与本次合法 Rendering 通知仍需按来源和实际形状变化区分，不能直接换算成显示 FPS。
 
 本轮保持 WPF shape / DComp translation-only 分工，同步更新 D-032、Architecture 和 Unreleased；仅本地提交，不推送。最终包 SHA-256：`DA8A31304C371C1C36EBBD813F9BEE0E8144203FA6435468C423B1DE4BD3E56A`。
+
+## E-006 — 原生消息、WPF 呈现等待和 Dispatcher promotion 定位
+
+**Status:** Completed（诊断完成，未新增生产调度修复）
+
+**基线：** `62f8dcc8`，已包含 E-005 的 Rendering 通知修正。
+
+**证据根：** `输出/edge-deep-latency-20260913/`。此前三轮实验目录保留原状。
+
+### 方法与范围
+
+同一优化 Debug 单文件包，原始实机数据的独立副本和原录制 `数据.exe`，每轮新进程，6秒启动等待与2秒收尾。已有详细内存日志保持开启；新增 deep 开关只观察 Dispatcher 生命周期、现有 WPF MediaContext 和几何批次内下游 HWND 消息。采集不新增 Rendering 订阅、调度操作或补帧；仅 Debug 编入。
+
+完成 deep 开启两轮、关闭两轮、deep＋外部 EventPipe 一轮。实际顺序是开启1→采样1→关闭1→关闭2→开启2，中间有分析，不称连续 ABBA。关闭1尾部少一个动作，共35，其余36；全体严格共同前缀33动作。五轮正常退出、采集零丢弃，退出前检查无匹配诊断文件。关闭时 deep 事件为0；开启三轮均531对 native 消息，无缺失配对。
+
+### 已定位的调用点
+
+1. **真实 HWND 移动的同步刷新。** `CommitEdgeCapsuleQueueProxyLogicalEndpoints → EndDeferWindowPos → WM_WINDOWPOSCHANGING → HwndTarget.UpdateWindowSettings → Channel.SyncFlush`。不带采样的两轮，下游0x46消息最长15.8239/12.7285ms；采样轮14.8517ms，8个 UI External 样本位于 `UpdateWindowSettings` 的 IL offset616，即614的 `SyncFlush` 调用与619的下一指令之间。真实位置变化也会触发此路径，不要求 resize；复用代理不免除真实源 HWND 的位置同步。
+2. **临时退订后退出 interlock 的同步收尾。** 采样轮某一真实 owner 宽高/透明度更新间隔50.5823ms：先约31ms处于 WaitingForResponse，随后临时退订 Rendering，`ScheduleNextRenderOp → LeaveInterlockedPresentation → CompleteRender` 进入同步等待。约19ms快照跨度内13个 UI External 样本的 IL offset68，对应65的 `Channel.WaitForNextMessage` 调用与70的下一条指令。它与上一类 SyncFlush 是两个接口。恢复订阅后真正 posted→started 仅0.0062ms。首段反馈、传递、接收的进一步归因仍未知；采样不等于逐纳秒归属。无采样的开启1有48.7156ms同型状态序列，但没有该轮逐指令证明。
+3. **WPF 的低优先级渲染 promotion 间隔。** 另外39.6142/37.3477ms样本先排 Inactive，配置10ms的 input promotion 实际约+23.09/+21.03ms发生，再在 Input 等约16ms；handler自身0.886/0.537ms。后半窗口的8/10个样本全在 `Dispatcher.GetMessage`，不是一直计算；estimated-vsync timer未启用，不能混称NoPresent计时器。底层timer晚到及Input等待的原因尚未确定。
+
+上述三段采样窗口未见实际GC/Start。采样器的约20069次SuspendOther不能误认成GC；全采集实际GC/Start为9次。精确seq/QPC、完整栈及复算脚本在根报告、`analysis-native/`、`analysis-wpf/` 和 `native-repro-analysis/`。
+
+### 扰动对照
+
+仅统计共同33动作的当前owner宽高/透明度实际变化间隔，不桥接transition，不是物理显示帧时间：
+
+| 组 | P95 ms | 最大 ms |
+| --- | ---: | ---: |
+| deep关闭，两轮 | 22.6779–25.5536 | 35.9359–51.4942 |
+| deep开启，两轮 | 24.9849–26.8912 | 35.8569–48.7156 |
+| deep＋EventPipe，一轮 | 27.6606 | 39.6142 |
+
+50.5823ms调用栈样本位于共同33动作之后，仅用于阻塞定位，不用于该表排名。关闭deep仍有51.4942ms，支持长间隙并非deep独有；样本数和系统波动不足以宣称零扰动或精确开销。开启deep增加约6.3万条记录、约4～7MiB capture allocation；外部采样另有成本。两轮关闭应用CPU为6593.750/7390.625ms，两轮开启7093.750/7546.875ms，采样轮7875ms，均覆盖各自完整harness窗口，且不含外部采样器CPU。
+
+### 版本核验与验证边界
+
+- 实际 `PresentationCore.dll` 为10.0.12，SHA256 `A0CE98A232C65ED2B9F9AF58B39359A6016066AFD62E85ECFD745DA202F0B01B`，MVID `4fccf047-3c3d-43a3-aa9e-e7c2f44ce373`。已保存实际方法IL及精确 `dotnet/dotnet` VMR revision `95017c711e6afc1085133d440e42b4bd78155701` 下WPF源码，不只依据旧版本源码猜测。
+- 系统WPR CPU和WPF ETW因当前Windows令牌权限失败，没有启动采集；不是自动审批拒绝。进程内EventPipe正常、转换eventsLost=0。尚无内核调度/GPU证据，不能继续归因到某个DWM/GPU/驱动问题。
+- 新 `PaperTodo.EdgeLatencyObservationChecks` 独立链接生产探针，受控隐藏HwndSource/Dispatcher行为192断言通过，0警告/错误；验证转发一次、原参数/结果、嵌套批次、Remove/reinstall、销毁及操作优先级/FIFO/取消。9项分析器回归通过。标准Release构建0错误，4条NU1900为漏洞数据服务网络失败，未完成漏洞审计。
+- v1失败构建、v2成功包、来源/哈希、所有副本和日志、nettrace/etlx、解析器/IL工具及派生结果保留。v2 EXE SHA256 `F8987C5E6914B0463B79628CDB66EF423709547573C5955E173FE4E647235A84`。四个原输入哈希复核未变；只本地提交，不推送。
+
+本轮确立“在UI侧具体等哪个接口”的证据，未证明合成端为何迟到，也未采用此前失败的Pointer屏障实验。当前运行职责未变；Architecture记录隔离诊断能力，D-032补充退订/恢复的成本，因无新增用户行为差异不追加Unreleased条目。

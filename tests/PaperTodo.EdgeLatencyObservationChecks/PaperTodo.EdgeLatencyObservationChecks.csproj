@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/EdgeNativeLatencyObservation.cs" Link="EdgeNativeLatencyObservation.cs" />
+    <Compile Include="../../src/EdgeDispatcherLatencyObservation.cs" Link="EdgeDispatcherLatencyObservation.cs" />
+    <Compile Include="../../src/EdgeDiagnosticJournal.cs" Link="EdgeDiagnosticJournal.cs" />
+  </ItemGroup>
+</Project>

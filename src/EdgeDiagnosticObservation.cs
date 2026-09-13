@@ -81,6 +81,7 @@ internal static class EdgeDiagnosticObservation
         EdgeCapsulePerformanceDiagnostics.Event("render.callback", Id(scheduler),
             args is RenderingEventArgs rendering ? rendering.RenderingTime.Ticks : -1,
             presenters, pending, ticking ? 1 : 0);
+        EdgeDispatcherLatencyObservation.Snapshot("render.callback");
     }
 
     internal static void Subscription(object scheduler, bool subscribed)
@@ -179,6 +180,7 @@ internal static class EdgeDiagnosticObservation
         if (!Enabled || _inputInstalled) return;
         _inputInstalled = true;
         ComponentDispatcher.ThreadPreprocessMessage += OnMessage;
+        EdgeDispatcherLatencyObservation.Install();
         EdgeCapsulePerformanceDiagnostics.Event("input.installed");
     }
 
@@ -186,6 +188,8 @@ internal static class EdgeDiagnosticObservation
     {
         if (!_inputInstalled) return;
         ComponentDispatcher.ThreadPreprocessMessage -= OnMessage;
+        EdgeDispatcherLatencyObservation.Remove();
+        EdgeNativeLatencyObservation.Remove();
         _inputInstalled = false;
     }
 

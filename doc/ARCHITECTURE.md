@@ -385,6 +385,8 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-004。
 
+定位等待可在上述 Debug 采集之上显式开启 `PAPERTODO_EDGE_DEEP_OBSERVATIONS=1`：`EdgeDispatcherLatencyObservation` 通过现有 Dispatcher hooks 和提交前通知读取已经存在的 WPF MediaContext；私有字段缺失只降低可观察能力，不成为运行依赖。`EdgeNativeLatencyObservation` 检查进程和线程归属，仅对当前 UI 线程自有 HWND 建立 subclass，在原生几何批次内记录下游消息耗时，原参数和返回值原样转发一次。两者退出时解除观察，不新增 Rendering 订阅、调度操作或补帧计时器；Release 不编入。深层采集有成本，仅用于诊断，不能据其回调/消息耗时声称物理帧率；同包关闭对照、实际 WPF 调用点和边界见 E-006。
+
 这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前无补帧调度见 D-032。
 
 ## 7. OS 与全局集成
