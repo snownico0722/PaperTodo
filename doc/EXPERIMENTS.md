@@ -504,3 +504,46 @@ PresentMon 官方独立采集工具的 pilot 因本机 ETW 会话权限不足返
 - `preservation-summary.json`、`preserved-files-sha256.csv`、`original-input-hashes.json`：最终目录清单、逐文件哈希及四项原输入复核。
 
 本轮只增加 opt-in Debug 诊断与实验记录，没有正式版用户行为变化，未改 Unreleased，也未形成新的产品路线 decision。所有提交和大体积证据只保留在本地，没有推送。
+
+## E-005 — Rendering 预计呈现时间误去重与同机单变量回放
+
+**日期：** 2026-09-13
+
+**状态：** Completed
+
+**基线：** `b40c6eb`，已包含预接管/复用和 E-004 内存诊断。
+
+**证据根：** `输出/edge-cadence-20260913/`；此前 E-003/E-004 的包和数据保留。
+
+### 定位与最终修正
+
+E-004 的长间隙并非单一耗时：原始记录分别出现约 36ms 没有新 Rendering、约 47ms 中途仅有相同 RenderingTime 通知被过滤、约 60ms 内有 45.496ms 的 pending 退订窗口。最后一例包含代理指针采样排出的 10 个 Pointer-only reconcile，最终没有 shape.applied；其中发生 GC 的 scope 不等同于 GC 暂停时间，也不能解释整个无记录空档。逐 seq 审计及脚本保存在 `audit/`。
+
+WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官方 MediaContext 源码](https://github.com/dotnet/wpf/blob/v10.0.0/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs) 允许复用估计值，并在每个 render handler 的首个 tick 发出通知；layout/tick 内环不会反复发同一个通知。项目的 transition 使用 QPC，按预测时间值去重会丢掉后续合法更新。最终删除该过滤条件和对应缓存；保留单一订阅、同步重入保护、外部 native apply 保护、队列屏障与终点退订，不增加 timer、轮询或主动补帧。
+
+### 单变量与撤回实验
+
+使用原始 `数据.exe`、独立数据副本、每轮新进程、6 秒启动等待及 2 秒收尾。沿用 E-004 的优化 Debug/单文件/无 R2R/无 Fody 参数和内存日志。各组前后动作完全相同，主比较为全部 36 动作（24 展开、12 收起），不与 E-004 的 common30 直接相减。每格是两轮实测范围，单位 ms；形状仅统计当前展开 owner 的实际宽高/透明度变化，不含纯平移和圆角，仍是应用更新而非物理显示帧。
+
+| 对照组 | 外形更新间隔中位数 | 外形更新间隔 P95 | 结论 |
+| --- | ---: | ---: | --- |
+| 原行为，第一组 ABBA | 16.641–16.718 | 26.197–31.538 | 基线 |
+| 仅取消纯 Pointer 屏障 | 17.361–18.906 | 32.963–35.426 | 屏障从约 800 次降到 36 次，但节拍未改善，撤回 |
+| 同包保持 RenderingTime 去重 | 16.687–16.873 | 32.563–32.830 | 第二组 ABBA 控制 |
+| 同包接受相同预计时间的新通知 | 10.243–10.408 | 23.593–26.123 | 采用；无新增帧源 |
+| 接受通知，同时取消 Pointer 屏障 | 16.325–16.637 | 32.428–33.226 | 组合也未改善，撤回 Pointer 改动 |
+| 组合前后复测，仅接受新通知 | 10.225–10.408 | 21.577–23.593 | 支持保留单一改动 |
+
+第二组单变量使用同一个 EXE，只在 Debug 诊断包中切换过滤开关；最终包已删除实验开关，Release 与 Debug 都采用同一通知处理。第二组控制 CPU 为 7843.750/6781.250ms，候选为 7500.000/6890.625ms，未见明显总 CPU 增长；候选累计分配约 141MiB，控制约 131MiB，候选多一次 Gen0 GC，不能宣称零成本。候选两轮最大形状间隔为 37.409/50.534ms，后续复测仍有约 49ms，不能宣布长停顿或物理帧率问题全部解决。
+
+### 验证与复现
+
+- `RepeatedRenderingNotificationChecks` 在保留旧去重条件时准确失败于第二个同预计时间通知；修正后 EdgeTitleChecks 6/6 组、3168 断言通过。覆盖 QPC 推进、终点、取消、同步重入、native apply 和显式事务恢复，不依赖 Sleep 或机器帧率。
+- 最终同包日志开关 ABBA 四轮均完成相同 36 动作、采集期零丢弃、正常退出封存；完整观察两轮 active-owner 宽高/透明度间隔 P95 为 27.771/25.152ms。关闭详细观察仍保留旧文本内存日志，该组不能直接计算 active-owner 指标；旧 changed-Rendering P95 为 24.365/27.280ms，完整观察为 26.365/26.304ms，不能宣称详细日志零扰动。关闭观察第二轮保留一条 421.848ms 的旧指纹分段间隔，逐记录核实它跨了前段收尾、静置和下一次收起，不能解读为连续动画停顿；精确证据见 `audit/final-control-outlier.md`，旧指纹指标不能与唯一 transition 的形状指标混用。
+- 最终标准 Release 构建成功，0 错误；4 条 NU1900 为 NuGet 漏洞数据源连接失败，漏洞检查未完成。诊断 publish 成功，保留既有单文件 IL3000 警告。本轮共 15 次回放，原输入、各次数据副本、原始日志和未采用候选均保留。
+- 运行标记审计保留了未采用 `pointer-v1-r1` 的一次启动期 `startup-failed` fallback，发生在录制开始前约 4.1 秒，不能将该候选描述为全生命周期无失败。其余 14 轮未见同类 fallback 标记，15 轮均未见正数 `wpfApplyFailed`；这只是已记录标记检查，不替代视觉或物理呈现验证。详见 `runtime-failure-scan.json` 和 `audit/pointer-v1-startup-fallback.md`。
+- `packages/` 保存各候选源码差异、输入源码哈希、完整 publish 参数、构建日志和 EXE 哈希；`pointer-v1-source/` 保留被撤回的生产与测试代码；`audit/` 保留独立审查和 WPF 机制核对。
+- `abba-analysis/`、`render-v2-analysis/`、`combined-v3-analysis/` 保存完整 CSV/JSON、每次实际执行的分析器源码与哈希。最终包及其日志开关复测另见根目录报告，不覆盖实验组。
+- 旧 `duplicateCallbacks` 字段保留为 0 以兼容日志 schema，表示没有按预计时间过滤；不表示原始 RenderingTime 没有重复。旧版 watchdog 的真实更新与本次合法 Rendering 通知仍需按来源和实际形状变化区分，不能直接换算成显示 FPS。
+
+本轮保持 WPF shape / DComp translation-only 分工，同步更新 D-032、Architecture 和 Unreleased；仅本地提交，不推送。最终包 SHA-256：`DA8A31304C371C1C36EBBD813F9BEE0E8144203FA6435468C423B1DE4BD3E56A`。

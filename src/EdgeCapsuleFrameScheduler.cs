@@ -24,7 +24,6 @@ internal sealed class EdgeCapsuleFrameScheduler
     private bool _acceptingPostCommitCallbacks;
     private readonly Dictionary<EdgeCapsulePresenter, int> _pendingReconcileOwners = new();
     private int _pendingRenderReconciles;
-    private TimeSpan? _lastRenderingTime;
 #if DEBUG
     private long _pendingRenderReconcileStartedAtTimestamp;
     private long _lastRawRenderingCallbackTimestamp;
@@ -37,7 +36,6 @@ internal sealed class EdgeCapsuleFrameScheduler
         bool ActiveBefore)> _debugWpfPresentationSamples = new();
     private long _debugRenderingCallbackSequence;
     private long _debugFrameSequence;
-    private int _suppressedDuplicateRenderingCallbacks;
     private int _suppressedExternalNativeBatchRenderingCallbacks;
     private int _suppressedReentrantRenderingCallbacks;
     private long _suppressedRenderingStartedAtTimestamp;
@@ -253,22 +251,10 @@ internal sealed class EdgeCapsuleFrameScheduler
             return;
         }
 
-        if (renderingTime.HasValue &&
-            _lastRenderingTime.HasValue &&
-            renderingTime.Value == _lastRenderingTime.Value)
-        {
-#if DEBUG
-            _suppressedDuplicateRenderingCallbacks++;
-            TraceRenderingCallback(
-                rawRenderingSequence,
-                rawGapMilliseconds,
-                renderingTime,
-                "suppressed",
-                "duplicate");
-#endif
-            return;
-        }
-        _lastRenderingTime = renderingTime;
+        // RenderingTime estimates presentation; separate WPF render passes can reuse it. Our
+        // transitions use QPC, so dropping a new notification with the same estimate can discard
+        // elapsed animation time. One subscription supplies the notifications; the guards above
+        // protect reentry and native ownership without treating the estimate as a frame identity.
 #if DEBUG
         TraceRenderingCallback(
             rawRenderingSequence,
@@ -299,8 +285,6 @@ internal sealed class EdgeCapsuleFrameScheduler
         _lastRenderingTimestamp = callbackStartedAt;
         var debugInitialCount = 0;
         var debugGroupCount = 0;
-        var duplicateRenderingCallbacks = _suppressedDuplicateRenderingCallbacks;
-        _suppressedDuplicateRenderingCallbacks = 0;
         var blockedQueueCount = 0;
         var suppressedExternalCallbacks = _suppressedExternalNativeBatchRenderingCallbacks;
         var suppressedReentrantCallbacks = _suppressedReentrantRenderingCallbacks;
@@ -457,7 +441,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                 $"wpfCompleteEqual={debugWpfCompleteEqual} " +
                 $"wpfSettledEqual={debugWpfSettledEqual} " +
                 $"wpfApplyFailed={debugWpfApplyFailed} " +
-                $"duplicateCallbacks={duplicateRenderingCallbacks} presenters={debugInitialCount} " +
+                $"duplicateCallbacks=0 presenters={debugInitialCount} " +
                 $"groups={debugGroupCount} renderPending={_pendingRenderReconciles} " +
                 $"blockedQueues={blockedQueueCount} " +
                 $"skippedExternal={suppressedExternalCallbacks} " +
@@ -884,14 +868,12 @@ internal sealed class EdgeCapsuleFrameScheduler
         if (_presenters.Count == 0)
         {
             UpdateRenderingSubscription();
-            _lastRenderingTime = null;
 #if DEBUG
             _lastRawRenderingCallbackTimestamp = 0;
             _lastRenderingTimestamp = 0;
             _lastWpfPresentationChangeTimestamp = 0;
             _lastWpfTransitionFingerprint = 0;
             _debugWpfPresentationSamples.Clear();
-            _suppressedDuplicateRenderingCallbacks = 0;
             _suppressedExternalNativeBatchRenderingCallbacks = 0;
             _suppressedReentrantRenderingCallbacks = 0;
             _suppressedRenderingStartedAtTimestamp = 0;

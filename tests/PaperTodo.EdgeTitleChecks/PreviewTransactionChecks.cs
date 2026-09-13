@@ -8,6 +8,7 @@ internal static partial class Program
     {
         ProxyInputReadiness();
         SharedFrameRenderingLiveness();
+        RepeatedRenderingNotificationChecks();
         var dispatcher = Dispatcher.CurrentDispatcher;
         foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
         foreach (var edge in new[] { EdgeCapsuleEdge.Left, EdgeCapsuleEdge.Right })
