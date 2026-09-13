@@ -218,6 +218,29 @@ SC multi-file + R2R 在本次补测 Fresh 为 1182.58 ms，而 E-001 原轮为 1
 
 不新增 SC/FD R2R 包，也不把 R2R 暴露成正式“打包选项”。#255 的实验和打包验证数据吸收进 E-001 后关闭；若未来改成安装器、多文件部署、运行时/host 明显变化，再重新 A/B。
 
+#### F. no-runtime Windows SDK 定向压缩：体积减半，未测到启动代价
+
+#248 将 framework-dependent / no-runtime 单文件中的 `Microsoft.Windows.SDK.NET` 通过 Costura/Fody 定向压缩，先前已确认 Debug EXE 约 33.45 -> 16.73 MiB 且功能可用，但当时没有做启动 A/B。为补齐这一点，从 #254 `6f26423d86baf21b762a5403c593d3b3e01b333a` 单独建立 `perf/fd-sdk-compression-benchmark-20260913`，只改变 `PaperTodoCompressWindowsSdk=true/false`；两组均固定为 Windows x64 Release、framework-dependent、single-file、no-R2R、`EnableCompressionInSingleFile=false`、不裁剪。
+
+补测 run `34758652475`：Windows Server 2025 `10.0.26100`，image `20260907.229.1`，.NET SDK `10.0.401` / runtime `10.0.12`。使用与 E-001 相同的 10 张可见折叠短 Note 工作集；round 0 只预热共同 OS/.NET 缓存，不计统计，随后每种形态各 12 个新进程样本，并逐轮 AB/BA 交错顺序降低 runner 漂移偏差。外部从 `CreateProcess` 前取时钟，记录最早 managed entry、`App.OnStartup`、controller 创建、`StartAsync`、命令 Ready、下一次 WPF Rendering 后的 `DwmFlush` 与工作集。
+
+| 形态 | EXE | Managed entry 中位 | Command Ready 中位 | DWM 中位 | Working Set 中位 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **SDK 定向压缩** | **16.27 MiB** | 104.03 ms | 924.29 ms | 939.14 ms | 111.66 MiB |
+| SDK 不压缩 | 32.99 MiB | 105.51 ms | 928.01 ms | 952.79 ms | 111.59 MiB |
+
+压缩后 EXE 少 `17,530,935` bytes，约 **-50.7%**。按两组各自中位数计算，压缩版 managed entry `-1.48 ms`、Command Ready `-3.72 ms`、DWM `-13.65 ms`；这些方向不能解释成“压缩让程序更快”。逐轮配对后，Command Ready 的 `compressed - uncompressed` 中位仅约 **-2.81 ms**，IQR 约 `-27.91 ~ +10.43 ms`，12 轮正好 6 次压缩版更快、6 次更慢；DWM 配对中位约 **-14.82 ms**，IQR 约 `-35.20 ~ +15.49 ms`，同样跨过 0。工作集中位只差约 `75,776` bytes（0.07 MiB）。
+
+因此本轮能支持的结论是：**Windows SDK 定向压缩把当前 no-runtime 单文件约减半，但没有观察到可证明的启动或工作集回退；也不能宣称它稳定更快。** 对当前发布目标，体积收益明确而运行时代价落在 runner 波动内，因此继续默认 `PaperTodoCompressWindowsSdk=true`。这里的“压缩”只指 Costura/Fody 定向处理 `Microsoft.Windows.SDK.NET`，不是 `.NET` 的 `EnableCompressionInSingleFile`，不能与 E-001 的 self-contained 整体 bundle compression 对照混为一谈。
+
+长期原始数据已随 #254 保存在：
+
+- [`E-001-fd-sdk-compression-samples.csv`](experiments/E-001-fd-sdk-compression-samples.csv)：含 round 0 的 26 个原始进程样本；
+- [`E-001-fd-sdk-compression-summary.csv`](experiments/E-001-fd-sdk-compression-summary.csv)：12 个计入统计样本/形态的中位数与 P25/P75；
+- [`E-001-fd-sdk-compression-publish.csv`](experiments/E-001-fd-sdk-compression-publish.csv)：两种产物的文件数与字节数。
+
+Actions artifact `fd-sdk-compression-benchmark`（run `34758652475`，实验 HEAD `7f33460c11f99ed87074b270144aa484366b92d7`）仅作短期日志证据；长期判断以上述落盘数据与本段方法为准。
+
 ### 当前可得的启动预算
 
 以当前正式 `SC + SF + compression + no-R2R` Fresh 中位数为例：

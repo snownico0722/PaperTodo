@@ -1331,6 +1331,8 @@ R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 ->
 
 单文件压缩本身也做了对照：关闭压缩把 self-contained 单文件从约 80.2 MiB 放大到约 192.0 MiB（约 +139%），fresh DWM 只从约 1452 降到约 1416 ms。当前不为约几十毫秒的 runner 差异把正式完整包扩大到两倍以上。
 
+FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTodoCompressWindowsSdk=true` 将本轮 EXE 从约 32.99 MiB 压到 16.27 MiB（约 -50.7%）；Command Ready 中位 928.01 -> 924.29 ms，DWM 952.79 -> 939.14 ms，配对差异的 IQR 均跨过 0，working set 只差约 0.07 MiB。这里不能宣称压缩更快，但没有测到可证明的启动/内存回退，因此 framework-dependent 包继续默认启用这项定向压缩。它与 self-contained 的 `EnableCompressionInSingleFile` 是两条不同压缩路径。
+
 ### Rejected / Pitfalls
 
 - 不因为“R2R 理论上减少 JIT”就在当前 single-file/compressed Release 中直接打开；先看端到端 `CreateProcess -> presentation` 数据。
@@ -1351,4 +1353,5 @@ R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 ->
 - `feb311cdf712d24f5b7cefb023a0f7d87150004d`：历史上因单文件体积膨胀关闭 ReadyToRun。
 - `.github/workflows/release.yml`：当前正式 self-contained / framework-dependent 单文件发布参数。
 - #255 补测：Actions run `34728040332`（启动/工作集）与 `34728463445`（未插桩 R2R ZIP 打包验证）；原始打包 PR 在数据吸收进 E-001 后关闭，不进入正式分发。
+- FD Windows SDK 定向压缩补测：Actions run `34758652475`，实验 HEAD `7f33460c11f99ed87074b270144aa484366b92d7`；12 轮/形态交错 A/B，原始 samples/summary/publish CSV 长期保存在 `doc/experiments/E-001-fd-sdk-compression-*.csv`。
 
