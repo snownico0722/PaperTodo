@@ -1,0 +1,92 @@
+name: Temporary E-003 lifecycle investigation
+
+on:
+  push:
+    branches: [perf/e003-lifecycle-probe-20260913]
+    paths: ['.github/e003-probe.py', '.github/workflows/e003-lifecycle-probe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tools
+      - uses: actions/checkout@v7
+        with:
+          ref: 416a6fdbf931612ffdb7f066149001c4100a9a4c
+          path: source
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build isolated instrumented variants
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence, binaries | Out-Null
+          dotnet --info | Out-File evidence/environment.txt
+          Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | Format-List | Out-File evidence/environment.txt -Append
+          foreach ($mode in @('baseline','early','defer','demand')) {
+            Push-Location source
+            git reset --hard 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'source reset failed' }
+            python ../tools/.github/e003-probe.py . $mode
+            if ($LASTEXITCODE -ne 0) { throw 'instrumentation failed' }
+            dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -o "../binaries/$mode" 2>&1 | Tee-Object "../evidence/build-$mode.log"
+            if ($LASTEXITCODE -ne 0) { throw "$mode build failed" }
+            Pop-Location
+          }
+      - name: Measure balanced new-process samples
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $modes = @('baseline','early','defer','demand')
+          foreach ($mode in $modes) {
+            $env:E003_MODE = $mode
+            & "./binaries/$mode/PaperTodo.LifecycleChecks.exe" --probe-one capsules-10 2>&1 | Out-File "evidence/warmup-$mode.log"
+            if ($LASTEXITCODE -ne 0) { throw "$mode warmup failed" }
+          }
+          for ($round=0; $round -lt 4; $round++) {
+            for ($i=0; $i -lt $modes.Length; $i++) {
+              $mode = $modes[($i+$round)%$modes.Length]
+              $env:E003_MODE = $mode
+              & "./binaries/$mode/PaperTodo.LifecycleChecks.exe" --probe-one capsules-10 2>&1 | Out-File "evidence/sample-$mode-$round.log"
+              if ($LASTEXITCODE -ne 0) { throw "$mode sample failed" }
+            }
+          }
+          foreach ($name in @('capsules-1','capsules-5','preview-off','scripts','real-exit')) {
+            foreach ($mode in @('baseline','defer')) {
+              $env:E003_MODE = $mode
+              & "./binaries/$mode/PaperTodo.LifecycleChecks.exe" --probe-one $name 2>&1 | Out-File "evidence/check-$name-$mode.log"
+              if ($LASTEXITCODE -ne 0) { throw "$mode $name failed" }
+            }
+          }
+      - name: Collect a diagnostic startup trace separately
+        continue-on-error: true
+        run: |
+          dotnet tool install --tool-path ./trace-tools dotnet-trace
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet-trace install failed' }
+          $env:E003_MODE = 'baseline'
+          Set-Content ./binaries/baseline/.papertodo-lifecycle-fixture 'isolated diagnostic run'
+          & ./trace-tools/dotnet-trace.exe --version | Out-File evidence/trace-version.txt
+          & ./trace-tools/dotnet-trace.exe collect --profile dotnet-common,dotnet-sampled-thread-time --output evidence/baseline.nettrace -- ./binaries/baseline/PaperTodo.LifecycleChecks.exe --fixture capsules-10
+          & ./trace-tools/dotnet-trace.exe report evidence/baseline.nettrace topN -n 40 | Out-File evidence/trace-top.txt
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e003-lifecycle-evidence
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
