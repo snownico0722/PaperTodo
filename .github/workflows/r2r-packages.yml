@@ -1,0 +1,91 @@
+name: R2R multi-file packages
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/Package-R2R.ps1"
+      - ".github/workflows/r2r-packages.yml"
+      - "PaperTodo.csproj"
+      - "native/lmdb/**"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build R2R ZIP packages
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build native LMDB library
+        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Build R2R packages
+        run: .\tools\Package-R2R.ps1 -Mode All -OutputDirectory .\artifacts\r2r
+
+      - name: Verify package contents
+        run: |
+          $manifest = Get-Content -LiteralPath .\artifacts\r2r\r2r-packages.json -Raw | ConvertFrom-Json
+          if ($manifest.packages.Count -ne 2) {
+            throw "Expected two R2R packages, found $($manifest.packages.Count)."
+          }
+
+          foreach ($package in $manifest.packages) {
+            $zipPath = Join-Path .\artifacts\r2r $package.zipName
+            if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
+              throw "Missing package $zipPath"
+            }
+
+            $extract = Join-Path $env:RUNNER_TEMP ("verify-" + [IO.Path]::GetFileNameWithoutExtension($package.zipName))
+            Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+            Expand-Archive -LiteralPath $zipPath -DestinationPath $extract
+            if (-not (Test-Path -LiteralPath (Join-Path $extract 'PaperTodo.exe') -PathType Leaf)) {
+              throw "$($package.zipName) does not contain PaperTodo.exe at the ZIP root."
+            }
+          }
+
+          $manifest.packages | Format-Table kind, publishFiles, publishBytes, zipBytes, zipName -AutoSize
+
+      - name: Upload self-contained R2R package
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-r2r-multifile-self-contained
+          archive: false
+          if-no-files-found: error
+          path: artifacts/r2r/*-r2r-multifile-self-contained.zip
+
+      - name: Upload no-runtime R2R package
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-r2r-multifile-no-runtime
+          archive: false
+          if-no-files-found: error
+          path: artifacts/r2r/*-r2r-multifile-no-runtime.zip
+
+      - name: Upload package manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-r2r-package-manifest
+          if-no-files-found: error
+          path: artifacts/r2r/r2r-packages.json
