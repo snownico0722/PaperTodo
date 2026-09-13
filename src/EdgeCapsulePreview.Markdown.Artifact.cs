@@ -77,10 +77,21 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     // The whole card is capped at 410 DIPs. Preparing this much body is therefore sufficient for
     // every current card height and lets one artifact survive a smaller host-height constraint.
     internal const double ArtifactMaximumBodyHeight = 410;
-    private const double ArtifactViewHorizontalInsets = 22; // view margins 19 + viewport margins 3
+    internal static readonly Thickness ArtifactViewMargin = new(10, 9, 9, 10);
+    internal static readonly Thickness ArtifactViewportMargin = new(1, 0, 2, 0);
 
-    internal static double ArtifactBodyWidth(EdgeCapsulePreviewSize cardSize) =>
-        Math.Max(1, cardSize.ContentSize.Width - ArtifactViewHorizontalInsets);
+    internal static double ArtifactBodyWidth(EdgeCapsulePreviewSize cardSize, FrameworkElement? anchor = null)
+    {
+        var dpi = anchor is { UseLayoutRounding: true } ? VisualTreeHelper.GetDpi(anchor).DpiScaleX : 0;
+        double Round(double value) => dpi > 0 ? Math.Round(value * dpi) / dpi : value;
+        // Match FrameworkElement's layout order: the fixed content layer and each nested view
+        // round independently, and margins round BEFORE subtraction. Rounding only (card - 44)
+        // misses real cache entries at fractional DPI (350-DIP card at 125% is 305.6, not 306).
+        var width = Round(cardSize.ContentSize.Width);
+        width = Round(width - Round(ArtifactViewMargin.Left + ArtifactViewMargin.Right));
+        width = Round(width - Round(ArtifactViewportMargin.Left + ArtifactViewportMargin.Right));
+        return Math.Max(1, width);
+    }
 
     internal enum ArtifactBlockKind
     {

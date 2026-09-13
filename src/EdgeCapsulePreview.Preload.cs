@@ -25,6 +25,7 @@ internal sealed class MarkdownEdgePreviewPreload
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
+    private bool _suspended;
     internal int ExcerptCount => _excerpts.Count;
     internal int ArtifactCount => _artifacts.Count;
     internal int PendingCount => _pendingLayout.Count;
@@ -147,7 +148,11 @@ internal sealed class MarkdownEdgePreviewPreload
             var resource = surface.TryFindResource(name);
             if (resource == null) { stamps.Add("missing:" + name); continue; }
             if (resource is not SolidColorBrush brush || brush.HasAnimatedProperties ||
-                !brush.Transform.Value.IsIdentity || !brush.RelativeTransform.Value.IsIdentity) return null;
+                !brush.Transform.Value.IsIdentity || !brush.RelativeTransform.Value.IsIdentity)
+            {
+                binding.Owner.TracePreload("uncacheable-resource", binding.Source, $"resource={name}");
+                return null;
+            }
             stamps.Add(brush.Color + ":" + brush.Opacity.ToString("R", CultureInfo.InvariantCulture));
         }
         if (Theme.SyntaxFadeBrush is not SolidColorBrush syntax || syntax.HasAnimatedProperties ||
@@ -163,11 +168,22 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         artifact = null;
-        if (!key.Binding.Current || !_artifacts.TryGetValue(key.Binding.Source, out var candidate)) return false;
+        if (!key.Binding.Current || !_artifacts.TryGetValue(key.Binding.Source, out var candidate))
+        {
+            if (demand) TracePreload("miss", key.Binding.Source, $"reason={(key.Binding.Current ? "absent" : "binding-stale")} width={key.Size.Width:R}");
+            return false;
+        }
         if (!candidate.Key.Binding.Current) { _artifacts.Remove(key.Binding.Source); return false; }
-        if (candidate.Key != key) return false;
+        if (candidate.Key != key)
+        {
+            if (demand) TracePreload("miss", key.Binding.Source,
+                $"reason=key cachedWidth={candidate.Key.Size.Width:R} width={key.Size.Width:R} " +
+                $"bindingEqual={candidate.Key.Binding == key.Binding} dpiEqual={candidate.Key.Dpi.Equals(key.Dpi)} " +
+                $"appearanceEqual={candidate.Key.Appearance == key.Appearance}");
+            return false;
+        }
         artifact = candidate.Artifact;
-        if (demand) ArtifactHits++;
+        if (demand) { ArtifactHits++; TracePreload("hit", key.Binding.Source, $"width={key.Size.Width:R}"); }
         return true;
     }
 
@@ -182,6 +198,7 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         _artifacts.Remove(source);
+        TracePreload("invalidate", source);
     }
 
     internal void Forget(EdgeCapsulePreviewInvalidationSource source)
@@ -190,6 +207,7 @@ internal sealed class MarkdownEdgePreviewPreload
         _excerpts.Remove(source); _artifacts.Remove(source); _pendingLayout.Remove(source); _deferred.Remove(source);
         if (ReferenceEquals(_workingSource, source)) _work?.Cancel();
         if (RunnableCount == 0) _debounce.Stop();
+        TracePreload("forget", source);
     }
 
     internal void RequestLayout(EdgeCapsulePreviewInvalidationSource source, Func<ReadResult> read)
@@ -202,6 +220,7 @@ internal sealed class MarkdownEdgePreviewPreload
         _deferred.Remove(source);
         _work?.Cancel();
         Arm();
+        TracePreload("request", source);
     }
 
     internal void Resume(EdgeCapsulePreviewInvalidationSource source)
@@ -221,13 +240,30 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _debounce.Stop();
         _debounce.Interval = TimeSpan.FromMilliseconds(500);
-        if (RunnableCount > 0) _debounce.Start();
+        if (!_suspended && RunnableCount > 0) _debounce.Start();
+    }
+
+    // The application coordinator owns WHEN optional work is allowed; this cache retains its
+    // one latest-reader queue, artifacts and worker cancellation. Demand uses a separate lifetime
+    // in the real viewport and must remain runnable while speculative work is suspended.
+    internal void SetSuspended(bool suspended)
+    {
+        _dispatcher.VerifyAccess();
+        if (_suspended == suspended) return;
+        _suspended = suspended;
+        TracePreload(suspended ? "suspended" : "resumed");
+        if (suspended)
+        {
+            _debounce.Stop();
+            _work?.Cancel();
+        }
+        else if (_enabled && !_dispatcher.HasShutdownStarted) Arm();
     }
 
     internal void StartStartupWork()
     {
         _dispatcher.VerifyAccess();
-        if (!_enabled || _dispatcher.HasShutdownStarted || RunnableCount == 0) return;
+        if (!_enabled || _suspended || _dispatcher.HasShutdownStarted || RunnableCount == 0) return;
         // Restoration supplies a stable batch, not a keystroke stream. Reuse the same one-shot
         // timer/owner but do not impose the editing debounce on the first startup batch.
         _debounce.Stop();
@@ -245,21 +281,22 @@ internal sealed class MarkdownEdgePreviewPreload
 
     private async void Drain()
     {
-        if (!_enabled || _work != null || _dispatcher.HasShutdownStarted) return;
+        if (!_enabled || _suspended || _work != null || _dispatcher.HasShutdownStarted) return;
         using var work = new CancellationTokenSource();
         _work = work;
         try
         {
-            while (!work.IsCancellationRequested && RunnableCount > 0)
+            while (!work.IsCancellationRequested && !_suspended && RunnableCount > 0)
             {
                 await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                if (work.IsCancellationRequested || RunnableCount == 0) break;
+                if (work.IsCancellationRequested || _suspended || RunnableCount == 0) break;
                 var pair = _pendingLayout.First(item => !_deferred.Contains(item.Key));
                 var defer = false;
                 _workingSource = pair.Key;
                 try
                 {
                     var read = pair.Value();
+                    TracePreload("read", pair.Key, $"state={read.State}");
                     defer = read.State == Readiness.Deferred;
                     if (read.State == Readiness.Ready && read.Target is { } target)
                     {
@@ -295,14 +332,16 @@ internal sealed class MarkdownEdgePreviewPreload
     internal async Task<bool> WarmLayoutAsync(Target target, CancellationToken cancellation = default)
     {
         _dispatcher.VerifyAccess();
-        if (!_enabled || cancellation.IsCancellationRequested || !target.StillEligible() ||
+        if (!_enabled || _suspended || cancellation.IsCancellationRequested || !target.StillEligible() ||
             !target.Anchor.IsLoaded || !target.Anchor.IsVisible) return false;
 
         var version = target.Context.InvalidationSource.Version;
+        TracePreload("prepare", target.Context.InvalidationSource,
+            $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(target.Context.Paper.Id)} card={target.Size.WidthDip:R}x{target.Size.HeightDip:R}");
         var content = Capture(target.Context);
         if (!ShouldPreload(target.Context, content)) return false;
         var binding = Bind(target.Context, content, target.Context.Paper.TextZoom);
-        var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size);
+        var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size, target.Anchor);
         var key = MakeKey(binding, target.Anchor, new Size(width, 0));
         if (key == null) return false;
         if (_artifacts.TryGetValue(key.Binding.Source, out var current) && current.Key == key) return true;
@@ -357,12 +396,13 @@ internal sealed class MarkdownEdgePreviewPreload
             var operation = _dispatcher.InvokeAsync(() =>
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (lifetime.IsCancellationRequested || !_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                if (lifetime.IsCancellationRequested || !_enabled || _suspended || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
                     !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
                     MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 
                 if (!StoreArtifact(key, artifact)) return false;
                 WarmCompletions++;
+                TracePreload("ready", key.Binding.Source, $"width={width:R} dpi={key.Dpi.DpiScaleX:R}x{key.Dpi.DpiScaleY:R}");
                 return true;
             }, DispatcherPriority.ContextIdle);
             return await operation.Task.ConfigureAwait(false);
@@ -380,6 +420,12 @@ internal sealed class MarkdownEdgePreviewPreload
         _pendingLayout.Clear(); _deferred.Clear(); _artifacts.Clear(); _excerpts.Clear();
     }
 
+    [Conditional("DEBUG")]
+    private void TracePreload(string phase, EdgeCapsulePreviewInvalidationSource? source = null, string? detail = null) =>
+        EdgeCapsulePerformanceDiagnostics.Trace($"markdown.preload phase={phase} " +
+            $"source={(source == null ? 0 : RuntimeHelpers.GetHashCode(source))} version={source?.Version ?? -1} " +
+            $"pending={PendingCount} deferred={DeferredCount} artifacts={ArtifactCount} suspended={_suspended} {detail}");
+
     // Same-binary A/B probe; no settings, environment switch or persistent product option.
-    internal void SetEnabledForChecks(bool enabled) { Clear(); _enabled = enabled; }
+    internal void SetEnabledForChecks(bool enabled) { Clear(); _enabled = enabled; _suspended = false; }
 }

@@ -180,9 +180,9 @@ public sealed partial class PaperWindow
         SetCollapsedState(false, animate: true, alignExpandedToDockedEdge: wasDeepCapsulePlaced);
     }
 
-    private void RefreshCapsuleLabel()
+    private void RefreshCapsuleLabel(bool invalidatePreview = true)
     {
-        InvalidateEdgeCapsulePreviewContent();
+        if (invalidatePreview) InvalidateEdgeCapsulePreviewContent();
         if (_capsuleLabelText == null)
         {
             return;
