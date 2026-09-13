@@ -306,10 +306,12 @@ internal static class EdgeDispatcherLatencyObservation
     {
         try
         {
-            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
             if (field == null) return null;
             var input = Expression.Parameter(typeof(object));
-            Expression value = Expression.Field(Expression.Convert(input, type), field);
+            // WPF's _contextRenderID is static and shared across MediaContexts. Read it
+            // without a target; it counts render walks, not channel commits or presents.
+            Expression value = Expression.Field(field.IsStatic ? null : Expression.Convert(input, type), field);
             if (value.Type == typeof(TimeSpan)) value = Expression.Property(value, nameof(TimeSpan.Ticks));
             if (value.Type == typeof(bool)) value = Expression.Condition(value, Expression.Constant(1L), Expression.Constant(0L));
             return Expression.Lambda<Func<object, long>>(Expression.Convert(value, typeof(long)), input).Compile();

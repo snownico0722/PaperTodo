@@ -34,6 +34,7 @@ internal static class Program
         try
         {
             application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            CheckNumericReaders();
             CheckNativeForwarding();
             CheckDispatcherObservation(application.Dispatcher);
             var entries = Entries();
@@ -65,6 +66,83 @@ internal static class Program
             }
         }
         return exitCode;
+    }
+
+    private enum NumericState : long { Waiting = -17, Ready = 23 }
+
+    private sealed class NumericFields
+    {
+        internal int InstanceCount = -31;
+        internal long InstanceTicks = 9_007_199_254_740_993L;
+        internal bool InstanceFlag = true;
+        internal TimeSpan InstanceDuration = TimeSpan.FromTicks(-123_456_789);
+        internal NumericState InstanceState = NumericState.Waiting;
+        internal string Unsupported = "unchanged";
+        internal static int SharedCount = 43;
+        internal static long SharedTicks = -9_007_199_254_740_995L;
+        internal static bool SharedFlag = false;
+        internal static TimeSpan SharedDuration = TimeSpan.FromTicks(987_654_321);
+        internal static NumericState SharedState = NumericState.Ready;
+    }
+
+    private static void CheckNumericReaders()
+    {
+        var factory = typeof(EdgeDispatcherLatencyObservation).GetMethod("MakeNumericReader",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Numeric reader factory unavailable");
+        Func<object, long>? Reader(string name) =>
+            (Func<object, long>?)factory.Invoke(null, [typeof(NumericFields), name]);
+        var first = new NumericFields();
+        var second = new NumericFields { InstanceCount = 61 };
+        (string Name, long Expected, bool Shared)[] samples =
+        [
+            (nameof(NumericFields.InstanceCount), -31, false),
+            (nameof(NumericFields.InstanceTicks), 9_007_199_254_740_993L, false),
+            (nameof(NumericFields.InstanceFlag), 1, false),
+            (nameof(NumericFields.InstanceDuration), -123_456_789, false),
+            (nameof(NumericFields.InstanceState), -17, false),
+            (nameof(NumericFields.SharedCount), 43, true),
+            (nameof(NumericFields.SharedTicks), -9_007_199_254_740_995L, true),
+            (nameof(NumericFields.SharedFlag), 0, true),
+            (nameof(NumericFields.SharedDuration), 987_654_321, true),
+            (nameof(NumericFields.SharedState), 23, true)
+        ];
+        foreach (var (name, expected, shared) in samples)
+        {
+            var reader = Reader(name);
+            Check(reader != null, $"Numeric reader supports {(shared ? "static" : "instance")} {name}");
+            Check(reader!(first) == expected && reader(first) == expected,
+                $"Repeated reads preserve the exact typed value of {name}");
+            if (shared)
+                Check(reader(new object()) == expected,
+                    $"Static reader {name} does not cast or dereference an instance target");
+        }
+        Check(Reader("MissingField") == null, "Missing numeric field safely disables its reader");
+        Check(Reader(nameof(NumericFields.Unsupported)) == null,
+            "Unsupported numeric field safely disables its reader");
+        Check(first.Unsupported == "unchanged", "Reader creation does not mutate unsupported data");
+        var instance = Reader(nameof(NumericFields.InstanceCount))!;
+        Check(instance(second) == 61 && instance(first) == -31,
+            "Instance reader selects the supplied object without retaining the first object");
+        first.InstanceCount = 73;
+        Check(instance(first) == 73 && instance(second) == 61, "Cached reader reads current instance state");
+        var sharedCount = Reader(nameof(NumericFields.SharedCount))!;
+        var sharedFlag = Reader(nameof(NumericFields.SharedFlag))!;
+        try
+        {
+            NumericFields.SharedCount = 79;
+            NumericFields.SharedFlag = true;
+            Check(sharedCount(first) == 79 && sharedCount(second) == 79,
+                "Cached static reader observes current shared state across instances");
+            Check(sharedFlag(first) == 1, "Static bool reader converts true to one after mutation");
+        }
+        finally
+        {
+            NumericFields.SharedCount = 43;
+            NumericFields.SharedFlag = false;
+        }
+        Check(sharedCount(first) == 43 && sharedFlag(first) == 0,
+            "Static readers observe restored state without scheduling or writes");
     }
 
     private static void CheckNativeForwarding()

@@ -18,6 +18,7 @@
 | E-005 | 2026-09-13 | Rendering 预计呈现时间误去重与同机单变量回放 | Completed | D-032 |
 | E-006 | 2026-09-13 | 原生消息、WPF 呈现等待和 Dispatcher promotion 定位 | Completed | D-032 |
 | E-007 | 2026-09-13 | Pointer 无效更新过滤与活跃 Rendering 保留交叉对照 | Completed; candidates rejected | D-032 |
+| E-008 | 2026-09-13 | 渲染请求、遍历、提交时钟与反馈的关联定位 | Completed; diagnostic fix only | D-032 |
 
 ---
 
@@ -638,3 +639,51 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 - `packages/`含实际源码、tracked patch、所有新增文件哈希、完整参数/日志和EXE；`rejected-source/`再次保存撤回前8个实验生产/测试文件，并逐一验证与v2打包源码相同。`scripts-v1/`保留最初harness版本；各分析目录保存执行时分析器源码。`independent-abba-review/`及`independent-matrix-review/`保留逐gap脚本、JSON、60份上下文与失败/终点审计。
 
 源码恢复后标准Release构建通过，0错误；4条NU1900为漏洞数据服务网络失败，未完成漏洞审计。最终仅提交实验结论和D-032踩坑补充，不改Architecture/AGENTS/Unreleased，不把未获收益的过滤或订阅开关留在日用程序；所有实验包与日志继续保留，只本地提交，不推送。
+
+## E-008 — 渲染请求、遍历、提交时钟与反馈的关联定位
+
+**Status:** Completed；本轮只保留只读诊断修正，不合入过滤、保留订阅或新的帧请求策略。长间隔仍存在，未宣称流畅性问题已解决。
+
+**证据根：** `输出/edge-render-chain-20260913/`；工作区基线 `2899a3bf93c7679c1732d862a37cefa414996452`。原数据、录制与之前已封存目录保持不变。
+
+### 方法与测量边界
+
+先复用 E-007 v2 同一 EXE，F=0/1、K始终0，开启已有 deep 观察做四轮 ABBA；再分别为两组增加一轮 EventPipe 调用栈采样。最后修正静态字段读取，另打 v3，同包做第二组四轮 ABBA。共10轮，全部严格相同36动作（24open/12close）、正常退出、记录/文本零丢弃、退出前无匹配诊断文件；两份采样 eventsLost=0。各组单独冻结 common36，不跨不同探针/采样形态排名。
+
+`CommittingBatch` 也会在同步等待路径调用，是提交/等待之前的通知，不能直接计为已完成的帧提交。`_lastCommitTime` 只覆盖 interlocked CommitChannel 路径；`_lastPresentationTime` 是被采样观察到的反馈时钟，其内嵌值可能晚于观察QPC，不能当成消息到达时刻或屏幕像素时间。各字段变化只给可观察下界。UI侧 shape.applied、Rendering 和全局 render-walk 编号均不是物理显示帧。
+
+实际显示配置通过只读 EnumDisplayDevices/EnumDisplaySettings 核对为一个 attached DISPLAY1，2560×1440、报告59Hz、RTX2080。该整数配置不是实测物理呈现间隔。前两次空结果为PowerShell null字符串被转换为空串；改为C#内部传真实null后成功，三份输出保留，不能把空结果解释成无显示器或权限不足。
+
+### 额外更新没有同幅增加提交/反馈
+
+修正探针后的同包 common36：
+
+| 组 / 轮 | owner 更新间隔P95 ms | 直接 Render handler 次数 | Animated handler 次数 | 观察到的 commit 时钟变化 | 观察到的 presentation 时钟变化 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 原行为1 | 28.6651 | 375 | 514 | 467 | 424 |
+| 原行为2 | 27.5150 | 375 | 529 | 482 | 436 |
+| 过滤1 | 34.0243 | 132 | 516 | 482 | 424 |
+| 过滤2 | 33.4639 | 130 | 527 | 492 | 451 |
+
+第一组原包也得到同型结果：直接 handler 原行为386/378、过滤123/127，Animated相近；commit时钟原行为486/458、过滤493/483，presentation时钟449/413对452/440。WPF的Rendering add accessor确实调用PostRender，但当前探针没有直接记录每个PostRender调用原因，不能把所有直接handler一律归到鼠标或重订阅。
+
+v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的全局renderID增量中位数原行为为2、过滤为1，支持额外请求增加了提交间的遍历；该静态编号跨MediaContext共享。与此同时，最近owner宽高/透明度变化到precommit观察的年龄中位数原行为13.9204/14.6906ms、过滤16.9799/17.2623ms，P95分别30.1304/30.0479与34.1530/33.4092ms。该年龄只描述已记录UI状态，不能证明这些状态已序列化进该批次或显示在屏幕上。窗口首末随各轮实际更新略有变化，不拿全common里的静止期状态年龄排名。
+
+因此，E-007的应用更新间隔退化不能直接升级成“过滤降低物理FPS”；相同提交数量也不能升级成“体验一样”。原行为可能以额外遍历换来更及时的状态，最终收益还需内容与实际呈现的对应证据。此前未采用候选的决定保留，本轮不因某一个计数或年龄指标恢复它。
+
+进一步按实际WPF源码的CountsToTicks、RefreshPeriod、TicksUntilNextVsync及CommitChannel复算请求时刻，在上述owner窗口内原行为可复算167/174次、过滤179/174次。请求相对commit时钟的提前量中位数原行为20.6797/20.4293ms、过滤20.5729/20.5456ms，P95分别23.8553/24.7593与24.4056/23.8494ms，未呈稳定过滤特异差异。计算保留C#负数余数语义；不少记录中的presentation时钟晚于commit，源码公式选择其后的周期。此为字段和固定源码重建的请求值，不是实际native参数抓取，更不是反馈到达或屏幕延时；不能把等待全算为UI计算，也不能仅凭该重建值宣称整个长间隔原因已经确定。
+
+### 调用栈区分两类等待
+
+- **没有待执行Render，等反馈/消息：** `chain-pipe-filter-r1` 的34.7051ms间隔，seq63545→63651、QPC4023209121939→4023209468990，全程保持订阅。开头状态为WaitingForResponse/currentOp0；UI原生线程13004的20个External样本均落在Dispatcher.GetMessage。到+34.4311ms才posted Animated op7035，+34.4483ms started，排队只有0.0172ms。此采样轮前五大间隔都属于该状态形态。
+- **已有低优先级Render，仍未获执行：** `chain-pipe-control-r1` 的32.1651ms间隔，seq46234→46363、QPC4022169088599→4022169410250。op4665在+0.2876ms以Inactive排队，+16.4029ms记录旧优先级0的变更钩子，+31.8700ms才以Input开始；变更后8个External样本仍落在GetMessage。同段另有2个SyncFlush样本，不能把整段全部算成空闲。
+
+上述两个区间都没有GC/Start；采样数量不是精确时间占比。未采样过滤轮也出现等待低优先级操作的46.1256ms样本，但不能借用另一轮栈作其直接证明。仅看GetMessage不足以区分两类；必须同时看操作是否存在、优先级与同轮QPC。当前证据尚未拆出合成端处理、通知传递及OS唤醒各自的成本，没有新增内核/GPU呈现证据。
+
+### 修正、验证与保留
+
+- 实际WPF `_contextRenderID` 是static int；旧读取器只查Instance导致不可读。`MakeNumericReader`增加静态字段只读支持，缺失/不支持类型仍安全降级；不新增事件、操作、订阅或计时器。v3四轮number/object availability均为1023/15，原包为511/15。
+- 完整EdgeLatencyObservationChecks通过225断言（原192＋新增33），覆盖static/instance int、精确long、bool、enum、TimeSpan、实时值、对象选择及降级，原生转发与Dispatcher生命周期检查仍执行。冻结分析器9项、commit/request关联分析器5项检查通过，后者覆盖首次clock不向后借用renderID、缺失mask、C#负余数及estimated后推选择；标准Release构建0错误、4条NU1900为漏洞数据源网络失败，未完成漏洞审计。
+- v3 EXE SHA256 `5186C0E2AF33C61CB14DB9ABC9D886B260C893B56DB5F278ECCA0FEE522EA33A`，复用原包仍为 `14245EBD9375AC89F43C7324D8565EAA948AFDFDC833B440F1DAB22721D39F05`。全部源码、测试、参数、失败/成功日志、nettrace/etlx、调用栈、逐间隙及commit关联均保存。打包用的3个运行时实验文件已按保存哈希恢复；四个原始输入哈希复核未变。
+
+当前架构、调度及用户行为保持不变；本地提交探针修正、行为检查和结论，不推送，不追加Unreleased或改写架构。归档报告保留这一轮的因果边界，不能用它宣称最终显示流畅性已经验证。
