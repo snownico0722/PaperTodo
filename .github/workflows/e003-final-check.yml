@@ -1,0 +1,82 @@
+name: Temporary E-003 real app validation
+on:
+  push:
+    branches: [perf/e003-lifecycle-measure-20260913]
+    paths: [.github/workflows/e003-final-check.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare clean candidates
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          dotnet --info | Set-Content evidence/dotnet.txt
+          foreach ($variant in @('baseline','overlap','delayed','combined')) {
+            git worktree add --detach "variants/$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
+            git -C "variants/$variant" submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
+            python .github/e003-final-candidate.py "variants/$variant" $variant
+            if ($LASTEXITCODE -ne 0) { throw 'candidate patch failed' }
+            if ($variant -eq 'combined') {
+              python .github/e003-regression.py "variants/$variant"
+              if ($LASTEXITCODE -ne 0) { throw 'test patch failed' }
+            }
+            git -C "variants/$variant" diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'diff check failed' }
+            git -C "variants/$variant" diff --binary --output "$((Resolve-Path evidence).Path)/$variant.patch"
+          }
+      - name: Release build and behavioral regressions
+        run: |
+          Push-Location variants/combined
+          try {
+            .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+            dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object ../../evidence/release.log
+            if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+            $failures = @()
+            foreach ($check in @('Lifecycle','EdgeTitle','EdgePreview','Threading','Persistence','MarkdownSemantic','MarkdownEditing','TodoNavigation')) {
+              dotnet run --project "tests/PaperTodo.${check}Checks/PaperTodo.${check}Checks.csproj" -c Release 2>&1 | Tee-Object "../../evidence/$check.log"
+              if ($LASTEXITCODE -ne 0) { $failures += $check }
+            }
+            $failures | Set-Content ../../evidence/regression-failures.txt
+          }
+          finally { Pop-Location }
+      - name: Publish same-form real executable probes
+        run: |
+          foreach ($variant in @('baseline','overlap','delayed','combined')) {
+            python .github/e003-app-probe.py "variants/$variant"
+            if ($LASTEXITCODE -ne 0) { throw 'App observer patch failed' }
+            dotnet publish "variants/$variant/PaperTodo.csproj" -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -p:PublishReadyToRun=false -p:PublishTrimmed=false -p:EmbedAllSources=false -p:EmbedUntrackedSources=false -p:DebugType=none -p:DebugSymbols=false -o "variants/$variant/published" 2>&1 | Tee-Object "evidence/publish-$variant.log"
+            if ($LASTEXITCODE -ne 0) { throw "$variant publish failed" }
+          }
+      - name: External process benchmark
+        run: .github/e003-app-benchmark.ps1
+      - name: Validate regression outcome
+        run: |
+          $failures = @(Get-Content evidence/regression-failures.txt | Where-Object { $_ })
+          if ($failures.Count -gt 0) { throw ($failures -join ', ') }
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e003-real-app-validation
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: error
