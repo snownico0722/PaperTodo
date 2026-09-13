@@ -1,0 +1,90 @@
+name: Finalize E-003 lifecycle improvements
+on:
+  push:
+    branches: [perf/e003-lifecycle-profile-20260913]
+    paths: ['.github/e003-finalize.py', '.github/e003-app-smoke.py', '.github/e003-app-smoke.ps1', '.github/e003-record.py', '.github/workflows/e003-finalize.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - name: Check out experimental tools
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          path: tools
+      - name: Check out target PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: perf/startup-exit-small-preload-20260913
+          fetch-depth: 0
+          submodules: recursive
+          path: target
+      - name: Check out actual App baseline
+        uses: actions/checkout@v7
+        with:
+          ref: 416a6fdbf931612ffdb7f066149001c4100a9a4c
+          fetch-depth: 0
+          submodules: recursive
+          path: baseline
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply measured candidate
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          if ((git -C target rev-parse HEAD) -ne '416a6fdbf931612ffdb7f066149001c4100a9a4c') { throw 'PR moved; reconcile instead of overwriting' }
+          python tools/.github/e003-finalize.py target
+          if ($LASTEXITCODE -ne 0) { throw 'candidate patch failed' }
+          git -C target diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'diff validation failed' }
+          git -C target diff | Set-Content evidence/product-before-validation.diff
+      - name: Release build and behavioral regressions
+        run: |
+          dotnet build target/PaperTodo.csproj -c Release 2>&1 | Tee-Object evidence/release-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          foreach ($suite in @('Lifecycle','MarkdownSemantic','MarkdownEditing','TodoNavigation','EdgeTitle','EdgePreview','Threading','Persistence')) {
+            $project = "target/tests/PaperTodo.${suite}Checks/PaperTodo.${suite}Checks.csproj"
+            dotnet run --project $project -c Release 2>&1 | Tee-Object "evidence/$suite.log"
+            if ($LASTEXITCODE -ne 0) { throw "$suite regression failed" }
+          }
+          dotnet run --project target/tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Debug 2>&1 | Tee-Object evidence/EdgePreview-Debug.log
+          if ($LASTEXITCODE -ne 0) { throw 'Debug EdgePreview failed' }
+      - name: Real App shutdown and repeated startup
+        run: .\tools\.github\e003-app-smoke.ps1 -Workspace .
+      - name: Retain measurements and verify final diff
+        run: |
+          python tools/.github/e003-record.py target evidence
+          if ($LASTEXITCODE -ne 0) { throw 'experiment record failed' }
+          Add-Content target/doc/EXPERIMENTS.md "`n最终组合验证与真实 App 证据：Actions run ``$env:GITHUB_RUN_ID``，artifact ``e003-final-verified``。"
+          git -C target diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'final diff validation failed' }
+          git -C target diff | Set-Content evidence/final-product.diff
+          if (Test-Path target/src/E003AppSmoke.cs) { throw 'temporary instrumentation survived' }
+          if (Test-Path target/.e003-smoke-originals.json) { throw 'temporary backup survived' }
+          git -C target status --short | Tee-Object evidence/status.txt
+      - name: Commit validated product changes to PR only
+        run: |
+          git -C target config user.name 'github-actions[bot]'
+          git -C target config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C target add src/AppController.cs src/AppController.StartupPrewarm.cs src/EdgeCapsulePreview.Preload.cs src/PaperWindow.cs src/PaperWindow.Capsule.cs src/PaperWindow.EdgeCapsulePreview.cs src/PaperWindow.EdgeCapsulePlacement.cs src/App.EdgeCapsuleComposition.cs tests/PaperTodo.LifecycleChecks/Program.cs doc/ARCHITECTURE.md doc/EXPERIMENTS.md CHANGELOG.md
+          git -C target commit -m 'perf(lifecycle): prepare previews before optional shells and finish WPF shutdown [ci]'
+          if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+          git -C target push origin HEAD:perf/startup-exit-small-preload-20260913
+          if ($LASTEXITCODE -ne 0) { throw 'PR changed concurrently; push rejected' }
+          git -C target rev-parse HEAD | Set-Content evidence/product-commit.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e003-final-verified
+          path: evidence/
+          retention-days: 14
