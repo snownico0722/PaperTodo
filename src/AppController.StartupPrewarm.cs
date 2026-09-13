@@ -25,6 +25,11 @@ public sealed partial class AppController
         var batchLimit = pending.Count <= SmallPrewarmPaperLimit ? SmallPrewarmPaperLimit : 1;
         try
         {
+            // Collapsed notes already have their edge host and model. Prepare their preview
+            // before paying the optional editor/Shell first-use cost; demand can still build
+            // one Shell immediately through EnsureShellBuilt.
+            if (startPreviewPreload && !IsExiting && generation == _startupShellPrewarmGeneration)
+                await MarkdownEdgePreviewPreload.For(dispatcher).StartStartupWork();
             while (pending.Count > 0 && !IsExiting && generation == _startupShellPrewarmGeneration)
             {
                 await dispatcher.InvokeAsync(() =>
@@ -42,7 +47,7 @@ public sealed partial class AppController
                         if (++built >= batchLimit || Stopwatch.GetElapsedTime(started).TotalMilliseconds >= 6)
                             break;
                     }
-                }, DispatcherPriority.ApplicationIdle);
+                }, startPreviewPreload ? DispatcherPriority.SystemIdle : DispatcherPriority.ApplicationIdle);
             }
         }
         catch (OperationCanceledException) when (dispatcher.HasShutdownStarted) { }
@@ -52,9 +57,5 @@ public sealed partial class AppController
             // owns its normal error path; this queue does not retry a failed shell indefinitely.
             Trace.TraceWarning("Startup shell prewarm failed: {0}", ex);
         }
-        // Only the startup batch bypasses the editor debounce. A runtime show/restore must not
-        // shorten another note's typing coalescing window. The existing cache still owns the drain.
-        if (startPreviewPreload && !IsExiting && generation == _startupShellPrewarmGeneration)
-            MarkdownEdgePreviewPreload.For(dispatcher).StartStartupWork();
     }
 }

@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["capsules-1", "capsules-5", "capsules-10", "capsules-11", "preview-off", "missing-monitor", "cancel-monitor", "scripts", "real-exit"];
+    private static readonly string[] Cases = ["capsules-1", "capsules-5", "capsules-10", "capsules-11", "preview-off", "missing-monitor", "cancel-monitor", "scripts", "real-exit", "preview-before-shell", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -26,14 +26,17 @@ internal static class Program
         {
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, FixtureMarker)))
                 throw new InvalidOperationException("Refusing to use a non-fixture data directory.");
-            var result = 1;
+            // Explicit shutdown can stop the Dispatcher before the awaiting caller resumes.
+            // Failures set the exit code directly; success does not depend on that continuation.
+            var result = 0;
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             app.Dispatcher.InvokeAsync(async () =>
             {
                 try { await RunFixture(args[1], args.Contains("--baseline")); result = 0; }
-                catch (Exception ex) { Console.Error.WriteLine(ex); }
+                catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
                 finally { app.Shutdown(); }
             });
+            app.Exit += (_, _) => Console.WriteLine("WPF_EXIT_COMPLETED");
             app.Run();
             return result;
         }
@@ -78,12 +81,21 @@ internal static class Program
             var text = output.GetAwaiter().GetResult();
             Console.Write(text); Console.Error.Write(error.GetAwaiter().GetResult());
             Require(child.ExitCode == 0, name + " failed");
-            if (name == "real-exit")
+            if (name.StartsWith("real-exit") || name == "early-exit")
             {
                 var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture, "data.json")));
                 var paper = saved.RootElement.GetProperty("papers")[0];
-                Require(paper.GetProperty("content").GetString() == "pending editor text at exit", "last editor change was lost");
+                Require(paper.GetProperty("content").GetString() == (name == "early-exit" ? "short note 0" : "pending editor text at exit"), "last editor change was lost");
                 Require(paper.GetProperty("isVisible").GetBoolean(), "hiding for exit persisted as a user hide");
+                Require(baseline || text.Contains("WPF_EXIT_COMPLETED"), "normal WPF exit event was skipped");
+                foreach (var childLine in text.Split('\n').Where(value => value.StartsWith("SCRIPT_CHILD ")))
+                {
+                    var id = int.Parse(childLine["SCRIPT_CHILD ".Length..]);
+                    Process? script;
+                    try { script = Process.GetProcessById(id); }
+                    catch (ArgumentException) { continue; }
+                    using (script) Require(script.HasExited, "script survived real application exit");
+                }
                 var line = text.Split('\n').Single(value => value.StartsWith("EXIT_REQUEST "));
                 var requestAt = long.Parse(line["EXIT_REQUEST ".Length..].Trim());
                 Console.WriteLine("EXIT_PROCESS_MS " + Stopwatch.GetElapsedTime(requestAt, endedAt).TotalMilliseconds);
@@ -169,24 +181,64 @@ internal static class Program
                 Require(controller.State.Papers.Single(paper => paper.Id == "missing-screen").X == 1_000_000,
                     "startup overwrote the unresolved monitor coordinates");
             }
+            if (name == "early-exit")
+            {
+                Console.WriteLine("EXIT_REQUEST " + Stopwatch.GetTimestamp());
+                controller.Exit();
+                return;
+            }
+            if (name == "cancel-prewarm")
+            {
+                controller.HideAllPapers();
+                await (Task)Field(controller, "_startupShellPrewarmTask");
+                await Until(() => cache.PendingCount == 0, "cancelled preview drain");
+                Require(windows.Values.All(window => !window.HasVisibleSurface) && cache.ArtifactCount == 0,
+                    "deferred startup resurrected a hidden surface or its cache");
+                return;
+            }
+            long[]? previewVersions = null;
+            if (name is "preview-before-shell" or "early-expand")
+            {
+                await cache.StartStartupWork();
+                Require(cache.ArtifactCount == count, "previews were not available ahead of shells");
+                Require(windows.Values.All(window => !window.IsShellBuilt), "optional shells blocked the first preview pass");
+                previewVersions = windows.Values.Select(window =>
+                    ((EdgeCapsulePreviewInvalidationSource)Field(window, "_edgeCapsulePreviewInvalidationSource")).Version).ToArray();
+                if (name == "early-expand")
+                {
+                    windows["fixture-0"].ActivateFromEdgeShortcut();
+                    Require(windows["fixture-0"].IsShellBuilt && windows["fixture-0"].HasExpandedPaperSurface,
+                        "early demand did not construct and show the selected paper");
+                }
+            }
             await Until(() => windows.Values.All(window => window.IsShellBuilt), "shell drain");
             var shells = Stopwatch.GetTimestamp();
             await Until(() => cache.PendingCount == 0, "artifact drain");
             var ready = Stopwatch.GetTimestamp();
+            if (name == "preview-before-shell")
+            {
+                Require(cache.ArtifactCount == count && cache.WarmCompletions == count,
+                    "shell initialization discarded or rebuilt valid preview artifacts");
+                Require(previewVersions!.SequenceEqual(windows.Values.Select(window =>
+                    ((EdgeCapsulePreviewInvalidationSource)Field(window, "_edgeCapsulePreviewInvalidationSource")).Version)),
+                    "initial title/capsule materialization changed the content generation");
+            }
             if (!baseline)
             {
-                if (name.StartsWith("capsules-") && count <= 10)
+                if ((name.StartsWith("capsules-") && count <= 10) || name == "preview-before-shell")
                 {
                     Require(cache.ArtifactCount == count, "small workset did not cache all short notes");
                     var first = windows["fixture-0"];
                     var source = (EdgeCapsulePreviewInvalidationSource)Field(first, "_edgeCapsulePreviewInvalidationSource");
                     var keyBefore = source.Version;
+                    var completionsBefore = cache.WarmCompletions;
                     var editor = Field(first, "_noteBox");
                     editor.GetType().GetProperty("Text")!.SetValue(editor, "edited short note");
                     first.CommitPendingNoteContentForSave();
                     first.RequestMarkdownPreviewLayoutPreload();
                     await Until(() => cache.PendingCount == 0 && cache.ArtifactCount == count, "light note edit rewarm");
-                    Require(source.Version >= keyBefore, "source generation regressed");
+                    Require(source.Version > keyBefore && cache.WarmCompletions > completionsBefore,
+                        "real editor changes did not invalidate and rebuild preview content");
                 }
                 if (name == "capsules-11" || name == "preview-off")
                     Require(cache.ArtifactCount == 0, "heavy filter or feature-off gate was bypassed");
@@ -209,7 +261,7 @@ internal static class Program
                 Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
                     "deferred rescue hid or duplicated an already-restored paper");
             }
-            if (name == "scripts")
+            if (name is "scripts" or "real-exit-scripts")
             {
                 var registry = (IDictionary)typeof(PaperWindow).GetField("PersistentScriptProcesses", Private)!.GetValue(null)!;
                 for (var i = 0; i < 3; i++)
@@ -218,17 +270,18 @@ internal static class Program
                     start.ArgumentList.Add("--sleep-child");
                     var process = Process.Start(start)!;
                     children.Add(process);
+                    Console.WriteLine("SCRIPT_CHILD " + process.Id);
                     Require(await process.StandardOutput.ReadLineAsync() == "ready", "script fixture did not start");
                     registry.Add("fixture-script-" + i, process);
                 }
             }
-            if (name == "real-exit")
+            if (name.StartsWith("real-exit"))
             {
                 var editor = Field(windows["fixture-0"], "_noteBox");
                 editor.GetType().GetProperty("Text")!.SetValue(editor, "pending editor text at exit");
                 Console.WriteLine("EXIT_REQUEST " + Stopwatch.GetTimestamp());
                 controller.Exit();
-                throw new InvalidOperationException("Exit unexpectedly returned");
+                return;
             }
             var childIds = children.Select(process => process.Id).ToArray();
             var exitAt = Stopwatch.GetTimestamp();

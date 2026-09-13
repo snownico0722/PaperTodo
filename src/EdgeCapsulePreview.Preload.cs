@@ -22,6 +22,7 @@ internal sealed class MarkdownEdgePreviewPreload
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<ReadResult>> _pendingLayout = new();
     private readonly HashSet<EdgeCapsulePreviewInvalidationSource> _deferred = new();
     private readonly DispatcherTimer _debounce;
+    private Task _drainTask = Task.CompletedTask;
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
@@ -61,7 +62,7 @@ internal sealed class MarkdownEdgePreviewPreload
         // One-shot editing/interest debounce, stopped as soon as it fires; no idle polling.
         _debounce = new DispatcherTimer(DispatcherPriority.ContextIdle, dispatcher)
         { Interval = TimeSpan.FromMilliseconds(500) };
-        _debounce.Tick += (_, _) => { _debounce.Stop(); _debounce.Interval = TimeSpan.FromMilliseconds(500); Drain(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); _debounce.Interval = TimeSpan.FromMilliseconds(500); _ = DrainPendingAsync(); };
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
@@ -224,15 +225,21 @@ internal sealed class MarkdownEdgePreviewPreload
         if (RunnableCount > 0) _debounce.Start();
     }
 
-    internal void StartStartupWork()
+    internal Task StartStartupWork()
     {
         _dispatcher.VerifyAccess();
-        if (!_enabled || _dispatcher.HasShutdownStarted || RunnableCount == 0) return;
-        // Restoration supplies a stable batch, not a keystroke stream. Reuse the same one-shot
-        // timer/owner but do not impose the editing debounce on the first startup batch.
+        if (!_enabled || _dispatcher.HasShutdownStarted) return Task.CompletedTask;
+        if (RunnableCount == 0) return _drainTask;
+        // The first stable batch uses the normal renderer/drain, without the editing debounce.
+        // Await only this pass: a user edit can cancel it and retain its ordinary 500ms delay.
         _debounce.Stop();
-        _debounce.Interval = TimeSpan.Zero;
-        _debounce.Start();
+        return DrainPendingAsync();
+    }
+
+    private Task DrainPendingAsync()
+    {
+        if (!_drainTask.IsCompleted) return _drainTask;
+        return _drainTask = DrainAsync();
     }
 
     internal void BeginDemand()
@@ -243,7 +250,7 @@ internal sealed class MarkdownEdgePreviewPreload
         if (RunnableCount > 0) Arm();
     }
 
-    private async void Drain()
+    private async Task DrainAsync()
     {
         if (!_enabled || _work != null || _dispatcher.HasShutdownStarted) return;
         using var work = new CancellationTokenSource();

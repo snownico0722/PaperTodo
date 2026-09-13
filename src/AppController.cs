@@ -393,8 +393,8 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTrayMenu();
-        // Shell construction can invalidate preview resources. Queue every reader now, but
-        // release the startup debounce only after those shells finish, not just before they reset it.
+        // Preview artifacts use the existing edge host and model; their first pass precedes
+        // optional collapsed Shell/editor construction rather than waiting behind it.
         foreach (var window in _windows.Values) window.RequestMarkdownPreviewLayoutPreload();
         ScheduleStartupShellPrewarm(papersToRestore, startPreviewPreload: true);
     }
@@ -3558,14 +3558,10 @@ public sealed partial class AppController : IDisposable
 
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
-        try
-        {
-            Application.Current.Shutdown();
-        }
-        finally
-        {
-            Environment.Exit(0);
-        }
+        // Let the owning Dispatcher finish WPF shutdown and App.OnExit (single-instance
+        // listener, telemetry and Application resources). Environment.Exit here preempts
+        // that queued work and was slower in the process-exit A/B; owned work is already stopped.
+        Application.Current.Shutdown();
     }
 
     private static void TryExitCleanup(Action cleanup)
