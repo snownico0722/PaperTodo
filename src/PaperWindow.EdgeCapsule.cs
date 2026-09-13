@@ -155,7 +155,7 @@ public sealed partial class PaperWindow
             OnEdgeCapsulePointerReleased,
             OnEdgeCapsuleCaptureLost,
             OnEdgeCapsuleCloseInvoked));
-        _edgeCapsuleHost.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
+        ScheduleDeepCapsuleSlotContextMenuInitialization();
         RefreshDeepCapsuleSlotLabel();
     }
 

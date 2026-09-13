@@ -18,7 +18,7 @@ public partial class App
         // browsing is enabled. Users who keep the feature off should not create any prewarm HWNDs
         // or compositor resources just for this path.
         _ = Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
+            DispatcherPriority.SystemIdle,
             (Action)(() =>
             {
                 if (AppController.Current?.State.ExperimentalEdgeCapsuleHoverPreview != true)

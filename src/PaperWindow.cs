@@ -2247,7 +2247,7 @@ public sealed partial class PaperWindow : Window
         Grid.SetColumn(titleHost, 1);
         titleArea.Children.Add(titleHost);
 
-        RefreshPaperTitle();
+        RefreshPaperTitle(invalidatePreview: false);
 
         Grid.SetColumn(titleArea, 0);
         top.Children.Add(titleArea);
@@ -2755,7 +2755,9 @@ public sealed partial class PaperWindow : Window
         _paperIconButton.Foreground = _paper.AlwaysOnTop ? Theme.ActiveBrush : WeakTextBrush;
     }
 
-    public void RefreshPaperTitle()
+    public void RefreshPaperTitle() => RefreshPaperTitle(invalidatePreview: true);
+
+    private void RefreshPaperTitle(bool invalidatePreview)
     {
         var title = _controller.PaperDisplayTitle(_paper);
         Title = title;
@@ -2773,7 +2775,7 @@ public sealed partial class PaperWindow : Window
             _titleEditBox.CaretBrush = TextBrush;
         }
 
-        RefreshCapsuleLabel();
+        RefreshCapsuleLabel(invalidatePreview);
         RefreshPaperContextMenus();
     }
 

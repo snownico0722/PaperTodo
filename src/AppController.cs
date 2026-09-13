@@ -254,15 +254,11 @@ public sealed partial class AppController : IDisposable
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
-            () => PaperWindow.EnsurePersistentScriptProcessForSettings(State),
+            () => { if (!IsExiting) PaperWindow.EnsurePersistentScriptProcessForSettings(State); },
             DispatcherPriority.SystemIdle);
         RefreshFullscreenAvoidanceRuntime();
         RefreshTodoReminderSchedule();
         RefreshExperimentalWindowRuntime();
-
-        // Keep the shell responsive while Windows finishes enumerating startup displays. The
-        // wait still precedes any coordinate rescue, so a late secondary monitor keeps its papers.
-        await WaitForStartupDisplayTopologyAsync();
 
         if (State.Papers.Count == 0)
         {
@@ -283,6 +279,7 @@ public sealed partial class AppController : IDisposable
         }
 
         ApplyInitialStartupVisibility(initialVisibilityCommand);
+        DeferStartupPapersWithoutMonitor();
         var rescuedPapers = EnsurePapersOnScreen();
 
         // Establish entity-paper background ownership before any visible Body/Mini frontend can
@@ -291,8 +288,10 @@ public sealed partial class AppController : IDisposable
 
         // Respect persisted IsVisible: hide closes the paper surface, delete removes it.
         // Tray/show-all (and second-instance show) still restore everything intentionally.
-        var papersToRestore = State.Papers.Where(paper => paper.IsVisible).ToList();
+        var papersToRestore = State.Papers.Where(paper =>
+            paper.IsVisible && !_startupDisplayDeferredPapers.Contains(paper)).ToList();
         await RestorePaperSurfacesAsync(papersToRestore);
+        CompleteDeferredStartupDisplayRestore();
 
         if (rescuedPapers)
         {
@@ -394,10 +393,10 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTrayMenu();
-        ScheduleStartupShellPrewarm(papersToRestore);
-        // Restored hosts are now staged. Only queue readers; classification/layout run after the
-        // existing shared debounce, without an additional startup timer or synchronous wait.
+        // Preview artifacts use the existing edge host and model; their first pass precedes
+        // optional collapsed Shell/editor construction rather than waiting behind it.
         foreach (var window in _windows.Values) window.RequestMarkdownPreviewLayoutPreload();
+        ScheduleStartupShellPrewarm(papersToRestore, startPreviewPreload: true);
     }
 
     private void ApplyInitialStartupVisibility(StartupCommandKind command)
@@ -427,56 +426,6 @@ public sealed partial class AppController : IDisposable
             paper.IsVisible &&
             CanPaperDisplayAsCapsule(paper) &&
             (paper.IsCollapsed || State.ShowDeepCapsuleWhileExpanded);
-    }
-
-    private void ScheduleStartupShellPrewarm(IEnumerable<PaperData> papers)
-    {
-        var pending = new Queue<(PaperData Paper, PaperWindow Window)>();
-        foreach (var paper in papers)
-        {
-            if (_windows.TryGetValue(paper.Id, out var window) &&
-                !window.IsClosed &&
-                !window.IsShellBuilt)
-            {
-                pending.Enqueue((paper, window));
-            }
-        }
-        if (pending.Count == 0)
-        {
-            return;
-        }
-
-        var generation = ++_startupShellPrewarmGeneration;
-        void PrewarmNext()
-        {
-            if (generation != _startupShellPrewarmGeneration || IsExiting)
-            {
-                return;
-            }
-
-            while (pending.Count > 0)
-            {
-                var (paper, window) = pending.Dequeue();
-                if (!paper.IsVisible || window.IsClosed || window.IsShellBuilt)
-                {
-                    continue;
-                }
-
-                window.EnsureShellBuilt();
-                break;
-            }
-
-            if (pending.Count > 0)
-            {
-                Application.Current.Dispatcher.BeginInvoke(
-                    (Action)PrewarmNext,
-                    DispatcherPriority.ApplicationIdle);
-            }
-        }
-
-        Application.Current.Dispatcher.BeginInvoke(
-            (Action)PrewarmNext,
-            DispatcherPriority.ApplicationIdle);
     }
 
     private void ScheduleDeferredShellPrewarm(PaperData paper, PaperWindow window)
@@ -1302,6 +1251,8 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // An explicit show is a user decision, not a late startup callback.
+        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         if (!_suppressDirty)
         {
@@ -1837,6 +1788,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _windows.TryGetValue(paper.Id, out var window);
         if (window != null)
@@ -1908,7 +1860,8 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // A runtime show supersedes any startup restore still waiting below Render/Loaded.
+        // Explicit show-all supersedes delayed monitor recovery as well as staged surfaces.
+        CancelStartupDisplayRestore();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _isPreparingStartupEdgeCapsules = false;
@@ -1957,6 +1910,7 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
+        CancelStartupDisplayRestore();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _paperSurfaceRestoreGeneration++;
         _isPreparingStartupEdgeCapsules = false;
@@ -2938,7 +2892,7 @@ public sealed partial class AppController : IDisposable
             if (sync)
             {
                 _store.SaveJsonSync(json, version);
-                TryReleaseUnreferencedImageCache();
+                if (!IsExiting) TryReleaseUnreferencedImageCache();
                 TryFlushPendingPluginPaperStateDeletes();
                 _hasShownSaveFailure = false;
             }
@@ -3263,7 +3217,8 @@ public sealed partial class AppController : IDisposable
         var changed = false;
         for (var i = 0; i < State.Papers.Count; i++)
         {
-            changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            if (!_startupDisplayDeferredPapers.Contains(State.Papers[i]))
+                changed |= RescuePaperIfOffScreen(State.Papers[i], i);
         }
 
         return changed;
@@ -3603,14 +3558,10 @@ public sealed partial class AppController : IDisposable
 
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
-        try
-        {
-            Application.Current.Shutdown();
-        }
-        finally
-        {
-            Environment.Exit(0);
-        }
+        // Let the owning Dispatcher finish WPF shutdown and App.OnExit (single-instance
+        // listener, telemetry and Application resources). Environment.Exit here preempts
+        // that queued work and was slower in the process-exit A/B; owned work is already stopped.
+        Application.Current.Shutdown();
     }
 
     private static void TryExitCleanup(Action cleanup)
@@ -3676,6 +3627,13 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        CancelStartupDisplayRestore();
+        _pluginStartupPaperGeneration++;
+        StopStateBackupPolicy();
+        MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();
+        // Stop all child processes together; their grace periods overlap each other and WPF
+        // teardown. Only non-UI process work runs in the pool, not Window/Host disposal.
+        var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
@@ -3689,6 +3647,10 @@ public sealed partial class AppController : IDisposable
         _displayMetricsRefreshTimer.Stop();
         StopTodoReminderTimer();
         TryExitCleanup(DisposeEdgeCapsuleQueueCompositionProxies);
+        // Final editor commit/save precedes this point. Withdraw every visible WPF surface
+        // before slow plugin/child-process teardown, without changing persisted IsVisible.
+        foreach (Window surface in Application.Current.Windows.Cast<Window>().ToArray())
+            TryExitCleanup(() => surface.Hide());
         ClearPaperLinkDropTarget();
         _deepCapsuleContextMenuOwners.Clear();
         _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
@@ -3709,7 +3671,7 @@ public sealed partial class AppController : IDisposable
             TryExitCleanup(m.CloseForReal);
         }
         _masterCapsules.Clear();
-        TryExitCleanup(PaperWindow.StopAllScriptProcesses);
         TryExitCleanup(_imageStore.Dispose);
+        TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }

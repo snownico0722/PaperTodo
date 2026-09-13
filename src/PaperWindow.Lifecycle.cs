@@ -230,7 +230,9 @@ public sealed partial class PaperWindow
         // The compositor proxy can only hand off while this window still accepts endpoint frames.
         // Reveal the small real host before changing the lifecycle state to Closing.
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
-        CommitPendingEditsForSave();
+        // Controller exit already committed all editors and saved the final snapshot. Ordinary
+        // close/hide still commits here; shutdown must not commit them for a second time.
+        if (_controller.IsRunning) CommitPendingEditsForSave();
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
         _collapseTransitionGeneration++;

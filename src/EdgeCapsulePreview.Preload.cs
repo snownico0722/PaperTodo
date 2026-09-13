@@ -22,6 +22,7 @@ internal sealed class MarkdownEdgePreviewPreload
     private readonly Dictionary<EdgeCapsulePreviewInvalidationSource, Func<ReadResult>> _pendingLayout = new();
     private readonly HashSet<EdgeCapsulePreviewInvalidationSource> _deferred = new();
     private readonly DispatcherTimer _debounce;
+    private Task _drainTask = Task.CompletedTask;
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
@@ -61,7 +62,7 @@ internal sealed class MarkdownEdgePreviewPreload
         // One-shot editing/interest debounce, stopped as soon as it fires; no idle polling.
         _debounce = new DispatcherTimer(DispatcherPriority.ContextIdle, dispatcher)
         { Interval = TimeSpan.FromMilliseconds(500) };
-        _debounce.Tick += (_, _) => { _debounce.Stop(); Drain(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); _debounce.Interval = TimeSpan.FromMilliseconds(500); _ = DrainPendingAsync(); };
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
@@ -105,6 +106,10 @@ internal sealed class MarkdownEdgePreviewPreload
         return false;
     }
 
+    internal static bool ShouldPreload(EdgeCapsulePreviewContext context,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent content) =>
+        !content.IsEmpty && (context.PreloadLightContent?.Invoke() == true || IsClearlyHighLoad(content));
+
     internal MarkdownEdgeCapsulePreviewRenderer.PreviewContent Capture(EdgeCapsulePreviewContext context)
     {
         _dispatcher.VerifyAccess();
@@ -120,7 +125,7 @@ internal sealed class MarkdownEdgePreviewPreload
             entry.Lines.SequenceEqual(candidate.Lines)) return entry;
         _artifacts.Remove(source);
         _excerpts.Remove(source);
-        if (IsClearlyHighLoad(candidate)) _excerpts[source] = candidate;
+        if (ShouldPreload(context, candidate)) _excerpts[source] = candidate;
         return candidate;
     }
 
@@ -213,7 +218,29 @@ internal sealed class MarkdownEdgePreviewPreload
         else if (_work == null) Arm();
     }
 
-    private void Arm() { _debounce.Stop(); if (RunnableCount > 0) _debounce.Start(); }
+    private void Arm()
+    {
+        _debounce.Stop();
+        _debounce.Interval = TimeSpan.FromMilliseconds(500);
+        if (RunnableCount > 0) _debounce.Start();
+    }
+
+    internal Task StartStartupWork()
+    {
+        _dispatcher.VerifyAccess();
+        if (!_enabled || _dispatcher.HasShutdownStarted) return Task.CompletedTask;
+        if (RunnableCount == 0) return _drainTask;
+        // The first stable batch uses the normal renderer/drain, without the editing debounce.
+        // Await only this pass: a user edit can cancel it and retain its ordinary 500ms delay.
+        _debounce.Stop();
+        return DrainPendingAsync();
+    }
+
+    private Task DrainPendingAsync()
+    {
+        if (!_drainTask.IsCompleted) return _drainTask;
+        return _drainTask = DrainAsync();
+    }
 
     internal void BeginDemand()
     {
@@ -223,7 +250,7 @@ internal sealed class MarkdownEdgePreviewPreload
         if (RunnableCount > 0) Arm();
     }
 
-    private async void Drain()
+    private async Task DrainAsync()
     {
         if (!_enabled || _work != null || _dispatcher.HasShutdownStarted) return;
         using var work = new CancellationTokenSource();
@@ -280,7 +307,7 @@ internal sealed class MarkdownEdgePreviewPreload
 
         var version = target.Context.InvalidationSource.Version;
         var content = Capture(target.Context);
-        if (!IsClearlyHighLoad(content)) return false;
+        if (!ShouldPreload(target.Context, content)) return false;
         var binding = Bind(target.Context, content, target.Context.Paper.TextZoom);
         var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size);
         var key = MakeKey(binding, target.Anchor, new Size(width, 0));
