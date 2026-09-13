@@ -1,0 +1,59 @@
+name: Temporary E-003 exit comparison
+on:
+  push:
+    branches: [perf/e003-lifecycle-profile-20260913]
+    paths: ['.github/e003-exit.py', '.github/workflows/e003-exit-comparison.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          path: tools
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build variants
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          foreach ($variant in @('forced','natural')) {
+            git -C tools worktree add --detach "../$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
+            git -C $variant submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
+            Copy-Item tools/.github/e003-*.py "$variant/.github/"
+            python tools/.github/e003-exit.py $variant $variant
+            if ($LASTEXITCODE -ne 0) { throw 'patch failed' }
+            git -C $variant diff -- src tests | Set-Content "evidence/$variant.diff"
+            dotnet build "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release 2>&1 | Tee-Object "evidence/$variant-build.log"
+            if ($LASTEXITCODE -ne 0) { throw "$variant build failed" }
+          }
+      - name: Interleaved process exit samples
+        run: |
+          foreach ($round in 0..5) {
+            $order=if ($round % 2 -eq 0) { @('forced','natural') } else { @('natural','forced') }
+            foreach ($variant in $order) {
+              foreach ($case in @('real-exit','real-exit-scripts')) {
+                dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- "--e003-case=$case" 2>&1 | Tee-Object "evidence/$round-$variant-$case.log"
+                if ($LASTEXITCODE -ne 0) { throw "$variant $case failed" }
+              }
+            }
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e003-exit-comparison
+          path: evidence/
+          retention-days: 14
