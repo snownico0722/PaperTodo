@@ -217,3 +217,42 @@ CreateProcess
   - 未插桩真实源码 R2R publish log。
 
 GitHub artifact 有保留期限，因此长期判断应以本文保留的实验条件和关键数值为准；需要重新做发布选择时，优先在当时的 runtime / Windows / PaperTodo 版本上复跑，而不是机械沿用 2026-09 的绝对毫秒数。
+
+### 后续补测：R2R 多文件 ZIP 与 FD multi-file
+
+为 #255 的“增加两种 R2R 多文件打包方式”补做一次窄范围复测；**这不是把它们加入正式 GitHub Release**。正式 Release 仍维持 D-036 已记录的两种单文件形态，本次只验证独立可调用的 ZIP 打包入口。
+
+#### 补测方法
+
+- Workflow run：`34728040332`，Windows Server 2025，image `windows-2025-vs2026 / 20260907.229.1`，.NET SDK `10.0.401` / runtime `10.0.12`。
+- 沿用 E-001 的同一 10 Note fixture、`CreateProcess -> DwmFlush` 边界与每变体 3 组 fresh/warm pair。
+- 只比较 `SC multi-file + R2R`、`FD single-file + R2R`、`FD multi-file + R2R`。
+- benchmark 会注入启动探针，因此其发布目录/ZIP 大小**不作为最终包大小**；下面的启动/内存取自 benchmark，最终 ZIP 体积取自未插桩的 `tools/Package-R2R.ps1` 打包运行。
+
+#### 端到端启动补测
+
+| 变体 | Fresh managed entry | Fresh DWM | Warm DWM | Fresh Exit | Fresh Working Set MiB | Warm Working Set MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SC + multi-file + R2R | 124.27 ms | 1182.58 ms | 1073.19 ms | 673.47 ms | 115.54 | 115.36 |
+| FD + single-file + R2R | 107.39 ms | **1027.88 ms** | 1029.93 ms | 675.90 ms | 115.77 | 115.52 |
+| FD + multi-file + R2R | **99.62 ms** | 1045.49 ms | **1013.35 ms** | **662.02 ms** | **115.30** | 115.37 |
+
+FD multi-file + R2R 与 FD single-file + R2R 属于同一性能档位：本轮 Fresh DWM 只慢约 `17.6 ms`（约 `1.7%`），Warm 反而快约 `16.6 ms`（约 `1.6%`）。这个差异已经小到不应据此宣称某一个稳定更快；更重要的结论是 **把 no-runtime R2R 展开成多文件，没有观察到明显启动或工作集惩罚**。
+
+SC multi-file + R2R 本轮 Fresh DWM 为 `1182.58 ms`，和 E-001 的 `1100.33 ms` 有约 82 ms 的跨运行波动，但 Warm `1073.19 ms` 与此前 `1078.64 ms` 很接近。这进一步说明 GitHub hosted runner 的绝对 Fresh 数字不能跨运行做个位数百分比精确比较。
+
+#### 实际 ZIP 体积
+
+未插桩的独立打包脚本已实际生成两种包；这里的“压缩”是**发布完多文件目录后再做 ZIP 压缩**，不是重新开启 single-file bundle compression：
+
+| 打包方式 | 解压后文件数 | 解压后大小 | ZIP 大小 |
+| --- | ---: | ---: | ---: |
+| SC + multi-file + R2R | 342 | 229.31 MiB | **90.83 MiB** |
+| FD + multi-file + R2R | 60 | 27.51 MiB | **14.49 MiB** |
+
+因此两种 R2R 多文件路线都有独立打包价值：
+
+- SC 包用约 90.8 MiB 下载体积换取包含 .NET 运行时和明显更好的 multi-file R2R 启动表现；
+- FD 包解压后约 27.5 MiB、ZIP 约 14.5 MiB，同时保持约 1.0 秒级的这组 CI 启动表现，但要求机器已安装兼容的 .NET Desktop Runtime。
+
+这些结果支持“提供额外打包方式”，**不改变当前正式 Release 仍使用两种单文件包的决策**。若未来要把任一 R2R ZIP 升级为正式 Release 资产，应单独做发布产品决策和真机验证，而不是因为本次打包入口已经存在就自动加入发布。
