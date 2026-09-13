@@ -36,9 +36,12 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("papertodo-r2r-{0}" -f [guid]:
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 
 function Invoke-DotNet([string[]]$Arguments) {
-    & dotnet @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    # Out-Host preserves readable build logs without leaking dotnet's stdout into the caller's
+    # PowerShell pipeline; package functions should return only their package metadata object.
+    & dotnet @Arguments | Out-Host
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        throw "dotnet $($Arguments -join ' ') failed with exit code $exitCode"
     }
 }
 
