@@ -1,0 +1,62 @@
+name: Temporary E-003 published app lifecycle
+on:
+  push:
+    branches: [perf/e003-lifecycle-probe-20260913]
+    paths: ['.github/e003-app-probe.py', '.github/e003-app-run.ps1', '.github/workflows/e003-published-app.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tools
+      - uses: actions/checkout@v7
+        with:
+          ref: 416a6fdbf931612ffdb7f066149001c4100a9a4c
+          path: source
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish real instrumented applications
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence,published | Out-Null
+          dotnet --info | Out-File evidence/environment.txt
+          foreach ($mode in @('baseline','ordered','graceful')) {
+            Push-Location source
+            git reset --hard 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'reset failed' }
+            python ../tools/.github/e003-candidate.py . $mode
+            if ($LASTEXITCODE -ne 0) { throw 'candidate patch failed' }
+            if ($mode -eq 'graceful') {
+              python ../tools/.github/e003-exit-variant.py .
+              if ($LASTEXITCODE -ne 0) { throw 'exit variant patch failed' }
+            }
+            python ../tools/.github/e003-app-probe.py .
+            if ($LASTEXITCODE -ne 0) { throw 'app probe patch failed' }
+            dotnet publish PaperTodo.csproj -c Release -r win-x64 --self-contained true -o "../published/$mode" /p:PublishSingleFile=true /p:EnableCompressionInSingleFile=true /p:PublishReadyToRun=false /p:PublishTrimmed=false /p:IncludeNativeLibrariesForSelfExtract=true /p:EmbedAllSources=false /p:EmbedUntrackedSources=false /p:DebugType=none /p:DebugSymbols=false 2>&1 | Tee-Object "../evidence/publish-$mode.log"
+            if ($LASTEXITCODE -ne 0) { throw "$mode publish failed" }
+            Pop-Location
+          }
+      - name: Measure full EXE startup and direct-pipe exit
+        run: ./tools/.github/e003-app-run.ps1
+      - name: Preserve full app measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e003-published-app-evidence
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
