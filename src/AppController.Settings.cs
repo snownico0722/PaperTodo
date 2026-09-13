@@ -356,12 +356,20 @@ public sealed partial class AppController
 
     private void ToggleExperimentalEdgeCapsuleHoverPreview()
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         State.ExperimentalEdgeCapsuleHoverPreview =
             !State.ExperimentalEdgeCapsuleHoverPreview;
         SaveNow();
         if (!State.ExperimentalEdgeCapsuleHoverPreview)
         {
             CloseEdgeCapsulePreview(animate: false, arrange: false);
+            // A browse cover can remain after its preview session has closed. Disabling preview
+            // removes proxy input eligibility, so release every retained queue, including idle
+            // queues that CloseEdgeCapsulePreview cannot identify through a current session.
+            foreach (var queueKey in _edgeCapsuleQueueCompositionProxies.Keys.ToArray())
+            {
+                CompleteEdgeCapsuleQueueCompositionProxy(queueKey, success: true);
+            }
         }
         ArrangeDeepCapsules(animate: false);
         RefreshEdgeCapsuleHoverIntentRuntime();
@@ -2829,6 +2837,7 @@ public sealed partial class AppController
 
     private void ToggleAnimations()
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         State.EnableAnimations = !State.EnableAnimations;
         if (!State.EnableAnimations)
         {

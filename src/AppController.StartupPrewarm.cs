@@ -54,7 +54,7 @@ public sealed partial class AppController
         }
         // Only the startup batch bypasses the editor debounce. A runtime show/restore must not
         // shorten another note's typing coalescing window. The existing cache still owns the drain.
-        if (startPreviewPreload && !IsExiting && generation == _startupShellPrewarmGeneration)
-            MarkdownEdgePreviewPreload.For(dispatcher).StartStartupWork();
+        if (!IsExiting && generation == _startupShellPrewarmGeneration)
+            CompleteStartupEdgePrewarm(startPreviewPreload);
     }
 }

@@ -51,6 +51,9 @@ public sealed partial class PaperWindow
     internal void SetAdvancedInteractionLocked(bool locked)
     {
         var changed = _advancedInteractionLocked != locked;
+        using var prewarmMutation = changed
+            ? _controller.SuspendEdgePrewarmForMutation()
+            : null;
         if (changed)
         {
             // The presentation-only proxy cannot inherit a mid-flight input lock. Settle its

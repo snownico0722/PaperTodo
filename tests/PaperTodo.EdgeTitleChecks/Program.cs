@@ -26,7 +26,8 @@ internal static partial class Program
             Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
-            Console.WriteLine($"Edge title checks: 5/5 groups, {assertions} assertions passed.");
+            ProxyRetentionChecks();
+            Console.WriteLine($"Edge title checks: 6/6 groups, {assertions} assertions passed.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

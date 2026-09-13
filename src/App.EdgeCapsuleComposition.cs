@@ -1,5 +1,3 @@
-using System.Windows.Threading;
-
 namespace PaperTodo;
 
 public partial class App
@@ -14,19 +12,7 @@ public partial class App
 
         InitializeTelemetry();
 
-        // Pay known DComp publication and WPF HWND first-use costs during startup only when edge
-        // browsing is enabled. Users who keep the feature off should not create any prewarm HWNDs
-        // or compositor resources just for this path.
-        _ = Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
-            (Action)(() =>
-            {
-                if (AppController.Current?.State.ExperimentalEdgeCapsuleHoverPreview != true)
-                {
-                    return;
-                }
-
-                EdgeCapsuleQueueCompositionProxy.PrewarmLightweight(Dispatcher);
-            }));
+        // The controller's prewarm coordinator schedules graphics resources together with real
+        // queue readiness, after startup shells settle. Construction itself never preclaims HWNDs.
     }
 }

@@ -9,19 +9,34 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     public bool TryStart(out bool realHostMayHaveChanged)
     {
         realHostMayHaveChanged = false;
+        var started = false;
         try
         {
-            var started = PrepareAndStart();
+            started = PrepareAndStart();
             realHostMayHaveChanged = _realEndpointMutationStarted;
             return started;
         }
         finally
         {
-            _starting = false;
-            if (_completionPendingDuringStart)
-            {
-                CompleteNow(_pendingStartCompletionSuccess);
-            }
+            FinishStartup(started);
+        }
+    }
+
+    private void FinishStartup(bool started)
+    {
+        // Publication has transferred the live sources. Rollback can no longer return to the
+        // retired generation; retaining it would keep the entire browsing history alive.
+        if (_coverPublished) _predecessor = null;
+        _starting = false;
+        if (_completionPendingDuringStart)
+        {
+            CompleteNow(_pendingStartCompletionSuccess);
+        }
+        else if (started && _plan.IsStaticPreacquisition)
+        {
+            // The ordinary endpoint verification grants retention. A static acquisition has
+            // no animation to wait for, and a reentrant explicit completion always wins above.
+            CompleteNow(success: true, allowBrowseRetention: true);
         }
     }
 
@@ -77,38 +92,44 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 #if DEBUG
             EdgeCapsuleColdStartDiagnostics.Boundary("resources-ready");
 #endif
-            var successorHandles = _members
-                .Select(member => member.SourceHandle)
-                .Where(handle => handle != IntPtr.Zero)
-                .ToHashSet();
+            var successorHandles = new HashSet<IntPtr>(_members.Count);
+            foreach (var member in _members)
+            {
+                if (member.SourceHandle != IntPtr.Zero)
+                {
+                    successorHandles.Add(member.SourceHandle);
+                }
+            }
             var predecessorHandles =
                 _predecessor?.SnapshotCloakedSourceHandles() ??
                 new HashSet<IntPtr>();
-            var inheritedHandles = predecessorHandles
-                .Where(successorHandles.Contains)
-                .ToHashSet();
-            var newHandles = successorHandles
-                .Where(handle =>
-                    !predecessorHandles.Contains(handle))
-                .ToArray();
-            var outgoingHandles = predecessorHandles
-                .Where(handle =>
-                    !successorHandles.Contains(handle))
-                .ToArray();
-
+            var inheritedCount = 0;
+            var newHandles = new HashSet<IntPtr>();
+            var outgoingCount = 0;
             var cloakChanges =
                 new List<WindowNative.WindowCloakChange>(
-                    newHandles.Length + outgoingHandles.Length);
-            cloakChanges.AddRange(newHandles.Select(handle =>
-                new WindowNative.WindowCloakChange(
-                    handle,
-                    Cloaked: true,
-                    RollbackCloaked: false)));
-            cloakChanges.AddRange(outgoingHandles.Select(handle =>
-                new WindowNative.WindowCloakChange(
-                    handle,
-                    Cloaked: false,
-                    RollbackCloaked: true)));
+                    successorHandles.Count + predecessorHandles.Count);
+            foreach (var handle in successorHandles)
+            {
+                if (predecessorHandles.Contains(handle))
+                {
+                    inheritedCount++;
+                    continue;
+                }
+                newHandles.Add(handle);
+                cloakChanges.Add(new WindowNative.WindowCloakChange(
+                    handle, Cloaked: true, RollbackCloaked: false));
+            }
+            foreach (var handle in predecessorHandles)
+            {
+                if (successorHandles.Contains(handle)) continue;
+                outgoingCount++;
+                cloakChanges.Add(new WindowNative.WindowCloakChange(
+                    handle, Cloaked: false, RollbackCloaked: true));
+            }
+#if DEBUG
+            EdgeCapsuleColdStartDiagnostics.Boundary("source-sets-ready");
+#endif
 
             var hostPromoted = false;
 
@@ -122,7 +143,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             var coverTimestamp = Stopwatch.GetTimestamp();
             if (_predecessor == null)
             {
-                RebaseVisualStarts(coverTimestamp);
+                // AddVisual already installed the immutable cold start offsets. Only a
+                // successor needs to sample a predecessor that can move during preparation.
                 _target.SetRoot(_root).CheckError();
                 _device.Commit().CheckError();
                 _targetRootInstalled = true;
@@ -134,6 +156,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 {
                     return false;
                 }
+#if DEBUG
+                EdgeCapsuleColdStartDiagnostics.Boundary("output-shown");
+#endif
                 if (!WindowNative.TryFlushDesktopComposition())
                 {
                     return false;
@@ -143,12 +168,12 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 EdgeCapsuleColdStartDiagnostics.Boundary("cover-static-visible");
 #endif
             }
-            else if (newHandles.Length > 0)
+            else if (newHandles.Count > 0)
             {
                 _successorAdmissionCover =
                     CreateSuccessorAdmissionCover(
                         coverTimestamp,
-                        newHandles.ToHashSet());
+                        newHandles);
                 _target.SetRoot(
                     _successorAdmissionCover.Root).CheckError();
                 _device.Commit().CheckError();
@@ -197,26 +222,28 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 // Publish the live cover at its start position. The coordinated DwmFlush below
                 // blocks this UI thread; starting autonomous DComp motion here would let peers
                 // move while WPF is still unable to produce the first shape frame.
-                RebaseVisualStarts(Stopwatch.GetTimestamp());
-
                 if (_predecessor != null)
                 {
+                    RebaseVisualStarts(Stopwatch.GetTimestamp());
                     // Outgoing real HWNDs are being un-cloaked in this same DWM batch. Keep the
                     // predecessor root installed until this callback, then replace the root so
                     // outgoing reveal, incoming cloak and successor publication cross one flush.
                     _target.SetRoot(_root).CheckError();
                     _targetRootInstalled = true;
+                    _device.Commit().CheckError();
 #if DEBUG
                     EdgeCapsuleColdStartDiagnostics.Boundary("successor-root-staged");
 #endif
                 }
 
-                _device.Commit().CheckError();
+                // A cold root is already visible at these same offsets. Settling the source
+                // HWNDs updates its live content without another DComp root/offset command.
+                // The coordinated cloak flush and verification below are still required.
 #if DEBUG
                 EdgeCapsuleColdStartDiagnostics.Boundary("start-cover-published");
 #endif
 
-                if (!_coverReady(this))
+                if (!_coverReady(this, _predecessor))
                 {
                     return false;
                 }
@@ -234,7 +261,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 {
                     try
                     {
-                        _coverRollback(this);
+                        _coverRollback(this, _predecessor);
                     }
                     catch (Exception ex)
                     {
@@ -280,8 +307,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 #if DEBUG
             EdgeCapsuleColdStartDiagnostics.Boundary("before-cloak-batch");
 #endif
-            var publication =
-                WindowNative.TrySetWindowCloakedBatchDetailed(
+            // When a successor keeps precisely the same live sources, no HWND authority changes.
+            // Root replacement is already an atomic DComp commit on the existing visible output;
+            // it must not wait for another scanout before WPF can produce the next shape frame.
+            // New/revealed sources still require the full cover/cloak/flush/verify transaction.
+            var retainedAuthority = _predecessor != null && cloakChanges.Count == 0;
+            var publication = retainedAuthority
+                ? PublishRetainedCover(PublishBeforeFlush, RollbackBeforeFlush)
+                : WindowNative.TrySetWindowCloakedBatchDetailed(
                     cloakChanges,
                     PublishBeforeFlush,
                     RollbackBeforeFlush);
@@ -302,7 +335,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 }
                 else
                 {
-                    // Rollback crossed its own DwmFlush and restored the predecessor root.
+                    // Rollback restored the predecessor root and completed its publication fence.
                     ReleaseSuccessorAdmissionCover();
                 }
                 return false;
@@ -311,7 +344,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             EdgeCapsuleColdStartDiagnostics.Boundary("publication-verified");
 #endif
 
-            // The batch DwmFlush has now made the final successor root authoritative.
+            // Either the cloak batch verified the authority swap, or the atomic successor commit
+            // preserved the existing cover and its unchanged, already-cloaked source set.
             ReleaseSuccessorAdmissionCover();
             foreach (var handle in successorHandles)
             {
@@ -324,33 +358,36 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             }
             _coverPublished = true;
 
-            // All blocking publication work is finished. Start shape and translation together
-            // from this fresh QPC, keeping the same curve and full duration for both. Do not
-            // flush again after starting: WPF must be free to produce its first frame. The cover
-            // already owns its sources, so a failure here uses the normal published-cover handoff.
-            var animationTimestamp = Stopwatch.GetTimestamp();
-            if (!_animationStartRequested(animationTimestamp))
+            if (!_plan.IsStaticPreacquisition)
             {
-                return false;
-            }
-            ConfigureAnimations(animationTimestamp);
-            _device.Commit().CheckError();
-            _animationStartedAtTimestamp = animationTimestamp;
+                // All blocking publication work is finished. Start shape and translation together
+                // from this fresh QPC, keeping the same curve and full duration for both. Do not
+                // flush again after starting: WPF must be free to produce its first frame. The cover
+                // already owns its sources, so a failure here uses the normal published-cover handoff.
+                var animationTimestamp = Stopwatch.GetTimestamp();
+                if (!_animationStartRequested(animationTimestamp))
+                {
+                    return false;
+                }
+                ConfigureAnimations(animationTimestamp);
+                _device.Commit().CheckError();
+                _animationStartedAtTimestamp = animationTimestamp;
 #if DEBUG
-            EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
+                EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
 #endif
 
-            if (RoutesPointerInput) _sampleTimer.Start();
-            var elapsed = Stopwatch.GetElapsedTime(
-                _animationStartedAtTimestamp,
-                Stopwatch.GetTimestamp()).TotalMilliseconds;
-            _completionTimer.Interval =
-                TimeSpan.FromMilliseconds(Math.Max(
-                    1,
-                    _plan.DurationMilliseconds +
-                    CompletionGuardMilliseconds -
-                    elapsed));
-            _completionTimer.Start();
+                if (RoutesPointerInput) _sampleTimer.Start();
+                var elapsed = Stopwatch.GetElapsedTime(
+                    _animationStartedAtTimestamp,
+                    Stopwatch.GetTimestamp()).TotalMilliseconds;
+                _completionTimer.Interval =
+                    TimeSpan.FromMilliseconds(Math.Max(
+                        1,
+                        _plan.DurationMilliseconds +
+                        CompletionGuardMilliseconds -
+                        elapsed));
+                _completionTimer.Start();
+            }
 
 #if DEBUG
             var outputPixels =
@@ -361,10 +398,12 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.session phase=start mode=live-translation " +
                 $"session={_sessionOrdinal} cold={IsColdSession} " +
+                $"freshAuthority={_predecessor == null} " +
                 $"successor={_predecessor != null} " +
+                $"staticPreacquisition={_plan.IsStaticPreacquisition} " +
                 $"queue={_plan.QueueKey} members={_members.Count} " +
-                $"inherited={inheritedHandles.Count} " +
-                $"revealed={outgoingHandles.Length} " +
+                $"inherited={inheritedCount} " +
+                $"revealed={outgoingCount} " +
                 $"durationMs={_plan.DurationMilliseconds} " +
                 $"output={_outputBounds.Left},{_outputBounds.Top}," +
                 $"{_outputBounds.Width}x{_outputBounds.Height} " +
@@ -387,6 +426,30 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 _sessionOrdinal,
                 ex);
             return false;
+        }
+    }
+
+    private WindowNative.WindowCloakBatchResult PublishRetainedCover(
+        Func<bool> publish,
+        Action rollback)
+    {
+        try
+        {
+            if (publish()) return WindowNative.WindowCloakBatchResult.Success;
+        }
+        catch
+        {
+            // The predecessor still covers every source. Restore it before reporting failure.
+        }
+        try
+        {
+            rollback();
+            _device.WaitForCommitCompletion().CheckError();
+            return WindowNative.WindowCloakBatchResult.RolledBack;
+        }
+        catch
+        {
+            return WindowNative.WindowCloakBatchResult.RollbackFailed;
         }
     }
 }

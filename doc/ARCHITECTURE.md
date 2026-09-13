@@ -361,6 +361,14 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。
 
+开启边缘预览时，符合条件的队列在动画端点验证成功后继续保留当前 cover，包括正常收回到胶囊后的静置状态。真实 source 和 output 使用同一产品最大预览尺寸入口，source 保持逐纸片有界，output 另为有限的队列浏览位移预留 envelope，不把每张 WPF bitmap 扩大到整个队列。后继必须落在已有 envelope 内，并保持原生 source identity/capacity；不能继承时仍走显式交接。后继可为同一 live surface 获取独立 COM 引用，发布成功后及时断开 predecessor 引用，不累积历史代链。
+
+`EdgePrewarmCoordinator` 统一安排一次性 graphics 预热和真实静态队列的提前接管。启动 Shell 稳定或有效生命周期变化后，由 Rendering 调度屏障转入低优先级 Dispatcher，每次只准备一个队列；Rendering 本身不证明 DWM 已显示。静态接管使用实际已应用且原生验证一致的同一组 HWND，保留首次 publication/cloak/rollback 及端点验证，不制造空动画。输入、隐藏、关闭或显示环境变化撤销旧代；暂时未就绪的队列等待真实输入结束或 presentation/lifecycle 事件再次唤醒，不轮询重试。实际 demand 仍可直接走既有正常路径。
+
+调度器在交互及原生准备期间暂停 Markdown 的 speculative 预热；正文 cache 继续独立拥有最新请求、失效版本和不可变 artifact，正在使用的正文 demand 不被取消。调度器不持有第二套纸片状态、正文控件或 surface authority。
+
+保留期间，已经结束的 translation 不冻结 WPF shape；presentation 和输入读取真实 Host 当前 applied frame。静置采样只在指针或 applied frame 改变时唤醒 presenters。原生 capacity 或 DPI 需要改变时，先释放代理再恢复暂存的 source invalidation；输入交互、拖动、隐藏、退出等显式完成不能被普通浏览保留规则拦住。
+
 Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后，cover 才能释放；completion timer 只负责发起完成尝试，不作为 correctness proof。
 
 Display/DPI、z-order、drag 结束、隐藏/关闭 Edge 模式等生命周期边界如果会让现有 surface/queue 失效，先结束或恢复当前 visual authority，再清理 preview、retraction、临时 placement/transaction 等 transient state；这些临时状态不能跨失效边界残留到下一次显示或重新启用。

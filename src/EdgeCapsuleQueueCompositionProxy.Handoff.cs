@@ -34,7 +34,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         {
             try
             {
-                _coverRollback(this);
+                _coverRollback(this, _predecessor);
             }
             catch
             {
@@ -398,7 +398,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             $"proxy.handoff phase=dispose session={_sessionOrdinal} " +
             $"cold={IsColdSession} queue={_plan.QueueKey} " +
             $"released={_sourcesReleased} " +
-            $"successor={_predecessor != null} reusedHost=true");
+            $"successor={_hadPredecessor} reusedHost=true");
 #endif
     }
 

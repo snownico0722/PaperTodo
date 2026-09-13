@@ -5,6 +5,10 @@ namespace PaperTodo;
 
 internal sealed partial class EdgeCapsuleQueueCompositionProxy
 {
+#if DEBUG
+    private int _reusedLiveSurfaceCount;
+#endif
+
     private VisualState AddVisual(
         EdgeCapsuleQueueCompositionProxyMember member,
         IntPtr sourceHandle,
@@ -17,10 +21,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         IDCompositionVisual? visual = null;
         try
         {
-            _device.CreateSurfaceFromHwnd(
-                sourceHandle,
-                out var createdSurface).CheckError();
-            surface = createdSurface;
+            surface = AcquireLiveSurface(member, sourceHandle, sourceBounds);
 
             _device.CreateVisual(
                 out IDCompositionVisual2 createdVisual).CheckError();
@@ -61,6 +62,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             _visuals.Add(state);
             surface = null;
             visual = null;
+#if DEBUG
+            if (_visuals.Count == _members.Count)
+            {
+                EdgeCapsulePerformanceDiagnostics.Trace(
+                    $"proxy.surface phase=acquired session={_sessionOrdinal} " +
+                    $"queue={_plan.QueueKey} reused={_reusedLiveSurfaceCount} " +
+                    $"created={_visuals.Count - _reusedLiveSurfaceCount}");
+            }
+#endif
             return state;
         }
         finally
@@ -68,6 +78,50 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             visual?.Dispose();
             surface?.Dispose();
         }
+    }
+
+    private IUnknown AcquireLiveSurface(
+        EdgeCapsuleQueueCompositionProxyMember member,
+        IntPtr sourceHandle,
+        DeviceScreenRect sourceBounds)
+    {
+        // Admission has already verified the live host's capacity. Reuse is narrower still:
+        // the same paper HWND must remain owned by the reserved predecessor on this runtime.
+        if (_predecessor is { } predecessor &&
+            !predecessor._disposed &&
+            !predecessor._coverLost &&
+            !predecessor._sourcesReleased &&
+            predecessor._successorHeld &&
+            ReferenceEquals(predecessor._runtime, _runtime) &&
+            predecessor._cloakedRealSourceHandles.Contains(sourceHandle) &&
+            member.Window.EdgeCapsuleQueueProxySourceHandle == sourceHandle)
+        {
+            foreach (var previous in predecessor._visuals)
+            {
+                if (!ReferenceEquals(previous.Member.Window, member.Window) ||
+                    previous.PresentedSourceHandle != sourceHandle ||
+                    previous.SourceBounds.Width != sourceBounds.Width ||
+                    previous.SourceBounds.Height != sourceBounds.Height ||
+                    previous.Surface is not ComObject existing ||
+                    existing.NativePointer == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                // QueryInterface(IUnknown) AddRefs the live surface and creates a distinct
+                // wrapper. The new generation owns that reference; retiring the predecessor
+                // releases only its reference. A later AddVisual failure disposes ours in its
+                // existing finally block, without changing the predecessor or its pixels.
+                var retained = existing.QueryInterface<ComObject>();
+#if DEBUG
+                _reusedLiveSurfaceCount++;
+#endif
+                return retained;
+            }
+        }
+
+        _device.CreateSurfaceFromHwnd(sourceHandle, out var surface).CheckError();
+        return surface;
     }
 
     private readonly record struct StaticCoverSource(
