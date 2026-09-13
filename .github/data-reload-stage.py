@@ -15,7 +15,6 @@ payload = ''.join((root / '.github' / ('data-reload-patch.' + part)).read_text(e
 patch = lzma.decompress(base64.b64decode(payload, validate=True))
 assert hashlib.sha256(patch).hexdigest() == '7b40b28d51f14349921a1bb7ccab7337179d0cc9856d4ff2a26a5b4dfad82ae1', 'Patch bytes changed'
 git('config', 'core.autocrlf', 'false')
-# Read Git blobs as bytes, independent of runner checkout EOL/stat caches.
 for name in re.findall(r'^--- a/(.+)$', patch.decode('utf-8'), re.MULTILINE):
     source = subprocess.check_output(['git', 'show', 'HEAD:' + name], cwd=root)
     (root / name).write_bytes(source)
@@ -27,14 +26,28 @@ git('apply', str(patch_file))
 def replace(name, old, new):
     path = root / name
     text = path.read_text(encoding='utf-8')
-    assert old in text, (name, old)
+    if new in text:
+        print('Already staged:', name, repr(new[:60]), flush=True)
+        return
+    if old not in text:
+        raise RuntimeError(f'Missing staging anchor: {name}: {old!r}')
     path.write_bytes(text.replace(old, new).encode('utf-8'))
+    print('Staged:', name, repr(old[:60]), flush=True)
 
 replace('src/StateReloadModels.cs', '        Copy(AppProperties, next, current);',
     '        // Keep the committed comparison snapshot immutable, including dictionaries/new papers.\n        next = StateStore.CopyForReload(next);\n        Copy(AppProperties, next, current);')
-replace('src/StateStore.cs', '            AddIfExists(paths, BackupPath);',
-    '            AddIfExists(paths, FilePath); // pending external edits can reference images absent from memory\n            AddIfExists(paths, BackupPath);')
-replace('tests/PaperTodo.DataReloadChecks/Program.cs', 'papertodo-image://', 'i:')
+path = root / 'src/StateStore.cs'
+text = path.read_text(encoding='utf-8')
+if 'AddIfExists(paths, FilePath);' not in text:
+    text, count = re.subn(r'(?m)^(\s*)AddIfExists\(paths, BackupPath\);',
+        r'\1AddIfExists(paths, FilePath); // pending external edits can reference images absent from memory\n\1AddIfExists(paths, BackupPath);', text)
+    if count != 1:
+        raise RuntimeError('Expected exactly one image-protection path anchor')
+    path.write_bytes(text.encode('utf-8'))
+print('Primary image protection verified', flush=True)
+path = root / 'tests/PaperTodo.DataReloadChecks/Program.cs'
+text = path.read_text(encoding='utf-8').replace('papertodo-image://', 'i:')
+path.write_bytes(text.encode('utf-8'))
 replace('tests/PaperTodo.DataReloadChecks/Program.cs', '        snapshot.Papers[0].Content = "![exit](i:456)";',
     '        var external = s.Read(); external["papers"]![0]!["content"] = "![pending](i:789)"; s.Write(external);\n        Require(s.Store.TryCollectProtectedImageIds(s.Memory, out ids) && ids.Contains("789"), "pending external primary image not protected");\n        snapshot.Papers[0].Content = "![exit](i:456)";')
 replace('tests/PaperTodo.DataReloadChecks/Program.cs', '        StateReloadModels.Apply(current, next);',
