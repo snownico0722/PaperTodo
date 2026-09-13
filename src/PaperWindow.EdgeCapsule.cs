@@ -488,16 +488,6 @@ public sealed partial class PaperWindow
         }
 
         EnsureDeepCapsuleSlotHost();
-        if (_stagingStartupEdgeCapsuleFirstPresentation &&
-            _edgeCapsuleHost?.IsVisible != true)
-        {
-            var staged = _edgeCapsuleHost?.ApplyStartupFirstPresentation(frame) == true;
-            if (staged)
-            {
-                _startupStagedEdgeCapsuleFrame = frame;
-            }
-            return staged;
-        }
         return _edgeCapsuleHost?.Apply(frame) == true;
     }
 

@@ -475,7 +475,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
 #if DEBUG
             var layoutStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
-            RefreshNativeMetricsLayout(updateNow: !_startupFirstPresentationBatchActive);
+            RefreshNativeMetricsLayout();
 #if DEBUG
             forcedLayoutMilliseconds +=
                 EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(
@@ -513,9 +513,27 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             return false;
         }
 
-        ApplyCommittedVisualState(
-            frame,
-            reveal: !_startupFirstPresentationBatchActive);
+        var contentOpacity = Math.Clamp(frame.ContentOpacity, 0, 1);
+        if (Math.Abs(root.Opacity - contentOpacity) > 0.001)
+        {
+            root.Opacity = contentOpacity;
+        }
+        if (root.IsHitTestVisible != frame.IsHitTestVisible)
+        {
+            root.IsHitTestVisible = frame.IsHitTestVisible;
+        }
+        var outlineVisibility = frame.OutlineVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (Outline.Visibility != outlineVisibility)
+        {
+            Outline.Visibility = outlineVisibility;
+        }
+        var opacity = Math.Clamp(frame.Opacity, 0, 1);
+        if (Math.Abs(window.Opacity - opacity) > 0.001)
+        {
+            window.Opacity = opacity;
+        }
         _appliedNativeMetricsVersion = nativeMetricsVersion;
         if (_experimentalPassive)
         {
@@ -635,16 +653,13 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         }
     }
 
-    private void RefreshNativeMetricsLayout(bool updateNow = true)
+    private void RefreshNativeMetricsLayout()
     {
         VisualSurface.InvalidateMeasure();
         VisualSurface.InvalidateArrange();
         Root.InvalidateMeasure();
         Root.InvalidateArrange();
-        if (updateNow)
-        {
-            Root.UpdateLayout();
-        }
+        Root.UpdateLayout();
     }
 
     private bool MatchesNativePresentationLayout(EdgeCapsulePresentationFrame frame)

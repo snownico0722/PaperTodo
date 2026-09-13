@@ -2656,7 +2656,17 @@ public sealed partial class AppController : IDisposable
 
         if (flushInitialPresentations)
         {
-            FlushStartupDeepCapsulePresentations(plan);
+            foreach (var queue in plan.Queues)
+            {
+                foreach (var paper in queue.Papers)
+                {
+                    if (_windows.TryGetValue(paper.Id, out var window) &&
+                        ShouldPaperOccupyDeepCapsuleSlot(paper, window))
+                    {
+                        window.FlushStartupDeepCapsulePresentation();
+                    }
+                }
+            }
         }
 
         if (!flushInitialPresentations)
