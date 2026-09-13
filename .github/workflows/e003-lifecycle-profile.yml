@@ -1,0 +1,66 @@
+name: Temporary E-003 lifecycle profile
+on:
+  push:
+    branches: [perf/e003-lifecycle-profile-20260913]
+    paths: ['.github/e003-profile.py', '.github/workflows/e003-lifecycle-profile.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Instrument isolated source
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          python .github/e003-profile.py .
+          if ($LASTEXITCODE -ne 0) { throw 'instrumentation failed' }
+          git diff -- src tests | Set-Content evidence/instrumentation.diff
+          dotnet --info | Set-Content evidence/dotnet.txt
+      - name: Build profiled fixture
+        run: |
+          dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+      - name: Measure fresh processes
+        run: |
+          foreach ($round in 0..3) {
+            $cases = if ($round % 2 -eq 0) { @('capsules-10','capsules-1','real-exit','scripts') } else { @('scripts','real-exit','capsules-1','capsules-10') }
+            foreach ($case in $cases) {
+              dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- "--e003-case=$case" 2>&1 | Tee-Object "evidence/$round-$case.log"
+              if ($LASTEXITCODE -ne 0) { throw "fixture $case round $round failed" }
+            }
+          }
+      - name: Summarize scopes
+        run: |
+          $rows = @()
+          foreach ($file in Get-ChildItem evidence/*.log) {
+            foreach ($line in Get-Content $file) {
+              if ($line -notlike 'E003_PROFILE *') { continue }
+              $report = $line.Substring(13) | ConvertFrom-Json
+              foreach ($group in ($report.entries | Group-Object Name)) {
+                $rows += [pscustomobject]@{sample=$file.BaseName; fixture=$report.fixture; scope=$group.Name; count=$group.Count; ms=($group.Group.DurationMs | Measure-Object -Sum).Sum; firstStartMs=$group.Group[0].StartMs}
+              }
+            }
+          }
+          $rows | Export-Csv evidence/scopes.csv -NoTypeInformation
+          $rows | Where-Object sample -Like '*capsules-10' | Format-Table -AutoSize | Out-String -Width 220 | Write-Host
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e003-lifecycle-profile
+          path: evidence/
+          retention-days: 14
