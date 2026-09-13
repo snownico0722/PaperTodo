@@ -31,11 +31,18 @@ jobs:
           import hashlib, io, json, os, urllib.request, zipfile
           from pathlib import Path
           api = 'https://api.github.com/repos/snownico0722/PaperTodo'
+          class SignedDownloadRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+                  if redirected is not None:
+                      redirected.remove_header('Authorization')
+                  return redirected
+          opener = urllib.request.build_opener(SignedDownloadRedirect())
           def get(path):
               request = urllib.request.Request(api + path, headers={
                   'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
                   'Accept': 'application/vnd.github+json'})
-              with urllib.request.urlopen(request) as response:
+              with opener.open(request) as response:
                   return response.read()
           job = json.loads(get('/actions/jobs/103664982265'))
           assert job['run_id'] == 34735095310
