@@ -392,3 +392,79 @@ Windows Server 2025 / .NET SDK 10.0.401 / runtime 10.0.12，同一 job 内以新
 最终 Windows 验证 run `34735095310` 的 Release 构建（0 警告/0 错误）、8 组 Release 回归、Debug EdgePreview 和真实 App A/B 均通过；之后仅实验文档两处 Markdown 行尾空格触发 `git diff --check` 失败，未执行推送。落盘流程复用其 artifact `10310961672` 中的原始受测源代码补丁并验证 SHA-256，仅修正文档格式，不替换受测代码。真实 App 对照表来自同一 artifact 的 `real-app-summary.csv`。
 
 普通退出不再强制终止潜在的第三方前台线程；本轮确认了 PaperTodo 自身线程、脚本子进程、正常 OnExit 及重复启动，未覆盖任意第三方插件自建的前台线程。真实 WebView/第三方插件组合仍需针对性验证，不把隔离用例的通过扩大成所有插件均已实测。
+
+---
+
+## E-004 — JSON 预生成、样式复用与托盘后移的启动取舍
+
+**日期：** 2026-09-13
+**状态：** Completed；本轮全部候选不采用，产品代码继续使用 E-003。
+**基线：** #254 `92e835a5fb259519fa41403e8eb41cc4bfec969e`。
+
+### 方法和测量口径
+
+Windows Server 2025、.NET SDK 10.0.401 / runtime 10.0.12；runner 可见 AMD EPYC 7763、2 核/4 逻辑处理器。实际运行普通 Release 多文件 `PaperTodo.exe`，不是 self-contained 发布包。工作集为1张或10张已折叠短笔记，独立临时数据目录，不加载真实用户插件。
+
+第一组4种变体共48个新进程；后续托盘优先级隔离2种变体共24个新进程。每种变体/纸片数运行6次，round 0 保留但不进入统计，余下5次中位数；同一 job 内轮换顺序，第二组明确逐轮 AB/BA。两组共72个进程、60个计入统计的样本。不同 job 的绝对毫秒数不相减，也不把多个指标的中位数之差当成同步 CPU 分账。
+
+外部父进程在 Start-Process 前记录 QPC；内部事件缓冲到命令 Ready/OnExit 才统一写出，避免每个打点产生磁盘 I/O。Rendering observed 是全部 Host 满足可见条件后观察到的 WPF Rendering，不是 DWM/物理显示器扫描。缓存写入、Shell 完成、托盘创建完成独立打点。主实例退出耗时从其 Exit 入口到父进程观察到真正结束，不包含第二实例启动和命令转发。
+
+每次命令 Ready 后保持运行4秒，在同一检查点采集 Working Set 和 Private Bytes；它们不是长时间运行的稳态内存或完整峰值。随后由第二实例 --exit，验证两进程返回0、App.OnExit 完成、纸片内容和持久化可见状态不变，并在相同隔离目录再次启动。所有初始预览写入数和 Shell 数都等于纸片数，没有用减少工作量换取数值。
+
+### 第一组：原实现、JSON metadata、样式复用和 ApplicationIdle 托盘
+
+JSON 候选只把类型契约生成提前到编译期，继续沿用 StateStore 的 JsonOptions、规范化、备份校验和同步保存。样式候选按 UI 线程与字体缩放复用同一 IconButton Style。托盘候选将原有 CreateTrayIcon 整体排到 ApplicationIdle，没有改变 Hardcodet ownership 或替换其 popup。
+
+| 纸片数 | 变体 | Rendering observed / ms | 命令 Ready / ms | 全部预览 / ms | 全部 Shell / ms | 退出 / ms | 4秒后 Private Bytes / MiB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | E-003 基线 | 752.09 | 803.91 | 1204.99 | 1355.15 | 92.92 | 38.00 |
+| 1 | JSON metadata 预生成（兼容修正版） | 744.90 | 793.49 | 1176.71 | 1332.91 | 85.21 | 41.73 |
+| 1 | 复用 IconButton Style | 746.04 | 796.54 | 1204.97 | 1350.71 | 93.64 | 38.40 |
+| 1 | 托盘后移 | 695.90 | 854.60 | 1242.84 | 1422.69 | 91.56 | 37.43 |
+| 10 | E-003 基线 | 854.01 | 907.32 | 1342.49 | 1577.14 | 130.56 | 65.56 |
+| 10 | JSON metadata 预生成（兼容修正版） | 852.81 | 891.66 | 1324.04 | 1558.61 | 122.67 | 70.25 |
+| 10 | 复用 IconButton Style | 852.07 | 904.48 | 1361.21 | 1585.94 | 125.87 | 64.87 |
+| 10 | 托盘后移 | 810.26 | 971.07 | 1421.72 | 1650.56 | 127.57 | 65.72 |
+
+**JSON 预生成：不采用。** 10张 Rendering 854.01 -> 852.81ms，StateStore.Load 92.43 -> 94.76ms，没有观察到有意义的冷启动收益。退出130.56 -> 122.67ms，约省7.89ms；但同检查点 Private Bytes 65.56 -> 70.25MiB，约多4.69MiB，主程序集还增加107008字节。单张和10张整体就绪差异较小且受波动影响，不足以支撑迁移生产契约；不把本实验扩张成“source generation 永远无效”。
+
+初版同时暴露 JsonInclude 私有 setter 可见性警告；最终实测版本把生成 context 嵌套在 partial PaperItem 内，保持关联字段 private set，不放宽业务封装。新的契约对照覆盖18组输入与混合笔记/待办 roundtrip，包含关联笔记、文件、目录、属性顺序冲突、提醒、旧字段、未知字段、重复字段、null、坏输入、输出一致性及备份恢复；连同既有测试12/12通过，正式测量的4组产品构建均0警告/0错误。早期 roundtrip 探针未先做既有规范化曾产生假失败，已修正，不作为产品 bug。兼容修正仅留在实验分支，不进入产品代码。
+
+**样式复用：不采用。** 10张累计 BuildShell 213.47 -> 209.04ms，只省约4.43ms；全部 Shell 1577.14 -> 1585.94ms，未改善用户就绪时间。首轮探索也只有个位数毫秒的局部减少，不为它增加新的长期缓存和失效状态。
+
+**ApplicationIdle 托盘：不采用。** 10张 Rendering 854.01 -> 810.26ms，但命令 Ready 907.32 -> 971.07ms，预览1342.50 -> 1421.72ms，Shell 1577.14 -> 1650.56ms。第一帧前的部分工作被挪走，却又排在恢复续体前；不能只宣传44ms Rendering 改善。
+
+### 第二组：进一步降到 SystemIdle 是否更划算
+
+为区分“托盘工作本身”和“占住恢复续体”，重新用同一 runner 测原实现对照 SystemIdle 候选，并新增托盘完成时间。不是直接拿第一组基线拼接第二组候选。
+
+| 纸片数 | 变体 | Rendering observed / ms | 命令 Ready / ms | 托盘创建完成 / ms | 全部预览 / ms | 全部 Shell / ms | 退出 / ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | E-003 基线 | 751.51 | 802.96 | 526.21 | 1241.70 | 1392.36 | 89.15 |
+| 1 | 托盘后移 | 708.15 | 749.71 | 1203.83 | 1231.72 | 1405.93 | 88.83 |
+| 10 | E-003 基线 | 874.81 | 914.64 | 530.11 | 1373.15 | 1598.82 | 123.31 |
+| 10 | 托盘后移 | 824.04 | 864.13 | 1332.80 | 1436.40 | 1662.27 | 125.41 |
+
+10张 Rendering 874.81 -> 824.04ms，命令 Ready 914.64 -> 864.13ms，各提前约51ms；但是预览1373.15 -> 1436.40ms，Shell 1598.82 -> 1662.27ms，各推后约63ms。托盘创建完成从530.11 -> 1332.80ms，推后约803ms。5个配对样本的Rendering都提前，预览却全部推后；不是纯粹没有差异，而是收益和代价方向明确的调度交换。单张预览差异落在波动内，托盘同样明显更晚。
+
+**SystemIdle 托盘：仍不采用。** 为约50ms的Rendering/命令就绪改善，承担预览和Shell更晚、托盘入口约晚0.8秒的代价，不符合本轮“整体更快”的目标。它也可能让“只在托盘运行”的启动感觉更差，不能因为桌面胶囊先出现就默认没有体验损失。后者是未单独测量的产品风险，不冒充已复现故障。
+
+该组正常退出123.31 -> 125.41ms，没有进一步改善。保留 E-003 正常 Shutdown、最后一次保存、资源清理和脚本结束，不加新退出快路或强制杀进程。
+
+### 进一步定位与最终边界
+
+在第二组增加的分段中，10张基线 StateStore.Load 约87.60ms，其中 NormalizeAfterLoad 约16.14ms、NormalizeGlobalState 约10.68ms；这些是嵌套范围，不能相加。JSON metadata 并没有让前者显著下降。第一组10次 MarkdownTextBox 构造及对象初始化累计约65.70ms，正文BuildBody累计约110.88ms，仍不能等同于整段Shell成本。
+
+本轮确认“继续后移非视觉工作”也不是无条件提速：需要同时看首帧、可操作入口、预览和完整纸片。后续应先细分真正昂贵的必要初始化，而不是继续降低一串任务的优先级，或为小幅局部收益扩张缓存系统。E-002 的批量首帧和 E-003 的正常退出结论不变；发布方式不变。
+
+本轮只追加实验文档与数据，不修改生产/测试源码、CHANGELOG或架构决策。没有将否决的候选留作隐藏功能开关。
+
+### 可复查数据与方法来源
+
+- 4变体正式矩阵：Actions run `34754325649`，tools commit `d2f9beb4cc461bfcd7c8fc583ed2b7ca12716c5f`，artifact `10316659645`；完整成功。
+- SystemIdle 隔离：Actions run `34754510424`，tools commit `dd1fe868f38854ce71f49a4ba1788d088d5a9dda`，artifact `10317005940`；完整成功。
+- 长期保留原始样本：[矩阵 samples](experiments/E-004-matrix-samples.csv)、[矩阵 summary](experiments/E-004-matrix-summary.csv)、[SystemIdle samples](experiments/E-004-tray-idle-samples.csv)、[SystemIdle summary](experiments/E-004-tray-idle-summary.csv)、[程序集体积](experiments/E-004-product-size.csv)。时间列ms、内存与程序集大小列bytes；summary排除round 0，原始samples不删除首轮。
+- 临时探针和变体代码只在 `perf/e004-startup-cost-20260913`，不进入 #254 的产品diff；GitHub原始trace/日志artifact仅保留2天，数值和方法在此长期保留。
+- Microsoft [JSON metadata source generation](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/source-generation-modes)：把类型信息收集提前不等于所有应用都降低端到端启动时间，仍需按实际选项和工作集测量。
+- Microsoft [JsonIncludeAttribute](https://learn.microsoft.com/en-us/dotnet/api/system.text.json.serialization.jsonincludeattribute?view=net-10.0)：生成器仍受成员可见性约束；不能靠忽略警告或开放业务setter迁就生成代码。
+- Microsoft [DispatcherPriority](https://learn.microsoft.com/en-us/dotnet/api/system.windows.threading.dispatcherpriority?view=windowsdesktop-10.0)：idle是Dispatcher相对优先级，不代表工作免费或所有可用性都会改善。
