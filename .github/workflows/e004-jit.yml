@@ -1,0 +1,91 @@
+name: Temporary E-004 background JIT comparison
+on:
+  push:
+    branches: [perf/e004-first-frame-editor-20260913]
+    paths: ['.github/e004-jit.py', '.github/workflows/e004-jit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build one binary with optional runtime profiling
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          dotnet --info > evidence/dotnet.txt
+          python .github/e004-jit.py .
+          if ($LASTEXITCODE -ne 0) { throw 'probe failed' }
+          git diff -- src tests > evidence/probe.diff
+          dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release > evidence/build.log 2>&1
+          if ($LASTEXITCODE -ne 0) { Get-Content evidence/build.log -Tail 80; throw 'build failed' }
+      - name: Compare absent fresh and recorded profiles
+        run: |
+          $profiles = Join-Path $env:RUNNER_TEMP 'e004-profiles'
+          foreach ($sampleIndex in 0..6) {
+            $order = if ($sampleIndex % 2 -eq 0) { @('baseline','recorded','fresh') } else { @('fresh','recorded','baseline') }
+            foreach ($mode in $order) {
+              foreach ($case in @('capsules-10','expanded-1')) {
+                $env:E004_JIT_PROFILE = ''
+                $dir = Join-Path $profiles "$mode-$case"
+                if ($mode -ne 'baseline') {
+                  if ($mode -eq 'fresh' -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force }
+                  New-Item -ItemType Directory -Force $dir | Out-Null
+                  $env:E004_JIT_PROFILE = $dir
+                }
+                $before = if (Test-Path "$dir/startup.prof") { (Get-Item "$dir/startup.prof").Length } else { 0 }
+                dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- "--e004-case=$case" > "evidence/$sampleIndex-$mode-$case.log" 2>&1
+                if ($LASTEXITCODE -ne 0) { Get-Content "evidence/$sampleIndex-$mode-$case.log" -Tail 40; throw 'fixture failed' }
+                $after = if (Test-Path "$dir/startup.prof") { (Get-Item "$dir/startup.prof").Length } else { 0 }
+                Add-Content "evidence/$sampleIndex-$mode-$case.log" "PROFILE_BYTES before=$before after=$after"
+              }
+            }
+          }
+          $env:E004_JIT_PROFILE = ''
+          Get-ChildItem $profiles -Recurse -File | Select-Object FullName,Length | Export-Csv evidence/profile-files.csv -NoTypeInformation
+      - name: Summarize independent milestones
+        shell: python
+        run: |
+          import json,csv,statistics
+          from pathlib import Path
+          rows=[]
+          for path in Path('evidence').glob('[0-6]-*.log'):
+              parts=path.stem.split('-'); sample_index=int(parts[0]);mode=parts[1];case='-'.join(parts[2:])
+              lines=path.read_text(encoding='utf-8-sig').splitlines()
+              external=int(next(l.removeprefix('E004_EXTERNAL ') for l in lines if l.startswith('E004_EXTERNAL ')))
+              report=json.loads(next(l.removeprefix('E004_JIT ') for l in lines if l.startswith('E004_JIT ')))
+              es=report['entries'];frequency=report['frequency'];origin=next(e['Tick'] for e in es if e['Name']=='controller.ready')
+              count=10 if case=='capsules-10' else 1
+              def nth(name,n=1,start=origin):
+                  ticks=[e['Tick'] for e in es if e['Name']==name]
+                  return (ticks[n-1]-start)*1000/frequency if len(ticks)>=n else None
+              rows.append(dict(sample_index=sample_index,mode=mode,case=case,
+                  externalReady=nth('ready',start=external),rendering=nth('rendering'),returned=nth('startup.returned'),
+                  cache=nth('cache.stored',count),shell=nth('shell.built',count),
+                  cpuMs=report['cpuMs'],privateBytes=report['privateBytes'],workingSet=report['workingSet'],allocated=report['allocated']))
+          with Path('evidence/summary.csv').open('w',newline='',encoding='utf-8') as f:
+              w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+          for case in ('capsules-10','expanded-1'):
+              for mode in ('baseline','recorded','fresh'):
+                  rs=[r for r in rows if r['mode']==mode and r['case']==case and r['sample_index']>0]
+                  print(case,mode,{k:round(statistics.median(r[k] for r in rs if r[k] is not None),2) for k in ('externalReady','rendering','returned','shell','cpuMs','privateBytes')})
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e004-background-jit
+          path: evidence/
+          retention-days: 2
