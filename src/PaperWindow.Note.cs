@@ -93,6 +93,15 @@ public sealed partial class PaperWindow
     private void TraceNoteRender(string message)
     {
 #if DEBUG
+        if (EdgeDiagnosticJournal.Enabled)
+        {
+            EdgeDiagnosticJournal.AppendText("md-render-trace.log", $"paper={_paper.Id[..Math.Min(6, _paper.Id.Length)]} {message}");
+            return;
+        }
+        // edgeJournal: default non-memory diagnostics preserve their original behavior.
+#endif
+
+#if DEBUG
         try
         {
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "md-render-trace.log");

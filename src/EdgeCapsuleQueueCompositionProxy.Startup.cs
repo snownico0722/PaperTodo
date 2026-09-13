@@ -43,6 +43,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private bool PrepareAndStart()
     {
 #if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.prepare", this);
+#endif
+
+#if DEBUG
         var startedAt =
             EdgeCapsulePerformanceDiagnostics.Timestamp();
         using var coldStartScope =
@@ -146,7 +150,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 // AddVisual already installed the immutable cold start offsets. Only a
                 // successor needs to sample a predecessor that can move during preparation.
                 _target.SetRoot(_root).CheckError();
-                _device.Commit().CheckError();
+#if DEBUG
+                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                    _device.Commit().CheckError();
                 _targetRootInstalled = true;
 #if DEBUG
                 EdgeCapsuleColdStartDiagnostics.Boundary("root-committed-static");
@@ -176,7 +183,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                         newHandles);
                 _target.SetRoot(
                     _successorAdmissionCover.Root).CheckError();
-                _device.Commit().CheckError();
+#if DEBUG
+                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                    _device.Commit().CheckError();
                 _targetRootInstalled = true;
                 if (!WindowNative.TryFlushDesktopComposition())
                 {
@@ -230,7 +240,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     // outgoing reveal, incoming cloak and successor publication cross one flush.
                     _target.SetRoot(_root).CheckError();
                     _targetRootInstalled = true;
-                    _device.Commit().CheckError();
+#if DEBUG
+                    using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                        _device.Commit().CheckError();
 #if DEBUG
                     EdgeCapsuleColdStartDiagnostics.Boundary("successor-root-staged");
 #endif
@@ -281,7 +294,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                         _target.SetRoot(
                             _predecessor._root).CheckError();
                     }
-                    _device.Commit().CheckError();
+#if DEBUG
+                    using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                        _device.Commit().CheckError();
                     _targetRootInstalled = false;
                 }
                 catch (Exception ex)
@@ -370,7 +386,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     return false;
                 }
                 ConfigureAnimations(animationTimestamp);
-                _device.Commit().CheckError();
+#if DEBUG
+                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                    _device.Commit().CheckError();
                 _animationStartedAtTimestamp = animationTimestamp;
 #if DEBUG
                 EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");
@@ -444,7 +463,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         try
         {
             rollback();
-            _device.WaitForCommitCompletion().CheckError();
+#if DEBUG
+            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-wait"))
+#endif
+                _device.WaitForCommitCompletion().CheckError();
             return WindowNative.WindowCloakBatchResult.RolledBack;
         }
         catch

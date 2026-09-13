@@ -264,7 +264,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
             Current = null;
             Staged = null;
             try { Target.SetRoot(null!).CheckError(); } catch { }
-            try { _runtime.Device.Commit().CheckError(); } catch { }
+            try
+            {
+#if DEBUG
+                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                    _runtime.Device.Commit().CheckError();
+            }
+            catch { }
             try { Target.Dispose(); } catch { }
             try { Window.Dispose(); } catch { }
         }

@@ -55,6 +55,10 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     public void RegisterRenderReconcile(EdgeCapsulePresenter owner)
     {
+#if DEBUG
+        using var edgeJournalBarrier = EdgeDiagnosticObservation.Begin("barrier.RegisterRenderReconcile", this);
+#endif
+
         _dispatcher.VerifyAccess();
 #if DEBUG
         if (_pendingRenderReconciles == 0)
@@ -71,6 +75,10 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     public void CompleteRenderReconcile(EdgeCapsulePresenter owner)
     {
+#if DEBUG
+        using var edgeJournalBarrier = EdgeDiagnosticObservation.Begin("barrier.CompleteRenderReconcile", this);
+#endif
+
         _dispatcher.VerifyAccess();
         if (!_pendingReconcileOwners.TryGetValue(owner, out var count))
         {
@@ -128,10 +136,16 @@ internal sealed class EdgeCapsuleFrameScheduler
             // WPF's Rendering add accessor requests a render. First activation and the release
             // of the last owner barrier therefore have explicit event-driven restart boundaries.
             CompositionTarget.Rendering += OnRendering;
+#if DEBUG
+            EdgeDiagnosticObservation.Subscription(this, true);
+#endif
         }
         else
         {
             CompositionTarget.Rendering -= OnRendering;
+#if DEBUG
+            EdgeDiagnosticObservation.Subscription(this, false);
+#endif
         }
         _renderingSubscribed = shouldSubscribe;
     }
@@ -189,6 +203,11 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void OnRendering(object? sender, EventArgs e)
     {
+#if DEBUG
+        EdgeDiagnosticObservation.Rendering(this, e, _presenters.Count, _isTicking, _pendingRenderReconciles);
+        using var edgeJournalCallback = EdgeDiagnosticObservation.Begin("render.callback", this, _presenters.Count, _pendingRenderReconciles);
+#endif
+
         if (!_dispatcher.CheckAccess())
         {
             return;
@@ -264,6 +283,11 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void AdvanceSharedFrame(TimeSpan? renderingTime, string source)
     {
+#if DEBUG
+        using var edgeJournalDispatch = EdgeDiagnosticObservation.FrameAccepted(this, renderingTime, source, _presenters.Count, _pendingRenderReconciles);
+        using var edgeJournalFrame = EdgeDiagnosticObservation.Begin("scheduler.frame", this, _presenters.Count, _pendingRenderReconciles);
+#endif
+
 #if DEBUG
         var callbackStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var frameSequence = ++_debugFrameSequence;

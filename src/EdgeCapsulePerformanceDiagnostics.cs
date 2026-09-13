@@ -40,7 +40,7 @@ internal static class EdgeCapsulePerformanceDiagnostics
     private const int ResourceFirstSampleDelayMilliseconds = 150;
     private const int ResourceSettledSampleDelayMilliseconds = 1_850;
     private static readonly ConcurrentQueue<DiagnosticLine> PendingLines = new();
-    private static readonly Timer FlushTimer = new(
+    private static readonly Timer? FlushTimer = EdgeDiagnosticJournal.Enabled ? null : new(
         static _ => FlushPendingLines(),
         null,
         Timeout.Infinite,
@@ -230,6 +230,11 @@ internal static class EdgeCapsulePerformanceDiagnostics
 #if DEBUG
         try
         {
+            if (EdgeDiagnosticJournal.Enabled)
+            {
+                EdgeDiagnosticJournal.AppendText("edge-preview-performance.log", message);
+                return;
+            }
             Enqueue(
                 "edge-preview-performance.log",
                 $"{DateTime.Now:HH:mm:ss.fff} " +
@@ -249,6 +254,11 @@ internal static class EdgeCapsulePerformanceDiagnostics
 #if DEBUG
         try
         {
+            if (EdgeDiagnosticJournal.Enabled)
+            {
+                EdgeDiagnosticJournal.AppendText("edge-preview-trace.log", message);
+                return;
+            }
             Enqueue(
                 "edge-preview-trace.log",
                 $"{DateTime.Now:HH:mm:ss.fff} {message}");
@@ -258,6 +268,12 @@ internal static class EdgeCapsulePerformanceDiagnostics
         }
 #endif
     }
+
+    [Conditional("DEBUG")]
+    internal static void Event(string eventName, long correlationId = 0,
+        long value1 = 0, long value2 = 0, long value3 = 0, long value4 = 0,
+        double number1 = 0, double number2 = 0, string? detail = null) =>
+        EdgeDiagnosticJournal.Event(eventName, correlationId, value1, value2, value3, value4, number1, number2, detail);
 
 #if DEBUG
     private static long ScheduleResourceSamplesLocked()
@@ -441,7 +457,7 @@ internal static class EdgeCapsulePerformanceDiagnostics
         {
             // Let one short burst accumulate before touching disk. Animation and pointer work can
             // therefore enqueue dozens of detailed timings while the writer performs one append.
-            FlushTimer.Change(50, Timeout.Infinite);
+            FlushTimer?.Change(50, Timeout.Infinite);
         }
         catch
         {

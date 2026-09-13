@@ -1469,8 +1469,19 @@ internal static partial class WindowNative
         ref int pvAttribute,
         int cbAttribute);
 
+#if DEBUG
+    [DllImport("dwmapi.dll", EntryPoint = "DwmFlush", PreserveSig = true)]
+    private static extern int DwmFlushNative();
+
+    private static int DwmFlush()
+    {
+        using var edgeJournalDwm = EdgeDiagnosticObservation.Begin("native.dwm-flush");
+        return DwmFlushNative();
+    }
+#else
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmFlush();
+#endif
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();

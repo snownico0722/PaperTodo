@@ -53,6 +53,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void OnSampleTimerTick(object? sender, EventArgs e)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.pointer", this);
+#endif
+
         if (!CanRoutePointerInput)
         {
             return;
@@ -89,6 +93,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void OnCompletionTimerTick(object? sender, EventArgs e)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.timer", this);
+#endif
+
         _completionTimer.Stop();
         CompleteNow(_completionRetrySuccess, allowBrowseRetention: true);
     }
@@ -380,6 +388,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     public void CompleteNow(bool success, bool allowBrowseRetention = false)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.complete", this);
+#endif
+
         if (_starting)
         {
             _completionPendingDuringStart = true;

@@ -85,6 +85,9 @@ public partial class App : Application
         // Listen as soon as this process owns the mutex. Commands received while
         // the controller is loading stay queued until startup is fully complete.
         _singleInstance.StartListener(HandleSingleInstanceCommand);
+#if DEBUG
+        EdgeDiagnosticObservation.InstallInput(); // edgeJournal: no Rendering observer
+#endif
 
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -370,5 +373,9 @@ public partial class App : Application
         _singleInstance?.Dispose();
         _controller?.Dispose();
         base.OnExit(e);
+#if DEBUG
+        EdgeDiagnosticObservation.RemoveInput();
+        EdgeDiagnosticJournal.Complete("normal-exit");
+#endif
     }
 }

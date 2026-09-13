@@ -574,6 +574,11 @@ public sealed partial class PaperWindow
     private bool ApplyEdgeCapsulePresentationFrame(
         EdgeCapsulePresentationFrame frame)
     {
+#if DEBUG
+        EdgeDiagnosticObservation.MapPresenter(_edgeCapsule, _paper.Id);
+        using var edgeJournalPaper = EdgeDiagnosticObservation.Begin("paper.apply", _edgeCapsule);
+#endif
+
         // A queue proxy owns only the global screen offset. The real bounded
         // host remains live and receives every WPF morph frame while cloaked.
         if (!frame.Visible)

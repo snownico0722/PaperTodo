@@ -187,6 +187,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         Action<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?> coverRollback,
         Action<EdgeCapsuleQueueCompositionProxy, bool, bool> completed)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.create", null);
+#endif
+
         if (members.Count == 0 ||
             members.Count != plan.Members.Count ||
             members.Any(member => member.SourceHandle == IntPtr.Zero) ||

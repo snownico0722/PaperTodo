@@ -383,6 +383,8 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`，transition 只由 `CompositionTarget.Rendering` 推进，不设补帧计时器。待处理 reconcile 与 visual transaction deferral 只阻挡所属 native batch group，其他就绪队列继续逐帧推进；跨队列事务仍按同一 transaction group 原子处理，原生 apply 重入保护不变。没有就绪队列时暂停 Rendering 订阅，更新或事务的最后一个 owner 释放后重新订阅，由 WPF 请求下一帧；全部结束后取消订阅。
 
+Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-004。
+
 这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前无补帧调度见 D-032。
 
 ## 7. OS 与全局集成
