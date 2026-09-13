@@ -21,6 +21,8 @@
 | E-008 | 2026-09-13 | 渲染请求、遍历、提交时钟与反馈的关联定位 | Completed; diagnostic fix only | D-032 |
 | E-009 | 2026-09-14 | 固定电脑状态后的44轮原包复测 | Completed; no runtime changes | D-032 |
 | E-010 | 2026-09-14 | PR238 watchdog移除与RenderingTime去重的单变量因果对照 | Completed; isolated experiments | D-032 |
+| E-011 | 2026-09-14 | MIL消息等待、计时策略及keep＋resume对照 | Completed; candidates isolated | D-032 |
+| E-012 | 2026-09-14 | 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照 | Completed; no product runtime change | — |
 
 ---
 
@@ -785,3 +787,35 @@ keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢�
 深层探针组P99和MIL下游尾部有改善信号；关闭deep/messages/DWM后，P95/P99及CPU没有一致改善，候选最大间隙仍52.1026ms，对照36.3745/38.4843ms。故不将该候选合入日用scheduler，也不把它永久判为无效机制。当前事件驱动路线和末帧交接规则未变，没有新增Unreleased用户修复条目。所有数值是应用owner宽高/透明度变化间隔，沿用冻结分组与lower median/ceil分位规则，不是物理FPS或输入到像素延迟；四个原输入和显示设置核验、后续代价检查及最终本地提交/封存清单见证据目录。
 
 另以直接引用冻结scheduler的真实WPF窗口夹具，单次运行visible/cloaked × release/cancel的750ms阻挡和250ms结束后idle。两臂各40项检查通过，阻挡期0推进、每场景7次有限Input均被服务、结束后0订阅泄漏。对照空回调均0，候选26/45/43/45次；本次对照Input最大排队约0.32～0.80ms，候选16.02/46.10/125.30/16.54ms。CPU结果有涨有跌，且cloaked夹具没有真实queue proxy，不能作为稳定能耗或日用输入延迟分布；它说明保留订阅有需要正面评估的空回调和输入公平性代价，功能检查通过不等于没有这种成本。夹具源码/链接哈希和全部结果保留，未继续扩大该未采纳候选的测试。
+
+## E-012 — 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照
+
+**日期：** 2026-09-14
+
+**状态：** Completed；没有修改产品目标框架或系统运行时。
+
+**源码基线：** 本地`pr-254 / af271f88f9ca9b9d351155c7e215dcd582b500b1`。
+**证据目录：** `输出/edge-net11-20260914/`；`validation/comparison.json`、逐轮原日志、固定分析器、源码/包/运行时下载及SHA清单、独立复核和最终封存均保留，旧实验目录不改写。
+
+结论：本轮没有测出足以解释或明显消除边缘浏览卡顿的升级收益。普通日志中.NET11的P95略低，但P90更高，CPU没有一致下降；深层采集仍出现59.7331ms长间隔。不能由这些有限轮次声称.NET11普遍更快或更慢，也没有把RC1作为日用升级或延迟修复合入。
+
+从同一649文件源码快照只构建一次optimized Debug、framework-dependent、single-file apphost，保留原manifest和net10目标；所有有效轮次运行同一个EXE，SHA256为`0F9BD6E6BDC195376AE6FE81E62B9E11D18ADCEA86307E988FE50B4DBC1B77B0`。两套隔离目录分别只含Core与WindowsDesktop的`10.0.12`、`11.0.0-rc.1.26425.128`，官方ZIP经发布元数据SHA512验证后解压。两臂使用相同roll-forward设置及每进程DOTNET_ROOT_X64，逐轮在回放前记录并核对coreclr、PresentationCore、WindowsBase等实际已加载模块的目录、版本和SHA，防止误跑回10。比较的是运行时组合，未引入.NET11 SDK/编译器、语言或net11重新目标化的差异。
+
+普通详细日志和deep/messages/DWM完整探针各做一次10→11→11→10的ABBA，共8轮有效回放。每轮独立复制原实机数据、新进程启动6秒后核验模块，再等1秒启动原始`数据.exe`，退出后等2秒正常关闭应用并落盘日志。均完成相同36动作、0采集丢弃、退出前无匹配诊断文件，录制器和应用均以0退出，原输入四文件和显示设置不变。最初另有沙箱内4轮因GetCursorPos失败而只有0动作，保留但全部排除；正常桌面权限重跑，并补上输入桌面、录制器退出码和每轮动作数量检查。
+
+下表为各臂两轮独立分位数的范围，单位ms，没有合并样本。完整逐轮n/P50/P90/P95/P98/P99/max/CPU见`validation/comparison.md`。
+
+| 同包运行时及日志 | P50 | P90 | P95 | P98 | P99 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 普通，.NET10 | 9.5500–10.9564 | 21.2164–21.8078 | 27.0032–27.1792 | 30.7874–32.0492 | 31.8008–35.6537 |
+| 普通，.NET11 RC1 | 9.7091–10.9449 | 22.4673–23.1358 | 26.2620–26.9284 | 30.1143–30.1451 | 31.2656–33.3742 |
+| 深层，.NET10 | 9.9334–12.8846 | 21.3664–21.7197 | 25.8952–28.1395 | 32.0577–32.1761 | 32.8449–34.3231 |
+| 深层，.NET11 RC1 | 10.8137–12.0288 | 21.0207–21.6915 | 25.3205–26.0150 | 28.8021–29.6648 | 31.9705–33.2854 |
+
+普通组进程CPU累计差值.NET10为7000.000/6937.500ms，.NET11为6875.000/7140.625ms，不能声称省CPU。深层组最大间隔分别为.NET10的38.6279/42.4121ms、.NET11的33.5463/59.7331ms；单一最大值也不能证明新版本必然退步。
+
+.NET11第二轮的59.7331ms段仍处于同owner/transition：约+15.88ms进入Pointer barrier并退订，+16.15ms开始处理MIL通知，原消息链下游耗时32.2159ms，观察到WaitingForResponse→Disabled。之后另一个presenter的reconcile scope耗时10.4406ms，直到约+59.38ms排空pending、+59.43ms重订阅、+59.59ms才进入下一次Rendering。该scope记录GC计数差[1,1,0]，本轮没有EventPipe栈或GC暂停事件，不能将全部10.44ms归为GC，也不能称整个59.73ms都在等一次Rendering或唯一归因DWM。另一.NET11轮的33.5463ms段仍有约16ms的MIL下游耗时。逐事件证据见`deep-message-analysis`、`deep-chain-analysis`和`review/results-review.md`。
+
+实际两版深层探针均读到完整MediaContext mask1023/15、Dispatcher reader1/1，无观察错误；同一观察器行为检查产物在两版分别通过243断言，冻结主分析器9项测试通过。消息年龄继续使用Win32 GetTickCount与MSG.time的同一粗时钟域；没有把.NET11的Environment.TickCount代入这一公式。更新间隔按既有owner/transition/episode分组，P50取lower median，其余取ceil分位，不是物理FPS或鼠标到像素延迟。Debug日志、同一热提取缓存、两轮重复和单机当前显示环境限制了外推；没有证明Release、首次冷启动、多屏或日用长期兼容性。
+
+独立复核固定官方RC1源后，Dispatcher/DispatcherTimer/DispatcherOperation/MediaContext四份文件与已验证的.NET10源码逐行一致，仍调用Environment.TickCount；.NET11底层时钟变化有明确官方依据，但不能把本轮整体运行时比较唯一归因该改动，也没有直接测量应用当时的中断计时分辨率。四份空diff、版本来源与clock变更保存在`review/`。这次结果完成了E-011留下的运行时升级验证线索；没有形成新的架构、ownership或永久禁用.NET11的决策，因此Architecture/Decisions和Unreleased用户修复项不变。
