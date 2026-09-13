@@ -23,6 +23,7 @@
 | E-010 | 2026-09-14 | PR238 watchdog移除与RenderingTime去重的单变量因果对照 | Completed; isolated experiments | D-032 |
 | E-011 | 2026-09-14 | MIL消息等待、计时策略及keep＋resume对照 | Completed; candidates isolated | D-032 |
 | E-012 | 2026-09-14 | 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照 | Completed; no product runtime change | — |
+| E-013 | 2026-09-14 | WPF请求、HWND原位置保留、代理shape能力及组合对照 | Completed; candidates isolated | D-032 |
 
 ---
 
@@ -819,3 +820,44 @@ keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢�
 实际两版深层探针均读到完整MediaContext mask1023/15、Dispatcher reader1/1，无观察错误；同一观察器行为检查产物在两版分别通过243断言，冻结主分析器9项测试通过。消息年龄继续使用Win32 GetTickCount与MSG.time的同一粗时钟域；没有把.NET11的Environment.TickCount代入这一公式。更新间隔按既有owner/transition/episode分组，P50取lower median，其余取ceil分位，不是物理FPS或鼠标到像素延迟。Debug日志、同一热提取缓存、两轮重复和单机当前显示环境限制了外推；没有证明Release、首次冷启动、多屏或日用长期兼容性。
 
 独立复核固定官方RC1源后，Dispatcher/DispatcherTimer/DispatcherOperation/MediaContext四份文件与已验证的.NET10源码逐行一致，仍调用Environment.TickCount；.NET11底层时钟变化有明确官方依据，但不能把本轮整体运行时比较唯一归因该改动，也没有直接测量应用当时的中断计时分辨率。四份空diff、版本来源与clock变更保存在`review/`。这次结果完成了E-011留下的运行时升级验证线索；没有形成新的架构、ownership或永久禁用.NET11的决策，因此Architecture/Decisions和Unreleased用户修复项不变。
+
+
+## E-013 — WPF请求、HWND原位置保留与代理shape能力的隔离对照
+
+**日期：** 2026-09-14
+
+**状态：** Completed；完成独立机制及组合实验，候选保持隔离，未修改日用运行时。
+
+**源码基线：** 本地 `pr-254 / 17a28c1de4310f29fe6e216ea168457fc11ff79f`。
+**证据目录：** `输出/edge-three-routes-20260914/`；README、24轮原始回放、2轮有效像素夹具及1轮失败夹具、完整源码/补丁/构建/功能检查、冻结分析器、逐轮分位数与最终SHA清单均保留。
+
+用户将后续工作分成优化WPF调度、减少真实HWND同步、扩大代理动画范围。主agent与2个子agent在隔离源码中推进；所有实机回放和像素采样串行，期间暂停构建及大日志分析。先做各项独立同包开关对照，再比较有实际机制收益的组合。没有fetch、push、云端写入或系统运行时安装。
+
+第一条把同一个就绪动画12ms截止干预拆成四臂：off；dispatch仅投递Render优先级空回调；request通过公开Rendering add/remove临时无状态handler请求WPF渲染；frame进入既有共享帧入口推进同一个Presenter。原队列、native batch、事务、重入及阻挡保护继续执行，闲置/阻挡/取消停止干预；没有写WPF私有状态。这是主动实验而非被动探针，默认off，未成为生产补帧策略。普通日志四臂正序/逆序各一次，deep/messages/DWM开启后重复，共16轮同包回放。
+
+下表每格为两轮独立P95，单位ms；owner指同presenter/transition/owner episode的有效宽高、opacity/contentOpacity更新，沿用lower median/ceil分位及既有分组。完整每轮n/P50/P90/P95/P98/P99/max/CPU见 `comparison/runs.md`。不是物理FPS。
+
+| 调度干预 | 普通owner P95 | 普通仅Rendering P95 | 深日志owner P95 |
+| --- | ---: | ---: | ---: |
+| off | 25.1940 / 22.5800 | 25.1940 / 22.5800 | 26.7859 / 23.6885 |
+| dispatch | 23.9140 / 25.4345 | 23.9140 / 25.4345 | 25.1506 / 23.0450 |
+| request | 13.5317 / 13.3493 | 13.5317 / 13.3493 | 13.2888 / 14.7089 |
+| frame | 13.1379 / 13.3549 | 17.7396 / 18.9813 | 13.0590 / 13.1055 |
+
+request的形状更新来源均为正常Rendering，没有直接补帧。两轮深日志各243次唤醒前最近状态为WaitingForResponse且无当前Render操作，另有Inactive操作等待；公开请求能很快接上正常回调。wake→下一raw callback中位时间关联约0.05ms，但分析未将每项限定为同一episode独占因果，不能当作响应上界。原有render-chain分析中，request的可观察commit变化473/478，与off473/480相近；呈现反馈时钟变化438/424，对照434/441，没有同比增多。
+
+另复用E-008的首次观察提交/遍历分析，在匹配presenter/transition的owner动画首末有效变化范围内，以唯一clock观察seq去重，比较提交前最近有效形状记录的年龄。off中位13.4628/14.5364ms、P95 26.9380/24.8910ms；request中位4.5821/5.0664ms、P95 11.2612/12.4860ms；frame中位4.2635/4.5479ms。它支持提交前应用状态更近，而不是仅有回调数增加；仍不证明记录的状态已经序列化或显示。请求模式普通CPU/分配增加，深日志CPU没有一致方向，不能承诺免费收益。
+
+request仍出现34.7560ms间隔：seq97823→98049，第一条MIL消息约+6.6680ms进入，原消息链下游耗时27.8718ms，WaitingForResponse→Disabled，约+34.6783ms才进入raw Rendering。另一轮23.6837ms最长间隔没有MIL通知。本轮没有新EventPipe栈，不能把所有残余等待都点名为WaitForNextMessage、GC或同一个定时器。
+
+第二条发现现有相同bounds跳过、NOMOVE/NOSIZE及按值更新已经存在，因而没有重复包装这些优化，也未使用NOSENDCHANGING绕过WPF一致性。候选只在保留同组已cloaked源HWND的successor期间保持源原位置，Presenter逻辑目标、WPF局部shape和代理屏幕位置不变；真实交接前仍归位并完成layout/Render/verify。尺寸、DPI、句柄身份及source集合边界均重新核验，冷启动或source集合变化走原路径，不新增几何缓存或工作区大surface。审查修复了“anchor retired误当归位已验证”的重试漏洞和跨队列借用scope问题；连续两次释放失败仍不reveal有独立行为检查。
+
+独立HWND同包ABBA四轮中，开启两轮均36/36 successor命中；实际EndDefer由每轮33批、175次位置变更降为0，累计原生调用103.194/94.934ms降为0。logical endpoint nativeMs P95由15.797/17.279ms降为0.006/0.005ms。apply.value1=1的2021/2130次是保持不同源位置的应用次数，不能当作减少这么多次Win32写。CPU由7625/7265.625ms降到6390.625/6437.5ms，均值约下降13.85%；owner P95由24.9630/26.8375变为28.5545/26.5395ms，没有一致改善。剩余notificationMs可达19.122ms，不能把所有长事务归为原生移动。
+
+合成包仅叠加已验证的request与HWND候选，固定request、只切HWND开关，再做四轮ABBA。两轮组合仍省掉33批/175次实际移动，prepare P95从15.867/15.183降至1.475/1.217ms；CPU均值6890.625→6601.5625ms，约下降4.20%。但owner P95从13.0806/13.2506变为14.0500/15.3071ms，P99从16.2366/20.9559变为22.1564/23.1605ms；组合未获得更好的节拍，故未直接合入。HWND独立与组合共8轮均没有真实窗口handoff，都是retained；退出时的settle成功也都是native noop，因为末态已回源位置。该数据完全不代表展开时点击、拖拽或显示环境变化的归位代价。
+
+第三条只交付真实中性live WPF HWND的能力夹具，复用Presenter transition/QPC及既有DComp cubic helper，试验整体effect opacity、矩形裁剪及圆角；没有截图正文、缩放文字、第二动画模型或每帧重提。控制和候选各115行为检查通过。UI有限阻塞的4个阶段内均0次UI apply、0次DComp重提，对照各1个不变ROI hash，候选42/52/17/39个变化hash。独立读取12个原始BGRA片段并核对SHA：opacity的固定白区域RGB51→241→255；裁剪足迹150×63→387×217→400×225，顶部第2行左角内缩8→39→41像素；反向亮度179→57→51且缩回紧凑端点。终点block内外原始hash一致，未见静态终点替换额外跳变。Desktop Duplication是桌面合成区域采样，不是面板scanout、物理FPS或实际浏览流畅性；所用radius=height/4仅为夹具样式。
+
+代理v1因错误地要求t=0整个frame等于Start，在取消前的outgoing预览断言失败；实际策略会立即调整surface和输入命中。失败数据/源码保留，v2仅修正夹具：去掉多余rebase、按真实插值字段验证连续性，并独立检查outgoing输入抑制及终点恢复；DComp实现hash不变。取消发生在capture.Stop后，仅有状态/资源证据，无取消后像素记录。真实产品中的中性源准备、WPF与DComp透明度去重/交接、外壳与关闭按钮及失败恢复尚未接入。
+
+所有24轮录制均是原始数据副本、原始数据.exe，同序36动作，逐轮验证实际加载.NET10.0.12，0记录/文本丢弃，退出前无匹配日志，正常退出后落盘。原4文件SHA和显示设置前后不变。实际日志固定记录预算96MiB、文本逻辑预算128MiB，以header为准，冻结分析器method中的旧24MiB示例不代表本轮设置。最终调度四模式各3206、HWND两臂3206/3238、组合两臂3244/3276断言通过，分析器9项检查通过；受限桌面导致旧输入检查失败的日志保留，正常桌面复测通过。各包、真实模块、构建告警、代码修正、独立复核及清单都留在证据目录。当前架构方向未变，没有新增Unreleased修复条目；不能把小原型或这套动作中的收益作为日用场景已完成优化。
