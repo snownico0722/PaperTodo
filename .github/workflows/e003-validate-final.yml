@@ -1,0 +1,74 @@
+name: Validate E-003 preview-first changes
+on:
+  push:
+    branches: [perf/e003-lifecycle-probe-20260913]
+    paths: ['.github/e003-final-changes.py', '.github/workflows/e003-validate-final.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tools
+      - uses: actions/checkout@v7
+        with:
+          ref: perf/e003-preview-first-20260913
+          path: target
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare production-only changes
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          Push-Location target
+          if ((git rev-parse HEAD) -ne '416a6fdbf931612ffdb7f066149001c4100a9a4c') { throw 'candidate branch moved; reconcile before changing it' }
+          python ../tools/.github/e003-final-changes.py .
+          if ($LASTEXITCODE -ne 0) { throw 'final patch failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'diff check failed' }
+          Pop-Location
+      - name: Release and behavioral regressions
+        working-directory: target
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object ../evidence/build-release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          foreach ($name in @('Lifecycle','MarkdownSemantic','MarkdownEditing','TodoNavigation','EdgeTitle','EdgePreview','Threading','Persistence','PluginApi','ProtocolPolicy')) {
+            dotnet run --project "tests/PaperTodo.${name}Checks/PaperTodo.${name}Checks.csproj" -c Release 2>&1 | Tee-Object "../evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { throw "$name failed" }
+          }
+          dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Debug 2>&1 | Tee-Object ../evidence/EdgePreview-debug.log
+          if ($LASTEXITCODE -ne 0) { throw 'Debug EdgePreview failed' }
+      - name: Commit validated source to candidate branch only
+        working-directory: target
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/AppController.cs src/AppController.StartupPrewarm.cs src/EdgeCapsulePreview.Preload.cs src/PaperWindow.cs src/PaperWindow.Capsule.cs tests/PaperTodo.LifecycleChecks/Program.cs doc/ARCHITECTURE.md CHANGELOG.md
+          git commit -m 'perf(startup): warm small preview batches before deferred shells [ci]'
+          if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+          git push origin HEAD:perf/e003-preview-first-20260913
+          if ($LASTEXITCODE -ne 0) { throw 'push failed; branch may have moved' }
+          git rev-parse HEAD | Out-File ../evidence/validated-commit.txt
+          git diff --stat 416a6fdbf931612ffdb7f066149001c4100a9a4c HEAD | Out-File ../evidence/diff-stat.txt
+          git diff --binary 416a6fdbf931612ffdb7f066149001c4100a9a4c HEAD | Out-File ../evidence/validated.patch
+      - name: Preserve validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e003-final-validation
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
