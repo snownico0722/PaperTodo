@@ -1215,6 +1215,8 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 
 E-006 将临时退订的另一个成本定位到实际 WPF 调用点：在 WaitingForResponse 期间没有 Rendering 订阅，`ScheduleNextRenderOp` 可退出 interlock，经 `LeaveInterlockedPresentation → CompleteRender → Channel.WaitForNextMessage` 同步等待。另有重新进入呈现调度时的 Inactive/Input promotion 间隔。因而恢复订阅后操作很快开始，并不能证明整个退订/恢复周期没有成本。此证据补充原因，不改变当前 owner、shape 与 translation 的职责；此前删除 Pointer 屏障仍是未获性能支持的候选，不能仅凭同步等待栈直接恢复该实验或引入补帧。完整采样、对照和仍未知的合成端延迟见 E-006。
 
+E-007 随后单独测试了两种更保守的候选：用现有 reducer 提前过滤不改变单纸片状态的 Pointer reconcile，以及仅在已有动画订阅时跨越临时 owner 屏障保留 Rendering。两者都保留原队列/native/事务保护，但同包四组交叉回放中，无论单独或组合，owner 更新间隔 P95 都约31～32ms，对照约20～21ms；过滤削掉约99%的代理 Pointer 排队、保留订阅大幅减少启停，均不足以换来节拍改善。候选最大间隙多发生在已订阅且无中途退订时，不能继续归因于该间隙内的同步退订。两项实现已撤回并隔离保存，当前规则不变。这是对具体实现的实测否决，不把所有输入合并或订阅生命周期优化永久排除；再次尝试必须提出新的机制差异及完整节拍证据。
+
 ### Evidence
 
 - `src/EdgeCapsuleFrameScheduler.cs`：owner registration、queue readiness、Rendering 订阅边界。

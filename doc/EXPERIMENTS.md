@@ -17,6 +17,7 @@
 | E-004 | 2026-09-13 | 统一内存日志、扰动检查与 16 版历史对照 | Completed | — |
 | E-005 | 2026-09-13 | Rendering 预计呈现时间误去重与同机单变量回放 | Completed | D-032 |
 | E-006 | 2026-09-13 | 原生消息、WPF 呈现等待和 Dispatcher promotion 定位 | Completed | D-032 |
+| E-007 | 2026-09-13 | Pointer 无效更新过滤与活跃 Rendering 保留交叉对照 | Completed; candidates rejected | D-032 |
 
 ---
 
@@ -592,3 +593,48 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 - v1失败构建、v2成功包、来源/哈希、所有副本和日志、nettrace/etlx、解析器/IL工具及派生结果保留。v2 EXE SHA256 `F8987C5E6914B0463B79628CDB66EF423709547573C5955E173FE4E647235A84`。四个原输入哈希复核未变；只本地提交，不推送。
 
 本轮确立“在UI侧具体等哪个接口”的证据，未证明合成端为何迟到，也未采用此前失败的Pointer屏障实验。当前运行职责未变；Architecture记录隔离诊断能力，D-032补充退订/恢复的成本，因无新增用户行为差异不追加Unreleased条目。
+
+## E-007 — Pointer 无效更新过滤与活跃 Rendering 保留交叉对照
+
+**Status:** Completed；三个候选均未采用，生产与测试源码恢复到 `a469cfd397dac0123f25773a46adc609c6e9d8a7`。
+
+**证据根：** `输出/edge-pointer-filter-20260913/`。原输入与 E-003～E-006 证据不改动。
+
+### 候选边界
+
+- **过滤 F：** 代理的每成员采样仍先进入现有 controller 仲裁；Presenter 用最终采样共用的 PointerIntent＋纯 reducer 判断是否会改变 model，覆盖视觉态、菜单、peer reorder，而非只比坐标或 PointerOverSurface。已有非Pointer dirty、visual deferral、native apply/retry/deferred时保守放行。无变化时不排本地 reconcile/barrier，但仍按原顺序使队列命中缓存失效，确保静止鼠标下的自主代理位移被重新解析。有效更新保留旧屏障。本轮没有合并队列 controller 广播或更改其缓存生命周期。
+- **保留 K：** 仅在已经订阅且仍有活跃transition时，跨越临时 owner 阻挡保留 Rendering；每个队列仍先通过 CanAdvanceQueue，native重入保护不变。一开始就受阻仍不首次订阅，取消、终点和shutdown继续释放。不新增timer、补帧或修改WPF私有状态。
+
+### 第一阶段：仅过滤，同包ABBA
+
+优化Debug、framework-dependent win-x64单文件，R2R/Fody/压缩关闭，与前轮参数一致。四轮新进程、原实机数据独立副本、6秒启动等待、原 `数据.exe`、2秒收尾和正常退出。原有详细内存观察开启，deep/EventPipe关闭。同一包只切 F，顺序旧1→过滤1→过滤2→旧2；全部相同36动作。
+
+| 组 | owner WH/opacity P95 ms | 代理Pointer排队 | barrier注册 | 订阅次数 | 全harness应用CPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 旧行为，两轮范围 | 20.7543–22.1402 | 7980–8340 | 8528–8872 | 350–351 | 7531.250–7921.875 |
+| 过滤，两轮范围 | 24.2882–31.9450 | 51–53 | 723–725 | 51–53 | 7578.125–7593.750 |
+
+过滤约99%的代理Pointer请求，capture allocation约215MiB降至197MiB，但CPU无稳定下降，更新间隔变差。计数下降不能作为采用依据。v1包SHA256 `99EE697B947BC1213290BE9B113F7681C77A58536A92E452AEDD6A4385253F85`；实际源码与所有新增测试已在package/source快照。
+
+### 第二阶段：同包2×2交叉对照
+
+新v2包分别切F/K，A=旧行为、B=只F、C=只K、D=F＋K，顺序 **A1→B1→C1→D1→D2→C2→B2→A2**；8轮全部严格相同36动作。每格是两轮范围，仍是当前owner按唯一transition及owner episode统计的应用宽高/两种透明度变化间隔，不是物理帧时间。
+
+| 组 | 更新间隔P95 ms | 最大间隔 ms | 代理Pointer排队 | 订阅次数 | 全harness应用CPU ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A 旧行为 | 19.8885–21.1164 | 32.8272–35.9002 | 8010–8110 | 341–349 | 7421.875–7765.625 |
+| B 仅过滤 | 31.4111–32.3762 | 36.1205–37.3572 | 52–54 | 52–53 | 6875.000–7718.750 |
+| C 仅保留订阅 | 31.0336–31.2836 | 34.7292–35.8954 | 7840–8150 | 37–38 | 7078.125–7406.250 |
+| D 组合 | 31.2175–32.1076 | 34.9560–39.1366 | 54 | 37 | 7281.250–7500.000 |
+
+候选median约16.15～16.40ms，对照9.75/11.07ms；候选实际owner更新数也减少。组合capture allocation约196MiB，单保留约206～207MiB，对照约214.5～214.9MiB，保留这些开销收益事实，但三组都没有达到本次流畅性目标，全部撤回。v2包SHA256 `14245EBD9375AC89F43C7324D8565EAA948AFDFDC833B440F1DAB22721D39F05`。
+
+### 逐间隙审查与验证
+
+- 第一阶段基线最长48.8617/34.4371ms仍有约17ms的pending退订跨度；过滤候选两轮前三大间隙内部已无退订，pending早已drained，后续Rendering晚到。
+- 矩阵中仅保留订阅两轮前三大间隙全程已订阅、内部无退订，后续raw Rendering晚到约34～36ms。组合多数同型；组合1第三大中途有Rendering但owner尺寸未变，不能把所有形状间隙直接等同于回调间隔。本轮没有deep状态/采样栈，不能把这些窗口套成E-006的CompleteRender、promotion或GPU等待。
+- 两阶段共12轮正常退出，容量/文本丢弃均0，退出前检查无匹配诊断文件；全部相同24open/12close，分析无unmatched transaction。完整日志未见fallback/retry-exhausted/failed/正数wpfApplyFailed标记。矩阵8轮的10个presenter最后target相同，且common36尾部最后shape.applied与各自target共80/80匹配；这不是屏幕像素或每次native呈现的独立证明。
+- 过滤候选完整EdgeTitleChecks通过3614断言；第二阶段同一个Debug DLL在K=0/K=1均通过3643断言，覆盖未cloaked/cloaked的动画中途双重barrier、零提前更新、最后释放后的真实Rendering恢复与cancel退订。保留首次测试坐标类型编译失败、受限桌面原生路由失败以及修正/真实桌面成功的独立日志。9项冻结分析器回归通过。
+- `packages/`含实际源码、tracked patch、所有新增文件哈希、完整参数/日志和EXE；`rejected-source/`再次保存撤回前8个实验生产/测试文件，并逐一验证与v2打包源码相同。`scripts-v1/`保留最初harness版本；各分析目录保存执行时分析器源码。`independent-abba-review/`及`independent-matrix-review/`保留逐gap脚本、JSON、60份上下文与失败/终点审计。
+
+源码恢复后标准Release构建通过，0错误；4条NU1900为漏洞数据服务网络失败，未完成漏洞审计。最终仅提交实验结论和D-032踩坑补充，不改Architecture/AGENTS/Unreleased，不把未获收益的过滤或订阅开关留在日用程序；所有实验包与日志继续保留，只本地提交，不推送。
