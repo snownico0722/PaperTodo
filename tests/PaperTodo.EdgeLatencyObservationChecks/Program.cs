@@ -37,6 +37,7 @@ internal static class Program
             CheckNumericReaders();
             CheckNativeForwarding();
             CheckDispatcherObservation(application.Dispatcher);
+            CheckMessageObservation(application.Dispatcher);
             var entries = Entries();
             Check(!entries.Any(entry => entry.Name.EndsWith(".error", StringComparison.Ordinal)),
                 "Observers did not report an internal error");
@@ -290,6 +291,98 @@ internal static class Program
         EdgeDispatcherLatencyObservation.Remove();
     }
 
+    private static void CheckMessageObservation(Dispatcher dispatcher)
+    {
+        var timingType = typeof(EdgeMessageLatencyObservation).GetNestedType("DwmTimingInfo", BindingFlags.NonPublic)!;
+        Check(Marshal.SizeOf(timingType) == 292 && Marshal.OffsetOf(timingType, "QpcVBlank").ToInt32() == 28 &&
+            Marshal.OffsetOf(timingType, "QpcRefreshPeriod").ToInt32() == 12,
+            "DWM timing buffer matches the complete packed Windows SDK layout");
+        var timingStart = Entries().Length;
+        typeof(EdgeMessageLatencyObservation).GetMethod("CaptureDwmTiming", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [91823L]);
+        var timing = Since(timingStart).Single(e => e.Name == "deep.message.dwm-call");
+        Check(timing.Value3 >= 0 && timing.Value2 >= timing.Value1,
+            "Read-only DWM timing call succeeds on this desktop with ordered before/after QPC");
+        var clock = Since(timingStart).Single(e => e.Name == "deep.message.dwm-clock");
+        var rate = Since(timingStart).Single(e => e.Name == "deep.message.dwm-rate");
+        Check(clock.Value1 > 0 && clock.Value2 > 0 && rate.Value1 > 0 && rate.Value2 > 0 && rate.Value3 > 0 && rate.Value4 > 0,
+            "Successful DWM read returns usable QPC and exact refresh/compose ratios");
+        var messageId = unchecked((int)RegisterWindowMessage("MilChannelNotify"));
+        var deliveries = new List<(IntPtr W, IntPtr L)>();
+        using var source = new HwndSource(new HwndSourceParameters("PaperTodo message observer checks")
+        { Width = 16, Height = 16, WindowStyle = unchecked((int)0x80000000) });
+        source.AddHook((IntPtr hwnd, int message, IntPtr w, IntPtr l, ref bool handled) =>
+        {
+            if (message != messageId) return IntPtr.Zero;
+            deliveries.Add((w, l));
+            handled = true;
+            return ExpectedResult(messageId);
+        });
+        var handle = source.Handle;
+        var baseline = SendMessage(handle, messageId, WParam(messageId), LParam(messageId));
+        Check(baseline == ExpectedResult(messageId), "Controlled channel-like message has a known downstream result");
+        Environment.SetEnvironmentVariable("PAPERTODO_EDGE_MESSAGE_OBSERVATIONS", "1");
+        var start = Entries().Length;
+        EdgeDispatcherLatencyObservation.Install();
+        EdgeMessageLatencyObservation.Install();
+        Check(Since(start).Count(e => e.Name == "deep.message.installed") == 1,
+            "Repeated observer installation attaches one thread-message filter");
+        var filter = typeof(EdgeMessageLatencyObservation).GetMethod("OnThreadMessage", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var msg = new MSG { hwnd = handle, message = messageId, wParam = WParam(messageId),
+            lParam = LParam(messageId), time = unchecked((int)GetTickCount() - 17) };
+        object?[] arguments = [msg, false];
+        filter.Invoke(null, arguments);
+        var unchanged = (MSG)arguments[0]!;
+        Check(!(bool)arguments[1]! && unchanged.hwnd == msg.hwnd && unchanged.message == msg.message &&
+            unchanged.wParam == msg.wParam && unchanged.lParam == msg.lParam && unchanged.time == msg.time,
+            "Thread filter leaves handled, HWND, message, parameters and timestamp unchanged");
+        var queued = Since(start).Single(e => e.Name == "deep.message.queued" && e.Value1 == handle.ToInt64());
+        Check(queued.Number1 == unchecked((uint)((int)queued.Value4 - (int)queued.Value3)),
+            "Queue age uses recorded uptime values with unsigned wrap semantics");
+        var result = SendMessage(handle, messageId, WParam(messageId), LParam(messageId));
+        Check(result == baseline && deliveries.Count == 2 && deliveries[1] == deliveries[0],
+            "Subclass preserves exact downstream result, arguments and once-only forwarding");
+        var channel = Since(start).Where(e => e.Name.StartsWith("deep.message.channel.", StringComparison.Ordinal)).ToArray();
+        Check(channel.Length == 2 && channel[0].Name.EndsWith("begin", StringComparison.Ordinal) &&
+            channel[1].Name.EndsWith("end", StringComparison.Ordinal) && channel[0].CorrelationId == channel[1].CorrelationId,
+            "Channel dispatch has one matched before/after observation");
+        Check(channel[1].Value4 >= 0 && channel[1].Value4 <= channel[1].Value1,
+            "Downstream QPC duration is nonnegative and enclosed by the inclusive observation");
+
+        var wrapStart = Entries().Length;
+        arguments = [new MSG { hwnd = handle, message = messageId, time = int.MaxValue }, true];
+        filter.Invoke(null, arguments);
+        var wrap = Since(wrapStart).Single(e => e.Name == "deep.message.queued");
+        Check((bool)arguments[1]! && wrap.Number2 == 1 && wrap.Value3 == int.MaxValue,
+            "Already handled messages retain their flag and timestamp across the sign boundary");
+
+        var postStart = Entries().Length;
+        Check(PostMessage(handle, messageId, WParam(messageId), LParam(messageId)), "Test-owned message can be posted");
+        var frame = new DispatcherFrame();
+        dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+        Check(deliveries.Count == 3 && deliveries[2] == deliveries[0],
+            "Real Dispatcher message pumping forwards the posted message once with exact parameters");
+        Check(Since(postStart).Count(e => e.Name == "deep.message.queued" && e.Value1 == handle.ToInt64() && e.Value2 == messageId) == 1,
+            "Real ThreadFilterMessage observes one queue timestamp for the controlled posted message");
+        Check(Since(postStart).Count(e => e.Name == "deep.message.channel.begin" && e.Value1 == handle.ToInt64()) == 1,
+            "Posted dispatch reaches the subclass once");
+        EdgeDispatcherLatencyObservation.Remove();
+        EdgeMessageLatencyObservation.Remove();
+        var removedStart = Entries().Length;
+        Check(SendMessage(handle, messageId, WParam(messageId), LParam(messageId)) == baseline,
+            "Removal preserves downstream behavior");
+        Check(!Since(removedStart).Any(e => e.Name.StartsWith("deep.message.", StringComparison.Ordinal)),
+            "Removal detaches native and managed message observation");
+        EdgeDispatcherLatencyObservation.Install();
+        arguments = [msg, false];
+        filter.Invoke(null, arguments);
+        source.Dispose();
+        Check(!IsWindow(handle), "An observed channel-like HWND is destroyed normally");
+        EdgeDispatcherLatencyObservation.Remove();
+        Environment.SetEnvironmentVariable("PAPERTODO_EDGE_MESSAGE_OBSERVATIONS", null);
+    }
+
     private static string[] RunDispatcherScenario(Dispatcher dispatcher, bool observed)
     {
         var steps = new List<string>();
@@ -369,12 +462,19 @@ internal static class Program
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindow(IntPtr handle);
+    [DllImport("kernel32.dll")]
+    private static extern uint GetTickCount();
 }
 
-// Only the facade is adapted. Both observers and the bounded journal are linked production code.
+// Only the facade is adapted. The observers and bounded journal are linked production code.
 internal static class EdgeCapsulePerformanceDiagnostics
 {
     internal static EdgeDiagnosticJournal.Buffer Buffer { get; private set; } = null!;

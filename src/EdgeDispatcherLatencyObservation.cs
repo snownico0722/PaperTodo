@@ -90,6 +90,7 @@ internal static class EdgeDispatcherLatencyObservation
             _hooks.OperationCompleted += OnCompleted;
             _hooks.OperationAborted += OnAborted;
             _hooks.OperationPriorityChanged += OnPriorityChanged;
+            EdgeMessageLatencyObservation.Install();
             Emit("deep.dispatcher.installed");
             Snapshot("install");
         }
@@ -105,6 +106,7 @@ internal static class EdgeDispatcherLatencyObservation
         _installed = false;
         try
         {
+            EdgeMessageLatencyObservation.Remove();
             if (_hooks is { } hooks)
             {
                 hooks.OperationPosted -= OnPosted;

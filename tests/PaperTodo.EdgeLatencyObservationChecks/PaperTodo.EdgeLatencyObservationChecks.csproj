@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/EdgeNativeLatencyObservation.cs" Link="EdgeNativeLatencyObservation.cs" />
+    <Compile Include="../../src/EdgeMessageLatencyObservation.cs" Link="EdgeMessageLatencyObservation.cs" />
     <Compile Include="../../src/EdgeDispatcherLatencyObservation.cs" Link="EdgeDispatcherLatencyObservation.cs" />
     <Compile Include="../../src/EdgeDiagnosticJournal.cs" Link="EdgeDiagnosticJournal.cs" />
   </ItemGroup>
