@@ -1,0 +1,86 @@
+name: Temporary E-003 scheduling comparison
+on:
+  push:
+    branches: [perf/e003-lifecycle-profile-20260913]
+    paths: ['.github/e003-variants.py', '.github/workflows/e003-lifecycle-variants.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          path: tools
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare and build isolated variants
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          dotnet --info | Set-Content evidence/dotnet.txt
+          foreach ($variant in @('baseline','preview','idle','combined')) {
+            git -C tools worktree add --detach "../$variant" 416a6fdbf931612ffdb7f066149001c4100a9a4c
+            if ($LASTEXITCODE -ne 0) { throw 'worktree failed' }
+            git -C $variant submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { throw 'submodule failed' }
+            Copy-Item tools/.github/e003-*.py "$variant/.github/"
+            python tools/.github/e003-variants.py $variant $variant
+            if ($LASTEXITCODE -ne 0) { throw 'variant failed' }
+            git -C $variant diff -- src | Set-Content "evidence/$variant-product.diff"
+            python tools/.github/e003-detail.py $variant
+            if ($LASTEXITCODE -ne 0) { throw 'profile failed' }
+            python tools/.github/e003-variants.py $variant measure
+            if ($LASTEXITCODE -ne 0) { throw 'measurement failed' }
+            dotnet build "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release 2>&1 | Tee-Object "evidence/$variant-build.log"
+            if ($LASTEXITCODE -ne 0) { throw "$variant build failed" }
+          }
+      - name: Interleave new process samples
+        run: |
+          foreach ($round in 0..5) {
+            $order = if ($round % 2 -eq 0) { @('baseline','preview','idle','combined') } else { @('combined','idle','preview','baseline') }
+            foreach ($variant in $order) {
+              dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- --e003-case=capsules-10 2>&1 | Tee-Object "evidence/$round-$variant-capsules-10.log"
+              if ($LASTEXITCODE -ne 0) { throw "sample $round $variant failed" }
+            }
+          }
+          foreach ($round in 0..2) {
+            foreach ($variant in @('baseline','preview','idle','combined')) {
+              foreach ($case in @('early-expand','real-exit')) {
+                dotnet run --no-build --project "$variant/tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj" -c Release -- "--e003-case=$case" 2>&1 | Tee-Object "evidence/extra-$round-$variant-$case.log"
+                if ($LASTEXITCODE -ne 0) { throw "$variant $case failed" }
+              }
+            }
+          }
+      - name: Summarize independent milestones
+        if: always()
+        run: |
+          $rows = @()
+          foreach ($file in Get-ChildItem evidence/*.log) {
+            foreach ($line in Get-Content $file) {
+              if ($line -notlike 'E003_PROFILE *') { continue }
+              $report = $line.Substring(13) | ConvertFrom-Json
+              $origin = ($report.entries | Where-Object Name -eq controller.ready | Select-Object -First 1).StartMs
+              foreach ($group in ($report.entries | Group-Object Name)) {
+                $rows += [pscustomobject]@{sample=$file.BaseName; fixture=$report.fixture; scope=$group.Name; count=$group.Count; durationMs=($group.Group.DurationMs | Measure-Object -Sum).Sum; firstStartAfterControllerMs=($group.Group[0].StartMs - $origin)}
+              }
+            }
+          }
+          $rows | Export-Csv evidence/scopes.csv -NoTypeInformation
+          $rows | Where-Object { $_.scope -in @('cache.initialReady','shell.allBuilt','capsules.renderingObserved','warm.composition','warm.drag','demand.expand') } | Format-Table -AutoSize | Out-String -Width 220 | Write-Host
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e003-scheduling-comparison
+          path: evidence/
+          retention-days: 14
