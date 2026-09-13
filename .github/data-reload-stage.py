@@ -4,6 +4,7 @@ import hashlib
 import lzma
 import pathlib
 import subprocess
+import re
 
 root = pathlib.Path(__file__).resolve().parent.parent
 
@@ -14,16 +15,32 @@ payload = ''.join((root / '.github' / ('data-reload-patch.' + part)).read_text(e
 patch = lzma.decompress(base64.b64decode(payload, validate=True))
 assert hashlib.sha256(patch).hexdigest() == '7b40b28d51f14349921a1bb7ccab7337179d0cc9856d4ff2a26a5b4dfad82ae1', 'Patch bytes changed'
 git('config', 'core.autocrlf', 'false')
-git('checkout-index', '--all', '--force')
+# Read Git blobs as bytes, independent of runner checkout EOL/stat caches.
+for name in re.findall(r'^--- a/(.+)$', patch.decode('utf-8'), re.MULTILINE):
+    source = subprocess.check_output(['git', 'show', 'HEAD:' + name], cwd=root)
+    (root / name).write_bytes(source)
 patch_file = root / '.git' / 'data-reload.patch'
 patch_file.write_bytes(patch)
-forward = subprocess.run(['git', 'apply', '--check', str(patch_file)], cwd=root, capture_output=True)
-if forward.returncode == 0:
-    git('apply', str(patch_file))
-else:
-    reverse = subprocess.run(['git', 'apply', '--reverse', '--check', str(patch_file)], cwd=root, capture_output=True)
-    if reverse.returncode != 0:
-        raise RuntimeError(forward.stderr.decode('utf-8', errors='replace'))
+git('apply', '--check', str(patch_file))
+git('apply', str(patch_file))
+
+def replace(name, old, new):
+    path = root / name
+    text = path.read_text(encoding='utf-8')
+    assert old in text, (name, old)
+    path.write_bytes(text.replace(old, new).encode('utf-8'))
+
+replace('src/StateReloadModels.cs', '        Copy(AppProperties, next, current);',
+    '        // Keep the committed comparison snapshot immutable, including dictionaries/new papers.\n        next = StateStore.CopyForReload(next);\n        Copy(AppProperties, next, current);')
+replace('src/StateStore.cs', '            AddIfExists(paths, BackupPath);',
+    '            AddIfExists(paths, FilePath); // pending external edits can reference images absent from memory\n            AddIfExists(paths, BackupPath);')
+replace('tests/PaperTodo.DataReloadChecks/Program.cs', 'papertodo-image://', 'i:')
+replace('tests/PaperTodo.DataReloadChecks/Program.cs', '        snapshot.Papers[0].Content = "![exit](i:456)";',
+    '        var external = s.Read(); external["papers"]![0]!["content"] = "![pending](i:789)"; s.Write(external);\n        Require(s.Store.TryCollectProtectedImageIds(s.Memory, out ids) && ids.Contains("789"), "pending external primary image not protected");\n        snapshot.Papers[0].Content = "![exit](i:456)";')
+replace('tests/PaperTodo.DataReloadChecks/Program.cs', '        StateReloadModels.Apply(current, next);',
+    '        next.GlobalHotkeys["fixture"] = "Ctrl+F1";\n        next.Papers.Add(new() { Id = "new-identity", Type = PaperTypes.Note });\n        StateReloadModels.Apply(current, next);')
+replace('tests/PaperTodo.DataReloadChecks/Program.cs', '"private-set relation lost");',
+    '"private-set relation lost");\n        current.GlobalHotkeys["fixture"] = "Ctrl+F2"; current.Papers[^1].Title = "live-only";\n        Require(next.GlobalHotkeys["fixture"] == "Ctrl+F1" && next.Papers[^1].Title == "", "live objects mutated the committed comparison snapshot");')
 git('add', '-N', '--', 'src', 'PaperTodo.Plugin.Abstractions', 'Resources', 'tests', 'plugin-samples/README.md', 'doc/ARCHITECTURE.md', 'doc/DECISIONS.md', 'doc/CHANGELOG.en.md', 'CHANGELOG.md', '.github/workflows/pull-request-build.yml')
 git('diff', '--check')
 print('Verified exact implementation patch:', len(patch), 'bytes', flush=True)

@@ -42,7 +42,7 @@ jobs:
           dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object reload-verification/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path tests/PaperTodo.DataReloadChecks/PaperTodo.DataReloadChecks.csproj) {
-            $checks = @('DataReload', 'Persistence', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Lifecycle')
+            $checks = @('DataReload', 'Persistence', 'PluginApi', 'ProtocolPolicy', 'MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'Threading', 'Lifecycle')
             foreach ($check in $checks) {
               dotnet run --project "tests/PaperTodo.${check}Checks/PaperTodo.${check}Checks.csproj" -c Release 2>&1 | Tee-Object "reload-verification/$check.log"
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -76,4 +76,4 @@ jobs:
         with:
           name: data-reload-verification
           path: reload-verification/
-          retention-days: 3
+          retention-days: 2
