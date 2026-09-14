@@ -74,7 +74,7 @@ public sealed partial class AppController
         var plan = EdgeCapsuleQueueProxyPolicy.TryCreate(
             queueKey,
             candidates,
-            includeStationaryMembers: string.Equals(
+            includeStationaryMembers: predecessor == null && string.Equals(
                 _edgeCapsulePreviewSession?.QueueKey, queueKey, StringComparison.Ordinal));
         if (plan == null)
         {
@@ -470,6 +470,18 @@ public sealed partial class AppController
         }
 
         _edgeCapsuleQueueCompositionProxies[queueKey] = successor;
+        successor.SettledInputRequested = (current, window) =>
+        {
+            if (IsExiting || !_edgeCapsuleQueueCompositionProxies.TryGetValue(queueKey, out var owner) ||
+                !ReferenceEquals(owner, current)) return;
+            if (current.TryReleaseSettledInput(window, out _,
+                (next, previous) => PublishEdgeCapsuleQueueCompositionProxy(queueKey, next, previous),
+                (next, previous) => RollbackEdgeCapsuleQueueCompositionProxyPublication(queueKey, next, previous),
+                (next, success, retention) => FinishEdgeCapsuleQueueCompositionProxy(queueKey, next, success, retention)))
+                window.ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease();
+            else
+                current.CompleteNow(success: true);
+        };
         foreach (var member in successor.Members)
         {
             _edgeCapsuleQueueCompositionProxyByWindow[

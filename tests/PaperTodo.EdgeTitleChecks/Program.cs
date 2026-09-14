@@ -11,11 +11,24 @@ internal static partial class Program
     private static int assertions;
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (TryRunProxyNativeInputChild(args, out var childExit)) return childExit;
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
+            if (args.Contains("--prewarm-coordinator-only"))
+            {
+                EdgePrewarmCoordinatorChecks();
+                Console.WriteLine($"Prewarm checks: {assertions} assertions passed.");
+                return 0;
+            }
+            if (args.Contains("--proxy-native-input"))
+            {
+                ProxyNativeInputChecks();
+                Console.WriteLine($"Native input checks: {assertions} assertions passed.");
+                return 0;
+            }
             DetachedPointerAdmissionChecks();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");

@@ -24,6 +24,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private readonly IDCompositionVisual _root;
     private readonly DeviceScreenRect _outputBounds;
     private readonly List<VisualState> _visuals = new();
+    private readonly List<DeviceScreenRect> _nativeInputRegions = new();
     private readonly HashSet<IntPtr> _cloakedRealSourceHandles = new();
     private readonly DispatcherTimer _sampleTimer;
     private readonly DispatcherTimer _completionTimer;
@@ -42,6 +43,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private int _completionRetryCount;
     private bool _finishing;
     private bool _retainedAfterAnimation;
+    internal Action<EdgeCapsuleQueueCompositionProxy, PaperWindow>? SettledInputRequested { get; set; }
     private bool _hasRetainedPointerSample;
     private DeviceScreenPoint? _lastRetainedPointer;
     private EdgeCapsulePresentationFrame[]? _lastRetainedPointerFrames;
@@ -199,6 +201,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
               plan.Members.Any(member =>
                   member.Start != member.Source || member.Source != member.Target ||
                   EdgeCapsuleQueueProxyPolicy.RequiresTranslation(member.Start, member.Target)))) ||
+            (plan.IsSettledInputHandoff && (predecessor == null ||
+                !predecessor.CanCreateSettledInputSuccessor(plan, members))) ||
             (predecessor != null &&
              !string.Equals(
                  predecessor.QueueKey,

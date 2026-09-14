@@ -14,6 +14,7 @@ internal static partial class Program
         ProxyBrowseAdmission();
         ProxyBrowseCapacity();
         ProxyRetentionLifecycle();
+        ProxyNativeOwnershipLifecycle();
         ProxyRetainedAppliedGeometry();
         ProxySourceCapacityInvalidation();
         ProxyMaximumCapacityChecks();
@@ -73,11 +74,9 @@ internal static partial class Program
 
         // PaperWindow is only the source adapter here: no application/controller/data is created.
         // Its raw applied-frame accessor reads this real host and the lifecycle field below.
-        var paper = (PaperWindow)RuntimeHelpers.GetUninitializedObject(typeof(PaperWindow));
+        var paper = NewProxyCheckPaperWindow(host);
         const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
-        typeof(PaperWindow).GetField("_edgeCapsuleHost", fields)!.SetValue(paper, host);
         var lifecycle = typeof(PaperWindow).GetField("_windowLifecycle", fields)!;
-        lifecycle.SetValue(paper, Enum.Parse(lifecycle.FieldType, "Alive"));
         using var fixture = new ProxyLifecycleFixture();
         var memberPlan = new EdgeCapsuleQueueProxyMemberPlan("applied-shape", compact, compact, expanded);
         fixture.Set("_members", new[] { new EdgeCapsuleQueueCompositionProxyMember(paper, memberPlan, host.Handle) });
@@ -172,6 +171,42 @@ internal static partial class Program
             StrongTextBrush: Brushes.Black, TextBrush: Brushes.Gray,
             UiFontFamily: new FontFamily("Segoe UI"), SymbolFontFamily: new FontFamily("Segoe UI Symbol"),
             Language: XmlLanguage.GetLanguage("en-US"), Topmost: false, DiagnosticId: diagnosticId));
+
+    private static PaperWindow NewProxyCheckPaperWindow(EdgeCapsuleHost host)
+    {
+        var paper = (PaperWindow)RuntimeHelpers.GetUninitializedObject(typeof(PaperWindow));
+        var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
+        var data = new PaperData { IsVisible = true, IsCollapsed = true };
+        var presenter = new EdgeCapsulePresenter();
+        typeof(AppController).GetProperty(nameof(AppController.State))!.SetValue(controller,
+            new AppState { ExperimentalEdgeCapsuleHoverPreview = true, Papers = new() { data } });
+        SetCapacityCheckField(controller, "_windows", new Dictionary<string, PaperWindow>());
+        SetCapacityCheckField(controller, "_edgeCapsuleQueueCompositionProxyByWindow",
+            new Dictionary<PaperWindow, EdgeCapsuleQueueCompositionProxy>());
+        SetCapacityCheckField(paper, "_controller", controller);
+        SetCapacityCheckField(paper, "_paper", data);
+        SetCapacityCheckField(paper, "_edgeCapsuleHost", host);
+        SetCapacityCheckField(paper, "_edgeCapsule", presenter);
+        var lifecycle = typeof(PaperWindow).GetField("_windowLifecycle", CapacityCheckFields)!;
+        lifecycle.SetValue(paper, Enum.Parse(lifecycle.FieldType, "Alive"));
+        Check(presenter.Dispatch(EdgeCapsuleIntent.Attach(new(0, 0, 1), EdgeCapsulePaperForm.Collapsed, false)).Accepted,
+            "Attach the real Presenter used by the source input adapter");
+        return paper;
+    }
+
+    private static object InitializeProxyCheckHostOwnership(EdgeCapsuleQueueCompositionProxy proxy,
+        EdgeCapsuleQueueProxyWindow output)
+    {
+        var hostField = typeof(EdgeCapsuleQueueCompositionProxy).GetField("_host", CapacityCheckFields)!;
+        var owner = RuntimeHelpers.GetUninitializedObject(hostField.FieldType);
+        hostField.FieldType.GetField("<Window>k__BackingField", CapacityCheckFields)!.SetValue(owner, output);
+        hostField.FieldType.GetField("<Current>k__BackingField", CapacityCheckFields)!.SetValue(owner, proxy);
+        hostField.SetValue(proxy, owner);
+        typeof(EdgeCapsuleQueueCompositionProxy).GetField("_window", CapacityCheckFields)!.SetValue(proxy, output);
+        typeof(EdgeCapsuleQueueCompositionProxy).GetField("_nativeInputRegions", CapacityCheckFields)!
+            .SetValue(proxy, new List<DeviceScreenRect>());
+        return owner;
+    }
 
     private static EdgeCapsulePresentationFrame ProxyCheckFrame(
         MonitorGeometry monitor, EdgeCapsuleEdge edge, double top, bool preview = false,
@@ -307,8 +342,8 @@ internal static partial class Program
             retained.Proxy.CompleteNow(success: true);
             Check(retained.Completions.SequenceEqual(new[] { (true, true), (true, false) }),
                 "Explicit browse/environment completion must not request another retention");
-            Check(!retained.SampleTimer.IsEnabled && !retained.CompletionTimer.IsEnabled,
-                "Explicit completion suspends both timers before handing authority back");
+            Check(retained.SampleTimer.IsEnabled && !retained.CompletionTimer.IsEnabled,
+                "Explicit completion preserves the visible cover's geometry sampling until authority is released");
             retained.Proxy.CompleteNow(success: true);
             Check(retained.Completions.Count == 2,
                 "Reentrant explicit completion cannot request duplicate handoffs");
@@ -321,8 +356,8 @@ internal static partial class Program
             held.FireCompletionTimer();
             Check(held.Proxy.TryReserveForSuccessor(),
                 "A retained preview can reserve its current authority for a successor");
-            Check(!held.SampleTimer.IsEnabled && !held.CompletionTimer.IsEnabled,
-                "A successor hold stops old generation input and completion callbacks");
+            Check(held.SampleTimer.IsEnabled && !held.CompletionTimer.IsEnabled,
+                "A successor hold maintains the visible hit region without polling completion");
             Check(!held.Proxy.TryReserveForSuccessor(),
                 "One current authority cannot be reserved by two successors");
             held.Proxy.CompleteNow(success: !failureRequested);
@@ -367,13 +402,22 @@ internal static partial class Program
         internal DispatcherTimer CompletionTimer { get; } = new() { Interval = TimeSpan.FromSeconds(1) };
         internal List<(bool Success, bool AllowRetention)> Completions { get; } = new();
         internal bool KeepAllowedCompletions { get; set; }
+        private readonly EdgeCapsuleQueueProxyWindow _output;
 
-        internal ProxyLifecycleFixture(int durationMilliseconds = 200)
+        internal ProxyLifecycleFixture(int durationMilliseconds = 200, DeviceScreenRect? outputBounds = null)
         {
+            // This fixture replaces compositor ownership callbacks, but startup still publishes
+            // real native input regions. Supply the constructor-owned list and real dual HWNDs
+            // instead of weakening that production contract for uninitialized test objects.
+            var bounds = outputBounds ?? new DeviceScreenRect(0, 0, 100, 40);
+            _output = EdgeCapsuleQueueProxyWindow.TryCreate(bounds,
+                false, _ => false, _ => { }, () => { }, () => { }, () => { }) ??
+                throw new InvalidOperationException("Could not create lifecycle-check native output");
+            InitializeProxyCheckHostOwnership(Proxy, _output);
             var frame = EdgeCapsulePresentationFrame.Hidden with
                 { Surface = EdgeCapsuleSurfaceKind.DockedResting };
             Set("_plan", new EdgeCapsuleQueueProxyPlan("lifecycle-check",
-                new DeviceScreenRect(0, 0, 100, 40), EdgeCapsuleEdge.Left,
+                bounds, EdgeCapsuleEdge.Left,
                 0, 1, 1, durationMilliseconds, true,
                 new[] { new EdgeCapsuleQueueProxyMemberPlan("test", frame, frame, frame) }));
             Set("_members", Array.Empty<EdgeCapsuleQueueCompositionProxyMember>());
@@ -404,6 +448,7 @@ internal static partial class Program
         {
             SampleTimer.Stop();
             CompletionTimer.Stop();
+            _output.Dispose();
         }
     }
 }

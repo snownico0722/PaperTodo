@@ -15,19 +15,27 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             member.Start.Surface == EdgeCapsuleSurfaceKind.DockedRetracted ||
             member.Target.Surface == EdgeCapsuleSurfaceKind.DockedRetracted);
 
-    // The plan's pointer role is stable, but native messages can re-enter while a cover is
-    // being published/replaced or released. All input entry points share this readiness boundary.
+    // A visible cover must still shield its actual card area while handoff/hold/retry temporarily
+    // rejects business input. Letting those presses through could activate another application.
+    // This is derived ownership, not another per-paper hit model.
+    private bool CanMaintainNativeInputRegion =>
+        !_disposed && _coverPublished && !_coverLost && !_sourcesReleased &&
+        ReferenceEquals(_host.Current, this) && RoutesPointerInput;
+
     private bool CanRoutePointerInput =>
-        !_disposed && !_starting && _coverPublished && !_coverLost &&
-        !_sourcesReleased && !_finishing && !_successorHeld && RoutesPointerInput;
+        CanMaintainNativeInputRegion && !_starting && !_finishing && !_successorHeld &&
+        !(_completionRetryCount > 0 && _completionTimer.IsEnabled);
 
-    private bool ContainsVisual(DeviceScreenPoint point)
+    private bool ContainsVisual(DeviceScreenPoint point) =>
+        CanMaintainNativeInputRegion && ContainsPresentedInput(point);
+
+    // Completion temporarily closes native routing, but still needs the actual pointer/shape to
+    // decide whether retaining the cover would deny the settled WPF controls their normal input.
+    internal bool HasInteractivePointer() =>
+        WindowNative.TryGetCursorScreenPosition(out var point) && ContainsPresentedInput(point);
+
+    private bool ContainsPresentedInput(DeviceScreenPoint point)
     {
-        if (!CanRoutePointerInput)
-        {
-            return false;
-        }
-
         var now = Stopwatch.GetTimestamp();
         return _members.Any(member =>
         {
@@ -57,18 +65,86 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.pointer", this);
 #endif
 
-        if (!CanRoutePointerInput)
+        if (!CanMaintainNativeInputRegion)
         {
             return;
         }
+        if (!RefreshNativeInputRegion())
+        {
+            CompleteNow(success: false);
+            return;
+        }
+        // Continue the existing geometry sampling while business input is suspended. Native
+        // messages within the live cover are swallowed; transparent holes remain OS passthrough.
+        if (!CanRoutePointerInput) return;
         DeviceScreenPoint? pointer = WindowNative.TryGetCursorScreenPosition(out var position)
             ? position : null;
-        if (!ShouldDispatchPointerSample(pointer)) return;
-        foreach (var member in _members)
+        if (ShouldDispatchPointerSample(pointer))
         {
-            if (!CanRoutePointerInput) break;
-            member.Window.InvalidateEdgeCapsuleQueueProxyPointer(pointer);
+            foreach (var member in _members)
+            {
+                if (!CanRoutePointerInput) break;
+                member.Window.InvalidateEdgeCapsuleQueueProxyPointer(pointer);
+            }
         }
+
+        // Input invalidation above may start a local WPF shape change without a new translation
+        // generation. Wait for that work to settle; do not snap an opening preview just to deliver
+        // hover. Check even after an unchanged sample so its final reconcile can release the cover.
+        if (ShouldReleaseForPointerInput(pointer))
+        {
+            var now = Stopwatch.GetTimestamp();
+            var member = _members.FirstOrDefault(item =>
+                TrySamplePresentation(item, now, out var frame) && frame.Visible && frame.IsHitTestVisible &&
+                EdgeCapsuleGeometry.Contains(frame.InteractiveBounds, pointer!.Value));
+            if (member != null && SettledInputRequested is { } request)
+                request(this, member.Window);
+            else
+                CompleteNow(success: true);
+        }
+    }
+
+    internal bool ShouldReleaseForPointerInput(DeviceScreenPoint? pointer) =>
+        CanRoutePointerInput && IsRetainedForQueueBrowsing && pointer.HasValue && ContainsVisual(pointer.Value) &&
+        _members.All(member => member.Window.IsEdgeCapsuleQueueProxyInputSettled);
+
+    private bool RefreshNativeInputRegion()
+    {
+        // A predecessor and its staged successor share this HWND pair. Only the published owner
+        // may mutate its native hit region, including when an older callback resumes after reentry.
+        if (!ReferenceEquals(_host.Current, this)) return false;
+        // The output is permanently click-through. Only this finite native input region owns
+        // mouse messages, and its geometry comes from the same applied/translation frame as routing.
+        // Changing the input region never clips the compositor output or resizes a WPF source.
+        var regions = _nativeInputRegions;
+        regions.Clear();
+        if (CanMaintainNativeInputRegion)
+        {
+            var now = Stopwatch.GetTimestamp();
+            foreach (var member in _members)
+            {
+                if (member.Window.CanRouteEdgeCapsuleQueueProxyInput &&
+                    TrySamplePresentation(member, now, out var frame) &&
+                    frame.Visible && frame.IsHitTestVisible && !frame.InteractiveBounds.IsEmpty)
+                {
+                    regions.Add(frame.InteractiveBounds);
+                }
+            }
+        }
+        return _window.TrySetInputRegions(regions);
+    }
+
+    private bool ClearNativeInputRegionIfOwned()
+    {
+        if (!ReferenceEquals(_host.Current, this)) return true;
+        if (_window.Handle == IntPtr.Zero)
+        {
+            // TrySetInputRegions requires a complete pair. If output destruction left only the
+            // input HWND alive, there is no visual cover to preserve; hide its surviving partner.
+            _window.Hide();
+            return true;
+        }
+        return _window.TrySetInputRegions(Array.Empty<DeviceScreenRect>());
     }
 
     private bool ShouldDispatchPointerSample(DeviceScreenPoint? pointer)
@@ -191,7 +267,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             _coverLost ||
             _sourcesReleased ||
             !_coverPublished ||
-            _successorHeld)
+            _successorHeld ||
+            (_completionRetryCount > 0 && _completionTimer.IsEnabled) ||
+            !ReferenceEquals(_host.Current, this))
         {
             return false;
         }
@@ -199,8 +277,16 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         _successorHeld = true;
         _completionPendingDuringSuccessorHold = false;
         _pendingSuccessorCompletionSuccess = true;
-        _sampleTimer.Stop();
         _completionTimer.Stop();
+        var inputReady = RefreshNativeInputRegion();
+        if (_disposed || !_successorHeld || !ReferenceEquals(_host.Current, this)) return false;
+        if (!inputReady)
+        {
+            _successorHeld = false;
+            CompleteNow(success: false);
+            return false;
+        }
+        if (CanMaintainNativeInputRegion) _sampleTimer.Start();
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.successor phase=reserve session={_sessionOrdinal} " +
@@ -253,6 +339,13 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 (durationTicks - elapsedTicks) *
                 1000.0 /
                 Stopwatch.Frequency));
+        if (!RefreshNativeInputRegion())
+        {
+            CompleteNow(success: false);
+            return;
+        }
+        if (!CanRoutePointerInput && RoutesPointerInput) return;
+        if (_disposed || _finishing || _successorHeld || !ReferenceEquals(_host.Current, this)) return;
         if (RoutesPointerInput) _sampleTimer.Start();
         _completionTimer.Interval =
             TimeSpan.FromMilliseconds(
@@ -361,6 +454,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private void HandleOutputLost()
     {
         _coverLost = true;
+        _sampleTimer.Stop();
+        _ = ClearNativeInputRegionIfOwned();
         CompleteNow(success: false);
     }
 
@@ -372,6 +467,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         _coverLost = true;
+        _sampleTimer.Stop();
+        _ = ClearNativeInputRegionIfOwned();
         var dispatcher = _members[0].Window.Dispatcher;
         if (dispatcher.HasShutdownStarted ||
             dispatcher.HasShutdownFinished)
@@ -409,10 +506,13 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         _finishing = true;
-        _sampleTimer.Stop();
         _completionTimer.Stop();
         try
         {
+            var ownedInput = ReferenceEquals(_host.Current, this);
+            if (ownedInput) _ = RefreshNativeInputRegion();
+            if (_disposed || !_finishing || _successorHeld ||
+                (ownedInput && !ReferenceEquals(_host.Current, this))) return;
             _completed(this, success, allowBrowseRetention);
         }
         catch (Exception ex)
@@ -442,6 +542,13 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         // Explicit input/environment/lifecycle completion still releases it immediately.
         _retainedAfterAnimation = true;
         _finishing = false;
+        if (!RefreshNativeInputRegion())
+        {
+            CompleteNow(success: false);
+            return;
+        }
+        if (!CanRoutePointerInput && RoutesPointerInput) return;
+        if (_disposed || _finishing || _successorHeld || !ReferenceEquals(_host.Current, this)) return;
         if (RoutesPointerInput) _sampleTimer.Start();
     }
 
@@ -464,12 +571,22 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             return;
         }
 
-        _finishing = false;
+        // Preserve the visible cover's shield, but reject business input until handoff succeeds.
+        // The existing sampler only refreshes current geometry during this retry window.
+        _finishing = true;
         _completionRetrySuccess = success;
         _completionTimer.Stop();
+        var ownedInput = ReferenceEquals(_host.Current, this);
+        if (ownedInput) _ = RefreshNativeInputRegion();
+        if (_disposed || !_finishing || _successorHeld ||
+            (ownedInput && !ReferenceEquals(_host.Current, this))) return;
+        _finishing = false;
 
         if (_coverLost)
         {
+            _sampleTimer.Stop();
+            _ = ClearNativeInputRegionIfOwned();
+            if (_disposed || (ownedInput && !ReferenceEquals(_host.Current, this))) return;
             // The normal handoff budget is already exhausted (or the DComp output was lost). Source
             // reveal is now the only safe authority transition. Keep that emergency recovery paced
             // at 50 ms if Windows temporarily refuses the uncloak; never turn it into a Send loop.
@@ -486,6 +603,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             // path, which reveals real sources before this broken generation can retire.
             _coverLost = true;
             _completionRetrySuccess = false;
+            _sampleTimer.Stop();
+            _ = ClearNativeInputRegionIfOwned();
+            if (_disposed || (ownedInput && !ReferenceEquals(_host.Current, this))) return;
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.handoff phase=retry-exhausted session={_sessionOrdinal} " +
@@ -500,6 +620,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         _completionRetryCount++;
         _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
         _completionTimer.Start();
+        // Establish retry admission before Start can synchronously notify Dispatcher hooks.
+        if (CanMaintainNativeInputRegion && _completionTimer.IsEnabled) _sampleTimer.Start();
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.handoff phase=retry session={_sessionOrdinal} " +

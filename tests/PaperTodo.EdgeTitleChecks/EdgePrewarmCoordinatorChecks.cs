@@ -9,6 +9,7 @@ internal static partial class Program
 {
     private static void EdgePrewarmCoordinatorChecks()
     {
+        Console.WriteLine("START prewarm coordinator checks: create real WPF host");
         var window = new Window
         {
             Width = 80, Height = 40, ShowActivated = false, ShowInTaskbar = false,
@@ -17,14 +18,22 @@ internal static partial class Program
         window.Show();
         try
         {
-            PrewarmRenderingAndMerging();
-            PrewarmFailureAndSleeping();
-            PrewarmInteractionQuiet();
-            PrewarmReentrantOwnership();
-            PrewarmDispatcherHookOwnership();
+            RunPrewarmCheck("Rendering and request merging", PrewarmRenderingAndMerging);
+            RunPrewarmCheck("failure and sleeping", PrewarmFailureAndSleeping);
+            RunPrewarmCheck("interaction quiet", PrewarmInteractionQuiet);
+            RunPrewarmCheck("reentrant ownership", PrewarmReentrantOwnership);
+            RunPrewarmCheck("Dispatcher hook ownership", PrewarmDispatcherHookOwnership);
         }
         finally { window.Close(); }
         Console.WriteLine("PASS prewarm-rendering-idle-cancel-interaction-and-content-suspension");
+    }
+
+    private static void RunPrewarmCheck(string name, Action check)
+    {
+        Console.WriteLine("START prewarm: " + name);
+        var started = Stopwatch.GetTimestamp();
+        check();
+        Console.WriteLine($"PASS prewarm: {name} ({Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms)");
     }
 
     private static void PrewarmRenderingAndMerging()
@@ -332,6 +341,7 @@ internal static partial class Program
 
     private static void PrewarmPumpUntil(Func<bool> finished, string scenario)
     {
+        Console.WriteLine("  WAIT prewarm: " + scenario);
         var started = Stopwatch.GetTimestamp();
         while (!finished() && Stopwatch.GetElapsedTime(started).TotalSeconds < 4)
             PrewarmPumpFor(10);
@@ -341,11 +351,21 @@ internal static partial class Program
     private static void PrewarmPumpFor(int milliseconds)
     {
         var frame = new DispatcherFrame();
-        var deadline = new DispatcherTimer(DispatcherPriority.Send, Dispatcher.CurrentDispatcher)
-            { Interval = TimeSpan.FromMilliseconds(milliseconds) };
-        deadline.Tick += (_, _) => { deadline.Stop(); frame.Continue = false; };
-        deadline.Start();
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var finished = 0;
+        // The outer four-second deadline cannot run while PushFrame is stuck in GetMessage.
+        // Use an independent timer to post its wake-up, rather than depending on this same WPF
+        // Dispatcher's timer promotion to let the test observe its own timeout. Rendering and
+        // the coordinator's ApplicationIdle work still execute through the real Dispatcher.
+        using var deadline = new System.Threading.Timer(_ =>
+        {
+            if (Volatile.Read(ref finished) != 0) return;
+            dispatcher.BeginInvoke(DispatcherPriority.Send, (Action)(() =>
+            {
+                if (Interlocked.Exchange(ref finished, 1) == 0) frame.Continue = false;
+            }));
+        }, null, milliseconds, Timeout.Infinite);
         try { Dispatcher.PushFrame(frame); }
-        finally { deadline.Stop(); }
+        finally { Interlocked.Exchange(ref finished, 1); }
     }
 }

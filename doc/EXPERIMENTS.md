@@ -27,6 +27,8 @@
 | E-014 | 2026-09-14 | 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照 | Completed; no product runtime change | — |
 | E-015 | 2026-09-14 | WPF请求、HWND原位置保留、代理shape能力及组合对照 | Completed; candidates isolated | D-032 |
 | E-016 | 2026-09-14 | 活动渲染请求正式化、真实交接像素与 HWND 合并对照 | Main integration validated; request adopted, HWND candidates not adopted | D-038 |
+| E-017 | 2026-09-15 | PR260 透明区输入、逐卡交还、隐藏绘制及代理缓存对照 | Input/paint/handoff repairs adopted; latency and visual acceptance incomplete | D-037 |
+| E-018 | 2026-09-15 | 按输入需求保留与异步首段接管的串行对照 | Completed; both methods remain isolated | D-037 |
 
 整合编号说明：主线既有 E-001～E-004 保持原编号。本地边缘实验旧 E-003～E-014 顺延为 E-005～E-016；已封存原始目录、报告、commit 和文件名保持不变，阅读其中旧编号时按此对应表解释。
 
@@ -1184,3 +1186,64 @@ baseline-r2 尾段复核发现：同一初始 hit 矩形内，某候选停留约
 原录制器串行回放 main-v1 一轮，36 个动作及目标与已封存 integration-v1 完全一致，记录/文本零丢弃、退出前无诊断文件，footer 为 `normal-exit`。有效 owner WH/opacity 更新 518 个间隔，P50/P90/P95/P98/P99 为 **7.0622/13.1165/13.3684/17.0752/21.2510ms**，最大 40.0976ms，整轮进程 CPU 7578.125ms。这是合并后的单轮回归，不是同期 A/B，不能从 CPU 或极值差异宣称主线启动改动带来新的性能收益或回退，也不等同物理显示帧率；残余长等待仍存在。
 
 本次新证据独立保存于 `输出/edge-pr-integration-20260914/`：源码与文档三方审查、main-v1 快照/构建、12 组运行日志、原始回放、分析器、final-validation 和输入 SHA 核对。先前 E-016 原始目录已封存，91,274 文件、17,464,454,896 字节，清单 SHA256 为 `2A855544D5CFB81107D029838D6BD8F8024282BD0435820A0F6086DCC6D0280A`；后续结果没有覆盖该目录或 E-015。原 data.json、LMDB、正式 EXE 和录制器再次核验 SHA 不变。
+
+---
+
+## E-017 — PR260 真实输入、隐藏绘制与静止交还
+
+**日期：** 2026-09-15
+
+**状态：** 输入、绘制与交还顺序修复采用；延迟长尾及物理可见性尚未完成验收。
+
+代码基线为 `26142c1`：将 #260 head `3e6d55b` 与主线 `b6ee52d` 合并的本地整合，不是裸 #260；不包含失败路线 3。所有原始材料在 `输出/edge-input-fix-20260915/`，`INDEX.md` 给出阅读顺序，`log-catalog.json` 列出 34 个运行目录和 27 个包目录及哈希。下述报告保留各自完成时的历史状态，以本节和后续最终报告解释更新。
+
+### 采用的修复及证据
+
+- 输出 HWND 用 layered/transparent 让出鼠标，另一个轻量输入 HWND 仅对 presented/applied InteractiveBounds 并集建立 OS region；不裁剪 DComp 图像，不把 host envelope 或 transfer corridor 当成命中区域。真实跨线程、跨进程 DOWN/UP 检查验证空白穿透。
+- 卡片稳定后通过排除当前卡片的静止 successor 恢复真实 WPF hover、按下/释放、捕获取消及光标；其他胶囊继续保留 live authority。已经交还且没有位移的卡片不再次接管。整队交还早期候选虽然恢复输入，却导致反复冷接管，已被此实现替代。
+- 隐藏 layered 输出曾约 10 秒收到 1,503,577 次 WM_PAINT；ValidateRect 成功但未消费该配置下的更新区。成对 BeginPaint/EndPaint 消除可复现绘制风暴，旧实现失败、新实现通过的原生检查保留。不能由此推论所有 layered 窗口行为相同或长期空闲成本已全部验收。
+- 静止交还先保留旧 root，解除并验证 outgoing source 的 cloak，再发布不含该卡的 root；后段失败先恢复并确认旧 cover，再反向 cloak，无法确认则整组恢复真实窗口。故障检查通过，不把原生可见标志当成屏幕像素证明。
+
+修复产品的常规 WPF/预热/交接检查 3407 断言、原生 OS/DComp/WPF 控件输入及失败回滚 574 断言通过。原生组按产品 PerMonitorV2 manifest 运行 apphost；不以 DPI 行为不同的 `dotnet <dll>` 替代。真实双源夹具不是完整 controller 所有时序的穷尽证明，产品路径另由串行录制回放核对。
+
+### 缓存与额外等待候选
+
+同一优化 Debug、相同被动诊断、固定实际加载 .NET 10.0.12、相同录制数据，两组 ABBA/相邻对照共六轮，每轮相同 36 动作、正常退出和零日志丢失；编译和大日志分析不与回放重叠。诊断在内存采集，退出落盘。
+
+单卡 dormant surface/visual 缓存两轮有 13/13 次符合条件的重入命中，但事务 P95 59.490/55.906ms，对照 53.357/49.905ms；资源准备约 0.15–0.61ms，两次交接等待仍占数十毫秒，没有采用。分母是符合条件的重入，不能外推任意胶囊命中率。union Commit 后额外 WaitForCommitCompletion 的 P95 为 64.145ms，对照 54.040ms，也没有采用。
+
+实际 WPF runtime 对应 MediaContext 源码及被动打点确认 Rendering 在 Render/CloseBatch/Commit 之前，RenderComplete 也不是某张卡的 Present 回执。四轮 210 个观测中 132 次全局 needCommit，但对应源 dirty 为 0；不能把全局状态归因到被交还卡，也没有据此证明此前闪烁原因。
+
+同产品最终修复代码带共同诊断的 `handoff-base-r1/r2/r3` 已完成回放；因此早期 PAINT 报告的“reveal-order 尚未回放”已被后续证据更新。其事务 P90 为 43.807/41.437/44.627ms，P95 为 53.357/49.905/54.040ms。三个 P90 都落在加入新 source 的 successor；三轮最慢四项共 12 项中，11 项为此类，另一项为运行中整队重新接管。更早的进程启动预热和事务外静态预接管不能混入这组 P90。
+
+用户对后续闪烁观察的回答为“没有观察”，不是“没有闪烁”。尚未证明物理闪烁已消除；长期空闲、多屏/混合 DPI、队列外鼠标运动暂停全局预热的范围仍未验收或未修。功能修复采用不等于性能及所有审查问题通过。
+
+完整聚合数据：[E-017-retained-input-samples.csv](experiments/E-017-retained-input-samples.csv)。各行标明摘要来源、包 SHA、动作数、采集有效性及分位。原始资料依次见 RESULTS → SELECTIVE-RESULTS → PAINT-AND-HANDOFF-RESULTS → HANDOFF-CACHE-RESULTS；`handoff-probe-wait-r1.json` 的资源归因曾有错误，应使用 corrected 或 final 版本，旧文件仍保留。
+
+## E-018 — 按输入需求保留与异步首段接管
+
+**日期：** 2026-09-15
+
+**状态：** 完成；方法 1、方法 2 均隔离，用户确认不纳入 PR260。
+
+仍使用 E-017 修复产品的 `handoff-base-v3` 为基线，不与缺少完整输入语义的早期包混算。两个隔离子任务实施、主任务集中原生检查和串行回放；共七轮，每轮同顺序 36 动作、.NET 10.0.12、正常退出及零采集丢失。
+
+方法 1 用真实 WPF InputHitTest 与祖先输入行为判断能否保留代理，保留 hover、tooltip、光标、捕获和未知/插件区域的保守交还。正常布局未命中可保留的背景；录制中的 18 次分类状态变化全部需要真实输入，交还 17 次，对照 16/18 次。没有省交还的实证，不通过删除现有输入行为制造收益。
+
+方法 2 保持旧覆盖及真实来源不变，将第一段 DwmFlush 放到单个后台 worker，回 UI 校验请求/源身份后继续第二段交接。静态预接管、静止输入交还及运动前任仍同步，目标队列 reconcile 约束在等待期间保留。早期 v1 把合法端点更新错判为失效，35 请求中 23 失败；虽然录制动作齐全，不能用这轮评价优化。v2 分离等待模型与持续身份校验；v3 补齐发布中及同步路径取消，避免旧请求 fallback。全部版本和失败日志保留。
+
+最终 v3 原生接管 883 断言、完整原生输入回归 574 断言通过；两轮分别 34/35 请求全部成功，worker 请求 5/6 次全部成功，无失败/取消/未完成。基线三轮与最终候选两轮的范围如下，单位 ms：
+
+| 指标 | 修复产品基线 | 方法 2 v3 |
+|---|---:|---:|
+| transaction.commit P90 | 47.974–50.484 | 11.921–12.391 |
+| transaction.commit P95 | 52.938–61.024 | 15.717–18.983 |
+| 新增 source 的 prepare→animation-clock P50 | 41.6795–49.6350 | 57.0199–58.0882 |
+| 新增 source 的 prepare→animation-clock P90 | 55.7925–60.3420 | 63.8191–65.9248 |
+| owner shape 更新间隔 P95 | 13.5868–13.9370 | 13.4513–13.6352 |
+
+事务计时变短不能代替完整接管时间；共同阶段探针包括后台等待及 UI 续步排队，仍不包含更早的输入停留、源创建或物理首帧。方法 2 的全部 Dispatcher 操作 >25ms 次数由基线 17/20/25 降至 10/11，但完整启动没有下降，个别续步排队约 13.35ms。两轮最长 UI 操作仍为未异步化的静态预热。最终没有采用，也没有把此结果解释成永久否定异步调度。
+
+P50 取较低中位数，其他分位取排序后 `ceil((n-1)*q)`，不插值；36 事务的 P98/P99 是最大值，小样本新增源尾分位同样不代表稳定总体极端分布。单机有限轮次不是泛化性能保证或物理出屏/闪烁验收。
+
+完整数据：[E-018-admission-methods-samples.csv](experiments/E-018-admission-methods-samples.csv)，其中 `known_invalid_implementation` 标识已知错误 v1；`valid_capture=True` 只说明采集有效，不代表实现通过。本地 METHODS-1-2-RESULTS、method-performance-final、method-latencies-final、method-dispatcher-final 保存完整分段及原始分析引用。方法 1 无有效覆盖率，因此未再测组合；产品不引入其分类器、异步 admission、额外缓存或被动内部探针。

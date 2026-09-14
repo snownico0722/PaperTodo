@@ -28,11 +28,17 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         // retired generation; retaining it would keep the entire browsing history alive.
         if (_coverPublished) _predecessor = null;
         _starting = false;
+        if (started && _coverPublished && !RefreshNativeInputRegion())
+        {
+            // A native input allocation failure must restore normal source-window interaction.
+            CompleteNow(success: false);
+            return;
+        }
         if (_completionPendingDuringStart)
         {
             CompleteNow(_pendingStartCompletionSuccess);
         }
-        else if (started && _plan.IsStaticPreacquisition)
+        else if (started && (_plan.IsStaticPreacquisition || _plan.IsSettledInputHandoff))
         {
             // The ordinary endpoint verification grants retention. A static acquisition has
             // no animation to wait for, and a reentrant explicit completion always wins above.
@@ -328,12 +334,29 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             // it must not wait for another scanout before WPF can produce the next shape frame.
             // New/revealed sources still require the full cover/cloak/flush/verify transaction.
             var retainedAuthority = _predecessor != null && cloakChanges.Count == 0;
-            var publication = retainedAuthority
-                ? PublishRetainedCover(PublishBeforeFlush, RollbackBeforeFlush)
-                : WindowNative.TrySetWindowCloakedBatchDetailed(
-                    cloakChanges,
-                    PublishBeforeFlush,
-                    RollbackBeforeFlush);
+            WindowNative.WindowCloakBatchResult publication;
+            if (_plan.IsSettledInputHandoff)
+            {
+                // This handoff changes only input ownership at already-settled endpoints.
+                // Keep the old live image until the outgoing real HWND has actually been
+                // revealed; a DComp root change and a DWM uncloak are separate submissions.
+                if (_predecessor == null || newHandles.Count != 0 || outgoingCount != 1 ||
+                    cloakChanges.Count != 1 || cloakChanges[0].Cloaked ||
+                    !cloakChanges[0].RollbackCloaked ||
+                    !_predecessor.CanCreateSettledInputSuccessor(_plan, _members) ||
+                    !_endpointCommitRequested(Stopwatch.GetTimestamp())) return false;
+                publication = PublishSettledInputCover(cloakChanges,
+                    PublishBeforeFlush, RollbackBeforeFlush);
+            }
+            else
+            {
+                publication = retainedAuthority
+                    ? PublishRetainedCover(PublishBeforeFlush, RollbackBeforeFlush)
+                    : WindowNative.TrySetWindowCloakedBatchDetailed(
+                        cloakChanges,
+                        PublishBeforeFlush,
+                        RollbackBeforeFlush);
+            }
             if (publication !=
                 WindowNative.WindowCloakBatchResult.Success)
             {
@@ -374,7 +397,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             }
             _coverPublished = true;
 
-            if (!_plan.IsStaticPreacquisition)
+            if (!_plan.IsStaticPreacquisition && !_plan.IsSettledInputHandoff)
             {
                 // All blocking publication work is finished. Start shape and translation together
                 // from this fresh QPC, keeping the same curve and full duration for both. Do not
@@ -419,7 +442,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 $"session={_sessionOrdinal} cold={IsColdSession} " +
                 $"freshAuthority={_predecessor == null} " +
                 $"successor={_predecessor != null} " +
-                $"staticPreacquisition={_plan.IsStaticPreacquisition} " +
+                $"staticPreacquisition={_plan.IsStaticPreacquisition} inputHandoff={_plan.IsSettledInputHandoff} " +
                 $"queue={_plan.QueueKey} members={_members.Count} " +
                 $"inherited={inheritedCount} " +
                 $"revealed={outgoingCount} " +

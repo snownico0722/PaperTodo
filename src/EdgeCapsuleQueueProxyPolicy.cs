@@ -43,6 +43,7 @@ internal sealed record EdgeCapsuleQueueProxyPlan(
     IReadOnlyList<EdgeCapsuleQueueProxyMemberPlan> Members)
 {
     internal bool IsStaticPreacquisition { get; init; }
+    internal bool IsSettledInputHandoff { get; init; }
 }
 
 /// <summary>

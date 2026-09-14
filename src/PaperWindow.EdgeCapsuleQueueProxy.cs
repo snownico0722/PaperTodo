@@ -161,6 +161,10 @@ public sealed partial class PaperWindow
     internal bool CanRouteEdgeCapsuleQueueProxyInput =>
         CanEnterEdgeCapsulePreview;
 
+    internal bool IsEdgeCapsuleQueueProxyInputSettled =>
+        _windowLifecycle == PaperWindowLifecycleState.Alive && !IsClosed &&
+        _edgeCapsule.IsSettledForPreacquisition;
+
     internal bool TryGetEdgeCapsuleQueueProxyAppliedPresentation(
         out EdgeCapsulePresentationFrame frame)
     {
@@ -169,6 +173,17 @@ public sealed partial class PaperWindow
             !IsClosed && _edgeCapsuleHost != null &&
             _edgeCapsuleHost.TryGetAppliedPresentation(out frame);
     }
+
+    internal bool TryPrepareSettledQueueProxyInput(out EdgeCapsulePresentationFrame frame)
+    {
+        frame = _edgeCapsule.AppliedPresentation;
+        return IsEdgeCapsuleQueueProxyInputSettled && _edgeCapsuleHost != null &&
+            frame.Visible && _edgeCapsuleHost.PrepareCompositionSourceLayoutForBatchHandoff();
+    }
+
+    internal bool VerifySettledQueueProxyInput(EdgeCapsulePresentationFrame frame) =>
+        IsEdgeCapsuleQueueProxyInputSettled && _edgeCapsule.AppliedPresentation == frame &&
+        _edgeCapsuleHost?.MatchesPresentation(frame) == true;
 
     internal bool ApplyEdgeCapsuleQueueProxyEndpoint(
         EdgeCapsulePresentationFrame endpoint)
