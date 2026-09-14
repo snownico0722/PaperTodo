@@ -6,14 +6,6 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private static T MarkAdvancedSetting<T>(T element)
-        where T : FrameworkElement
-    {
-        // Advanced sections already have a distinct background. Keep their controls on the same
-        // alignment line as ordinary settings instead of adding a per-item badge.
-        return element;
-    }
-
     private UIElement AdvancedSettingsBlock(params UIElement[] items)
     {
         var content = new StackPanel();

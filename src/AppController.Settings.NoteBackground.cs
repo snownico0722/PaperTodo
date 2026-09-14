@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -5,34 +6,6 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private UIElement BuildVisualSettingsPageWithNoteBackground()
-    {
-        var basePage = BuildVisualSettingsPage();
-        if (basePage is not DockPanel baseRoot || baseRoot.Children.Count != 2)
-        {
-            return basePage;
-        }
-
-        // BuildVisualSettingsPage currently returns a restore-footer DockPanel. Reuse its actual
-        // visual content and rebuild only the footer callback so page-default restore also clears
-        // the external background-disabled marker, without duplicating the visual settings page.
-        var visualContent = baseRoot.Children[1];
-        baseRoot.Children.Remove(visualContent);
-
-        UIElement content = visualContent;
-        if (NoteBackground.IsAvailable)
-        {
-            var stack = new StackPanel();
-            stack.Children.Add(BuildNoteBackgroundSettingsSection());
-            stack.Children.Add(visualContent);
-            content = stack;
-        }
-
-        return WithSettingsPageRestoreFooter(
-            content,
-            RestoreVisualSettingsPageDefaultsWithNoteBackground);
-    }
-
     private UIElement BuildNoteBackgroundSettingsSection()
     {
         var section = new StackPanel
@@ -60,17 +33,39 @@ public sealed partial class AppController
 
     private void ToggleNoteBackground()
     {
-        NoteBackground.SetEnabled(!NoteBackground.IsEnabled);
-        foreach (var window in _windows.Values)
+        if (TrySetNoteBackgroundEnabled(!NoteBackground.IsEnabled))
         {
-            window.RefreshNoteBackground();
+            foreach (var window in _windows.Values)
+            {
+                window.RefreshNoteBackground();
+            }
         }
+        // Re-read the marker even on failure; the clicked checkbox must not imply a saved change.
         RefreshSettingsWindowContent();
     }
 
-    private void RestoreVisualSettingsPageDefaultsWithNoteBackground()
+    private bool TrySetNoteBackgroundEnabled(bool enabled)
     {
-        NoteBackground.SetEnabled(true);
-        RestoreVisualSettingsPageDefaults();
+        try
+        {
+            NoteBackground.SetEnabled(enabled);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (_settingsWindow != null)
+            {
+                PaperNoticeDialog.Show(
+                    _settingsWindow,
+                    SettingsSidebarLocalized("笔记背景", "Note background", "ノート背景", "노트 배경"),
+                    SettingsSidebarLocalized(
+                        "无法保存笔记背景开关。请检查 custom/note 目录的写入权限。",
+                        "Could not save the note background setting. Check write access to custom/note.",
+                        "ノート背景の設定を保存できませんでした。custom/note の書き込み権限を確認してください。",
+                        "노트 배경 설정을 저장하지 못했습니다. custom/note의 쓰기 권한을 확인하세요.") +
+                    Environment.NewLine + ex.Message);
+            }
+            return false;
+        }
     }
 }

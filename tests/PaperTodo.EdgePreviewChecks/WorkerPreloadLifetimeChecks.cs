@@ -26,7 +26,7 @@ internal static partial class Program
             Task<bool> warming;
             using (HoldWorker(MarkdownLayoutWorker.Shared))
             {
-                warming = cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true), cancellation.Token);
+                warming = cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true, cache.Capture(context)), cancellation.Token);
                 UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0,
                     "preload reaches the real pending paragraph worker");
                 // No source notification: immutable artifacts must reject the old resource snapshot.
@@ -35,7 +35,7 @@ internal static partial class Program
             UntilReview(() => warming.IsCompleted, "resource-invalidated preload settles");
             Require(!warming.GetAwaiter().GetResult() && cache.ArtifactCount == 0,
                 "optional preload discards changed resources rather than caching stale colors");
-            Require(AwaitPreload(cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true))),
+            Require(AwaitPreload(cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true, cache.Capture(context)))),
                 "a later lifecycle request can prepare the current resources");
             Require(cache.ArtifactCount == 1 && root.Children.Count == 0,
                 "the current artifact is cached once without mounting a hidden holder");

@@ -44,7 +44,7 @@ internal static partial class Program
                 Require(host.Apply(EdgeCapsuleTargetPlanner.Calculate(initial, layout).Docked.ToFrame()), "real bounded host starts docked");
                 Pump();
                 Require(host.MarkdownPreloadAnchor != null, "preload uses the actual live host anchor for resources/DPI only");
-                Require(AwaitPreload(cache.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, size, () => true))),
+                Require(AwaitPreload(cache.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, size, () => true, cache.Capture(context)))),
                     "never-opened artifact completes preload");
                 Require(cache.ArtifactCount == 1 && host.MarkdownPreloadAnchor!.Children.Count > 0,
                     "preload retains one immutable artifact without mounting a hidden preview child");

@@ -37,7 +37,7 @@ internal static partial class Program
         EdgeCapsulePreviewContext Context(EdgeCapsulePreviewInvalidationSource source, Func<string>? text = null) =>
             new(new PaperData(), () => "Audit", false, text ?? (() => new string('x', 450)),
                 () => MarkdownRenderModes.Full, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, source);
-        MarkdownEdgePreviewPreload.Target Target(EdgeCapsulePreviewContext context) => new(context, root, new(460, 410), () => true);
+        MarkdownEdgePreviewPreload.Target Target(EdgeCapsulePreviewContext context) => new(context, root, new(460, 410), () => true, cache.Capture(context));
         void Until(Func<bool> condition, string message)
         {
             var timer = Stopwatch.StartNew();
@@ -56,6 +56,15 @@ internal static partial class Program
             Until(() => cache.ArtifactCount == 1 && cache.PendingCount == 0, "startup request completes without mouse activity");
             Require(calls == 1 && Stopwatch.GetElapsedTime(requestedAt).TotalMilliseconds >= 490,
                 "shared half-second debounce precedes startup prelayout");
+            var sourceReads = 0;
+            var capturedContext = Context(new(), () => { sourceReads++; return new string('x', 450); });
+            var content = cache.Capture(capturedContext);
+            var size = MarkdownEdgeCapsulePreviewProvider.MeasureSize(capturedContext, content);
+            Require(AwaitPreload(cache.WarmLayoutAsync(
+                new(capturedContext, root, size, () => true, content))), "captured excerpt warms");
+            Require(sourceReads == 1, "eligibility, measurement and layout share one source read");
+            cache.Forget(capturedContext.InvalidationSource);
+
             var first = cache.Capture(context);
             Require(ReferenceEquals(first, cache.Capture(context)), "unchanged excerpt reuses prepared semantics");
             var binding = cache.Bind(context, first, 1)!;

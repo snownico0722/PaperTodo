@@ -87,17 +87,18 @@ public sealed partial class PaperWindow
         var host = _edgeCapsuleHost;
         var generation = _bodySessionGeneration;
         var context = CreateEdgeCapsulePreviewContext();
-        if (!MarkdownEdgePreviewPreload.ShouldPreload(context, cache.Capture(context)))
+        var content = cache.Capture(context);
+        if (!MarkdownEdgePreviewPreload.ShouldPreload(context, content))
             return MarkdownEdgePreviewPreload.ReadResult.Discard;
-        var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
-        var size = descriptor.Size.Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
+        var size = MarkdownEdgeCapsulePreviewProvider.MeasureSize(context, content)
+            .Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
         // Preloading never grows HWND capacity or takes presentation authority.
         if (!TryConstrainEdgeCapsulePreviewToCurrentHostCapacity(size, out size))
             return MarkdownEdgePreviewPreload.ReadResult.Deferred;
         return MarkdownEdgePreviewPreload.ReadResult.Ready(new(context, anchor, size, () =>
             CanPreloadMarkdownText && generation == _bodySessionGeneration &&
-            ReferenceEquals(host, _edgeCapsuleHost)));
+            ReferenceEquals(host, _edgeCapsuleHost), content));
     }
 }
 
