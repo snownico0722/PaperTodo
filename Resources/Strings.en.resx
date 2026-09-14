@@ -1389,4 +1389,27 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
+  <data name="DataReloadTitle" xml:space="preserve">
+    <value>PaperTodo data reload</value>
+  </data>
+  <data name="DataReloadConflict" xml:space="preserve">
+    <value>{0} external changes conflicted. PaperTodo kept its running values for those conflicts and applied the remaining changes.
+
+Complete external file: {1}
+Conflict details: {2}</value>
+  </data>
+  <data name="DataReloadFailed" xml:space="preserve">
+    <value>Could not complete data.json reload: {0}
+
+Autosave will not overwrite pending external edits. Correct and save the file, or retry through the API / MCP. Restart and check the data after a display-refresh error.</value>
+  </data>
+  <data name="DataReloadRestart" xml:space="preserve">
+    <value>The data was saved. Restart PaperTodo to apply the interface language change.</value>
+  </data>
+  <data name="DataReloadExitRecovery" xml:space="preserve">
+    <value>data.json still has external changes that could not be applied. That file was preserved. PaperTodo saved its running state separately before exiting:
+{0}
+
+Check both files after restarting to recover the content you need.</value>
+  </data>
 </root>

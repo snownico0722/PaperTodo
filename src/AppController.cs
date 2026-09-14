@@ -223,6 +223,7 @@ public sealed partial class AppController : IDisposable
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.TimeChanged += OnSystemTimeChanged;
+        InitializeDataReload();
     }
 
     private bool StripInternalImageRenderMarkersFromState()
@@ -275,6 +276,7 @@ public sealed partial class AppController : IDisposable
             }
             RefreshMcpRuntime();
             SchedulePluginStartupPapers(initialVisibilityCommand);
+            StartDataReloadWatcher();
             return;
         }
 
@@ -299,6 +301,7 @@ public sealed partial class AppController : IDisposable
         }
         RefreshMcpRuntime();
         SchedulePluginStartupPapers(initialVisibilityCommand);
+        StartDataReloadWatcher();
     }
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)
@@ -2364,6 +2367,7 @@ public sealed partial class AppController : IDisposable
 
     public void UpdateGeometry(PaperData paper, Window window)
     {
+        if (IsDataReloading) return;
         if (window is PaperWindow { SuppressGeometrySave: true })
         {
             return;
@@ -2877,6 +2881,7 @@ public sealed partial class AppController : IDisposable
 
     private bool TrySaveNow(bool sync)
     {
+        if (IsDataReloading) return false;
         long? attemptedVersion = null;
         try
         {
@@ -2935,6 +2940,7 @@ public sealed partial class AppController : IDisposable
 
     internal void CommitPendingNoteContentsForSave()
     {
+        if (SuppressDataReloadEditorCommit) return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
@@ -3025,6 +3031,15 @@ public sealed partial class AppController : IDisposable
     {
         if (IsExiting)
         {
+            return;
+        }
+
+        if (ex is ExternalStatePendingException)
+        {
+            _hasPendingDirty = true;
+            _saveTimer.Stop();
+            _forceSaveTimer.Stop();
+            QueueDataReload();
             return;
         }
 
@@ -3530,6 +3545,7 @@ public sealed partial class AppController : IDisposable
         {
             return;
         }
+        if (!FinishDataReloadBeforeExit()) return;
 
         CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         foreach (var window in _windows.Values.ToList())
@@ -3544,7 +3560,7 @@ public sealed partial class AppController : IDisposable
         _displayMetricsRefreshTimer.Stop();
         StopTodoReminderTimer();
 
-        if (!TrySaveNow(sync: true))
+        if (!SaveForNormalShutdown())
         {
             TryExitCleanup(() =>
             {
@@ -3612,12 +3628,13 @@ public sealed partial class AppController : IDisposable
 
         if (_lifecycleState == AppLifecycleState.Running)
         {
+            CompletePendingDataReload();
             foreach (var window in _windows.Values.ToList())
             {
                 window.CommitPendingEditsForSave();
             }
 
-            TrySaveNow(sync: true);
+            SaveForNormalShutdown();
         }
 
         _lifecycleState = AppLifecycleState.Exiting;
@@ -3627,6 +3644,7 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        StopDataReloadWatcher();
         CancelStartupDisplayRestore();
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();

@@ -843,6 +843,8 @@ internal sealed partial class PaperCommandService
 
     private void EnsureRunning()
     {
+        if (_controller.IsDataReloading)
+            throw Error("data_reload_in_progress", "PaperTodo is applying a committed data reload; retry after it completes.");
         if (!_controller.IsRunning)
         {
             throw Error("app_exiting", "PaperTodo is exiting.");

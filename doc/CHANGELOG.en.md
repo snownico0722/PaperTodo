@@ -18,6 +18,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased (4.0.0-preview)
 
+- **Live data reload**: Editing `data.json` externally updates papers, todos, notes and settings without restarting. Independent changes merge automatically; conflicting values keep the running PaperTodo version, with the complete external input and conflict details saved separately and one notification per batch. Native / Web plugin APIs and MCP can explicitly reload and inspect the result. Interface language changes still require a restart.
+
 - **Startup and Exit Responsiveness**: Only papers on not-yet-available displays defer restoration; other capsules and papers become available first. Small shell worksets are prepared in short batches, and plugin startup papers await completion instead of polling. Normal exit preserves the final save, withdraws visible surfaces before slower cleanup, and stops script processes concurrently rather than waiting for each in sequence.
 
 **Edge Preview Cards (Edge Browse)**

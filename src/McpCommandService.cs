@@ -41,6 +41,8 @@ internal sealed class McpCommandService
         {
             return method switch
             {
+                "reload_data" => ReloadData(),
+                "get_data_reload_status" => _commands.GetDataReloadStatus(),
                 "list_papers" => ListPapers(parameters),
                 "get_paper" => GetPaper(parameters),
                 "create_todo_paper" => CreateTodoPaper(parameters),
@@ -60,6 +62,12 @@ internal sealed class McpCommandService
         {
             throw new McpApiException(ex.Code, ex.Message);
         }
+    }
+
+    private DataReloadResult ReloadData()
+    {
+        RequireFullWrites();
+        return _commands.ReloadData(PaperOperationContext.Mcp());
     }
 
     private object ListPapers(JsonElement parameters)

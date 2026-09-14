@@ -1389,4 +1389,27 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
   </data>
+  <data name="DataReloadTitle" xml:space="preserve">
+    <value>PaperTodo データの再読み込み</value>
+  </data>
+  <data name="DataReloadConflict" xml:space="preserve">
+    <value>外部の変更が {0} 件競合しました。競合箇所は PaperTodo の現在の値を保持し、それ以外の変更は適用しました。
+
+外部ファイルの完全なコピー：{1}
+競合の詳細：{2}</value>
+  </data>
+  <data name="DataReloadFailed" xml:space="preserve">
+    <value>data.json の再読み込みを完了できませんでした：{0}
+
+未適用の外部変更は自動保存で上書きされません。ファイルを修正して保存するか、API / MCP で再試行してください。画面更新エラーの場合は再起動後にデータを確認してください。</value>
+  </data>
+  <data name="DataReloadRestart" xml:space="preserve">
+    <value>データを保存しました。表示言語の変更を適用するには PaperTodo を再起動してください。</value>
+  </data>
+  <data name="DataReloadExitRecovery" xml:space="preserve">
+    <value>data.json に適用できない外部変更が残っているため、元のファイルを保持しました。終了前の PaperTodo の状態は別のファイルに保存しました：
+{0}
+
+再起動後に両方のファイルを確認し、必要な内容を復元してください。</value>
+  </data>
 </root>

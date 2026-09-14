@@ -10,6 +10,8 @@ internal static class WebPluginWorkspaceRequests
         string method,
         JsonElement parameters) => method switch
     {
+        "data.reload" => host.ReloadData(),
+        "data.status" => host.GetDataReloadStatus(),
         "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
         "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
         "todos.list" => host.ListTodos(

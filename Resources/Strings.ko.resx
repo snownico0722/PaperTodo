@@ -1389,4 +1389,27 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>선택한 이미지 내용이 너무 커서 이번에는 텍스트만 복사했습니다.</value>
   </data>
+  <data name="DataReloadTitle" xml:space="preserve">
+    <value>PaperTodo 데이터 다시 불러오기</value>
+  </data>
+  <data name="DataReloadConflict" xml:space="preserve">
+    <value>외부 변경 {0}개가 충돌했습니다. 충돌한 항목은 PaperTodo의 현재 값을 유지하고 나머지 변경은 적용했습니다.
+
+전체 외부 파일: {1}
+충돌 상세 정보: {2}</value>
+  </data>
+  <data name="DataReloadFailed" xml:space="preserve">
+    <value>data.json을 다시 불러오지 못했습니다: {0}
+
+적용되지 않은 외부 변경은 자동 저장으로 덮어쓰지 않습니다. 파일을 수정하여 저장하거나 API / MCP로 다시 시도하세요. 화면 갱신 오류가 발생하면 재시작 후 데이터를 확인하세요.</value>
+  </data>
+  <data name="DataReloadRestart" xml:space="preserve">
+    <value>데이터를 저장했습니다. 인터페이스 언어 변경을 적용하려면 PaperTodo를 재시작하세요.</value>
+  </data>
+  <data name="DataReloadExitRecovery" xml:space="preserve">
+    <value>data.json에 적용할 수 없는 외부 변경이 남아 있어 원본 파일을 보존했습니다. 종료 전 PaperTodo의 현재 상태를 별도로 저장했습니다:
+{0}
+
+재시작 후 두 파일을 확인하여 필요한 내용을 복구하세요.</value>
+  </data>
 </root>

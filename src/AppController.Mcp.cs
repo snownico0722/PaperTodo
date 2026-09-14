@@ -239,10 +239,11 @@ public sealed partial class AppController
             "- Preserve the user's existing paper structure unless the user explicitly asks to reorganize it.",
             "- Treat permission errors as PaperTodo policy, not as transport failures; do not retry a rejected mutation with a more destructive tool.",
             "- For reminders, use an explicit future ISO 8601 time with UTC offset.",
+            "- After an authorized external data.json edit, use `reload_data` and check `get_data_reload_status`. Preserve `$paperTodoRevision`; conflicting values keep PaperTodo's version and are archived, not silently discarded.",
             "",
             "## Available tools",
             "`list_papers`, `get_paper`, `create_todo_paper`, `create_note`, `add_todos`,",
-            "`update_todo`, `set_todo_reminder`, `write_note`, `delete_paper`, `delete_todo`.",
+            "`update_todo`, `set_todo_reminder`, `write_note`, `delete_paper`, `delete_todo`, `reload_data`, `get_data_reload_status`.",
             "",
             "Connection details are intentionally separate. Use PaperTodo's “Copy JSON config” button to configure the MCP client.");
     }

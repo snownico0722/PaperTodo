@@ -175,6 +175,18 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 图片 GC / id reuse 是破坏性操作，因此 reachability 采用 fail-closed：无法可靠证明当前状态和需要保护的 recovery snapshot 都可扫描时，本轮不回收。
 
+### data.json 运行时重载
+
+文件监听、Native / Web Workspace API、GUI 侧 MCP 经 `PaperCommandService` 的同一重载入口进入 `AppController.DataReload`；它负责 UI 编辑提交、当前操作协调和显示更新，不建立第二份运行状态或独立写入器。`StateStore.Reload` 在正常保存的同一写锁和版本序号下完成读取、校验、三方合并、冲突归档及主文件持久化。`StateJsonMerge` 只做纯数据比较；`StateReloadModels` 按 ID 原位更新存活的 AppState / PaperData / PaperItem，窗口继续引用原对象。
+
+比较以编辑器实际读到的版本为基线，而不是收到通知时的最新文件。运行时保存增加可选 `$paperTodoRevision` 扩展字段，宿主保留有界的近期版本快照。外部文件保留该字段；旧式无字段文件仅在对应基线仍可确认时合并。基线未知或已淘汰时不猜测，保留运行状态并归档完整外部文件。重载不改变已有字段兼容规则。
+
+仅外部修改的字段接受外部，仅内存修改的字段保留内存；不同字段合并，相同新值不冲突。不同新值或删除/修改冲突保留 PaperTodo 一侧，同时写入完整原始 `dataconflict(n).json` 和带基线/双方值、存在标记、语义路径的 `dataconflictdiff(n).json`，一次输入批次只提示一次。Papers / Items 按 ID 比较；非冲突字段不因其他字段冲突而被拒绝。
+
+正常写入在替换主文件前检查是否存在未处理外部修改（包括原子替换重试），旧版本保存不能覆盖已经提交的重载。热重载只读主文件，不调用启动时的备份恢复或空状态回退；输入无效时保留文件与运行数据。退出仍无法应用外部文件时，正常退出将当前内存另存 `data.unsaved_exit.*.json` 并提示；崩溃/系统关机保持原有不新增最终写入策略。冲突原文件与退出恢复文件进入既有图片保护引用扫描。
+
+持久化成功后，在调用者返回后的 UI 调度轮次完成显示交接；期间暂停重入的保存和共享业务命令，防止旧编辑器提交覆盖新模型。未变化窗口/编辑器不重建，正文按已有刷新路径更新；删除及类型/provider 改变只释放受影响窗口，随后按已有 Runtime、事件和 Edge 呈现入口协调。语言设置仍需重启。重载 API 不提供任意原始状态写入、插件代码热替换或新增的插件安全边界。选择理由和限制见 D-037。
+
 ### 4.4 插件状态
 
 插件 settings 与 per-paper state 由 `PaperBodyPluginDataStore` 独立保存，不塞回 `data.json`。插件数据读失败时保留原始问题源，并通过受控 recovery 路径继续；插件数据故障不应把核心 Paper 数据变成不可加载。

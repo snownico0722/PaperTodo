@@ -1045,6 +1045,7 @@ public sealed partial class PaperWindow
 
     internal void CommitCurrentPaperBody()
     {
+        if (_controller.SuppressDataReloadEditorCommit) return;
         InvokeBodySession(item => item.Commit());
     }
 

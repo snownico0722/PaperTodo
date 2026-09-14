@@ -15,6 +15,16 @@ internal sealed class McpTools
         _client = client;
     }
 
+    [McpServerTool(Name = "reload_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Reload external data.json changes without restarting PaperTodo. Requires full writes. Merge by paper/todo ID; conflicting fields keep the running value and preserve external files. Read get_data_reload_status for display completion/errors.")]
+    public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("reload_data", new { }, cancellationToken);
+
+    [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Read data reload progress, last result, pending external change and baseline revision. Does not modify data or acknowledge conflicts.")]
+    public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
+
     [McpServerTool(
         Name = "list_papers",
         ReadOnly = true,

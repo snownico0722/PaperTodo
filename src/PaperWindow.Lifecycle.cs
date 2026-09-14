@@ -101,6 +101,7 @@ public sealed partial class PaperWindow
 
     internal void CommitPendingEditsForSave()
     {
+        if (_controller.SuppressDataReloadEditorCommit) return;
         CancelPendingTitleEditIntent();
         if (_isEditingTitle)
         {

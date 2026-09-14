@@ -1193,3 +1193,21 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+
+## data.json 热重载（协议 2.1 增量能力）
+
+Native Body / Runtime 共用 `Workspace.ReloadData()` 和 `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用同一 Workspace bridge：
+
+```js
+const result = await papertodo.workspace.request('data.reload', {});
+const status = await papertodo.workspace.request('data.status', {});
+```
+
+不新增插件权限或安全沙箱。接口与文件监听、MCP 共用宿主重载实现，不重新发现插件文件，也不替换 DLL 或重启插件后台。更改纸片绑定、删除最后一张插件纸片时，仍按正常生命周期结束相关 session / Runtime。
+
+`DataReloadResult` 返回 `Outcome`（`unchanged` / `applied` / `conflict` / `invalid` / `busy` / `failed`）、`Applied`、`AppliedExternalChanges`、`ConflictCount`、`ConflictFile`、`ConflictDiffFile`、`Revision`、`RestartRequired`、`Error`。Web bridge 使用 camelCase。保存完成后，窗口更新在当前回调返回后的 UI 调度轮次完成；`status.isReloading` 为 true 时不要立即发起其他修改，可稍后查询状态。后台 Native 调用自动切回 UI 线程。调用若删除自己的纸片，返回后原 session 可以失效，不应继续使用该 lease。
+
+外部编辑应从当前 `data.json` 读取，保留 `$paperTodoRevision` 和实体 ID，只修改需要变更的字段。宿主按 ID / 字段做三方合并，冲突处保留正在运行的值，完整外部原文件和结构化冲突详情保存为 `dataconflict(n).json` / `dataconflictdiff(n).json`；非冲突字段照常应用。没有可确认的共同基线时保留整个运行状态，并将整份外部文件报告为冲突。文件缺失、未写完、格式错误不触发默认空状态或旧备份恢复，也不会被下一次自动保存直接覆盖。
+
+MCP 对应工具为 `reload_data`（沿用现有 MCP full writes 设置）与只读的 `get_data_reload_status`。普通 Todo / Note 修改仍优先使用既有领域 API。持久化、版本基线和 UI 交接规则见 `doc/ARCHITECTURE.md` 与 D-037。
