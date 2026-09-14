@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   coordination:
-    if: contains(github.event.head_commit.message, '[ci]')
+    if: contains(github.event.head_commit.message, '[ci]') || contains(github.event.head_commit.message, '[coordination-ci]')
     name: Prewarm reentrancy (${{ matrix.source }})
     runs-on: windows-latest
     timeout-minutes: 10
@@ -48,11 +48,17 @@ jobs:
       - name: Execute real Dispatcher checks and verify exact baseline failures
         run: |
           $ErrorActionPreference = 'Stop'
-          $arguments = if ('${{ matrix.source }}' -eq 'baseline') { @('--expect-baseline-defects') } else { @() }
-          & ./tests/PaperTodo.Pr260RegressionChecks/bin/Release/net10.0-windows/PaperTodo.Pr260RegressionChecks.exe @arguments 2>&1 | Tee-Object -FilePath pr260-run.log
+          if ('${{ matrix.source }}' -eq 'baseline') {
+            & ./tests/PaperTodo.Pr260RegressionChecks/bin/Release/net10.0-windows/PaperTodo.Pr260RegressionChecks.exe --expect-baseline-defects 2>&1 | Tee-Object -FilePath pr260-run.log
+          } else {
+            & ./tests/PaperTodo.Pr260RegressionChecks/bin/Release/net10.0-windows/PaperTodo.Pr260RegressionChecks.exe 2>&1 | Tee-Object -FilePath pr260-run.log
+          }
           $code = $LASTEXITCODE
           if (Test-Path pr260-coordination-results.json) {
             $result = Get-Content pr260-coordination-results.json -Raw | ConvertFrom-Json
+            if ($result.Baseline -ne ('${{ matrix.source }}' -eq 'baseline')) {
+              throw 'The executable did not receive the expected baseline/candidate mode'
+            }
             "## ${{ matrix.source }} — ${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY
             "Runtime: $($result.Runtime). Scope: scheduler correctness, NOT animation or physical-display latency." >> $env:GITHUB_STEP_SUMMARY
             '| Scenario | Passed | Pending | Sleeping | Calls |' >> $env:GITHUB_STEP_SUMMARY
@@ -60,6 +66,8 @@ jobs:
             foreach ($row in $result.Results) {
               "| $($row.Name) | $($row.State.Passed) | $($row.State.Pending) | $($row.State.Sleeping) | $($row.State.Calls) |" >> $env:GITHUB_STEP_SUMMARY
             }
+          } else {
+            throw 'The regression executable did not produce its result file'
           }
           exit $code
       - uses: actions/upload-artifact@v4
@@ -70,4 +78,4 @@ jobs:
             pr260-build.log
             pr260-run.log
             pr260-coordination-results.json
-          retention-days: 14
+          retention-days: 2
