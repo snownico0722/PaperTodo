@@ -23,6 +23,8 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private EventHandler? _renderingHandler;
     private Candidate? _preparingCandidate;
     private long _dispatchGeneration;
+    private long _preparationEpoch;
+    private long _preparingEpoch;
     private long _quietUntil;
     private bool _enabled;
     private bool _disposed;
@@ -43,6 +45,30 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         internal readonly string Key = key;
         internal readonly long Version = version;
         internal Readiness State = Readiness.AwaitingFrame;
+    }
+
+    // Version remains a diagnostic/FIFO sequence. Only a global lifecycle/input change or
+    // replacement of this particular Candidate invalidates its native preparation.
+    internal readonly record struct PreparationTicket(long Epoch, long RequestVersion);
+
+    internal PreparationTicket? CapturePreparationTicket(string queueKey)
+    {
+        _dispatcher.VerifyAccess();
+        var candidate = _preparingCandidate;
+        return IsPreparing && candidate != null &&
+            string.Equals(candidate.Key, queueKey, StringComparison.Ordinal) &&
+            CanContinue(candidate, _preparingEpoch)
+                ? new PreparationTicket(_preparingEpoch, candidate.Version)
+                : null;
+    }
+
+    internal bool IsPreparationCurrent(string queueKey, PreparationTicket ticket)
+    {
+        _dispatcher.VerifyAccess();
+        var candidate = _preparingCandidate;
+        return IsPreparing && candidate != null && candidate.Version == ticket.RequestVersion &&
+            string.Equals(candidate.Key, queueKey, StringComparison.Ordinal) &&
+            CanContinue(candidate, ticket.Epoch);
     }
 
     internal EdgePrewarmCoordinator(Dispatcher dispatcher, Func<bool> canPrepare,
@@ -74,6 +100,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         if (_disposed || _enabled == enabled) return;
         _enabled = enabled;
         Version++;
+        _preparationEpoch++;
         TraceState(enabled ? "enabled" : "disabled");
         if (!enabled) ClearPending();
         else Schedule();
@@ -103,9 +130,8 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     internal void Cancel(string queueKey)
     {
         _dispatcher.VerifyAccess();
-        if (_disposed) return;
+        if (_disposed || !_candidates.Remove(queueKey)) return;
         Version++;
-        if (!_candidates.Remove(queueKey)) return;
         TraceState("cancel", queueKey);
         CancelDispatch();
         Schedule();
@@ -116,6 +142,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         _dispatcher.VerifyAccess();
         if (_disposed) return;
         Version++;
+        _preparationEpoch++;
         TraceState("cancel-all");
         ClearPending();
     }
@@ -125,6 +152,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         _dispatcher.VerifyAccess();
         if (!Active) return;
         Version++;
+        _preparationEpoch++;
         // A native publication callback can pump input. Invalidate that attempt immediately,
         // while preserving its latest request for the next quiet period.
         if (_preparingCandidate != null && IsCurrent(_preparingCandidate))
@@ -232,13 +260,14 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
                 candidate = entry;
         if (candidate == null) return;
 
-        var version = Version;
+        var epoch = _preparationEpoch;
+        _preparingEpoch = epoch;
         candidate.State = Readiness.Sleeping;
         _preparingCandidate = candidate;
         IsPreparing = true;
         try
         {
-            if (!_canPrepare() || !CanContinue(candidate, version))
+            if (!_canPrepare() || !CanContinue(candidate, epoch))
             {
                 TraceState("deferred-unavailable", candidate.Key);
                 return;
@@ -246,25 +275,25 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
             // A native callback may pump messages or wait for publication. Pause only the
             // optional body preloader before entering it; current preview demand keeps running.
             UpdateContentSuspension();
-            if (!CanContinue(candidate, version)) return;
+            if (!CanContinue(candidate, epoch)) return;
             if (!_graphicsAttempted)
             {
                 _graphicsAttempted = true;
                 try { _prepareGraphics(); }
                 catch (Exception ex) { Trace.WriteLine($"PaperTodo graphics prewarm failed: {ex}"); }
-                if (!CanContinue(candidate, version)) return;
+                if (!CanContinue(candidate, epoch)) return;
             }
             var outcome = _prepareQueue(candidate.Key);
             TraceState(outcome.ToString(), candidate.Key);
-            // A callback may pump a newer Request, Wake, input, or shutdown. Its result cannot
-            // erase that newer interest or resurrect cancelled work.
-            if (CanContinue(candidate, version) && outcome != EdgePrewarmOutcome.Deferred)
+            // Same-queue replacement and global invalidation cannot consume newer interest.
+            // An unrelated queue request must not strand this successful candidate in Sleeping.
+            if (CanContinue(candidate, epoch) && outcome != EdgePrewarmOutcome.Deferred)
                 _candidates.Remove(candidate.Key);
         }
         catch (Exception ex)
         {
             // Preparation is optional: fail once and wait for fresh external interest.
-            if (CanContinue(candidate, version)) _candidates.Remove(candidate.Key);
+            if (CanContinue(candidate, epoch)) _candidates.Remove(candidate.Key);
             Trace.WriteLine($"PaperTodo queue prewarm failed ({candidate.Key}): {ex}");
         }
         finally
@@ -280,8 +309,8 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private bool IsCurrent(Candidate candidate) =>
         _candidates.TryGetValue(candidate.Key, out var current) && ReferenceEquals(current, candidate);
 
-    private bool CanContinue(Candidate candidate, long version) =>
-        Active && !_interactionPending && Version == version && IsCurrent(candidate);
+    private bool CanContinue(Candidate candidate, long epoch) =>
+        Active && !_interactionPending && _preparationEpoch == epoch && IsCurrent(candidate);
 
     private void UpdateContentSuspension()
     {
@@ -327,6 +356,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         _disposed = true;
         _enabled = false;
         Version++;
+        _preparationEpoch++;
         ClearPending();
         _interactionDelay.Tick -= OnInteractionDelay;
         _dispatcher.ShutdownStarted -= OnShutdown;
