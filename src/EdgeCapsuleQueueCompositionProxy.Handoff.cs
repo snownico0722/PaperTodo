@@ -332,6 +332,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
         _successfulRetireScheduled = true;
         _disposed = true;
+        _shapeRefresh?.Abort();
+        _shapeRecovery?.Abort();
+        _shapeRefresh = null;
+        _shapeRecovery = null;
         _sampleTimer.Stop();
         _completionTimer.Stop();
 
@@ -401,6 +405,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         _disposed = true;
         _sampleTimer.Stop();
         _completionTimer.Stop();
+        _shapeRefresh?.Abort();
+        _shapeRecovery?.Abort();
+        _shapeRefresh = null;
+        _shapeRecovery = null;
         try
         {
             if (clearTargetRoot &&

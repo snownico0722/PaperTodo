@@ -257,6 +257,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
 
         if (!frame.Visible)
         {
+            _proxySource?.Invalidate();
 #if DEBUG
             var previousHostBounds = _appliedFrame.HostBounds;
 #endif
@@ -539,6 +540,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             window.Opacity = opacity;
         }
         _appliedNativeMetricsVersion = nativeMetricsVersion;
+        _proxySource?.Synchronize(frame);
         if (_experimentalPassive)
         {
             WindowNative.ApplyBottomZOrder(window);
@@ -1345,6 +1347,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             return;
         }
+        _proxySource?.ThemeChanging(paperBrush, paperBorderBrush, outlineBrush);
         _hoverBrush = hoverBrush;
         _textBrush = strongTextBrush;
         _weakTextBrush = weakTextBrush;

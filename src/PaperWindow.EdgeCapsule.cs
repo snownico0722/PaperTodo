@@ -579,15 +579,20 @@ public sealed partial class PaperWindow
         using var edgeJournalPaper = EdgeDiagnosticObservation.Begin("paper.apply", _edgeCapsule);
 #endif
 
-        // A queue proxy owns only the global screen offset. The real bounded
-        // host remains live and receives every WPF morph frame while cloaked.
+        // The real bounded Host keeps its canonical WPF frame and input endpoint. When the
+        // shape experiment owns an independent live source, submit the same Presenter transition
+        // after successful Apply; this adapter never becomes a second model or animation clock.
         if (!frame.Visible)
         {
             return _edgeCapsuleHost?.Apply(frame) ?? true;
         }
 
         EnsureDeepCapsuleSlotHost();
-        return _edgeCapsuleHost?.Apply(frame) == true;
+        var applied = _edgeCapsuleHost?.Apply(frame) == true;
+        if (applied)
+            _controller.UpdateEdgeCapsuleProxyShape(this, frame,
+                _edgeCapsule.ActiveTransitionSnapshot);
+        return applied;
     }
 
     private DeviceScreenPoint? CaptureEdgeCapsulePointerPosition()

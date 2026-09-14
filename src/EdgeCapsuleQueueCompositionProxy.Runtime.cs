@@ -34,13 +34,40 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
 
         public IDCompositionAnimation? OffsetXAnimation { get; set; }
         public IDCompositionAnimation? OffsetYAnimation { get; set; }
+        public EdgeCapsuleProxySourceLease? ShapeSource { get; set; }
+        public EdgeCapsuleProxyNativeShape? Shape { get; set; }
+        public Action? SourceInvalidated { get; set; }
+        public Action? SourceUpdated { get; set; }
+
+        public void ReleaseShapeSource()
+        {
+            var lease = ShapeSource;
+            ShapeSource = null;
+            if (lease != null)
+            {
+                lease.CanReplacePreview = null;
+                lease.Invalidated -= SourceInvalidated;
+                lease.Updated -= SourceUpdated;
+            }
+            lease?.Dispose();
+        }
 
         public void Dispose()
         {
-            OffsetYAnimation?.Dispose();
-            OffsetXAnimation?.Dispose();
-            Visual.Dispose();
-            Surface.Dispose();
+            try
+            {
+                try { Shape?.Dispose(); } catch { }
+                try { OffsetYAnimation?.Dispose(); } catch { }
+                try { OffsetXAnimation?.Dispose(); } catch { }
+                try { Visual.Dispose(); } catch { }
+                try { Surface.Dispose(); } catch { }
+            }
+            finally
+            {
+                // The atlas owns an HWND and references the actual WPF content. Native resource
+                // cleanup failure must not strand its lease after the visual list is cleared.
+                ReleaseShapeSource();
+            }
         }
     }
 
@@ -49,9 +76,12 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         public required IDCompositionVisual Root { get; init; }
         public List<IUnknown> Surfaces { get; } = new();
         public List<IDCompositionVisual> Visuals { get; } = new();
+        public List<EdgeCapsuleProxyNativeShape> Shapes { get; } = new();
 
         public void Dispose()
         {
+            foreach (var shape in Shapes) { try { shape.Dispose(); } catch { } }
+            Shapes.Clear();
             for (var index = Visuals.Count - 1; index >= 0; index--)
             {
                 try { Visuals[index].Dispose(); } catch { }

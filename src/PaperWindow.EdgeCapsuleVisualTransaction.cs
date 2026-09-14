@@ -2,6 +2,9 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    internal EdgeCapsuleTransition? EdgeCapsuleTransitionSnapshot =>
+        _edgeCapsule.ActiveTransitionSnapshot;
+
     internal IDisposable DeferEdgeCapsuleVisualTransactionReconcile() =>
         _edgeCapsule.DeferReconcileToVisualTransaction();
 

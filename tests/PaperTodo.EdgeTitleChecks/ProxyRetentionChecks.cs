@@ -377,6 +377,13 @@ internal static partial class Program
                 0, 1, 1, durationMilliseconds, true,
                 new[] { new EdgeCapsuleQueueProxyMemberPlan("test", frame, frame, frame) }));
             Set("_members", Array.Empty<EdgeCapsuleQueueCompositionProxyMember>());
+            // GetUninitializedObject skips field initializers. This fixture owns no compositor
+            // visuals or cloaked sources, but real retention/routing methods still enumerate the
+            // corresponding collections. Keep the ordinary WPF-source branch explicit instead of
+            // relying on product code to accept a partially constructed proxy.
+            var visualsField = typeof(EdgeCapsuleQueueCompositionProxy).GetField("_visuals", Fields)!;
+            Set("_visuals", Activator.CreateInstance(visualsField.FieldType)!);
+            Set("_cloakedRealSourceHandles", new HashSet<IntPtr>());
             Set("_sampleTimer", SampleTimer);
             Set("_completionTimer", CompletionTimer);
             Set("_coverPublished", true);

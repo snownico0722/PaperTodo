@@ -1448,3 +1448,27 @@ E-016 的同包对照及去除实验开关后的整合回放支持应用端 owne
 - `src/EdgeCapsulePresenter.cs`：native apply 就绪变化、普通 reconcile 和真实输入优先级。
 - `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
 - `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。
+
+---
+
+## D-039 — 停止采用当前独立 WPF atlas 与原生 shape 接入
+
+**Status:** Rejected for adoption — 当前实验实现停止，失败分支保留（2026-09-15）
+
+### Context
+
+E-017 基于 #260 与主线整合基线，尝试让原生代理接管宽高、裁剪、圆角和整体透明度；正文仍由实际 WPF 绘制。独立 cloaked atlas 用于避免真实输入窗口与代理共享 alpha 的交接问题，但新增了内容源、布局就绪、租约退休和原生分层边界。
+
+### Decision
+
+按用户最终选择停止当前实现，不合并、不发布，源码和测试结论作为本地失败记录分支 `archive/edge-route3-failed-20260915` 保留。日常工作恢复父基线 `26142c1d1d055c35e2b1c8843cee6030203a31cc`，保留 D-037 的代理复用/预接管和 D-038 的 render demand。既有 WPF shape / translation-only DComp 方向不变；本条不永久否决所有可能的原生形状方案。
+
+### Why
+
+修掉等值主题导致整批重建的回归后，同包完整 36 动作的准备 P50/P95 仍为 ON 31.9784/99.6240 ms、OFF 1.8993/18.8556 ms，ON 整轮 CPU 较高、终点私有内存多约 44.42 MiB。首次准备、owner 源尚未就绪的 fallback、提交退休等待仍未解决。单胶囊预准备实验确认 UI 阻塞时代理能自主展开及收回，但静态像素不完全一致，阻塞收回末端图标未及时恢复；实际输入、多屏/混合 DPI 与完整呈现验收尚未完成。继续投入的复杂度与当前可证明的产品收益不相称。
+
+### Evidence / Consequences
+
+- `doc/EXPERIMENTS.md` E-017 保存测量口径、数据与最终停止状态；原始材料位于 `输出/edge-route3-minimal-20260914/`。每组单轮、预先布局的受控能力捕获和软件更新间隔均不能证明日常物理出屏帧率或整体响应收益。
+- 失败分支的 `EdgeCapsuleHost.ProxySource` / `EdgeCapsuleProxyNativeShape` 与相关真实检查保留实现证据；未进入日常基线，也不要求将其资源管理框架留在产品。
+- 可复用教训是先检查内容兼容性再失效、区分代理能力与准备/交接成本，并把端点内容正确性与“外壳会动”分别验收。不能用实验自身回归被修复的幅度替代与既有路线的比较。

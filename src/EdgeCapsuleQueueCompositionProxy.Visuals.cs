@@ -19,17 +19,41 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     {
         IUnknown? surface = null;
         IDCompositionVisual? visual = null;
+        EdgeCapsuleProxySourceLease? sourceLease = null;
+        EdgeCapsuleProxyNativeShape? shape = null;
         try
         {
-            surface = AcquireLiveSurface(member, sourceHandle, sourceBounds);
+            if (ShapeEnabled &&
+                member.Window.TryAcquireProxySource(out sourceLease))
+                sourceHandle = sourceLease!.SourceHandle;
+#if DEBUG
+            if (ShapeEnabled && sourceLease == null)
+                EdgeCapsulePerformanceDiagnostics.Trace(
+                    $"proxy.shape phase=source-unavailable session={_sessionOrdinal} paper={member.Plan.PaperId}");
+#endif
+#if DEBUG
+            using (var observation = EdgeDiagnosticObservation.Begin("proxy.surface-acquire", member.Window))
+#endif
+                surface = AcquireLiveSurface(member, sourceHandle, sourceBounds);
 
             _device.CreateVisual(
                 out IDCompositionVisual2 createdVisual).CheckError();
             visual = createdVisual;
-            visual.SetContent(surface).CheckError();
+            if (sourceLease == null) visual.SetContent(surface).CheckError();
             visual.SetBitmapInterpolationMode(
                 BitmapInterpolationMode.Linear).CheckError();
             visual.SetBorderMode(BorderMode.Soft).CheckError();
+            if (sourceLease != null)
+            {
+#if DEBUG
+                using (var observation = EdgeDiagnosticObservation.Begin("proxy.shape-build", member.Window))
+#endif
+                    shape = new EdgeCapsuleProxyNativeShape(_device, visual, surface, sourceLease.Description);
+#if DEBUG
+                using (var observation = EdgeDiagnosticObservation.Begin("proxy.shape-static", member.Window))
+#endif
+                    shape.SetStatic(member.Plan.Start, sourceLease.Description);
+            }
 
             var startOffsetX =
                 startVisualBounds.Left - _outputBounds.Left;
@@ -57,9 +81,23 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 StartOffsetX = startOffsetX,
                 StartOffsetY = startOffsetY,
                 TargetOffsetX = targetOffsetX,
-                TargetOffsetY = targetOffsetY
+                TargetOffsetY = targetOffsetY,
+                ShapeSource = sourceLease,
+                Shape = shape,
+                SourceInvalidated = OnProxySourceInvalidated,
+                SourceUpdated = OnProxySourceUpdated
             };
+            if (sourceLease != null)
+            {
+                sourceLease.CanReplacePreview = () => !_starting && !_finishing && !_successorHeld &&
+                    _successorAdmissionCover == null &&
+                    state.Shape?.CanReplacePreview(System.Diagnostics.Stopwatch.GetTimestamp()) == true;
+                sourceLease.Invalidated += state.SourceInvalidated;
+                sourceLease.Updated += state.SourceUpdated;
+            }
             _visuals.Add(state);
+            sourceLease = null;
+            shape = null;
             surface = null;
             visual = null;
 #if DEBUG
@@ -75,8 +113,13 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
         finally
         {
-            visual?.Dispose();
-            surface?.Dispose();
+            try
+            {
+                try { shape?.Dispose(); } catch { }
+                try { visual?.Dispose(); } catch { }
+                try { surface?.Dispose(); } catch { }
+            }
+            finally { sourceLease?.Dispose(); }
         }
     }
 
@@ -93,8 +136,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             !predecessor._sourcesReleased &&
             predecessor._successorHeld &&
             ReferenceEquals(predecessor._runtime, _runtime) &&
-            predecessor._cloakedRealSourceHandles.Contains(sourceHandle) &&
-            member.Window.EdgeCapsuleQueueProxySourceHandle == sourceHandle)
+            predecessor._cloakedRealSourceHandles.Contains(member.SourceHandle) &&
+            member.Window.EdgeCapsuleQueueProxySourceHandle == member.SourceHandle)
         {
             foreach (var previous in predecessor._visuals)
             {
@@ -126,7 +169,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private readonly record struct StaticCoverSource(
         IntPtr Handle,
-        DeviceScreenRect PresentedBounds);
+        IntPtr OwnerHandle,
+        DeviceScreenRect PresentedBounds,
+        EdgeCapsulePresentationFrame Frame,
+        EdgeCapsuleProxySourceDescription? ShapeDescription);
 
     private IReadOnlyList<StaticCoverSource> SnapshotStaticCoverSources(
         long timestamp)
@@ -140,11 +186,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         var sources = new List<StaticCoverSource>(_visuals.Count);
         foreach (var state in _visuals)
         {
-            var frame = EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                state.Member.Plan,
-                AnimationStartedAtTimestamp,
-                _plan.DurationMilliseconds,
-                timestamp);
+            if (!TrySamplePresentation(state.Member, timestamp, out var frame))
+                throw new InvalidOperationException("A predecessor has no current published presentation.");
             var bounds =
                 EdgeCapsuleQueueProxyPolicy.PresentedHostBounds(frame);
             if (bounds.IsEmpty ||
@@ -157,7 +200,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
             sources.Add(new StaticCoverSource(
                 state.PresentedSourceHandle,
-                bounds));
+                state.Member.SourceHandle,
+                bounds,
+                frame,
+                state.Shape?.Description));
         }
         return sources;
     }
@@ -191,7 +237,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                      _predecessor.SnapshotStaticCoverSources(timestamp))
             {
                 if (source.Handle == IntPtr.Zero ||
-                    !coveredHandles.Add(source.Handle))
+                    !coveredHandles.Add(source.OwnerHandle))
                 {
                     continue;
                 }
@@ -199,7 +245,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     resources,
                     source.Handle,
                     source.PresentedBounds,
-                    ref reference);
+                    ref reference,
+                    source.Frame,
+                    source.ShapeDescription);
             }
 
             foreach (var member in _members)
@@ -218,11 +266,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     throw new InvalidOperationException(
                         "A new successor source has no stable admission bounds.");
                 }
+                var visualState = _visuals.First(state => ReferenceEquals(state.Member.Window, member.Window));
                 AddStaticCoverVisual(
                     resources,
-                    member.SourceHandle,
+                    visualState.PresentedSourceHandle,
                     bounds,
-                    ref reference);
+                    ref reference,
+                    member.Plan.Start,
+                    visualState.Shape?.Description);
             }
 
             foreach (var handle in newHandles)
@@ -248,7 +299,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         StaticCoverResources resources,
         IntPtr sourceHandle,
         DeviceScreenRect presentedBounds,
-        ref IDCompositionVisual? reference)
+        ref IDCompositionVisual? reference,
+        EdgeCapsulePresentationFrame frame,
+        EdgeCapsuleProxySourceDescription? shapeDescription)
     {
         IUnknown? surface = null;
         IDCompositionVisual? visual = null;
@@ -261,10 +314,16 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             _device.CreateVisual(
                 out IDCompositionVisual2 createdVisual).CheckError();
             visual = createdVisual;
-            visual.SetContent(surface).CheckError();
+            if (shapeDescription == null) visual.SetContent(surface).CheckError();
             visual.SetBitmapInterpolationMode(
                 BitmapInterpolationMode.Linear).CheckError();
             visual.SetBorderMode(BorderMode.Soft).CheckError();
+            if (shapeDescription != null)
+            {
+                var shape = new EdgeCapsuleProxyNativeShape(_device, visual, surface, shapeDescription);
+                resources.Shapes.Add(shape);
+                shape.SetStatic(frame, shapeDescription);
+            }
             visual.SetOffsetX(
                 presentedBounds.Left - _outputBounds.Left).CheckError();
             visual.SetOffsetY(
@@ -324,6 +383,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 state.StartOffsetX).CheckError();
             state.Visual.SetOffsetY(
                 state.StartOffsetY).CheckError();
+            if (state.Shape != null && state.ShapeSource != null)
+                state.Shape.SetStatic(frame, state.ShapeSource.Description);
         }
     }
 
@@ -331,6 +392,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     {
         foreach (var state in _visuals)
         {
+            if (state.Shape != null)
+            {
+                var frame = state.Member.Window.TryGetEdgeCapsuleQueueProxyAppliedPresentation(out var applied)
+                    ? applied : state.Member.Plan.Start;
+                state.Shape.Update(frame, state.Member.Window.EdgeCapsuleTransitionSnapshot,
+                    state.ShapeSource!.Description);
+                TraceProxyShape(state, "start");
+            }
             state.OffsetXAnimation = ApplyAnimatedValue(
                 state.StartOffsetX,
                 state.TargetOffsetX,
@@ -381,12 +450,20 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         float from,
         float to,
         long absoluteBeginTimestamp,
-        int durationMilliseconds)
+        int durationMilliseconds) => CreateEaseOutCubicAnimation(
+            _device, from, to, absoluteBeginTimestamp, durationMilliseconds);
+
+    internal static IDCompositionAnimation CreateEaseOutCubicAnimation(
+        IDCompositionDesktopDevice device,
+        float from,
+        float to,
+        long absoluteBeginTimestamp,
+        double durationMilliseconds)
     {
         var durationSeconds =
             Math.Max(0.001, durationMilliseconds / 1000.0);
         var delta = to - from;
-        var animation = _device.CreateAnimation();
+        var animation = device.CreateAnimation();
         try
         {
             animation.SetAbsoluteBeginTime(

@@ -17,7 +17,10 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--artifact-readiness")) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
+            if (args.Contains("--proxy-animation-value")) ProxyAnimationValueProbe(args.Last());
+            else if (args.Contains("--proxy-opacity-pixels")) ProxyOpacityPixels(args.Last());
+            else if (args.Contains("--proxy-source-lifecycle")) ProxySourceLifecycleChecks();
+            else if (args.Contains("--artifact-readiness")) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
             else if (args.Contains("--worker-checks")) MarkdownWorkerChecks();
             else if (args.Contains("--review-integration")) ReviewIntegrationChecks();
             else if (args.Contains("--preload-coordination")) PreloadCoordinationChecks();

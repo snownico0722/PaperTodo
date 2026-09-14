@@ -176,6 +176,9 @@ internal sealed partial class EdgeCapsuleHost
                 "Preview content must be a fresh, unparented FrameworkElement.");
         }
 
+        // Retire the source before mutating a sampled tree. Its independent VisualBrush keeps the
+        // old content alive until native consumers release it; normal staging never waits for them.
+        ProxySourcePreviewChanging(content, Math.Max(1, contentWidthDip), Math.Max(1, contentHeightDip));
         EnsurePreviewLayers();
         if (_previewContentLayer == null)
         {
@@ -900,6 +903,7 @@ internal sealed partial class EdgeCapsuleHost
 
     private bool DetachPreviewContent()
     {
+        ProxySourcePreviewChanging(null, 0, 0);
         int detachGeneration;
         unchecked
         {

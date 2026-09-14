@@ -93,6 +93,20 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     reference);
             }
 
+            // Existing real HWND surfaces have already rendered before admission. Newly created
+            // atlas HWNDs need their WPF scene submitted while the real sources still own pixels.
+            // Share one boundary across all members; a reused atlas never adds a per-member fence.
+            var hasNewAtlas = _visuals.Any(state => state.ShapeSource != null &&
+                !(_predecessor?._visuals.Any(previous =>
+                    previous.PresentedSourceHandle == state.PresentedSourceHandle) ?? false));
+            if (hasNewAtlas)
+            {
+                _members[0].Window.Dispatcher.Invoke(static () => { },
+                    System.Windows.Threading.DispatcherPriority.Render);
+                if (_visuals.Any(state => state.ShapeSource != null && !state.ShapeSource.IsCurrent))
+                    return false;
+            }
+
 #if DEBUG
             EdgeCapsuleColdStartDiagnostics.Boundary("resources-ready");
 #endif
@@ -328,8 +342,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             // it must not wait for another scanout before WPF can produce the next shape frame.
             // New/revealed sources still require the full cover/cloak/flush/verify transaction.
             var retainedAuthority = _predecessor != null && cloakChanges.Count == 0;
+            // The same real HWND set can still replace an atlas generation. Unlike the real
+            // sources, the predecessor's last atlas lease closes its HWND during retirement.
+            // Keep that HWND alive until the root replacement has reached the compositor.
+            var retiresAtlas = _predecessor?._visuals.Any(previous =>
+                previous.ShapeSource != null && !_visuals.Any(current =>
+                    current.PresentedSourceHandle == previous.PresentedSourceHandle &&
+                    current.ShapeSource?.Generation == previous.ShapeSource.Generation)) == true;
             var publication = retainedAuthority
-                ? PublishRetainedCover(PublishBeforeFlush, RollbackBeforeFlush)
+                ? PublishRetainedCover(PublishBeforeFlush, RollbackBeforeFlush, retiresAtlas)
                 : WindowNative.TrySetWindowCloakedBatchDetailed(
                     cloakChanges,
                     PublishBeforeFlush,
@@ -432,7 +453,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 $"session={_sessionOrdinal} queue={_plan.QueueKey} " +
                 $"outputPixels={outputPixels} " +
                 $"wrappedPixels={wrappedPixels} " +
-                $"snapshotHosts=0 clips=0 effects=0");
+                $"snapshotHosts=0 nativeShapeMembers={_visuals.Count(state => state.Shape != null)}");
 #endif
             return true;
         }
@@ -450,11 +471,22 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private WindowNative.WindowCloakBatchResult PublishRetainedCover(
         Func<bool> publish,
-        Action rollback)
+        Action rollback,
+        bool retiresAtlas)
     {
         try
         {
-            if (publish()) return WindowNative.WindowCloakBatchResult.Success;
+            if (publish())
+            {
+                if (retiresAtlas)
+                {
+#if DEBUG
+                    using var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-wait");
+#endif
+                    _device.WaitForCommitCompletion().CheckError();
+                }
+                return WindowNative.WindowCloakBatchResult.Success;
+            }
         }
         catch
         {

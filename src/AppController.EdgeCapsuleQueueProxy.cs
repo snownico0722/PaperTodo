@@ -780,7 +780,12 @@ public sealed partial class AppController
         _edgePrewarm?.Cancel(queueKey);
         _edgePrewarm?.NotifyInteraction();
         if (!_edgeCapsuleQueueCompositionProxies.TryGetValue(queueKey, out var proxy)) return;
-        if (proxy.TryResolveInputTarget(input.ScreenPoint, out var handle, out var endpoint))
+        var found = proxy.TryResolveInputTarget(input.ScreenPoint, out var handle, out var endpoint);
+#if DEBUG
+        var opacityRoute = EdgeRoute3HandoffProbe.BeginRoute(proxy.SessionOrdinal, handle,
+            input.ScreenPoint, endpoint, found, proxy: proxy);
+#endif
+        if (found)
         {
             var target = proxy.Members.FirstOrDefault(member => member.SourceHandle == handle)?.Window;
             if (target != null)
@@ -792,12 +797,25 @@ public sealed partial class AppController
                         ReferenceEquals(current, target) && valid(),
                     () =>
                     {
-                        if (!WindowNative.TryPostMouseButtonDown(handle, input, endpoint))
+#if DEBUG
+                        EdgeRoute3HandoffProbe.BeforePost(opacityRoute, handle);
+#endif
+                        var posted = WindowNative.TryPostMouseButtonDown(handle, input, endpoint);
+#if DEBUG
+                        EdgeRoute3HandoffProbe.RecordPostResult(opacityRoute, handle, posted);
+#endif
+                        if (!posted)
                             Trace.TraceWarning("Edge input could not be posted after handoff: {0}", paperId);
                     });
             }
         }
-        proxy.CompleteNow(success: true);
+        try { proxy.CompleteNow(success: true); }
+        finally
+        {
+#if DEBUG
+            EdgeRoute3HandoffProbe.EndRoute(opacityRoute, proxy);
+#endif
+        }
     }
 
 

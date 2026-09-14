@@ -122,6 +122,28 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         long timestamp,
         out EdgeCapsulePresentationFrame frame)
     {
+        var shape = _visuals.FirstOrDefault(state => ReferenceEquals(state.Member.Window, member.Window))?.Shape;
+        if (shape != null)
+        {
+            // Shape and translation are submitted to the same compositor but have separate
+            // retargeting lifetimes. Keep the native shape's canonical sampled hit rectangle,
+            // positioned by the actual queue translation, rather than a late WPF applied width.
+            var sampled = shape.Sample(timestamp);
+            var positionedHost = _retainedAfterAnimation ? member.Plan.Target.HostBounds :
+                EdgeCapsuleQueueProxyPolicy.PresentedHostBounds(
+                    EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(member.Plan,
+                        AnimationStartedAtTimestamp, _plan.DurationMilliseconds, timestamp));
+            var dy = positionedHost.Top - sampled.Bounds.Top;
+            static DeviceScreenRect MoveY(DeviceScreenRect bounds, int y) => bounds.IsEmpty
+                ? bounds : new DeviceScreenRect(bounds.Left, bounds.Top + y, bounds.Right, bounds.Bottom + y);
+            frame = sampled with
+            {
+                Bounds = MoveY(sampled.Bounds, dy),
+                InteractiveBounds = MoveY(sampled.InteractiveBounds, dy),
+                HostBounds = member.Plan.Target.HostBounds
+            };
+            return frame.Visible && frame.IsUsable;
+        }
         if (_retainedAfterAnimation)
         {
             // Translation has settled, while the live WPF source may still change hover/content
@@ -432,7 +454,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         EdgeCapsulePresentationFrame endpoint) =>
         _members.Any(member =>
             ReferenceEquals(member.Window, window) &&
-            EdgeCapsuleQueueProxyPolicy.HasStableLiveSurfaceIdentity(endpoint, member.Plan.Target));
+            EdgeCapsuleQueueProxyPolicy.HasStableLiveSurfaceIdentity(endpoint, member.Plan.Target)) &&
+        _visuals.Where(state => ReferenceEquals(state.Member.Window, window))
+            .All(state => state.ShapeSource == null || state.ShapeSource.IsCurrent);
 
     internal void RetainForQueueBrowsing()
     {

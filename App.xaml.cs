@@ -33,6 +33,9 @@ public partial class App : Application
     private readonly object _singleInstanceCommandGate = new();
     private readonly Queue<IReadOnlyList<string>> _pendingSingleInstanceCommands = new();
     private AppController? _controller;
+#if DEBUG
+    private EdgeRoute3HandoffProbe? _route3HandoffProbe;
+#endif
     private bool _singleInstanceCommandsReady;
     private SingleInstanceHelper? _singleInstance;
     private int _handlingGlobalException;
@@ -135,6 +138,9 @@ public partial class App : Application
             _controller.ExecuteStartupCommand(startupCommand);
         }
         _controller.StartStateBackupPolicy();
+#if DEBUG
+        _route3HandoffProbe = EdgeRoute3HandoffProbe.Start(_controller, Dispatcher);
+#endif
         CompleteSingleInstanceStartup();
     }
 
@@ -372,6 +378,9 @@ public partial class App : Application
     {
         _singleInstance?.Dispose();
         _controller?.Dispose();
+#if DEBUG
+        _route3HandoffProbe?.Dispose();
+#endif
         base.OnExit(e);
 #if DEBUG
         EdgeDiagnosticObservation.RemoveInput();

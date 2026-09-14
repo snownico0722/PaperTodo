@@ -166,6 +166,7 @@ internal sealed class EdgeCapsulePresenter
     public int AppliedPresentationVersion { get; private set; }
     public DeviceScreenPoint? LastPointerSample { get; private set; }
     internal bool HasActiveTransition => Transition.HasValue;
+    internal EdgeCapsuleTransition? ActiveTransitionSnapshot => Transition;
     internal bool IsSettledForPreacquisition => !HasActiveTransition &&
         _visualTransactionDeferrals == 0 && !_nativeBatchApplyActive && !_nativeBatchRetryPending &&
         !_nativeBatchApplyDeferred && !_reconcileScheduled && _dirty == EdgeCapsuleDirty.None;
