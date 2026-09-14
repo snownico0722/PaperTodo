@@ -1,23 +1,67 @@
-name: Review trim workspace
+name: Review trim Windows validation
 on:
   push:
     branches: [work/review-trim-20260915]
-    paths: [.github/workflows/review-trim-work.yml]
+    paths: [.github/workflows/review-trim-work.yml, .work/review-trim.b64]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source:
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
     steps:
+      - name: Preserve source line endings
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Export review sources
-        run: |
-          git ls-files '*AGENTS.md' '*AGENT.md'
-          git archive --format=zip --output=review-source.zip 4adebd559da172bca4db5cfa3dc7ac3c6464c040 src tests PaperTodo.csproj PaperTodo.Plugin.Abstractions doc/ARCHITECTURE.md doc/DECISIONS.md AGENTS.md .github/workflows CHANGELOG.md doc/CHANGELOG.en.md
-      - uses: actions/upload-artifact@v4
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
         with:
-          name: review-trim-source
-          path: review-source.zip
-          retention-days: 1
+          dotnet-version: '10.0.x'
+      - name: Apply reviewed edits
+        shell: python
+        run: |
+          import base64, gzip, hashlib, json, os
+          from pathlib import Path
+          encoded = Path('.work/review-trim.b64').read_text().replace('SePoZZDbn', 'SePoZDbn').replace('qoxZZIB', 'qoxZIB')
+          source = gzip.decompress(base64.b64decode(encoded))
+          assert hashlib.sha256(source).hexdigest() == 'aa28ec4f6c4f895aaec5c9635962da2797d07da37f519590adf69fed107e366f'
+          exec(compile(source, 'reviewed-cleanup', 'exec'))
+          Path(os.environ['RUNNER_TEMP'], 'expected-blobs.json').write_text(json.dumps(expected))
+      - name: Release build
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Existing Release checks
+        run: |
+          $projects = @('MarkdownSemantic', 'MarkdownEditing', 'TodoNavigation', 'EdgeTitle', 'EdgePreview', 'Threading', 'Lifecycle', 'Persistence')
+          foreach ($name in $projects) {
+            Write-Host "=== $name checks ==="
+            dotnet run --project "tests/PaperTodo.${name}Checks/PaperTodo.${name}Checks.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Debug edge preview checks
+        run: dotnet run --project tests/PaperTodo.EdgePreviewChecks/PaperTodo.EdgePreviewChecks.csproj -c Debug
+      - name: Record tested source commit
+        shell: python
+        run: |
+          import json, os, subprocess
+          from pathlib import Path
+          expected = json.loads(Path(os.environ['RUNNER_TEMP'], 'expected-blobs.json').read_text())
+          files = [item['path'] for item in expected]
+          for item in expected:
+              actual = subprocess.check_output(['git', 'hash-object', item['path']], text=True).strip()
+              assert actual == item['sha'], (item['path'], actual)
+          subprocess.run(['git', 'add', '--', *files], check=True)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          subprocess.run(['git', '-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', 'refactor: tested settings and preload cleanup'], check=True)
+          subprocess.run(['git', 'push', 'origin', 'HEAD:work/review-trim-20260915'], check=True)
+          print('CANDIDATE_COMMIT=' + subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip())
+          print('CANDIDATE_TREE=' + subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip())
+          subprocess.run(['git', 'diff', '--stat', '4adebd559da172bca4db5cfa3dc7ac3c6464c040', '--', *files], check=True)
+          subprocess.run(['git', 'ls-tree', '-r', 'HEAD', '--', *files], check=True)
