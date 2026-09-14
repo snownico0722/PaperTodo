@@ -42,7 +42,7 @@ jobs:
           merge_status=$?
           set -e
           if [ "$merge_status" -ne 1 ]; then
-            echo "Expected the reviewed seven-file conflict set, got merge exit $merge_status" >&2
+            echo "Expected the reviewed eight-file conflict set, got merge exit $merge_status" >&2
             exit 20
           fi
 
@@ -51,6 +51,7 @@ jobs:
           import os, re, subprocess
 
           expected_conflicts = {
+              '.github/workflows/pull-request-build.yml',
               'CHANGELOG.md',
               'doc/ARCHITECTURE.md',
               'doc/CHANGELOG.en.md',
@@ -89,6 +90,11 @@ jobs:
               for slot, ours, theirs in blocks:
                   parts[slot] = chooser(ours, theirs)
               p.write_text(''.join(parts), encoding='utf-8', newline='\n')
+
+          # This workflow file was pre-synchronized through the GitHub connector because
+          # Actions' GITHUB_TOKEN cannot push workflow mutations. Keep the branch version
+          # here so the merge commit has no first-parent workflow diff.
+          resolve('.github/workflows/pull-request-build.yml', lambda ours, theirs: ours)
 
           for path in ('CHANGELOG.md', 'doc/CHANGELOG.en.md'):
               resolve(path, lambda ours, theirs: ours + theirs)
