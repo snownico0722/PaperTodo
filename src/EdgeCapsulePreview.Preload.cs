@@ -44,7 +44,8 @@ internal sealed class MarkdownEdgePreviewPreload
     }
 
     internal sealed record Target(EdgeCapsulePreviewContext Context, Panel Anchor,
-        EdgeCapsulePreviewSize Size, Func<bool> StillEligible);
+        EdgeCapsulePreviewSize Size, Func<bool> StillEligible,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content);
     internal sealed record Binding(MarkdownEdgePreviewPreload Owner,
         EdgeCapsulePreviewInvalidationSource Source, long Version,
         MarkdownEdgeCapsulePreviewRenderer.PreviewContent Content, double Zoom)
@@ -347,7 +348,7 @@ internal sealed class MarkdownEdgePreviewPreload
         var version = target.Context.InvalidationSource.Version;
         TracePreload("prepare", target.Context.InvalidationSource,
             $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(target.Context.Paper.Id)} card={target.Size.WidthDip:R}x{target.Size.HeightDip:R}");
-        var content = Capture(target.Context);
+        var content = target.Content;
         if (!ShouldPreload(target.Context, content)) return false;
         var binding = Bind(target.Context, content, target.Context.Paper.TextZoom);
         var width = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(target.Size, target.Anchor);

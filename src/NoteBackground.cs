@@ -26,33 +26,21 @@ internal static class NoteBackground
 
     internal static void SetEnabled(bool enabled)
     {
-        try
+        if (enabled)
         {
-            if (enabled)
+            // Also clear a stale marker when the image is temporarily absent.
+            File.Delete(DisabledMarkerPath);
+        }
+        else
+        {
+            if (!IsAvailable)
             {
-                // Enabling is also used by "restore visual defaults". Clear a stale marker even
-                // when the background image is temporarily absent.
-                File.Delete(DisabledMarkerPath);
+                return;
             }
-            else
-            {
-                if (!IsAvailable)
-                {
-                    return;
-                }
-
-                Directory.CreateDirectory(DirectoryPath);
-                File.WriteAllText(DisabledMarkerPath, "disabled");
-            }
+            Directory.CreateDirectory(DirectoryPath);
+            File.WriteAllText(DisabledMarkerPath, "disabled");
         }
-        catch
-        {
-            // Custom visual resources must never affect core note behavior.
-        }
-        finally
-        {
-            InvalidateCache();
-        }
+        InvalidateCache();
     }
 
     internal static void Apply(MarkdownTextBox? editor)

@@ -21,6 +21,19 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
     {
         var initialVersion = context.InvalidationSource.Version;
         var content = MarkdownEdgePreviewPreload.For(Dispatcher.CurrentDispatcher).Capture(context);
+        var measuredSize = MeasureSize(context, content);
+
+        MarkdownEdgeCapsulePreviewView? view = null;
+        return new EdgeCapsulePreviewDescriptor(
+            measuredSize,
+            size => view = new MarkdownEdgeCapsulePreviewView(context, size, content, initialVersion),
+            visible => view?.SetPreviewActive(visible));
+    }
+
+    internal static EdgeCapsulePreviewSize MeasureSize(
+        EdgeCapsulePreviewContext context,
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
+    {
         var textScale = MarkdownEdgeCapsulePreviewRenderer.EstimateTextScale(context.Paper.TextZoom);
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
@@ -46,12 +59,7 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
         {
             width = Math.Max(130, width);
         }
-
-        MarkdownEdgeCapsulePreviewView? view = null;
-        return new EdgeCapsulePreviewDescriptor(
-            new EdgeCapsulePreviewSize(width, height),
-            size => view = new MarkdownEdgeCapsulePreviewView(context, size, content, initialVersion),
-            visible => view?.SetPreviewActive(visible));
+        return new EdgeCapsulePreviewSize(width, height);
     }
 }
 

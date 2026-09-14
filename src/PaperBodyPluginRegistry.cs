@@ -67,6 +67,8 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
     public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];
     public PaperBodyPluginStartupManifest? StartupPaper { get; set; }
+    public Dictionary<string, PaperBodyPluginLocaleManifest> Locales { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public string DirectoryPath { get; internal set; } = "";
     public string EntryPath { get; internal set; } = "";
@@ -258,6 +260,9 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         ValidateSettings(manifest);
         ValidateStartupPaper(manifest);
         ValidateProtocolFeatures(manifest);
+        PaperBodyPluginLocalization.ValidateAndApply(
+            manifest,
+            UiLanguages.EffectiveUiCulture);
 
         var kind = NormalizeKind(manifest.Kind);
         manifest.DirectoryPath = Path.GetFullPath(directory);

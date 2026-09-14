@@ -52,14 +52,14 @@ public sealed partial class AppController
         {
             leftColumn.Children.Add(SettingsSectionLabel(
                 SettingsSidebarLocalized("窗口", "Windows", "ウィンドウ", "창")));
-            _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(
+            _settingsHidePapersFromTaskbarCheckBox = SettingsToggle(
                 Strings.Get("SettingsHidePapersFromTaskbar"),
                 State.HidePapersFromTaskbar,
-                ToggleHidePapersFromTaskbar));
-            _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(
+                ToggleHidePapersFromTaskbar);
+            _settingsHidePapersFromWindowSwitcherCheckBox = SettingsToggle(
                 Strings.Get("SettingsHidePapersFromWindowSwitcher"),
                 State.HidePapersFromWindowSwitcher,
-                ToggleHidePapersFromWindowSwitcher));
+                ToggleHidePapersFromWindowSwitcher);
             leftColumn.Children.Add(AdvancedSettingsBlock(
                 WrapWithHint(
                     _settingsHidePapersFromTaskbarCheckBox,
@@ -146,10 +146,10 @@ public sealed partial class AppController
         {
             rightColumn.Children.Add(AdvancedSettingsBlock(
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
                         State.HideEdgeCapsuleCloseButtonOnHover,
-                        ToggleHideEdgeCapsuleCloseButtonOnHover)),
+                        ToggleHideEdgeCapsuleCloseButtonOnHover),
                     BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())),
                 CompactSettingsField(
                     Strings.Get("SettingsMaxTitleLength"),

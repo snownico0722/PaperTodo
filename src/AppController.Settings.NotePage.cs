@@ -54,31 +54,31 @@ public sealed partial class AppController
                 SettingsSectionLabel(
                     SettingsSidebarLocalized("图片", "Images", "画像", "이미지")),
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsAutoCompressLargeImages"),
                         State.AutoCompressLargeImages,
-                        ToggleAutoCompressLargeImages)),
+                        ToggleAutoCompressLargeImages),
                     "TipAutoCompressLargeImages")));
 
             content.Children.Add(AdvancedSettingsBlock(
                 SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsPersistentPowerShellProcess"),
                         State.UsePersistentPowerShellProcess,
-                        TogglePersistentPowerShellProcess)),
+                        TogglePersistentPowerShellProcess),
                     "TipPersistentPowerShellProcess"),
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsPreferPowerShell7"),
                         State.PreferPowerShell7,
-                        TogglePreferPowerShell7)),
+                        TogglePreferPowerShell7),
                     "TipPreferPowerShell7"),
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsHideScriptRunWindow"),
                         State.HideScriptRunWindow,
-                        ToggleHideScriptRunWindow)),
+                        ToggleHideScriptRunWindow),
                     "TipHideScriptRunWindow")));
         }
 

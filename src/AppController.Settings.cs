@@ -1996,7 +1996,7 @@ public sealed partial class AppController
         {
             leftColumn.Children.Add(AdvancedSettingsBlock(
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8)),
+                    SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
                     "TipImageReferenceText"),
                 CreateImageReferenceTextModeSelector()));
         }
@@ -2073,7 +2073,15 @@ public sealed partial class AppController
         columns.Children.Add(separator);
         columns.Children.Add(rightColumn);
 
-        return WithSettingsPageRestoreFooter(columns, RestoreVisualSettingsPageDefaults);
+        UIElement content = columns;
+        if (NoteBackground.IsAvailable)
+        {
+            var stack = new StackPanel();
+            stack.Children.Add(BuildNoteBackgroundSettingsSection());
+            stack.Children.Add(columns);
+            content = stack;
+        }
+        return WithSettingsPageRestoreFooter(content, RestoreVisualSettingsPageDefaults);
     }
 
     private UIElement WithSettingsPageRestoreFooter(UIElement content, Action restorePageDefaults)
@@ -2105,6 +2113,7 @@ public sealed partial class AppController
 
     private void RestoreVisualSettingsPageDefaults()
     {
+        TrySetNoteBackgroundEnabled(true);
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;

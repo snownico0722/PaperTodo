@@ -128,7 +128,7 @@ internal static partial class Program
         preload.SetEnabledForChecks(preparation != "cold");
         var warmStarted = Stopwatch.GetTimestamp();
         if (preparation == "layout")
-            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true)));
+            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true, preload.Capture(context))));
         var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
         var hitsBefore = preload.ArtifactHits;
         var allocation = GC.GetAllocatedBytesForCurrentThread();

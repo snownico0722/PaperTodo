@@ -536,16 +536,17 @@ public sealed partial class AppController
         return frame;
     }
 
-    private FrameworkElement BuildPluginFullSettingsLayout(
-        PaperBodyPluginDescriptor descriptor,
-        IReadOnlyList<PaperBodyPluginSettingManifest> settings,
-        double singleColumnWidth,
-        double availableWidth,
-        double availableHeight)
+    private static List<(
+        string Category,
+        string Column,
+        PaperBodyPluginSettingManifest[] Settings)> BuildPluginSettingGroups(
+        PaperBodyPluginManifest? manifest,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings)
     {
-        var categoryColumns = (descriptor.Manifest?.SettingCategories ?? [])
+        // Localized labels can collide; identity and column placement use the original keys.
+        var categoryColumns = (manifest?.SettingCategories ?? [])
             .ToDictionary(
-                item => item.Name,
+                item => item.Key,
                 item => item.Column,
                 StringComparer.Ordinal);
         var groupedCategories = new HashSet<string>(StringComparer.Ordinal);
@@ -556,26 +557,37 @@ public sealed partial class AppController
 
         foreach (var setting in settings)
         {
-            if (string.IsNullOrWhiteSpace(setting.Category))
+            if (string.IsNullOrWhiteSpace(setting.CategoryKey))
             {
                 units.Add(("", "", new[] { setting }));
                 continue;
             }
-            if (!groupedCategories.Add(setting.Category))
+            if (!groupedCategories.Add(setting.CategoryKey))
             {
                 continue;
             }
 
-            categoryColumns.TryGetValue(setting.Category, out var column);
+            categoryColumns.TryGetValue(setting.CategoryKey, out var column);
             units.Add((
                 setting.Category,
                 column ?? "",
                 settings.Where(item => string.Equals(
-                    item.Category,
-                    setting.Category,
+                    item.CategoryKey,
+                    setting.CategoryKey,
                     StringComparison.Ordinal)).ToArray()));
         }
 
+        return units;
+    }
+
+    private FrameworkElement BuildPluginFullSettingsLayout(
+        PaperBodyPluginDescriptor descriptor,
+        IReadOnlyList<PaperBodyPluginSettingManifest> settings,
+        double singleColumnWidth,
+        double availableWidth,
+        double availableHeight)
+    {
+        var units = BuildPluginSettingGroups(descriptor.Manifest, settings);
         var elements = new List<(FrameworkElement Element, string Column)>();
         var naturalHeight = 0d;
         foreach (var unit in units)

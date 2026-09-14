@@ -24,7 +24,7 @@ internal static partial class Program
         var oldReads = 0;
         var latestReads = 0;
         MarkdownEdgePreviewPreload.ReadResult Ready() =>
-            MarkdownEdgePreviewPreload.ReadResult.Ready(new(context, root, size, () => true));
+            MarkdownEdgePreviewPreload.ReadResult.Ready(new(context, root, size, () => true, cache.Capture(context)));
         void PumpFor(int milliseconds)
         {
             var watch = Stopwatch.StartNew();
