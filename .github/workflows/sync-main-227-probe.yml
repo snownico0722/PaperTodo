@@ -1,0 +1,40 @@
+name: Probe #227 main sync conflicts
+
+on:
+  push:
+    branches:
+      - exp/playful-skins-20260909
+    paths:
+      - .github/workflows/sync-main-227-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Probe merge conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          set +e
+          git merge --no-commit --no-ff origin/main
+          status=$?
+          set -e
+          echo "merge_exit=$status"
+          echo "### Unmerged paths" >> "$GITHUB_STEP_SUMMARY"
+          conflicts="$(git diff --name-only --diff-filter=U)"
+          if [ -n "$conflicts" ]; then
+            printf '%s\n' "$conflicts"
+            printf '```text\n%s\n```\n' "$conflicts" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "(none)"
+            echo "(none)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          git merge --abort || true
