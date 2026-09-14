@@ -172,8 +172,9 @@ public sealed class MasterCapsuleWindow : Window
             ClipToBounds = false
         };
 
-        _pill = new Border
+        _pill = new SkinBorder
         {
+            IsCapsule = true,
             Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
             CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
             BorderThickness = new Thickness(1),
@@ -181,12 +182,7 @@ public sealed class MasterCapsuleWindow : Window
             BorderBrush = Theme.PaperBorderBrush,
             SnapsToDevicePixels = true,
             Cursor = System.Windows.Input.Cursors.Hand,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 4,
-                ShadowDepth = 0,
-                Opacity = 0.10
-            }
+            Effect = SkinBorder.CreateShadow(4, 0, 0.1)
         };
 
         // The pill background stays opaque (PaperBrush) at all times. Hover tint is a separate
@@ -339,6 +335,8 @@ public sealed class MasterCapsuleWindow : Window
     public void UpdateTheme()
     {
         // The pill background stays opaque; hover is rendered by the overlay.
+        SkinBorder.Refresh(_pill);
+        _pill.Effect = SkinBorder.CreateShadow(4, 0, 0.1);
         _pill.Background = Theme.PaperBrush;
         _pill.BorderBrush = Theme.PaperBorderBrush;
         _hoverOverlay.Background = _isHovering ? Theme.HoverBrush : Brushes.Transparent;

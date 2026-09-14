@@ -405,6 +405,13 @@ public sealed class AppState
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
+    // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
+    public string? PaperSkin { get; set; }
+    // Only liquid glass captures the desktop; other materials retain normal screen capture.
+    public bool LiquidGlassRefraction { get; set; } = true;
+    public bool MatchAuxiliaryMaterialStrength { get; set; }
+    public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
+    public bool MicaAlwaysActive { get; set; }
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>

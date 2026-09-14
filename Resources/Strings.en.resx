@@ -1389,4 +1389,98 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Uses native DWM Mica on Windows 11 22H2 or later, composed by Windows without reading or simulating the wallpaper. Applies to expanded papers and Settings; capsules, folding animations and translucent states keep solid rendering. Falls back to solid colors when transparency is disabled, high contrast is enabled, or native APIs are unavailable. After switching from another skin for the first time, exit and reopen PaperTodo.</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>Mica selection saved. Exit PaperTodo from the tray and reopen it to enable native Mica. Existing windows use solid colors for now; changing skins does not recreate your editors or undo history.</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>Native Mica requires Windows 11 22H2 (build 22621) or later. This system uses solid Mica palette colors.</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>Native Mica applies to expanded papers and Settings. Capsules, folding animations and translucent states use solid backgrounds. Windows may also use its fallback based on transparency and power settings.</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>Backdrop material</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>Choose Mica, standard Acrylic or Clear Acrylic. Standard Acrylic has a soft frosted finish; Clear Acrylic uses a lighter tint to reveal more background color.</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>Acrylic</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>Clear Acrylic</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>Always show active material</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>Keep the active material appearance on expanded papers and Settings when they lose focus.</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>Neutral</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>Skin (experimental)</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>Skins control materials; palettes control colors.</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>Default paper</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>Tracing paper</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>Liquid glass (approximation)</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero glass</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>Pixel</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>Clear glass with curved refraction, highlights and dispersion. Edge previews use a lightweight finish.</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>Pale blue transparent glass with diagonal reflections. No desktop capture.</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>Restart PaperTodo to enable native backdrops.</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>Native backdrops require Windows 11 22H2 or later.</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>Live background processing</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>Processes local backgrounds in memory; nothing is saved or uploaded. Sampled windows may be missing from screenshots, recordings or screen sharing. Turn this off before sharing.</value>
+  </data>
+  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>Full capsule and menu material</value>
+  </data>
+  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>On: match the paper. Off: lighter effects and a more solid, readable paper base. Edge previews always use lightweight effects.</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>May affect screenshots and sharing. Turn off before sharing.</value>
+  </data>
 </root>

@@ -1438,4 +1438,98 @@
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>云母</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>使用 Windows 11 22H2 及以上的原生 DWM Mica，背景由系统合成，不读取或模拟壁纸。用于展开的纸片和设置窗口；胶囊、折叠动画和半透明状态保留实色绘制。关闭系统透明效果、开启高对比度或原生接口不可用时回退实色。首次从其他皮肤切换后需退出并重新打开 PaperTodo。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>已保存云母选择。请从托盘退出并重新打开 PaperTodo，以启用原生 Mica；当前窗口先使用实色，编辑内容和撤销记录不会因换肤被重建。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>原生 Mica 需要 Windows 11 22H2（22621）及以上。当前系统使用云母配色的实色背景。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>原生 Mica 用于展开的纸片和设置窗口。胶囊、折叠动画及半透明状态使用实色背景；系统也可能按透明效果和节能策略回退。</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>材质效果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>选择标准云母、标准亚克力或透色亚克力。标准亚克力保留柔和磨砂效果；透色亚克力使用更轻的底色，让背后的颜色更明显。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>标准云母</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>标准亚克力</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色亚克力</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>材质始终显示激活效果</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>勾选后，展开纸片和设置窗口失去焦点时仍保持激活时的材质外观。</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>素灰</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>皮肤（实验）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>皮肤控制材质，配色控制颜色。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>默认纸片</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明描图纸</value>
+  </data>
+  <data name="SkinLiquidGlass" xml:space="preserve">
+    <value>仿液态玻璃</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero 玻璃</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>像素风</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
+  </data>
+  <data name="TipSkinLiquidGlass" xml:space="preserve">
+    <value>清透玻璃，带曲面折射、高光和色散。边缘浏览使用轻量效果。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>淡蓝透明玻璃与斜向反光，不采样桌面。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>重启 PaperTodo 后启用原生背景。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
+  </data>
+  <data name="SettingsLiveRefraction" xml:space="preserve">
+    <value>实时背景处理</value>
+  </data>
+  <data name="TipLiveRefraction" xml:space="preserve">
+    <value>实时处理局部背景，仅在本机内存中使用，不保存或上传。开启采样的窗口可能无法被截图、录屏或共享；分享前关闭此项。</value>
+  </data>
+  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>胶囊与菜单完整材质</value>
+  </data>
+  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>开启：与纸片一致。关闭：材质更轻、底色更实，更易阅读。边缘浏览始终使用轻量效果。</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>可能影响截图与共享，分享前请关闭。</value>
+  </data>
 </root>

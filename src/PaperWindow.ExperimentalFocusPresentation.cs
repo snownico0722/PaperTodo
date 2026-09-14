@@ -82,6 +82,7 @@ public sealed partial class PaperWindow
 
     private bool CanFadeInactiveTitleBar() =>
         AllowsTransparency &&
+        (_paperChrome is not SkinBorder skin || !PaperSkins.IsDecorated(skin.Skin)) &&
         IsVisible &&
         !_paper.IsCollapsed &&
         WindowState == WindowState.Normal &&

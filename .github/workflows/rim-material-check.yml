@@ -1,0 +1,94 @@
+name: Material optics validation
+on:
+  push:
+    branches: [exp/playful-skins-20260909]
+permissions:
+  contents: read
+concurrency:
+  group: rim-material-validation
+  cancel-in-progress: true
+jobs:
+  validate:
+    if: contains(github.event.head_commit.message, '[rim-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Record exactly the checked source
+        id: source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (git status --porcelain) { throw 'Source is not clean' }
+          $sha = git rev-parse HEAD
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "short=$($sha.Substring(0,8))" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/rim-evidence/logs" | Out-Null
+          git bundle create "$env:RUNNER_TEMP/rim-source.bundle" HEAD
+      - name: Release build
+        shell: pwsh
+        run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
+      - name: Actual optics, idle composition, material pixels and lifecycle
+        shell: pwsh
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/rim-evidence/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/rim-evidence/skins
+        run: |
+          dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release *> "$env:RUNNER_TEMP/rim-evidence/logs/materials.txt"
+          $code = $LASTEXITCODE
+          Get-Content "$env:RUNNER_TEMP/rim-evidence/logs/materials.txt" -Tail 100
+          if ($code -ne 0) { throw 'Material checks failed' }
+      - name: Editing, navigation, threading and persistence regressions
+        shell: pwsh
+        run: |
+          foreach ($project in @('MarkdownSemanticChecks','MarkdownEditingChecks','TodoNavigationChecks','EdgeTitleChecks','ThreadingChecks','PersistenceChecks')) {
+            dotnet run --project "./tests/PaperTodo.$project/PaperTodo.$project.csproj" -c Release *> "$env:RUNNER_TEMP/rim-evidence/logs/$project.txt"
+            $code = $LASTEXITCODE
+            Get-Content "$env:RUNNER_TEMP/rim-evidence/logs/$project.txt" -Tail 12
+            if ($code -ne 0) { throw "Failed: $project" }
+          }
+      - name: Publish exactly the tested source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sha = '${{ steps.source.outputs.sha }}'
+          $short = '${{ steps.source.outputs.short }}'
+          if ((git rev-parse HEAD) -ne $sha -or (git status --porcelain)) { throw 'Tested source changed' }
+          $destination = Join-Path $env:RUNNER_TEMP 'rim-package'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          foreach ($kind in @('self-contained','no-runtime')) {
+            $contained = if ($kind -eq 'self-contained') { 'true' } else { 'false' }
+            $out = Join-Path $env:RUNNER_TEMP "rim-publish-$kind"
+            dotnet publish ./PaperTodo.csproj -c Release -r win-x64 --self-contained $contained -o $out /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true "/p:EnableCompressionInSingleFile=$contained" /p:PublishTrimmed=false /p:PublishReadyToRun=false /p:DebugType=none /p:DebugSymbols=false /p:EmbedAllSources=false /p:EmbedUntrackedSources=false "/p:InformationalVersion=4.0.0-preview+$sha" --nologo -clp:ErrorsOnly
+            if ($LASTEXITCODE -ne 0) { throw "Publish failed: $kind" }
+            Copy-Item (Join-Path $out 'PaperTodo.exe') (Join-Path $destination "PaperTodo-skins-$short-win-x64-$kind.exe")
+          }
+          $hashes = Get-ChildItem $destination -Filter *.exe | Get-FileHash -Algorithm SHA256 | Select-Object @{n='File';e={Split-Path $_.Path -Leaf}},Hash
+          @{ sourceCommit=$sha; configuration='Release'; branch='exp/playful-skins-20260909'; executables=$hashes; optics='coherent bounded background scattering, monotone edge refraction, continuous size adaptation; low-tint Aero with defined reflections'; realWindows11ManualAcceptance=$false } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $destination 'build-manifest.json') -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/rim-evidence
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/rim-source.bundle
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: material-package-${{ steps.source.outputs.short }}
+          path: ${{ runner.temp }}/rim-package
+          if-no-files-found: error
+          retention-days: 7

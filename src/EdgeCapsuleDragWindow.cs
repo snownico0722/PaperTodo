@@ -637,6 +637,9 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         Topmost = options.Topmost;
 
         _paperBackground.Margin = new Thickness(options.WindowChromeMargin);
+        SkinBorder.Refresh(_paperBackground);
+        _paperBackground.Effect = SkinBorder.CreateShadow(8, 1, 0.12);
+        SkinBorder.Refresh(_outline);
         _paperBackground.Background = options.PaperBrush;
         _paperBackground.BorderBrush = options.PaperBorderBrush;
         _paperBackground.CornerRadius = new CornerRadius(
@@ -838,16 +841,12 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         };
         _root.Children.Add(_surface);
 
-        _paperBackground = new Border
+        _paperBackground = new SkinBorder
         {
+            IsCapsule = true,
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 8,
-                ShadowDepth = 1,
-                Opacity = 0.12
-            }
+            Effect = SkinBorder.CreateShadow(8, 1, 0.12)
         };
         _surface.Children.Add(_paperBackground);
 
@@ -897,8 +896,9 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         Panel.SetZIndex(_shell, 10);
         _surface.Children.Add(_shell);
 
-        _outline = new Border
+        _outline = new SkinBorder
         {
+            IsOutline = true, IsCapsule = true,
             Background = Brushes.Transparent,
             IsHitTestVisible = false,
             SnapsToDevicePixels = true

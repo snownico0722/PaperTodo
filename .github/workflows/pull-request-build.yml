@@ -68,3 +68,21 @@ jobs:
 
       - name: Startup, shutdown and small-workset checks
         run: dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release
+
+      - name: Restart identity and launch checks
+        run: dotnet run --project .\tests\PaperTodo.RestartChecks\PaperTodo.RestartChecks.csproj -c Release
+
+      - name: Native material and skin checks
+        env:
+          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
+          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
+        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
+
+      - name: Upload material visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-visual-${{ github.sha }}
+          path: ${{ runner.temp }}/material-pixels
+          if-no-files-found: warn
+          retention-days: 7
