@@ -7,6 +7,12 @@ using JournalBuffer = PaperTodo.EdgeDiagnosticJournal.Buffer;
 internal static class Program
 {
     private static int _assertions;
+    private static bool CollectionEnabledInBuild =>
+#if DEBUG
+        true;
+#else
+        false;
+#endif
 
     private static int Main(string[] args)
     {
@@ -72,7 +78,7 @@ internal static class Program
             text.Contains("journalSeq=1"), "Legacy text exports retain messages and add stable sequence metadata");
         Check(Directory.GetFiles(directory, "*.tmp").Length == 0, "Successful completion leaves only completed files");
         var bytes = File.ReadAllBytes(complete.Path);
-        Check(journal.Complete("process-exit") == complete && bytes.SequenceEqual(File.ReadAllBytes(complete.Path)), "Repeated completion is idempotent");
+        Check(journal.Complete("process-exit") == complete && bytes.SequenceEqual(File.ReadAllBytes(complete.Path)), "Repeated completion is idempotentent");
         Check(!journal.Event("late") && journal.Stats.RejectedAfterSeal == 1, "Post-exit producers cannot change a sealed capture");
         Console.WriteLine("PASS memory-and-export");
     }
@@ -180,10 +186,12 @@ internal static class Program
 
     private static int Child(string mode)
     {
-        if (mode == "disabled")
+        // Release must remain disabled even when its child receives the memory opt-in.
+        if (mode == "disabled" || !CollectionEnabledInBuild)
         {
             if (EdgeDiagnosticJournal.Enabled) return 3;
             EdgeDiagnosticJournal.AppendText("edge-preview-performance.log", "disabled");
+            EdgeDiagnosticJournal.Event("disabled");
             EdgeDiagnosticJournal.Complete("disabled-exit");
             return 0;
         }
@@ -214,9 +222,9 @@ internal static class Program
             using var process = Process.Start(start)!;
             if (!process.WaitForExit(10_000)) { process.Kill(); throw new Exception("Diagnostic child failed to exit"); }
             Check(process.ExitCode == 0, "Pure-console diagnostic child exits cleanly: " + process.StandardError.ReadToEnd());
-            if (mode is "disabled" or "uninitialized")
+            if (!CollectionEnabledInBuild || mode is "disabled" or "uninitialized")
             {
-                Check(!Directory.Exists(target), "Disabled or untouched helper process must not create a diagnostic capture");
+                Check(!Directory.Exists(target), "Disabled, Release or untouched helper process must not create a diagnostic capture");
                 continue;
             }
             var path = Directory.GetFiles(target, "edge-diagnostic-journal-*.jsonl").Single();

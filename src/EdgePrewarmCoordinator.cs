@@ -19,7 +19,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private readonly Action<bool> _suspendContent;
     private readonly Dictionary<string, Candidate> _candidates = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _interactionDelay;
-    private DispatcherOperation? _pendingOperation;
+    private PreparationDispatch? _pendingDispatch;
     private EventHandler? _renderingHandler;
     private Candidate? _preparingCandidate;
     private long _dispatchGeneration;
@@ -29,6 +29,13 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private bool _graphicsAttempted;
     private bool _interactionPending;
     private bool _contentSuspended;
+
+    // Own the slot before BeginInvoke: OperationPosted may cancel or even run it before
+    // BeginInvoke returns its operation handle. This is scheduling identity, not queue state.
+    private sealed class PreparationDispatch
+    {
+        internal DispatcherOperation? Operation;
+    }
 
     private enum Readiness { AwaitingFrame, Ready, Sleeping }
     private sealed class Candidate(string key, long version)
@@ -58,7 +65,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     internal bool IsPreparing { get; private set; }
     internal int PendingCount => _candidates.Count;
     internal int DeferredCount => _candidates.Values.Count(candidate => candidate.State == Readiness.Sleeping);
-    internal bool HasScheduledWork => _renderingHandler != null || _pendingOperation != null || _interactionPending;
+    internal bool HasScheduledWork => _renderingHandler != null || _pendingDispatch != null || _interactionPending;
     private bool Active => _enabled && !_disposed && !_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished;
 
     internal void SetEnabled(bool enabled)
@@ -118,7 +125,6 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         _dispatcher.VerifyAccess();
         if (!Active) return;
         Version++;
-        CancelDispatch();
         // A native publication callback can pump input. Invalidate that attempt immediately,
         // while preserving its latest request for the next quiet period.
         if (_preparingCandidate != null && IsCurrent(_preparingCandidate))
@@ -126,6 +132,8 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         _interactionPending = true;
         _quietUntil = Environment.TickCount64 + InteractionDelayMilliseconds;
         _interactionDelay.Stop();
+        // Publish the pause before Abort can synchronously enter Dispatcher hooks.
+        CancelDispatch();
         UpdateContentSuspension();
         // The content owner may synchronously cancel or disable this coordinator.
         if (!Active || !_interactionPending) return;
@@ -167,13 +175,7 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private void Schedule()
     {
         if (!Active || IsPreparing || _interactionPending) return;
-        var needsFrame = false;
-        var hasReady = false;
-        foreach (var candidate in _candidates.Values)
-        {
-            needsFrame |= candidate.State == Readiness.AwaitingFrame;
-            hasReady |= candidate.State == Readiness.Ready;
-        }
+        var needsFrame = _candidates.Values.Any(candidate => candidate.State == Readiness.AwaitingFrame);
         if (needsFrame && _renderingHandler == null)
         {
             var generation = _dispatchGeneration;
@@ -182,11 +184,27 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
             _renderingHandler = handler;
             CompositionTarget.Rendering += handler;
         }
-        if (hasReady && _pendingOperation == null)
+        // Rendering subscription can itself post work and re-enter through Dispatcher hooks.
+        if (!Active || IsPreparing || _interactionPending || _pendingDispatch != null ||
+            !_candidates.Values.Any(candidate => candidate.State == Readiness.Ready)) return;
+        var pending = new PreparationDispatch();
+        _pendingDispatch = pending;
+        try
         {
-            var generation = _dispatchGeneration;
-            _pendingOperation = _dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,
-                (Action)(() => PrepareOne(generation)));
+            var operation = _dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,
+                (Action)(() => PrepareOne(pending)));
+            if (ReferenceEquals(_pendingDispatch, pending) && operation.Status == DispatcherOperationStatus.Pending)
+                pending.Operation = operation;
+            else
+            {
+                if (ReferenceEquals(_pendingDispatch, pending)) _pendingDispatch = null;
+                operation.Abort();
+            }
+        }
+        catch
+        {
+            if (ReferenceEquals(_pendingDispatch, pending)) _pendingDispatch = null;
+            throw;
         }
     }
 
@@ -203,10 +221,10 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
         Schedule();
     }
 
-    private void PrepareOne(long generation)
+    private void PrepareOne(PreparationDispatch pending)
     {
-        if (generation != _dispatchGeneration) return;
-        _pendingOperation = null;
+        if (!ReferenceEquals(_pendingDispatch, pending)) return;
+        _pendingDispatch = null;
         if (!Active || IsPreparing || _interactionPending) return;
         Candidate? candidate = null;
         foreach (var entry in _candidates.Values)
@@ -277,19 +295,21 @@ internal sealed class EdgePrewarmCoordinator : IDisposable
     private void CancelDispatch()
     {
         _dispatchGeneration++;
-        _pendingOperation?.Abort();
-        _pendingOperation = null;
-        if (_renderingHandler == null) return;
-        CompositionTarget.Rendering -= _renderingHandler;
+        var pending = _pendingDispatch;
+        var rendering = _renderingHandler;
+        _pendingDispatch = null;
         _renderingHandler = null;
+        if (rendering != null) CompositionTarget.Rendering -= rendering;
+        // Detach only the old work before Abort: OperationAborted may schedule new interest.
+        pending?.Operation?.Abort();
     }
 
     private void ClearPending()
     {
         _candidates.Clear();
-        CancelDispatch();
-        _interactionDelay.Stop();
         _interactionPending = false;
+        _interactionDelay.Stop();
+        CancelDispatch();
         UpdateContentSuspension();
     }
 

@@ -21,6 +21,7 @@ internal static partial class Program
             PrewarmFailureAndSleeping();
             PrewarmInteractionQuiet();
             PrewarmReentrantOwnership();
+            PrewarmDispatcherHookOwnership();
         }
         finally { window.Close(); }
         Console.WriteLine("PASS prewarm-rendering-idle-cancel-interaction-and-content-suspension");
@@ -234,6 +235,58 @@ internal static partial class Program
             PrewarmPumpUntil(() => interaction.Prepared.Count == 2 && !interaction.Paused &&
                 interaction.Coordinator.PendingCount == 0, "Input-interrupted request resumes after quiet");
         }
+    }
+
+    private static void PrewarmDispatcherHookOwnership()
+    {
+        foreach (var cancelDuringPost in new[] { true, false })
+        {
+            using var fixture = new PrewarmCheckFixture();
+            var dispatcher = Dispatcher.CurrentDispatcher;
+            DispatcherOperation? original = null;
+            var replaced = false;
+            fixture.Coordinator.SetEnabled(true);
+            void Posted(object? sender, DispatcherHookEventArgs args)
+            {
+                if (original != null || args.Operation.Priority != DispatcherPriority.ApplicationIdle) return;
+                original = args.Operation;
+                if (cancelDuringPost)
+                {
+                    fixture.Coordinator.CancelAll();
+                    fixture.Coordinator.Request("replacement");
+                    replaced = true;
+                }
+                else
+                {
+                    // Run after BeginInvoke returns its handle, but before the idle work runs.
+                    dispatcher.BeginInvoke(DispatcherPriority.Send, (Action)fixture.Coordinator.CancelAll);
+                }
+            }
+            void Aborted(object? sender, DispatcherHookEventArgs args)
+            {
+                if (cancelDuringPost || !ReferenceEquals(args.Operation, original)) return;
+                fixture.Coordinator.Request("replacement");
+                replaced = true;
+            }
+            dispatcher.Hooks.OperationPosted += Posted;
+            dispatcher.Hooks.OperationAborted += Aborted;
+            try
+            {
+                fixture.Coordinator.Request("cancelled");
+                PrewarmPumpUntil(() => replaced && fixture.Coordinator.PendingCount == 0,
+                    cancelDuringPost ? "Prewarm cancel during OperationPosted" : "Prewarm request during OperationAborted");
+                Check(fixture.Prepared.SequenceEqual(new[] { "replacement" }) && fixture.GraphicsCalls == 1,
+                    "Dispatcher hooks cancel the old preparation without losing or duplicating its replacement");
+                Check(!fixture.Coordinator.HasScheduledWork && !fixture.Paused,
+                    "Reentrant Dispatcher scheduling leaves no stale operation slot or Rendering listener");
+            }
+            finally
+            {
+                dispatcher.Hooks.OperationPosted -= Posted;
+                dispatcher.Hooks.OperationAborted -= Aborted;
+            }
+        }
+        Console.WriteLine("PASS prewarm-dispatcher-posted-and-aborted-reentrancy");
     }
 
     private sealed class PrewarmCheckFixture : IDisposable
