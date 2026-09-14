@@ -57,5 +57,11 @@ public sealed partial class AppController
             // owns its normal error path; this queue does not retry a failed shell indefinitely.
             Trace.TraceWarning("Startup shell prewarm failed: {0}", ex);
         }
+        // Admit optional native preparation only after the preview-first pass and Shell drain.
+        // That coordinator can suspend speculative content, so it must not own this first pass.
+        // Do not restart preview work here: cancelled edits retain their ordinary debounce, and
+        // a runtime show/restore must not shorten another note's typing coalescing window.
+        if (!IsExiting && generation == _startupShellPrewarmGeneration)
+            CompleteStartupEdgePrewarm(startPreviewPreload: false);
     }
 }

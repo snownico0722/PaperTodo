@@ -16,15 +16,17 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private readonly Dispatcher _dispatcher;
     private readonly List<EdgeCapsulePresenter> _presenters = new();
+    private readonly EdgeCapsuleRenderDemand _renderDemand;
+    private readonly HashSet<EdgeCapsuleNativeBatchGroup> _renderDemandReady = new();
     private readonly List<Action> _postCommitCallbacks = new();
     private readonly List<List<EdgeCapsulePresenter>> _frameGroups = new();
     private readonly Dictionary<EdgeCapsuleNativeBatchGroup, int> _frameGroupIndices = new();
     private bool _renderingSubscribed;
+    private bool _shutdown;
     private bool _isTicking;
     private bool _acceptingPostCommitCallbacks;
     private readonly Dictionary<EdgeCapsulePresenter, int> _pendingReconcileOwners = new();
     private int _pendingRenderReconciles;
-    private TimeSpan? _lastRenderingTime;
 #if DEBUG
     private long _pendingRenderReconcileStartedAtTimestamp;
     private long _lastRawRenderingCallbackTimestamp;
@@ -37,7 +39,6 @@ internal sealed class EdgeCapsuleFrameScheduler
         bool ActiveBefore)> _debugWpfPresentationSamples = new();
     private long _debugRenderingCallbackSequence;
     private long _debugFrameSequence;
-    private int _suppressedDuplicateRenderingCallbacks;
     private int _suppressedExternalNativeBatchRenderingCallbacks;
     private int _suppressedReentrantRenderingCallbacks;
     private long _suppressedRenderingStartedAtTimestamp;
@@ -46,6 +47,51 @@ internal sealed class EdgeCapsuleFrameScheduler
     private EdgeCapsuleFrameScheduler(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
+        _shutdown = dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished;
+        // Dispatcher sets HasShutdownStarted only after its ShutdownStarted handlers return.
+        // Latch first, including before demand.Dispose can enter OperationAborted hooks.
+        dispatcher.ShutdownStarted += OnDispatcherShutdown;
+        _renderDemand = new EdgeCapsuleRenderDemand(dispatcher, IsRenderDemandGroupReady,
+            RequestWpfRender, enabled: !_shutdown);
+    }
+
+    private bool IsRenderDemandGroupReady(EdgeCapsuleNativeBatchGroup group) =>
+        !_shutdown && !_isTicking && !_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished &&
+        !HasExternallyOwnedNativeBatchApply() && CanAdvanceQueue(group) &&
+        _presenters.Any(p => p.NativeBatchGroup == group && p.HasActiveTransition);
+
+    private static void RenderDemandHandler(object? sender, EventArgs args) { }
+
+    private void RequestWpfRender()
+    {
+        if (!_presenters.Any(p => IsRenderDemandGroupReady(p.NativeBatchGroup))) return;
+        // The public add accessor requests WPF work; the temporary handler never samples state.
+        // Its PostRender can enter synchronous Dispatcher Hooks, so always remove our listener.
+        try { CompositionTarget.Rendering += RenderDemandHandler; }
+        finally { CompositionTarget.Rendering -= RenderDemandHandler; }
+    }
+
+    internal void NativeApplyReadinessChanged() => UpdateRenderDemandReadiness();
+
+    private void UpdateRenderDemandReadiness()
+    {
+        _dispatcher.VerifyAccess();
+        if (_isTicking || !_renderDemand.Enabled) return;
+        _renderDemandReady.Clear();
+        foreach (var presenter in _presenters)
+            if (IsRenderDemandGroupReady(presenter.NativeBatchGroup))
+                _renderDemandReady.Add(presenter.NativeBatchGroup);
+        _renderDemand.ReadyGroupsChanged(_renderDemandReady);
+        // ReadyGroupsChanged may abort a queued operation and synchronously re-enter us. It has
+        // consumed the shared set before that callback; do not publish an old decision afterward.
+    }
+
+    private void OnDispatcherShutdown(object? sender, EventArgs args)
+    {
+        _shutdown = true;
+        _renderDemand.Dispose();
+        UpdateRenderingSubscription();
+        _dispatcher.ShutdownStarted -= OnDispatcherShutdown;
     }
 
     public static EdgeCapsuleFrameScheduler For(Dispatcher dispatcher) =>
@@ -55,7 +101,12 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     public void RegisterRenderReconcile(EdgeCapsulePresenter owner)
     {
+#if DEBUG
+        using var edgeJournalBarrier = EdgeDiagnosticObservation.Begin("barrier.RegisterRenderReconcile", this);
+#endif
+
         _dispatcher.VerifyAccess();
+        if (_shutdown) return;
 #if DEBUG
         if (_pendingRenderReconciles == 0)
         {
@@ -71,6 +122,10 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     public void CompleteRenderReconcile(EdgeCapsulePresenter owner)
     {
+#if DEBUG
+        using var edgeJournalBarrier = EdgeDiagnosticObservation.Begin("barrier.CompleteRenderReconcile", this);
+#endif
+
         _dispatcher.VerifyAccess();
         if (!_pendingReconcileOwners.TryGetValue(owner, out var count))
         {
@@ -89,7 +144,7 @@ internal sealed class EdgeCapsuleFrameScheduler
 #endif
         // The owner has finished/aborted its callback or released a visual transaction deferral.
         // Reattach to WPF's frame source
-        // when a queue becomes ready; never synthesize a frame or poll for a missing callback.
+        // when a queue becomes ready; never synthesize a frame.
         ReconcileReadinessChanged();
     }
 
@@ -111,7 +166,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     private void UpdateRenderingSubscription()
     {
         var shouldSubscribe = false;
-        if (!_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
+        if (!_shutdown && !_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
         {
             for (var index = 0; index < _presenters.Count; index++)
             {
@@ -122,23 +177,35 @@ internal sealed class EdgeCapsuleFrameScheduler
                 }
             }
         }
-        if (shouldSubscribe == _renderingSubscribed) return;
-        if (shouldSubscribe)
+        if (shouldSubscribe != _renderingSubscribed)
         {
-            // WPF's Rendering add accessor requests a render. First activation and the release
-            // of the last owner barrier therefore have explicit event-driven restart boundaries.
-            CompositionTarget.Rendering += OnRendering;
+            // Publish ownership before public add can post an operation and enter Hooks. A
+            // nested cancellation must remove this listener; never overwrite it on return.
+            _renderingSubscribed = shouldSubscribe;
+            if (shouldSubscribe)
+            {
+#if DEBUG
+                EdgeDiagnosticObservation.Subscription(this, true);
+#endif
+                CompositionTarget.Rendering += OnRendering;
+            }
+            else
+            {
+#if DEBUG
+                EdgeDiagnosticObservation.Subscription(this, false);
+#endif
+                CompositionTarget.Rendering -= OnRendering;
+            }
         }
-        else
-        {
-            CompositionTarget.Rendering -= OnRendering;
-        }
-        _renderingSubscribed = shouldSubscribe;
+        // Recompute demand from current owners after all public-accessor Hooks. Demand retirement
+        // can itself enter Hooks, so nothing below it may reuse the pre-callback shouldSubscribe.
+        UpdateRenderDemandReadiness();
     }
 
     public void Activate(EdgeCapsulePresenter presenter)
     {
         _dispatcher.VerifyAccess();
+        if (_shutdown || _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished) return;
         if (!_presenters.Contains(presenter))
         {
             _presenters.Add(presenter);
@@ -162,7 +229,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     internal bool TryEnqueuePostCommit(Action callback)
     {
         _dispatcher.VerifyAccess();
-        if (!_isTicking || !_acceptingPostCommitCallbacks)
+        if (_shutdown || !_isTicking || !_acceptingPostCommitCallbacks)
         {
             return false;
         }
@@ -189,7 +256,13 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        if (!_dispatcher.CheckAccess())
+#if DEBUG
+        EdgeDiagnosticObservation.Rendering(this, e, _presenters.Count, _isTicking, _pendingRenderReconciles);
+        using var edgeJournalCallback = EdgeDiagnosticObservation.Begin("render.callback", this, _presenters.Count, _pendingRenderReconciles);
+#endif
+
+        if (!_dispatcher.CheckAccess() || _shutdown ||
+            _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
         {
             return;
         }
@@ -234,22 +307,10 @@ internal sealed class EdgeCapsuleFrameScheduler
             return;
         }
 
-        if (renderingTime.HasValue &&
-            _lastRenderingTime.HasValue &&
-            renderingTime.Value == _lastRenderingTime.Value)
-        {
-#if DEBUG
-            _suppressedDuplicateRenderingCallbacks++;
-            TraceRenderingCallback(
-                rawRenderingSequence,
-                rawGapMilliseconds,
-                renderingTime,
-                "suppressed",
-                "duplicate");
-#endif
-            return;
-        }
-        _lastRenderingTime = renderingTime;
+        // RenderingTime estimates presentation; separate WPF render passes can reuse it. Our
+        // transitions use QPC, so dropping a new notification with the same estimate can discard
+        // elapsed animation time. One subscription supplies the notifications; the guards above
+        // protect reentry and native ownership without treating the estimate as a frame identity.
 #if DEBUG
         TraceRenderingCallback(
             rawRenderingSequence,
@@ -264,6 +325,12 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void AdvanceSharedFrame(TimeSpan? renderingTime, string source)
     {
+        if (_shutdown || _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished) return;
+#if DEBUG
+        using var edgeJournalDispatch = EdgeDiagnosticObservation.FrameAccepted(this, renderingTime, source, _presenters.Count, _pendingRenderReconciles);
+        using var edgeJournalFrame = EdgeDiagnosticObservation.Begin("scheduler.frame", this, _presenters.Count, _pendingRenderReconciles);
+#endif
+
 #if DEBUG
         var callbackStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
         var frameSequence = ++_debugFrameSequence;
@@ -275,8 +342,6 @@ internal sealed class EdgeCapsuleFrameScheduler
         _lastRenderingTimestamp = callbackStartedAt;
         var debugInitialCount = 0;
         var debugGroupCount = 0;
-        var duplicateRenderingCallbacks = _suppressedDuplicateRenderingCallbacks;
-        _suppressedDuplicateRenderingCallbacks = 0;
         var blockedQueueCount = 0;
         var suppressedExternalCallbacks = _suppressedExternalNativeBatchRenderingCallbacks;
         var suppressedReentrantCallbacks = _suppressedReentrantRenderingCallbacks;
@@ -340,6 +405,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                     group,
                     pointer,
                     frameTimestamp);
+                _renderDemand.GroupSampled(group[0].NativeBatchGroup, frameTimestamp);
             }
 
             for (var index = _presenters.Count - 1; index >= 0; index--)
@@ -433,7 +499,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                 $"wpfCompleteEqual={debugWpfCompleteEqual} " +
                 $"wpfSettledEqual={debugWpfSettledEqual} " +
                 $"wpfApplyFailed={debugWpfApplyFailed} " +
-                $"duplicateCallbacks={duplicateRenderingCallbacks} presenters={debugInitialCount} " +
+                $"duplicateCallbacks=0 presenters={debugInitialCount} " +
                 $"groups={debugGroupCount} renderPending={_pendingRenderReconciles} " +
                 $"blockedQueues={blockedQueueCount} " +
                 $"skippedExternal={suppressedExternalCallbacks} " +
@@ -860,14 +926,12 @@ internal sealed class EdgeCapsuleFrameScheduler
         if (_presenters.Count == 0)
         {
             UpdateRenderingSubscription();
-            _lastRenderingTime = null;
 #if DEBUG
             _lastRawRenderingCallbackTimestamp = 0;
             _lastRenderingTimestamp = 0;
             _lastWpfPresentationChangeTimestamp = 0;
             _lastWpfTransitionFingerprint = 0;
             _debugWpfPresentationSamples.Clear();
-            _suppressedDuplicateRenderingCallbacks = 0;
             _suppressedExternalNativeBatchRenderingCallbacks = 0;
             _suppressedReentrantRenderingCallbacks = 0;
             _suppressedRenderingStartedAtTimestamp = 0;

@@ -33,6 +33,8 @@ public sealed partial class AppController
 
         var queueKey =
             QueueKey(initiator.EdgeCapsulePreviewPaper);
+        _edgePrewarm?.Cancel(queueKey);
+        _edgePrewarm?.NotifyInteraction();
         if (_edgeCapsuleVisualTransactionCommitOperation is
             { Status: DispatcherOperationStatus.Pending })
         {
@@ -118,6 +120,10 @@ public sealed partial class AppController
 
     private void CommitEdgeCapsuleVisualTransaction()
     {
+#if DEBUG
+        using var edgeJournalTransaction = EdgeDiagnosticObservation.Begin("transaction.commit", this);
+#endif
+
 #if DEBUG
         var commitStartedAt =
             EdgeCapsulePerformanceDiagnostics.Timestamp();

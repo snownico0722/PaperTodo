@@ -29,7 +29,6 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private const int HtClient = 1;
     private const int HtTransparent = -1;
     private const int MaNoActivate = 3;
-    private const int SwShowNoActivate = 4;
     private const int SwHide = 0;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
@@ -133,7 +132,9 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         {
             return false;
         }
-        var placed = SetWindowPos(
+        // SWP_SHOWWINDOW and SWP_NOACTIVATE publish position, size and visibility together.
+        // A second ShowWindow request would repeat that native publication on the cold path.
+        return SetWindowPos(
             Handle,
             topmost ? HwndTopmost : HwndTop,
             bounds.Left,
@@ -141,8 +142,6 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             bounds.Width,
             bounds.Height,
             SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
-        _ = ShowWindow(Handle, SwShowNoActivate);
-        return placed;
     }
 
     public void Hide()

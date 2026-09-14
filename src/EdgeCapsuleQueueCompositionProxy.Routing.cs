@@ -35,13 +35,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             {
                 return false;
             }
-            var frame =
-                EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                    member.Plan,
-                    AnimationStartedAtTimestamp,
-                    _plan.DurationMilliseconds,
-                    now);
-            return frame.Visible &&
+            return TrySamplePresentation(member, now, out var frame) &&
+                frame.Visible &&
                 frame.IsHitTestVisible &&
                 !frame.InteractiveBounds.IsEmpty &&
                 EdgeCapsuleGeometry.Contains(
@@ -58,20 +53,52 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void OnSampleTimerTick(object? sender, EventArgs e)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.pointer", this);
+#endif
+
         if (!CanRoutePointerInput)
         {
             return;
         }
+        DeviceScreenPoint? pointer = WindowNative.TryGetCursorScreenPosition(out var position)
+            ? position : null;
+        if (!ShouldDispatchPointerSample(pointer)) return;
         foreach (var member in _members)
         {
-            member.Window.InvalidateEdgeCapsuleQueueProxyPointer();
+            if (!CanRoutePointerInput) break;
+            member.Window.InvalidateEdgeCapsuleQueueProxyPointer(pointer);
         }
+    }
+
+    private bool ShouldDispatchPointerSample(DeviceScreenPoint? pointer)
+    {
+        if (!_retainedAfterAnimation) return true;
+
+        // A settled queue still observes pointer movement without keeping every WPF presenter
+        // reconciling at the timer cadence. Applied shape changes also invalidate the sample, so
+        // a stationary pointer is reconsidered when live WPF content changes its real hit area.
+        var changed = !_hasRetainedPointerSample || _lastRetainedPointer != pointer;
+        _lastRetainedPointerFrames ??= new EdgeCapsulePresentationFrame[_members.Count];
+        for (var index = 0; index < _members.Count; index++)
+        {
+            _members[index].Window.TryGetEdgeCapsuleQueueProxyAppliedPresentation(out var frame);
+            changed |= _lastRetainedPointerFrames[index] != frame;
+            _lastRetainedPointerFrames[index] = frame;
+        }
+        _hasRetainedPointerSample = true;
+        _lastRetainedPointer = pointer;
+        return changed;
     }
 
     private void OnCompletionTimerTick(object? sender, EventArgs e)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.timer", this);
+#endif
+
         _completionTimer.Stop();
-        CompleteNow(_completionRetrySuccess);
+        CompleteNow(_completionRetrySuccess, allowBrowseRetention: true);
     }
 
     internal bool TryGetPresentationAt(
@@ -85,6 +112,23 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         {
             frame = EdgeCapsulePresentationFrame.Hidden;
             return false;
+        }
+
+        return TrySamplePresentation(member, timestamp, out frame);
+    }
+
+    private bool TrySamplePresentation(
+        EdgeCapsuleQueueCompositionProxyMember member,
+        long timestamp,
+        out EdgeCapsulePresentationFrame frame)
+    {
+        if (_retainedAfterAnimation)
+        {
+            // Translation has settled, while the live WPF source may still change hover/content
+            // presentation. Read that applied shape directly instead of replaying an old target.
+            // This source accessor must not resolve through the proxy again.
+            return member.Window.TryGetEdgeCapsuleQueueProxyAppliedPresentation(out frame) &&
+                EdgeCapsuleQueueProxyPolicy.HasStableLiveSurfaceIdentity(frame, member.Plan.Target);
         }
 
         frame = EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
@@ -241,13 +285,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 continue;
             }
 
-            var current =
-                EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                    member.Plan,
-                    AnimationStartedAtTimestamp,
-                    _plan.DurationMilliseconds,
-                    now);
-            if (!current.IsHitTestVisible ||
+            if (!TrySamplePresentation(member, now, out var current) ||
+                !current.Visible || !current.IsHitTestVisible ||
                 current.InteractiveBounds.IsEmpty ||
                 !EdgeCapsuleGeometry.Contains(
                     current.InteractiveBounds,
@@ -347,8 +386,12 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             (Action)(() => CompleteNow(success: false)));
     }
 
-    public void CompleteNow(bool success)
+    public void CompleteNow(bool success, bool allowBrowseRetention = false)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.complete", this);
+#endif
+
         if (_starting)
         {
             _completionPendingDuringStart = true;
@@ -371,7 +414,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         _completionTimer.Stop();
         try
         {
-            _completed(this, success);
+            _completed(this, success, allowBrowseRetention);
         }
         catch (Exception ex)
         {
@@ -383,6 +426,24 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 ex);
             ScheduleCompletionRetry(success: false);
         }
+    }
+
+    internal bool HasCompatibleEndpoint(
+        PaperWindow window,
+        EdgeCapsulePresentationFrame endpoint) =>
+        _members.Any(member =>
+            ReferenceEquals(member.Window, window) &&
+            EdgeCapsuleQueueProxyPolicy.HasStableLiveSurfaceIdentity(endpoint, member.Plan.Target));
+
+    internal void RetainForQueueBrowsing()
+    {
+        // The controller has verified the real/WPF endpoint and this queue remains browsable,
+        // either after real movement or directly after a static idle acquisition.
+        // Keep the same live authority for its successor, without scheduling another completion.
+        // Explicit input/environment/lifecycle completion still releases it immediately.
+        _retainedAfterAnimation = true;
+        _finishing = false;
+        if (RoutesPointerInput) _sampleTimer.Start();
     }
 
     public void ScheduleCompletionRetry(bool success)

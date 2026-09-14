@@ -35,7 +35,7 @@
 | D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
 | D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
-| D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
+| D-023 | Lightweight Prewarm 保留一次性首用预热 | Partially superseded by D-037 | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
 | D-025 | Note 图片若干限制为已接受取舍 | Accepted | Note / 图片 |
 | D-026 | Markdig 拥有标准 Markdown grammar；宿主仅做有界兼容处理 | Accepted | Note / Markdown |
@@ -44,11 +44,13 @@
 | D-029 | 插件后台统一为 provider 单 Runtime | Accepted | 插件 / 生命周期 |
 | D-030 | Full 档 = 编辑器内 WYSIWYG 块级编辑态 | Accepted | Note / Markdown |
 | D-031 | 插件弹窗只保留一次定位与失焦关闭 | Accepted | 插件 / UI ownership |
-| D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Accepted | Edge animation |
+| D-032 | Edge 仅由 Rendering 推进，owner 释放后恢复订阅 | Partially superseded by D-038 | Edge animation |
 | D-033 | 有界预览重段落使用共享 STA 排版 | Superseded by D-035 | Edge performance |
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
+| D-037 | 可浏览队列保留已验证的 live authority | Accepted | Edge performance / lifecycle |
+| D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 
 ## 维护规则
 
@@ -803,7 +805,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 
 ## D-023 — Lightweight Prewarm 保留一次性首用预热
 
-**Status:** Accepted
+**Status:** Partially superseded by D-037（graphics 预热保留，调度与真实队列提前接管由 D-037 扩展）
 
 ### Context
 
@@ -1191,7 +1193,9 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 
 ## D-032 — Edge 帧调度由 owner 解除阻挡后恢复 Rendering，不保留补帧计时器
 
-**Status:** Accepted
+**Status:** Partially superseded by D-038
+
+D-038 替代本条仅靠 lifecycle/owner 恢复请求、没有活动请求截止协调的选择；Rendering 唯一推进、共享 QPC、按组屏障和原生重入保护继续有效。下文保留当时的决策及 E-007～E-015 历史证据，不将后续 render demand 改写成原先已经采用。
 
 ### Context
 
@@ -1200,6 +1204,7 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 ### Decision
 
 - Presenter 的 transition 仅由共享 scheduler 的 `CompositionTarget.Rendering` 推进；移除 liveness timer、rescue callback 与轮询，不改成另一种固定节拍或自我排队的 dispatcher 循环。
+- 同一订阅收到的后续 Rendering 通知不能仅因 `RenderingTime` 相同而丢弃。该值是 WPF 可复用的预计呈现时间；本项目的 transition 使用 QPC，仍按本次合法回调的共享时间推进。同步重入和外部 native apply 继续由原有 guard 阻挡。
 - reconcile registration 记录 owner，按 owner 当前的 native batch group 阻挡；visual transaction deferral 同样只阻挡关联组。跨队列 transaction group 仍是不可拆的原子单位；原生 apply 同步重入保护不放宽。
 - 没有就绪组时取消 Rendering 订阅。最后一个 callback/deferral 释放后直接重新检查就绪状态、恢复订阅；首次 activation 使用同一入口。WPF 的 Rendering add accessor 会请求 render，不靠超时猜测何时恢复。
 - 普通源内容继续按已测成本与 WPF ownership 准备，不为去掉计时器恢复每篇常驻 parser worker。此项不改变 D-027 的正文语义发布，也不改变 D-008 的 WPF shape / DComp translation 分工。
@@ -1208,6 +1213,20 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 ### Why
 
 补一条最终仍回到 UI Dispatcher 的回调不能解除 UI 阻塞；与显示帧竞争还会掩盖真正的队列阻挡。由 owner 明确恢复帧源，既减少并行状态，又避免一个队列的待处理工作拖住无关队列。没有实际帧呈现证据时，不把 functional checks 通过解释成任意机器都不掉帧。
+
+2026-09-13 的 E-007 补充了另一种丢推进路径：不同 WPF Rendering 通知可能复用预计呈现时间，按值去重会丢掉已经到来的合法通知。新回归在旧条件下复现第二次通知无法推进，在移除该条件后通过；同包开关对照也支持应用更新间隔改善。纯 Pointer 回调不设队列屏障的实验则减少了屏障次数，却没有改善更新间隔，单独与组合测试均未采用。不能将更少的屏障、退订或 watchdog 次数替代完整的更新节拍对照，也不能把 Rendering-only 统计中排除的旧 watchdog 更新视作无效工作。
+
+E-008 将临时退订的另一个成本定位到实际 WPF 调用点：在 WaitingForResponse 期间没有 Rendering 订阅，`ScheduleNextRenderOp` 可退出 interlock，经 `LeaveInterlockedPresentation → CompleteRender → Channel.WaitForNextMessage` 同步等待。另有重新进入呈现调度时的 Inactive/Input promotion 间隔。因而恢复订阅后操作很快开始，并不能证明整个退订/恢复周期没有成本。此证据补充原因，不改变当前 owner、shape 与 translation 的职责；此前删除 Pointer 屏障仍是未获性能支持的候选，不能仅凭同步等待栈直接恢复该实验或引入补帧。完整采样、对照和仍未知的合成端延迟见 E-008。
+
+E-009 随后单独测试了两种更保守的候选：用现有 reducer 提前过滤不改变单纸片状态的 Pointer reconcile，以及仅在已有动画订阅时跨越临时 owner 屏障保留 Rendering。两者都保留原队列/native/事务保护，但同包四组交叉回放中，无论单独或组合，owner 更新间隔 P95 都约31～32ms，对照约20～21ms；过滤削掉约99%的代理 Pointer 排队、保留订阅大幅减少启停，均不足以换来节拍改善。候选最大间隙多发生在已订阅且无中途退订时，不能继续归因于该间隙内的同步退订。两项实现已撤回并隔离保存，当前规则不变。这是对具体实现的实测否决，不把所有输入合并或订阅生命周期优化永久排除；再次尝试必须提出新的机制差异及完整节拍证据。
+
+E-010进一步限制了这项性能判断的外推范围：原行为多出的直接Rendering请求/遍历，并没有带来同幅增长的可观察提交或呈现反馈；同一观察提交间隔可以发生多次遍历。因此E-009的应用更新间隔不能直接换算为物理FPS退化。另一方面，提交数量相近也不证明体验相同，原行为提交前最近记录的owner状态较新，但是否被序列化并实际显示仍未知。后续优化需同时核对请求、执行、提交及内容新鲜度，不能只优化其中一个计数。采样还区分了“WaitingForResponse且没有Render操作”和“已有Inactive/Input操作但未执行”两种GetMessage等待，不能用一个统一的退订解释替代。当前调度规则与候选撤回状态不变；原始证据及只读探针修正见E-010。
+
+2026-09-14 的 E-012 在 PR238 的直接父提交 PR245 上只关闭旧 watchdog，就将实际 owner 形状更新 P95 从约13.4ms推到约33ms，足以复现历史跳升。旧通道确实推进同一动画状态，不能以“非Rendering来源”为由抹去其收益；Rendering-only P95也由约26ms变成约33ms，差异不只是统计时少算中间点。PR238并未新增RenderingTime值去重，但移除另一更新来源后，已有误去重的损失更明显；历史包关闭去重有收益，当前代码已在E-007修正。这个因果结果不证明定时更新修好了WPF反馈等待，也不证明关闭计时器本身使显示更流畅。当前事件驱动路线保留，但其性能目标尚未达成；后续选择需正面比较实际更新、提交与呈现，不能以简化调度为性能改善的替代证据。完整单变量对照及仍未拆开的PR238其他变化见E-012。
+
+E-013 用消息前后探针区分了通知处理前的等待和通知下游自身的同步等待：一些约33ms间隔的第一条MIL通知在约16ms到达，但下游又耗时约16ms，不能描述成处理完第一条之后再空等第二条。另有49ms段的render操作早已排队，不能归为丢请求。探针时钟只有粗粒度，queue-age=0不证明亚毫秒投递；DWM未来时钟的实测也不单独证明多等一帧。针对这些证据，独立测试了“保留已有活动订阅＋首次恢复就绪时通过公开add路径保留原render请求”的组合，区别于E-009仅keep。它通过屏障、单次恢复、同步Hooks重入及取消检查，深层采集下P99有改善；关闭深层探针后P95/P99未呈一致改善，且仍出现52ms间隔。因此候选保持隔离，未作为生产优化采纳。强制本进程遵守高精度计时请求的Windows策略也未获稳定收益，未引入日用设置。这里排除的是已测具体实现，不是宣称订阅机制没有成本；完整对照及尚未验证的WPF/系统等待见E-013。
+
+E-015进一步把同一就绪截止干预拆成只唤醒UI、只请求WPF渲染和直接推进动画。仅请求正常Rendering即可重复改善owner更新P95及提交前最近形状记录的年龄，说明旧救援的收益不必全部依赖直接补帧；提交/呈现反馈的观察数量却没有同比增长，不能换算为物理FPS提升。请求模式仍有MIL下游约27.9ms等待，减少被遮住源HWND移动的独立候选则省掉实际native写入但未改善节拍；组合降低CPU却提高了更新P95/P99。因此三种机制需要分别评价，不能以少写、少订阅或更多回调替代最终呈现证据。本轮定时请求与HWND候选全部保持隔离，现有生产规则不变；真实位移后的输入交接、透明度跨通道交接及日用代价仍未验证。完整同包对照、代理自主shape像素能力原型与限制见E-015。
 
 ### Evidence
 
@@ -1355,3 +1374,75 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 - #255 补测：Actions run `34728040332`（启动/工作集）与 `34728463445`（未插桩 R2R ZIP 打包验证）；原始打包 PR 在数据吸收进 E-001 后关闭，不进入正式分发。
 - FD Windows SDK 定向压缩补测：Actions run `34758652475`，实验 HEAD `7f33460c11f99ed87074b270144aa484366b92d7`；12 轮/形态交错 A/B，原始 samples/summary/publish CSV 长期保存在 `doc/experiments/E-001-fd-sdk-compression-*.csv`。
 
+---
+
+## D-037 — 可浏览队列提前接管并保留已验证的 live authority
+
+**Status:** Accepted
+
+### Context
+
+PR #254 实机数据的连续浏览回放中，代理每次完成后释放 source cloak，使下一次悬停反复进入完整接管。阶段日志显示主要等待集中在可见 authority 的发布、cloak 和真实 HWND 位置提交；创建托管对象和 DComp visual 不是主要耗时。一次性临时预热不能消除每次重新接管的同步边界。
+
+### Decision
+
+- 开启预览且队列仍可浏览时，动画端点通过原有 apply/layout/render/verify 后保留当前 live cover，正常收回后也可继承。显式交互或生命周期完成默认必须释放；正常动画完成或明确的静态预接管才获得保留资格。
+- 空闲时可对全部成员已稳定的真实队列提前执行首次接管；静态 plan 明确标识零时长、无位移，不创建伪动画，也不跳过首次显示、cloak、失败回滚与端点确认。队列成员、源 HWND 与调度代在 publication 和最终保留前重新检查。
+- 轻量 coordinator 只拥有调度：Shell 准备完成后通过 Rendering 屏障转到 ApplicationIdle，一次准备一个队列；真实输入期间让路，暂时阻挡由后续真实事件唤醒。隐藏、关闭、拖动、设置与显示失效先取消旧代，稳定后重新请求。正文仍由原 cache/worker 持有，只暂停 speculative 工作，不取消 demand。
+- 首次有真实位移的事务可同时纳入兼容的静止成员，并预留有界 output envelope；后续随机目标能否继承仍由实际队列、source identity/capacity 和 envelope 决定，不以预先猜中下一张纸片为前提，也不承诺跨失效边界命中。
+- 已持有完全相同 source cloak 集合的 successor 通过现有可见 root 保护真实端点更新，再提交新 root；没有 cloak 变化时不重复支付 cloak flush。首次接管、成员增减与失败回滚保留各自原有边界。
+- 同一 source surface 在后继中持有独立 COM 引用；visual/root 仍属于当前代。发布并退休 predecessor 后断开对象引用，避免长期浏览保留整条历史链。
+- 静置时从真实 Host applied frame 读取形状、透明度和输入范围，指针与 applied frame 都未变化时不再逐个 invalidate presenter。DPI 或 capacity 增长先完成代理交接，再处理暂存的失效请求。
+
+### Why / Rejected / Pitfalls
+
+该选择减少日用过程中重复接管的次数，保留 WPF 唯一 shape owner 和 translation-only DComp 边界。不能把动画结束等同于绘制完成，也不能用删除首次可见 cover 的同步边界来制造启动数字上的收益。尝试以 commit completion 替代首次 DWM 等待未显示稳定收益，未采纳。
+
+不能用旧 plan target 作为静置期永久输入快照；真实 WPF 仍会发生 hover、透明度与内容变化。也不能等待“下次动画”才处理被固定 source capacity 阻挡的更新。output envelope 可以超过工作区底边以容纳当前队列位移，但不得因此扩大每张纸片的 WPF surface。
+
+### Consequences / Evidence
+
+每个已准备且未失效的可见队列可能长期占有一个 compositor cover 及当前成员 surface 引用，静置仍有轻量指针采样；不是零资源成本。关闭预览、隐藏、交互、DPI/capacity 或设备失效继续走显式交接。首次接管的同步等待移到交互前，工作本身没有消失；若输入早于准备完成或队列不满足条件，仍走正常接管，不能承诺所有首次输入均命中。
+
+source 首次准备与 output 共用产品最大值，按当前工作区归一化。内置 Todo/Markdown 原本已有最大 envelope；插件从初始 miniSize 改为有效 miniMaxSize 会增加其单纸片 WPF backing surface，这是减少合法尺寸变化时重新接管的明确代价。未声明最大值且 Native 首次 Describe 才报告更大 preferred size 时，仍显式交接、扩容并重建，不提前调用插件内容来猜值。多屏多个缓存的复杂协调不在此选择中；跨显示环境失效保留安全回退，不承诺跨屏命中率。
+
+- `src/AppController.EdgeCapsuleQueueProxy.cs`：队列准入、端点验证、保留与显式交接。
+- `src/AppController.EdgePrewarm.cs` / `src/EdgePrewarmCoordinator.cs`：真实队列准入、可取消调度、生命周期失效和后台正文让路。
+- `src/EdgeCapsuleQueueCompositionProxy.Startup.cs` / `Visuals.cs` / `Routing.cs`：source 集合、独立 COM 引用、代际生命周期与真实 applied frame 输入。
+- `src/PaperWindow.EdgeCapsule.cs`：代理释放后的 DPI/capacity 失效恢复。
+- `tests/PaperTodo.EdgeTitleChecks/ProxyRetentionChecks.cs`：左右边缘/DPI、静止成员准入、保留/强制完成、真实 Host 形状输入及空闲采样；这些检查不替代物理显示帧与长时间设备验证。
+
+---
+
+## D-038 — 活动就绪动画使用可撤销 render demand，Rendering 保留唯一推进权
+
+**Status:** Accepted
+
+### Context
+
+D-032 建立了 owner 分组屏障并移除直接补帧，但仅靠 activation/阻挡解除请求 WPF，未达到连续浏览的更新节奏目标。E-012 确认旧 watchdog 确实贡献过动画状态更新，不能因其来自 timer 就抹去收益；E-015 又把唤醒 UI、请求 WPF 和直接推进拆开，证明收益不必依赖第二个状态推进入口。E-016 在保留队列和 native 屏障的前提下，继续验证仅请求 WPF 的独立实现及正式整合产物。
+
+### Decision
+
+- `EdgeCapsuleFrameScheduler` 仍是同 Dispatcher 的唯一动画推进入口，只有真实 `CompositionTarget.Rendering` 回调推进 Presenter。`EdgeCapsuleRenderDemand` 只协调工作请求，不持有 desired model、frame、surface 或 pointer truth，不调用 Presenter 来补帧。
+- 每个仍有活动 transition 且就绪的 native batch group 独立持有截止时间；以该组实际采样使用的共享 QPC 更新，避免无关组的活动掩盖另一组的迟到。请求延迟是实现参数，不是显示周期或固定 FPS 合同。
+- 共享的可重设单次 timer 只投递一个带 generation 的 Dispatcher 请求。UI 执行时再次核对就绪资格，通过公开 Rendering add 路径请求 WPF，并在 `finally` 删除临时空 handler；一次只请求当前工作，不追补历史帧，也不改变系统计时精度设置。
+- 组不再活动、reconcile/transaction 阻挡、外部 native apply、取消或 shutdown 必须撤销旧资格与待执行请求；恢复后重新核对。工作线程只访问截止/generation/投递槽，Presenter/WPF 就绪状态仍由 UI 线程读取。Abort、operation 发布和 Dispatcher Hooks 的同步重入不能让旧代覆盖新代或占用第二个投递槽。
+- shutdown 在事件入口先锁存，然后停止 demand 和订阅；不能只依赖稍后才更新的 Dispatcher shutdown 属性。普通 reconcile 保持 Render 优先级，真实 Host 输入可将同一个 pending operation 提升到 Send，原 owner registration 继续由该操作完成并释放。
+- 正式运行启用上述请求协调；实验选择器不成为长期产品配置。不恢复旧直接补状态的 watchdog，不取消 native batch group/visual transaction 屏障，也不把请求计时器当作 real/WPF 端点或 compositor 已显示的证明。
+
+### Why / Rejected / Pitfalls
+
+E-016 的同包对照及去除实验开关后的整合回放支持应用端 owner 更新间隔改善；深层观察还支持提交前最近形状记录更及时。这些量都不是物理显示帧率，不证明该记录已被序列化并显示，也不代表 WPF/MIL 下游等待或所有输入延迟已经解决。活动请求有额外调度与 CPU 成本，应保留无工作时撤销和有界投递，而不是扩大为常驻高频轮询。
+
+本轮 source-anchor 与 retained 期间提前移动源 HWND 的实验未通过最终 authority 交接：几何验证正确、提前移动完成后，真实点击仍能出现 peer 短暂缺失；另一次交接路径存在边缘叠加，因此这些候选未采用。collection 没有消除本次回放中的原生写入；初轮同步耗时下降的信号在追加同包 ABBA 中未呈稳定方向，因此也保留为隔离候选。原生调用次数相同不能单独否定提交时机收益，采用判断需包括实际耗时与行为。代理自主 shape 路线仍封存。各路线的局部验证不能合并成整条交接路线已通过，也不能作为 render-demand 收益的归因；保留 E-016 的正反证据，不将具体候选未采用扩大成永久否决所有后续方案。
+
+### Consequences / Evidence
+
+请求发生与动画推进分开计量；Render handler 执行、观察到 precommit、DWM/物理显示以及输入到达都是不同边界。功能检查覆盖请求合并、按组截止、取消重启、跨线程发布和 shutdown 同步重入；真实回放记录动作公共前缀和更新间隔，不能用通过断言数或请求次数替代呈现证据。
+
+- `src/EdgeCapsuleRenderDemand.cs`：每组截止、单槽跨线程投递、取消重启与 shutdown 生命周期。
+- `src/EdgeCapsuleFrameScheduler.cs`：活动/就绪组准入、Rendering 唯一推进与公开 WPF 请求入口。
+- `src/EdgeCapsulePresenter.cs`：native apply 就绪变化、普通 reconcile 和真实输入优先级。
+- `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
+- `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。

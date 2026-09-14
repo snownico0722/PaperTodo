@@ -71,7 +71,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
     {
         _initialContent = initialContent;
         _initialVersion = initialVersion;
-        Margin = new Thickness(10, 9, 9, 10);
+        Margin = MarkdownEdgeCapsulePreviewRenderer.ArtifactViewMargin;
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition());
 
@@ -94,7 +94,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
 
         _viewport = new MarkdownEdgeCapsulePreviewViewport()
         {
-            Margin = new Thickness(1, 0, 2, 0)
+            Margin = MarkdownEdgeCapsulePreviewRenderer.ArtifactViewportMargin
         };
         Grid.SetRow(_viewport, 1);
         Children.Add(_viewport);
@@ -116,8 +116,11 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
             ? _initialContent : MarkdownEdgePreviewPreload.For(Dispatcher).Capture(Context);
         _initialContent = null;
         var textZoom = Context.Paper.TextZoom;
+        var preloadBinding = MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom);
+        EdgeCapsulePerformanceDiagnostics.Trace($"markdown.demand paper={EdgeCapsulePerformanceDiagnostics.ShortId(Context.Paper.Id)} " +
+            $"source={System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Context.InvalidationSource)} version={contentVersion} bound={preloadBinding != null}");
         _viewport.SetContent(content, Context.OpenExternal, textZoom,
-            MarkdownEdgePreviewPreload.For(Dispatcher).Bind(Context, content, textZoom),
+            preloadBinding,
             (Context.InvalidationSource, contentVersion));
     }
 }

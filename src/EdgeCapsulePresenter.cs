@@ -166,11 +166,27 @@ internal sealed class EdgeCapsulePresenter
     public int AppliedPresentationVersion { get; private set; }
     public DeviceScreenPoint? LastPointerSample { get; private set; }
     internal bool HasActiveTransition => Transition.HasValue;
+    internal bool IsSettledForPreacquisition => !HasActiveTransition &&
+        _visualTransactionDeferrals == 0 && !_nativeBatchApplyActive && !_nativeBatchRetryPending &&
+        !_nativeBatchApplyDeferred && !_reconcileScheduled && _dirty == EdgeCapsuleDirty.None;
 
     internal EdgeCapsuleTargetPresentation PlanTargetPresentation(
         EdgeCapsuleLayoutSnapshot layout) =>
         EdgeCapsuleTargetPlanner.Calculate(Model, layout).Docked;
+#if DEBUG
+    private EdgeCapsuleTransition? _edgeJournalTransition;
+    private EdgeCapsuleTransition? Transition
+    {
+        get => _edgeJournalTransition;
+        set
+        {
+            EdgeDiagnosticObservation.TransitionChanged(this, _edgeJournalTransition, value);
+            _edgeJournalTransition = value;
+        }
+    }
+#else
     private EdgeCapsuleTransition? Transition { get; set; }
+#endif
 
     public EdgeCapsuleDispatchResult Dispatch(
         EdgeCapsuleIntent intent,
@@ -511,6 +527,10 @@ internal sealed class EdgeCapsulePresenter
 
     public void CancelTransition()
     {
+#if DEBUG
+        using var edgeJournalCancel = EdgeDiagnosticObservation.Begin("presenter.cancel", this);
+#endif
+
         Transition = null;
         if (_nativeBatchTransactionGroupId == 0 &&
             !_nativeBatchRetryPending)
@@ -560,6 +580,9 @@ internal sealed class EdgeCapsulePresenter
         }
 
         AppliedPresentation = presentation;
+#if DEBUG
+        EdgeDiagnosticObservation.Applied(this, presentation);
+#endif
         unchecked
         {
             AppliedPresentationVersion++;
@@ -570,6 +593,10 @@ internal sealed class EdgeCapsulePresenter
         Func<EdgeCapsulePresentationFrame, bool> apply,
         EdgeCapsulePresentationFrame frame)
     {
+#if DEBUG
+        using var edgeJournalApply = EdgeDiagnosticObservation.Begin("presenter.apply", this);
+#endif
+
         var applied = apply(frame);
         if (_nativeBatchApplyActive)
         {
@@ -778,6 +805,10 @@ internal sealed class EdgeCapsulePresenter
 
     private void RunReconcile(long? nowTimestamp = null, bool synchronousFlush = false)
     {
+#if DEBUG
+        using var edgeJournalReconcile = EdgeDiagnosticObservation.Begin("presenter.reconcile", this, (long)_dirty, nowTimestamp ?? 0);
+#endif
+
         if (_reconcile == null)
         {
             return;
@@ -1021,9 +1052,16 @@ internal sealed class EdgeCapsulePresenter
         _nativeBatchApplySucceeded = true;
         _nativeBatchApplyAttempted = false;
         _nativeBatchApplyDeferred = false;
+        _frameScheduler?.NativeApplyReadinessChanged();
     }
 
     internal void CompleteNativeBatchApplySuccess()
+    {
+        try { CompleteNativeBatchApplySuccessCore(); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplySuccessCore()
     {
         if (!_nativeBatchApplyActive)
         {
@@ -1047,6 +1085,12 @@ internal sealed class EdgeCapsulePresenter
     }
 
     internal void CompleteNativeBatchApplyFailure(long nowTimestamp)
+    {
+        try { CompleteNativeBatchApplyFailureCore(nowTimestamp); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplyFailureCore(long nowTimestamp)
     {
         if (!_nativeBatchApplyActive)
         {
@@ -1105,6 +1149,12 @@ internal sealed class EdgeCapsulePresenter
     }
 
     internal void CompleteNativeBatchApplyDeferred()
+    {
+        try { CompleteNativeBatchApplyDeferredCore(); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplyDeferredCore()
     {
         if (!_nativeBatchApplyActive)
         {

@@ -16,6 +16,7 @@ internal static partial class Program
 
     private static void ReviewIntegrationChecks()
     {
+        PreloadLayoutDpiChecks();
         var cache = MarkdownEdgePreviewPreload.For(System.Windows.Threading.Dispatcher.CurrentDispatcher);
         cache.SetEnabledForChecks(true);
         using var host = NewHost(EdgeCapsuleLayout.WindowChromeMargin);
@@ -48,6 +49,9 @@ internal static partial class Program
                 Require(cache.ArtifactCount == 1 && host.MarkdownPreloadAnchor!.Children.Count > 0,
                     "preload retains one immutable artifact without mounting a hidden preview child");
                 var hits = cache.ArtifactHits;
+                var preloadKey = MarkdownEdgePreviewPreload.MakeKey(
+                    cache.Bind(context, cache.Capture(context), zoom), host.MarkdownPreloadAnchor!,
+                    new Size(MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(size, host.MarkdownPreloadAnchor!), 0));
                 var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
                 var request = new EdgeCapsulePreviewRequest(size, descriptor.CreateContent(size), descriptor.SetVisibility);
                 var contentSize = request.Size.ContentSize;
@@ -59,7 +63,12 @@ internal static partial class Program
                 request.SetVisibility?.Invoke(true);
                 var viewport = Elements(request.Content).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
                 UntilReview(() => viewport.Opacity == 1 && viewport.IsHitTestVisible, "first real host display publishes");
-                Require(cache.ArtifactHits == hits + 1, "FIRST live-host display must take the preloaded artifact, not rebuild it");
+                var demandKey = MarkdownEdgePreviewPreload.MakeKey(
+                    cache.Bind(context, cache.Capture(context), zoom), viewport, viewport.RenderSize);
+                Require(cache.ArtifactHits == hits + 1,
+                    $"FIRST live-host display must take the preloaded artifact, not rebuild it; edge={edge} size={size} zoom={zoom} " +
+                    $"hits={cache.ArtifactHits - hits} preloadWidth={preloadKey?.Size.Width} demandWidth={demandKey?.Size.Width} " +
+                    $"dpiMatch={Equals(preloadKey?.Dpi, demandKey?.Dpi)} appearanceMatch={preloadKey?.Appearance == demandKey?.Appearance}");
                 var surface = Elements(viewport).OfType<MarkdownPreviewArtifactSurface>().Single();
                 Require(surface.Children.OfType<Button>().Count() == surface.Artifact.Links.Count && surface.Artifact.Drawing.IsFrozen,
                     "live host mounts one frozen drawing surface with native link hits but no WPF block tree");
@@ -88,5 +97,34 @@ internal static partial class Program
             ReviewLinkGestureChecks();
         }
         finally { host.ClearPreviewContent(); cache.Clear(); }
+    }
+
+    private static void PreloadLayoutDpiChecks()
+    {
+        var context = new EdgeCapsulePreviewContext(new(), () => "layout rounding", false,
+            () => "正文", () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
+            () => new Style(), () => "", _ => { }, new());
+        var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
+        var cases = 0;
+        foreach (var dpi in new[] { 1.0, 1.25, 1.5, 1.75, 2.0, 2.25 })
+        foreach (var round in new[] { false, true })
+        foreach (var width in new[] { 190.0, 349.2, 349.5, 350.0, 350.4, 351.0, 459.6, 460.0 })
+        {
+            var size = new EdgeCapsulePreviewSize(width, 300);
+            var view = descriptor.CreateContent(size);
+            var root = new Border { Width = size.ContentSize.Width, Height = size.ContentSize.Height,
+                Child = view, UseLayoutRounding = round };
+            // Test real WPF layout under explicit DPI values; this is not a multi-monitor device test.
+            VisualTreeHelper.SetRootDpi(root, new DpiScale(dpi, dpi));
+            root.Measure(size.ContentSize);
+            root.Arrange(new Rect(size.ContentSize));
+            var viewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
+            var expected = MarkdownEdgeCapsulePreviewRenderer.ArtifactBodyWidth(size, root);
+            Require(viewport.RenderSize.Width == expected,
+                $"preload width must match real WPF layout: dpi={dpi} rounding={round} card={width} expected={expected:R} actual={viewport.RenderSize.Width:R}");
+            root.Child = null;
+            cases++;
+        }
+        Console.WriteLine($"PASS preload width matches real WPF layout ({cases} width/DPI/rounding cases)");
     }
 }
