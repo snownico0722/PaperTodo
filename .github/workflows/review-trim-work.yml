@@ -15,6 +15,7 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: 'true'
+      PYTHONUTF8: '1'
     steps:
       - name: Preserve source line endings
         run: git config --global core.autocrlf false
