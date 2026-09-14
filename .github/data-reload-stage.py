@@ -39,6 +39,8 @@ def replace(name, old, new):
 
 replace('src/StateReloadModels.cs', '        Copy(AppProperties, next, current);',
     '        // Keep the committed comparison snapshot immutable, including dictionaries/new papers.\n        next = StateStore.CopyForReload(next);\n        Copy(AppProperties, next, current);')
+replace('src/StateJsonMerge.cs', 'other.Skip(i + 1).Select(result.IndexOf)',
+    'other.Skip(i + 1).Select(item => result.IndexOf(item))')
 path = root / 'src/StateStore.cs'
 text = path.read_text(encoding='utf-8')
 if 'AddIfExists(paths, FilePath);' not in text:
