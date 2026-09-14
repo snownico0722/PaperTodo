@@ -127,8 +127,12 @@ jobs:
               m = re.match(r'^\| (D-(?:03[2-9]|04[0-3])) \|', line)
               if m:
                   rows.append(remap_skin_ids(line))
-          if len(rows) != 12:
-              raise SystemExit(f'Expected 12 skin decision index rows, found {len(rows)}')
+          if len(rows) != 10:
+              raise SystemExit(f'Expected the existing 10 skin decision index rows, found {len(rows)}')
+          rows.extend([
+              '| D-049 | 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度 | Partially superseded by D-050 | 主题 / Rendering |',
+              '| D-050 | 实际辅助窗口共用液态背景处理与材质清理 | Experimental | 主题 / Rendering |',
+          ])
           body_match = re.search(r'(?m)^## D-032 — 普通窗口原生 Mica 与 layered 胶囊边界\s*$', ours_decisions)
           if not body_match:
               raise SystemExit('Could not locate skin decision body start')
