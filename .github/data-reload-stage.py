@@ -59,6 +59,9 @@ replace('tests/PaperTodo.DataReloadChecks/Program.cs', '        StateReloadModel
     '        next.GlobalHotkeys["fixture"] = "Ctrl+F1";\n        next.Papers.Add(new() { Id = "new-identity", Type = PaperTypes.Note });\n        StateReloadModels.Apply(current, next);')
 replace('tests/PaperTodo.DataReloadChecks/Program.cs', '"private-set relation lost");',
     '"private-set relation lost");\n        current.GlobalHotkeys["fixture"] = "Ctrl+F2"; current.Papers[^1].Title = "live-only";\n        Require(next.GlobalHotkeys["fixture"] == "Ctrl+F1" && next.Papers[^1].Title == "", "live objects mutated the committed comparison snapshot");')
+replace('tests/PaperTodo.DataReloadChecks/LiveChecks.cs',
+    '    private static T Field<T>(object instance, string name) =>\n        (T)instance.GetType().GetField(name, Private)!.GetValue(instance)!;',
+    '    private static T Field<T>(object instance, string name)\n    {\n        var type = instance.GetType();\n        if (type.GetField(name, Private) is { } field) return (T)field.GetValue(instance)!;\n        if (type.GetProperty(name, Private) is { } property) return (T)property.GetValue(instance)!;\n        throw new MissingMemberException(type.FullName, name);\n    }')
 git('add', '-N', '--', 'src', 'PaperTodo.Plugin.Abstractions', 'Resources', 'tests', 'plugin-samples/README.md', 'doc/ARCHITECTURE.md', 'doc/DECISIONS.md', 'doc/CHANGELOG.en.md', 'CHANGELOG.md', '.github/workflows/pull-request-build.yml')
 git('diff', '--check')
 print('Verified exact implementation patch:', len(patch), 'bytes', flush=True)
