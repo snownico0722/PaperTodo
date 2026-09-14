@@ -35,6 +35,7 @@ internal sealed partial class PaperBodyPluginRegistry
         foreach (var category in manifest.SettingCategories)
         {
             category.Name = category.Name?.Trim() ?? "";
+            category.Key = category.Name;
             category.Column = category.Column?.Trim().ToLowerInvariant() ?? "";
             if (category.Name.Length == 0 || !categoryNames.Add(category.Name))
             {
@@ -63,6 +64,7 @@ internal sealed partial class PaperBodyPluginRegistry
                 : setting.Name.Trim();
             setting.Description = setting.Description?.Trim() ?? "";
             setting.Category = setting.Category?.Trim() ?? "";
+            setting.CategoryKey = setting.Category;
             setting.Suffix = setting.Suffix?.Trim() ?? "";
             setting.Placeholder = setting.Placeholder?.Trim() ?? "";
             setting.ShortcutAction = string.IsNullOrWhiteSpace(setting.ShortcutAction)
@@ -265,6 +267,7 @@ internal sealed class PaperBodyPluginSettingManifest
     public JsonElement Default { get; set; }
     public bool Quick { get; set; }
     public string Category { get; set; } = "";
+    internal string CategoryKey { get; set; } = "";
     public double? Min { get; set; }
     public double? Max { get; set; }
     public double? Step { get; set; }
@@ -278,6 +281,7 @@ internal sealed class PaperBodyPluginSettingManifest
 internal sealed class PaperBodyPluginSettingCategoryManifest
 {
     public string Name { get; set; } = "";
+    internal string Key { get; set; } = "";
     public string Column { get; set; } = "";
 }
 

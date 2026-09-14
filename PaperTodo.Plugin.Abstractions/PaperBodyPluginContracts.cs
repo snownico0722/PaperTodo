@@ -327,6 +327,8 @@ public sealed class PaperBodyContext
 {
     public required string ProviderId { get; init; }
     public required string ApiVersion { get; init; }
+    /// <summary>PaperTodo UI culture name for this process, for example zh-CN or en-US.</summary>
+    public string UiLanguage { get; init; } = PaperPluginEnvironment.UiLanguage;
     public required string StateJson { get; init; }
     public required int StateVersion { get; init; }
     public required int TargetStateVersion { get; init; }

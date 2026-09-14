@@ -123,6 +123,8 @@ public sealed class PaperPluginRuntimeContext
 {
     public required string ProviderId { get; init; }
     public required string ApiVersion { get; init; }
+    /// <summary>PaperTodo UI culture name for this process, for example zh-CN or en-US.</summary>
+    public string UiLanguage { get; init; } = PaperPluginEnvironment.UiLanguage;
     public required IReadOnlySet<string> GrantedPermissions { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
     public required IPaperPluginRuntimeSettings Settings { get; init; }
