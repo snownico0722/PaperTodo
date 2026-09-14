@@ -53,8 +53,7 @@ internal static partial class Program
 
     private static void Checks()
     {
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-            MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         {
             var source = "[入口](https://example.com)\n" + string.Join('\n',
                 Enumerable.Range(1, 40).Select(i => $"第{i}行 **粗体** 和 `code`"));
@@ -276,7 +275,7 @@ internal static partial class Program
         {
             foreach (var sharp in new[] { false, true })
             foreach (var zoom in new[] { 0.7, 1.3 })
-            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
             for (var i = 0; i < fixtures.Length; i++)
             {
                 AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,

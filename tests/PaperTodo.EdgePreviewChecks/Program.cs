@@ -74,7 +74,7 @@ internal static partial class Program
             ("long-code", "```\n" + new string('文', 5500) + "\n```"),
             ("many-links", string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ", 120)))
         };
-        foreach (var mode in new[] { MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         foreach (var fixture in fixtures)
         {
             var rows = new List<double[]>();

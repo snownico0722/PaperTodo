@@ -94,9 +94,6 @@ Error: {0}</value>
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>Basic</value>
   </data>
-  <data name="MarkdownRenderEnhanced" xml:space="preserve">
-    <value>Enhanced</value>
-  </data>
   <data name="MarkdownRenderFull" xml:space="preserve">
     <value>Full Render</value>
   </data>
@@ -556,9 +553,8 @@ Sharp: stronger pixel alignment; clearer outlines; a few fonts may change width 
 Place both papertodo and PaperTodo_Bold (.ttf/.otf).</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>Basic: light Markdown highlighting.
-Enhanced: nicer headings, lists, and emphasis.
-Full Render: while editing, blocks (headings, lists, quotes, code, images) appear in their final layout and most Markdown markers are hidden — they no longer occupy width, so text is compactly reflowed; the block under the caret reveals its markers for editing. Blur switches to read-only whole-note rendering.</value>
+    <value>Basic: keeps Markdown markers, fades syntax, and shows lightweight layout such as list bullets and dividers.
+Full Render: while editing, headings, lists, quotes, code and other blocks use their final layout with most Markdown markers hidden; the block under the caret reveals its markers for editing. Blur switches to read-only whole-note rendering.</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown rendering animation</value>

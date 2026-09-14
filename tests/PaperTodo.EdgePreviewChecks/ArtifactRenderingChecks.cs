@@ -11,8 +11,7 @@ internal static partial class Program
     private static void ArtifactRenderingChecks()
     {
         // Source admission and geometry remain independent of the cache and of the drawing engine.
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-            MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         {
             var sixteen = string.Join('\n', Enumerable.Range(1, 16).Select(i => $"row {i}"));
             var admitted = Renderer.CaptureContent(sixteen, mode);
@@ -33,7 +32,7 @@ internal static partial class Program
         }
         var code = "```\n" + string.Join('\n', Enumerable.Repeat("literal **code**", 40)) + "\n```";
         Require(!Renderer.CaptureContent(code, MarkdownRenderModes.Full).Truncated, "a fenced code block uses one block slot");
-        Require(Renderer.CaptureContent(code, MarkdownRenderModes.Enhanced).Truncated, "source modes count individual admitted lines");
+        Require(Renderer.CaptureContent(code, MarkdownRenderModes.Basic).Truncated, "source modes count individual admitted lines");
         var marker = Renderer.CaptureContent("# title\n> quote\n- item\n- [x] done\n12) item\n---\n![image](i:123456)\n" + code, MarkdownRenderModes.Full);
         var root = new StackPanel();
         var plan = Renderer.CaptureArtifactPlan(root, marker, 400, 1);
@@ -47,7 +46,7 @@ internal static partial class Program
             ("[a **bold**](https://example.com)", Colors.Blue) })
         {
             var syntaxPlan = Renderer.CaptureArtifactPlan(root,
-                Renderer.CaptureContent(text, MarkdownRenderModes.Enhanced), 400, 1);
+                Renderer.CaptureContent(text, MarkdownRenderModes.Basic), 400, 1);
             var decoratedSyntax = syntaxPlan.Styles.Where(s =>
                 s.Foreground is SolidColorBrush b && b.Color == ((SolidColorBrush)Theme.SyntaxFadeBrush).Color &&
                 s.Decorations?.Any(d => d.Location == TextDecorationLocation.Underline) == true).ToArray();

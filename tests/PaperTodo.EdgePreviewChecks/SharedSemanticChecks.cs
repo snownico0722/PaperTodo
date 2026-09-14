@@ -39,7 +39,7 @@ internal static class SharedPreviewSemanticChecks
         Require(string.Concat(html.Select(p => p.Text)) == "a b c", "supported HTML uses the existing semantic recognizer");
         Require(html.Any(p => p.Text == "c" && (p.Style & Style.Underline) != 0), "shared underline semantics survive adaptation");
         Require(Visible("![photo](i:asset)") == "▧ photo", "images stay lightweight placeholders");
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced })
+        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic })
             Require(string.Concat(Renderer.InlinePieces(ordinary, mode).Select(p => p.Text)) == ordinary,
                 "non-Full modes retain the exact source: " + mode);
         var cache = new Renderer.PreviewInlineCache();

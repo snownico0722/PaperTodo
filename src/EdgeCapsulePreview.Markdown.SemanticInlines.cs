@@ -36,7 +36,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             for (var i = Math.Max(0, start); i < Math.Min(text.Length, end); i++)
             {
                 if (full) hidden[i] = true;
-                else if (mode == MarkdownRenderModes.Enhanced) styles[i] |= InlineStyle.Syntax;
+                else if (mode == MarkdownRenderModes.Basic) styles[i] |= InlineStyle.Syntax;
             }
         }
         foreach (var link in snapshot.Links)

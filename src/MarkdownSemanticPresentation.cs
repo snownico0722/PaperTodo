@@ -61,7 +61,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private bool FadeSyntax =>
         string.Equals(
             _editor.MarkdownRenderMode,
-            MarkdownRenderModes.Enhanced,
+            MarkdownRenderModes.Basic,
             StringComparison.Ordinal) &&
         _editor.IsPreviewMode;
 
@@ -172,7 +172,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         return FadeSyntax ? Theme.SyntaxFadeBrush : Theme.ActiveBrush;
     }
 
-    /// <summary>引用 &gt; 标记取色：Enhanced 预览沿用「完全透明保留宽度」，与一般语法淡化不同。</summary>
+    /// <summary>引用 &gt; 标记取色：Basic 预览沿用「完全透明保留宽度」，与一般语法淡化不同。</summary>
     internal Brush QuoteControlBrush(bool revealed)
     {
         if (IsFullMode)

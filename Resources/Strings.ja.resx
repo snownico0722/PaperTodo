@@ -94,9 +94,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>基本</value>
   </data>
-  <data name="MarkdownRenderEnhanced" xml:space="preserve">
-    <value>強化</value>
-  </data>
   <data name="MarkdownRenderFull" xml:space="preserve">
     <value>完全レンダリング</value>
   </data>
@@ -569,9 +566,8 @@ YaHei または DengXian を選ぶと、UI・トレイ・カプセル・ToDo・�
 papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>基本：Markdown の軽いハイライト。
-拡張：見出し・リスト・強調をより整えて表示。
-フル レンダリング：編集中も見出し・リスト・引用・コードなどが最終レイアウトで表示され、大半の Markdown 記号は非表示（記号は幅を取らず、文字は最終レイアウトに詰めて再配置）。カーソルのあるブロックだけ記号を表示して編集できます。フォーカスを外すとノート全体を読み取り専用でレンダリング。</value>
+    <value>基本：Markdown 記号を残しつつ構文記号を薄くし、リストの丸印や区切り線などの軽い整形を表示します。
+フル レンダリング：編集中も見出し・リスト・引用・コードなどを最終レイアウトで表示し、大半の Markdown 記号を隠します。カーソルのあるブロックでは編集用に記号を表示し、フォーカスが外れると全体を読み取り専用で表示します。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown レンダリング アニメーション</value>

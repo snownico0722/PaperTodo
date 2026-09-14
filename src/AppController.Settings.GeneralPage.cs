@@ -137,6 +137,20 @@ public sealed partial class AppController
             "TipCollapseExpandedDeepCapsuleOnClick"));
         rightColumn.Children.Add(WrapWithHint(
             SettingsToggle(
+                SettingsSidebarLocalized(
+                    "浏览时优先向下展开",
+                    "Prefer downward expansion while browsing",
+                    "閲覧時は下方向への展開を優先",
+                    "탐색 중 아래로 펼치기 우선"),
+                State.EdgeCapsulePreviewPreferDownward,
+                ToggleEdgeCapsulePreviewPreferDownward),
+            BuildSettingsHintTooltip(SettingsSidebarLocalized(
+                "默认开启。向下浏览边缘胶囊时，如果当前卡片下方空间足够，就保持鼠标处的位置并向下展开；空间不足时仍使用原有补位。关闭后始终优先利用上一张卡片释放的上方空位。",
+                "Enabled by default. When browsing edge capsules downward, keep the hovered card in place and expand downward if it fits. Otherwise use the original placement. Disable to always reuse the upper space released by the previous card.",
+                "初期設定はオンです。エッジカプセルを下方向に閲覧する際、カードが収まる場合はマウス位置を保って下に展開し、収まらない場合は従来の配置を使います。オフにすると前のカードが空けた上側の空間を常に優先します。",
+                "기본으로 켜져 있습니다. 가장자리 캡슐을 아래로 탐색할 때 카드가 들어갈 공간이 있으면 마우스 위치를 유지하며 아래로 펼칩니다. 공간이 부족하면 기존 배치를 사용합니다. 끄면 이전 카드가 비운 위쪽 공간을 항상 우선 사용합니다."))));
+        rightColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
                 Strings.Get("LabsDockedCapsulesNonTopmost"),
                 State.ExperimentalDockedCapsulesNonTopmost,
                 ToggleExperimentalDockedCapsulesNonTopmost),
@@ -186,6 +200,12 @@ public sealed partial class AppController
             RestoreSettingsSidebarGeneralDefaults);
     }
 
+    private void ToggleEdgeCapsulePreviewPreferDownward()
+    {
+        State.EdgeCapsulePreviewPreferDownward = !State.EdgeCapsulePreviewPreferDownward;
+        SaveNow();
+    }
+
     private string HideEdgeCapsuleCloseButtonOnHoverTip() =>
         SettingsSidebarLocalized(
             "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要关闭时可在右键菜单中选择「隐藏」。",
@@ -211,6 +231,7 @@ public sealed partial class AppController
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CollapseExpandedDeepCapsuleOnClick = false;
+        State.EdgeCapsulePreviewPreferDownward = true;
         State.ExperimentalDockedCapsulesNonTopmost = false;
         State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;

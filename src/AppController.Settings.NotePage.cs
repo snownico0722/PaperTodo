@@ -94,7 +94,6 @@ public sealed partial class AppController
         {
             (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
             (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced")),
             (MarkdownRenderModes.Full, Strings.Get("MarkdownRenderFull"))
         };
 
@@ -122,7 +121,7 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarNoteDefaults()
     {
-        State.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
+        State.MarkdownRenderMode = MarkdownRenderModes.Basic;
         State.MarkdownEditAnimationEnabled = true;
         State.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Default;
         State.AutoCompressLargeImages = true;

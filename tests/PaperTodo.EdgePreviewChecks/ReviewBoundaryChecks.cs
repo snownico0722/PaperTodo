@@ -67,8 +67,7 @@ internal static partial class Program
             "```\n" + new string('文', 5995) + "😀tail\n```"
         };
         var strictUtf8 = new UTF8Encoding(false, true);
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-            MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         foreach (var source in fixtures)
         {
             var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent(source, mode);
@@ -84,8 +83,7 @@ internal static partial class Program
     private static void CheckPlainInlineReuse()
     {
         var text = string.Concat(Enumerable.Repeat("普通文字 English e\u0301 العربية 😀 ", 20));
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic,
-            MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         {
             var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
             Require(pieces.Length == 1 && pieces[0].Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None &&
@@ -100,7 +98,7 @@ internal static partial class Program
     private static void ProfilePlainInlineAllocation()
     {
         foreach (var length in new[] { 300, 6000 })
-        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         {
             var text = new string('文', length);
             long Sample()

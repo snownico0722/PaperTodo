@@ -105,7 +105,7 @@ internal static partial class Program
                 return bytes;
             }
             foreach (var sharp in new[] { false, true })
-            foreach (var testMode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+            foreach (var testMode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
             foreach (var zoom in new[] { 0.7, 1.3 })
             foreach (var fixture in pixelFixtures)
             {
@@ -178,7 +178,7 @@ internal static partial class Program
             a.Paper.TextZoom = 1.3;
             hits = cache.ArtifactHits; Release(Demand(a, new(350, 300)));
             Require(cache.ArtifactHits == hits, "changed zoom cannot reuse old layout");
-            mode = MarkdownRenderModes.Enhanced;
+            mode = MarkdownRenderModes.Basic;
             hits = cache.ArtifactHits; Release(Demand(a, new(350, 300)));
             Require(cache.ArtifactHits == hits, "changed render mode cannot reuse old layout");
             Console.WriteLine("PASS source, version, theme, height reuse, width, zoom and mode invalidation");
@@ -256,7 +256,7 @@ internal static partial class Program
 
     private static void ProfilePreload(bool reverse)
     {
-        foreach (var mode in new[] { MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         foreach (var fixture in new[] {
             (Name: "plain", Text: string.Join('\n', Enumerable.Range(1,12).Select(i=>$"第{i}行 **内容** `code`"))),
             (Name: "dense", Text: string.Concat(Enumerable.Repeat("**加粗** *italic* ~~删除~~ `code` [链接](https://example.com) 文 ", 80))),

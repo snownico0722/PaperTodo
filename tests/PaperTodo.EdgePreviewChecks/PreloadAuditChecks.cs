@@ -11,7 +11,7 @@ internal static partial class Program
     {
         bool Eligible(string text, string mode) => MarkdownEdgePreviewPreload.IsClearlyHighLoad(
             MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, mode));
-        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         {
             Require(!Eligible(new string('a', 200), mode), "200 source characters do not qualify");
             Require(!Eligible(new string('a', 400), mode) && Eligible(new string('a', 401), mode), "strict 400/401 boundary");
