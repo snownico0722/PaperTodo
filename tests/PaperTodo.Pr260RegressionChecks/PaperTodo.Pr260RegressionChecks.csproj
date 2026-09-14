@@ -9,6 +9,7 @@
     <CoordinatorSource Condition="'$(CoordinatorSource)' == ''">../../src/EdgePrewarmCoordinator.cs</CoordinatorSource>
   </PropertyGroup>
   <ItemGroup>
+    <Using Include="System.IO" />
     <Compile Include="Program.cs" />
     <!-- Execute the actual production scheduler; only optional diagnostic logging is stubbed. -->
     <Compile Include="$(CoordinatorSource)" Link="EdgePrewarmCoordinator.cs" />
