@@ -63,7 +63,11 @@ public sealed partial class AppController
 
     private EdgePrewarmOutcome PrepareStaticEdgeQueue(string queueKey)
     {
-        if (!CanPrepareEdgePrewarm()) return EdgePrewarmOutcome.Deferred;
+        var coordinator = _edgePrewarm;
+        // Capture the actual in-flight request before capacity/layout callbacks can re-enter.
+        // A new request for another queue is not a reason to abandon this queue's admission.
+        if (coordinator?.CapturePreparationTicket(queueKey) is not { } ticket ||
+            !CanPrepareEdgePrewarm()) return EdgePrewarmOutcome.Deferred;
         if (_edgeCapsuleQueueCompositionProxies.TryGetValue(queueKey, out var existing))
             return existing.IsRetainedForQueueBrowsing ? EdgePrewarmOutcome.Skipped : EdgePrewarmOutcome.Deferred;
         var windows = DeepCapsulePapersInOrder().Where(paper =>
@@ -103,17 +107,19 @@ public sealed partial class AppController
         plan = ReserveEdgeCapsuleQueueProxyOutputCapacity(plan);
         var entries = windows.Select(window => new EdgeCapsuleVisualTransactionEntry(
             window!, queueKey, motion, RefreshLayout: true)).ToArray();
-        var version = _edgePrewarm!.Version;
         var sourceHandles = windows.Select(window => window!.EdgeCapsuleQueueProxySourceHandle).ToArray();
         // The endpoint commit changes the presenter's dirty/authority state itself. Recheck the
         // lifecycle and source identity here; the endpoint verifier owns settled geometry checks.
-        bool StillCurrent() => _edgePrewarm?.Version == version && CanPrepareEdgePrewarm() &&
+        bool StillCurrent() => ReferenceEquals(_edgePrewarm, coordinator) &&
+            coordinator.IsPreparationCurrent(queueKey, ticket) && CanPrepareEdgePrewarm() &&
             DeepCapsulePapersInOrder().Where(paper =>
                 string.Equals(QueueKey(paper), queueKey, StringComparison.Ordinal))
                 .Select(paper => _windows.GetValueOrDefault(paper.Id)).SequenceEqual(windows) &&
             windows.Select((window, index) => window!.CanEnterEdgeCapsulePreview &&
                 !window.IsEdgeCapsulePreviewOpen &&
                 window.EdgeCapsuleQueueProxySourceHandle == sourceHandles[index]).All(valid => valid);
+        // Do not even enter native staging after a capacity/layout callback invalidated this ticket.
+        if (!StillCurrent()) return EdgePrewarmOutcome.Deferred;
         var startedAt = Stopwatch.GetTimestamp();
         var started = TryStartEdgeCapsuleQueueCompositionProxy(plan, entries, predecessor: null,
             out _, StillCurrent);
@@ -121,7 +127,8 @@ public sealed partial class AppController
             proxy.IsRetainedForQueueBrowsing;
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"prewarm.queue phase={(retained ? "ready" : "failed")} queue={queueKey} members={windows.Length} " +
-            $"version={version} totalMs={Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F3}");
+            $"version={coordinator.Version} request={ticket.RequestVersion} epoch={ticket.Epoch} " +
+            $"totalMs={Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F3}");
         return retained ? EdgePrewarmOutcome.Prepared : EdgePrewarmOutcome.Failed;
     }
 
