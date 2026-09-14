@@ -13,6 +13,7 @@ public partial class App
         InitializeTelemetry();
 
         // The controller's prewarm coordinator schedules graphics resources together with real
-        // queue readiness, after startup shells settle. Construction itself never preclaims HWNDs.
+        // queue readiness, after the first preview pass and startup shells settle. Construction
+        // itself never preclaims HWNDs or competes with the preview-first startup path.
     }
 }

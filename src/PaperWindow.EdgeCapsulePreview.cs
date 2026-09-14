@@ -871,7 +871,7 @@ public sealed partial class PaperWindow
         }
 
         _ = Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
+            DispatcherPriority.SystemIdle,
             (Action)(() =>
             {
                 if (_controller.State.ExperimentalEdgeCapsuleHoverPreview &&

@@ -35,7 +35,7 @@
 | D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
 | D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
-| D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
+| D-023 | Lightweight Prewarm 保留一次性首用预热 | Partially superseded by D-037 | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
 | D-025 | Note 图片若干限制为已接受取舍 | Accepted | Note / 图片 |
 | D-026 | Markdig 拥有标准 Markdown grammar；宿主仅做有界兼容处理 | Accepted | Note / Markdown |
@@ -48,7 +48,7 @@
 | D-033 | 有界预览重段落使用共享 STA 排版 | Superseded by D-035 | Edge performance |
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
-| D-036 | 单文件正式发布保持 ReadyToRun 关闭 | Accepted | 启动性能 / 发布 |
+| D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
 | D-037 | 可浏览队列保留已验证的 live authority | Accepted | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 
@@ -1195,7 +1195,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 
 **Status:** Partially superseded by D-038
 
-D-038 替代本条仅靠 lifecycle/owner 恢复请求、没有活动请求截止协调的选择；Rendering 唯一推进、共享 QPC、按组屏障和原生重入保护继续有效。下文保留当时的决策及 E-005～E-013 历史证据，不将后续 render demand 改写成原先已经采用。
+D-038 替代本条仅靠 lifecycle/owner 恢复请求、没有活动请求截止协调的选择；Rendering 唯一推进、共享 QPC、按组屏障和原生重入保护继续有效。下文保留当时的决策及 E-007～E-015 历史证据，不将后续 render demand 改写成原先已经采用。
 
 ### Context
 
@@ -1214,19 +1214,19 @@ D-012 为缺失 Rendering 加入救援通道，后来形成线程池 timer、截
 
 补一条最终仍回到 UI Dispatcher 的回调不能解除 UI 阻塞；与显示帧竞争还会掩盖真正的队列阻挡。由 owner 明确恢复帧源，既减少并行状态，又避免一个队列的待处理工作拖住无关队列。没有实际帧呈现证据时，不把 functional checks 通过解释成任意机器都不掉帧。
 
-2026-09-13 的 E-005 补充了另一种丢推进路径：不同 WPF Rendering 通知可能复用预计呈现时间，按值去重会丢掉已经到来的合法通知。新回归在旧条件下复现第二次通知无法推进，在移除该条件后通过；同包开关对照也支持应用更新间隔改善。纯 Pointer 回调不设队列屏障的实验则减少了屏障次数，却没有改善更新间隔，单独与组合测试均未采用。不能将更少的屏障、退订或 watchdog 次数替代完整的更新节拍对照，也不能把 Rendering-only 统计中排除的旧 watchdog 更新视作无效工作。
+2026-09-13 的 E-007 补充了另一种丢推进路径：不同 WPF Rendering 通知可能复用预计呈现时间，按值去重会丢掉已经到来的合法通知。新回归在旧条件下复现第二次通知无法推进，在移除该条件后通过；同包开关对照也支持应用更新间隔改善。纯 Pointer 回调不设队列屏障的实验则减少了屏障次数，却没有改善更新间隔，单独与组合测试均未采用。不能将更少的屏障、退订或 watchdog 次数替代完整的更新节拍对照，也不能把 Rendering-only 统计中排除的旧 watchdog 更新视作无效工作。
 
-E-006 将临时退订的另一个成本定位到实际 WPF 调用点：在 WaitingForResponse 期间没有 Rendering 订阅，`ScheduleNextRenderOp` 可退出 interlock，经 `LeaveInterlockedPresentation → CompleteRender → Channel.WaitForNextMessage` 同步等待。另有重新进入呈现调度时的 Inactive/Input promotion 间隔。因而恢复订阅后操作很快开始，并不能证明整个退订/恢复周期没有成本。此证据补充原因，不改变当前 owner、shape 与 translation 的职责；此前删除 Pointer 屏障仍是未获性能支持的候选，不能仅凭同步等待栈直接恢复该实验或引入补帧。完整采样、对照和仍未知的合成端延迟见 E-006。
+E-008 将临时退订的另一个成本定位到实际 WPF 调用点：在 WaitingForResponse 期间没有 Rendering 订阅，`ScheduleNextRenderOp` 可退出 interlock，经 `LeaveInterlockedPresentation → CompleteRender → Channel.WaitForNextMessage` 同步等待。另有重新进入呈现调度时的 Inactive/Input promotion 间隔。因而恢复订阅后操作很快开始，并不能证明整个退订/恢复周期没有成本。此证据补充原因，不改变当前 owner、shape 与 translation 的职责；此前删除 Pointer 屏障仍是未获性能支持的候选，不能仅凭同步等待栈直接恢复该实验或引入补帧。完整采样、对照和仍未知的合成端延迟见 E-008。
 
-E-007 随后单独测试了两种更保守的候选：用现有 reducer 提前过滤不改变单纸片状态的 Pointer reconcile，以及仅在已有动画订阅时跨越临时 owner 屏障保留 Rendering。两者都保留原队列/native/事务保护，但同包四组交叉回放中，无论单独或组合，owner 更新间隔 P95 都约31～32ms，对照约20～21ms；过滤削掉约99%的代理 Pointer 排队、保留订阅大幅减少启停，均不足以换来节拍改善。候选最大间隙多发生在已订阅且无中途退订时，不能继续归因于该间隙内的同步退订。两项实现已撤回并隔离保存，当前规则不变。这是对具体实现的实测否决，不把所有输入合并或订阅生命周期优化永久排除；再次尝试必须提出新的机制差异及完整节拍证据。
+E-009 随后单独测试了两种更保守的候选：用现有 reducer 提前过滤不改变单纸片状态的 Pointer reconcile，以及仅在已有动画订阅时跨越临时 owner 屏障保留 Rendering。两者都保留原队列/native/事务保护，但同包四组交叉回放中，无论单独或组合，owner 更新间隔 P95 都约31～32ms，对照约20～21ms；过滤削掉约99%的代理 Pointer 排队、保留订阅大幅减少启停，均不足以换来节拍改善。候选最大间隙多发生在已订阅且无中途退订时，不能继续归因于该间隙内的同步退订。两项实现已撤回并隔离保存，当前规则不变。这是对具体实现的实测否决，不把所有输入合并或订阅生命周期优化永久排除；再次尝试必须提出新的机制差异及完整节拍证据。
 
-E-008进一步限制了这项性能判断的外推范围：原行为多出的直接Rendering请求/遍历，并没有带来同幅增长的可观察提交或呈现反馈；同一观察提交间隔可以发生多次遍历。因此E-007的应用更新间隔不能直接换算为物理FPS退化。另一方面，提交数量相近也不证明体验相同，原行为提交前最近记录的owner状态较新，但是否被序列化并实际显示仍未知。后续优化需同时核对请求、执行、提交及内容新鲜度，不能只优化其中一个计数。采样还区分了“WaitingForResponse且没有Render操作”和“已有Inactive/Input操作但未执行”两种GetMessage等待，不能用一个统一的退订解释替代。当前调度规则与候选撤回状态不变；原始证据及只读探针修正见E-008。
+E-010进一步限制了这项性能判断的外推范围：原行为多出的直接Rendering请求/遍历，并没有带来同幅增长的可观察提交或呈现反馈；同一观察提交间隔可以发生多次遍历。因此E-009的应用更新间隔不能直接换算为物理FPS退化。另一方面，提交数量相近也不证明体验相同，原行为提交前最近记录的owner状态较新，但是否被序列化并实际显示仍未知。后续优化需同时核对请求、执行、提交及内容新鲜度，不能只优化其中一个计数。采样还区分了“WaitingForResponse且没有Render操作”和“已有Inactive/Input操作但未执行”两种GetMessage等待，不能用一个统一的退订解释替代。当前调度规则与候选撤回状态不变；原始证据及只读探针修正见E-010。
 
-2026-09-14 的 E-010 在 PR238 的直接父提交 PR245 上只关闭旧 watchdog，就将实际 owner 形状更新 P95 从约13.4ms推到约33ms，足以复现历史跳升。旧通道确实推进同一动画状态，不能以“非Rendering来源”为由抹去其收益；Rendering-only P95也由约26ms变成约33ms，差异不只是统计时少算中间点。PR238并未新增RenderingTime值去重，但移除另一更新来源后，已有误去重的损失更明显；历史包关闭去重有收益，当前代码已在E-005修正。这个因果结果不证明定时更新修好了WPF反馈等待，也不证明关闭计时器本身使显示更流畅。当前事件驱动路线保留，但其性能目标尚未达成；后续选择需正面比较实际更新、提交与呈现，不能以简化调度为性能改善的替代证据。完整单变量对照及仍未拆开的PR238其他变化见E-010。
+2026-09-14 的 E-012 在 PR238 的直接父提交 PR245 上只关闭旧 watchdog，就将实际 owner 形状更新 P95 从约13.4ms推到约33ms，足以复现历史跳升。旧通道确实推进同一动画状态，不能以“非Rendering来源”为由抹去其收益；Rendering-only P95也由约26ms变成约33ms，差异不只是统计时少算中间点。PR238并未新增RenderingTime值去重，但移除另一更新来源后，已有误去重的损失更明显；历史包关闭去重有收益，当前代码已在E-007修正。这个因果结果不证明定时更新修好了WPF反馈等待，也不证明关闭计时器本身使显示更流畅。当前事件驱动路线保留，但其性能目标尚未达成；后续选择需正面比较实际更新、提交与呈现，不能以简化调度为性能改善的替代证据。完整单变量对照及仍未拆开的PR238其他变化见E-012。
 
-E-011 用消息前后探针区分了通知处理前的等待和通知下游自身的同步等待：一些约33ms间隔的第一条MIL通知在约16ms到达，但下游又耗时约16ms，不能描述成处理完第一条之后再空等第二条。另有49ms段的render操作早已排队，不能归为丢请求。探针时钟只有粗粒度，queue-age=0不证明亚毫秒投递；DWM未来时钟的实测也不单独证明多等一帧。针对这些证据，独立测试了“保留已有活动订阅＋首次恢复就绪时通过公开add路径保留原render请求”的组合，区别于E-007仅keep。它通过屏障、单次恢复、同步Hooks重入及取消检查，深层采集下P99有改善；关闭深层探针后P95/P99未呈一致改善，且仍出现52ms间隔。因此候选保持隔离，未作为生产优化采纳。强制本进程遵守高精度计时请求的Windows策略也未获稳定收益，未引入日用设置。这里排除的是已测具体实现，不是宣称订阅机制没有成本；完整对照及尚未验证的WPF/系统等待见E-011。
+E-013 用消息前后探针区分了通知处理前的等待和通知下游自身的同步等待：一些约33ms间隔的第一条MIL通知在约16ms到达，但下游又耗时约16ms，不能描述成处理完第一条之后再空等第二条。另有49ms段的render操作早已排队，不能归为丢请求。探针时钟只有粗粒度，queue-age=0不证明亚毫秒投递；DWM未来时钟的实测也不单独证明多等一帧。针对这些证据，独立测试了“保留已有活动订阅＋首次恢复就绪时通过公开add路径保留原render请求”的组合，区别于E-009仅keep。它通过屏障、单次恢复、同步Hooks重入及取消检查，深层采集下P99有改善；关闭深层探针后P95/P99未呈一致改善，且仍出现52ms间隔。因此候选保持隔离，未作为生产优化采纳。强制本进程遵守高精度计时请求的Windows策略也未获稳定收益，未引入日用设置。这里排除的是已测具体实现，不是宣称订阅机制没有成本；完整对照及尚未验证的WPF/系统等待见E-013。
 
-E-013进一步把同一就绪截止干预拆成只唤醒UI、只请求WPF渲染和直接推进动画。仅请求正常Rendering即可重复改善owner更新P95及提交前最近形状记录的年龄，说明旧救援的收益不必全部依赖直接补帧；提交/呈现反馈的观察数量却没有同比增长，不能换算为物理FPS提升。请求模式仍有MIL下游约27.9ms等待，减少被遮住源HWND移动的独立候选则省掉实际native写入但未改善节拍；组合降低CPU却提高了更新P95/P99。因此三种机制需要分别评价，不能以少写、少订阅或更多回调替代最终呈现证据。本轮定时请求与HWND候选全部保持隔离，现有生产规则不变；真实位移后的输入交接、透明度跨通道交接及日用代价仍未验证。完整同包对照、代理自主shape像素能力原型与限制见E-013。
+E-015进一步把同一就绪截止干预拆成只唤醒UI、只请求WPF渲染和直接推进动画。仅请求正常Rendering即可重复改善owner更新P95及提交前最近形状记录的年龄，说明旧救援的收益不必全部依赖直接补帧；提交/呈现反馈的观察数量却没有同比增长，不能换算为物理FPS提升。请求模式仍有MIL下游约27.9ms等待，减少被遮住源HWND移动的独立候选则省掉实际native写入但未改善节拍；组合降低CPU却提高了更新P95/P99。因此三种机制需要分别评价，不能以少写、少订阅或更多回调替代最终呈现证据。本轮定时请求与HWND候选全部保持隔离，现有生产规则不变；真实位移后的输入交接、透明度跨通道交接及日用代价仍未验证。完整同包对照、代理自主shape像素能力原型与限制见E-015。
 
 ### Evidence
 
@@ -1319,7 +1319,7 @@ D-034 去掉隐藏正文缓存，但保留冷 WPF renderer 与热 artifact rende
 
 ---
 
-## D-036 — 单文件正式发布保持 ReadyToRun 关闭
+## D-036 — 正式分发保持两档单文件且不增加 ReadyToRun 变体
 
 **Status:** Accepted
 
@@ -1329,11 +1329,13 @@ PaperTodo 的 Windows Release 同时提供 self-contained 与 framework-dependen
 
 本轮以 10 个已折叠 Edge Note 为固定工作集，在同一 Windows Server 2025 runner 上比较 8 种发布形态。每种形态执行 3 组 fresh/warm 新进程样本；外部计时从 `CreateProcess` 开始，进程内记录最早 module initializer、`App.OnStartup`、`AppController`、surface restore、WPF `CompositionTarget.Rendering`，最后用 `DwmFlush` 作为“已提交到 DWM”的边界。该边界不是物理显示器真正扫描出像素的时间，也不是用户机器的绝对性能保证。
 
+#255 随后补测了 SC/FD multi-file R2R 的启动、工作集与真实 ZIP 体积，并实际验证两个 ZIP 均可解压运行。将这些数据与现有 FD single-file no-R2R 放回同一用户选择后，R2R 的技术收益不足以支撑新增分发变体，因此本条决策从“正式单文件关闭 R2R”进一步收紧为“正式分发保持两档 no-R2R 单文件”。
+
 ### Decision
 
 - 正式 self-contained + single-file + compression 发布继续使用 `PublishReadyToRun=false`。
-- framework-dependent 单文件当前也保持 `PublishReadyToRun=false`；其 R2R 版本虽有可测启动收益，但包体增幅过大，不作为默认发布形态。
-- 不把 ReadyToRun 本身列为永久禁用能力。若未来改成多文件部署、安装器式部署、NativeAOT 或显著改变单文件 host/运行时版本，应重新 A/B，而不是机械沿用本条数字。
+- framework-dependent 单文件也保持 `PublishReadyToRun=false`；它本身已经承担“更小、更快、需要 .NET”的用户选择，不再为 R2R 增加第三/第四种正式包。
+- 不新增 self-contained / framework-dependent 的 R2R 多文件 ZIP 或 R2R 单文件作为正式打包选项。ReadyToRun 本身不列为永久禁用能力；若未来改成安装器、多文件部署、NativeAOT 或显著改变 host/运行时版本，应重新 A/B。
 
 ### Why
 
@@ -1344,9 +1346,11 @@ PaperTodo 的 Windows Release 同时提供 self-contained 与 framework-dependen
 
 因此在当前正式单文件压缩组合中，R2R 不仅没有带来端到端启动收益，还把主要额外成本推到了最早托管代码之前。该 probe 无法仅凭这些时间点把这段成本进一步归因到 host、bundle 映射、解压或 loader 的某一个内部步骤，因此长期结论只写“当前组合负优化”，不臆测具体内部原因。
 
-R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 -> 1100 ms（约 -27%），framework-dependent 单文件约 1193 -> 1041 ms（约 -13%）。但对应发布体积也分别从约 200 -> 240 MB、17.1 -> 51.6 MB。对 PaperTodo 当前“单 EXE、尽量小、即时启动”的发布目标，这些收益不足以推翻单文件边界。
+R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 -> 1100 ms（约 -27%），framework-dependent 单文件约 1193 -> 1041 ms（约 -13%）。但产品决策不能只和“同形态 no-R2R”比较：现有 FD single-file no-R2R 已经约 1193/1162 ms、约 17.2 MiB。相对这档真实用户选择，SC multi-file + R2R 在同一矩阵只再快约 93 ms Fresh / 84 ms Warm，却需要约 229 MiB 多文件目录；FD single-file + R2R 则把体积放大到约 50.1 MiB，Warm 只再快约 75 ms。#255 后续补测还证明 FD multi-file R2R 与 FD single-file R2R 基本同档，说明 R2R 技术有效，但没有产生新的用户分发档位。
 
 单文件压缩本身也做了对照：关闭压缩把 self-contained 单文件从约 80.2 MiB 放大到约 192.0 MiB（约 +139%），fresh DWM 只从约 1452 降到约 1416 ms。当前不为约几十毫秒的 runner 差异把正式完整包扩大到两倍以上。
+
+FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTodoCompressWindowsSdk=true` 将本轮 EXE 从约 32.99 MiB 压到 16.27 MiB（约 -50.7%）；Command Ready 中位 928.01 -> 924.29 ms，DWM 952.79 -> 939.14 ms，配对差异的 IQR 均跨过 0，working set 只差约 0.07 MiB。这里不能宣称压缩更快，但没有测到可证明的启动/内存回退，因此 framework-dependent 包继续默认启用这项定向压缩。它与 self-contained 的 `EnableCompressionInSingleFile` 是两条不同压缩路径。
 
 ### Rejected / Pitfalls
 
@@ -1359,7 +1363,7 @@ R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 ->
 
 - `.github/workflows/release.yml` 中的 `PublishReadyToRun=false` 是有实测依据的发布决策，不应在普通“启动优化”中随手改回 true。
 - 若继续优化冷启动，优先测 PaperTodo 自身 `AppController` / PaperWindow / Edge Host 与单文件 host 的真实阶段，而不是先假设 JIT 是主瓶颈。
-- framework-dependent 包天然绕过大部分 self-contained bundle 启动成本，可继续作为对启动速度敏感且已安装匹配 .NET Runtime 用户的轻量选择；是否为它单独启用 R2R 需要重新权衡约 3 倍 EXE 体积。
+- framework-dependent no-R2R 单文件继续作为对启动速度敏感且已安装匹配 .NET Runtime 用户的轻量选择；当前不再把“是否单独启用 R2R”作为待选正式分发方案。
 
 ### Evidence
 
@@ -1367,6 +1371,8 @@ R2R 本身仍然有效：self-contained 多文件的 fresh DWM 中位约 1501 ->
 - benchmark artifact `cold-start-packaging-benchmark`：`summary.csv` / `startup-samples.csv` / `publish-results.csv`。
 - `feb311cdf712d24f5b7cefb023a0f7d87150004d`：历史上因单文件体积膨胀关闭 ReadyToRun。
 - `.github/workflows/release.yml`：当前正式 self-contained / framework-dependent 单文件发布参数。
+- #255 补测：Actions run `34728040332`（启动/工作集）与 `34728463445`（未插桩 R2R ZIP 打包验证）；原始打包 PR 在数据吸收进 E-001 后关闭，不进入正式分发。
+- FD Windows SDK 定向压缩补测：Actions run `34758652475`，实验 HEAD `7f33460c11f99ed87074b270144aa484366b92d7`；12 轮/形态交错 A/B，原始 samples/summary/publish CSV 长期保存在 `doc/experiments/E-001-fd-sdk-compression-*.csv`。
 
 ---
 
@@ -1414,7 +1420,7 @@ source 首次准备与 output 共用产品最大值，按当前工作区归一�
 
 ### Context
 
-D-032 建立了 owner 分组屏障并移除直接补帧，但仅靠 activation/阻挡解除请求 WPF，未达到连续浏览的更新节奏目标。E-010 确认旧 watchdog 确实贡献过动画状态更新，不能因其来自 timer 就抹去收益；E-013 又把唤醒 UI、请求 WPF 和直接推进拆开，证明收益不必依赖第二个状态推进入口。E-014 在保留队列和 native 屏障的前提下，继续验证仅请求 WPF 的独立实现及正式整合产物。
+D-032 建立了 owner 分组屏障并移除直接补帧，但仅靠 activation/阻挡解除请求 WPF，未达到连续浏览的更新节奏目标。E-012 确认旧 watchdog 确实贡献过动画状态更新，不能因其来自 timer 就抹去收益；E-015 又把唤醒 UI、请求 WPF 和直接推进拆开，证明收益不必依赖第二个状态推进入口。E-016 在保留队列和 native 屏障的前提下，继续验证仅请求 WPF 的独立实现及正式整合产物。
 
 ### Decision
 
@@ -1427,9 +1433,9 @@ D-032 建立了 owner 分组屏障并移除直接补帧，但仅靠 activation/�
 
 ### Why / Rejected / Pitfalls
 
-E-014 的同包对照及去除实验开关后的整合回放支持应用端 owner 更新间隔改善；深层观察还支持提交前最近形状记录更及时。这些量都不是物理显示帧率，不证明该记录已被序列化并显示，也不代表 WPF/MIL 下游等待或所有输入延迟已经解决。活动请求有额外调度与 CPU 成本，应保留无工作时撤销和有界投递，而不是扩大为常驻高频轮询。
+E-016 的同包对照及去除实验开关后的整合回放支持应用端 owner 更新间隔改善；深层观察还支持提交前最近形状记录更及时。这些量都不是物理显示帧率，不证明该记录已被序列化并显示，也不代表 WPF/MIL 下游等待或所有输入延迟已经解决。活动请求有额外调度与 CPU 成本，应保留无工作时撤销和有界投递，而不是扩大为常驻高频轮询。
 
-本轮 source-anchor 与 retained 期间提前移动源 HWND 的实验未通过最终 authority 交接：几何验证正确、提前移动完成后，真实点击仍能出现 peer 短暂缺失；另一次交接路径存在边缘叠加，因此这些候选未采用。collection 没有消除本次回放中的原生写入；初轮同步耗时下降的信号在追加同包 ABBA 中未呈稳定方向，因此也保留为隔离候选。原生调用次数相同不能单独否定提交时机收益，采用判断需包括实际耗时与行为。代理自主 shape 路线仍封存。各路线的局部验证不能合并成整条交接路线已通过，也不能作为 render-demand 收益的归因；保留 E-014 的正反证据，不将具体候选未采用扩大成永久否决所有后续方案。
+本轮 source-anchor 与 retained 期间提前移动源 HWND 的实验未通过最终 authority 交接：几何验证正确、提前移动完成后，真实点击仍能出现 peer 短暂缺失；另一次交接路径存在边缘叠加，因此这些候选未采用。collection 没有消除本次回放中的原生写入；初轮同步耗时下降的信号在追加同包 ABBA 中未呈稳定方向，因此也保留为隔离候选。原生调用次数相同不能单独否定提交时机收益，采用判断需包括实际耗时与行为。代理自主 shape 路线仍封存。各路线的局部验证不能合并成整条交接路线已通过，也不能作为 render-demand 收益的归因；保留 E-016 的正反证据，不将具体候选未采用扩大成永久否决所有后续方案。
 
 ### Consequences / Evidence
 
@@ -1439,5 +1445,4 @@ E-014 的同包对照及去除实验开关后的整合回放支持应用端 owne
 - `src/EdgeCapsuleFrameScheduler.cs`：活动/就绪组准入、Rendering 唯一推进与公开 WPF 请求入口。
 - `src/EdgeCapsulePresenter.cs`：native apply 就绪变化、普通 reconcile 和真实输入优先级。
 - `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
-- `doc/EXPERIMENTS.md` E-014：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。
-
+- `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。

@@ -116,7 +116,7 @@ public sealed partial class PaperWindow
         RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         if (!TryStageEdgeCapsuleVisualTransaction(
                 animate,
@@ -194,7 +194,7 @@ public sealed partial class PaperWindow
         RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         UpdateDeepCapsuleSlotHostTheme();
 

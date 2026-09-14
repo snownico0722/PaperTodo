@@ -350,7 +350,12 @@ public sealed partial class PaperWindow
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
-        RefreshCapsuleLabel();
+        // Materializing the first Shell is not a model edit. Preserve an existing edge
+        // artifact when the Markdown editor loaded the same text; normalization still invalidates.
+        RefreshCapsuleLabel(invalidatePreview:
+            !IsCurrentBodyProviderMarkdown ||
+            !string.Equals(CurrentMarkdownTextForEdgeCapsulePreview(), _paper.Content ?? string.Empty,
+                StringComparison.Ordinal));
         leftStack.Children.Add(_capsuleLabelText);
 
         leftArea.Child = BuildPluginCapsuleContentHost(leftStack);

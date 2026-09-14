@@ -90,9 +90,9 @@ PaperTodo.exe
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
 
-启动恢复先建立已知显示器上的 Edge Host 和可见纸片。只有显示器归属尚不确定的普通纸片延后恢复，等待期间不改写其坐标；显示器稳定或限时到达后仍由既有离屏救援处理。显式显示、隐藏、删除和退出优先于迟到的恢复结果。`AppController.StartupPrewarm` 在 UI Dispatcher 上按短批次补建 Shell，完成 Task 供插件 startupPaper 等待，不使用 Shell-ready 轮询；插件初始化本身仍在 idle 阶段，不同步阻挡 StartAsync 返回。
+启动恢复先建立已知显示器上的 Edge Host 和可见纸片。只有显示器归属尚不确定的普通纸片延后恢复，等待期间不改写其坐标；显示器稳定或限时到达后仍由既有离屏救援处理。显式显示、隐藏、删除和退出优先于迟到的恢复结果。`AppController.StartupPrewarm` 先等待既有 Markdown 预热队列的首轮完成，再在 UI Dispatcher 的低优先级短批次补建折叠纸片的完整 Shell；提前展开仍由 `EnsureShellBuilt` 当场完成所选纸片，不另建备用路径。Shell 完成 Task 供插件 startupPaper 等待，不使用 Shell-ready 轮询；插件初始化本身仍在 idle 阶段，不同步阻挡 StartAsync 返回。DComp 与拖拽的一次性可选预热保留，但不排在启动主流程返回之前。
 
-正常退出先提交当前编辑并完成既有同步保存，再撤下可见 surface；撤下界面不改变持久化 IsVisible。WPF/插件 UI 仍由原 Dispatcher 释放，脚本进程的停止请求和限时等待在非 UI 任务中并发执行，与界面清理重叠，最终统一等待完成。退出不为即将销毁的图片缓存执行额外回收，也不重复提交已由 controller 保存的编辑内容。
+正常退出先提交当前编辑并完成既有同步保存，再撤下可见 surface；撤下界面不改变持久化 IsVisible。WPF/插件 UI 仍由原 Dispatcher 释放，脚本进程的停止请求和限时等待在非 UI 任务中并发执行，与界面清理重叠，最终统一等待完成。退出不为即将销毁的图片缓存执行额外回收，也不重复提交已由 controller 保存的编辑内容。普通主实例退出在已停止 owned work 后调用 `Application.Shutdown` 并让 Dispatcher 完成 `App.OnExit`、单实例监听和应用资源清理，不再紧接着调用 `Environment.Exit` 截断 WPF 生命周期；崩溃边界和次实例转发退出保持独立。
 
 ### 3.2 MCP
 
@@ -267,7 +267,7 @@ Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验
 
 冷渲染与预热共用唯一的 `PrepareArtifactAsync`：UI 捕获内容、样式、字体、DPI 和资源冻结副本，共享 `MarkdownLayoutWorker` STA 完成 `TextFormatter` 排版，UI 校验外观后组合冻结 Drawing、尺寸、截断状态与全局链接矩形。普通短行也走这条路径，不保留 WPF block renderer、重段落控件或同步渲染退路。保留的短/长行装饰差异只用于兼容既有画面，不再决定 renderer。Worker 不持有 UI 控件、可变语义缓存或业务回调；需求优先于预热，按可见行短批次让出并检查取消，空闲时等待 Dispatcher。
 
-`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact。边缘浏览开启时，小工作集包含轻内容在内的非空内置 Markdown 笔记都可预热，较多来源仍沿用重内容筛选；计数只包含当前存活、可见且已进入边缘队列的内置 Markdown 纸片。启动恢复先登记首批工作，在 Shell 预建完成后直接唤醒既有队列，避免初始化再次重置预热延迟；后续编辑仍使用共享一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
+`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact。边缘浏览开启时，小工作集包含轻内容在内的非空内置 Markdown 笔记都可预热，较多来源仍沿用重内容筛选；计数只包含当前存活、可见且已进入边缘队列的内置 Markdown 纸片。启动恢复直接唤醒首批工作，使用现有 Edge Host 和模型生成预览，不等待折叠纸片的完整 Shell。队列暴露本轮完成 Task 供可选 Shell 预建排序，日常失效与调度仍由队列自身拥有。首次标题和胶囊 UI 初始化不把未变化的 Markdown 内容当成编辑作废；实际文本规范化、编辑及资源变更仍走原失效路径，后续编辑保留一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
 
 `MarkdownEdgeCapsulePreviewViewport` 是唯一的准备、取消和发布 owner：命中取 artifact，未命中异步调用同一个 builder，两者都进入 `Publish`，挂载一个正文绘制面及原生链接控件。只有完整结果发布后才启用正文输入；链接的捕获、释放、焦点和键盘由 `MarkdownPreviewLinkHit` 保留 WPF 行为，完全裁掉的链接禁用，背景仍交给打开纸片手势。同一视图、内容和尺寸可短暂收起后复用；内容、外观、DPI 或尺寸失效重新准备，卸载释放挂载元素。
 
@@ -391,11 +391,11 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 普通 reconcile 使用 Render 优先级并保留原有 owner registration；真实 Host 输入需要提前处理时，将同一待执行操作提升到 Send，完成后释放原 registration，不另建一套输入或帧状态。上述 demand 已用于正常运行，Debug 观察开关不决定其是否启用。
 
-Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-004。
+Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-006。
 
-定位等待可在上述 Debug 采集之上显式开启 `PAPERTODO_EDGE_DEEP_OBSERVATIONS=1`：`EdgeDispatcherLatencyObservation` 通过现有 Dispatcher hooks 和提交前通知读取已经存在的 WPF MediaContext；私有字段缺失只降低可观察能力，不成为运行依赖。`EdgeNativeLatencyObservation` 检查进程和线程归属，仅对当前 UI 线程自有 HWND 建立 subclass，在原生几何批次内记录下游消息耗时，原参数和返回值原样转发一次。两者退出时解除观察，不新增 Rendering 订阅、调度操作或补帧计时器；Release 不编入。深层采集有成本，仅用于诊断，不能据其回调/消息耗时声称物理帧率；同包关闭对照、实际 WPF 调用点和边界见 E-006。
+定位等待可在上述 Debug 采集之上显式开启 `PAPERTODO_EDGE_DEEP_OBSERVATIONS=1`：`EdgeDispatcherLatencyObservation` 通过现有 Dispatcher hooks 和提交前通知读取已经存在的 WPF MediaContext；私有字段缺失只降低可观察能力，不成为运行依赖。`EdgeNativeLatencyObservation` 检查进程和线程归属，仅对当前 UI 线程自有 HWND 建立 subclass，在原生几何批次内记录下游消息耗时，原参数和返回值原样转发一次。两者退出时解除观察，不新增 Rendering 订阅、调度操作或补帧计时器；Release 不编入。深层采集有成本，仅用于诊断，不能据其回调/消息耗时声称物理帧率；同包关闭对照、实际 WPF 调用点和边界见 E-008。
 
-进一步显式开启 `PAPERTODO_EDGE_MESSAGE_OBSERVATIONS=1` 时，`EdgeMessageLatencyObservation` 观察现有 Dispatcher/MIL/WM_TIMER 的队列时间，只对当前进程 UI 线程自有的 MIL 通知 HWND 建立有界 subclass，保留原消息链和返回值；可再以 `PAPERTODO_EDGE_DWM_OBSERVATIONS=1` 读取公开 DWM 时钟。队列年龄用 Win32 `GetTickCount` 与 `MSG.time` 的同一时钟域，毫秒单位不代表毫秒精度；它不能测量定时器应到未到的时间。观察器不提交渲染或请求高精度计时，随既有深层观察解除，Release 不编入；同包开销对照和证据边界见 E-011。
+进一步显式开启 `PAPERTODO_EDGE_MESSAGE_OBSERVATIONS=1` 时，`EdgeMessageLatencyObservation` 观察现有 Dispatcher/MIL/WM_TIMER 的队列时间，只对当前进程 UI 线程自有的 MIL 通知 HWND 建立有界 subclass，保留原消息链和返回值；可再以 `PAPERTODO_EDGE_DWM_OBSERVATIONS=1` 读取公开 DWM 时钟。队列年龄用 Win32 `GetTickCount` 与 `MSG.time` 的同一时钟域，毫秒单位不代表毫秒精度；它不能测量定时器应到未到的时间。观察器不提交渲染或请求高精度计时，随既有深层观察解除，Release 不编入；同包开销对照和证据边界见 E-013。
 
 这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前可撤销 render demand 见 D-038，D-032 保留此前移除直接补帧与建立 owner 屏障的历史。
 

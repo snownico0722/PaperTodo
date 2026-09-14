@@ -13,18 +13,37 @@
 | --- | --- | --- | --- | --- |
 | E-001 | 2026-09-13 | Windows 发布形态：Single-file / Compression / ReadyToRun / Multi-file | Completed | D-036 |
 | E-002 | 2026-09-13 | Edge Host 首次呈现：菜单延后与批量首帧 | Completed | — |
-| E-003 | 2026-09-13 | 实机录制：代理常驻复用及封版后的历史版本对照 | Completed | D-037 |
-| E-004 | 2026-09-13 | 统一内存日志、扰动检查与 16 版历史对照 | Completed | — |
-| E-005 | 2026-09-13 | Rendering 预计呈现时间误去重与同机单变量回放 | Completed | D-032 |
-| E-006 | 2026-09-13 | 原生消息、WPF 呈现等待和 Dispatcher promotion 定位 | Completed | D-032 |
-| E-007 | 2026-09-13 | Pointer 无效更新过滤与活跃 Rendering 保留交叉对照 | Completed; candidates rejected | D-032 |
-| E-008 | 2026-09-13 | 渲染请求、遍历、提交时钟与反馈的关联定位 | Completed; diagnostic fix only | D-032 |
-| E-009 | 2026-09-14 | 固定电脑状态后的44轮原包复测 | Completed; no runtime changes | D-032 |
-| E-010 | 2026-09-14 | PR238 watchdog移除与RenderingTime去重的单变量因果对照 | Completed; isolated experiments | D-032 |
-| E-011 | 2026-09-14 | MIL消息等待、计时策略及keep＋resume对照 | Completed; candidates isolated | D-032 |
-| E-012 | 2026-09-14 | 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照 | Completed; no product runtime change | — |
-| E-013 | 2026-09-14 | WPF请求、HWND原位置保留、代理shape能力及组合对照 | Completed; candidates isolated | D-032 |
-| E-014 | 2026-09-14 | 活动渲染请求正式化、真实交接像素与 HWND 合并对照 | Local validation complete; request adopted, HWND candidates rejected | D-038 |
+| E-003 | 2026-09-13 | 预览优先、折叠 Shell 延后与正常 WPF 退出 | Completed | — |
+| E-004 | 2026-09-13 | JSON 预生成、样式复用与托盘后移的启动取舍 | Completed | — |
+| E-005 | 2026-09-13 | 实机录制：代理常驻复用及封版后的历史版本对照 | Completed | D-037 |
+| E-006 | 2026-09-13 | 统一内存日志、扰动检查与 16 版历史对照 | Completed | — |
+| E-007 | 2026-09-13 | Rendering 预计呈现时间误去重与同机单变量回放 | Completed | D-032 |
+| E-008 | 2026-09-13 | 原生消息、WPF 呈现等待和 Dispatcher promotion 定位 | Completed | D-032 |
+| E-009 | 2026-09-13 | Pointer 无效更新过滤与活跃 Rendering 保留交叉对照 | Completed; candidates rejected | D-032 |
+| E-010 | 2026-09-13 | 渲染请求、遍历、提交时钟与反馈的关联定位 | Completed; diagnostic fix only | D-032 |
+| E-011 | 2026-09-14 | 固定电脑状态后的44轮原包复测 | Completed; no runtime changes | D-032 |
+| E-012 | 2026-09-14 | PR238 watchdog移除与RenderingTime去重的单变量因果对照 | Completed; isolated experiments | D-032 |
+| E-013 | 2026-09-14 | MIL消息等待、计时策略及keep＋resume对照 | Completed; candidates isolated | D-032 |
+| E-014 | 2026-09-14 | 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照 | Completed; no product runtime change | — |
+| E-015 | 2026-09-14 | WPF请求、HWND原位置保留、代理shape能力及组合对照 | Completed; candidates isolated | D-032 |
+| E-016 | 2026-09-14 | 活动渲染请求正式化、真实交接像素与 HWND 合并对照 | Main integration validated; request adopted, HWND candidates not adopted | D-038 |
+
+整合编号说明：主线既有 E-001～E-004 保持原编号。本地边缘实验旧 E-003～E-014 顺延为 E-005～E-016；已封存原始目录、报告、commit 和文件名保持不变，阅读其中旧编号时按此对应表解释。
+
+| 封存旧编号 | 当前编号 |
+| --- | --- |
+| E-003 | E-005 |
+| E-004 | E-006 |
+| E-005 | E-007 |
+| E-006 | E-008 |
+| E-007 | E-009 |
+| E-008 | E-010 |
+| E-009 | E-011 |
+| E-010 | E-012 |
+| E-011 | E-013 |
+| E-012 | E-014 |
+| E-013 | E-015 |
+| E-014 | E-016 |
 
 ---
 
@@ -165,7 +184,7 @@
 
 因此没有理由仅为这几十毫秒把完整包扩大到两倍以上。
 
-#### C. Multi-file + R2R 是有效候选，不是当前决策
+#### C. Multi-file + R2R 技术上有效，但不进入当前分发
 
 相对 SC multi-file no-R2R：
 
@@ -180,13 +199,77 @@
 - SC multi-file：128,696,320 / 128,847,872 / 122,478,592 bytes；
 - SC multi-file + R2R：120,840,192 / 128,147,456 / 120,967,168 bytes。
 
-这证明 multi-file + R2R 值得作为未来发布形态候选继续评估，但它会失去“单 EXE”便携性，所以本实验**不把它自动升级为当前正式发布方案**。
+这证明 multi-file + R2R 的技术性能是有效的；但用户真正会比较的高性能/小体积方案不是 SC multi-file no-R2R，而是现有的 FD single-file no-R2R。结合后续 #255 补测后，这条路线不再作为当前分发候选；只有部署边界、安装方式或运行时发生明显变化时才值得重新测。
 
 #### D. Framework-dependent 仍是最快、最小的轻量路线之一
 
 FD single-file no-R2R 已把 Fresh DWM 降到 1193.38 ms；R2R 后进一步到 1041.10 ms，但发布目录约 17.2 -> 50.1 MiB，约 3 倍。
 
-因此“是否给 no-runtime 包单独启用 R2R”是独立产品/发布取舍，不能因为速度更快就直接采用。
+结合后续 #255 补测，FD single-file no-R2R 已经承担“更快/更小、但要求已安装 .NET”这档用户选择；R2R 的额外收益不足以再增加一档正式分发。
+
+#### E. #255 后续补测：R2R 技术有效，但无额外分发价值
+
+#255 原计划增加 `SC multi-file + R2R` 与 `FD multi-file + R2R` 两种独立 ZIP 打包入口。为判断它们是否值得成为长期分发能力，又做了一轮窄范围补测；补测仍沿用 E-001 的 10 Note fixture、`CreateProcess -> DwmFlush` 边界和每变体 3 组 fresh/warm pair。
+
+补测 run `34728040332`（Windows Server 2025、.NET SDK 10.0.401 / runtime 10.0.12）的启动结果：
+
+| 变体 | Fresh managed entry | Fresh DWM | Warm DWM | Fresh Exit | Fresh WS MiB | Warm WS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SC + multi-file + R2R | 124.27 ms | 1182.58 ms | 1073.19 ms | 673.47 ms | 115.54 | 115.36 |
+| FD + single-file + R2R | 107.39 ms | **1027.88 ms** | 1029.93 ms | 675.90 ms | 115.77 | 115.52 |
+| FD + multi-file + R2R | **99.62 ms** | 1045.49 ms | **1013.35 ms** | **662.02 ms** | **115.30** | 115.37 |
+
+FD multi-file + R2R 与 FD single-file + R2R 属于同一性能档位：Fresh 只差约 17.6 ms（1.7%），Warm 反而快约 16.6 ms（1.6%）。不能据此宣称其中一个稳定更快；可确认的是 no-runtime R2R 展开为多文件没有观察到明显启动或工作集惩罚。
+
+SC multi-file + R2R 在本次补测 Fresh 为 1182.58 ms，而 E-001 原轮为 1100.33 ms；Warm 1073.19 ms 与原轮 1078.64 ms 很接近。这个跨 run 差异再次说明 hosted runner 的 Fresh 绝对数不能跨运行做个位数百分比精确比较。因此产品取舍仍优先使用 E-001 同一矩阵内部的对照。
+
+未插桩的 #255 独立打包验证 run `34728463445` 实际得到：
+
+| 打包方式 | 解压后文件数 | 解压后大小 | ZIP 大小 |
+| --- | ---: | ---: | ---: |
+| SC + multi-file + R2R | 342 | 229.31 MiB | **90.83 MiB** |
+| FD + multi-file + R2R | 60 | 27.51 MiB | **14.49 MiB** |
+
+但是“R2R 相对同形态 no-R2R 提升很大”不是用户真正的分发决策。把现有两档正式选择放回同一 E-001 矩阵后：
+
+| 用户可选形态 | Fresh DWM | Warm DWM | 体积 / 特点 |
+| --- | ---: | ---: | --- |
+| **SC + compressed single-file + no-R2R** | 1452.10 ms | 1414.87 ms | 约 77.4 MiB，开箱即用 |
+| **FD + single-file + no-R2R** | 1193.38 ms | 1162.40 ms | 约 17.2 MiB，需要匹配的 .NET Desktop Runtime |
+| SC + multi-file + R2R | 1100.33 ms | 1078.64 ms | 约 229.3 MiB 解压目录；补测 ZIP 约 90.8 MiB |
+| FD + single-file + R2R | 1041.10 ms | 1087.06 ms | 约 50.1 MiB |
+
+从真实用户选择看，想要“更快/更小”的用户已经可以选 FD single-file no-R2R。SC multi-file + R2R 相比它在同一 E-001 run 里只再快约 93 ms Fresh / 84 ms Warm，却从约 17 MiB 单文件变成 229 MiB 多文件目录（即使 ZIP 下载也约 91 MiB）。FD single-file + R2R 则把约 17.2 MiB 放大到 50.1 MiB，换来的额外收益约 152 ms Fresh / 75 ms Warm。对启动约一秒量级的 PaperTodo，这些边际收益不足以支付额外包型、下载页选择、体积和维护成本。
+
+**最终产品结论：R2R 有实验价值，但在 PaperTodo 当前两档分发体系里没有额外分发价值。** 正式分发保持：
+
+- SC compressed single-file + no-R2R：面向开箱即用；
+- FD single-file + no-R2R：面向更小、更快且已安装匹配 .NET 的用户。
+
+不新增 SC/FD R2R 包，也不把 R2R 暴露成正式“打包选项”。#255 的实验和打包验证数据吸收进 E-001 后关闭；若未来改成安装器、多文件部署、运行时/host 明显变化，再重新 A/B。
+
+#### F. no-runtime Windows SDK 定向压缩：体积减半，未测到启动代价
+
+#248 将 framework-dependent / no-runtime 单文件中的 `Microsoft.Windows.SDK.NET` 通过 Costura/Fody 定向压缩，先前已确认 Debug EXE 约 33.45 -> 16.73 MiB 且功能可用，但当时没有做启动 A/B。为补齐这一点，从 #254 `6f26423d86baf21b762a5403c593d3b3e01b333a` 单独建立 `perf/fd-sdk-compression-benchmark-20260913`，只改变 `PaperTodoCompressWindowsSdk=true/false`；两组均固定为 Windows x64 Release、framework-dependent、single-file、no-R2R、`EnableCompressionInSingleFile=false`、不裁剪。
+
+补测 run `34758652475`：Windows Server 2025 `10.0.26100`，image `20260907.229.1`，.NET SDK `10.0.401` / runtime `10.0.12`。使用与 E-001 相同的 10 张可见折叠短 Note 工作集；round 0 只预热共同 OS/.NET 缓存，不计统计，随后每种形态各 12 个新进程样本，并逐轮 AB/BA 交错顺序降低 runner 漂移偏差。外部从 `CreateProcess` 前取时钟，记录最早 managed entry、`App.OnStartup`、controller 创建、`StartAsync`、命令 Ready、下一次 WPF Rendering 后的 `DwmFlush` 与工作集。
+
+| 形态 | EXE | Managed entry 中位 | Command Ready 中位 | DWM 中位 | Working Set 中位 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **SDK 定向压缩** | **16.27 MiB** | 104.03 ms | 924.29 ms | 939.14 ms | 111.66 MiB |
+| SDK 不压缩 | 32.99 MiB | 105.51 ms | 928.01 ms | 952.79 ms | 111.59 MiB |
+
+压缩后 EXE 少 `17,530,935` bytes，约 **-50.7%**。按两组各自中位数计算，压缩版 managed entry `-1.48 ms`、Command Ready `-3.72 ms`、DWM `-13.65 ms`；这些方向不能解释成“压缩让程序更快”。逐轮配对后，Command Ready 的 `compressed - uncompressed` 中位仅约 **-2.81 ms**，IQR 约 `-27.91 ~ +10.43 ms`，12 轮正好 6 次压缩版更快、6 次更慢；DWM 配对中位约 **-14.82 ms**，IQR 约 `-35.20 ~ +15.49 ms`，同样跨过 0。工作集中位只差约 `75,776` bytes（0.07 MiB）。
+
+因此本轮能支持的结论是：**Windows SDK 定向压缩把当前 no-runtime 单文件约减半，但没有观察到可证明的启动或工作集回退；也不能宣称它稳定更快。** 对当前发布目标，体积收益明确而运行时代价落在 runner 波动内，因此继续默认 `PaperTodoCompressWindowsSdk=true`。这里的“压缩”只指 Costura/Fody 定向处理 `Microsoft.Windows.SDK.NET`，不是 `.NET` 的 `EnableCompressionInSingleFile`，不能与 E-001 的 self-contained 整体 bundle compression 对照混为一谈。
+
+长期原始数据已随 #254 保存在：
+
+- [`E-001-fd-sdk-compression-samples.csv`](experiments/E-001-fd-sdk-compression-samples.csv)：含 round 0 的 26 个原始进程样本；
+- [`E-001-fd-sdk-compression-summary.csv`](experiments/E-001-fd-sdk-compression-summary.csv)：12 个计入统计样本/形态的中位数与 P25/P75；
+- [`E-001-fd-sdk-compression-publish.csv`](experiments/E-001-fd-sdk-compression-publish.csv)：两种产物的文件数与字节数。
+
+Actions artifact `fd-sdk-compression-benchmark`（run `34758652475`，实验 HEAD `7f33460c11f99ed87074b270144aa484366b92d7`）仅作短期日志证据；长期判断以上述落盘数据与本段方法为准。
 
 ### 当前可得的启动预算
 
@@ -228,6 +311,8 @@ CreateProcess
   - `raw.json`；
   - 各变体 publish logs；
   - 未插桩真实源码 R2R publish log。
+- #255 后续启动补测：Actions run `34728040332`。
+- #255 未插桩 R2R ZIP 打包验证：Actions run `34728463445`，head `67a09b339fc3fe49ada88ab17cb741076d157e6e`。
 
 GitHub artifact 有保留期限，因此长期判断应以本文保留的实验条件和关键数值为准；需要重新做发布选择时，优先在当时的 runtime / Windows / PaperTodo 版本上复跑，而不是机械沿用 2026-09 的绝对毫秒数。
 
@@ -313,10 +398,174 @@ E-002 说明真正值得继续拆的是 `Host.Apply`，而不是 `EdgeCapsuleHos
 - Profile + Host probe：Actions run `34727969772`，artifact `e002-startup-batch-profiled-evidence`。
 - Menu vs batch isolation：Actions run `34728469483`，artifact `e002-menu-vs-batch-isolation`。
 
+---
+
+## E-003 — 预览优先、折叠 Shell 延后与正常 WPF 退出
+
+**日期：** 2026-09-13
+**状态：** Completed
+**基线：** #254 `416a6fdbf931612ffdb7f066149001c4100a9a4c`（E-002 menu-only）。
+
+### 方法与边界
+
+Windows Server 2025 / .NET SDK 10.0.401 / runtime 10.0.12，同一 job 内以新进程交错运行对照，正反顺序轮换。调度比较每模式 6 次，round 0 保留在原始证据但不进入下表，余下 5 次取中位数；早展开额外每模式 3 次。不是清空 Windows 文件缓存后的 SSD 冷启动。
+
+生命周期 fixture 不含 EXE/CLR 入口；下表启动时间从 controller 构造结束计算。`Rendering observed` 是全部 Host 满足可见条件后观察到的 WPF Rendering 回调，不证明物理像素已上屏。`cache.initialReady` 在第 10 份 artifact 写入时直接打点，`shell.allBuilt` 在最后一个 Shell 完成时打点；它们相互独立，不再用“先等 Shell，再轮询缓存”的旧 `preloadReadyMs` 冒充预览最早可用时间。
+
+每个 scope 记录墙钟、起点、线程，异步 scope 包含等待；嵌套 scope 包含子调用。不能把父子时间相加，也不能把不同运行/不同指标的中位数相减当作精确 CPU 分账。没有用户插件、真实多屏或物理显示器扫描测量。
+
+### 先定位，再选方案
+
+- 10 个 Host 的 `RefreshNativeMetricsLayout` 累计约 0.6 ms；不是先前猜测的数百毫秒。不删 DPI/layout/placement 校验。
+- `CreateTrayIcon` 首用约 159 ms，混合 WPF 菜单壳、Hardcodet、图标与属性初始化；移动这一工作也可能只迁移 WPF 首用成本，本轮不改托盘 ownership。
+- 一次性 DComp lightweight prewarm 典型约 159～179 ms，另有约 12 ms 拖拽预热。它们排在原来的 ApplicationIdle 恢复续体前，解释了 Rendering 已观察到之后仍有约 250～300 ms 的恢复尾部。
+- 1 张 Shell 的 `EnsureShellBuilt` 约 190 ms，10 张累计约 244 ms；首个编辑器初始化占大头，不是每张固定消耗几十毫秒。
+- 普通退出的保存和 owned resource 清理之后，`Environment.Exit` 至外部观察到进程结束仍约 330 ms；不能靠省略保存来解决这个尾部。
+
+分段证据为 run `34733914974`（4 轮、1/10 张、脚本与退出）和 `34734228116`（3 轮、细分 DComp/拖拽/托盘/退出事件）。scope 是带探针结果，只用于定位；下面的同机对照才用于判断取舍。
+
+### 调度隔离实验与最终结果
+
+| 模式 | Rendering observed | StartAsync 返回 | 第 10 份缓存完成 | 第 10 个 Shell 完成 | 初始化缓存写入次数 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 基线 | 482.64 ms | 778.71 ms | 1201.09 ms | 1080.48 ms | 10 |
+| 预览先于 Shell | 467.95 ms | 755.16 ms | 974.91 ms | 1138.79 ms | 10 |
+| **预览优先 + 可选预热后移** | **470.20 ms** | **501.00 ms** | **939.23 ms** | **1100.89 ms** | **10** |
+
+最终组合把缓存就绪提前约 **261.86 ms / 21.8%**，完整 Shell 就绪推后约 **20.41 ms**。StartAsync 返回提前约 277.71 ms，意味着启动命令转发等后续工作能更早继续；**Rendering observed 只差约 12 ms，不能宣称胶囊首帧因此快了 278 ms**。3 组 cache 初次完成原始样本（round 1～5）为：
+
+- baseline：1182.07 / 1206.00 / 1197.74 / 1205.98 / 1201.09 ms；
+- preview：974.91 / 973.99 / 1012.43 / 903.70 / 989.02 ms；
+- combined：1001.95 / 939.23 / 920.54 / 889.89 / 1031.62 ms。
+
+更早的 run `34734324679` 同时比较了 idle-only。只把可选预热降到 SystemIdle 能让 StartAsync 更早返回，但没有提前 Rendering 或缓存就绪，故不把这种移位独立宣传成首帧优化。该轮最初的 preview-first 还暴露重复缓存：第 10 份缓存先生成，随后 Shell 初始化标题再次作废，最终写入 20 份并多等一次 500 ms。最终修正首次 `BuildTopBar -> RefreshPaperTitle` 和初次胶囊标签构建的失效语义；实际内容编辑、文本规范化和资源变化仍失效，不全面关闭缓存验证。
+
+**代价：**提前展开尚未建 Shell 的纸片，现有 `EnsureShellBuilt` 当场接管。早展开专项中 baseline 已建 Shell，调用中位约 124.92 ms；组合方案明确尚未建 Shell，调用中位约 217.49 ms，约多 92.57 ms。这个测试覆盖的是展开调用，不是动画结束或点击到物理显示。选择延后预建而非永不预建，保留最终全部 Shell；不为这段短暂首用窗口再增加双编辑器、预估器或并行 UI 线程。
+
+修正版调度 run：`34734678622`，tools commit `c268051a0217b7279094ecb891684ddfdac4acbb`，artifact `e003-scheduling-refined`。检查覆盖全部 10 份缓存、Shell 后不重复预热、编辑后再生成与实际早展开。
+
+### 退出对照
+
+同机正反交错，每场景每模式 6 次，round 0 不计入中位数。计时从主实例 `Exit` 请求到外部父进程观察到主进程真正结束，均保留最后一次编辑同步保存、界面撤下、插件/图片清理及脚本关闭，不使用 Kill 自身或跳过持久化。
+
+| 模式 | 5 张纸片正常退出 | 5 张纸片 + 3 个脚本子进程 |
+| --- | ---: | ---: |
+| Shutdown 后立即 Environment.Exit | 401.17 ms | 638.39 ms |
+| **正常 WPF Shutdown/Dispatcher 退出** | **104.64 ms** | **336.40 ms** |
+
+脚本 fixture 故意不响应 stdin EOF，仍执行原有 250 ms graceful stop 上限；不为漂亮数字删掉正常结束机会。普通退出少约 296.53 ms，带脚本少约 301.98 ms。强制 Exit 版本未触发 WPF Exit 事件；正常版本可以执行 WPF Exit、Dispatcher shutdown 并返回 Application.Run。本轮只改正常主实例退出；崩溃退出和次实例命令转发退出不改。
+
+第一次 natural-exit 探针已正常结束，但 test Main 依赖一个被 Dispatcher shutdown 取消的 await 续体来把返回码从 1 改成 0，造成假失败。修正为失败在 catch 显式置 1，成功不依赖该续体，并保留子进程返回码、最后编辑保存和可见状态断言。正式对照 run `34734637521` / tools commit `fe205dda9f9d10ae021dbbc2a3bfdd352f5fad13`，artifact `e003-exit-comparison`，24 个进程样本。
+
+### 真实 App 补充验证
+
+另外运行真实 `PaperTodo.exe`（不是只有 controller 的 fixture），比较基线与最终组合。每种 4 次，首轮不计，后 3 次中位；每次保持运行 4 秒以经过 telemetry bootstrap，再由第二实例 `--exit` 触发退出。主实例 Exit 入口独立打点，故下表 Exit 不包含第二个 EXE 的 CLR 启动和转发延迟。每次复用同一临时数据目录重新启动，验证 Mutex/pipe 已释放；验证 10 张纸内容与 IsVisible 保持，并要求最终版本的 `App.OnExit`（包括 base.Exit 回调）确实完成。
+
+| 模式 | 外部启动到命令 Ready | 主实例 Exit 到进程结束 | App.OnExit 完成 |
+| --- | ---: | ---: | --- |
+| 基线 | 1148.06 ms | 415.27 ms | False/False/False |
+| 最终组合 | 908.68 ms | 125.36 ms | True/True/True |
+
+实际 App 此处仍是普通 Release 多文件构建，不是 E-001 的压缩自包含发布形态；不能混用绝对毫秒数。`Ready` 是主实例接受启动命令的边界，不是物理首帧，也不代表全部后台预热完成。真实多屏/DPI、实际 WebView/第三方插件以及用户机器上的稳定内存和输入长尾尚未测量。
+
+### 最终保留与不采用
+
+保留现有 renderer/cache/STA 和 6 ms Shell 软预算；只改变首轮顺序，把缓存队列本轮完成 Task 暴露给 Shell 启动调用方。DComp/拖拽预热改在更低优先级执行，不取消功能；真实展开继续沿用现有同步 Shell 入口。只抑制“首次 UI 构造、内容未变”的无意义失效。正常退出让 WPF 走完自身生命周期。
+
+不采用：永久不建折叠 Shell（会把每张首次展开成本长期留给用户）、取消 DComp 预热（收益属于成本迁移，影响 hover 首用）、多 UI 线程/共用大 HWND（改动面远大于已证实收益）、删 DPI/布局校验（本轮布局总成本不足 1 ms）、强杀自身或丢最后一次保存。E-002 的批量 Stage/Reveal 仍维持拒绝，不重新引入。
+
+持续集成补充可执行用例：预览先就绪而 Shell 尚未构造、Shell 构造不改变源版本或重复写缓存、真实编辑继续失效、提前展开、隐藏取消预热、预热中退出、带脚本真实退出及最后一次编辑保存。完整产品源码不含临时探针、计时开关或试验 workflow。
+
+下一步应针对真实用户的首帧与首个编辑器约束继续定位；不能把调度后移后的低 StartAsync 数字当作所有可见启动成本已经消除。
+
+
+### 复核资料与落盘验证
+
+- Microsoft [Application.Shutdown](https://learn.microsoft.com/en-us/dotnet/api/system.windows.application.shutdown?view=windowsdesktop-10.0)：正常应用退出及 Exit 生命周期。
+- Microsoft [Environment.Exit](https://learn.microsoft.com/en-us/dotnet/api/system.environment.exit?view=net-10.0)：与正常返回不同的强制进程退出语义；不是所有程序都会有本实验相同的时间差。
+- Microsoft [DispatcherPriority](https://learn.microsoft.com/en-us/dotnet/api/system.windows.threading.dispatcherpriority?view=windowsdesktop-10.0)：ApplicationIdle/SystemIdle 是相对队列优先级，不表示 CPU 空闲，也不使单次 UI 构建可抢占。
+
+最终 Windows 验证 run `34735095310` 的 Release 构建（0 警告/0 错误）、8 组 Release 回归、Debug EdgePreview 和真实 App A/B 均通过；之后仅实验文档两处 Markdown 行尾空格触发 `git diff --check` 失败，未执行推送。落盘流程复用其 artifact `10310961672` 中的原始受测源代码补丁并验证 SHA-256，仅修正文档格式，不替换受测代码。真实 App 对照表来自同一 artifact 的 `real-app-summary.csv`。
+
+普通退出不再强制终止潜在的第三方前台线程；本轮确认了 PaperTodo 自身线程、脚本子进程、正常 OnExit 及重复启动，未覆盖任意第三方插件自建的前台线程。真实 WebView/第三方插件组合仍需针对性验证，不把隔离用例的通过扩大成所有插件均已实测。
 
 ---
 
-## E-003 — 实机录制、代理常驻复用与历史版本对照
+## E-004 — JSON 预生成、样式复用与托盘后移的启动取舍
+
+**日期：** 2026-09-13
+**状态：** Completed；本轮全部候选不采用，产品代码继续使用 E-003。
+**基线：** #254 `92e835a5fb259519fa41403e8eb41cc4bfec969e`。
+
+### 方法和测量口径
+
+Windows Server 2025、.NET SDK 10.0.401 / runtime 10.0.12；runner 可见 AMD EPYC 7763、2 核/4 逻辑处理器。实际运行普通 Release 多文件 `PaperTodo.exe`，不是 self-contained 发布包。工作集为1张或10张已折叠短笔记，独立临时数据目录，不加载真实用户插件。
+
+第一组4种变体共48个新进程；后续托盘优先级隔离2种变体共24个新进程。每种变体/纸片数运行6次，round 0 保留但不进入统计，余下5次中位数；同一 job 内轮换顺序，第二组明确逐轮 AB/BA。两组共72个进程、60个计入统计的样本。不同 job 的绝对毫秒数不相减，也不把多个指标的中位数之差当成同步 CPU 分账。
+
+外部父进程在 Start-Process 前记录 QPC；内部事件缓冲到命令 Ready/OnExit 才统一写出，避免每个打点产生磁盘 I/O。Rendering observed 是全部 Host 满足可见条件后观察到的 WPF Rendering，不是 DWM/物理显示器扫描。缓存写入、Shell 完成、托盘创建完成独立打点。主实例退出耗时从其 Exit 入口到父进程观察到真正结束，不包含第二实例启动和命令转发。
+
+每次命令 Ready 后保持运行4秒，在同一检查点采集 Working Set 和 Private Bytes；它们不是长时间运行的稳态内存或完整峰值。随后由第二实例 --exit，验证两进程返回0、App.OnExit 完成、纸片内容和持久化可见状态不变，并在相同隔离目录再次启动。所有初始预览写入数和 Shell 数都等于纸片数，没有用减少工作量换取数值。
+
+### 第一组：原实现、JSON metadata、样式复用和 ApplicationIdle 托盘
+
+JSON 候选只把类型契约生成提前到编译期，继续沿用 StateStore 的 JsonOptions、规范化、备份校验和同步保存。样式候选按 UI 线程与字体缩放复用同一 IconButton Style。托盘候选将原有 CreateTrayIcon 整体排到 ApplicationIdle，没有改变 Hardcodet ownership 或替换其 popup。
+
+| 纸片数 | 变体 | Rendering observed / ms | 命令 Ready / ms | 全部预览 / ms | 全部 Shell / ms | 退出 / ms | 4秒后 Private Bytes / MiB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | E-003 基线 | 752.09 | 803.91 | 1204.99 | 1355.15 | 92.92 | 38.00 |
+| 1 | JSON metadata 预生成（兼容修正版） | 744.90 | 793.49 | 1176.71 | 1332.91 | 85.21 | 41.73 |
+| 1 | 复用 IconButton Style | 746.04 | 796.54 | 1204.97 | 1350.71 | 93.64 | 38.40 |
+| 1 | 托盘后移 | 695.90 | 854.60 | 1242.84 | 1422.69 | 91.56 | 37.43 |
+| 10 | E-003 基线 | 854.01 | 907.32 | 1342.49 | 1577.14 | 130.56 | 65.56 |
+| 10 | JSON metadata 预生成（兼容修正版） | 852.81 | 891.66 | 1324.04 | 1558.61 | 122.67 | 70.25 |
+| 10 | 复用 IconButton Style | 852.07 | 904.48 | 1361.21 | 1585.94 | 125.87 | 64.87 |
+| 10 | 托盘后移 | 810.26 | 971.07 | 1421.72 | 1650.56 | 127.57 | 65.72 |
+
+**JSON 预生成：不采用。** 10张 Rendering 854.01 -> 852.81ms，StateStore.Load 92.43 -> 94.76ms，没有观察到有意义的冷启动收益。退出130.56 -> 122.67ms，约省7.89ms；但同检查点 Private Bytes 65.56 -> 70.25MiB，约多4.69MiB，主程序集还增加107008字节。单张和10张整体就绪差异较小且受波动影响，不足以支撑迁移生产契约；不把本实验扩张成“source generation 永远无效”。
+
+初版同时暴露 JsonInclude 私有 setter 可见性警告；最终实测版本把生成 context 嵌套在 partial PaperItem 内，保持关联字段 private set，不放宽业务封装。新的契约对照覆盖18组输入与混合笔记/待办 roundtrip，包含关联笔记、文件、目录、属性顺序冲突、提醒、旧字段、未知字段、重复字段、null、坏输入、输出一致性及备份恢复；连同既有测试12/12通过，正式测量的4组产品构建均0警告/0错误。早期 roundtrip 探针未先做既有规范化曾产生假失败，已修正，不作为产品 bug。兼容修正仅留在实验分支，不进入产品代码。
+
+**样式复用：不采用。** 10张累计 BuildShell 213.47 -> 209.04ms，只省约4.43ms；全部 Shell 1577.14 -> 1585.94ms，未改善用户就绪时间。首轮探索也只有个位数毫秒的局部减少，不为它增加新的长期缓存和失效状态。
+
+**ApplicationIdle 托盘：不采用。** 10张 Rendering 854.01 -> 810.26ms，但命令 Ready 907.32 -> 971.07ms，预览1342.50 -> 1421.72ms，Shell 1577.14 -> 1650.56ms。第一帧前的部分工作被挪走，却又排在恢复续体前；不能只宣传44ms Rendering 改善。
+
+### 第二组：进一步降到 SystemIdle 是否更划算
+
+为区分“托盘工作本身”和“占住恢复续体”，重新用同一 runner 测原实现对照 SystemIdle 候选，并新增托盘完成时间。不是直接拿第一组基线拼接第二组候选。
+
+| 纸片数 | 变体 | Rendering observed / ms | 命令 Ready / ms | 托盘创建完成 / ms | 全部预览 / ms | 全部 Shell / ms | 退出 / ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | E-003 基线 | 751.51 | 802.96 | 526.21 | 1241.70 | 1392.36 | 89.15 |
+| 1 | 托盘后移 | 708.15 | 749.71 | 1203.83 | 1231.72 | 1405.93 | 88.83 |
+| 10 | E-003 基线 | 874.81 | 914.64 | 530.11 | 1373.15 | 1598.82 | 123.31 |
+| 10 | 托盘后移 | 824.04 | 864.13 | 1332.80 | 1436.40 | 1662.27 | 125.41 |
+
+10张 Rendering 874.81 -> 824.04ms，命令 Ready 914.64 -> 864.13ms，各提前约51ms；但是预览1373.15 -> 1436.40ms，Shell 1598.82 -> 1662.27ms，各推后约63ms。托盘创建完成从530.11 -> 1332.80ms，推后约803ms。5个配对样本的Rendering都提前，预览却全部推后；不是纯粹没有差异，而是收益和代价方向明确的调度交换。单张预览差异落在波动内，托盘同样明显更晚。
+
+**SystemIdle 托盘：仍不采用。** 为约50ms的Rendering/命令就绪改善，承担预览和Shell更晚、托盘入口约晚0.8秒的代价，不符合本轮“整体更快”的目标。它也可能让“只在托盘运行”的启动感觉更差，不能因为桌面胶囊先出现就默认没有体验损失。后者是未单独测量的产品风险，不冒充已复现故障。
+
+该组正常退出123.31 -> 125.41ms，没有进一步改善。保留 E-003 正常 Shutdown、最后一次保存、资源清理和脚本结束，不加新退出快路或强制杀进程。
+
+### 进一步定位与最终边界
+
+在第二组增加的分段中，10张基线 StateStore.Load 约87.60ms，其中 NormalizeAfterLoad 约16.14ms、NormalizeGlobalState 约10.68ms；这些是嵌套范围，不能相加。JSON metadata 并没有让前者显著下降。第一组10次 MarkdownTextBox 构造及对象初始化累计约65.70ms，正文BuildBody累计约110.88ms，仍不能等同于整段Shell成本。
+
+本轮确认“继续后移非视觉工作”也不是无条件提速：需要同时看首帧、可操作入口、预览和完整纸片。后续应先细分真正昂贵的必要初始化，而不是继续降低一串任务的优先级，或为小幅局部收益扩张缓存系统。E-002 的批量首帧和 E-003 的正常退出结论不变；发布方式不变。
+
+本轮只追加实验文档与数据，不修改生产/测试源码、CHANGELOG或架构决策。没有将否决的候选留作隐藏功能开关。
+
+### 可复查数据与方法来源
+
+- 4变体正式矩阵：Actions run `34754325649`，tools commit `d2f9beb4cc461bfcd7c8fc583ed2b7ca12716c5f`，artifact `10316659645`；完整成功。
+- SystemIdle 隔离：Actions run `34754510424`，tools commit `dd1fe868f38854ce71f49a4ba1788d088d5a9dda`，artifact `10317005940`；完整成功。
+- 长期保留原始样本：[矩阵 samples](experiments/E-004-matrix-samples.csv)、[矩阵 summary](experiments/E-004-matrix-summary.csv)、[SystemIdle samples](experiments/E-004-tray-idle-samples.csv)、[SystemIdle summary](experiments/E-004-tray-idle-summary.csv)、[程序集体积](experiments/E-004-product-size.csv)。时间列ms、内存与程序集大小列bytes；summary排除round 0，原始samples不删除首轮。
+- 临时探针和变体代码只在 `perf/e004-startup-cost-20260913`，不进入 #254 的产品diff；GitHub原始trace/日志artifact仅保留2天，数值和方法在此长期保留。
+- Microsoft [JSON metadata source generation](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/source-generation-modes)：把类型信息收集提前不等于所有应用都降低端到端启动时间，仍需按实际选项和工作集测量。
+- Microsoft [JsonIncludeAttribute](https://learn.microsoft.com/en-us/dotnet/api/system.text.json.serialization.jsonincludeattribute?view=net-10.0)：生成器仍受成员可见性约束；不能靠忽略警告或开放业务setter迁就生成代码。
+- Microsoft [DispatcherPriority](https://learn.microsoft.com/en-us/dotnet/api/system.windows.threading.dispatcherpriority?view=windowsdesktop-10.0)：idle是Dispatcher相对优先级，不代表工作免费或所有可用性都会改善。
+
+## E-005 — 实机录制、代理常驻复用与历史版本对照
 
 **日期：** 2026-09-13
 **状态：** Completed
@@ -419,28 +668,28 @@ N/A 表示最早四个版本没有 wpfChanged / wpfTransitionId 等同口径字�
 
 新增机器可读产物：history/replay-results-all-v2.json（68 份全程/共同前缀记录）、history/comparison-all-common22.csv、history/sequence-equivalence-all.json、history/run-outcomes-all.json；原首批 replay-results-v2.json 不覆盖。追加包的身份与构建日志见 history/packages-supplement-20260913-03.json。所有快照、包、输入副本、原始日志、失败试验、脚本及旧统计均保留。
 
-## E-004 — 统一内存日志与历史全程对照
+## E-006 — 统一内存日志与历史全程对照
 
 **日期：** 2026-09-13
 **状态：** Completed
-**目的：** 补齐 E-003 最早四版缺少统一帧字段的问题，把代理接管、展开形状更新和日志自身扰动分开测量。
+**目的：** 补齐 E-005 最早四版缺少统一帧字段的问题，把代理接管、展开形状更新和日志自身扰动分开测量。
 
 ### 本轮结论
 
 - 当前同步事务显著快于 PR254：相同动作窗内中位数从 37.828～39.973ms 降到 2.122～2.303ms，P95 从 54.277～64.620ms 降到 18.330～18.801ms。
-- 当前展开对象的宽高、透明度变化，单看 Rendering 来源，间隔 P95 仍为 31.496～32.563ms。PR94 为 30.832～31.395ms，PR245 为 30.374～31.253ms；这些两轮样本没有显示 13ms 对 32ms 那样的差距。旧版混合 watchdog 的 13～15ms 软件更新不能直接与当前 Rendering-only 比较成显示帧率翻倍。E-003 的整队列 accepted Rendering 指标与本轮单个展开对象形状指标也不是同一个量。
+- 当前展开对象的宽高、透明度变化，单看 Rendering 来源，间隔 P95 仍为 31.496～32.563ms。PR94 为 30.832～31.395ms，PR245 为 30.374～31.253ms；这些两轮样本没有显示 13ms 对 32ms 那样的差距。旧版混合 watchdog 的 13～15ms 软件更新不能直接与当前 Rendering-only 比较成显示帧率翻倍。E-005 的整队列 accepted Rendering 指标与本轮单个展开对象形状指标也不是同一个量。
 - PR254 这两轮形状间隔 P95 为 33.585～45.491ms，当前有所改善，但不能宣布卡顿已经消失。最早 V3 切换版 d4af6af 同样出现约 33～34ms 的形状长尾。
 - V2.5 仍由 DComp 做原生形状动画，WPF 记录不描述其每个原生中间帧。本轮不能判定用户记忆中的“以前更顺”是错觉，也不能证明 V2.5 的实际显示帧率更高。
 
 ### 采集与比较方法
 
-16 个历史版本均从 E-003 保存的精确 archive 和固定子模块重新提取，先逐文件核对 SHA-256，再只加观察点。统一使用同一份 Journal、Observation 和文本缓冲源码；`SourceModified=true` 明确表示诊断副本，原始历史包及上一轮数据不覆盖。动画、渲染、输入策略及功能预算仍保留各版原有实现，不能把版本间所有差异归因于某一个调度函数。
+16 个历史版本均从 E-005 保存的精确 archive 和固定子模块重新提取，先逐文件核对 SHA-256，再只加观察点。统一使用同一份 Journal、Observation 和文本缓冲源码；`SourceModified=true` 明确表示诊断副本，原始历史包及上一轮数据不覆盖。动画、渲染、输入策略及功能预算仍保留各版原有实现，不能把版本间所有差异归因于某一个调度函数。
 
-包参数继续统一为优化 Debug / win-x64 / framework-dependent / single-file / R2R=false / 不压缩 / 不裁剪 / Fody 关闭。每轮新进程，启动后等 6 秒，直接执行原 `数据.exe` 约 27 秒，再等 2 秒并通过正常命令退出。历史第一轮正序、第二轮倒序；采集期间不运行构建、其他应用测试或全量分析。当前包也改成两次新进程，与 E-003 同进程双轮的条件分开记录。
+包参数继续统一为优化 Debug / win-x64 / framework-dependent / single-file / R2R=false / 不压缩 / 不裁剪 / Fody 关闭。每轮新进程，启动后等 6 秒，直接执行原 `数据.exe` 约 27 秒，再等 2 秒并通过正常命令退出。历史第一轮正序、第二轮倒序；采集期间不运行构建、其他应用测试或全量分析。当前包也改成两次新进程，与 E-005 同进程双轮的条件分开记录。
 
-共完成 32 轮历史＋2 轮当前完整观察＋2 轮当前关闭详细观察的对照；另保留一个独立 pilot。36 轮正式采集全部正常退出、无容量/文本预算丢弃、无 span 配对异常，退出前检查均无匹配诊断文件。15/32 历史轮的后段动作与当前不同：PR88 在第 31 个动作多出一次收起，因此主比较限定为严格相同的前 30 个 open/close 动作。每次完整回放和动作差异均保留，不能跨 E-003 与 E-004 的不同窗口直接相减。
+共完成 32 轮历史＋2 轮当前完整观察＋2 轮当前关闭详细观察的对照；另保留一个独立 pilot。36 轮正式采集全部正常退出、无容量/文本预算丢弃、无 span 配对异常，退出前检查均无匹配诊断文件。15/32 历史轮的后段动作与当前不同：PR88 在第 31 个动作多出一次收起，因此主比较限定为严格相同的前 30 个 open/close 动作。每次完整回放和动作差异均保留，不能跨 E-005 与 E-006 的不同窗口直接相减。
 
-日志只观察既有回调，不额外订阅 Rendering、补帧或强制布局。每个 presenter/transition 使用独立观察编号；同一帧多次 apply 只留最后状态，分开统计队列平移与实际宽高/透明度变化，并提供去除多纸片重复权重的统计。圆角原始事件保留，本次形状间隔汇总未纳入圆角。清除 transition 不代表成功完成；scope 退出不代表操作成功；嵌套 span 不直接相加。分位数沿用 E-003 的非插值定义：median 下中位，P95 取排序后 ceil((n−1)×0.95) 项。
+日志只观察既有回调，不额外订阅 Rendering、补帧或强制布局。每个 presenter/transition 使用独立观察编号；同一帧多次 apply 只留最后状态，分开统计队列平移与实际宽高/透明度变化，并提供去除多纸片重复权重的统计。圆角原始事件保留，本次形状间隔汇总未纳入圆角。清除 transition 不代表成功完成；scope 退出不代表操作成功；嵌套 span 不直接相加。分位数沿用 E-005 的非插值定义：median 下中位，P95 取排序后 ceil((n−1)×0.95) 项。
 
 ### 相同动作窗结果
 
@@ -515,25 +764,25 @@ PresentMon 官方独立采集工具的 pilot 因本机 ETW 会话权限不足返
 
 本轮只增加 opt-in Debug 诊断与实验记录，没有正式版用户行为变化，未改 Unreleased，也未形成新的产品路线 decision。所有提交和大体积证据只保留在本地，没有推送。
 
-## E-005 — Rendering 预计呈现时间误去重与同机单变量回放
+## E-007 — Rendering 预计呈现时间误去重与同机单变量回放
 
 **日期：** 2026-09-13
 
 **状态：** Completed
 
-**基线：** `b40c6eb`，已包含预接管/复用和 E-004 内存诊断。
+**基线：** `b40c6eb`，已包含预接管/复用和 E-006 内存诊断。
 
-**证据根：** `输出/edge-cadence-20260913/`；此前 E-003/E-004 的包和数据保留。
+**证据根：** `输出/edge-cadence-20260913/`；此前 E-005/E-006 的包和数据保留。
 
 ### 定位与最终修正
 
-E-004 的长间隙并非单一耗时：原始记录分别出现约 36ms 没有新 Rendering、约 47ms 中途仅有相同 RenderingTime 通知被过滤、约 60ms 内有 45.496ms 的 pending 退订窗口。最后一例包含代理指针采样排出的 10 个 Pointer-only reconcile，最终没有 shape.applied；其中发生 GC 的 scope 不等同于 GC 暂停时间，也不能解释整个无记录空档。逐 seq 审计及脚本保存在 `audit/`。
+E-006 的长间隙并非单一耗时：原始记录分别出现约 36ms 没有新 Rendering、约 47ms 中途仅有相同 RenderingTime 通知被过滤、约 60ms 内有 45.496ms 的 pending 退订窗口。最后一例包含代理指针采样排出的 10 个 Pointer-only reconcile，最终没有 shape.applied；其中发生 GC 的 scope 不等同于 GC 暂停时间，也不能解释整个无记录空档。逐 seq 审计及脚本保存在 `audit/`。
 
 WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官方 MediaContext 源码](https://github.com/dotnet/wpf/blob/v10.0.0/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs) 允许复用估计值，并在每个 render handler 的首个 tick 发出通知；layout/tick 内环不会反复发同一个通知。项目的 transition 使用 QPC，按预测时间值去重会丢掉后续合法更新。最终删除该过滤条件和对应缓存；保留单一订阅、同步重入保护、外部 native apply 保护、队列屏障与终点退订，不增加 timer、轮询或主动补帧。
 
 ### 单变量与撤回实验
 
-使用原始 `数据.exe`、独立数据副本、每轮新进程、6 秒启动等待及 2 秒收尾。沿用 E-004 的优化 Debug/单文件/无 R2R/无 Fody 参数和内存日志。各组前后动作完全相同，主比较为全部 36 动作（24 展开、12 收起），不与 E-004 的 common30 直接相减。每格是两轮实测范围，单位 ms；形状仅统计当前展开 owner 的实际宽高/透明度变化，不含纯平移和圆角，仍是应用更新而非物理显示帧。
+使用原始 `数据.exe`、独立数据副本、每轮新进程、6 秒启动等待及 2 秒收尾。沿用 E-006 的优化 Debug/单文件/无 R2R/无 Fody 参数和内存日志。各组前后动作完全相同，主比较为全部 36 动作（24 展开、12 收起），不与 E-006 的 common30 直接相减。每格是两轮实测范围，单位 ms；形状仅统计当前展开 owner 的实际宽高/透明度变化，不含纯平移和圆角，仍是应用更新而非物理显示帧。
 
 | 对照组 | 外形更新间隔中位数 | 外形更新间隔 P95 | 结论 |
 | --- | ---: | ---: | --- |
@@ -558,11 +807,11 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 
 本轮保持 WPF shape / DComp translation-only 分工，同步更新 D-032、Architecture 和 Unreleased；仅本地提交，不推送。最终包 SHA-256：`DA8A31304C371C1C36EBBD813F9BEE0E8144203FA6435468C423B1DE4BD3E56A`。
 
-## E-006 — 原生消息、WPF 呈现等待和 Dispatcher promotion 定位
+## E-008 — 原生消息、WPF 呈现等待和 Dispatcher promotion 定位
 
 **Status:** Completed（诊断完成，未新增生产调度修复）
 
-**基线：** `62f8dcc8`，已包含 E-005 的 Rendering 通知修正。
+**基线：** `62f8dcc8`，已包含 E-007 的 Rendering 通知修正。
 
 **证据根：** `输出/edge-deep-latency-20260913/`。此前三轮实验目录保留原状。
 
@@ -601,11 +850,11 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 
 本轮确立“在UI侧具体等哪个接口”的证据，未证明合成端为何迟到，也未采用此前失败的Pointer屏障实验。当前运行职责未变；Architecture记录隔离诊断能力，D-032补充退订/恢复的成本，因无新增用户行为差异不追加Unreleased条目。
 
-## E-007 — Pointer 无效更新过滤与活跃 Rendering 保留交叉对照
+## E-009 — Pointer 无效更新过滤与活跃 Rendering 保留交叉对照
 
 **Status:** Completed；三个候选均未采用，生产与测试源码恢复到 `a469cfd397dac0123f25773a46adc609c6e9d8a7`。
 
-**证据根：** `输出/edge-pointer-filter-20260913/`。原输入与 E-003～E-006 证据不改动。
+**证据根：** `输出/edge-pointer-filter-20260913/`。原输入与 E-005～E-008 证据不改动。
 
 ### 候选边界
 
@@ -639,14 +888,14 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 ### 逐间隙审查与验证
 
 - 第一阶段基线最长48.8617/34.4371ms仍有约17ms的pending退订跨度；过滤候选两轮前三大间隙内部已无退订，pending早已drained，后续Rendering晚到。
-- 矩阵中仅保留订阅两轮前三大间隙全程已订阅、内部无退订，后续raw Rendering晚到约34～36ms。组合多数同型；组合1第三大中途有Rendering但owner尺寸未变，不能把所有形状间隙直接等同于回调间隔。本轮没有deep状态/采样栈，不能把这些窗口套成E-006的CompleteRender、promotion或GPU等待。
+- 矩阵中仅保留订阅两轮前三大间隙全程已订阅、内部无退订，后续raw Rendering晚到约34～36ms。组合多数同型；组合1第三大中途有Rendering但owner尺寸未变，不能把所有形状间隙直接等同于回调间隔。本轮没有deep状态/采样栈，不能把这些窗口套成E-008的CompleteRender、promotion或GPU等待。
 - 两阶段共12轮正常退出，容量/文本丢弃均0，退出前检查无匹配诊断文件；全部相同24open/12close，分析无unmatched transaction。完整日志未见fallback/retry-exhausted/failed/正数wpfApplyFailed标记。矩阵8轮的10个presenter最后target相同，且common36尾部最后shape.applied与各自target共80/80匹配；这不是屏幕像素或每次native呈现的独立证明。
 - 过滤候选完整EdgeTitleChecks通过3614断言；第二阶段同一个Debug DLL在K=0/K=1均通过3643断言，覆盖未cloaked/cloaked的动画中途双重barrier、零提前更新、最后释放后的真实Rendering恢复与cancel退订。保留首次测试坐标类型编译失败、受限桌面原生路由失败以及修正/真实桌面成功的独立日志。9项冻结分析器回归通过。
 - `packages/`含实际源码、tracked patch、所有新增文件哈希、完整参数/日志和EXE；`rejected-source/`再次保存撤回前8个实验生产/测试文件，并逐一验证与v2打包源码相同。`scripts-v1/`保留最初harness版本；各分析目录保存执行时分析器源码。`independent-abba-review/`及`independent-matrix-review/`保留逐gap脚本、JSON、60份上下文与失败/终点审计。
 
 源码恢复后标准Release构建通过，0错误；4条NU1900为漏洞数据服务网络失败，未完成漏洞审计。最终仅提交实验结论和D-032踩坑补充，不改Architecture/AGENTS/Unreleased，不把未获收益的过滤或订阅开关留在日用程序；所有实验包与日志继续保留，只本地提交，不推送。
 
-## E-008 — 渲染请求、遍历、提交时钟与反馈的关联定位
+## E-010 — 渲染请求、遍历、提交时钟与反馈的关联定位
 
 **Status:** Completed；本轮只保留只读诊断修正，不合入过滤、保留订阅或新的帧请求策略。长间隔仍存在，未宣称流畅性问题已解决。
 
@@ -654,7 +903,7 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 
 ### 方法与测量边界
 
-先复用 E-007 v2 同一 EXE，F=0/1、K始终0，开启已有 deep 观察做四轮 ABBA；再分别为两组增加一轮 EventPipe 调用栈采样。最后修正静态字段读取，另打 v3，同包做第二组四轮 ABBA。共10轮，全部严格相同36动作（24open/12close）、正常退出、记录/文本零丢弃、退出前无匹配诊断文件；两份采样 eventsLost=0。各组单独冻结 common36，不跨不同探针/采样形态排名。
+先复用 E-009 v2 同一 EXE，F=0/1、K始终0，开启已有 deep 观察做四轮 ABBA；再分别为两组增加一轮 EventPipe 调用栈采样。最后修正静态字段读取，另打 v3，同包做第二组四轮 ABBA。共10轮，全部严格相同36动作（24open/12close）、正常退出、记录/文本零丢弃、退出前无匹配诊断文件；两份采样 eventsLost=0。各组单独冻结 common36，不跨不同探针/采样形态排名。
 
 `CommittingBatch` 也会在同步等待路径调用，是提交/等待之前的通知，不能直接计为已完成的帧提交。`_lastCommitTime` 只覆盖 interlocked CommitChannel 路径；`_lastPresentationTime` 是被采样观察到的反馈时钟，其内嵌值可能晚于观察QPC，不能当成消息到达时刻或屏幕像素时间。各字段变化只给可观察下界。UI侧 shape.applied、Rendering 和全局 render-walk 编号均不是物理显示帧。
 
@@ -675,7 +924,7 @@ WPF 的 `RenderingTime` 是预计呈现时间，不是唯一通知编号。[官�
 
 v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的全局renderID增量中位数原行为为2、过滤为1，支持额外请求增加了提交间的遍历；该静态编号跨MediaContext共享。与此同时，最近owner宽高/透明度变化到precommit观察的年龄中位数原行为13.9204/14.6906ms、过滤16.9799/17.2623ms，P95分别30.1304/30.0479与34.1530/33.4092ms。该年龄只描述已记录UI状态，不能证明这些状态已序列化进该批次或显示在屏幕上。窗口首末随各轮实际更新略有变化，不拿全common里的静止期状态年龄排名。
 
-因此，E-007的应用更新间隔退化不能直接升级成“过滤降低物理FPS”；相同提交数量也不能升级成“体验一样”。原行为可能以额外遍历换来更及时的状态，最终收益还需内容与实际呈现的对应证据。此前未采用候选的决定保留，本轮不因某一个计数或年龄指标恢复它。
+因此，E-009的应用更新间隔退化不能直接升级成“过滤降低物理FPS”；相同提交数量也不能升级成“体验一样”。原行为可能以额外遍历换来更及时的状态，最终收益还需内容与实际呈现的对应证据。此前未采用候选的决定保留，本轮不因某一个计数或年龄指标恢复它。
 
 进一步按实际WPF源码的CountsToTicks、RefreshPeriod、TicksUntilNextVsync及CommitChannel复算请求时刻，在上述owner窗口内原行为可复算167/174次、过滤179/174次。请求相对commit时钟的提前量中位数原行为20.6797/20.4293ms、过滤20.5729/20.5456ms，P95分别23.8553/24.7593与24.4056/23.8494ms，未呈稳定过滤特异差异。计算保留C#负数余数语义；不少记录中的presentation时钟晚于commit，源码公式选择其后的周期。此为字段和固定源码重建的请求值，不是实际native参数抓取，更不是反馈到达或屏幕延时；不能把等待全算为UI计算，也不能仅凭该重建值宣称整个长间隔原因已经确定。
 
@@ -694,7 +943,7 @@ v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的
 
 当前架构、调度及用户行为保持不变；本地提交探针修正、行为检查和结论，不推送，不追加Unreleased或改写架构。归档报告保留这一轮的因果边界，不能用它宣称最终显示流畅性已经验证。
 
-## E-009 — 固定电脑状态后的原包复测
+## E-011 — 固定电脑状态后的原包复测
 
 **日期：** 2026-09-14
 
@@ -702,7 +951,7 @@ v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的
 
 **证据目录：** `输出/edge-fixed-state-20260914/`
 
-用户固定电脑状态后，复用E-007的8轮同包2×2矩阵、E-008的4轮v3深度ABBA以及E-004的16个历史诊断包正序/倒序，共44轮。所有包沿用已封存EXE、原动作、独立数据副本、启动6秒/收尾2秒及各自旧日志预算；回放期间不编译、不跑完整日志分析或并行性能测试。只读前后显示配置仍为2560×1440、报告59Hz、RTX2080，电源计划均为平衡。新整机快照的whole-harness busy均值17.0%–20.4%，不是纯空载，也没有旧轮同口径负载可作因果对照。
+用户固定电脑状态后，复用E-009的8轮同包2×2矩阵、E-010的4轮v3深度ABBA以及E-006的16个历史诊断包正序/倒序，共44轮。所有包沿用已封存EXE、原动作、独立数据副本、启动6秒/收尾2秒及各自旧日志预算；回放期间不编译、不跑完整日志分析或并行性能测试。只读前后显示配置仍为2560×1440、报告59Hz、RTX2080，电源计划均为平衡。新整机快照的whole-harness busy均值17.0%–20.4%，不是纯空载，也没有旧轮同口径负载可作因果对照。
 
 同一冻结分析器联合处理44份新日志和44份旧日志，最近组共同36动作，历史组共同30动作；历史全段35–37动作差异保留。下表为active owner宽高/opacity/contentOpacity实际变化间隔P95，两轮范围，单位ms，只在同一行内比较：
 
@@ -725,7 +974,7 @@ v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的
 
 44轮正常退出、记录/文本零丢弃、退出前无匹配诊断文件，未发现所检查的失败/回退标记；原始四输入前后哈希一致。旧新别名副本日志逐字节hash相同，历史别名保留原生路线识别前缀；全部原始记录、来源清单、实际分析源码/参数、对照表、逐间隔证据、辅助分析失败与修正均保存。冻结分析器9项检查通过。只提交本实验记录，不改运行时、Architecture、Decisions或Unreleased，不重新编译或推送。
 
-## E-010 — PR238 watchdog移除与RenderingTime去重的单变量因果对照
+## E-012 — PR238 watchdog移除与RenderingTime去重的单变量因果对照
 
 **日期：** 2026-09-14
 
@@ -733,7 +982,7 @@ v3中，24个owner-transition有效形状首末窗口内，相邻观察commit的
 
 **证据目录：** `输出/edge-pr238-cause-20260914/`
 
-本地提交关系确认：PR238 squash `a563a2524ce986e65d4afbed1c584401a7e74b49` 的唯一直接父提交是 PR245 `07eeb01061f65760c32ebefc852fc52fa6c67c66`，PR编号不代表实际合入顺序。复用E-004对应两个已插桩源码快照，逐文件核对后复制，仅在各自的 `EdgeCapsuleFrameScheduler.cs` 加入静态实验开关及一次开关日志。父版本可禁用watchdog，两版都可绕过RenderingTime值去重；原pending、native及同步重入保护均保留。父版watchdog禁用分支同时撤销计时并清零截止时间，整个capture验证零watchdog dispatch。两包构建成功，各有一条历史IL3000告警；参数及实际源码差异保存在各自packages目录。
+本地提交关系确认：PR238 squash `a563a2524ce986e65d4afbed1c584401a7e74b49` 的唯一直接父提交是 PR245 `07eeb01061f65760c32ebefc852fc52fa6c67c66`，PR编号不代表实际合入顺序。复用E-006对应两个已插桩源码快照，逐文件核对后复制，仅在各自的 `EdgeCapsuleFrameScheduler.cs` 加入静态实验开关及一次开关日志。父版本可禁用watchdog，两版都可绕过RenderingTime值去重；原pending、native及同步重入保护均保留。父版watchdog禁用分支同时撤销计时并清零截止时间，整个capture验证零watchdog dispatch。两包构建成功，各有一条历史IL3000告警；参数及实际源码差异保存在各自packages目录。
 
 ABCDEEDCBA串行回放10轮，每轮独立原始数据副本和新进程，原录制、启动6秒/收尾2秒、262144条/64MiB文本内存日志，deep/EventPipe关闭。每轮均完成同一36动作，冻结分析器先核对完整序列，再使用与历史比较一致的前30动作；以下为各组两轮独立分位数范围，单位ms，未合并样本：
 
@@ -747,15 +996,15 @@ ABCDEEDCBA串行回放10轮，每轮独立原始数据副本和新进程，原�
 
 A→B在未引入PR238其他改动时已复现跳升，证明旧watchdog的移除足以改变应用更新节拍。旧通道调用同一个shared-frame入口，真实宽高/透明度更新不能当作噪声排除。A的Rendering-only P95为25.8833–26.0248ms，B为32.5723–33.7415ms，所以差异不能全部解释为从固定时间序列删去中间更新；具体请求、反馈、唤醒贡献本轮尚未拆开。
 
-D→E将前30动作的duplicate suppression从286/272降至0，接受的Rendering推进从459/449增至727/716，支持去掉错误值去重的收益。但这个guard在父版本已经存在，当前代码也已经在E-005修正，不能称为本轮新增生产修复。B→C的P95仍约32.6ms，E的最大间隙仍79.2–94.3ms，去重不是全部根因。B→D、C→E混合了group/pending、订阅、共同起钟、visual deferral和正文准备等差异，不能单独归因其中一项。父版计时器在首次有效shared frame后才arm，也不构成首次Rendering在12ms内到来的保证。
+D→E将前30动作的duplicate suppression从286/272降至0，接受的Rendering推进从459/449增至727/716，支持去掉错误值去重的收益。但这个guard在父版本已经存在，当前代码也已经在E-007修正，不能称为本轮新增生产修复。B→C的P95仍约32.6ms，E的最大间隙仍79.2–94.3ms，去重不是全部根因。B→D、C→E混合了group/pending、订阅、共同起钟、visual deferral和正文准备等差异，不能单独归因其中一项。父版计时器在首次有效shared frame后才arm，也不构成首次Rendering在12ms内到来的保证。
 
-同时补算E-009已封存历史与当前数据的P50/P90/P95/P98/P99。`historical-percentiles.md`保存16个节点，PR88/PR90原生shape仍为N/A；`historical-p50-p90/results.json`保存28轮可比较的实际间隔样本，后续尾部分位数直接从这些样本计算。当前普通详细日志基线F0/K0/deep0/EventPipe0按前30动作分别为8.9253–9.9184、19.8659–21.2750、26.0423–28.2484、30.3944–31.0665、33.6564–33.8121ms；完整36动作另存 `current-percentiles/results.json`。当前数字来自E-009原包复测，与本轮D/E历史实验包分开。P50沿用lower median，其他Pq按排序后ceil((n−1)×q)取值，不插值；有限尾部样本不适合过度解读微小差异。
+同时补算E-011已封存历史与当前数据的P50/P90/P95/P98/P99。`historical-percentiles.md`保存16个节点，PR88/PR90原生shape仍为N/A；`historical-p50-p90/results.json`保存28轮可比较的实际间隔样本，后续尾部分位数直接从这些样本计算。当前普通详细日志基线F0/K0/deep0/EventPipe0按前30动作分别为8.9253–9.9184、19.8659–21.2750、26.0423–28.2484、30.3944–31.0665、33.6564–33.8121ms；完整36动作另存 `current-percentiles/results.json`。当前数字来自E-011原包复测，与本轮D/E历史实验包分开。P50沿用lower median，其他Pq按排序后ceil((n−1)×q)取值，不插值；有限尾部样本不适合过度解读微小差异。
 
 10轮均正常退出、记录/文本零丢弃、退出前无匹配诊断文件，实际开关与计划一致，未发现所检查的失败/回退标记。独立复核确认第31动作起点正好是各轮前30窗口末端、冻结分析器哈希相同、全部历史保留样本分位数相符及禁用组全capture零watchdog。四个原输入哈希未变，全部包、源码、patch、构建和回放日志、实际分析脚本、辅助失败/修正及独立报告保留。本地缺少100ms watchdog中间commit对象，未fetch，也未将旧记忆冒充该对象的源码审阅。所有分位数均为应用状态更新间隔，尚未验证物理呈现或输入到像素延迟。
 
 本轮只提交实验记录及D-032证据补充，不恢复补帧计时器、不改Architecture或Unreleased、不推送；完整清单与本地提交记录见证据目录的 `final-validation.json`、`inventory-sha256.csv` 和 `seal.json`。
 
-## E-011 — MIL消息等待、计时时钟及保留订阅后恢复请求的对照
+## E-013 — MIL消息等待、计时时钟及保留订阅后恢复请求的对照
 
 **日期：** 2026-09-14
 
@@ -784,13 +1033,13 @@ DWM API实际返回的qpcVBlank在两轮600/601和600/600次观察中晚于调�
 
 Windows策略候选只对本测试进程设置IGNORE_TIMER_RESOLUTION控制位、清对应状态位，其他位保留，不增加timeBeginPeriod。两轮Set及读回均成功，P95/P99及CPU未呈一致收益。`exit`命令在Shutdown后finally调用Environment.Exit，日志以process-exit封存而无restore记录，因此只确认进程退出、策略随进程结束；未声称OnExit恢复已观测成功。首次分析因错误地要求restore事件而失败，修正及失败输出均保存。
 
-keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢复就绪时公开移除/加入同一handler一次，保留原add带来的render请求。它与E-007只有keep的实现不同；所有队列/native/同步重入保护继续执行，WPF正在渲染时仍可合并请求。实际common区间保留/恢复次数为311/309、316/314；长期订阅启停降至37/37，但恢复脉冲另有记录，不能把37当作全部accessor次数。控制/候选的定向行为检查130/145项、完整Edge检查3242/3257项均通过，包括多个group、owner嵌套、公开优先级恢复、Hooks同步重入、取消、shutdown及visible/cloaked真实WPF完成。
+keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢复就绪时公开移除/加入同一handler一次，保留原add带来的render请求。它与E-009只有keep的实现不同；所有队列/native/同步重入保护继续执行，WPF正在渲染时仍可合并请求。实际common区间保留/恢复次数为311/309、316/314；长期订阅启停降至37/37，但恢复脉冲另有记录，不能把37当作全部accessor次数。控制/候选的定向行为检查130/145项、完整Edge检查3242/3257项均通过，包括多个group、owner嵌套、公开优先级恢复、Hooks同步重入、取消、shutdown及visible/cloaked真实WPF完成。
 
 深层探针组P99和MIL下游尾部有改善信号；关闭deep/messages/DWM后，P95/P99及CPU没有一致改善，候选最大间隙仍52.1026ms，对照36.3745/38.4843ms。故不将该候选合入日用scheduler，也不把它永久判为无效机制。当前事件驱动路线和末帧交接规则未变，没有新增Unreleased用户修复条目。所有数值是应用owner宽高/透明度变化间隔，沿用冻结分组与lower median/ceil分位规则，不是物理FPS或输入到像素延迟；四个原输入和显示设置核验、后续代价检查及最终本地提交/封存清单见证据目录。
 
 另以直接引用冻结scheduler的真实WPF窗口夹具，单次运行visible/cloaked × release/cancel的750ms阻挡和250ms结束后idle。两臂各40项检查通过，阻挡期0推进、每场景7次有限Input均被服务、结束后0订阅泄漏。对照空回调均0，候选26/45/43/45次；本次对照Input最大排队约0.32～0.80ms，候选16.02/46.10/125.30/16.54ms。CPU结果有涨有跌，且cloaked夹具没有真实queue proxy，不能作为稳定能耗或日用输入延迟分布；它说明保留订阅有需要正面评估的空回调和输入公平性代价，功能检查通过不等于没有这种成本。夹具源码/链接哈希和全部结果保留，未继续扩大该未采纳候选的测试。
 
-## E-012 — 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照
+## E-014 — 同一程序包的.NET 10 / .NET 11 RC1隔离运行时对照
 
 **日期：** 2026-09-14
 
@@ -820,10 +1069,10 @@ keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢�
 
 实际两版深层探针均读到完整MediaContext mask1023/15、Dispatcher reader1/1，无观察错误；同一观察器行为检查产物在两版分别通过243断言，冻结主分析器9项测试通过。消息年龄继续使用Win32 GetTickCount与MSG.time的同一粗时钟域；没有把.NET11的Environment.TickCount代入这一公式。更新间隔按既有owner/transition/episode分组，P50取lower median，其余取ceil分位，不是物理FPS或鼠标到像素延迟。Debug日志、同一热提取缓存、两轮重复和单机当前显示环境限制了外推；没有证明Release、首次冷启动、多屏或日用长期兼容性。
 
-独立复核固定官方RC1源后，Dispatcher/DispatcherTimer/DispatcherOperation/MediaContext四份文件与已验证的.NET10源码逐行一致，仍调用Environment.TickCount；.NET11底层时钟变化有明确官方依据，但不能把本轮整体运行时比较唯一归因该改动，也没有直接测量应用当时的中断计时分辨率。四份空diff、版本来源与clock变更保存在`review/`。这次结果完成了E-011留下的运行时升级验证线索；没有形成新的架构、ownership或永久禁用.NET11的决策，因此Architecture/Decisions和Unreleased用户修复项不变。
+独立复核固定官方RC1源后，Dispatcher/DispatcherTimer/DispatcherOperation/MediaContext四份文件与已验证的.NET10源码逐行一致，仍调用Environment.TickCount；.NET11底层时钟变化有明确官方依据，但不能把本轮整体运行时比较唯一归因该改动，也没有直接测量应用当时的中断计时分辨率。四份空diff、版本来源与clock变更保存在`review/`。这次结果完成了E-013留下的运行时升级验证线索；没有形成新的架构、ownership或永久禁用.NET11的决策，因此Architecture/Decisions和Unreleased用户修复项不变。
 
 
-## E-013 — WPF请求、HWND原位置保留与代理shape能力的隔离对照
+## E-015 — WPF请求、HWND原位置保留与代理shape能力的隔离对照
 
 **日期：** 2026-09-14
 
@@ -847,7 +1096,7 @@ keep＋resume只跨越已有活动订阅的全组临时阻挡，在首个组恢�
 
 request的形状更新来源均为正常Rendering，没有直接补帧。两轮深日志各243次唤醒前最近状态为WaitingForResponse且无当前Render操作，另有Inactive操作等待；公开请求能很快接上正常回调。wake→下一raw callback中位时间关联约0.05ms，但分析未将每项限定为同一episode独占因果，不能当作响应上界。原有render-chain分析中，request的可观察commit变化473/478，与off473/480相近；呈现反馈时钟变化438/424，对照434/441，没有同比增多。
 
-另复用E-008的首次观察提交/遍历分析，在匹配presenter/transition的owner动画首末有效变化范围内，以唯一clock观察seq去重，比较提交前最近有效形状记录的年龄。off中位13.4628/14.5364ms、P95 26.9380/24.8910ms；request中位4.5821/5.0664ms、P95 11.2612/12.4860ms；frame中位4.2635/4.5479ms。它支持提交前应用状态更近，而不是仅有回调数增加；仍不证明记录的状态已经序列化或显示。请求模式普通CPU/分配增加，深日志CPU没有一致方向，不能承诺免费收益。
+另复用E-010的首次观察提交/遍历分析，在匹配presenter/transition的owner动画首末有效变化范围内，以唯一clock观察seq去重，比较提交前最近有效形状记录的年龄。off中位13.4628/14.5364ms、P95 26.9380/24.8910ms；request中位4.5821/5.0664ms、P95 11.2612/12.4860ms；frame中位4.2635/4.5479ms。它支持提交前应用状态更近，而不是仅有回调数增加；仍不证明记录的状态已经序列化或显示。请求模式普通CPU/分配增加，深日志CPU没有一致方向，不能承诺免费收益。
 
 request仍出现34.7560ms间隔：seq97823→98049，第一条MIL消息约+6.6680ms进入，原消息链下游耗时27.8718ms，WaitingForResponse→Disabled，约+34.6783ms才进入raw Rendering。另一轮23.6837ms最长间隔没有MIL通知。本轮没有新EventPipe栈，不能把所有残余等待都点名为WaitForNextMessage、GC或同一个定时器。
 
@@ -863,14 +1112,14 @@ request仍出现34.7560ms间隔：seq97823→98049，第一条MIL消息约+6.668
 
 所有24轮录制均是原始数据副本、原始数据.exe，同序36动作，逐轮验证实际加载.NET10.0.12，0记录/文本丢弃，退出前无匹配日志，正常退出后落盘。原4文件SHA和显示设置前后不变。实际日志固定记录预算96MiB、文本逻辑预算128MiB，以header为准，冻结分析器method中的旧24MiB示例不代表本轮设置。最终调度四模式各3206、HWND两臂3206/3238、组合两臂3244/3276断言通过，分析器9项检查通过；受限桌面导致旧输入检查失败的日志保留，正常桌面复测通过。各包、真实模块、构建告警、代码修正、独立复核及清单都留在证据目录。当前架构方向未变，没有新增Unreleased修复条目；不能把小原型或这套动作中的收益作为日用场景已完成优化。
 
-## E-014 — 活动渲染请求、真实交接像素与 HWND 最终请求合并
+## E-016 — 活动渲染请求、真实交接像素与 HWND 最终请求合并
 
 **日期：** 2026-09-14
 
-**状态：** 本地验证完成；采用活动 render demand 与 Detached Pointer 准入修正。两项 HWND 候选均未作为性能优化采用，路线 3 保留在 E-013 隔离原型中。主线整合结果另行记录，不由本地构建推定远端 CI 通过。
+**状态：** 本地与主线整合验证完成；采用活动 render demand 与 Detached Pointer 准入修正。两项 HWND 候选均未作为性能优化采用，路线 3 保留在 E-015 隔离原型中。主线整合结果见末节，不由本地构建推定远端 CI 通过。
 
 **源码基线：** 本地 `pr-254 / 1ef86d135fec1e8d51112a760e5268706f95f322`。
-**证据目录：** `输出/edge-request-handoff-20260914/`。保留所有候选源、补丁、编译/检查日志、逐轮原始数据、内存退出日志、失败及像素采集；最终索引见该目录 README。E-013 维持当时的隔离结论，本条记录其后续取舍。
+**证据目录：** `输出/edge-request-handoff-20260914/`。保留所有候选源、补丁、编译/检查日志、逐轮原始数据、内存退出日志、失败及像素采集；最终索引见该目录 README。E-015 维持当时的隔离结论，本条记录其后续取舍。
 
 ### 活动请求的正式机制和收益
 
@@ -891,7 +1140,7 @@ scheduler-v6 按同一 Dispatcher 的就绪 native batch group 保存实际 QPC 
 
 ### HWND 原位置保留：真实交接否决
 
-E-013 的 hover 宏没有真实 input handoff。E-014 使用隔离数据和原生输入，进一步测点击、拖拽取消、隐藏/显示和退出，并用 Desktop Duplication 保存连续 BGRA 帧；不靠低频截图判断卡顿，不把桌面合成采样等同面板扫描。
+E-015 的 hover 宏没有真实 input handoff。E-016 使用隔离数据和原生输入，进一步测点击、拖拽取消、隐藏/显示和退出，并用 Desktop Duplication 保存连续 BGRA 帧；不靠低频截图判断卡顿，不把桌面合成采样等同面板扫描。
 
 h1 的实际 Source→Target 移动会在点击交接中让队列成员短暂缺失。后续预 flush、先 reveal、单一 reveal 边界等候选没有同时得到稳定输入时延和无缺失/无重叠。h7 在同一 live cover 下空闲归位：两轮 9 个源 HWND 均成功归到 Target，保持源身份、output envelope、root 与 cloak 状态，约 4.93/6.43ms 的归位阶段未出现成员缺失；但这不足以证明稍后的 authority handoff 成功。
 
@@ -924,4 +1173,14 @@ baseline-r2 尾段复核发现：同一初始 hit 矩形内，某候选停留约
 
 所有数据均来自独立实机数据副本，原数据、LMDB、正式 EXE 和录制器不修改；四个原输入 SHA 复核见 original-input-verification。运行时锁定 .NET 10.0.12，所有真实回放串行，期间无构建或大日志分析；普通、深层和像素采样分别解释，不合并数值。像素分析保留重复画面再次出现的时间顺序，初始 LastPresentQpc=0 不赋予呈现时间；早期全局去重导致的错误时长推断及其修正均保存。
 
-路线 3 只有 E-013 的 compositor 能力原型，没有实际产品的 WPF／DComp 透明度交接结论；本次不合入。后续独立 PR 必须基于第一张 PR 的实际合并结果，不能把这里的能力验证当作正式可用或自动合并授权。
+路线 3 只有 E-015 的 compositor 能力原型，没有实际产品的 WPF／DComp 透明度交接结论；本次不合入。后续独立 PR 必须基于第一张 PR 的实际合并结果，不能把这里的能力验证当作正式可用或自动合并授权。
+
+### 与已合并主线的最终验证
+
+本地候选收口并封存后，将主线 `b9a6a9bd6aa161ae3c36ee119be80684b2715a8b`（PR #254）整合到独立分支。保留主线首轮 preview cache 先行、共享完成 Task、SystemIdle Shell 后建和正常 `Application.Shutdown()`／OnExit；本地静态代理预热仅在该启动链完成后获得准入，不重复开启预览 pass 或绕过编辑去抖。主线 14 个生命周期场景完整保留，并在既有场景内增加 Task 共用与 coordinator 准入顺序断言。
+
+整合后的 main-v1 冻结 660 个源文件，正式树与快照逐项 SHA 核对；随后只有实验说明与索引补记。标准 Release build 0 错误、0 警告，12 个配置检查组全部通过：EdgeTitle（Debug/Release，各 3347 断言）、Lifecycle（14 场景）、EdgePreview（Debug/Release）、MarkdownSemantic、MarkdownEditing、TodoNavigation、Threading、Persistence、EdgeDiagnosticJournal 和 EdgeLatencyObservation。日志测试包为优化 Debug 单文件、framework-dependent，关闭 R2R/压缩等变量，publish 有 1 条既有 IL3000；实际测试宿主及回放模块均为隔离 .NET 10.0.12。
+
+原录制器串行回放 main-v1 一轮，36 个动作及目标与已封存 integration-v1 完全一致，记录/文本零丢弃、退出前无诊断文件，footer 为 `normal-exit`。有效 owner WH/opacity 更新 518 个间隔，P50/P90/P95/P98/P99 为 **7.0622/13.1165/13.3684/17.0752/21.2510ms**，最大 40.0976ms，整轮进程 CPU 7578.125ms。这是合并后的单轮回归，不是同期 A/B，不能从 CPU 或极值差异宣称主线启动改动带来新的性能收益或回退，也不等同物理显示帧率；残余长等待仍存在。
+
+本次新证据独立保存于 `输出/edge-pr-integration-20260914/`：源码与文档三方审查、main-v1 快照/构建、12 组运行日志、原始回放、分析器、final-validation 和输入 SHA 核对。先前 E-016 原始目录已封存，91,274 文件、17,464,454,896 字节，清单 SHA256 为 `2A855544D5CFB81107D029838D6BD8F8024282BD0435820A0F6086DCC6D0280A`；后续结果没有覆盖该目录或 E-015。原 data.json、LMDB、正式 EXE 和录制器再次核验 SHA 不变。
