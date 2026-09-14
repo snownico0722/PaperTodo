@@ -60,8 +60,14 @@ jobs:
       - name: Edge title checks
         run: dotnet run --project .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
 
+      - name: Edge preview rendering and lifecycle checks
+        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
+
       - name: Threading regression checks
         run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
+
+      - name: Startup, shutdown and small-workset checks
+        run: dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release
 
       - name: Restart identity and launch checks
         run: dotnet run --project .\tests\PaperTodo.RestartChecks\PaperTodo.RestartChecks.csproj -c Release
