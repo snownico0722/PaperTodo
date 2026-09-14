@@ -1,6 +1,6 @@
 # PaperTodo 用户手册
 
-> **相关链接**：[返回项目主页](../README.md) · [插件开发文档](../plugin-samples/README.md) · [版本更新日志](../CHANGELOG.md)
+> **相关链接**：[返回项目主页](../README.zh-CN.md) · [插件开发文档](../plugin-samples/README.md) · [版本更新日志](../CHANGELOG.md)
 
 本文档面向 PaperTodo 的日常使用者。如果你是第一次接触 PaperTodo，请先阅读 [1. 快速入门](#1-快速入门)；其余章节可在需要时按目录检索查阅。
 
