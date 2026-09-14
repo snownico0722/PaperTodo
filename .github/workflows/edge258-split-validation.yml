@@ -6,22 +6,21 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
+  materialize:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Export fixed source histories for split verification
-        run: |
-          mkdir -p /tmp/edge258-source
-          git branch snapshot-main 2a84601d732d2c6a169e525bd55f373191784532
-          git branch snapshot-full 37fcf9b97f4750be22ce96056b2dd667bd87f213
-          git bundle create /tmp/edge258-source/source.bundle snapshot-main snapshot-full
-          git rev-parse snapshot-main snapshot-full > /tmp/edge258-source/refs.txt
+      - name: Reconstruct and verify source trees without moving refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/edge258-workbench/materialize.py
       - uses: actions/upload-artifact@v7
         with:
-          name: edge258-source
-          path: /tmp/edge258-source/*
+          name: edge258-verified-trees
+          path: edge258-trees.json
           retention-days: 1
