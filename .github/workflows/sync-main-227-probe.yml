@@ -25,16 +25,49 @@ jobs:
           git config user.name "PaperTodo Sync Probe"
           git config user.email "actions@users.noreply.github.com"
           git fetch origin main
+          echo "branch_head=$(git rev-parse HEAD)"
+          echo "main_head=$(git rev-parse origin/main)"
           set +e
           git merge --no-commit --no-ff origin/main
           status=$?
           set -e
           echo "merge_exit=$status"
-          echo "### Unmerged paths" >> "$GITHUB_STEP_SUMMARY"
           conflicts="$(git diff --name-only --diff-filter=U)"
+          echo "### Unmerged paths" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$conflicts" ]; then
             printf '%s\n' "$conflicts"
             printf '```text\n%s\n```\n' "$conflicts" >> "$GITHUB_STEP_SUMMARY"
+            python3 - <<'PY'
+          from pathlib import Path
+          files = [
+              '.github/workflows/pull-request-build.yml',
+              'CHANGELOG.md',
+              'doc/ARCHITECTURE.md',
+              'doc/CHANGELOG.en.md',
+              'doc/DECISIONS.md',
+              'src/PaperWindow.Capsule.cs',
+              'src/PaperWindow.Lifecycle.cs',
+              'src/PaperWindow.cs',
+          ]
+          for name in files:
+              p = Path(name)
+              if not p.exists():
+                  continue
+              lines = p.read_text(encoding='utf-8').splitlines()
+              markers = [i for i, line in enumerate(lines) if line.startswith('<<<<<<< ')]
+              if not markers:
+                  continue
+              print(f'\n===== CONFLICTS: {name} =====')
+              for n, start in enumerate(markers, 1):
+                  end = start
+                  while end < len(lines) and not lines[end].startswith('>>>>>>> '):
+                      end += 1
+                  lo = max(0, start - 8)
+                  hi = min(len(lines), end + 9)
+                  print(f'--- block {n}, lines {start+1}-{min(end+1,len(lines))} ---')
+                  for idx in range(lo, hi):
+                      print(f'{idx+1:5}: {lines[idx]}')
+          PY
           else
             echo "(none)"
             echo "(none)" >> "$GITHUB_STEP_SUMMARY"
