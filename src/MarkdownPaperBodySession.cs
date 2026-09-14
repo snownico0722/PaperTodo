@@ -67,6 +67,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
             _noteBox = value;
             if (value != null)
             {
+                NoteBackground.Apply(value);
                 _semanticDocument = new MarkdownSemanticDocument(value.Document);
                 value.SetSemanticDocument(_semanticDocument);
                 _semanticPresentation = new MarkdownSemanticPresentation(
@@ -145,8 +146,11 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         CancelPresenterInteractions?.Invoke();
     }
 
-    public void OnThemeChanged(PaperBodyTheme theme) =>
+    public void OnThemeChanged(PaperBodyTheme theme)
+    {
+        NoteBackground.Apply(NoteBox);
         NoteBox?.RefreshVisualStyle();
+    }
 
     public void OnTypographyChanged(PaperBodyTheme theme) =>
         NoteBox?.RefreshTypography();
