@@ -28,6 +28,7 @@ internal static partial class Program
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
             RenderDemandChecks();
+            ProxyRetentionChecks();
             Console.WriteLine($"Edge title checks: {assertions} assertions passed.");
             return 0;
         }

@@ -49,6 +49,7 @@ public sealed partial class PaperWindow
         {
             return;
         }
+        using var prewarmMutation = _controller.SuspendEdgePrewarmForMutation();
         // A queue proxy is controller-owned and cannot be demoted/raised with one paper's native
         // passive state. Handoff first; eligibility checks keep a retained retry non-interactive.
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);

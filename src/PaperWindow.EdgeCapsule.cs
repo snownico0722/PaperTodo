@@ -16,6 +16,7 @@ public sealed partial class PaperWindow
     private EdgeCapsuleEdge _edgeCapsuleHostCapacityEdge;
     private double _edgeCapsuleHostCapacityDpiX;
     private double _edgeCapsuleHostCapacityDpiY;
+    private bool _edgeCapsuleDisplayMetricsPendingAfterProxyRelease;
     private double _edgeCapsuleHostCapacityWidthDip;
     private double _edgeCapsuleHostCapacityHeightDip;
 
@@ -232,11 +233,27 @@ public sealed partial class PaperWindow
 
     internal void InvalidateEdgeCapsuleDisplayMetrics()
     {
+        using var prewarmMutation = _controller.SuspendEdgePrewarmForMutation();
         if (_edgeCapsuleHost == null && !HasDeepCapsuleSlotPlacement)
         {
             return;
         }
 
+        if (_controller.IsEdgeCapsuleQueueProxyRetainingSource(this))
+        {
+            // The source and output HWND receive display messages independently. End the live
+            // surface contract here instead of relying on the output's message arriving first.
+            // A failed handoff keeps this request until the controller confirms source release.
+            _edgeCapsuleDisplayMetricsPendingAfterProxyRelease = true;
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+            if (_controller.IsEdgeCapsuleQueueProxyRetainingSource(this) ||
+                !_edgeCapsuleDisplayMetricsPendingAfterProxyRelease)
+            {
+                return;
+            }
+        }
+
+        _edgeCapsuleDisplayMetricsPendingAfterProxyRelease = false;
         _edgeCapsuleHost?.InvalidateNativeMetrics();
         _edgeCapsule.ForceApplyCurrentPresentation();
         _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
@@ -245,6 +262,46 @@ public sealed partial class PaperWindow
             EdgeCapsuleDirty.Presentation |
             EdgeCapsuleDirty.Measure |
             EdgeCapsuleDirty.DisplayMetrics);
+    }
+
+    internal void ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease()
+    {
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
+            _controller.IsEdgeCapsuleQueueProxyRetainingSource(this))
+        {
+            return;
+        }
+
+        var hadPendingSourceInvalidation = _edgeCapsuleDisplayMetricsPendingAfterProxyRelease ||
+            _edgeCapsulePendingPreviewCapacity.HasValue;
+        if (_edgeCapsuleDisplayMetricsPendingAfterProxyRelease)
+        {
+            InvalidateEdgeCapsuleDisplayMetrics();
+        }
+
+        if (HasDeepCapsuleSlotPlacement &&
+            _edgeCapsulePendingPreviewCapacity is { } pendingCapacity)
+        {
+            var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
+            var size = pendingCapacity.Normalize(
+                Math.Max(1, workArea.Width - 16),
+                Math.Max(1, workArea.Height - 16));
+            if (TryReserveEdgeCapsuleHostCapacity(size, out var changed))
+            {
+                if (_edgeCapsulePendingPreviewCapacity == pendingCapacity)
+                {
+                    _edgeCapsulePendingPreviewCapacity = null;
+                }
+                if (changed)
+                {
+                    InvalidateEdgeCapsule(
+                        EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
+                }
+            }
+        }
+        if (hadPendingSourceInvalidation && !_edgeCapsuleDisplayMetricsPendingAfterProxyRelease &&
+            !_edgeCapsulePendingPreviewCapacity.HasValue)
+            _controller.RequestEdgePrewarmForVisibleQueues();
     }
 
     private bool GrowEdgeCapsuleHostCapacity(
@@ -390,6 +447,21 @@ public sealed partial class PaperWindow
     private bool PrepareEdgeCapsuleHostCapacity(
         EdgeCapsulePreviewSize size)
     {
+        if (_controller.IsEdgeCapsuleQueueProxyRetainingSource(this) &&
+            !CurrentEdgeCapsuleHostCapacityContains(size))
+        {
+            // This is an explicit preview demand, not a layout getter. A retained queue may now
+            // outlive a browse session, so waiting for its normal animation end cannot make a
+            // larger source available. Release through the existing verified handoff and retry.
+            RememberEdgeCapsulePreviewCapacityRequest(size);
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        }
+
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive)
+        {
+            return false;
+        }
+
         if (TryReserveEdgeCapsuleHostCapacity(
                 size,
                 out _))
@@ -425,7 +497,8 @@ public sealed partial class PaperWindow
         // Outside compositor ownership the live bounded HWND may resize to new title/plugin/mini
         // requirements. During an active queue proxy transaction the proxy owns a live surface from
         // this HWND, so keep that source capacity stable until the proxy releases it.
-        if (!_controller.IsEdgeCapsuleQueueProxyRetainingSource(this))
+        var retainedByProxy = _controller.IsEdgeCapsuleQueueProxyRetainingSource(this);
+        if (!retainedByProxy)
         {
             _ = GrowEdgeCapsuleHostCapacity(
                 monitor,
@@ -455,8 +528,7 @@ public sealed partial class PaperWindow
                     .ExperimentalRestingCapsuleOpacityAlways
                     ? restingOpacity
                     : null;
-        return EdgeCapsuleLayoutService.Calculate(
-            new EdgeCapsuleLayoutFacts(
+        var facts = new EdgeCapsuleLayoutFacts(
                 monitor,
                 edge,
                 _edgeCapsule.Placement,
@@ -474,12 +546,39 @@ public sealed partial class PaperWindow
                 _edgeCapsuleHostCapacityWidthDip,
                 _edgeCapsuleHostCapacityHeightDip,
                 expandedWidth,
-                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden));
+                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden);
+        return EdgeCapsuleLayoutService.Calculate(retainedByProxy
+            ? ConstrainEdgeCapsuleLayoutToRetainedCapacity(facts)
+            : facts);
+    }
+
+    internal static EdgeCapsuleLayoutFacts ConstrainEdgeCapsuleLayoutToRetainedCapacity(
+        EdgeCapsuleLayoutFacts facts)
+    {
+        // A larger desired title/mini can arrive before the verified handoff finishes. Keeping
+        // only HostCapacity unchanged is insufficient: TargetPlanner also includes shape widths
+        // in its native host maximum. Limit this temporary WPF shape to the source we still own;
+        // the original desired measurement is recomputed once the existing pending request resumes.
+        var bodyCapacity = Math.Max(1,
+            facts.HostCapacityWidthDip - facts.MaximumCloseWidthDip);
+        return facts with
+        {
+            RestingWidthDip = Math.Min(facts.RestingWidthDip, bodyCapacity),
+            ExpandedWidthDip = Math.Min(facts.ExpandedWidthDip, bodyCapacity),
+            HeightDip = Math.Min(facts.HeightDip, facts.HostCapacityHeightDip),
+            PreviewWidthDip = Math.Min(facts.PreviewWidthDip, facts.HostCapacityWidthDip),
+            PreviewHeightDip = Math.Min(facts.PreviewHeightDip, facts.HostCapacityHeightDip)
+        };
     }
 
     private bool ApplyEdgeCapsulePresentationFrame(
         EdgeCapsulePresentationFrame frame)
     {
+#if DEBUG
+        EdgeDiagnosticObservation.MapPresenter(_edgeCapsule, _paper.Id);
+        using var edgeJournalPaper = EdgeDiagnosticObservation.Begin("paper.apply", _edgeCapsule);
+#endif
+
         // A queue proxy owns only the global screen offset. The real bounded
         // host remains live and receives every WPF morph frame while cloaked.
         if (!frame.Visible)
@@ -544,6 +643,28 @@ public sealed partial class PaperWindow
 
     private void InvalidateEdgeCapsule(EdgeCapsuleDirty dirty)
     {
+        if ((dirty & EdgeCapsuleDirty.Measure) != 0 &&
+            _edgeCapsuleHost?.IsVisible == true &&
+            _controller.IsEdgeCapsuleQueueProxyRetainingSource(this))
+        {
+            // Title, font and plugin widths can grow while no preview is open. This explicit
+            // invalidation owns that demand; the layout getter must not initiate a handoff.
+            var monitor = DeepCapsuleMonitorGeometry();
+            var restingWidth = DeepCapsuleVisibleWidth(monitor.DpiScaleY);
+            var expandedWidth = DeepCapsuleExpandedBodyWidth(monitor, restingWidth);
+            var previewSize = CurrentEdgeCapsulePreviewSize;
+            var requiredCapacity = new EdgeCapsulePreviewSize(
+                Math.Max(expandedWidth + CapsuleCloseWidth,
+                    previewSize?.WidthDip ?? restingWidth + CapsuleCloseWidth),
+                Math.Max(PaperLayoutDefaults.CapsuleHeight, previewSize?.HeightDip ?? 0));
+            if (!PrepareEdgeCapsuleHostCapacity(requiredCapacity))
+            {
+                // Prepare remembered the growth before requesting release. A retry must keep the
+                // old source intact; ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease grows
+                // it and queues a fresh Measure/Presentation after ownership has actually ended.
+                return;
+            }
+        }
         if ((dirty & EdgeCapsuleDirty.Pointer) != 0)
         {
             _controller.InvalidateEdgeCapsulePreviewPointerResolution();
@@ -627,6 +748,7 @@ public sealed partial class PaperWindow
             _controller.NotifyEdgeCapsulePointerOverChanged(this, pointerOver);
         }
         _controller.NotifyEdgeCapsulePreviewPhysicalPointer(this, pointer);
+        _controller.NotifyEdgePrewarmPresentation(this);
     }
 
     internal void PublishEdgeCapsuleVisualTransactionNotifications() =>
@@ -645,6 +767,7 @@ public sealed partial class PaperWindow
         _edgeCapsuleHostCapacityMonitor = null;
         _edgeCapsuleHostCapacityWidthDip = 0;
         _edgeCapsuleHostCapacityHeightDip = 0;
+        _edgeCapsuleDisplayMetricsPendingAfterProxyRelease = false;
     }
 
     // ── This window's OWN queue identity. A queue is (monitor, edge); each docked capsule

@@ -26,6 +26,7 @@ internal sealed class MarkdownEdgePreviewPreload
     private CancellationTokenSource? _work;
     private EdgeCapsulePreviewInvalidationSource? _workingSource;
     private bool _enabled = true;
+    private bool _suspended;
     internal int ExcerptCount => _excerpts.Count;
     internal int ArtifactCount => _artifacts.Count;
     internal int PendingCount => _pendingLayout.Count;
@@ -240,14 +241,33 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _debounce.Stop();
         _debounce.Interval = TimeSpan.FromMilliseconds(500);
-        if (RunnableCount > 0) _debounce.Start();
+        if (!_suspended && RunnableCount > 0) _debounce.Start();
+    }
+
+    // The application coordinator owns WHEN optional work is allowed; this cache retains its
+    // one latest-reader queue, artifacts and worker cancellation. Demand uses a separate lifetime
+    // in the real viewport and must remain runnable while speculative work is suspended.
+    internal void SetSuspended(bool suspended)
+    {
+        _dispatcher.VerifyAccess();
+        if (_suspended == suspended) return;
+        _suspended = suspended;
+        TracePreload(suspended ? "suspended" : "resumed");
+        if (suspended)
+        {
+            _debounce.Stop();
+            _work?.Cancel();
+        }
+        else if (_enabled && !_dispatcher.HasShutdownStarted) Arm();
     }
 
     internal Task StartStartupWork()
     {
         _dispatcher.VerifyAccess();
         if (!_enabled || _dispatcher.HasShutdownStarted) return Task.CompletedTask;
-        if (RunnableCount == 0) return _drainTask;
+        // Suspension cancels only the optional pass. Share its completion with existing callers
+        // without starting new work or waiting for a future interaction/graphics preparation.
+        if (_suspended || RunnableCount == 0) return _drainTask;
         // The first stable batch uses the normal renderer/drain, without the editing debounce.
         // Await only this pass: a user edit can cancel it and retain its ordinary 500ms delay.
         _debounce.Stop();
@@ -270,15 +290,15 @@ internal sealed class MarkdownEdgePreviewPreload
 
     private async Task DrainAsync()
     {
-        if (!_enabled || _work != null || _dispatcher.HasShutdownStarted) return;
+        if (!_enabled || _suspended || _work != null || _dispatcher.HasShutdownStarted) return;
         using var work = new CancellationTokenSource();
         _work = work;
         try
         {
-            while (!work.IsCancellationRequested && RunnableCount > 0)
+            while (!work.IsCancellationRequested && !_suspended && RunnableCount > 0)
             {
                 await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-                if (work.IsCancellationRequested || RunnableCount == 0) break;
+                if (work.IsCancellationRequested || _suspended || RunnableCount == 0) break;
                 var pair = _pendingLayout.First(item => !_deferred.Contains(item.Key));
                 var defer = false;
                 _workingSource = pair.Key;
@@ -321,7 +341,7 @@ internal sealed class MarkdownEdgePreviewPreload
     internal async Task<bool> WarmLayoutAsync(Target target, CancellationToken cancellation = default)
     {
         _dispatcher.VerifyAccess();
-        if (!_enabled || cancellation.IsCancellationRequested || !target.StillEligible() ||
+        if (!_enabled || _suspended || cancellation.IsCancellationRequested || !target.StillEligible() ||
             !target.Anchor.IsLoaded || !target.Anchor.IsVisible) return false;
 
         var version = target.Context.InvalidationSource.Version;
@@ -385,7 +405,7 @@ internal sealed class MarkdownEdgePreviewPreload
             var operation = _dispatcher.InvokeAsync(() =>
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (lifetime.IsCancellationRequested || !_enabled || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
+                if (lifetime.IsCancellationRequested || !_enabled || _suspended || !target.StillEligible() || target.Context.InvalidationSource.Version != version ||
                     !target.Anchor.IsLoaded || !target.Anchor.IsVisible || !key.Binding.Current ||
                     MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 
@@ -413,8 +433,8 @@ internal sealed class MarkdownEdgePreviewPreload
     private void TracePreload(string phase, EdgeCapsulePreviewInvalidationSource? source = null, string? detail = null) =>
         EdgeCapsulePerformanceDiagnostics.Trace($"markdown.preload phase={phase} " +
             $"source={(source == null ? 0 : RuntimeHelpers.GetHashCode(source))} version={source?.Version ?? -1} " +
-            $"pending={PendingCount} deferred={DeferredCount} artifacts={ArtifactCount} {detail}");
+            $"pending={PendingCount} deferred={DeferredCount} artifacts={ArtifactCount} suspended={_suspended} {detail}");
 
     // Same-binary A/B probe; no settings, environment switch or persistent product option.
-    internal void SetEnabledForChecks(bool enabled) { Clear(); _enabled = enabled; }
+    internal void SetEnabledForChecks(bool enabled) { Clear(); _enabled = enabled; _suspended = false; }
 }

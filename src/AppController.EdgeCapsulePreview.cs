@@ -191,6 +191,7 @@ public sealed partial class AppController
         {
             owner.SetEdgeCapsulePreviewClosed(animate: false);
         }
+        ReleaseEdgeCapsuleQueueProxyForEndedPreview(session);
     }
 
     internal void NotifyEdgeCapsulePointerOverChanged(
@@ -1093,6 +1094,23 @@ public sealed partial class AppController
         if (arrange)
         {
             ArrangeDeepCapsules(animate);
+        }
+        else
+        {
+            ReleaseEdgeCapsuleQueueProxyForEndedPreview(session);
+        }
+    }
+
+    private void ReleaseEdgeCapsuleQueueProxyForEndedPreview(
+        EdgeCapsulePreviewLayoutSession? session)
+    {
+        // A reset/close without an arrange has no successor animation whose completion could
+        // release a retained cover. The preview-session owner must end that lease explicitly.
+        if (session != null &&
+            !string.Equals(_edgeCapsulePreviewSession?.QueueKey, session.QueueKey,
+                StringComparison.Ordinal))
+        {
+            CompleteEdgeCapsuleQueueCompositionProxy(session.QueueKey, success: true);
         }
     }
 
