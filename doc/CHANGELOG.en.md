@@ -112,7 +112,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Bare Markdown Link Recognition**: Auto-detects plain `http://` and `https://` URLs in note text as clickable links without breaking code fences.
 - **Note Image Memory Optimization**: Decodes large images directly to display target dimensions during import, dramatically lowering peak RAM consumption.
 - **Edge Capsule Spacing**: Added configurable spacing between docked capsules (0 / 4 / 8 DIP; default 4 DIP).
-- **Multi-Language Selector**: Added official in-app UI language options: Follow System, 简体中文, English,日本語, and 한국어.
+- **Multi-Language Selector**: Added official in-app UI language options: Follow System, 简体中文, English, 日本語, and 한국어.
 - **Numpad Key Distinction**: Added preference to distinguish between Numpad digits and primary number row keys in global hotkeys.
 - **Old Windows Version Compatibility**: Hardened startup lifecycle for edge environments and legacy Windows builds.
 
