@@ -30,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # The pinned tray submodule calculates its version from Git history.
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
