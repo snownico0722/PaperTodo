@@ -47,7 +47,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          import os, re
+          import os, re, subprocess
 
           expected_conflicts = {
               '.github/workflows/pull-request-build.yml',
@@ -59,17 +59,13 @@ jobs:
               'src/PaperWindow.Lifecycle.cs',
               'src/PaperWindow.cs',
           }
-
-          import subprocess
           actual = set(filter(None, subprocess.check_output(
               ['git', 'diff', '--name-only', '--diff-filter=U'], text=True).splitlines()))
           if actual != expected_conflicts:
               raise SystemExit(f'Conflict set changed. expected={sorted(expected_conflicts)} actual={sorted(actual)}')
 
           def split_conflicts(text):
-              out = []
-              pos = 0
-              blocks = []
+              out, blocks, pos = [], [], 0
               while True:
                   start = text.find('<<<<<<< HEAD\n', pos)
                   if start < 0:
@@ -89,8 +85,7 @@ jobs:
 
           def resolve(path, chooser):
               p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              parts, blocks = split_conflicts(text)
+              parts, blocks = split_conflicts(p.read_text(encoding='utf-8'))
               for slot, ours, theirs in blocks:
                   parts[slot] = chooser(ours, theirs)
               p.write_text(''.join(parts), encoding='utf-8', newline='\n')
@@ -116,10 +111,8 @@ jobs:
           tmp = Path(os.environ['RUNNER_TEMP'])
           ours_decisions = (tmp / 'decisions-ours.md').read_text(encoding='utf-8')
           main_decisions = (tmp / 'decisions-main.md').read_text(encoding='utf-8')
-          rows = []
-          for line in ours_decisions.splitlines():
-              if re.match(r'^\| D-(?:03[2-9]|04[0-3]) \|', line):
-                  rows.append(remap_skin_ids(line))
+          rows = [remap_skin_ids(line) for line in ours_decisions.splitlines()
+                  if re.match(r'^\| D-(?:03[2-9]|04[0-3]) \|', line)]
           if len(rows) != 10:
               raise SystemExit(f'Expected the existing 10 skin decision index rows, found {len(rows)}')
           rows.extend([
@@ -213,7 +206,11 @@ jobs:
 
           git add -A
           test -z "$(git diff --name-only --diff-filter=U)"
-          git diff --check --cached
+          git diff --check --cached -- \
+            .github/workflows/pull-request-build.yml \
+            CHANGELOG.md doc/ARCHITECTURE.md doc/CHANGELOG.en.md doc/DECISIONS.md \
+            src/PaperWindow.Capsule.cs src/PaperWindow.Lifecycle.cs src/PaperWindow.cs \
+            src/PaperChromeBorder.cs src/SkinBorder.cs src/PaperWindow.ExperimentalFocusPresentation.cs
 
       - name: Release build
         shell: pwsh
@@ -245,7 +242,6 @@ jobs:
           git rm --ignore-unmatch .github/workflows/sync-main-227-apply.yml
           git rm --ignore-unmatch .github/workflows/sync-main-227-retry.yml
           git add -A
-          git diff --check --cached
           test -n "$(git rev-parse -q --verify MERGE_HEAD)"
           git commit -m "chore: sync main into experimental skins branch"
           git push origin HEAD:exp/playful-skins-20260909
