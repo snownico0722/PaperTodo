@@ -41,6 +41,9 @@ replace('src/StateReloadModels.cs', '        Copy(AppProperties, next, current);
     '        // Keep the committed comparison snapshot immutable, including dictionaries/new papers.\n        next = StateStore.CopyForReload(next);\n        Copy(AppProperties, next, current);')
 replace('src/StateJsonMerge.cs', 'other.Skip(i + 1).Select(result.IndexOf)',
     'other.Skip(i + 1).Select(item => result.IndexOf(item))')
+replace('src/PaperWindow.DataReload.cs',
+    '        if (before.IsCollapsed != _paper.IsCollapsed)\n        {\n            var collapsed = _paper.IsCollapsed;\n            _paper.IsCollapsed = before.IsCollapsed;\n            SetCollapsedState(collapsed, animate: false, saveGeometry: false);\n        }',
+    '        if (before.IsCollapsed != _paper.IsCollapsed)\n        {\n            var collapsed = _paper.IsCollapsed;\n            var expandingFromDeepCapsuleEdge = !collapsed && HasDeepCapsuleSlotPlacement;\n            _paper.IsCollapsed = before.IsCollapsed;\n            if (expandingFromDeepCapsuleEdge) ShowMainWindowForDeepCapsuleActivation();\n            SetCollapsedState(collapsed, animate: false, saveGeometry: false,\n                alignExpandedToDockedEdge: expandingFromDeepCapsuleEdge);\n        }')
 path = root / 'src/StateStore.cs'
 text = path.read_text(encoding='utf-8')
 if 'AddIfExists(paths, FilePath);' not in text:
