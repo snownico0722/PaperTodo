@@ -11,6 +11,7 @@ internal static class PluginLocalizationChecks
         var host = Assembly.Load("PaperTodo");
         CheckLocalizedOverlay(host);
         CheckBaseFallback(host);
+        CheckLocalizedCategoryGroups(host);
         Console.WriteLine("PaperTodo plugin localization checks passed.");
     }
 
@@ -75,6 +76,65 @@ internal static class PluginLocalizationChecks
         Assert(StringProperty(manifest, "Name") == "Base", "Missing locale must use base text.");
         Assert(StringProperty(First(manifest, "Settings"), "Name") == "Enabled",
             "Missing locale changed base setting text.");
+    }
+
+    private static void CheckLocalizedCategoryGroups(Assembly host)
+    {
+        const string json = """
+        {
+          "advancedSettings": true,
+          "settingCategories": [
+            { "name": "appearance", "column": "left" },
+            { "name": "display", "column": "right" }
+          ],
+          "settings": [
+            { "id": "theme", "type": "boolean", "category": "appearance" },
+            { "id": "zoom", "type": "boolean", "category": "display" },
+            { "id": "accent", "type": "boolean", "category": "appearance" },
+            { "id": "standalone", "type": "boolean" },
+            { "id": "other", "type": "boolean" }
+          ],
+          "locales": {
+            "en": {
+              "settingCategories": { "appearance": "Display", "display": "Display" }
+            }
+          }
+        }
+        """;
+
+        var buildGroups = host.GetType("PaperTodo.AppController", true)!
+            .GetMethod("BuildPluginSettingGroups", BindingFlags.Static | BindingFlags.NonPublic)!;
+        foreach (var cultureName in new[] { "en-GB", "fr-FR" })
+        {
+            var manifest = Prepare(host, json, CultureInfo.GetCultureInfo(cultureName));
+            var groups = ((System.Collections.IEnumerable)buildGroups.Invoke(
+                    null, [manifest, Property(manifest, "Settings")])!)
+                .Cast<ITuple>().ToArray();
+
+            Assert(groups.Length == 4, "Distinct categories or uncategorized settings were merged.");
+            Assert((string)groups[0][0]! == (cultureName == "en-GB" ? "Display" : "appearance") &&
+                   (string)groups[1][0]! == (cultureName == "en-GB" ? "Display" : "display"),
+                "Category labels must display localized or base text, not identity keys.");
+            Assert((string)groups[0][1]! == "left" && (string)groups[1][1]! == "right",
+                "Localized category labels changed explicit column placement.");
+            Assert(((Array)groups[0][2]!).Cast<object>()
+                    .Select(setting => StringProperty(setting, "Id"))
+                    .SequenceEqual(new[] { "theme", "accent" }),
+                "The left category lost its settings or their order.");
+            Assert(((Array)groups[1][2]!).Cast<object>()
+                    .Select(setting => StringProperty(setting, "Id"))
+                    .SequenceEqual(new[] { "zoom" }),
+                "Settings from distinct categories with the same label were mixed.");
+            for (var index = 2; index < groups.Length; index++)
+            {
+                var settings = (Array)groups[index][2]!;
+                Assert((string)groups[index][0]! == "" && (string)groups[index][1]! == "" &&
+                       settings.Length == 1 &&
+                       StringProperty(settings.GetValue(0)!, "Id") ==
+                           (index == 2 ? "standalone" : "other"),
+                    "Uncategorized settings must remain independent and retain their order.");
+            }
+        }
     }
 
     private static object Prepare(Assembly host, string json, CultureInfo culture)
