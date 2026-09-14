@@ -22,6 +22,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "PaperTodo Sync Probe"
+          git config user.email "actions@users.noreply.github.com"
           git fetch origin main
           set +e
           git merge --no-commit --no-ff origin/main
