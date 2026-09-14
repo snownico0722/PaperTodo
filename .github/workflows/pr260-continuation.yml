@@ -1,0 +1,73 @@
+name: PR260 continuation regressions
+
+on:
+  push:
+    branches:
+      - experiment/pr260-continuation-20260915
+
+permissions:
+  contents: read
+
+jobs:
+  coordination:
+    if: contains(github.event.head_commit.message, '[ci]')
+    name: Prewarm reentrancy (${{ matrix.source }})
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [baseline, candidate]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build the same harness against the selected production scheduler
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceRef = if ('${{ matrix.source }}' -eq 'baseline') { '953ae6266af2bc8c5d1696be7660e5006525202b' } else { '${{ github.sha }}' }
+          $sourcePath = Join-Path $env:RUNNER_TEMP 'pr260-EdgePrewarmCoordinator.cs'
+          $source = git show "${sourceRef}:src/EdgePrewarmCoordinator.cs"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read the pinned production source' }
+          [IO.File]::WriteAllLines($sourcePath, $source, [Text.UTF8Encoding]::new($false))
+          "SOURCE_REF=$sourceRef" | Tee-Object -FilePath pr260-build.log
+          "HARNESS_REF=${{ github.sha }}" | Tee-Object -FilePath pr260-build.log -Append
+          Get-FileHash $sourcePath -Algorithm SHA256 | Out-String | Tee-Object -FilePath pr260-build.log -Append
+          dotnet --info | Tee-Object -FilePath pr260-build.log -Append
+          dotnet build tests/PaperTodo.Pr260RegressionChecks -c Release "-p:CoordinatorSource=$sourcePath" 2>&1 | Tee-Object -FilePath pr260-build.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Execute real Dispatcher checks and verify exact baseline failures
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $arguments = if ('${{ matrix.source }}' -eq 'baseline') { @('--expect-baseline-defects') } else { @() }
+          & ./tests/PaperTodo.Pr260RegressionChecks/bin/Release/net10.0-windows/PaperTodo.Pr260RegressionChecks.exe @arguments 2>&1 | Tee-Object -FilePath pr260-run.log
+          $code = $LASTEXITCODE
+          if (Test-Path pr260-coordination-results.json) {
+            $result = Get-Content pr260-coordination-results.json -Raw | ConvertFrom-Json
+            "## ${{ matrix.source }} — ${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY
+            "Runtime: $($result.Runtime). Scope: scheduler correctness, NOT animation or physical-display latency." >> $env:GITHUB_STEP_SUMMARY
+            '| Scenario | Passed | Pending | Sleeping | Calls |' >> $env:GITHUB_STEP_SUMMARY
+            '| --- | --- | --- | --- | --- |' >> $env:GITHUB_STEP_SUMMARY
+            foreach ($row in $result.Results) {
+              "| $($row.Name) | $($row.State.Passed) | $($row.State.Pending) | $($row.State.Sleeping) | $($row.State.Calls) |" >> $env:GITHUB_STEP_SUMMARY
+            }
+          }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-coordination-${{ matrix.source }}-${{ github.sha }}
+          path: |
+            pr260-build.log
+            pr260-run.log
+            pr260-coordination-results.json
+          retention-days: 14
