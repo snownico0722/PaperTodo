@@ -44,6 +44,10 @@ public sealed partial class AppController
     private void ToggleNoteBackground()
     {
         NoteBackground.SetEnabled(!NoteBackground.IsEnabled);
-        RefreshThemeSurfaces();
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshNoteBackground();
+        }
+        RefreshSettingsWindowContent();
     }
 }
