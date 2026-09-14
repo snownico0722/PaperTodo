@@ -147,23 +147,15 @@ public sealed partial class PaperWindow
             EdgeCapsuleIntent.DockingRevealStarted(),
             EdgeCapsuleDirty.None);
 
-    private bool FinishEdgeCapsulePointerInteraction()
-    {
-        var accepted = DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsulePointerInteraction() =>
+        DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
-        if (accepted) _controller.RequestEdgePrewarmForVisibleQueues();
-        return accepted;
-    }
 
-    private bool FinishEdgeCapsuleDockingHandoff()
-    {
-        var accepted = DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsuleDockingHandoff() =>
+        DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.None);
-        if (accepted) _controller.RequestEdgePrewarmForVisibleQueues();
-        return accepted;
-    }
 
     private bool MarkEdgeCapsuleOpenedFromEdge() =>
         DispatchEdgeCapsuleIntent(

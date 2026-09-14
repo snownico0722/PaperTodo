@@ -1229,40 +1229,17 @@ internal static partial class WindowNative
     public static void FlushDesktopComposition() => _ = DwmFlush();
 
     public static bool TryPostMouseButtonDown(
-        IntPtr handle,
-        int message,
-        DeviceScreenPoint screenPoint)
+        IntPtr handle, EdgeCapsulePointerDown input, DeviceScreenPoint screenPoint)
     {
-        const int wmLeftButtonDown = 0x0201;
-        const int wmRightButtonDown = 0x0204;
-        const int wmMiddleButtonDown = 0x0207;
-        var keyState = message switch
-        {
-            wmLeftButtonDown => 0x0001,
-            wmRightButtonDown => 0x0002,
-            wmMiddleButtonDown => 0x0010,
-            _ => 0
-        };
-        if (handle == IntPtr.Zero ||
-            keyState == 0 ||
-            !IsWindow(handle))
-        {
-            return false;
-        }
-
+        if (handle == IntPtr.Zero || !IsWindow(handle) ||
+            input.Message is not (0x0201 or 0x0204 or 0x0207)) return false;
         var clientPoint = new CursorPoint
         {
             X = (int)Math.Round(screenPoint.X, MidpointRounding.AwayFromZero),
             Y = (int)Math.Round(screenPoint.Y, MidpointRounding.AwayFromZero)
         };
-        if (!ScreenToClient(handle, ref clientPoint))
-        {
-            return false;
-        }
-        return PostMessage(
-            handle,
-            message,
-            new IntPtr(keyState),
+        if (!ScreenToClient(handle, ref clientPoint)) return false;
+        return PostMessage(handle, input.Message, input.KeyState,
             PackScreenPoint(clientPoint.X, clientPoint.Y));
     }
 

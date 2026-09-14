@@ -34,7 +34,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         {
             try
             {
-                _coverRollback(this, _predecessor);
+                _coverRollback(this);
             }
             catch
             {
@@ -58,14 +58,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             {
                 _target.SetRoot(_predecessor._root).CheckError();
             }
-#if DEBUG
-            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                _device.Commit().CheckError();
-#if DEBUG
-            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-wait"))
-#endif
-                _device.WaitForCommitCompletion().CheckError();
+            _device.Commit().CheckError();
+            _device.WaitForCommitCompletion().CheckError();
             if (!_host.RollbackPromotion(this, _predecessor))
             {
                 throw new InvalidOperationException(
@@ -149,10 +143,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
             swapAttempted = true;
             _target.SetRoot(null!).CheckError();
-#if DEBUG
-            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                _device.Commit().CheckError();
+            _device.Commit().CheckError();
             _targetRootInstalled = false;
             return true;
         }
@@ -167,10 +158,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             try
             {
                 _target.SetRoot(_root).CheckError();
-#if DEBUG
-                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                    _device.Commit().CheckError();
+                _device.Commit().CheckError();
                 _targetRootInstalled = true;
             }
             catch
@@ -235,14 +223,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         if (ReferenceEquals(_host.Current, this))
         {
             try { _target.SetRoot(null!).CheckError(); } catch { }
-            try
-            {
-#if DEBUG
-                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                    _device.Commit().CheckError();
-            }
-            catch { }
+            try { _device.Commit().CheckError(); } catch { }
             _targetRootInstalled = false;
             _window.Hide();
             _host.Detach(this);
@@ -307,6 +288,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     public void ForceDisposeForShutdown()
     {
+        _inputHandoff?.Cancel();
         if (_disposed)
         {
             RetireVisualResources();
@@ -388,10 +370,6 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void DisposeCore(bool clearTargetRoot)
     {
-#if DEBUG
-        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.dispose", this);
-#endif
-
         if (_disposed)
         {
             return;
@@ -406,14 +384,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 ReferenceEquals(_host.Current, this))
             {
                 try { _target.SetRoot(null!).CheckError(); } catch { }
-                try
-                {
-#if DEBUG
-                    using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                        _device.Commit().CheckError();
-                }
-                catch { }
+                try { _device.Commit().CheckError(); } catch { }
                 _targetRootInstalled = false;
             }
 
@@ -428,7 +399,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             $"proxy.handoff phase=dispose session={_sessionOrdinal} " +
             $"cold={IsColdSession} queue={_plan.QueueKey} " +
             $"released={_sourcesReleased} " +
-            $"successor={_hadPredecessor} reusedHost=true");
+            $"successor={_predecessor != null} reusedHost=true");
 #endif
     }
 

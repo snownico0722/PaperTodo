@@ -2,12 +2,6 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    internal bool CanPreacquireEdgeCapsuleSource => CanEnterEdgeCapsulePreview &&
-        !IsEdgeCapsulePreviewOpen && !EdgeCapsulePreviewPointerCaptureActive &&
-        !_edgeCapsule.ContextMenuOpen && EdgeCapsuleGesture == EdgeCapsuleGestureState.Idle &&
-        CurrentEdgeCapsuleVisualAuthority == EdgeCapsuleVisualAuthority.RealDocked &&
-        _edgeCapsule.IsSettledForPreacquisition;
-
     [System.Diagnostics.Conditional("DEBUG")]
     internal void TraceEdgeCapsuleCompositionVisibility(string context)
     {
@@ -78,7 +72,8 @@ public sealed partial class PaperWindow
 
     internal (
         DeviceScreenRect PreviewBounds,
-        int MaximumDownwardShiftDevice)
+        int MaximumDownwardShiftDevice,
+        int WorkAreaBottomDevice)
         CaptureEdgeCapsuleQueueProxyCapacity()
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
@@ -139,10 +134,21 @@ public sealed partial class PaperWindow
                 layout.HeightDip));
         return (
             preview.Bounds,
-            EdgeCapsuleQueueProxyGeometry.DownwardBrowseCapacity(
-                compact.Bounds,
-                preview.Bounds,
-                layout.Monitor.WorkArea.Bottom));
+            Math.Max(
+                0,
+                preview.Bounds.Height -
+                compact.Bounds.Height),
+            layout.Monitor.WorkArea.Bottom);
+    }
+
+    internal Func<bool> CaptureEdgeCapsulePointerInputValidity()
+    {
+        var source = EdgeCapsuleQueueProxySourceHandle;
+        var body = _bodySessionGeneration;
+        var preview = _edgeCapsulePreviewRequest;
+        return () => CanRouteEdgeCapsuleQueueProxyInput && !IsClosed &&
+            source != IntPtr.Zero && EdgeCapsuleQueueProxySourceHandle == source &&
+            _bodySessionGeneration == body && ReferenceEquals(_edgeCapsulePreviewRequest, preview);
     }
 
     internal IntPtr EdgeCapsuleQueueProxySourceHandle =>
@@ -150,15 +156,6 @@ public sealed partial class PaperWindow
 
     internal bool CanRouteEdgeCapsuleQueueProxyInput =>
         CanEnterEdgeCapsulePreview;
-
-    internal bool TryGetEdgeCapsuleQueueProxyAppliedPresentation(
-        out EdgeCapsulePresentationFrame frame)
-    {
-        frame = EdgeCapsulePresentationFrame.Hidden;
-        return _windowLifecycle == PaperWindowLifecycleState.Alive &&
-            !IsClosed && _edgeCapsuleHost != null &&
-            _edgeCapsuleHost.TryGetAppliedPresentation(out frame);
-    }
 
     internal bool ApplyEdgeCapsuleQueueProxyEndpoint(
         EdgeCapsulePresentationFrame endpoint)
@@ -243,7 +240,7 @@ public sealed partial class PaperWindow
               _edgeCapsuleHost.MatchesPresentation(endpoint);
     }
 
-    internal void InvalidateEdgeCapsuleQueueProxyPointer(DeviceScreenPoint? pointer)
+    internal void InvalidateEdgeCapsuleQueueProxyPointer()
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
             IsClosed)
@@ -251,6 +248,7 @@ public sealed partial class PaperWindow
             return;
         }
 
+        var pointer = CaptureEdgeCapsulePointerPosition();
         _controller.NotifyEdgeCapsulePreviewPhysicalPointer(
             this,
             pointer);

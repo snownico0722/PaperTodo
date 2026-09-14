@@ -18,6 +18,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     private readonly List<EdgeCapsulePresenter> _presenters = new();
     private readonly EdgeCapsuleRenderDemand _renderDemand;
     private readonly HashSet<EdgeCapsuleNativeBatchGroup> _renderDemandReady = new();
+    private readonly HashSet<EdgeCapsuleNativeBatchGroup> _renderDemandBlocked = new();
     private readonly List<Action> _postCommitCallbacks = new();
     private readonly List<List<EdgeCapsulePresenter>> _frameGroups = new();
     private readonly Dictionary<EdgeCapsuleNativeBatchGroup, int> _frameGroupIndices = new();
@@ -64,7 +65,8 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void RequestWpfRender()
     {
-        if (!_presenters.Any(p => IsRenderDemandGroupReady(p.NativeBatchGroup))) return;
+        CollectRenderDemandReadyGroups();
+        if (_renderDemandReady.Count == 0) return;
         // The public add accessor requests WPF work; the temporary handler never samples state.
         // Its PostRender can enter synchronous Dispatcher Hooks, so always remove our listener.
         try { CompositionTarget.Rendering += RenderDemandHandler; }
@@ -77,13 +79,29 @@ internal sealed class EdgeCapsuleFrameScheduler
     {
         _dispatcher.VerifyAccess();
         if (_isTicking || !_renderDemand.Enabled) return;
-        _renderDemandReady.Clear();
-        foreach (var presenter in _presenters)
-            if (IsRenderDemandGroupReady(presenter.NativeBatchGroup))
-                _renderDemandReady.Add(presenter.NativeBatchGroup);
+        CollectRenderDemandReadyGroups();
         _renderDemand.ReadyGroupsChanged(_renderDemandReady);
         // ReadyGroupsChanged may abort a queued operation and synchronously re-enter us. It has
         // consumed the shared set before that callback; do not publish an old decision afterward.
+    }
+
+    private void CollectRenderDemandReadyGroups()
+    {
+        _renderDemandReady.Clear();
+        _renderDemandBlocked.Clear();
+        if (_shutdown || _isTicking || _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished) return;
+        foreach (var owner in _pendingReconcileOwners.Keys)
+            _renderDemandBlocked.Add(owner.NativeBatchGroup);
+        foreach (var presenter in _presenters)
+        {
+            if (EdgeCapsuleNativeTransactionPolicy.ShouldDeferSharedFrameForNativeApply(presenter.NativeBatchApplyActive))
+            {
+                _renderDemandReady.Clear();
+                return;
+            }
+            if (presenter.HasActiveTransition && !_renderDemandBlocked.Contains(presenter.NativeBatchGroup))
+                _renderDemandReady.Add(presenter.NativeBatchGroup);
+        }
     }
 
     private void OnDispatcherShutdown(object? sender, EventArgs args)

@@ -8,6 +8,8 @@ internal static partial class Program
     private static void ProxyInputReadiness()
     {
         ProxyOutputWindowVisibility();
+        ProxyPointerMessageCoordinates();
+        ProxyPendingInputChecks();
         // Exercise the real native mouse-message adapter and proxy callback. Lifecycle fields are
         // injected to cover reentrant publication/retirement without requiring a live DComp device;
         // this is not a substitute for testing the complete compositor handoff on a real desktop.
@@ -26,9 +28,9 @@ internal static partial class Program
                 new[] { new EdgeCapsuleQueueProxyMemberPlan("test", start, start, target) }));
         SetPlan(resting, resting);
         var received = new List<int>();
-        Set("_interactionRequested", (Action<DeviceScreenPoint, int>)((_, message) => received.Add(message)));
+        Set("_interactionRequested", (Action<EdgeCapsulePointerDown>)(input => received.Add(input.Message)));
         var route = type.GetMethod("HandleInteractionRequested", flags)!
-            .CreateDelegate<Action<DeviceScreenPoint, int>>(proxy);
+            .CreateDelegate<Action<EdgeCapsulePointerDown>>(proxy);
         using var window = EdgeCapsuleQueueProxyWindow.TryCreate(new DeviceScreenRect(0, 0, 100, 40),
             false, _ => true, route, () => { }, () => { }, () => { });
         Check(window != null, "Create native proxy input regression HWND");
@@ -84,7 +86,7 @@ internal static partial class Program
         {
             var initial = new DeviceScreenRect(100, 100, 200, 140);
             using var output = EdgeCapsuleQueueProxyWindow.TryCreate(initial, topmost,
-                _ => false, (_, _) => { }, () => { }, () => { }, () => { });
+                _ => false, _ => { }, () => { }, () => { }, () => { });
             Check(output != null, "Create proxy output for native publication checks");
             var handle = output!.Handle;
             Check(handle != IntPtr.Zero && !IsProxyCheckWindowVisible(handle),

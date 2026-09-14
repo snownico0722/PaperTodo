@@ -190,7 +190,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 offscreen,
                 topmost: true,
                 static _ => false,
-                static (_, _) => { },
+                static _ => { },
                 static () => { },
                 static () => { },
                 static () => { });
@@ -224,10 +224,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             root.SetOffsetX(animation).CheckError();
 
             target.SetRoot(root).CheckError();
-#if DEBUG
-            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                runtime.Device.Commit().CheckError();
+            runtime.Device.Commit().CheckError();
             if (!window.Show(offscreen, topmost: true) ||
                 !WindowNative.TryFlushDesktopComposition())
             {
@@ -324,10 +321,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                     reference!).CheckError();
                 reference = sourceVisual;
             }
-#if DEBUG
-            using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                runtime.Device.Commit().CheckError();
+            runtime.Device.Commit().CheckError();
             if (!WindowNative.TryFlushDesktopComposition())
             {
                 throw new InvalidOperationException(
@@ -412,10 +406,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                                 .SetOffsetY(sourceAnimation)
                                 .CheckError();
                         }
-#if DEBUG
-                        using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                            runtime.Device.Commit().CheckError();
+                        runtime.Device.Commit().CheckError();
                         return true;
                     });
             if (coordinatedResult !=
@@ -449,10 +440,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 if (target != null)
                 {
                     target.SetRoot(null!).CheckError();
-#if DEBUG
-                    using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                        runtime.Device.Commit().CheckError();
+                    runtime.Device.Commit().CheckError();
                 }
             }
             catch { }

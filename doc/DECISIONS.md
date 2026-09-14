@@ -35,7 +35,7 @@
 | D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
 | D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
-| D-023 | Lightweight Prewarm 保留一次性首用预热 | Partially superseded by D-037 | Edge performance |
+| D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
 | D-025 | Note 图片若干限制为已接受取舍 | Accepted | Note / 图片 |
 | D-026 | Markdig 拥有标准 Markdown grammar；宿主仅做有界兼容处理 | Accepted | Note / Markdown |
@@ -49,7 +49,7 @@
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
-| D-037 | 可浏览队列保留已验证的 live authority | Accepted | Edge performance / lifecycle |
+| D-037 | 可浏览队列保留已验证的 live authority | Deferred | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 
 ## 维护规则
@@ -805,7 +805,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 
 ## D-023 — Lightweight Prewarm 保留一次性首用预热
 
-**Status:** Partially superseded by D-037（graphics 预热保留，调度与真实队列提前接管由 D-037 扩展）
+**Status:** Accepted
 
 ### Context
 
@@ -1378,39 +1378,9 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 
 ## D-037 — 可浏览队列提前接管并保留已验证的 live authority
 
-**Status:** Accepted
+**Status:** Deferred（从 #258 独立审查，尚未成为当前实现）
 
-### Context
-
-PR #254 实机数据的连续浏览回放中，代理每次完成后释放 source cloak，使下一次悬停反复进入完整接管。阶段日志显示主要等待集中在可见 authority 的发布、cloak 和真实 HWND 位置提交；创建托管对象和 DComp visual 不是主要耗时。一次性临时预热不能消除每次重新接管的同步边界。
-
-### Decision
-
-- 开启预览且队列仍可浏览时，动画端点通过原有 apply/layout/render/verify 后保留当前 live cover，正常收回后也可继承。显式交互或生命周期完成默认必须释放；正常动画完成或明确的静态预接管才获得保留资格。
-- 空闲时可对全部成员已稳定的真实队列提前执行首次接管；静态 plan 明确标识零时长、无位移，不创建伪动画，也不跳过首次显示、cloak、失败回滚与端点确认。队列成员、源 HWND 与调度代在 publication 和最终保留前重新检查。
-- 轻量 coordinator 只拥有调度：Shell 准备完成后通过 Rendering 屏障转到 ApplicationIdle，一次准备一个队列；真实输入期间让路，暂时阻挡由后续真实事件唤醒。隐藏、关闭、拖动、设置与显示失效先取消旧代，稳定后重新请求。正文仍由原 cache/worker 持有，只暂停 speculative 工作，不取消 demand。
-- 首次有真实位移的事务可同时纳入兼容的静止成员，并预留有界 output envelope；后续随机目标能否继承仍由实际队列、source identity/capacity 和 envelope 决定，不以预先猜中下一张纸片为前提，也不承诺跨失效边界命中。
-- 已持有完全相同 source cloak 集合的 successor 通过现有可见 root 保护真实端点更新，再提交新 root；没有 cloak 变化时不重复支付 cloak flush。首次接管、成员增减与失败回滚保留各自原有边界。
-- 同一 source surface 在后继中持有独立 COM 引用；visual/root 仍属于当前代。发布并退休 predecessor 后断开对象引用，避免长期浏览保留整条历史链。
-- 静置时从真实 Host applied frame 读取形状、透明度和输入范围，指针与 applied frame 都未变化时不再逐个 invalidate presenter。DPI 或 capacity 增长先完成代理交接，再处理暂存的失效请求。
-
-### Why / Rejected / Pitfalls
-
-该选择减少日用过程中重复接管的次数，保留 WPF 唯一 shape owner 和 translation-only DComp 边界。不能把动画结束等同于绘制完成，也不能用删除首次可见 cover 的同步边界来制造启动数字上的收益。尝试以 commit completion 替代首次 DWM 等待未显示稳定收益，未采纳。
-
-不能用旧 plan target 作为静置期永久输入快照；真实 WPF 仍会发生 hover、透明度与内容变化。也不能等待“下次动画”才处理被固定 source capacity 阻挡的更新。output envelope 可以超过工作区底边以容纳当前队列位移，但不得因此扩大每张纸片的 WPF surface。
-
-### Consequences / Evidence
-
-每个已准备且未失效的可见队列可能长期占有一个 compositor cover 及当前成员 surface 引用，静置仍有轻量指针采样；不是零资源成本。关闭预览、隐藏、交互、DPI/capacity 或设备失效继续走显式交接。首次接管的同步等待移到交互前，工作本身没有消失；若输入早于准备完成或队列不满足条件，仍走正常接管，不能承诺所有首次输入均命中。
-
-source 首次准备与 output 共用产品最大值，按当前工作区归一化。内置 Todo/Markdown 原本已有最大 envelope；插件从初始 miniSize 改为有效 miniMaxSize 会增加其单纸片 WPF backing surface，这是减少合法尺寸变化时重新接管的明确代价。未声明最大值且 Native 首次 Describe 才报告更大 preferred size 时，仍显式交接、扩容并重建，不提前调用插件内容来猜值。多屏多个缓存的复杂协调不在此选择中；跨显示环境失效保留安全回退，不承诺跨屏命中率。
-
-- `src/AppController.EdgeCapsuleQueueProxy.cs`：队列准入、端点验证、保留与显式交接。
-- `src/AppController.EdgePrewarm.cs` / `src/EdgePrewarmCoordinator.cs`：真实队列准入、可取消调度、生命周期失效和后台正文让路。
-- `src/EdgeCapsuleQueueCompositionProxy.Startup.cs` / `Visuals.cs` / `Routing.cs`：source 集合、独立 COM 引用、代际生命周期与真实 applied frame 输入。
-- `src/PaperWindow.EdgeCapsule.cs`：代理释放后的 DPI/capacity 失效恢复。
-- `tests/PaperTodo.EdgeTitleChecks/ProxyRetentionChecks.cs`：左右边缘/DPI、静止成员准入、保留/强制完成、真实 Host 形状输入及空闲采样；这些检查不替代物理显示帧与长时间设备验证。
+资源预热不等于长期接管输入。原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`；静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组另行审查。现有短时动画代理、后继接续与显式交接继续保留。控件级悬停、完整手势、空闲观察与预热退让仍须单独验收，不以历史性能数字代替通过。
 
 ---
 

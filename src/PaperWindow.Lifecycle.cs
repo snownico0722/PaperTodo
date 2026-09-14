@@ -222,7 +222,6 @@ public sealed partial class PaperWindow
 
     private void BeginPaperWindowClose()
     {
-        using var prewarmMutation = _controller.SuspendEdgePrewarmForMutation();
         if (_windowLifecycle != PaperWindowLifecycleState.Alive)
         {
             return;

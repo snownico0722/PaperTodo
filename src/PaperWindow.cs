@@ -2710,15 +2710,12 @@ public sealed partial class PaperWindow : Window
             !_controller.State.ExperimentalDockedCapsulesNonTopmost &&
             !_controller.SuppressDeepCapsuleTopmostForContextMenu &&
             queueAvoidanceWindow == IntPtr.Zero;
-        var slotZOrderChanges = _edgeCapsuleHost?.WouldChangeZOrder(
-            slotShouldBeTopmost, queueAvoidanceWindow) == true;
-        using var prewarmMutation = slotZOrderChanges
-            ? _controller.SuspendEdgePrewarmForMutation()
-            : null;
         // The transient proxy captures z-order at creation. Settle it only when that contract is
         // actually changing; ordinary placement refreshes run during A-to-B staging and must leave
         // the current cover available for successor promotion.
-        if (slotZOrderChanges)
+        if (_edgeCapsuleHost?.WouldChangeZOrder(
+                slotShouldBeTopmost,
+                queueAvoidanceWindow) == true)
         {
             _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(
                 this,

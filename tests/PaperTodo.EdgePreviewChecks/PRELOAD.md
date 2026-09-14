@@ -24,8 +24,6 @@
 
 `CompletionChecks`、原生链接和 worker/Host 检查覆盖：首次发布前不开放输入、普通冷短行也使用 worker、重排不生成 WPF 正文块、收起/恢复、编辑、卸载重挂、主题/宽度/DPI/源版本失效、清空缓存不阻塞需求、取消及迟到结果、链接独立命中/背景穿透/裁剪/键盘/焦点，以及 worker 被阻塞时真实 Host 外壳仍能完成动画。`PreloadAuditChecks` 保留严格 OR 边界、延后读取、启动式排队、取消续做、新请求合并延迟、异常隔离和来源撤销。四个 DPI 参数检查不冒充多显示器硬件手测。
 
-`ReviewIntegrationChecks` 确认真实 Host 首次显示直接命中，并通过 96 组真实 WPF 布局核对不同宽度、DPI 和布局舍入设置。预热宽度必须遵循固定内容层及两层 margin 的逐层像素舍入，不能仅按名义 DIP 减去边距。`PreloadCoordinationChecks` 用真实 worker 阻塞点验证协调器暂停只取消可选预热、保留最新来源请求，活动需求仍能完成；恢复沿用原队列和合并延迟。可分别使用 `--review-integration` / `--preload-coordination` 运行，这些检查不代表多显示器硬件手测。
-
 ```powershell
 dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release
 dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug

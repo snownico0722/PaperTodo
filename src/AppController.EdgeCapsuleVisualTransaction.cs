@@ -33,8 +33,6 @@ public sealed partial class AppController
 
         var queueKey =
             QueueKey(initiator.EdgeCapsulePreviewPaper);
-        _edgePrewarm?.Cancel(queueKey);
-        _edgePrewarm?.NotifyInteraction();
         if (_edgeCapsuleVisualTransactionCommitOperation is
             { Status: DispatcherOperationStatus.Pending })
         {

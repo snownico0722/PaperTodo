@@ -114,8 +114,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
                     initialBounds,
                     topmost,
                     point => host?.Current?.ContainsVisual(point) == true,
-                    (point, message) =>
-                        host?.Current?.HandleInteractionRequested(point, message),
+                    input => host?.Current?.HandleInteractionRequested(input),
                     () => host?.Current?.HandleEnvironmentChanged(),
                     () => host?.Current?.HandleCompositionPaint(),
                     () => host?.Current?.HandleOutputLost());
@@ -264,14 +263,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
             Current = null;
             Staged = null;
             try { Target.SetRoot(null!).CheckError(); } catch { }
-            try
-            {
-#if DEBUG
-                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
-#endif
-                    _runtime.Device.Commit().CheckError();
-            }
-            catch { }
+            try { _runtime.Device.Commit().CheckError(); } catch { }
             try { Target.Dispose(); } catch { }
             try { Window.Dispose(); } catch { }
         }
