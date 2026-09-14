@@ -190,7 +190,11 @@ internal static class EdgeCapsuleReducer
         EdgeCapsuleModel model,
         bool overInteractiveSurface)
     {
-        overInteractiveSurface &= !model.PeerReorderActive;
+        // Detach can precede the final hidden frame. A sample from the old applied/cover
+        // rectangle must not restore pointer ownership after the model has left the queue.
+        // Floating gestures still own an attached slot and retain their existing sampling.
+        overInteractiveSurface &= model.State.Slot != EdgeCapsuleSlotState.None &&
+            !model.PeerReorderActive;
         var visual = model.State.Slot switch
         {
             EdgeCapsuleSlotState.ExpandedReserved => EdgeCapsuleVisualState.Active,

@@ -1052,9 +1052,16 @@ internal sealed class EdgeCapsulePresenter
         _nativeBatchApplySucceeded = true;
         _nativeBatchApplyAttempted = false;
         _nativeBatchApplyDeferred = false;
+        _frameScheduler?.NativeApplyReadinessChanged();
     }
 
     internal void CompleteNativeBatchApplySuccess()
+    {
+        try { CompleteNativeBatchApplySuccessCore(); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplySuccessCore()
     {
         if (!_nativeBatchApplyActive)
         {
@@ -1078,6 +1085,12 @@ internal sealed class EdgeCapsulePresenter
     }
 
     internal void CompleteNativeBatchApplyFailure(long nowTimestamp)
+    {
+        try { CompleteNativeBatchApplyFailureCore(nowTimestamp); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplyFailureCore(long nowTimestamp)
     {
         if (!_nativeBatchApplyActive)
         {
@@ -1136,6 +1149,12 @@ internal sealed class EdgeCapsulePresenter
     }
 
     internal void CompleteNativeBatchApplyDeferred()
+    {
+        try { CompleteNativeBatchApplyDeferredCore(); }
+        finally { _frameScheduler?.NativeApplyReadinessChanged(); }
+    }
+
+    private void CompleteNativeBatchApplyDeferredCore()
     {
         if (!_nativeBatchApplyActive)
         {

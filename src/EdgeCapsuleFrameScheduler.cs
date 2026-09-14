@@ -16,10 +16,13 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private readonly Dispatcher _dispatcher;
     private readonly List<EdgeCapsulePresenter> _presenters = new();
+    private readonly EdgeCapsuleRenderDemand _renderDemand;
+    private readonly HashSet<EdgeCapsuleNativeBatchGroup> _renderDemandReady = new();
     private readonly List<Action> _postCommitCallbacks = new();
     private readonly List<List<EdgeCapsulePresenter>> _frameGroups = new();
     private readonly Dictionary<EdgeCapsuleNativeBatchGroup, int> _frameGroupIndices = new();
     private bool _renderingSubscribed;
+    private bool _shutdown;
     private bool _isTicking;
     private bool _acceptingPostCommitCallbacks;
     private readonly Dictionary<EdgeCapsulePresenter, int> _pendingReconcileOwners = new();
@@ -44,6 +47,51 @@ internal sealed class EdgeCapsuleFrameScheduler
     private EdgeCapsuleFrameScheduler(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
+        _shutdown = dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished;
+        // Dispatcher sets HasShutdownStarted only after its ShutdownStarted handlers return.
+        // Latch first, including before demand.Dispose can enter OperationAborted hooks.
+        dispatcher.ShutdownStarted += OnDispatcherShutdown;
+        _renderDemand = new EdgeCapsuleRenderDemand(dispatcher, IsRenderDemandGroupReady,
+            RequestWpfRender, enabled: !_shutdown);
+    }
+
+    private bool IsRenderDemandGroupReady(EdgeCapsuleNativeBatchGroup group) =>
+        !_shutdown && !_isTicking && !_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished &&
+        !HasExternallyOwnedNativeBatchApply() && CanAdvanceQueue(group) &&
+        _presenters.Any(p => p.NativeBatchGroup == group && p.HasActiveTransition);
+
+    private static void RenderDemandHandler(object? sender, EventArgs args) { }
+
+    private void RequestWpfRender()
+    {
+        if (!_presenters.Any(p => IsRenderDemandGroupReady(p.NativeBatchGroup))) return;
+        // The public add accessor requests WPF work; the temporary handler never samples state.
+        // Its PostRender can enter synchronous Dispatcher Hooks, so always remove our listener.
+        try { CompositionTarget.Rendering += RenderDemandHandler; }
+        finally { CompositionTarget.Rendering -= RenderDemandHandler; }
+    }
+
+    internal void NativeApplyReadinessChanged() => UpdateRenderDemandReadiness();
+
+    private void UpdateRenderDemandReadiness()
+    {
+        _dispatcher.VerifyAccess();
+        if (_isTicking || !_renderDemand.Enabled) return;
+        _renderDemandReady.Clear();
+        foreach (var presenter in _presenters)
+            if (IsRenderDemandGroupReady(presenter.NativeBatchGroup))
+                _renderDemandReady.Add(presenter.NativeBatchGroup);
+        _renderDemand.ReadyGroupsChanged(_renderDemandReady);
+        // ReadyGroupsChanged may abort a queued operation and synchronously re-enter us. It has
+        // consumed the shared set before that callback; do not publish an old decision afterward.
+    }
+
+    private void OnDispatcherShutdown(object? sender, EventArgs args)
+    {
+        _shutdown = true;
+        _renderDemand.Dispose();
+        UpdateRenderingSubscription();
+        _dispatcher.ShutdownStarted -= OnDispatcherShutdown;
     }
 
     public static EdgeCapsuleFrameScheduler For(Dispatcher dispatcher) =>
@@ -58,6 +106,7 @@ internal sealed class EdgeCapsuleFrameScheduler
 #endif
 
         _dispatcher.VerifyAccess();
+        if (_shutdown) return;
 #if DEBUG
         if (_pendingRenderReconciles == 0)
         {
@@ -95,7 +144,7 @@ internal sealed class EdgeCapsuleFrameScheduler
 #endif
         // The owner has finished/aborted its callback or released a visual transaction deferral.
         // Reattach to WPF's frame source
-        // when a queue becomes ready; never synthesize a frame or poll for a missing callback.
+        // when a queue becomes ready; never synthesize a frame.
         ReconcileReadinessChanged();
     }
 
@@ -117,7 +166,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     private void UpdateRenderingSubscription()
     {
         var shouldSubscribe = false;
-        if (!_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
+        if (!_shutdown && !_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
         {
             for (var index = 0; index < _presenters.Count; index++)
             {
@@ -128,29 +177,35 @@ internal sealed class EdgeCapsuleFrameScheduler
                 }
             }
         }
-        if (shouldSubscribe == _renderingSubscribed) return;
-        if (shouldSubscribe)
+        if (shouldSubscribe != _renderingSubscribed)
         {
-            // WPF's Rendering add accessor requests a render. First activation and the release
-            // of the last owner barrier therefore have explicit event-driven restart boundaries.
-            CompositionTarget.Rendering += OnRendering;
+            // Publish ownership before public add can post an operation and enter Hooks. A
+            // nested cancellation must remove this listener; never overwrite it on return.
+            _renderingSubscribed = shouldSubscribe;
+            if (shouldSubscribe)
+            {
 #if DEBUG
-            EdgeDiagnosticObservation.Subscription(this, true);
+                EdgeDiagnosticObservation.Subscription(this, true);
 #endif
-        }
-        else
-        {
-            CompositionTarget.Rendering -= OnRendering;
+                CompositionTarget.Rendering += OnRendering;
+            }
+            else
+            {
 #if DEBUG
-            EdgeDiagnosticObservation.Subscription(this, false);
+                EdgeDiagnosticObservation.Subscription(this, false);
 #endif
+                CompositionTarget.Rendering -= OnRendering;
+            }
         }
-        _renderingSubscribed = shouldSubscribe;
+        // Recompute demand from current owners after all public-accessor Hooks. Demand retirement
+        // can itself enter Hooks, so nothing below it may reuse the pre-callback shouldSubscribe.
+        UpdateRenderDemandReadiness();
     }
 
     public void Activate(EdgeCapsulePresenter presenter)
     {
         _dispatcher.VerifyAccess();
+        if (_shutdown || _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished) return;
         if (!_presenters.Contains(presenter))
         {
             _presenters.Add(presenter);
@@ -174,7 +229,7 @@ internal sealed class EdgeCapsuleFrameScheduler
     internal bool TryEnqueuePostCommit(Action callback)
     {
         _dispatcher.VerifyAccess();
-        if (!_isTicking || !_acceptingPostCommitCallbacks)
+        if (_shutdown || !_isTicking || !_acceptingPostCommitCallbacks)
         {
             return false;
         }
@@ -206,7 +261,8 @@ internal sealed class EdgeCapsuleFrameScheduler
         using var edgeJournalCallback = EdgeDiagnosticObservation.Begin("render.callback", this, _presenters.Count, _pendingRenderReconciles);
 #endif
 
-        if (!_dispatcher.CheckAccess())
+        if (!_dispatcher.CheckAccess() || _shutdown ||
+            _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
         {
             return;
         }
@@ -269,6 +325,7 @@ internal sealed class EdgeCapsuleFrameScheduler
 
     private void AdvanceSharedFrame(TimeSpan? renderingTime, string source)
     {
+        if (_shutdown || _dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished) return;
 #if DEBUG
         using var edgeJournalDispatch = EdgeDiagnosticObservation.FrameAccepted(this, renderingTime, source, _presenters.Count, _pendingRenderReconciles);
         using var edgeJournalFrame = EdgeDiagnosticObservation.Begin("scheduler.frame", this, _presenters.Count, _pendingRenderReconciles);
@@ -348,6 +405,7 @@ internal sealed class EdgeCapsuleFrameScheduler
                     group,
                     pointer,
                     frameTimestamp);
+                _renderDemand.GroupSampled(group[0].NativeBatchGroup, frameTimestamp);
             }
 
             for (var index = _presenters.Count - 1; index >= 0; index--)

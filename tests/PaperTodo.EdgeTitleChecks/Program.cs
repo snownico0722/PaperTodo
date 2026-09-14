@@ -16,6 +16,7 @@ internal static partial class Program
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
+            DetachedPointerAdmissionChecks();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");
             Persistence();
@@ -26,8 +27,9 @@ internal static partial class Program
             Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
+            RenderDemandChecks();
             ProxyRetentionChecks();
-            Console.WriteLine($"Edge title checks: 6/6 groups, {assertions} assertions passed.");
+            Console.WriteLine($"Edge title checks: {assertions} assertions passed.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
