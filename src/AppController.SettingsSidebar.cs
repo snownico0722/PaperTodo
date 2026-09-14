@@ -415,7 +415,7 @@ public sealed partial class AppController
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
         SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
         SettingsPage.Note => BuildSettingsSidebarNotePage(),
-        SettingsPage.Visual => BuildVisualSettingsPage(),
+        SettingsPage.Visual => BuildVisualSettingsPageWithNoteBackground(),
         SettingsPage.Shortcuts => BuildShortcutSettingsPage(),
         SettingsPage.Plugins => BuildPluginsSettingsPage(),
         SettingsPage.Labs => BuildLabsSettingsPage(),
