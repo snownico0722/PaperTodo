@@ -15,9 +15,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             member.Start.Surface == EdgeCapsuleSurfaceKind.DockedRetracted ||
             member.Target.Surface == EdgeCapsuleSurfaceKind.DockedRetracted);
 
+    // The plan's pointer role is stable, but native messages can re-enter while a cover is
+    // being published/replaced or released. All input entry points share this readiness boundary.
+    private bool CanRoutePointerInput =>
+        !_disposed && !_starting && _coverPublished && !_coverLost &&
+        !_sourcesReleased && !_finishing && !_successorHeld && RoutesPointerInput;
+
     private bool ContainsVisual(DeviceScreenPoint point)
     {
-        if (_disposed || _coverLost || !RoutesPointerInput)
+        if (!CanRoutePointerInput)
         {
             return false;
         }
@@ -52,8 +58,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     private void OnSampleTimerTick(object? sender, EventArgs e)
     {
-        if (_disposed || _finishing || _successorHeld ||
-            !RoutesPointerInput)
+        if (!CanRoutePointerInput)
         {
             return;
         }
@@ -136,6 +141,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     public bool TryReserveForSuccessor()
     {
         if (_disposed ||
+            _inputHandoff is { Count: > 0 } ||
             _starting ||
             _finishing ||
             _coverLost ||
@@ -203,7 +209,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 (durationTicks - elapsedTicks) *
                 1000.0 /
                 Stopwatch.Frequency));
-        _sampleTimer.Start();
+        if (RoutesPointerInput) _sampleTimer.Start();
         _completionTimer.Interval =
             TimeSpan.FromMilliseconds(
                 remainingMilliseconds +
@@ -221,7 +227,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         out IntPtr targetHandle,
         out DeviceScreenPoint endpointPoint)
     {
-        if (_disposed || _coverLost || !RoutesPointerInput)
+        if (!CanRoutePointerInput)
         {
             targetHandle = IntPtr.Zero;
             endpointPoint = point;
@@ -269,13 +275,11 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         return false;
     }
 
-    private void HandleInteractionRequested(
-        DeviceScreenPoint point,
-        int message)
+    private void HandleInteractionRequested(EdgeCapsulePointerDown input)
     {
-        if (!_disposed && !_coverLost && RoutesPointerInput)
+        if (CanRoutePointerInput)
         {
-            _interactionRequested(point, message);
+            _interactionRequested(input);
         }
     }
 
@@ -382,6 +386,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     public void ScheduleCompletionRetry(bool success)
     {
+        _inputHandoff?.Prune();
         if (_disposed)
         {
             return;

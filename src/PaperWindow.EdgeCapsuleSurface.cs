@@ -209,6 +209,18 @@ public sealed partial class PaperWindow
         var bootstrapBounds = programmaticOrigin == null
             ? DeepCapsuleMainWindowBootstrapBounds()
             : default;
+        if (programmaticOrigin == null &&
+            _controller.TryGetRememberedDeepCapsuleExpandedGeometry(
+                _paper, _paper.Width, _paper.Height, out var rememberedGeometry))
+        {
+            // Start on the restore monitor. Visiting the queue monitor first makes the same
+            // HWND change DPI twice before its first expand frame can be presented.
+            var left = rememberedGeometry.Bounds.Left;
+            var top = rememberedGeometry.Bounds.Top;
+            bootstrapBounds = new DeviceScreenRect(left, top,
+                left + (int)Math.Round(DesiredCapsuleWindowWidth * rememberedGeometry.DpiScaleX),
+                top + (int)Math.Round(PaperLayoutDefaults.CapsuleHeight * rememberedGeometry.DpiScaleY));
+        }
         var useNativeBootstrap = !bootstrapBounds.IsEmpty;
 
         BeginAnimation(Window.OpacityProperty, null);
@@ -236,6 +248,13 @@ public sealed partial class PaperWindow
                     Top = _paper.Y;
                 }
 
+                if (useNativeBootstrap)
+                {
+                    _ = TryApplyDeepCapsuleDeviceBounds(bootstrapBounds);
+                }
+                // Handle creation applies initial shell styles. Set the expanded taskbar state
+                // after that, while hidden, so WPF need not hide/show the first animation frame.
+                ShowInTaskbar = ShouldShowInTaskbar(collapsed: false);
                 Show();
                 if (useNativeBootstrap &&
                     !TryApplyDeepCapsuleDeviceBounds(bootstrapBounds))
@@ -253,6 +272,10 @@ public sealed partial class PaperWindow
                         Top = _paper.Y;
                     }
                 }
+                // The native move can change DPI; finish measuring the capsule at that DPI
+                // while transparent, before exposing the first expand frame.
+                RefreshCapsuleLabel();
+                UpdateLayout();
             });
         }
         finally
@@ -358,7 +381,7 @@ public sealed partial class PaperWindow
                     return;
                 }
 
-                _ = TryApplyDeepCapsuleDeviceBounds(bounds);
+                MoveWindowWithoutGeometrySave(() => _ = TryApplyDeepCapsuleDeviceBounds(bounds));
             }),
             System.Windows.Threading.DispatcherPriority.Render);
     }
@@ -424,30 +447,26 @@ public sealed partial class PaperWindow
 
         var rawTargetWidth = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
         var rawTargetHeight = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
-        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         if (alignToDockedEdge &&
             ExpandedFromDeepCapsuleEdge &&
             _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, rawTargetWidth, rawTargetHeight, out var rememberedGeometry))
         {
             rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
-            rawTargetWidth = rememberedGeometry.Width;
-            rawTargetHeight = rememberedGeometry.Height;
+            rawTargetWidth = rememberedGeometry.WidthDip;
+            rawTargetHeight = rememberedGeometry.HeightDip;
         }
 
-        var targetWidth = RoundToDevicePixelX(rawTargetWidth);
-        var targetHeight = RoundToDevicePixelY(rawTargetHeight);
+        var targetWidth = rememberedDeepCapsuleExpandedGeometry?.WidthDip ?? RoundToDevicePixelX(rawTargetWidth);
+        var targetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(rawTargetHeight);
         MoveWindowWithoutGeometrySave(() =>
         {
             Width = targetWidth;
             Height = targetHeight;
             if (alignToDockedEdge)
             {
-                if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
-                {
-                    Left = RoundToDevicePixelX(rememberedRect.Left);
-                    Top = RoundToDevicePixelY(rememberedRect.Top);
-                }
-                else
+                if (rememberedDeepCapsuleExpandedGeometry is not PaperRestoreGeometry rememberedPlacement ||
+                    !TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedPlacement))
                 {
                     var requiredEdgeInset = _controller.State.ShowDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper)
                         ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
@@ -484,15 +503,33 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        MarkEdgeCapsuleOpenedFromEdge();
+        var applied = false;
         MoveWindowWithoutGeometrySave(() =>
         {
-            Left = RoundToDevicePixelX(rememberedGeometry.Left);
-            Top = RoundToDevicePixelY(rememberedGeometry.Top);
-            Width = RoundToDevicePixelX(rememberedGeometry.Width);
-            Height = RoundToDevicePixelY(rememberedGeometry.Height);
+            applied = TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedGeometry);
         });
+        if (!applied)
+        {
+            return false;
+        }
+        MarkEdgeCapsuleOpenedFromEdge();
         return true;
+    }
+
+    private bool TryApplyRememberedDeepCapsuleExpandedGeometry(PaperRestoreGeometry geometry)
+    {
+        _deepCapsuleDevicePlacementGeneration++;
+        if (!TryApplyDeepCapsuleDeviceBounds(geometry.Bounds))
+        {
+            return false;
+        }
+
+        // Native placement selects the destination DPI. Settle WPF's logical size at that DPI
+        // before starting the form animation; a queued resize would compete with its frames.
+        Width = geometry.WidthDip;
+        Height = geometry.HeightDip;
+        UpdateLayout();
+        return TryApplyDeepCapsuleDeviceBounds(geometry.Bounds);
     }
 
     internal void ExpandForProgrammaticOpen(ProgrammaticPaperExpansionOrigin? programmaticOrigin = null)

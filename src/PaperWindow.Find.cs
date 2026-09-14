@@ -5,13 +5,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
+using WpfPath = System.Windows.Shapes.Path;
 
 namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private const double FindPopupBaseWidth = 276;
+    private const double FindPopupBaseWidth = 296;
 
     private readonly record struct PaperFindMatch(string? TodoItemId, int Offset, int Length)
     {
@@ -22,6 +24,7 @@ public sealed partial class PaperWindow
     private Border? _findHost;
     private TextBox? _findInput;
     private TextBlock? _findCountText;
+    private Border? _findDragHandle;
     private Button? _findPreviousButton;
     private Button? _findNextButton;
     private readonly List<PaperFindMatch> _findMatches = [];
@@ -188,12 +191,12 @@ public sealed partial class PaperWindow
 
         var host = new Border
         {
-            Padding = new Thickness(4),
+            Padding = new Thickness(4, 4, 2, 4),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(RadiusControl),
             SnapsToDevicePixels = true,
             UseLayoutRounding = true,
-            Effect = CreatePaperChromeShadow(blurRadius: 10, opacity: 0.16, shadowDepth: 2)
+            Cursor = Cursors.SizeAll
         };
 
         var row = new Grid();
@@ -206,6 +209,7 @@ public sealed partial class PaperWindow
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var input = new TextBox
         {
@@ -213,6 +217,7 @@ public sealed partial class PaperWindow
             Padding = new Thickness(5, 2, 5, 2),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null,
+            Cursor = Cursors.IBeam,
             ToolTip = "Ctrl+F"
         };
         input.TextChanged += (_, _) =>
@@ -276,22 +281,49 @@ public sealed partial class PaperWindow
         Grid.SetColumn(count, 1);
         row.Children.Add(count);
 
-        var previous = FindIconButton("↑", "Shift+Enter");
+        var previous = FindIconButton("M8,13 V3 M4,7 L8,3 L12,7", "Shift+Enter");
         previous.Click += (_, _) => MoveFindMatch(-1);
         Grid.SetColumn(previous, 2);
         row.Children.Add(previous);
 
-        var next = FindIconButton("↓", "Enter");
+        var next = FindIconButton("M8,3 V13 M4,9 L8,13 L12,9", "Enter");
         next.Click += (_, _) => MoveFindMatch(1);
         Grid.SetColumn(next, 3);
         row.Children.Add(next);
 
-        var close = FindIconButton("×", "Esc");
+        var close = FindIconButton("M4,4 L12,12 M12,4 L4,12", "Esc");
         close.Click += (_, _) => HideBuiltInFind(restoreFocus: true);
         Grid.SetColumn(close, 4);
         row.Children.Add(close);
 
+        var dragHandle = new Border
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+        Grid.SetColumn(dragHandle, 5);
+        row.Children.Add(dragHandle);
+
         host.Child = row;
+        host.PreviewMouseLeftButtonDown += OnBuiltInFindDragStart;
+        host.PreviewMouseMove += OnBuiltInFindDragMove;
+        host.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (_findDragStart == null)
+            {
+                return;
+            }
+            EndBuiltInFindDrag();
+            e.Handled = true;
+        };
+        host.LostMouseCapture += (_, _) =>
+        {
+            if (!host.IsMouseCaptured)
+            {
+                _findDragStart = null;
+            }
+        };
 
         var popup = new Popup
         {
@@ -311,6 +343,7 @@ public sealed partial class PaperWindow
         };
         popup.Closed += (_, _) =>
         {
+            EndBuiltInFindDrag();
             UnhookBuiltInFindContentChanges();
             ReleaseTodoInactiveFindSelection();
             RefreshExperimentalOpacity();
@@ -320,6 +353,7 @@ public sealed partial class PaperWindow
         _findHost = host;
         _findInput = input;
         _findCountText = count;
+        _findDragHandle = dragHandle;
         _findPreviousButton = previous;
         _findNextButton = next;
 
@@ -355,12 +389,31 @@ public sealed partial class PaperWindow
         UpdateFindCount();
     }
 
-    private static Button FindIconButton(string glyph, string tooltip)
+    private static Button FindIconButton(string pathData, string tooltip)
     {
-        var button = IconButton(glyph, tooltip);
+        var button = IconButton("", tooltip);
+        var geometry = Geometry.Parse(pathData);
+        geometry.Freeze();
+        var icon = new WpfPath
+        {
+            Data = geometry,
+            Width = 16,
+            Height = 16,
+            StrokeThickness = 1.4,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round
+        };
+        icon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(button));
+        button.Content = new Viewbox
+        {
+            Child = icon,
+            IsHitTestVisible = false
+        };
         button.Padding = new Thickness(0);
         button.Margin = new Thickness(1, 0, 0, 0);
         button.Focusable = false;
+        button.Cursor = Cursors.Arrow;
         return button;
     }
 
@@ -369,13 +422,18 @@ public sealed partial class PaperWindow
         Size targetSize,
         Point offset)
     {
-        var y = TitleBarHeight + 4;
+        if (_findPopup?.PlacementRectangle.IsEmpty == false)
+        {
+            return [new CustomPopupPlacement(new Point(), PopupPrimaryAxis.None)];
+        }
+
+        var y = TitleBarHeight + 33;
         var inside = new CustomPopupPlacement(
-            new Point(Math.Max(6, targetSize.Width - popupSize.Width - 6), y),
+            new Point(Math.Max(6, targetSize.Width - popupSize.Width + 20), y),
             PopupPrimaryAxis.Horizontal);
 
-        // Keep the anchor inside the paper even when the find bar is wider. Popup can overflow
-        // the paper and WPF still adjusts it at the screen edge; no detached side placement.
+        // Default slightly below the title row and let the right edge overhang the paper.
+        // WPF still nudges the popup back when it approaches a screen boundary.
         return [inside];
     }
 
@@ -401,7 +459,9 @@ public sealed partial class PaperWindow
                 FindPopupBaseWidth * AppTypography.ScaleFactor,
                 236,
                 420));
-        _findHost.Padding = new Thickness(AppTypography.Scale(4));
+        _findHost.Padding = new Thickness(
+            AppTypography.Scale(4), AppTypography.Scale(4),
+            AppTypography.Scale(2), AppTypography.Scale(4));
 
         _findInput.Foreground = TextBrush;
         _findInput.CaretBrush = TextBrush;
@@ -426,6 +486,15 @@ public sealed partial class PaperWindow
             AppTypography.Scale(3),
             0);
 
+        if (_findDragHandle != null)
+        {
+            _findDragHandle.Background = WeakTextBrush;
+            _findDragHandle.Width = AppTypography.Scale(2);
+            _findDragHandle.Height = AppTypography.Scale(11);
+            _findDragHandle.CornerRadius = new CornerRadius(AppTypography.Scale(1));
+            _findDragHandle.Margin = new Thickness(AppTypography.Scale(6), 0, 0, 0);
+        }
+
         UpdateFindButtonMetrics(_findPreviousButton);
         UpdateFindButtonMetrics(_findNextButton);
         if (_findHost.Child is Grid grid && grid.Children.OfType<Button>().LastOrDefault() is { } close)
@@ -449,6 +518,11 @@ public sealed partial class PaperWindow
         button.MinWidth = size;
         button.MinHeight = size;
         button.FontSize = AppTypography.Scale(11.5);
+        if (button.Content is Viewbox icon)
+        {
+            icon.Width = AppTypography.Scale(16);
+            icon.Height = AppTypography.Scale(16);
+        }
     }
 
     private bool BuiltInFindVisualsNeedRefresh()

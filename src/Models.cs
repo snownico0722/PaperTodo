@@ -593,6 +593,11 @@ public sealed class PaperData
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? DeepCapsuleExpandedHeight { get; set; }
 
+    // The four legacy values remain window DIPs. The captured HWND scale makes their
+    // physical screen rectangle unambiguous without reinterpreting old data.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedDpiScale { get; set; }
+
     public string DeepCapsuleExpandedSide { get; set; } = "";
     public string DeepCapsuleExpandedMonitorDeviceName { get; set; } = "";
 

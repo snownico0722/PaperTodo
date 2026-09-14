@@ -80,7 +80,7 @@ PaperTodo.exe
 | docked Edge surface | `EdgeCapsuleHost` | 每纸片 bounded HWND 和完整 WPF visual tree |
 | 同队列 compositor translation | `EdgeCapsuleQueueCompositionProxy` | live HWND surface 的 X/Y translation 与 visual-authority handoff |
 | floating drag | `EdgeCapsuleDragWindow` | 独立 floating pill HWND |
-| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` | Rendering cadence、统一 pointer/time sample、liveness rescue |
+| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` + `EdgeCapsuleRenderDemand` | Rendering 唯一推进、共享 pointer/time sample、按组更新屏障；demand 只拥有就绪组的请求截止与取消 |
 
 ## 3. 进程与运行时边界
 
@@ -89,6 +89,10 @@ PaperTodo.exe
 正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
+
+启动恢复先建立已知显示器上的 Edge Host 和可见纸片。只有显示器归属尚不确定的普通纸片延后恢复，等待期间不改写其坐标；显示器稳定或限时到达后仍由既有离屏救援处理。显式显示、隐藏、删除和退出优先于迟到的恢复结果。`AppController.StartupPrewarm` 先等待既有 Markdown 预热队列的首轮完成，再在 UI Dispatcher 的低优先级短批次补建折叠纸片的完整 Shell；提前展开仍由 `EnsureShellBuilt` 当场完成所选纸片，不另建备用路径。Shell 完成 Task 供插件 startupPaper 等待，不使用 Shell-ready 轮询；插件初始化本身仍在 idle 阶段，不同步阻挡 StartAsync 返回。DComp 与拖拽的一次性可选预热保留，但不排在启动主流程返回之前。
+
+正常退出先提交当前编辑并完成既有同步保存，再撤下可见 surface；撤下界面不改变持久化 IsVisible。WPF/插件 UI 仍由原 Dispatcher 释放，脚本进程的停止请求和限时等待在非 UI 任务中并发执行，与界面清理重叠，最终统一等待完成。退出不为即将销毁的图片缓存执行额外回收，也不重复提交已由 controller 保存的编辑内容。普通主实例退出在已停止 owned work 后调用 `Application.Shutdown` 并让 Dispatcher 完成 `App.OnExit`、单实例监听和应用资源清理，不再紧接着调用 `Environment.Exit` 截断 WPF 生命周期；崩溃边界和次实例转发退出保持独立。
 
 ### 3.2 MCP
 
@@ -157,6 +161,8 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 
 普通窗口 `X/Y/Width/Height` 与 Edge Capsule 的 queue / expanded recovery geometry 不是同一套状态，不能由 parked/hidden shell 相互覆盖。
 
+Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpandedDpiScale` 记录捕获时的 HWND 缩放；队列 monitor/side 只标识记忆归属。恢复先还原物理矩形选屏，再以目标屏 DPI 计算尺寸，通过原生窗口边界和既有布局确认完成回位。旧数据缺少缩放信息时沿用系统 DPI 的兼容解释，不猜测其原屏幕；下一次真实展开窗口保存后补齐。
+
 `StateStore` 的方向是保守恢复与版本化写入：主文件失败后可从 backup 恢复；需要保护失败源时先保留证据再允许正常保存覆盖。保存阶段只修复序列化无效值，不重新解释业务不变量。
 
 全局 crash boundary 不执行普通“最后强行保存”。正常 durability 由常规保存、同步退出保存和 backup 提供。
@@ -187,13 +193,14 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 四种装饰皮肤由 `SkinBorder` 绘制：描图纸固定纤维、液态玻璃、Aero 和物理像素风。材质不管理布局、命中或窗口；Edge shape/layout 与 DComp translation-only 边界不变。`MaterialRelief` 按 host 圆角及开口边界缓存预算内的法线高光；液态反光始终绘制于背景采样之上。`SkinBorder.LensLight` 监听实际 `HwndSource.RootVisual` 的指针（包括 popup），Aero 窗口位置驱动固定宽度反光视差；不运行空闲动画。主纸片、各类胶囊、右键及子菜单复用液态折射、RGB 分离采样和表面绘制，文字和图标不进入 effect。`MatchAuxiliaryMaterialStrength` 关闭时减弱光学处理，并在表面染色之后、高光与正文之前增加语义纸色的可读性层，使弱档更接近普通纸片而非更加透明；开启时使用完整处理且不加该底层。两档不衰减正文、外轮廓或整窗 opacity。分层小窗口的云母／亚克力用局部场景 Gaussian diffusion 近似；不声称等同系统 Mica 壁纸算法，主窗口 DWM 不变。Aero 小窗口直接使用既有 alpha。失效、高对比度、系统禁用透明或部分透明时保留实色回退。已删除的皮肤 ID 由通用 Normalize 回退 paper，没有保留旧材质绘制。
 
-配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-042。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 clearGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥；内部 `clearGlass` recipe 只由液态皮肤映射，不写入旧 MicaBackdropType，使用空 blur region 的 alpha composition，不启用磨砂背景（兼容路径见 D-036，现代透明通道见 D-037）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND，不进入这个原生适配器；背景处理由同一个 SkinBorder 持有，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-033）。
+配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-049。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 clearGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥；内部 `clearGlass` recipe 只由液态皮肤映射，不写入旧 MicaBackdropType，使用空 blur region 的 alpha composition，不启用磨砂背景（兼容路径见 D-043，现代透明通道见 D-044）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND，不进入这个原生适配器；背景处理由同一个 SkinBorder 持有，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-040）。
 
 液态玻璃的真实背景折射由 `SkinBorder.Refraction` 持有，偏好 `AppState.LiquidGlassRefraction` 经现有 `StateStore` 保存。可见且不透明的纸片、设置、胶囊、右键和子菜单按其各自实际 HWND 使用。位于 `Border.Child` 前的容器按「采样背景 → 表面染色／反光／owner 描边 → 正文」排序，避免不透明背景视觉盖住父 Border 的材质反光；表面绘制缓存按材质／几何刷新，不新增定时器。统一背景避免透明中心与不同步的边缘拼接。`LiquidRefractionEffect` 用少量双线性采样进行轻散射、饱和度和局部 RGB 色散处理，正文区域的背景按屏幕坐标原比例映射，不围绕随尺寸变化的窗口中心缩放；采样背景与光学查找表经各效果本地的原像素 BitmapCacheBrush 送入 shader，避免 ImageBrush 按输出尺寸创建中间纹理而再次重采样；正文与按钮始终不参与 shader；边缘使用 `LensDisplacement` 共享 512×1 的五次平滑曲线，RG 两通道保存 16 位位移，端点一阶和二阶导数归零；位移上限涵盖最外侧 RGB 通道，光学圆角至少覆盖曲面过渡宽度，避免边缘折返与内角焦点。光学圆角只影响背景采样，不改变 host 轮廓或命中。`GlassMetrics` 按 DIP、短边和面积连续计算边缘厚度与位移；正文区域的散射、遮色与饱和度不随尺寸变化，窄长面板的边缘保持轻薄，不拉伸圆角或生成全尺寸位移图。正文／编辑器／命中／布局／HWND 归属不变。
 
 `SkinBorder.CaptureHost` 从真实 `HwndSource` 取得当前表面的 HWND（不使用菜单 owner 代替 popup），观察宿主移动、DPI、可见性及祖先 opacity；隐藏／关闭／部分透明时停止处理，恢复后继续，卸载解除全部订阅。`SkinBorder.Refraction` 在现有正文前放置背景视觉及表面 finish，不重建编辑器、布局或 HWND。`DesktopLensCapture` 仅在本机内存中用 SRCCOPY 采样 DWM 合成后的局部 SDR 背景，不使用可能扰动鼠标显示的 legacy CAPTUREBLT，也不隐藏或重绘系统指针；不承诺包含所有旧式分层覆盖层。有上限的原像素优先采样；大表面按整数像素步长固定在屏幕网格上，避免移动时改变降采样相位。密度由完整表面而非屏幕裁剪部分决定。单一场景布局、单张位图及单最新帧邮箱保留，不维护多分块列表。后台比较完整场景像素，UI 用零等待 TryLock；背景像素与屏幕映射共同构成一个版本，范围变化（即使尺寸相同）时先填充并冻结新位图，再一起切换来源与映射，不让异步像素拷贝落后于坐标，也不覆盖旧映射引用的像素；随后同一区域的内容更新恢复可写位图复用。低频 worker 采样扩大后的局部场景，拖动消息不提高采样频率。发布只排一个合并通知请求 Rendering；新纹理上传与指针高光仍合并到各自的单次显示帧，静止解除 Rendering。液态表面的纯 HWND 平移在 WM_WINDOWPOSCHANGED 内立即更新背景裁剪，不再另排 Loaded／Rendering 等待；不吞掉系统移动消息，缩放／显示／隐藏仍走完整生命周期。屏幕原点由整数 client 原点加完整 WPF 局部变换计算，保留小数偏移，不把 PointToScreen 的 Win32 整数结果当成亚像素坐标。扩展场景在内侧安全范围内跨平移和尺寸变化复用，DPI/预留尺度或桌面变化时失效；超出覆盖范围后重取区域，降采样密度带回滞，避免预算边界反复切换。布局提交尺寸后在同次绘制更新背景尺寸与裁剪，不推迟到下一次 Rendering；小幅移动仍检测真实背景变化，但不因移动自身发布重复纹理。液态移动只改裁剪坐标，复用尺寸相关光学参数；云母/亚克力保持场景局部绘制和柔化参数，移动仅改 visual offset。仅共享着色器字节码；PixelShader、纹理和可变光学参数由各窗口独立持有，避免 WPF shader 字节码事件反向持有效果实例。高光/纹理只绘制在采样背景之上，下面仅保留轻量失效底色。尺寸或同一 HWND 的材质变化保留可重投影的已采样场景，不先隐藏它。采样开启时持有 WDA_EXCLUDEFROMCAPTURE 排除自身，结束恢复原 affinity；包括液态纸片／设置／胶囊／菜单以及需要软件柔化的分层辅助表面，设置提示共享副作用。独立开关关闭时所有这些表面停止采样；Aero 不采样。每个 popup 单独拥有资源，关闭子菜单不影响 parent。`MaterialMenuOpening` 只延后标准 ContextMenu／Popup 的首次打开请求，在 HWND 出现前异步取得局部背景；复用的离线模板在预备阶段同步当前材质并上传冻结的首张位图，最终 arrange/Loaded 只确定位置，首绘仍有兜底；实时 popup 用本地值关闭系统淡入，避免动态资源重新引入 PopupRoot 的透明度动画；首帧不因尚未 Loaded 的正常接入阶段被移除，随后交给既有捕获 worker。不创建预热 HWND、不改前景 opacity，原有 WPF 定位／焦点／菜单关闭语义不变。取消或 owner 卸载丢弃迟到结果；失败或超时在本次打开保持静态回退，下次打开重新尝试。WPF 自动右键通过 SetCurrentValue 发起打开，异步准备完成后显式重放仍有效的请求，而非对已被强制为 false 的值再次 CoerceValue；等待期间也属于纸片菜单交互，避免焦点或菜单重建抢占。设置页只替换外壳内的内容树，同一 SkinBorder 与 native adapter 保留，普通切页不强制重装 DWM。HDR 和真实混合 DPI / 高刷新观感需真人检查，不能用 Windows Server CI 代替。
 
-普通浮动纸片的失焦标题栏由 `PaperWindow.ExperimentalFocusPresentation` 管理：保留原始 HWND 和 shell 布局，在阴影外层使用 `InactiveTitleBarMask` 淡出标题栏区域。完全隐藏区的最终像素 alpha 为零，由分层窗口命中机制允许点击穿透；布局变化只更新遮罩边界，窗口位置保存不受失焦状态抑制。此路径仅适用于 `AllowsTransparency` 窗口，折叠、隐藏和 Snap 等边界会移除遮罩。
+普通浮动纸片的失焦标题栏由 `PaperWindow.ExperimentalFocusPresentation` 管理：保留原始 HWND 和 shell 布局，`PaperChromeBorder` 只将无内容的背景 Border 收短，并在阴影生成之前裁剪标题内容，形成完整的圆角、描边和阴影。正文保持原位置与尺寸；完全透明区由分层窗口命中机制允许点击穿透，原窗口边缘的缩放区域不会移入正文。此路径仅适用于 `AllowsTransparency` 窗口，折叠、隐藏和 Snap 等边界会恢复完整外框。
+装饰性 `SkinBorder`（描图纸、液态玻璃、Aero、像素风）暂不参与失焦标题栏裁切；这些自绘材质继续保持完整表面，避免缩短 helper surface 与完整材质绘制叠加。默认纸片及可走基类绘制的表面沿用 `PaperChromeBorder`。
 
 ### 5.2 Provider / session 分层
 
@@ -265,6 +272,18 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
 
+### 内置笔记的边缘预览
+
+边缘预览是有界导航内容，不是第二个可编辑正文。`MarkdownEdgeCapsulePreviewRenderer` 捕获一次受限文本，尺寸估算与显示使用相同内容预算；行内语法复用正文的 `MarkdownSemanticSnapshot`，块级保留现有有限预览语义，不解析预算外正文或引用定义。
+
+冷渲染与预热共用唯一的 `PrepareArtifactAsync`：UI 捕获内容、样式、字体、DPI 和资源冻结副本，共享 `MarkdownLayoutWorker` STA 完成 `TextFormatter` 排版，UI 校验外观后组合冻结 Drawing、尺寸、截断状态与全局链接矩形。普通短行也走这条路径，不保留 WPF block renderer、重段落控件或同步渲染退路。保留的短/长行装饰差异只用于兼容既有画面，不再决定 renderer。Worker 不持有 UI 控件、可变语义缓存或业务回调；需求优先于预热，按可见行短批次让出并检查取消，空闲时等待 Dispatcher。
+
+`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact。边缘浏览开启时，小工作集包含轻内容在内的非空内置 Markdown 笔记都可预热，较多来源仍沿用重内容筛选；计数只包含当前存活、可见且已进入边缘队列的内置 Markdown 纸片。启动恢复直接唤醒首批工作，使用现有 Edge Host 和模型生成预览，不等待折叠纸片的完整 Shell。队列暴露本轮完成 Task 供可选 Shell 预建排序，日常失效与调度仍由队列自身拥有。首次标题和胶囊 UI 初始化不把未变化的 Markdown 内容当成编辑作废；实际文本规范化、编辑及资源变更仍走原失效路径，后续编辑保留一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
+
+`MarkdownEdgeCapsulePreviewViewport` 是唯一的准备、取消和发布 owner：命中取 artifact，未命中异步调用同一个 builder，两者都进入 `Publish`，挂载一个正文绘制面及原生链接控件。只有完整结果发布后才启用正文输入；链接的捕获、释放、焦点和键盘由 `MarkdownPreviewLinkHit` 保留 WPF 行为，完全裁掉的链接禁用，背景仍交给打开纸片手势。同一视图、内容和尺寸可短暂收起后复用；内容、外观、DPI 或尺寸失效重新准备，卸载释放挂载元素。
+
+需求的源版本与可选预热缓存资格分开：清空缓存不能阻止当前预览正常生成，但源已失效、上层刷新尚未送达时，旧版本仍不得准备或发布。关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队。Host 尚未就绪或尺寸暂不可用的 reader 休眠保留，只由 Host Loaded/Visible 或容量恢复唤醒；菜单、输入锁和手势不再被当作 artifact 准备资格。恢复一个来源不会打断另一个来源正在进行的预热，失败或永久失效目标不持续轮询。Host 仍提供资源、DPI、尺寸和实际输入边界，`Describe` 仍在 UI；正文等待不持有动画/窗口交接屏障，不改变 D-027 的编辑正文语义。当前选择及历史取舍见 D-035。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。
@@ -294,6 +313,8 @@ EdgeCapsuleHost.Apply(frame)
 ```
 
 `EdgeCapsuleReducer` 决定单纸片业务状态；`EdgeCapsulePresenter` 是该纸 desired model、target、transition、applied presentation 和 dirty/deferred work 的唯一 presentation authority。
+
+Pointer intent 先服从 model 的逻辑准入：`Slot=None` 或 `PeerReorderActive` 时，`SamplePointer` 不得恢复 `PointerOverSurface`。Detach 可以先于旧可见 frame 的清理，旧 `InteractiveBounds` 仍命中不能重新建立已经撤销的逻辑归属。合法 docked/floating 手势仍保留 attached slot，重新 Attach 后恢复正常采样；结构断言和正常物理命中规则不放宽。
 
 `EdgeCapsuleTargetPlanner` 是纯 desired-model → shape/layout planner，一次生成完整 `EdgeCapsulePresentationPlan`。关闭悬停预览时的完整标题宽度和零字标题可见性也进入同一 layout/target/frame 合同；host capacity 提前覆盖标题展开宽度，普通悬停不反复缩放 HWND。Docked surface 与 `FloatingFree` 是互斥外形；floating 的宽度、圆角、关闭区和其他 shape 语义不由窗口构造参数或拖拽路径另行拼装。
 
@@ -355,6 +376,8 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。
 
+代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
+
 Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后，cover 才能释放；completion timer 只负责发起完成尝试，不作为 correctness proof。
 
 Display/DPI、z-order、drag 结束、隐藏/关闭 Edge 模式等生命周期边界如果会让现有 surface/queue 失效，先结束或恢复当前 visual authority，再清理 preview、retraction、临时 placement/transaction 等 transient state；这些临时状态不能跨失效边界残留到下一次显示或重新启用。
@@ -367,9 +390,21 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 首次没有 preview session 时，经过验证的真实物理命中可以直接建立 owner；已有 session 内的 A→B transfer 则继续使用当前 residence/stability/predictor policy。具体毫秒数和灵敏度属于实现参数，留在代码。
 
-同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`。正常 transition 由 `CompositionTarget.Rendering` 推进；watchdog 只在 Rendering 没有及时推进 active transition 时做 demand-driven rescue，不成为第二套长期动画时钟。
+同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`，transition 只由 `CompositionTarget.Rendering` 推进。每次合法通知按共享 QPC 时间推进；`RenderingTime` 是 WPF 的预计呈现时间，可以被不同通知复用，不用它充当唯一帧编号去重。待处理 reconcile 与 visual transaction deferral 只阻挡所属 native batch group，其他就绪队列继续逐帧推进；跨队列事务仍按同一 transaction group 原子处理，原生 apply 重入保护不变。没有就绪队列时暂停 Rendering 订阅，更新或事务的最后一个 owner 释放后重新检查并恢复订阅；全部结束后取消订阅。
 
-这些原则的历史原因、失败路线和不可回退点见 D-005～D-014。
+`EdgeCapsuleRenderDemand` 为仍有活动 transition 且当前就绪的 native batch group 保存独立请求截止，以该组实际采样使用的 QPC 刷新。共享的可重设单次 timer 只将一个带 generation 的请求送回 UI Dispatcher；执行时重新核对组的就绪状态，通过公开 Rendering add 路径请求 WPF 工作，并在 `finally` 移除临时空 handler。它不采样 pointer、不推进 frame、不补算错过的历史帧，也不承诺固定帧率；具体请求延迟留在代码。
+
+组失去活动动画或受到 reconcile、transaction、外部 native apply 阻挡时，撤销其旧截止；无就绪组、取消或 shutdown 时撤下待执行请求。组恢复后重新建立请求资格，无关组的合法采样不延后另一组的截止。工作线程只接触截止、generation 和单个投递槽，不访问 Presenter/WPF 状态；取消或重启可同步进入 Dispatcher Hooks，旧回调不得覆盖新代。shutdown 在事件入口先锁存，再撤销 demand 与订阅，避免后续事件处理器在 Dispatcher 状态字段更新前重新激活。
+
+普通 reconcile 使用 Render 优先级并保留原有 owner registration；真实 Host 输入需要提前处理时，将同一待执行操作提升到 Send，完成后释放原 registration，不另建一套输入或帧状态。上述 demand 已用于正常运行，Debug 观察开关不决定其是否启用。
+
+Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-006。
+
+定位等待可在上述 Debug 采集之上显式开启 `PAPERTODO_EDGE_DEEP_OBSERVATIONS=1`：`EdgeDispatcherLatencyObservation` 通过现有 Dispatcher hooks 和提交前通知读取已经存在的 WPF MediaContext；私有字段缺失只降低可观察能力，不成为运行依赖。`EdgeNativeLatencyObservation` 检查进程和线程归属，仅对当前 UI 线程自有 HWND 建立 subclass，在原生几何批次内记录下游消息耗时，原参数和返回值原样转发一次。两者退出时解除观察，不新增 Rendering 订阅、调度操作或补帧计时器；Release 不编入。深层采集有成本，仅用于诊断，不能据其回调/消息耗时声称物理帧率；同包关闭对照、实际 WPF 调用点和边界见 E-008。
+
+进一步显式开启 `PAPERTODO_EDGE_MESSAGE_OBSERVATIONS=1` 时，`EdgeMessageLatencyObservation` 观察现有 Dispatcher/MIL/WM_TIMER 的队列时间，只对当前进程 UI 线程自有的 MIL 通知 HWND 建立有界 subclass，保留原消息链和返回值；可再以 `PAPERTODO_EDGE_DWM_OBSERVATIONS=1` 读取公开 DWM 时钟。队列年龄用 Win32 `GetTickCount` 与 `MSG.time` 的同一时钟域，毫秒单位不代表毫秒精度；它不能测量定时器应到未到的时间。观察器不提交渲染或请求高精度计时，随既有深层观察解除，Release 不编入；同包开销对照和证据边界见 E-013。
+
+这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前可撤销 render demand 见 D-038，D-032 保留此前移除直接补帧与建立 owner 屏障的历史。
 
 ## 7. OS 与全局集成
 

@@ -1,0 +1,49 @@
+name: Edge diagnostics checks
+
+on:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    name: Debug diagnostics and edge checks
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[debug-ci]')
+    concurrency:
+      group: edge-diagnostics-checks-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The pinned tray submodule calculates its version from Git history.
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Journal Debug collection and exit checks
+        run: dotnet run --project tests/PaperTodo.EdgeDiagnosticJournalChecks -c Debug
+      - name: Journal Release disabled collection checks
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/PaperTodo.EdgeDiagnosticJournalChecks -c Release
+      - name: Native and Dispatcher observer checks
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/PaperTodo.EdgeLatencyObservationChecks -c Debug
+      - name: Edge title and prewarm Debug checks
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/PaperTodo.EdgeTitleChecks -c Debug

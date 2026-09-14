@@ -114,8 +114,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
                     initialBounds,
                     topmost,
                     point => host?.Current?.ContainsVisual(point) == true,
-                    (point, message) =>
-                        host?.Current?.HandleInteractionRequested(point, message),
+                    input => host?.Current?.HandleInteractionRequested(input),
                     () => host?.Current?.HandleEnvironmentChanged(),
                     () => host?.Current?.HandleCompositionPaint(),
                     () => host?.Current?.HandleOutputLost());

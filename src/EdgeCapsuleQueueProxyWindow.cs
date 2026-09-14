@@ -29,7 +29,6 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private const int HtClient = 1;
     private const int HtTransparent = -1;
     private const int MaNoActivate = 3;
-    private const int SwShowNoActivate = 4;
     private const int SwHide = 0;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
@@ -42,7 +41,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         Marshal.GetFunctionPointerForDelegate(WindowProcedure);
 
     private readonly Func<DeviceScreenPoint, bool> _containsVisual;
-    private readonly Action<DeviceScreenPoint, int> _interactionRequested;
+    private readonly Action<EdgeCapsulePointerDown> _interactionRequested;
     private readonly Action _environmentChanged;
     private readonly Action _compositionInvalidated;
     private readonly Action _outputLost;
@@ -53,7 +52,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private EdgeCapsuleQueueProxyWindow(
         IntPtr handle,
         Func<DeviceScreenPoint, bool> containsVisual,
-        Action<DeviceScreenPoint, int> interactionRequested,
+        Action<EdgeCapsulePointerDown> interactionRequested,
         Action environmentChanged,
         Action compositionInvalidated,
         Action outputLost)
@@ -72,7 +71,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         DeviceScreenRect bounds,
         bool topmost,
         Func<DeviceScreenPoint, bool> containsVisual,
-        Action<DeviceScreenPoint, int> interactionRequested,
+        Action<EdgeCapsulePointerDown> interactionRequested,
         Action environmentChanged,
         Action compositionInvalidated,
         Action outputLost)
@@ -133,7 +132,9 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         {
             return false;
         }
-        var placed = SetWindowPos(
+        // SWP_SHOWWINDOW and SWP_NOACTIVATE publish position, size and visibility together.
+        // A second ShowWindow request would repeat that native publication on the cold path.
+        return SetWindowPos(
             Handle,
             topmost ? HwndTopmost : HwndTop,
             bounds.Left,
@@ -141,8 +142,6 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             bounds.Width,
             bounds.Height,
             SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
-        _ = ShowWindow(Handle, SwShowNoActivate);
-        return placed;
     }
 
     public void Hide()
@@ -182,11 +181,16 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
                 case WmLButtonDown:
                 case WmRButtonDown:
                 case WmMiddleButtonDown:
-                    if (GetCursorPos(out var cursor))
+                    var packedPoint = lParam.ToInt64();
+                    var cursor = new CursorPoint
                     {
-                        _interactionRequested(
-                            new DeviceScreenPoint(cursor.X, cursor.Y),
-                            message);
+                        X = unchecked((short)(packedPoint & 0xFFFF)),
+                        Y = unchecked((short)((packedPoint >> 16) & 0xFFFF))
+                    };
+                    if (ClientToScreen(hwnd, ref cursor))
+                    {
+                        _interactionRequested(new EdgeCapsulePointerDown(
+                            new DeviceScreenPoint(cursor.X, cursor.Y), message, wParam));
                     }
                     return IntPtr.Zero;
                 case WmDpiChanged:
@@ -362,7 +366,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private static extern bool ShowWindow(IntPtr hwnd, int command);
 
     [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out CursorPoint point);
+    private static extern bool ClientToScreen(IntPtr hwnd, ref CursorPoint point);
 
     [DllImport("user32.dll")]
     private static extern bool ValidateRect(IntPtr hwnd, IntPtr rect);

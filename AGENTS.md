@@ -29,7 +29,7 @@
 Edge 任务先阅读本文件的硬约束，再按实际影响范围选择资料：
 
 - 文案、颜色或不改变布局/交互边界的普通参数调整：读取相关当前代码及局部规则，不默认加载完整 Edge 历史。
-- 状态、布局、命中、拖拽、窗口交接或动画调整：读取 Architecture「Edge Capsule V3 Lite」的对应小节和相关 Decisions。状态看 D-005，队列/几何看 D-006，命中看 D-014，拖拽看 D-011，surface/composition/交接看 D-007～D-010、D-013，帧节拍看 D-012；涉及插件 mini 再读 D-018。跨多个边界时合并读取。
+- 状态、布局、命中、拖拽、窗口交接或动画调整：读取 Architecture「Edge Capsule V3 Lite」的对应小节和相关 Decisions。状态看 D-005，队列/几何看 D-006，命中看 D-014，拖拽看 D-011，surface/composition/交接看 D-007～D-010、D-013，当前帧节拍看 D-038，历史取舍看 D-012、D-032；涉及插件 mini 再读 D-018。跨多个边界时合并读取。
 - 整体呈现路线重构、Edge 全局审查或恢复旧方案：读取完整 Edge 架构、D-005～D-014，以及涉及插件 mini 时的 D-018，并核对相关 git/PR 历史。
 
 阅读中发现影响超出初始判断时，先补读受影响边界再修改；按需读取不豁免任何既有硬约束。
@@ -75,6 +75,9 @@ Edge 任务先阅读本文件的硬约束，再按实际影响范围选择资料
 避免两个极端：不要为缺乏证据的少数极端场景把系统膨胀成过重框架，也不要用一次性补丁不断叠加并行状态。优先修清 ownership、数据流和真实高风险边界。
 
 小改默认直接在目标分支完成；只有改动较大、风险较高或需要独立验证时再开分支。
+
+- 在 Web Chat 中处理本仓库时，先发现并优先使用当前可用的 GitHub 连接器操作；不得仅因本地缺少 `git` / `gh`、凭据或网络，或依据旧会话、通用产品说明，就断言无法提交、推送或创建 PR。
+- 对用户已授权的 GitHub 写入，优先使用当前实际可用的连接器操作执行，并在写入后回读核对结果；受阻时应区分“工具未提供”“连接器授权 / 仓库策略限制”和“调用故障”，报告具体证据，不得未经核验笼统声称“只有读取权限”，也不要为了探测权限创建无意义提交或 PR。
 
 验证规模按行为风险和影响范围决定，不按修改行数决定。目标与改动点明确、低风险的局部修改，只核对相关上下文、最终 diff 和必要的直接验证，不重复读全仓、整文件或走完整审查流程。涉及持久化、兼容性、权限或窗口/状态交接等高风险边界，即使只改一行也要完成对应验证。既有明确的构建、CI 和发布验收要求仍须遵守；验证充分后停止，只有新的失败证据或尚未覆盖的具体风险才扩大或重复检查。
 
@@ -155,7 +158,8 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
-- 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件；本地打包只生成 no-runtime。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
+- 用户在chat中要求打包时，默认生成用于测试的 Windows x64 单文件、不含 .NET 运行时且启用压缩的包；明确指定其他形式时或者语境中明显不是用于测试时无视此规则。
+- 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
 - 普通 build/publish 使用仓库内默认 `papertodo_lmdb.dll`；GitHub Release 必须先从仓库内 LMDB 源码 `-ForceRebuild`，不能把默认 DLL 冒充云端编译产物。
 - 稳定正式版只通过完成真实多屏/混合 DPI 等发布前手测后的 `workflow_dispatch` 发布；稳定 tag push 不是发布步骤。`rc` / `alpha` / `beta` / `preview` tag 可以发布预发行版。
 

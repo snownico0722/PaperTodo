@@ -58,7 +58,7 @@ public sealed partial class PaperWindow : Window
     private bool UsesNativePaperChrome => _controller.UsesNativeMicaWindows && !_paper.IsCollapsed;
 
     private Grid _windowHost = null!;
-    private Border _paperChrome = null!;
+    private PaperChromeBorder _paperChrome = null!;
     private readonly Grid _containerGrid = new();
     private readonly Grid _shell = new();
     private readonly ScaleTransform _shellScale = new(1.0, 1.0);
@@ -172,7 +172,7 @@ public sealed partial class PaperWindow : Window
     private const double CapsuleNormalMinWidth = 76;
     private const double CapsuleLeftPadding = 6;
     private const double CapsuleIconGap = 4;
-    private const double CapsuleCloseWidth = 14;
+    private const double CapsuleCloseWidth = EdgeCapsuleLayout.CapsuleCloseWidth;
     private const double CapsuleNormalCloseWidth = 21;
     private const double CapsuleRightPadding = 6;
     private double CapsuleIconFontSize => AppTypography.Scale(13);
@@ -896,15 +896,21 @@ public sealed partial class PaperWindow : Window
 
     private void ApplyDeferredStartupSystemVisibility()
     {
+        // A cold edge activation can start its form animation before Loaded's queued work.
+        // SourceInitialized already applied switcher state; form completion owns the taskbar.
+        if (IsPaperFormTransitioning)
+        {
+            return;
+        }
         var shouldShowInTaskbar = ShouldShowInTaskbar();
         ApplySystemVisibility(reapplyTaskbarShellState: ShowInTaskbar != shouldShowInTaskbar || !shouldShowInTaskbar);
     }
 
-    private bool ShouldShowInTaskbar()
+    private bool ShouldShowInTaskbar(bool? collapsed = null)
     {
         return !_controller.State.HidePapersFromWindowSwitcher &&
             !_controller.State.HidePapersFromTaskbar &&
-            !_paper.IsCollapsed;
+            !(collapsed ?? _paper.IsCollapsed);
     }
 
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
@@ -938,8 +944,8 @@ public sealed partial class PaperWindow : Window
         var dpiScale = dpi > 0 ? dpi / 96.0 : 1.0;
         // Keep resize bands at the original HWND edges. Moving the top band to the
         // mask boundary would intercept controls in the first 8 DIPs of the body.
-        if (_inactiveTitleBarMask is { HeaderOpacity: 0 } mask &&
-            pointerY < bounds.Top + (int)Math.Round(mask.HeaderBottom * dpiScale))
+        if (_paperChrome is { HeaderOpacity: 0 } chrome &&
+            pointerY < bounds.Top + (int)Math.Round((chrome.Margin.Top + chrome.HeaderExtent) * dpiScale))
         {
             return false;
         }
@@ -2288,7 +2294,7 @@ public sealed partial class PaperWindow : Window
         Grid.SetColumn(titleHost, 1);
         titleArea.Children.Add(titleHost);
 
-        RefreshPaperTitle();
+        RefreshPaperTitle(invalidatePreview: false);
 
         Grid.SetColumn(titleArea, 0);
         top.Children.Add(titleArea);
@@ -2800,7 +2806,9 @@ public sealed partial class PaperWindow : Window
         _paperIconButton.Foreground = _paper.AlwaysOnTop ? Theme.ActiveBrush : WeakTextBrush;
     }
 
-    public void RefreshPaperTitle()
+    public void RefreshPaperTitle() => RefreshPaperTitle(invalidatePreview: true);
+
+    private void RefreshPaperTitle(bool invalidatePreview)
     {
         var title = _controller.PaperDisplayTitle(_paper);
         Title = title;
@@ -2818,7 +2826,7 @@ public sealed partial class PaperWindow : Window
             _titleEditBox.CaretBrush = TextBrush;
         }
 
-        RefreshCapsuleLabel();
+        RefreshCapsuleLabel(invalidatePreview);
         RefreshPaperContextMenus();
     }
 

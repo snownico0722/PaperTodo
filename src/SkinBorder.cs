@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 /// <summary>Surface paint only. The existing host still owns layout, input, shape transitions
 /// and the native/solid Background decision. Never replace its focus border with a skin rim.</summary>
-internal sealed partial class SkinBorder : Border
+internal sealed partial class SkinBorder : PaperChromeBorder
 {
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),

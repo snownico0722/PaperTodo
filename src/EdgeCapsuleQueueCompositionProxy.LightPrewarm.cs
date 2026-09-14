@@ -190,7 +190,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 offscreen,
                 topmost: true,
                 static _ => false,
-                static (_, _) => { },
+                static _ => { },
                 static () => { },
                 static () => { },
                 static () => { });

@@ -180,9 +180,9 @@ public sealed partial class PaperWindow
         SetCollapsedState(false, animate: true, alignExpandedToDockedEdge: wasDeepCapsulePlaced);
     }
 
-    private void RefreshCapsuleLabel()
+    private void RefreshCapsuleLabel(bool invalidatePreview = true)
     {
-        InvalidateEdgeCapsulePreviewContent();
+        if (invalidatePreview) InvalidateEdgeCapsulePreviewContent();
         if (_capsuleLabelText == null)
         {
             return;
@@ -350,7 +350,12 @@ public sealed partial class PaperWindow
             Margin = new Thickness(CapsuleIconGap, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
-        RefreshCapsuleLabel();
+        // Materializing the first Shell is not a model edit. Preserve an existing edge
+        // artifact when the Markdown editor loaded the same text; normalization still invalidates.
+        RefreshCapsuleLabel(invalidatePreview:
+            !IsCurrentBodyProviderMarkdown ||
+            !string.Equals(CurrentMarkdownTextForEdgeCapsulePreview(), _paper.Content ?? string.Empty,
+                StringComparison.Ordinal));
         leftStack.Children.Add(_capsuleLabelText);
 
         leftArea.Child = BuildPluginCapsuleContentHost(leftStack);
@@ -677,18 +682,18 @@ public sealed partial class PaperWindow
             && usesDeepCapsuleMode
             && ExpandedFromDeepCapsuleEdge
             && !_controller.State.ShowDeepCapsuleWhileExpanded;
-        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         // An explicit open origin outranks edge history; edge-driven expansion still restores it.
         if (programmaticOrigin == null &&
             expandingFromDeepCapsuleEdge &&
             _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, targetWidth, targetHeight, out var rememberedGeometry))
         {
             rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
-            targetWidth = rememberedGeometry.Width;
-            targetHeight = rememberedGeometry.Height;
+            targetWidth = rememberedGeometry.WidthDip;
+            targetHeight = rememberedGeometry.HeightDip;
         }
-        double finalTargetWidth = RoundToDevicePixelX(targetWidth);
-        double finalTargetHeight = RoundToDevicePixelY(targetHeight);
+        double finalTargetWidth = rememberedDeepCapsuleExpandedGeometry?.WidthDip ?? RoundToDevicePixelX(targetWidth);
+        double finalTargetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
         if (_controller.UsesNativeMicaWindows)
@@ -700,6 +705,39 @@ public sealed partial class PaperWindow
             RefreshNativeMica(force: true);
         }
         RefreshExperimentalOpacity();
+        var expandedWidth = collapsed
+    ? RoundToDevicePixelX(_controller.UsesNativeMicaWindows && interruptedVisualWidth.HasValue ? _transitionBaseWidth : Width)
+    : finalTargetWidth;
+var expandedHeight = collapsed
+    ? RoundToDevicePixelY(_controller.UsesNativeMicaWindows && interruptedVisualHeight.HasValue ? _transitionBaseHeight : Height)
+    : finalTargetHeight;
+        if (animate)
+        {
+            _transitionBaseWidth = expandedWidth;
+            _transitionBaseHeight = expandedHeight;
+            _startTransitionWidth = interruptedVisualWidth ?? (collapsed ? expandedWidth : capsuleWidth);
+            _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
+            _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
+            _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
+            _startTransitionChromeMargin = startChromeMargin;
+            _targetTransitionChromeMargin = _paperChrome.Margin.Left;
+
+            // Establish the initial visual BEFORE native placement can resize the HWND and
+            // synchronously run WPF layout. Otherwise the full-size chrome is exposed first,
+            // then reset to capsule size when the expand animation starts.
+            _shell.Width = Math.Max(0, expandedWidth - (_controller.UsesNativeMicaWindows
+        ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : WindowChromeInset));
+            _shell.Height = Math.Max(0, expandedHeight - (_controller.UsesNativeMicaWindows
+        ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : WindowChromeInset));
+            TransitionProgress = 0.0;
+            UpdateTransitionVisuals(0.0);
+            if (!collapsed)
+            {
+                _shell.Opacity = 0.0;
+                _capsuleShell.Opacity = 1.0;
+            }
+        }
+
         if (!collapsed)
         {
             ChangeEdgeCapsulePaperForm(
@@ -722,12 +760,8 @@ public sealed partial class PaperWindow
                     : 0;
                 MoveWindowWithoutGeometrySave(() =>
                 {
-                    if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
-                    {
-                        Left = RoundToDevicePixelX(rememberedRect.Left);
-                        Top = RoundToDevicePixelY(rememberedRect.Top);
-                    }
-                    else
+                    if (rememberedDeepCapsuleExpandedGeometry is not PaperRestoreGeometry rememberedPlacement ||
+                        !TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedPlacement))
                     {
                         AlignExpandedToDockedEdge(finalTargetWidth, finalTargetHeight, requiredEdgeInset);
                     }
@@ -760,7 +794,9 @@ public sealed partial class PaperWindow
 
         RefreshEffectiveTopmost();
         UpdateAdvancedInteractionLockVisuals();
-        ApplySystemVisibility();
+        // Form changes affect only taskbar membership. A visible shell refresh hides/shows
+        // the layered HWND and can expose its cached bitmap before the new layout is rendered.
+        // Keep the current native surface through the animation; update membership at completion.
         _controller.MarkDirty();
 
         if (collapsed)
@@ -793,29 +829,6 @@ public sealed partial class PaperWindow
 
         if (animate)
         {
-            var expandedWidth = collapsed
-                ? RoundToDevicePixelX(_controller.UsesNativeMicaWindows && interruptedVisualWidth.HasValue ? _transitionBaseWidth : Width)
-                : finalTargetWidth;
-            var expandedHeight = collapsed
-                ? RoundToDevicePixelY(_controller.UsesNativeMicaWindows && interruptedVisualHeight.HasValue ? _transitionBaseHeight : Height)
-                : finalTargetHeight;
-            _transitionBaseWidth = expandedWidth;
-            _transitionBaseHeight = expandedHeight;
-            _startTransitionWidth = interruptedVisualWidth ?? (collapsed ? expandedWidth : capsuleWidth);
-            _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
-            _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
-            _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
-            _startTransitionChromeMargin = startChromeMargin;
-            _targetTransitionChromeMargin = _paperChrome.Margin.Left;
-
-            // Prevent shell content reflow/wrapping by locking its size to the expanded dimensions
-            _shell.Width = Math.Max(0, expandedWidth - (_controller.UsesNativeMicaWindows
-                ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : WindowChromeInset));
-            _shell.Height = Math.Max(0, expandedHeight - (_controller.UsesNativeMicaWindows
-                ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : WindowChromeInset));
-
-            TransitionProgress = 0.0;
-            UpdateTransitionVisuals(0.0);
             if (!collapsed && !_controller.UsesNativeMicaWindows)
             {
                 Width = expandedWidth;
@@ -956,6 +969,7 @@ public sealed partial class PaperWindow
                 {
                     FinishExpandSnapStateRestore();
                 }
+                UpdateTaskbarVisibility();
             };
 
             BeginAnimation(TransitionProgressProperty, progressAnim);
@@ -1019,6 +1033,7 @@ public sealed partial class PaperWindow
             {
                 FinishExpandSnapStateRestore();
             }
+            UpdateTaskbarVisibility();
         }
 
         RefreshPaperContextMenus();

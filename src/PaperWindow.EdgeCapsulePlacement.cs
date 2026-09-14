@@ -111,10 +111,12 @@ public sealed partial class PaperWindow
         {
             return;
         }
-        RefreshCapsuleLabel();
+        // Rearranging a queue changes placement, not the title/body generation. Invalidating here
+        // would discard every preloaded artifact immediately after staging the next preview.
+        RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         if (!TryStageEdgeCapsuleVisualTransaction(
                 animate,
@@ -189,10 +191,10 @@ public sealed partial class PaperWindow
             return;
         }
         MarkEdgeCapsuleOpenedFromEdge();
-        RefreshCapsuleLabel();
+        RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         UpdateDeepCapsuleSlotHostTheme();
 

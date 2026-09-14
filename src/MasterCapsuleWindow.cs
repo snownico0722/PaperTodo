@@ -41,8 +41,8 @@ public sealed class MasterCapsuleWindow : Window
     // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
-    private const double MasterLeftPadding = 5;
-    private const double MasterGlyphGap = 4;
+    private const double MasterLeftPadding = 4;
+    private const double MasterGlyphGap = 3;
     private const double MasterRightPadding = 3;
     private const double MasterInteriorBorderThickness = 1;
     private const string MasterTwoDigitCountSample = "88";

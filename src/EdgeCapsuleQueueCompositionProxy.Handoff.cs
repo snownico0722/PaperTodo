@@ -288,6 +288,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
     public void ForceDisposeForShutdown()
     {
+        _inputHandoff?.Cancel();
         if (_disposed)
         {
             RetireVisualResources();

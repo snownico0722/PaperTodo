@@ -1,0 +1,48 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+using PaperTodo;
+
+internal static partial class Program
+{
+    private static void WorkerPreloadLifetimeChecks()
+    {
+        var cache = MarkdownEdgePreviewPreload.For(Dispatcher.CurrentDispatcher);
+        cache.SetEnabledForChecks(true);
+        var foreground = new SolidColorBrush(Colors.Black);
+        var root = new Grid();
+        root.Resources["TextBrushKey"] = foreground;
+        var window = new Window { Content = root, Width = 550, Height = 500,
+            ShowActivated = false, ShowInTaskbar = false };
+        var source = new EdgeCapsulePreviewInvalidationSource();
+        var context = new EdgeCapsulePreviewContext(new(), () => "resource restart", false,
+            () => new string('文', 900), () => MarkdownRenderModes.Full,
+            (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, source);
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            window.Show(); Pump();
+            Task<bool> warming;
+            using (HoldWorker(MarkdownLayoutWorker.Shared))
+            {
+                warming = cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true), cancellation.Token);
+                UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0,
+                    "preload reaches the real pending paragraph worker");
+                // No source notification: immutable artifacts must reject the old resource snapshot.
+                foreground.Color = Colors.Red;
+            }
+            UntilReview(() => warming.IsCompleted, "resource-invalidated preload settles");
+            Require(!warming.GetAwaiter().GetResult() && cache.ArtifactCount == 0,
+                "optional preload discards changed resources rather than caching stale colors");
+            Require(AwaitPreload(cache.WarmLayoutAsync(new(context, root, new(460, 410), () => true))),
+                "a later lifecycle request can prepare the current resources");
+            Require(cache.ArtifactCount == 1 && root.Children.Count == 0,
+                "the current artifact is cached once without mounting a hidden holder");
+            Require(!foreground.IsFrozen && source.Version == 0,
+                "preload does not freeze the host brush or mutate the source version");
+            Console.WriteLine("PASS worker preload discards stale resources and accepts a later current request");
+        }
+        finally { cancellation.Cancel(); cache.Clear(); window.Close(); Pump(); }
+    }
+}

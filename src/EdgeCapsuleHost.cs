@@ -207,6 +207,10 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
     /// </summary>
     public bool Apply(EdgeCapsulePresentationFrame frame)
     {
+#if DEBUG
+        using var edgeJournalHost = EdgeDiagnosticObservation.Begin("host.apply", this, EdgeDiagnosticObservation.Pack(frame.Bounds.Width, frame.Bounds.Height), frame.Visible ? 1 : 0);
+#endif
+
         if (_disposed || !frame.IsUsable)
         {
             return false;
@@ -331,9 +335,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             previousFrame.Bounds.Height != frame.Bounds.Height ||
             Math.Abs(previousFrame.DpiScaleX - frame.DpiScaleX) > 0.001 ||
             Math.Abs(previousFrame.DpiScaleY - frame.DpiScaleY) > 0.001;
-        var visualSurfaceOffsetChanged =
-            previousNativeHostBounds.Top != nativeHostBounds.Top ||
-            previousFrame.Bounds.Top - previousNativeHostBounds.Top != visualOffsetYDevice;
         var segmentLayoutChanged = visualSurfaceSizeChanged ||
             previousFrame.BodyWindowWidthDevice != frame.BodyWindowWidthDevice ||
             Math.Abs(previousFrame.MaximumCloseWidthDip - frame.MaximumCloseWidthDip) > 0.001;
@@ -395,7 +396,9 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             ApplyFixedLayout(frame.Edge);
         }
-        if (visualSurfaceSizeChanged || visualSurfaceOffsetChanged)
+        // The local WPF surface stays at (0, 0); queue translation is supplied by DComp.
+        // A changing screen-space offset does not require reapplying identical local dimensions.
+        if (visualSurfaceSizeChanged)
         {
             ApplyVisualSurface(frame);
         }
@@ -556,6 +559,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
                     ? "bounds-changed"
                     : "visibility-changed");
         TraceApply("success");
+        EdgeDiagnosticObservation.HostApplied(this, Window, Chrome.CornerRadius);
 #endif
         return true;
     }

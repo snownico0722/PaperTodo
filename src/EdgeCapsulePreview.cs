@@ -14,6 +14,12 @@ internal readonly record struct EdgeCapsulePreviewSize(
     public const double MinimumHeightDip = 90;
     public const double MaximumHeightDip = double.MaxValue;
 
+    // Descriptor sizes include close/chrome. Preload, first display and replacement must
+    // use the same content box; height is part of the prepared-body cache key.
+    internal Size ContentSize => new(
+        Math.Max(1, WidthDip - EdgeCapsuleLayout.CapsuleCloseWidth - EdgeCapsuleLayout.WindowChromeMargin),
+        Math.Max(1, HeightDip - EdgeCapsuleLayout.WindowChromeMargin * 2));
+
     public EdgeCapsulePreviewSize Normalize(double maximumWidthDip, double maximumHeightDip)
     {
         if (!double.IsFinite(WidthDip) ||
@@ -70,7 +76,13 @@ internal sealed class EdgeCapsulePreviewInvalidationSource
 {
     public event Action? Invalidated;
 
-    public void Invalidate() => Invalidated?.Invoke();
+    private long _version;
+    internal long Version => Interlocked.Read(ref _version);
+    public void Invalidate()
+    {
+        Interlocked.Increment(ref _version);
+        Invalidated?.Invoke();
+    }
 }
 
 internal sealed record EdgeCapsulePreviewContext(
@@ -78,12 +90,14 @@ internal sealed record EdgeCapsulePreviewContext(
     Func<string> ReadTitle,
     bool PaperExpanded,
     Func<string> ReadMarkdownText,
+    Func<string> ReadMarkdownRenderMode,
     Func<string, bool, bool> SetTodoDone,
     Func<string, bool> OpenTodoLinkedTarget,
     Func<Style> ReadTodoCheckStyle,
     Func<string> ReadPluginStatus,
     Action<string> OpenExternal,
-    EdgeCapsulePreviewInvalidationSource InvalidationSource)
+    EdgeCapsulePreviewInvalidationSource InvalidationSource,
+    Func<bool>? PreloadLightContent = null)
 {
     public string Title => ReadTitle();
 }

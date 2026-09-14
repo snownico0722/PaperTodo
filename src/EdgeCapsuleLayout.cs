@@ -25,6 +25,7 @@ public static class EdgeCapsuleLayout
     // Transparent outer chrome around the capsule body. Edge capsules omit this margin on the
     // wall side and keep it on the interior side for the shadow.
     public const double WindowChromeMargin = 8;
+    internal const double CapsuleCloseWidth = 14;
     // The focus outline extends one DIP beyond the body and is the outermost stable alpha edge.
     // Proxy clips share these values with the WPF host so animation and endpoint silhouettes use
     // the same coordinate system instead of intersecting two offset rounded rectangles.
