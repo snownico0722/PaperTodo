@@ -95,7 +95,6 @@ jobs:
                   parts[slot] = chooser(ours, theirs)
               p.write_text(''.join(parts), encoding='utf-8', newline='\n')
 
-          # CI and changelogs are independent additions at the same insertion point: keep both.
           for path in ('.github/workflows/pull-request-build.yml', 'CHANGELOG.md', 'doc/CHANGELOG.en.md'):
               resolve(path, lambda ours, theirs: ours + theirs)
 
@@ -104,28 +103,22 @@ jobs:
           def remap_skin_ids(text):
               return id_pattern.sub(lambda m: mapping[m.group(0)], text)
 
-          # Architecture: preserve #227's skin architecture, adopt main's PaperChromeBorder route,
-          # and explicitly bound the decorated-skin exception until that custom renderer supports it.
           def architecture_choice(ours, theirs):
               ours_lines = [line for line in ours.splitlines(keepends=True)
                             if 'InactiveTitleBarMask' not in line]
               skin = remap_skin_ids(''.join(ours_lines))
-              main = theirs
               note = ('装饰性 `SkinBorder`（描图纸、液态玻璃、Aero、像素风）暂不参与失焦标题栏裁切；'
                       '这些自绘材质继续保持完整表面，避免缩短 helper surface 与完整材质绘制叠加。'
                       '默认纸片及可走基类绘制的表面沿用 `PaperChromeBorder`。\n')
-              return skin + main + note
+              return skin + theirs + note
           resolve('doc/ARCHITECTURE.md', architecture_choice)
 
-          # Decisions: main owns D-032..D-038 now. Preserve the experimental skin history by
-          # appending it as D-039..D-050 and remapping references inside that skin-only block.
           tmp = Path(os.environ['RUNNER_TEMP'])
           ours_decisions = (tmp / 'decisions-ours.md').read_text(encoding='utf-8')
           main_decisions = (tmp / 'decisions-main.md').read_text(encoding='utf-8')
           rows = []
           for line in ours_decisions.splitlines():
-              m = re.match(r'^\| (D-(?:03[2-9]|04[0-3])) \|', line)
-              if m:
+              if re.match(r'^\| D-(?:03[2-9]|04[0-3]) \|', line):
                   rows.append(remap_skin_ids(line))
           if len(rows) != 10:
               raise SystemExit(f'Expected the existing 10 skin decision index rows, found {len(rows)}')
@@ -148,11 +141,8 @@ jobs:
               main_decisions.rstrip() + '\n\n---\n\n' + skin_body + '\n',
               encoding='utf-8', newline='\n')
 
-          # Lifecycle: both completion responsibilities are required.
           resolve('src/PaperWindow.Lifecycle.cs', lambda ours, theirs: ours + theirs)
 
-          # Capsule: main moved transition initialization earlier. Keep that ordering, but fold
-          # #227's native-material dimensions/margins into the earlier initialization.
           resolve('src/PaperWindow.Capsule.cs',
                   lambda ours, theirs: '            if (!collapsed && !_controller.UsesNativeMicaWindows)\n')
           p = Path('src/PaperWindow.Capsule.cs')
@@ -183,8 +173,6 @@ jobs:
           text = text.replace(old_w, new_w, 1).replace(old_h, new_h, 1)
           p.write_text(text, encoding='utf-8', newline='\n')
 
-          # Paper shell: use the skin renderer as a PaperChromeBorder specialization so main's
-          # header-clip API remains the single shell contract.
           resolve('src/PaperWindow.cs', lambda ours, theirs: ours)
 
           p = Path('src/PaperChromeBorder.cs')
@@ -203,18 +191,15 @@ jobs:
 
           p = Path('src/PaperWindow.ExperimentalFocusPresentation.cs')
           text = p.read_text(encoding='utf-8')
-          needle = '''    private bool CanFadeInactiveTitleBar() =>
-          AllowsTransparency &&
-          IsVisible &&'''
-          replacement = '''    private bool CanFadeInactiveTitleBar() =>
-          AllowsTransparency &&
-          (_paperChrome is not SkinBorder skin || !PaperSkins.IsDecorated(skin.Skin)) &&
-          IsVisible &&'''
-          if text.count(needle) != 1:
+          pattern = re.compile(r'(    private bool CanFadeInactiveTitleBar\(\) =>\n        AllowsTransparency &&\n)(        IsVisible &&)')
+          text, count = pattern.subn(
+              r'\1        (_paperChrome is not SkinBorder skin || !PaperSkins.IsDecorated(skin.Skin)) &&\n\2',
+              text,
+              count=1)
+          if count != 1:
               raise SystemExit('Inactive-title eligibility shape changed')
-          p.write_text(text.replace(needle, replacement, 1), encoding='utf-8', newline='\n')
+          p.write_text(text, encoding='utf-8', newline='\n')
 
-          # No conflict markers or duplicate current decision IDs may survive.
           for path in expected_conflicts:
               content = Path(path).read_text(encoding='utf-8')
               if any(marker in content for marker in ('<<<<<<<', '=======', '>>>>>>>')):
@@ -258,6 +243,7 @@ jobs:
           set -euo pipefail
           git rm --ignore-unmatch .github/workflows/sync-main-227-probe.yml
           git rm --ignore-unmatch .github/workflows/sync-main-227-apply.yml
+          git rm --ignore-unmatch .github/workflows/sync-main-227-retry.yml
           git add -A
           git diff --check --cached
           test -n "$(git rev-parse -q --verify MERGE_HEAD)"
