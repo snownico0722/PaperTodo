@@ -80,7 +80,7 @@ PaperTodo.exe
 | docked Edge surface | `EdgeCapsuleHost` | 每纸片 bounded HWND 和完整 WPF visual tree |
 | 同队列 compositor translation | `EdgeCapsuleQueueCompositionProxy` | live HWND surface 的 X/Y translation 与 visual-authority handoff |
 | floating drag | `EdgeCapsuleDragWindow` | 独立 floating pill HWND |
-| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` | Rendering cadence、统一 pointer/time sample、按队列的更新屏障 |
+| 同 Dispatcher 动画节拍 | `EdgeCapsuleFrameScheduler` + `EdgeCapsuleRenderDemand` | Rendering 唯一推进、共享 pointer/time sample、按组更新屏障；demand 只拥有就绪组的请求截止与取消 |
 
 ## 3. 进程与运行时边界
 
@@ -303,6 +303,8 @@ EdgeCapsuleHost.Apply(frame)
 
 `EdgeCapsuleReducer` 决定单纸片业务状态；`EdgeCapsulePresenter` 是该纸 desired model、target、transition、applied presentation 和 dirty/deferred work 的唯一 presentation authority。
 
+Pointer intent 先服从 model 的逻辑准入：`Slot=None` 或 `PeerReorderActive` 时，`SamplePointer` 不得恢复 `PointerOverSurface`。Detach 可以先于旧可见 frame 的清理，旧 `InteractiveBounds` 仍命中不能重新建立已经撤销的逻辑归属。合法 docked/floating 手势仍保留 attached slot，重新 Attach 后恢复正常采样；结构断言和正常物理命中规则不放宽。
+
 `EdgeCapsuleTargetPlanner` 是纯 desired-model → shape/layout planner，一次生成完整 `EdgeCapsulePresentationPlan`。关闭悬停预览时的完整标题宽度和零字标题可见性也进入同一 layout/target/frame 合同；host capacity 提前覆盖标题展开宽度，普通悬停不反复缩放 HWND。Docked surface 与 `FloatingFree` 是互斥外形；floating 的宽度、圆角、关闭区和其他 shape 语义不由窗口构造参数或拖拽路径另行拼装。
 
 `AppController` 可以协调跨纸片 session、向多张纸 dispatch intent、捕获事务 frame，但不维护第二份 per-paper desired model。
@@ -381,7 +383,13 @@ Preview session 建立后，当前 owner 是 queue-wide 的 pointer arbiter：ow
 
 首次没有 preview session 时，经过验证的真实物理命中可以直接建立 owner；已有 session 内的 A→B transfer 则继续使用当前 residence/stability/predictor policy。具体毫秒数和灵敏度属于实现参数，留在代码。
 
-同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`，transition 只由 `CompositionTarget.Rendering` 推进，不设补帧计时器。每次合法通知按共享 QPC 时间推进；`RenderingTime` 是 WPF 的预计呈现时间，可以被不同通知复用，不用它充当唯一帧编号去重。待处理 reconcile 与 visual transaction deferral 只阻挡所属 native batch group，其他就绪队列继续逐帧推进；跨队列事务仍按同一 transaction group 原子处理，原生 apply 重入保护不变。没有就绪队列时暂停 Rendering 订阅，更新或事务的最后一个 owner 释放后重新订阅，由 WPF 请求下一帧；全部结束后取消订阅。
+同一 Dispatcher 的 presenters 共用 `EdgeCapsuleFrameScheduler`，transition 只由 `CompositionTarget.Rendering` 推进。每次合法通知按共享 QPC 时间推进；`RenderingTime` 是 WPF 的预计呈现时间，可以被不同通知复用，不用它充当唯一帧编号去重。待处理 reconcile 与 visual transaction deferral 只阻挡所属 native batch group，其他就绪队列继续逐帧推进；跨队列事务仍按同一 transaction group 原子处理，原生 apply 重入保护不变。没有就绪队列时暂停 Rendering 订阅，更新或事务的最后一个 owner 释放后重新检查并恢复订阅；全部结束后取消订阅。
+
+`EdgeCapsuleRenderDemand` 为仍有活动 transition 且当前就绪的 native batch group 保存独立请求截止，以该组实际采样使用的 QPC 刷新。共享的可重设单次 timer 只将一个带 generation 的请求送回 UI Dispatcher；执行时重新核对组的就绪状态，通过公开 Rendering add 路径请求 WPF 工作，并在 `finally` 移除临时空 handler。它不采样 pointer、不推进 frame、不补算错过的历史帧，也不承诺固定帧率；具体请求延迟留在代码。
+
+组失去活动动画或受到 reconcile、transaction、外部 native apply 阻挡时，撤销其旧截止；无就绪组、取消或 shutdown 时撤下待执行请求。组恢复后重新建立请求资格，无关组的合法采样不延后另一组的截止。工作线程只接触截止、generation 和单个投递槽，不访问 Presenter/WPF 状态；取消或重启可同步进入 Dispatcher Hooks，旧回调不得覆盖新代。shutdown 在事件入口先锁存，再撤销 demand 与订阅，避免后续事件处理器在 Dispatcher 状态字段更新前重新激活。
+
+普通 reconcile 使用 Render 优先级并保留原有 owner registration；真实 Host 输入需要提前处理时，将同一待执行操作提升到 Send，完成后释放原 registration，不另建一套输入或帧状态。上述 demand 已用于正常运行，Debug 观察开关不决定其是否启用。
 
 Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有输入、调度、presentation 与 native 调用，使用独立的观察编号关联事件，不拥有或推进 transition，也不额外订阅 Rendering。`EdgeDiagnosticJournal` 在有界内存中保存 QPC 事件和原有调试文本，退出时封存为独立进程/session 的日志；采集期不启动日志写盘计时器。容量耗尽明确记丢弃数，异常退出尽力封存，强制终止不保证保留。调度回调和 WPF applied frame 仍不是物理显示帧，测量方法及开销对照见 E-004。
 
@@ -389,7 +397,7 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 
 进一步显式开启 `PAPERTODO_EDGE_MESSAGE_OBSERVATIONS=1` 时，`EdgeMessageLatencyObservation` 观察现有 Dispatcher/MIL/WM_TIMER 的队列时间，只对当前进程 UI 线程自有的 MIL 通知 HWND 建立有界 subclass，保留原消息链和返回值；可再以 `PAPERTODO_EDGE_DWM_OBSERVATIONS=1` 读取公开 DWM 时钟。队列年龄用 Win32 `GetTickCount` 与 `MSG.time` 的同一时钟域，毫秒单位不代表毫秒精度；它不能测量定时器应到未到的时间。观察器不提交渲染或请求高精度计时，随既有深层观察解除，Release 不编入；同包开销对照和证据边界见 E-011。
 
-这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前无补帧调度见 D-032。
+这些原则的历史原因、失败路线和不可回退点见 D-005～D-014；当前可撤销 render demand 见 D-038，D-032 保留此前移除直接补帧与建立 owner 屏障的历史。
 
 ## 7. OS 与全局集成
 
