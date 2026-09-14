@@ -15,6 +15,9 @@ payload = ''.join((root / '.github' / ('data-reload-patch.' + part)).read_text(e
 patch = lzma.decompress(base64.b64decode(payload, validate=True))
 assert hashlib.sha256(patch).hexdigest() == '7b40b28d51f14349921a1bb7ccab7337179d0cc9856d4ff2a26a5b4dfad82ae1', 'Patch bytes changed'
 git('config', 'core.autocrlf', 'false')
+# checkout ran with the Windows default first. Rewrite the whole disposable worktree
+# from its index so unchanged CRLF files do not appear as edits after disabling conversion.
+git('checkout-index', '--all', '--force')
 for name in re.findall(r'^--- a/(.+)$', patch.decode('utf-8'), re.MULTILINE):
     source = subprocess.check_output(['git', 'show', 'HEAD:' + name], cwd=root)
     (root / name).write_bytes(source)
