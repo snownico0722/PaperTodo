@@ -1,0 +1,23 @@
+name: Review trim workspace
+on:
+  push:
+    branches: [work/review-trim-20260915]
+    paths: [.github/workflows/review-trim-work.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Export review sources
+        run: |
+          git ls-files '*AGENTS.md' '*AGENT.md'
+          git archive --format=zip --output=review-source.zip 4adebd559da172bca4db5cfa3dc7ac3c6464c040 src tests PaperTodo.csproj PaperTodo.Plugin.Abstractions doc/ARCHITECTURE.md doc/DECISIONS.md AGENTS.md .github/workflows CHANGELOG.md doc/CHANGELOG.en.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-trim-source
+          path: review-source.zip
+          retention-days: 1
