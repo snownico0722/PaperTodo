@@ -35,7 +35,7 @@
 | D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
 | D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
-| D-023 | Lightweight Prewarm 保留一次性首用预热 | Partially superseded by D-037 | Edge performance |
+| D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
 | D-025 | Note 图片若干限制为已接受取舍 | Accepted | Note / 图片 |
 | D-026 | Markdig 拥有标准 Markdown grammar；宿主仅做有界兼容处理 | Accepted | Note / Markdown |
@@ -49,7 +49,7 @@
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
-| D-037 | 可浏览队列保留已验证的 live authority | Accepted | Edge performance / lifecycle |
+| D-037 | 可浏览队列保留已验证的 live authority | Proposed | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 
 ## 维护规则
@@ -805,7 +805,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 
 ## D-023 — Lightweight Prewarm 保留一次性首用预热
 
-**Status:** Partially superseded by D-037（graphics 预热保留，调度与真实队列提前接管由 D-037 扩展）
+**Status:** Accepted（一次性 graphics 预热继续有效；D-037 的调度与真实队列提前接管扩展仍待候选验收）
 
 ### Context
 
@@ -1378,7 +1378,9 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 
 ## D-037 — 可浏览队列提前接管并保留已验证的 live authority
 
-**Status:** Accepted
+**Status:** Proposed（从 #258 拆为 #260 的候选；本分支保留实现，真实输入与空闲代价尚待验收）
+
+资源预热不等于长期接管输入。主线 #258 将本组拆出独立审查；原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`。本分支继续保留静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组，控件级悬停、完整手势、空闲观察与预热退让仍须单独验收，不以历史性能数字代替通过。按下转交沿用主线的同步交接边界：需要 completion retry 就丢弃旧按下，不保留超时重放队列。
 
 ### Context
 

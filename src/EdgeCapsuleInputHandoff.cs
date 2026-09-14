@@ -2,41 +2,40 @@ using System.Diagnostics;
 
 namespace PaperTodo;
 
-// Pending native presses belong to one proxy generation. This is not a mouse/gesture engine:
-// it only retains the existing press transfer across that generation's verified handoff retry.
+// One native press may wait only for the synchronous authority-release attempt that it triggered.
+// If that attempt schedules any retry, the press is dropped; old input is never replayed later.
 internal sealed class EdgeCapsuleInputHandoff
 {
-    private sealed record Pending(Func<bool> IsCurrent, Action Deliver, long Created);
-    private readonly List<Pending> _pending = new();
-    private readonly TimeProvider _clock;
-    internal EdgeCapsuleInputHandoff(TimeProvider? clock = null) => _clock = clock ?? TimeProvider.System;
-    internal int Count => _pending.Count;
+    private sealed record Pending(Func<bool> IsCurrent, Action Deliver);
+    private Pending? _pending;
+    internal int Count => _pending == null ? 0 : 1;
 
-    internal void Enqueue(Func<bool> isCurrent, Action deliver)
-    {
-        Prune();
-        _pending.Add(new Pending(isCurrent, deliver, _clock.GetTimestamp()));
-    }
+    internal void Enqueue(Func<bool> isCurrent, Action deliver) =>
+        _pending = new Pending(isCurrent, deliver);
 
-    // Called only once native/WPF authority has actually returned, not when a retry is scheduled.
     internal void Complete()
     {
-        var pending = _pending.ToArray();
-        _pending.Clear(); // Remove ownership BEFORE callbacks can re-enter completion.
-        foreach (var item in pending)
+        var pending = _pending;
+        _pending = null; // Remove ownership BEFORE callbacks can re-enter completion.
+        if (pending == null)
         {
-            try
-            {
-                if (Current(item)) item.Deliver();
-            }
-            catch (Exception error) { Trace.TraceWarning("Edge input transfer failed: {0}", error); }
+            return;
+        }
+
+        try
+        {
+            if (pending.IsCurrent()) pending.Deliver();
+        }
+        catch (Exception error)
+        {
+            Trace.TraceWarning("Edge input transfer failed: {0}", error);
         }
     }
 
-    internal void Prune() => _pending.RemoveAll(item => !Current(item));
-    internal void Cancel() => _pending.Clear();
-    private bool Current(Pending item) =>
-        _clock.GetElapsedTime(item.Created) <= TimeSpan.FromSeconds(1) && item.IsCurrent();
+    // ScheduleCompletionRetry calls this before arming the retry. A press belongs only to the
+    // original synchronous handoff attempt; any retry deliberately drops it instead of replaying it.
+    internal void Prune() => Cancel();
+    internal void Cancel() => _pending = null;
 }
 
 internal sealed partial class EdgeCapsuleQueueCompositionProxy
@@ -44,5 +43,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private EdgeCapsuleInputHandoff? _inputHandoff;
     internal void DeferPointerDown(Func<bool> isCurrent, Action deliver) =>
         (_inputHandoff ??= new()).Enqueue(isCurrent, deliver);
-    internal void CompleteDeferredPointerInput() => _inputHandoff?.Complete();
+
+    internal void CompleteDeferredPointerInput()
+    {
+        if (_coverLost)
+        {
+            _inputHandoff?.Cancel();
+            return;
+        }
+        _inputHandoff?.Complete();
+    }
 }

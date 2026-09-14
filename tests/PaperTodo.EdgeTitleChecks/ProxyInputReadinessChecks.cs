@@ -9,7 +9,7 @@ internal static partial class Program
     {
         ProxyOutputWindowVisibility();
         ProxyPointerMessageCoordinates();
-        ProxyPendingInputChecks();
+        ProxyImmediateInputChecks();
         // Exercise the real native mouse-message adapter and proxy callback. Lifecycle fields are
         // injected to cover reentrant publication/retirement without requiring a live DComp device;
         // this is not a substitute for testing the complete compositor handoff on a real desktop.

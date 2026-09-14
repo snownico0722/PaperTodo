@@ -49,29 +49,33 @@ internal static partial class Program
         Console.WriteLine("PASS proxy-original-press-coordinates-and-modifiers");
     }
 
-    private static void ProxyPendingInputChecks()
+    private static void ProxyImmediateInputChecks()
     {
-        var clock = new RenderDemandClock();
-        var pending = new EdgeCapsuleInputHandoff(clock);
+        var pending = new EdgeCapsuleInputHandoff();
         var current = true;
         var deliveries = 0;
+
         pending.Enqueue(() => current, () => { deliveries++; pending.Complete(); });
-        pending.Prune(); // A failed handoff keeps the original request; no independent replay timer.
-        Check(deliveries == 0 && pending.Count == 1, "A failed handoff retains the press without delivering early");
         pending.Complete(); pending.Complete();
-        Check(deliveries == 1 && pending.Count == 0, "A later successful handoff delivers exactly once, including reentrant completion");
+        Check(deliveries == 1 && pending.Count == 0,
+            "An immediately successful handoff delivers exactly once, including reentrant completion");
+
         pending.Enqueue(() => current, () => deliveries++);
-        current = false;
+        pending.Prune(); // Scheduling any retry deliberately drops this press.
         pending.Complete();
-        Check(deliveries == 1 && pending.Count == 0, "Closed, hidden or replaced targets do not receive delayed input");
-        current = true;
+        Check(deliveries == 1 && pending.Count == 0,
+            "A failed synchronous handoff drops the press instead of replaying it on a later retry");
+
+        current = false;
         pending.Enqueue(() => current, () => deliveries++);
-        clock.Now += 1001;
-        pending.Prune(); pending.Complete();
-        Check(deliveries == 1 && pending.Count == 0, "An exhausted recovery cannot replay an old press indefinitely");
+        pending.Complete();
+        Check(deliveries == 1 && pending.Count == 0,
+            "A target that becomes invalid during the synchronous handoff does not receive input");
+
         pending.Enqueue(() => true, () => deliveries++);
         pending.Cancel(); pending.Complete();
-        Check(deliveries == 1, "Shutdown cancels pending input instead of invoking user actions");
-        Console.WriteLine("PASS proxy-pending-press-retry-cancel-and-exactly-once");
+        Check(deliveries == 1,
+            "Cancellation drops pending input instead of invoking a user action");
+        Console.WriteLine("PASS proxy-immediate-press-transfer-and-drop-on-retry");
     }
 }
