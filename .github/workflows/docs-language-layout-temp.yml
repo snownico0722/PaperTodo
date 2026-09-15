@@ -1,0 +1,131 @@
+name: Temporary docs language layout migration
+
+on:
+  push:
+    branches:
+      - chore/docs-language-layout
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Normalize documentation language layout
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The follow-up push from this workflow is intentionally idempotent.
+          if [[ ! -f README.zh-CN.md ]]; then
+            echo "Documentation layout is already migrated."
+            exit 0
+          fi
+
+          git mv README.zh-CN.md README.zh.md
+          git rm README.en.md
+          git mv CHANGELOG.md CHANGELOG.zh.md
+          git mv doc/CHANGELOG.en.md CHANGELOG.md
+          git mv plugin-samples/README.zh-CN.md plugin-samples/README.zh.md
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          ROOT = Path('.')
+          TEMP_WORKFLOW = '.github/workflows/docs-language-layout-temp.yml'
+
+          def read(path: str) -> str:
+              return Path(path).read_text(encoding='utf-8-sig')
+
+          def write_if_changed(path: str, old_text: str, new_text: str) -> None:
+              if new_text != old_text:
+                  Path(path).write_text(new_text, encoding='utf-8', newline='\n')
+
+          def replace_required(path: str, old: str, new: str) -> None:
+              text = read(path)
+              count = text.count(old)
+              if count < 1:
+                  raise SystemExit(f'{path}: expected at least one occurrence of {old!r}')
+              write_if_changed(path, text, text.replace(old, new))
+
+          # Update path references wherever the old root/plugin README or English changelog is named.
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          for name in tracked:
+              if not name or name == TEMP_WORKFLOW:
+                  continue
+              path = Path(name)
+              if not path.is_file():
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8-sig')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              updated = text.replace('README.zh-CN.md', 'README.zh.md')
+              updated = updated.replace('doc/CHANGELOG.en.md', 'CHANGELOG.md')
+              write_if_changed(name, text, updated)
+
+          # The moved English changelog now lives at repository root.
+          replace_required('CHANGELOG.md', '[简体中文](../CHANGELOG.md)', '[简体中文](CHANGELOG.zh.md)')
+          replace_required('CHANGELOG.md', '[Back to Home](../README.md)', '[Back to Home](README.md)')
+          replace_required('CHANGELOG.md', '[User Manual](USER_GUIDE.en.md)', '[User Manual](doc/USER_GUIDE.en.md)')
+
+          # Chinese-facing documents should continue to link to the Chinese changelog.
+          replace_required('README.zh.md', 'CHANGELOG.md', 'CHANGELOG.zh.md')
+          replace_required('doc/USER_GUIDE.md', '../CHANGELOG.md', '../CHANGELOG.zh.md')
+          plugin_zh = Path('plugin-samples/README.zh.md')
+          plugin_text = plugin_zh.read_text(encoding='utf-8-sig')
+          plugin_updated = plugin_text.replace('../CHANGELOG.md', '../CHANGELOG.zh.md')
+          write_if_changed(str(plugin_zh), plugin_text, plugin_updated)
+
+          # English user guide moved its changelog target out of doc/.
+          replace_required('doc/USER_GUIDE.en.md', '(CHANGELOG.en.md)', '(../CHANGELOG.md)')
+
+          # Release notes keep English first, now with both files at repository root.
+          replace_required(
+              '.github/scripts/release_notes.py',
+              'parser.add_argument("--chinese", type=Path, default=Path("CHANGELOG.md"))',
+              'parser.add_argument("--chinese", type=Path, default=Path("CHANGELOG.zh.md"))',
+          )
+
+          # AGENTS should describe the new canonical paths, without a legacy README shim.
+          replace_required(
+              'AGENTS.md',
+              '- `README.md` 为默认英文首页，`README.zh.md` 保留中文，顶部互链；`README.en.md` 只保留旧链接兼容入口。',
+              '- `README.md` 为默认英文首页，`README.zh.md` 保留中文，顶部互链。',
+          )
+          replace_required(
+              'AGENTS.md',
+              'Release 说明由 `.github/scripts/release_notes.py` 从 `CHANGELOG.md` 与 `CHANGELOG.md` 提取同一版本',
+              'Release 说明由 `.github/scripts/release_notes.py` 从 `CHANGELOG.md` 与 `CHANGELOG.zh.md` 提取同一版本',
+          )
+          PY
+
+          # Rebuild the generated Chinese section of the English homepage from README.zh.md.
+          python .github/scripts/sync_readme.py
+          python .github/scripts/sync_readme.py --check
+
+          # Exercise both the release-note unit tests and the real default-path extraction.
+          python .github/scripts/test_release_notes.py
+          python .github/scripts/release_notes.py \
+            --tag v4.0.0-beta1 \
+            --repository snownico0722/PaperTodo \
+            --assets PaperTodo-v4.0.0-beta1-win-x64-self-contained.exe PaperTodo-v4.0.0-beta1-win-x64-no-runtime.exe \
+            --output /tmp/PaperTodo-RELEASE_NOTES.md
+          grep -q 'Custom Paper Backgrounds' /tmp/PaperTodo-RELEASE_NOTES.md
+          grep -q '自定义纸片背景' /tmp/PaperTodo-RELEASE_NOTES.md
+
+          # No obsolete language-layout names may remain outside this one-time workflow itself.
+          if git grep -n -E 'README\.en\.md|README\.zh-CN\.md|CHANGELOG\.en\.md|doc/CHANGELOG\.en\.md' -- ':!.github/workflows/docs-language-layout-temp.yml'; then
+            echo 'Obsolete documentation filename reference remains.' >&2
+            exit 1
+          fi
+
+          git diff --check
+          git config user.name "snownico0722"
+          git config user.email "36026283+snownico0722@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: normalize language file layout [ci]"
+          git push origin HEAD:chore/docs-language-layout
