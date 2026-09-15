@@ -157,6 +157,11 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+    // RestoreVisualSettingsPageDefaults still calls the original helper name from #262.
+    // Keep that narrow compatibility point, but map it to the new blend semantics.
+    private bool TrySetNoteBackgroundEnabled(bool enabled) =>
+        TryUpdatePaperBackgroundSetting(() => NoteBackground.SetBlendWithTheme(enabled));
+
     private bool TryUpdatePaperBackgroundSetting(Action update)
     {
         try
