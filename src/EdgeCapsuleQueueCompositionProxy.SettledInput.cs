@@ -78,19 +78,34 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             // No model change, native move, animation cancellation, or alternative shape state.
             // Prepare the already-settled WPF endpoints together, then use the existing outgoing
             // source transaction to reveal only the input window while peers keep their cloak.
-            var endpoints = new List<(PaperWindow Window, EdgeCapsulePresentationFrame Frame)>();
+            // Startup validation must not become a long-lived strong reference chain after the
+            // successor publishes. The predecessor and endpoint windows are guaranteed alive by
+            // the active source set during startup, so weak guards preserve the same validation
+            // while allowing retired generations and released windows to be collected afterwards.
+            var predecessorReference = new WeakReference<EdgeCapsuleQueueCompositionProxy>(this);
+            var endpoints = new List<(WeakReference<PaperWindow> Window, EdgeCapsulePresentationFrame Frame)>();
             var peers = new List<EdgeCapsuleQueueCompositionProxyMember>();
             foreach (var member in _members)
             {
                 if (!member.Window.TryPrepareSettledQueueProxyInput(out var frame) ||
                     !HasCompatibleEndpoint(member.Window, frame)) return false;
-                endpoints.Add((member.Window, frame));
+                endpoints.Add((new WeakReference<PaperWindow>(member.Window), frame));
                 if (!ReferenceEquals(member.Window, inputWindow))
                     peers.Add(new(member.Window, new(member.Plan.PaperId, frame, frame, frame), member.SourceHandle));
             }
             _members[0].Window.Dispatcher.Invoke(DispatcherPriority.Render, static () => { });
-            bool StillValid() => !_disposed && !_coverLost && !_completionPendingDuringSuccessorHold &&
-                _successorHeld && endpoints.All(item => item.Window.VerifySettledQueueProxyInput(item.Frame));
+            bool StillValid()
+            {
+                if (!predecessorReference.TryGetTarget(out var predecessor) ||
+                    predecessor._disposed || predecessor._coverLost ||
+                    predecessor._completionPendingDuringSuccessorHold || !predecessor._successorHeld)
+                {
+                    return false;
+                }
+                return endpoints.All(item =>
+                    item.Window.TryGetTarget(out var window) &&
+                    window.VerifySettledQueueProxyInput(item.Frame));
+            }
             if (!StillValid()) return false;
             var plan = _plan with { Members = peers.Select(member => member.Plan).ToArray(),
                 DurationMilliseconds = 0,
