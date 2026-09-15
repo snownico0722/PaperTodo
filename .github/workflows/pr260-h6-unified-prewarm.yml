@@ -37,6 +37,13 @@ jobs:
           if ($refreshMatches.Count -ne 1) { throw "Expected exactly one hover-intent refresh method, found $($refreshMatches.Count)" }
           $replacement = "    internal void RefreshEdgeCapsuleHoverIntentSettings()`r`n    {`r`n        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only`r`n        // invalidates pointer intent; feature/startup/interaction eligibility is decided once`r`n        // by the controller rather than by a parallel SystemIdle native-prewarm path.`r`n        InvalidateEdgeCapsulePointer();`r`n    }"
           $text = $refreshRegex.Replace($text, $replacement, 1)
+
+          $capacityCallPattern = '(?m)^        ScheduleEdgeCapsuleCompositionPrewarm\(\);\r?\n\r?\n'
+          $capacityCallRegex = [regex]::new($capacityCallPattern)
+          $capacityMatches = $capacityCallRegex.Matches($text)
+          if ($capacityMatches.Count -ne 1) { throw "Expected exactly one capacity-side legacy prewarm call, found $($capacityMatches.Count)" }
+          $text = $capacityCallRegex.Replace($text, '', 1)
+
           if ($text -match 'ScheduleEdgeCapsuleCompositionPrewarm' -or
               $text -match 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight') {
             throw 'PaperWindow still contains the direct graphics-prewarm path'
@@ -52,7 +59,7 @@ jobs:
           git config user.email 'noreply@openai.com'
           git add src/PaperWindow.EdgeCapsulePreview.cs
           if (git diff --cached --quiet) { throw 'H6 candidate produced no product diff' }
-          git commit -m 'perf(edge-prewarm): unify graphics prewarm scheduling [h6-ci] [native-input-ci]'
+          git commit -m 'perf(edge-prewarm): unify graphics prewarm scheduling [h6-ci] [native-input-ci] [ci]'
           git push origin HEAD:experiment/pr260-continuation-20260915
 
   verify-candidate:
