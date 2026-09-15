@@ -50,14 +50,13 @@ internal static partial class WindowNative
             timer.Stop();
             timer.Tick -= tick;
 
-            // If fullscreen avoidance has already ended, WPF restores Topmost=true. Do not let a
-            // stale retry undo that restoration. The foreground guard also prevents retrying after
-            // the user has switched away from the original fullscreen window.
             if (window.Dispatcher.HasShutdownStarted ||
                 window.Topmost ||
-                GetForegroundWindow() != insertAfter ||
                 !IsWindow(handle) ||
-                !IsWindow(insertAfter))
+                !FullscreenForegroundWindowDetector.TryGetFullscreenWindow(
+                    out var fullscreenWindow,
+                    allowGlobalScan: false) ||
+                fullscreenWindow != insertAfter)
             {
                 return;
             }
