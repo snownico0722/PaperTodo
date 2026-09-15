@@ -108,12 +108,6 @@ internal static class PaperBackground
 
     internal static void ResetPreferences()
     {
-        if (BlendWithTheme &&
-            string.Equals(Layout, PaperBackgroundLayouts.Center, StringComparison.Ordinal))
-        {
-            return;
-        }
-
         var next = new BackgroundPreferences();
         SavePreferences(next);
         _preferences = next;
