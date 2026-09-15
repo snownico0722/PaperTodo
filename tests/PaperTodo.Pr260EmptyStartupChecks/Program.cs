@@ -9,13 +9,18 @@ internal static class Program
 {
     private const string FixtureMarker = ".papertodo-pr260-empty-start-fixture";
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+    private static readonly string[] Cases = ["empty-no-default", "empty-default", "nonempty"];
 
     [STAThread]
     private static int Main(string[] args)
     {
         if (args.Contains("--fixture", StringComparer.Ordinal))
         {
-            return RunFixtureProcess(args.Contains("--expect-defect", StringComparer.Ordinal));
+            var scenario = ValueAfter(args, "--case") ??
+                throw new ArgumentException("Fixture case is required.");
+            return RunFixtureProcess(
+                scenario,
+                args.Contains("--expect-defect", StringComparer.Ordinal));
         }
 
         var expectDefect = args.Contains("--expect-defect", StringComparer.Ordinal);
@@ -29,29 +34,35 @@ internal static class Program
             CopyBinaries(AppContext.BaseDirectory, fixture);
             File.WriteAllText(Path.Combine(fixture, FixtureMarker), "owned test data");
             var executable = Path.Combine(fixture, "PaperTodo.Pr260EmptyStartupChecks.exe");
-            var start = new ProcessStartInfo(executable)
+            foreach (var scenario in Cases)
             {
-                UseShellExecute = false,
-                WorkingDirectory = fixture,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            start.ArgumentList.Add("--fixture");
-            if (expectDefect) start.ArgumentList.Add("--expect-defect");
-            using var child = Process.Start(start) ??
-                throw new InvalidOperationException("Empty-start fixture process did not start.");
-            var output = child.StandardOutput.ReadToEndAsync();
-            var error = child.StandardError.ReadToEndAsync();
-            if (!child.WaitForExit(20_000))
-            {
-                child.Kill(entireProcessTree: true);
-                child.WaitForExit();
-                throw new TimeoutException("Empty-start fixture timed out.");
+                var start = new ProcessStartInfo(executable)
+                {
+                    UseShellExecute = false,
+                    WorkingDirectory = fixture,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                start.ArgumentList.Add("--fixture");
+                start.ArgumentList.Add("--case");
+                start.ArgumentList.Add(scenario);
+                if (expectDefect) start.ArgumentList.Add("--expect-defect");
+                using var child = Process.Start(start) ??
+                    throw new InvalidOperationException($"Empty-start fixture did not start ({scenario}).");
+                var output = child.StandardOutput.ReadToEndAsync();
+                var error = child.StandardError.ReadToEndAsync();
+                if (!child.WaitForExit(20_000))
+                {
+                    child.Kill(entireProcessTree: true);
+                    child.WaitForExit();
+                    throw new TimeoutException($"Empty-start fixture timed out ({scenario}).");
+                }
+                Console.Write(output.GetAwaiter().GetResult());
+                Console.Error.Write(error.GetAwaiter().GetResult());
+                if (child.ExitCode != 0) return child.ExitCode;
             }
-            Console.Write(output.GetAwaiter().GetResult());
-            Console.Error.Write(error.GetAwaiter().GetResult());
-            return child.ExitCode;
+            return 0;
         }
         catch (Exception error)
         {
@@ -64,7 +75,7 @@ internal static class Program
         }
     }
 
-    private static int RunFixtureProcess(bool expectDefect)
+    private static int RunFixtureProcess(string scenario, bool expectDefect)
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, FixtureMarker)))
         {
@@ -72,16 +83,27 @@ internal static class Program
             return 1;
         }
 
-        var state = new AppState
+        var state = NewState();
+        var createDefaultPaper = scenario == "empty-default";
+        if (scenario == "nonempty")
         {
-            TelemetryEnabled = false,
-            EnableAnimations = true,
-            UseCapsuleMode = true,
-            UseDeepCapsuleMode = true,
-            ExperimentalEdgeCapsuleHoverPreview = true,
-            UsePersistentPowerShellProcess = false,
-            McpEnabled = false
-        };
+            // Hidden paper keeps the fixture non-empty without showing UI. The normal restore path
+            // must still increment its generation and perform the existing asynchronous startup
+            // completion; the candidate empty-start fix must not short-circuit that ordering.
+            state.Papers.Add(new PaperData
+            {
+                Type = PaperTypes.Note,
+                Title = "startup-control",
+                IsVisible = false,
+                IsCollapsed = true
+            });
+        }
+        else
+        {
+            Require(scenario is "empty-no-default" or "empty-default",
+                $"Unknown fixture case: {scenario}");
+        }
+
         var store = new StateStore();
         store.SaveJsonSync(store.SerializeState(state), 1);
 
@@ -93,35 +115,57 @@ internal static class Program
             try
             {
                 controller = new AppController();
-                Require(controller.State.Papers.Count == 0,
-                    "Fixture did not start from an empty paper state.");
-                await controller.StartAsync(createDefaultPaper: false);
+                var expectedInitialPapers = scenario == "nonempty" ? 1 : 0;
+                Require(controller.State.Papers.Count == expectedInitialPapers,
+                    $"Fixture initial paper count mismatch ({scenario}).");
+                await controller.StartAsync(createDefaultPaper);
+
+                // Non-empty startup completion is deliberately scheduled behind the shell queue.
+                // Empty startup candidate completion occurs synchronously at the common tail. Pump
+                // ordinary Dispatcher work for both so the control arm proves that ordering remains.
+                var deadline = Stopwatch.StartNew();
+                while (scenario == "nonempty" &&
+                       !(bool)Field(controller, "_edgePrewarmStartupReady")! &&
+                       deadline.Elapsed < TimeSpan.FromSeconds(3))
+                {
+                    await Dispatcher.CurrentDispatcher.InvokeAsync(
+                        static () => { }, DispatcherPriority.ApplicationIdle);
+                    await Task.Delay(10);
+                }
                 await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
 
                 var restoreGeneration = (int)Field(controller, "_paperSurfaceRestoreGeneration")!;
                 var startupReady = (bool)Field(controller, "_edgePrewarmStartupReady")!;
-                // Exercise the public-behaviour gate directly: candidate startup completion already
-                // creates the coordinator; pinned #260 still returns before it can do so.
                 Invoke(controller, "RequestEdgePrewarmForVisibleQueues");
                 var coordinatorCreated = Field(controller, "_edgePrewarm") != null;
 
-                Require(restoreGeneration == 0,
-                    "Empty startup unexpectedly ran the non-empty surface restore path.");
-                if (expectDefect)
+                if (scenario == "nonempty")
                 {
-                    Require(!startupReady && !coordinatorCreated,
-                        "Pinned #260 no longer reproduces the empty-start prewarm gate defect.");
+                    Require(restoreGeneration == 1,
+                        "Non-empty control did not execute the normal restore generation.");
+                    Require(startupReady && coordinatorCreated,
+                        "Non-empty control did not complete the existing startup-prewarm sequence.");
                 }
                 else
                 {
-                    Require(startupReady && coordinatorCreated,
-                        "Empty startup did not complete the native-prewarm startup gate.");
+                    Require(restoreGeneration == 0,
+                        $"Empty startup unexpectedly ran the non-empty restore path ({scenario}).");
+                    if (expectDefect)
+                    {
+                        Require(!startupReady && !coordinatorCreated,
+                            $"Pinned #260 no longer reproduces the empty-start gate defect ({scenario}).");
+                    }
+                    else
+                    {
+                        Require(startupReady && coordinatorCreated,
+                            $"Empty startup did not complete the native-prewarm startup gate ({scenario}).");
+                    }
                 }
 
                 Console.WriteLine(
-                    $"RESULT pr260-empty-start expectDefect={expectDefect} " +
-                    $"restoreGeneration={restoreGeneration} startupReady={startupReady} " +
-                    $"coordinatorCreated={coordinatorCreated}");
+                    $"RESULT pr260-empty-start case={scenario} expectDefect={expectDefect} " +
+                    $"papers={controller.State.Papers.Count} restoreGeneration={restoreGeneration} " +
+                    $"startupReady={startupReady} coordinatorCreated={coordinatorCreated}");
             }
             catch (Exception error)
             {
@@ -136,6 +180,24 @@ internal static class Program
         });
         app.Run();
         return result;
+    }
+
+    private static AppState NewState() => new()
+    {
+        TelemetryEnabled = false,
+        EnableAnimations = true,
+        UseCapsuleMode = true,
+        UseDeepCapsuleMode = true,
+        ExperimentalEdgeCapsuleHoverPreview = true,
+        UsePersistentPowerShellProcess = false,
+        McpEnabled = false
+    };
+
+    private static string? ValueAfter(string[] args, string option)
+    {
+        for (var index = 0; index + 1 < args.Length; index++)
+            if (string.Equals(args[index], option, StringComparison.Ordinal)) return args[index + 1];
+        return null;
     }
 
     private static object? Field(object target, string name)
@@ -161,7 +223,7 @@ internal static class Program
                 file.EndsWith(".deps.json", StringComparison.Ordinal) ||
                 file.EndsWith(".runtimeconfig.json", StringComparison.Ordinal))
             {
-                File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+                File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
             }
         }
         foreach (var locale in new[] { "en", "ja", "ko", "runtimes" })
@@ -172,7 +234,7 @@ internal static class Program
             {
                 var destination = Path.Combine(target, Path.GetRelativePath(source, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(file, destination);
+                File.Copy(file, destination, overwrite: true);
             }
         }
     }
