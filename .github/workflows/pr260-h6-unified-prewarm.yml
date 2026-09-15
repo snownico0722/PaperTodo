@@ -25,21 +25,25 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = 'src/PaperWindow.EdgeCapsulePreview.cs'
           $text = Get-Content $path -Raw
-          $method = '(?s)\r?\n    private void ScheduleEdgeCapsuleCompositionPrewarm\(\)\r?\n    \{.*?\r?\n    \}\r?\n(?=\r?\n    internal void RefreshEdgeCapsuleHoverIntentSettings\(\))'
-          $methodMatches = [regex]::Matches($text, $method)
+          $methodPattern = '(?s)\r?\n    private void ScheduleEdgeCapsuleCompositionPrewarm\(\)\r?\n    \{.*?\r?\n    \}\r?\n(?=\r?\n    internal void RefreshEdgeCapsuleHoverIntentSettings\(\))'
+          $methodRegex = [regex]::new($methodPattern)
+          $methodMatches = $methodRegex.Matches($text)
           if ($methodMatches.Count -ne 1) { throw "Expected exactly one direct prewarm method, found $($methodMatches.Count)" }
-          $text = [regex]::Replace($text, $method, '', 1)
-          $refresh = '(?s)    internal void RefreshEdgeCapsuleHoverIntentSettings\(\)\r?\n    \{.*?\r?\n    \}'
-          $refreshMatches = [regex]::Matches($text, $refresh)
+          $text = $methodRegex.Replace($text, '', 1)
+
+          $refreshPattern = '(?s)    internal void RefreshEdgeCapsuleHoverIntentSettings\(\)\r?\n    \{\r?\n        if \(_controller\.State\.ExperimentalEdgeCapsuleHoverPreview\)\r?\n        \{\r?\n            ScheduleEdgeCapsuleCompositionPrewarm\(\);\r?\n        \}\r?\n        else\r?\n        \{\r?\n        \}\r?\n        InvalidateEdgeCapsulePointer\(\);\r?\n    \}'
+          $refreshRegex = [regex]::new($refreshPattern)
+          $refreshMatches = $refreshRegex.Matches($text)
           if ($refreshMatches.Count -ne 1) { throw "Expected exactly one hover-intent refresh method, found $($refreshMatches.Count)" }
           $replacement = "    internal void RefreshEdgeCapsuleHoverIntentSettings()`r`n    {`r`n        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only`r`n        // invalidates pointer intent; feature/startup/interaction eligibility is decided once`r`n        // by the controller rather than by a parallel SystemIdle native-prewarm path.`r`n        InvalidateEdgeCapsulePointer();`r`n    }"
-          $text = [regex]::Replace($text, $refresh, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $replacement }, 1)
+          $text = $refreshRegex.Replace($text, $replacement, 1)
           if ($text -match 'ScheduleEdgeCapsuleCompositionPrewarm' -or
               $text -match 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight') {
             throw 'PaperWindow still contains the direct graphics-prewarm path'
           }
           [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($true))
           git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff -- $path
       - name: Commit candidate to the authorized experiment branch
         run: |
