@@ -124,24 +124,24 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
-    private bool TryResetPaperBackgroundPreferences()
-    {
-        if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+        private bool TryResetPaperBackgroundPreferences()
         {
-            return false;
+            if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+            {
+                return false;
+            }
+
+            RefreshPaperBackgroundSurfaces();
+            return true;
         }
 
-        RefreshPaperBackgroundSurfaces();
-        return true;
-    }
-
-    private void RefreshPaperBackgroundSurfaces()
-    {
-        foreach (var window in _windows.Values)
+        private void RefreshPaperBackgroundSurfaces()
         {
-            window.RefreshPaperBackground();
+            foreach (var window in _windows.Values)
+            {
+                window.RefreshPaperBackground();
+            }
         }
-    }
 
     private bool TryUpdatePaperBackgroundSetting(Action update)
     {

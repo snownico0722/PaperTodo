@@ -34,14 +34,14 @@ public sealed partial class PaperWindow
         RebuildTodoRows();
 
         var scrollViewer = new ScrollViewer
-{
-    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-    Content = _todoPanel,
-    FocusVisualStyle = null
-};
-AttachTodoBackgroundHost(scrollViewer);
-return scrollViewer;
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _todoPanel,
+            FocusVisualStyle = null
+        };
+        AttachTodoBackgroundHost(scrollViewer);
+        return scrollViewer;
     }
 
 
