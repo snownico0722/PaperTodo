@@ -16,7 +16,10 @@ internal static partial class WindowNative
     {
         var handle = new WindowInteropHelper(window).Handle;
         var applied = ApplyTopmostZOrder(handle, topmost, insertAfter);
-        if (!applied && !topmost && insertAfter != IntPtr.Zero)
+        if (!applied &&
+            !topmost &&
+            insertAfter != IntPtr.Zero &&
+            GetForegroundWindow() == insertAfter)
         {
             QueueSingleFullscreenAvoidanceRetry(window, handle, insertAfter);
         }
