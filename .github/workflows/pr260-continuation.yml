@@ -162,3 +162,51 @@ jobs:
             pr260-moving-build.log
             pr260-moving-run.log
           retention-days: 2
+
+  native-input-full:
+    if: contains(github.event.head_commit.message, '[ci]') || contains(github.event.head_commit.message, '[native-input-ci]')
+    name: Full proxy native input (candidate)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build full native input checks
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet --info 2>&1 | Tee-Object -FilePath pr260-native-input-build.log
+          dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object -FilePath pr260-native-input-build.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run complete proxy native input suite
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) {
+            $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe'
+          }
+          if (!(Test-Path $exe)) { throw 'Native input executable was not produced' }
+          & $exe --proxy-native-input 2>&1 | Tee-Object -FilePath pr260-native-input-run.log
+          $code = $LASTEXITCODE
+          "## Full proxy native input — ${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY
+          "Runs the existing product PerMonitorV2 apphost/native suite; it is not a physical-panel present benchmark." >> $env:GITHUB_STEP_SUMMARY
+          Get-Content pr260-native-input-run.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-native-input-${{ github.sha }}
+          path: |
+            pr260-native-input-build.log
+            pr260-native-input-run.log
+          retention-days: 2
