@@ -25,42 +25,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = 'src/PaperWindow.EdgeCapsulePreview.cs'
           $text = Get-Content $path -Raw
-          $method = '(?s)\r?\n    private void ScheduleEdgeCapsuleCompositionPrewarm\(\)\r?\n    \{.*?\r?\n    \}\r?\n\r?\n    internal void RefreshEdgeCapsuleHoverIntentSettings\(\)'
+          $method = '(?s)\r?\n    private void ScheduleEdgeCapsuleCompositionPrewarm\(\)\r?\n    \{.*?\r?\n    \}\r?\n(?=\r?\n    internal void RefreshEdgeCapsuleHoverIntentSettings\(\))'
           $methodMatches = [regex]::Matches($text, $method)
           if ($methodMatches.Count -ne 1) { throw "Expected exactly one direct prewarm method, found $($methodMatches.Count)" }
-          $text = [regex]::Replace($text, $method, "`r`n    internal void RefreshEdgeCapsuleHoverIntentSettings()", 1)
-
-          $oldRefresh = @'
-    internal void RefreshEdgeCapsuleHoverIntentSettings()
-    {
-        if (_controller.State.ExperimentalEdgeCapsuleHoverPreview)
-        {
-            ScheduleEdgeCapsuleCompositionPrewarm();
-        }
-        else
-        {
-        }
-        InvalidateEdgeCapsulePointer();
-    }
-'@
-          $newRefresh = @'
-    internal void RefreshEdgeCapsuleHoverIntentSettings()
-    {
-        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only
-        // invalidates pointer intent; feature/startup/interaction eligibility is decided once
-        // by the controller rather than by a parallel SystemIdle native-prewarm path.
-        InvalidateEdgeCapsulePointer();
-    }
-'@
-          if (!$text.Contains($oldRefresh)) {
-            # The method-removal regex preserves repository line endings, normalize only for this exact edit.
-            $normalized = $text -replace "`r`n", "`n"
-            if (!$normalized.Contains($oldRefresh)) { throw 'Expected hover-intent refresh block was not found' }
-            $normalized = $normalized.Replace($oldRefresh, $newRefresh)
-            $text = $normalized -replace "`n", "`r`n"
-          } else {
-            $text = $text.Replace($oldRefresh, $newRefresh)
-          }
+          $text = [regex]::Replace($text, $method, '', 1)
+          $refresh = '(?s)    internal void RefreshEdgeCapsuleHoverIntentSettings\(\)\r?\n    \{.*?\r?\n    \}'
+          $refreshMatches = [regex]::Matches($text, $refresh)
+          if ($refreshMatches.Count -ne 1) { throw "Expected exactly one hover-intent refresh method, found $($refreshMatches.Count)" }
+          $replacement = "    internal void RefreshEdgeCapsuleHoverIntentSettings()`r`n    {`r`n        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only`r`n        // invalidates pointer intent; feature/startup/interaction eligibility is decided once`r`n        // by the controller rather than by a parallel SystemIdle native-prewarm path.`r`n        InvalidateEdgeCapsulePointer();`r`n    }"
+          $text = [regex]::Replace($text, $refresh, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $replacement }, 1)
           if ($text -match 'ScheduleEdgeCapsuleCompositionPrewarm' -or
               $text -match 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight') {
             throw 'PaperWindow still contains the direct graphics-prewarm path'
