@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -272,8 +272,6 @@ public sealed partial class PaperWindow
         {
             return false;
         }
-
-        ScheduleEdgeCapsuleCompositionPrewarm();
 
         var generation = _bodySessionGeneration;
         try
@@ -861,37 +859,11 @@ public sealed partial class PaperWindow
             !frame.InteractiveBounds.IsEmpty;
     }
 
-    private void ScheduleEdgeCapsuleCompositionPrewarm()
-    {
-        if (!_controller.State.ExperimentalEdgeCapsuleHoverPreview ||
-            _windowLifecycle != PaperWindowLifecycleState.Alive ||
-            IsClosed)
-        {
-            return;
-        }
-
-        _ = Dispatcher.BeginInvoke(
-            DispatcherPriority.SystemIdle,
-            (Action)(() =>
-            {
-                if (_controller.State.ExperimentalEdgeCapsuleHoverPreview &&
-                    _windowLifecycle == PaperWindowLifecycleState.Alive &&
-                    !IsClosed)
-                {
-                    EdgeCapsuleQueueCompositionProxy.PrewarmLightweight(Dispatcher);
-                }
-            }));
-    }
-
     internal void RefreshEdgeCapsuleHoverIntentSettings()
     {
-        if (_controller.State.ExperimentalEdgeCapsuleHoverPreview)
-        {
-            ScheduleEdgeCapsuleCompositionPrewarm();
-        }
-        else
-        {
-        }
+        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only
+        // invalidates pointer intent; feature/startup/interaction eligibility is decided once
+        // by the controller rather than by a parallel SystemIdle native-prewarm path.
         InvalidateEdgeCapsulePointer();
     }
 
