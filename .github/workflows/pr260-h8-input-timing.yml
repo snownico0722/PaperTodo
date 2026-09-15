@@ -31,7 +31,10 @@ jobs:
       - name: Restore focused H8 probe
         run: dotnet restore .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj
       - name: Build focused H8 probe Release
-        run: dotnet build .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj -c Release --no-restore
+        run: |
+          dotnet build .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj -c Release --no-restore 2>&1 |
+            Tee-Object -FilePath pr260-h8-build.log
+          exit $LASTEXITCODE
       - name: Run real DComp stalled-region probe
         run: |
           $ErrorActionPreference = 'Stop'
@@ -51,6 +54,8 @@ jobs:
         if: always()
         with:
           name: pr260-h8-input-timing-${{ github.sha }}
-          path: pr260-h8-input-timing.log
+          path: |
+            pr260-h8-build.log
+            pr260-h8-input-timing.log
           if-no-files-found: ignore
           retention-days: 2
