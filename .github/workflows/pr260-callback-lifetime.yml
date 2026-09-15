@@ -1,0 +1,95 @@
+name: PR260 settled-input callback lifetime
+
+on:
+  push:
+    branches:
+      - experiment/pr260-continuation-20260915
+
+permissions:
+  contents: read
+
+jobs:
+  callback-lifetime:
+    if: contains(github.event.head_commit.message, '[ci]') || contains(github.event.head_commit.message, '[callback-lifetime-ci]')
+    name: Settled-input callback lifetime (${{ matrix.source }})
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [baseline, candidate]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Prepare pinned baseline or current candidate tree
+        id: prepare
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ('${{ matrix.source }}' -eq 'baseline') {
+            $root = Join-Path $env:RUNNER_TEMP 'pr260-callback-lifetime-baseline'
+            git worktree add --detach $root 953ae6266af2bc8c5d1696be7660e5006525202b
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git -C $root submodule update --init --recursive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Copy-Item tests/PaperTodo.EdgeTitleChecks/Pr260StartupCallbackLifetimeRegression.cs `
+              (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/Pr260StartupCallbackLifetimeRegression.cs') -Force
+          } else {
+            $root = (Get-Location).Path
+          }
+          "root=$root" >> $env:GITHUB_OUTPUT
+          "SOURCE=${{ matrix.source }}" | Tee-Object -FilePath pr260-callback-lifetime-build.log
+          "ROOT=$root" | Tee-Object -FilePath pr260-callback-lifetime-build.log -Append
+          "HARNESS_REF=${{ github.sha }}" | Tee-Object -FilePath pr260-callback-lifetime-build.log -Append
+      - name: Build real WPF/DComp lifetime regression
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = '${{ steps.prepare.outputs.root }}'
+          Push-Location $root
+          try {
+            dotnet --info 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-callback-lifetime-build.log') -Append
+            dotnet build tests/PaperTodo.EdgeTitleChecks -c Release `
+              -p:StartupObject=Pr260StartupCallbackLifetimeProgram 2>&1 | `
+              Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-callback-lifetime-build.log') -Append
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+      - name: Run predecessor lifetime regression
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = '${{ steps.prepare.outputs.root }}'
+          $exe = Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) {
+            $exe = Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe'
+          }
+          if (!(Test-Path $exe)) { throw 'Lifetime regression executable was not produced' }
+          if ('${{ matrix.source }}' -eq 'baseline') {
+            & $exe --expect-startup-callback-retention 2>&1 | Tee-Object -FilePath pr260-callback-lifetime-run.log
+          } else {
+            & $exe 2>&1 | Tee-Object -FilePath pr260-callback-lifetime-run.log
+          }
+          $code = $LASTEXITCODE
+          "## Settled-input callback lifetime — ${{ matrix.source }}" >> $env:GITHUB_STEP_SUMMARY
+          "Pinned baseline: 953ae626. Candidate: ${{ github.sha }}." >> $env:GITHUB_STEP_SUMMARY
+          "The test keeps the peer successor live, removes the fixture-only predecessor root, forces GC, and checks only managed generation lifetime; it is not a GPU-resource leak or physical-present benchmark." >> $env:GITHUB_STEP_SUMMARY
+          Get-Content pr260-callback-lifetime-run.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-callback-lifetime-${{ matrix.source }}-${{ github.sha }}
+          path: |
+            pr260-callback-lifetime-build.log
+            pr260-callback-lifetime-run.log
+          retention-days: 2
