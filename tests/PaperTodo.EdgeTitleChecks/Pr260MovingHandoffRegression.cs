@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using PaperTodo;
@@ -137,7 +138,8 @@ internal static partial class Program
         }
         catch (TargetInvocationException error) when (error.InnerException != null)
         {
-            throw error.InnerException;
+            ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+            throw;
         }
     }
 }
