@@ -44,6 +44,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Copy-Item tests/PaperTodo.EdgeTitleChecks/Pr260StartupCallbackLifetimeRegression.cs `
               (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/Pr260StartupCallbackLifetimeRegression.cs') -Force
+            Copy-Item tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj `
+              (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj') -Force
           } else {
             $root = (Get-Location).Path
           }
@@ -59,7 +61,7 @@ jobs:
           try {
             dotnet --info 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-callback-lifetime-build.log') -Append
             dotnet build tests/PaperTodo.EdgeTitleChecks -c Release `
-              -p:StartupObject=Pr260StartupCallbackLifetimeProgram 2>&1 | `
+              -p:Pr260CallbackLifetimeHarness=true 2>&1 | `
               Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-callback-lifetime-build.log') -Append
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
