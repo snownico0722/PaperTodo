@@ -99,6 +99,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
@@ -109,6 +110,8 @@ jobs:
           if ('${{ matrix.source }}' -eq 'baseline') {
             $root = Join-Path $env:RUNNER_TEMP 'pr260-moving-baseline'
             git worktree add --detach $root 953ae6266af2bc8c5d1696be7660e5006525202b
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git -C $root submodule update --init --recursive
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Copy-Item tests/PaperTodo.EdgeTitleChecks/Pr260MovingHandoffRegression.cs (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/Pr260MovingHandoffRegression.cs') -Force
             Copy-Item tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj') -Force
