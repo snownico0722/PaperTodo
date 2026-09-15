@@ -28,6 +28,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          python scripts/pr260_h7_repair_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/pr260_h7_experiment.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --check
