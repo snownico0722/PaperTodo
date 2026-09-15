@@ -1,4 +1,4 @@
-name: One-time 4.0.0-beta1 preview release
+name: One-time reorder v4.0.0-beta1 release notes
 
 on:
   push:
@@ -9,104 +9,43 @@ permissions:
   contents: write
 
 jobs:
-  publish:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
+  reorder:
+    runs-on: ubuntu-latest
     env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "true"
       RELEASE_TAG: "v4.0.0-beta1"
     steps:
-      - name: Check out current main
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Build native LMDB library
-        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
-
-      - name: Read version
-        id: meta
-        run: |
-          $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
-          $version = ([string]$project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText).Trim()
-          if ($version -ne '4.0.0-beta1') { throw "Expected 4.0.0-beta1, got '$version'." }
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "exe=PaperTodo-v$version-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
-
-      - name: Restore
-        run: dotnet restore .\PaperTodo.csproj
-
-      - name: Publish self-contained single-file executable
-        env:
-          EXE_NAME: ${{ steps.meta.outputs.exe }}
-        run: |
-          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
-          $publishDir = Join-Path $env:RUNNER_TEMP "publish-self-contained"
-          Remove-Item -LiteralPath $releaseDir, $publishDir -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $releaseDir, $publishDir | Out-Null
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -o $publishDir `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=false `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=true `
-            /p:PublishTrimmed=false `
-            /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false `
-            /p:DebugType=none `
-            /p:DebugSymbols=false
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          Copy-Item -LiteralPath (Join-Path $publishDir 'PaperTodo.exe') -Destination (Join-Path $releaseDir $env:EXE_NAME)
-
-      - name: Generate release notes
-        env:
-          EXE_NAME: ${{ steps.meta.outputs.exe }}
-        run: |
-          python .github/scripts/release_notes.py `
-            --tag $env:RELEASE_TAG `
-            --repository $env:GITHUB_REPOSITORY `
-            --assets $env:EXE_NAME `
-            --output release/RELEASE_NOTES.md
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Publish prerelease
+      - name: Put Simplified Chinese changelog first
         env:
           GH_TOKEN: ${{ github.token }}
-          EXE_NAME: ${{ steps.meta.outputs.exe }}
         run: |
-          $asset = Join-Path $env:GITHUB_WORKSPACE "release\$env:EXE_NAME"
-          $notes = Join-Path $env:GITHUB_WORKSPACE "release\RELEASE_NOTES.md"
-          $target = (git rev-parse origin/main).Trim()
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > /tmp/body.md
+          python - <<'PY'
+          from pathlib import Path
 
-          gh release view $env:RELEASE_TAG *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:RELEASE_TAG $asset --clobber
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            gh release edit $env:RELEASE_TAG --target $target --title "PaperTodo $env:RELEASE_TAG" --notes-file $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-            gh release create $env:RELEASE_TAG $asset --target $target --title "PaperTodo $env:RELEASE_TAG" --notes-file $notes --prerelease
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+          path = Path('/tmp/body.md')
+          body = path.read_text(encoding='utf-8')
+          marker = '<details>\n<summary>简体中文更新日志</summary>\n\n'
+          start = body.find(marker)
+          if start < 0:
+              raise SystemExit('Simplified Chinese details block not found')
+          close = body.find('\n</details>', start)
+          if close < 0:
+              raise SystemExit('Simplified Chinese details block is not closed')
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: PaperTodo-v4.0.0-beta1-win-x64-self-contained
-          path: release/${{ steps.meta.outputs.exe }}
-          if-no-files-found: error
+          chinese = body[start + len(marker):close].strip()
+          english = body[:start].strip()
+          tail = body[close + len('\n</details>'):].strip()
+
+          reordered = (
+              chinese
+              + '\n\n<details>\n<summary>English changelog</summary>\n\n'
+              + english
+              + '\n\n</details>'
+          )
+          if tail:
+              reordered += '\n\n' + tail
+          reordered += '\n'
+          Path('/tmp/reordered.md').write_text(reordered, encoding='utf-8')
+          PY
+
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file /tmp/reordered.md --prerelease
