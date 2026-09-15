@@ -28,24 +28,24 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Restore focused H8 probe
-        run: dotnet restore .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj
-      - name: Build focused H8 probe Release
+      - name: Restore EdgeTitle checks for H8 entry
+        run: dotnet restore .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -p:Pr260H8InputTiming=true
+      - name: Build H8 entry Release
         run: |
-          dotnet build .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj -c Release --no-restore 2>&1 |
+          dotnet build .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release --no-restore -p:Pr260H8InputTiming=true 2>&1 |
             Tee-Object -FilePath pr260-h8-build.log
           exit $LASTEXITCODE
-      - name: Run real DComp stalled-region probe
+      - name: Run DComp stall with mature cross-process native-input fixture
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Get-ChildItem .\tests\PaperTodo.Pr260InputTimingChecks\bin\Release -Recurse -Filter PaperTodo.EdgeTitleChecks.exe |
+          $exe = Get-ChildItem .\tests\PaperTodo.EdgeTitleChecks\bin\Release -Recurse -Filter PaperTodo.EdgeTitleChecks.exe |
             Select-Object -First 1 -ExpandProperty FullName
-          if (!$exe) { throw 'H8 timing probe executable was not produced' }
+          if (!$exe) { throw 'H8 EdgeTitle executable was not produced' }
           & $exe 2>&1 | Tee-Object -FilePath pr260-h8-input-timing.log
           $code = $LASTEXITCODE
-          "## PR260 H8 focused compositor/input timing" >> $env:GITHUB_STEP_SUMMARY
-          "This is a focused Windows reproduction using a real production dual-HWND proxy window, real WPF redirected surface, real DirectComposition animation, an intentional UI-thread stall, and a cross-process lower input target." >> $env:GITHUB_STEP_SUMMARY
-          "It is not a physical-monitor/high-speed-camera proof and does not by itself prove every product transition leaks input." >> $env:GITHUB_STEP_SUMMARY
+          "## PR260 H8 compositor/native-input timing" >> $env:GITHUB_STEP_SUMMARY
+          "This run reuses the existing NativeInputRemoteTarget, tagged SendInput path, production dual-HWND proxy window, a real WPF redirected surface, real DirectComposition animation, and an intentional UI-thread stall." >> $env:GITHUB_STEP_SUMMARY
+          "It tests both directions of the mismatch: visible moved pixels outside the stale HRGN, and visually empty old pixels still inside the stale HRGN. It is automated desktop-composition evidence, not physical-monitor/high-speed-camera proof." >> $env:GITHUB_STEP_SUMMARY
           if (Test-Path pr260-h8-input-timing.log) {
             Get-Content pr260-h8-input-timing.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
           }
