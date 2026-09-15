@@ -145,6 +145,22 @@ replace_once(
         var request = (EdgeCapsulePreviewRequest)ctor.Invoke(args);""",
 )
 
+# QueueKey(PaperData) is a private static helper. CapacityCheckFields is intentionally instance-only
+# for most fixture access, so using it here returned null and the second H7 run died before product
+# recovery was exercised. Resolve the exact static overload instead of weakening the shared flags.
+replace_once(
+    "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
+    """        var queueKeyMethod = typeof(AppController).GetMethod("QueueKey", CapacityCheckFields)!;
+        var queueKey = (string)queueKeyMethod.Invoke(controller, new object[] { fixture.Paper })!;""",
+    """        var queueKeyMethod = typeof(AppController).GetMethod(
+            "QueueKey",
+            BindingFlags.Static | BindingFlags.NonPublic,
+            binder: null,
+            types: new[] { typeof(PaperData) },
+            modifiers: null)!;
+        var queueKey = (string)queueKeyMethod.Invoke(null, new object[] { fixture.Paper })!;""",
+)
+
 # After the happy-path recovery, put the same live request back into a constrained state while the
 # controller still owns the same paper but deliberately carries a mismatched session size. That
 # allows content replacement to happen, then forces TryRestoreEdgeCapsulePreviewSessionSize to
