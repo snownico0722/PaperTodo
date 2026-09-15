@@ -21,7 +21,7 @@ public sealed partial class AppController
         PaperWindow inputWindow,
         DeviceScreenPoint? pointer)
     {
-        ObserveEdgePrewarmPointer(pointer);
+        ObserveEdgePrewarmPhysicalPointer(inputWindow, pointer);
         if (IsExiting)
         {
             return;
