@@ -1,0 +1,56 @@
+name: PR260 H8 compositor/input timing
+
+on:
+  push:
+    branches:
+      - exp/pr260-parallel-automation
+
+permissions:
+  contents: read
+
+jobs:
+  h8-repro:
+    if: contains(github.event.head_commit.message, '[h8-ci]')
+    name: Real DComp stall vs native input region
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore focused H8 probe
+        run: dotnet restore .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj
+      - name: Build focused H8 probe Release
+        run: dotnet build .\tests\PaperTodo.Pr260InputTimingChecks\PaperTodo.Pr260InputTimingChecks.csproj -c Release --no-restore
+      - name: Run real DComp stalled-region probe
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem .\tests\PaperTodo.Pr260InputTimingChecks\bin\Release -Recurse -Filter PaperTodo.EdgeTitleChecks.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (!$exe) { throw 'H8 timing probe executable was not produced' }
+          & $exe 2>&1 | Tee-Object -FilePath pr260-h8-input-timing.log
+          $code = $LASTEXITCODE
+          "## PR260 H8 focused compositor/input timing" >> $env:GITHUB_STEP_SUMMARY
+          "This is a focused Windows reproduction using a real production dual-HWND proxy window, real WPF redirected surface, real DirectComposition animation, an intentional UI-thread stall, and a cross-process lower input target." >> $env:GITHUB_STEP_SUMMARY
+          "It is not a physical-monitor/high-speed-camera proof and does not by itself prove every product transition leaks input." >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path pr260-h8-input-timing.log) {
+            Get-Content pr260-h8-input-timing.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
+          }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-h8-input-timing-${{ github.sha }}
+          path: pr260-h8-input-timing.log
+          if-no-files-found: ignore
+          retention-days: 2
