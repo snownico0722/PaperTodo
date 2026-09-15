@@ -1,0 +1,142 @@
+name: PR260 H6 unified graphics prewarm
+
+on:
+  push:
+    branches:
+      - experiment/pr260-continuation-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  apply-candidate:
+    if: contains(github.event.head_commit.message, '[h6-edit]')
+    runs-on: windows-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Remove PaperWindow direct graphics-prewarm bypass
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'src/PaperWindow.EdgeCapsulePreview.cs'
+          $text = Get-Content $path -Raw
+          $method = '(?s)\r?\n    private void ScheduleEdgeCapsuleCompositionPrewarm\(\)\r?\n    \{.*?\r?\n    \}\r?\n\r?\n    internal void RefreshEdgeCapsuleHoverIntentSettings\(\)'
+          $methodMatches = [regex]::Matches($text, $method)
+          if ($methodMatches.Count -ne 1) { throw "Expected exactly one direct prewarm method, found $($methodMatches.Count)" }
+          $text = [regex]::Replace($text, $method, "`r`n    internal void RefreshEdgeCapsuleHoverIntentSettings()", 1)
+
+          $oldRefresh = @'
+    internal void RefreshEdgeCapsuleHoverIntentSettings()
+    {
+        if (_controller.State.ExperimentalEdgeCapsuleHoverPreview)
+        {
+            ScheduleEdgeCapsuleCompositionPrewarm();
+        }
+        else
+        {
+        }
+        InvalidateEdgeCapsulePointer();
+    }
+'@
+          $newRefresh = @'
+    internal void RefreshEdgeCapsuleHoverIntentSettings()
+    {
+        // Graphics prewarm belongs to EdgePrewarmCoordinator. This per-window refresh only
+        // invalidates pointer intent; feature/startup/interaction eligibility is decided once
+        // by the controller rather than by a parallel SystemIdle native-prewarm path.
+        InvalidateEdgeCapsulePointer();
+    }
+'@
+          if (!$text.Contains($oldRefresh)) {
+            # The method-removal regex preserves repository line endings, normalize only for this exact edit.
+            $normalized = $text -replace "`r`n", "`n"
+            if (!$normalized.Contains($oldRefresh)) { throw 'Expected hover-intent refresh block was not found' }
+            $normalized = $normalized.Replace($oldRefresh, $newRefresh)
+            $text = $normalized -replace "`n", "`r`n"
+          } else {
+            $text = $text.Replace($oldRefresh, $newRefresh)
+          }
+          if ($text -match 'ScheduleEdgeCapsuleCompositionPrewarm' -or
+              $text -match 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight') {
+            throw 'PaperWindow still contains the direct graphics-prewarm path'
+          }
+          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($true))
+          git diff --check
+          git diff -- $path
+      - name: Commit candidate to the authorized experiment branch
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'ChatGPT Codex Connector'
+          git config user.email 'noreply@openai.com'
+          git add src/PaperWindow.EdgeCapsulePreview.cs
+          if (git diff --cached --quiet) { throw 'H6 candidate produced no product diff' }
+          git commit -m 'perf(edge-prewarm): unify graphics prewarm scheduling [h6-ci] [native-input-ci]'
+          git push origin HEAD:experiment/pr260-continuation-20260915
+
+  verify-candidate:
+    if: contains(github.event.head_commit.message, '[h6-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compare production callsites with pinned PR260 baseline
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $baseline = git show '953ae6266af2bc8c5d1696be7660e5006525202b:src/PaperWindow.EdgeCapsulePreview.cs'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read pinned PR260 PaperWindow source' }
+          $candidate = Get-Content src/PaperWindow.EdgeCapsulePreview.cs -Raw
+          $controller = Get-Content src/AppController.EdgePrewarm.cs -Raw
+          $baselineDirect = ([regex]::Matches(($baseline -join "`n"), 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight')).Count
+          $candidateDirect = ([regex]::Matches($candidate, 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight')).Count
+          $controllerCalls = ([regex]::Matches($controller, 'EdgeCapsuleQueueCompositionProxy\.PrewarmLightweight')).Count
+          "baselinePaperWindowDirect=$baselineDirect" | Tee-Object h6-results.txt
+          "candidatePaperWindowDirect=$candidateDirect" | Tee-Object h6-results.txt -Append
+          "candidateControllerCalls=$controllerCalls" | Tee-Object h6-results.txt -Append
+          if ($baselineDirect -ne 1) { throw "Pinned baseline signature changed: expected 1 PaperWindow direct call, got $baselineDirect" }
+          if ($candidateDirect -ne 0) { throw "Candidate still has $candidateDirect PaperWindow direct call(s)" }
+          if ($controllerCalls -ne 1) { throw "Expected exactly one coordinator-owned graphics prewarm call, got $controllerCalls" }
+          if ($candidate -match 'ScheduleEdgeCapsuleCompositionPrewarm') { throw 'Legacy PaperWindow scheduler still exists' }
+      - name: Build and run the real coordinator checks
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object h6-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+          if (!(Test-Path $exe)) { throw 'EdgeTitleChecks executable was not produced' }
+          & $exe --prewarm-coordinator-only 2>&1 | Tee-Object h6-run.log
+          exit $LASTEXITCODE
+      - name: Write verification summary
+        if: always()
+        run: |
+          '## H6 unified graphics prewarm' >> $env:GITHUB_STEP_SUMMARY
+          'Pinned baseline: 953ae626; candidate: ${{ github.sha }}.' >> $env:GITHUB_STEP_SUMMARY
+          'Structural metric is production call ownership, not an end-to-end latency claim.' >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path h6-results.txt) { Get-Content h6-results.txt | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY } }
+          if (Test-Path h6-run.log) { Get-Content h6-run.log | Select-Object -Last 30 | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY } }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-h6-${{ github.sha }}
+          path: |
+            h6-results.txt
+            h6-build.log
+            h6-run.log
+          retention-days: 2
