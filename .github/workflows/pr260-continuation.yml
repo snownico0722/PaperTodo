@@ -79,3 +79,83 @@ jobs:
             pr260-run.log
             pr260-coordination-results.json
           retention-days: 2
+
+  moving-handoff:
+    if: contains(github.event.head_commit.message, '[ci]') || contains(github.event.head_commit.message, '[moving-input-ci]')
+    name: Moving pointer handoff (${{ matrix.source }})
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [baseline, candidate]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Prepare pinned baseline or current candidate tree
+        id: prepare
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ('${{ matrix.source }}' -eq 'baseline') {
+            $root = Join-Path $env:RUNNER_TEMP 'pr260-moving-baseline'
+            git worktree add --detach $root 953ae6266af2bc8c5d1696be7660e5006525202b
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Copy-Item tests/PaperTodo.EdgeTitleChecks/Pr260MovingHandoffRegression.cs (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/Pr260MovingHandoffRegression.cs') -Force
+            Copy-Item tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj') -Force
+          } else {
+            $root = (Get-Location).Path
+          }
+          "root=$root" >> $env:GITHUB_OUTPUT
+          "SOURCE=${{ matrix.source }}" | Tee-Object -FilePath pr260-moving-build.log
+          "ROOT=$root" | Tee-Object -FilePath pr260-moving-build.log -Append
+          "HARNESS_REF=${{ github.sha }}" | Tee-Object -FilePath pr260-moving-build.log -Append
+      - name: Build focused real-WPF/DComp regression
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = '${{ steps.prepare.outputs.root }}'
+          Push-Location $root
+          try {
+            dotnet --info 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-moving-build.log') -Append
+            dotnet build tests/PaperTodo.EdgeTitleChecks -c Release -p:Pr260MovingHandoffHarness=true 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'pr260-moving-build.log') -Append
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+      - name: Run changed-coordinate handoff regression
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = '${{ steps.prepare.outputs.root }}'
+          $exe = Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) {
+            $exe = Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe'
+          }
+          if (!(Test-Path $exe)) { throw 'Focused regression executable was not produced' }
+          if ('${{ matrix.source }}' -eq 'baseline') {
+            & $exe --expect-moving-handoff-defect 2>&1 | Tee-Object -FilePath pr260-moving-run.log
+          } else {
+            & $exe 2>&1 | Tee-Object -FilePath pr260-moving-run.log
+          }
+          $code = $LASTEXITCODE
+          "## Moving pointer handoff — ${{ matrix.source }}" >> $env:GITHUB_STEP_SUMMARY
+          "Pinned baseline: 953ae626. Candidate: ${{ github.sha }}." >> $env:GITHUB_STEP_SUMMARY
+          "The test drives the production retained proxy/sample callback and real WPF/DComp source; it is not a physical-panel present benchmark." >> $env:GITHUB_STEP_SUMMARY
+          Get-Content pr260-moving-run.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-moving-handoff-${{ matrix.source }}-${{ github.sha }}
+          path: |
+            pr260-moving-build.log
+            pr260-moving-run.log
+          retention-days: 2
