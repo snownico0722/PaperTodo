@@ -22,7 +22,7 @@ Task key: `PAPERTODO-PR260-CONTINUATION-20260915`.
 | H3 | settled-input 启动验证闭包长期强持有 predecessor | **R2 已复现并修复。** 真实 WPF/DComp GC A/B：baseline predecessor 在 live successor 下仍存活，candidate 可回收；完整 native-input 574 assertions 通过。只称托管对象非必要存活，不称 GPU/COM 泄漏。 |
 | H4 | 空状态 `StartAsync` 早退跳过 edge-prewarm startup-ready 收尾 | **R2 已复现并修复。** create-default / no-default 两种空启动获得 ready；非空恢复保持 generation=1 原顺序。 |
 | H5 | 无关桌面鼠标移动暂停全局预热并触发无关工作 | **R3 已收窄全局预热暂停范围。** retained proxy 的物理桌面采样仅在存在 preview session 或指针实际命中该 edge capsule 时通知 prewarm；实际 WPF 输入仍走 InputManager 并保持全局保守暂停。完整 native-input 574 assertions 通过。**尚无直接 pause-count / 完成率 A/B，且逐成员采样成本仍归 H10，不能写成 H5 全部关闭。** |
-| H6 | `PaperWindow` 旧 `PrewarmLightweight` 直接入口绕过 coordinator | **待推进。** `App.EdgeCapsuleComposition.cs` 已无直接预热，但 `PaperWindow.EdgeCapsulePreview.cs::ScheduleEdgeCapsuleCompositionPrewarm()` 仍在 `SystemIdle` 直接调用。 |
+| H6 | `PaperWindow` 旧 `PrewarmLightweight` 直接入口绕过 coordinator | **R4 已验证并修复。** 删除 `PaperWindow` 的 `SystemIdle` 直接 graphics-prewarm 调度及 capacity-reserve 侧调用；可选 graphics prewarm 现在只由 `EdgePrewarmCoordinator` 发起。结构计数 baseline PaperWindow direct 1 → candidate 0，controller coordinator call 保持 1；focused coordinator、完整 PR build、candidate native-input/H1/H2 回归通过。 |
 | H7 | 容量恢复后当前受限 preview request 的 Size 没恢复 | 待做同 request/content generation 恢复测试。 |
 | H8 | DComp 动画像素与 UI timer 更新的 input HRGN 可能错位 | 高优先级原生时序风险；尚未真实移动 + UI stall + 跨进程背景窗口复现。禁止扩大整个 envelope 来“修”。 |
 | H9 | completion retry 会丢弃第一次点击 | 当前是防止迟到重放的既有契约；不能简单重放旧点击。R1 已确保正常稳定卡片快速进入时第一击走真实 WPF。 |
@@ -115,12 +115,40 @@ PR260 continuation run：[34923789358](https://github.com/snownico0722/PaperTodo
 
 本轮**没有**直接做 “无关桌面移动 N 秒 → prewarm pause 次数 / 完成率” 的 baseline/candidate A/B，因此 H5 当前只能写成“调用范围已收窄且完整原生输入契约未回归”，不能写成“预热命中率提高 X%”或“延迟降低 X ms”。active preview session 期间仍保持保守全局暂停；这一点是刻意保留，不是遗漏。
 
+## R4 — H6 统一 graphics prewarm 调度入口
+
+实际模型：**GPT-5.6 Sol**；当前环境没有 GPT-6 Pro 路由/选择参数。R4 起始 HEAD `34d31eb9af9168522ac115e65a2c8a07f1e61b29`。本轮重新读取 #260/#269、阶段评论、提交、增量和检查后续接。
+
+### 实际改动
+
+产品提交 `4169d80d5bd467fe5750a2848f28a60e62cfb852` 修改 `src/PaperWindow.EdgeCapsulePreview.cs`：
+
+- 删除 `ScheduleEdgeCapsuleCompositionPrewarm()`，不再从每个 `PaperWindow` 以 `DispatcherPriority.SystemIdle` 直接调用 `EdgeCapsuleQueueCompositionProxy.PrewarmLightweight()`；
+- `RefreshEdgeCapsuleHoverIntentSettings()` 只负责刷新 pointer intent，不再隐式启动 native graphics prewarm；
+- 同时删除 `TryReserveEdgeCapsulePreviewMaximumCapacity()` 中对旧 scheduler 的调用。容量预留继续只处理 source capacity，本身不再携带一次绕过 controller 资格规则的 native prewarm 副作用；
+- `AppController.EdgePrewarm.cs` 中由 `EdgePrewarmCoordinator` 持有的 `PrewarmLightweight(dispatcher)` 入口保持不变，因此启动、交互、capture/drag/menu/preview、visual transaction 等资格仍由同一 coordinator 决定。
+
+结构计数冻结对照：#260 baseline 的 `PaperWindow` 生产代码存在 **1** 个直接 `PrewarmLightweight` 调用，candidate 为 **0**；candidate controller/coordinator 入口保持 **1**。这证明 H6 报告的并行执行入口实际存在且已收拢，但它不是毫秒级性能测量。
+
+编辑工作流一度意外写入 UTF-8 BOM，随后在最终验证前用 `0f78813ca08b9f302c1ba5e06def06ce65a276ad` 仅做编码恢复；没有把编码噪声保留为产品改动。最终 clean-tree 验证触发提交为 `246072bbb3468d7bcf44ab146af96febb2043955`；H6 临时工作流验证完成后已从实验分支删除。
+
+### Windows 验证
+
+- H6 focused run [34927967372](https://github.com/snownico0722/PaperTodo/actions/runs/34927967372)：production callsite 对照通过；Release `EdgeTitleChecks` build 与真实 `--prewarm-coordinator-only` 检查通过。
+- 常规 PR build [34927967368](https://github.com/snownico0722/PaperTodo/actions/runs/34927967368)：build、Markdown semantic/editing、Todo navigation、Edge title、Edge preview rendering/lifecycle、Threading、Startup/shutdown/small-workset 全部通过。
+- continuation regressions [34927967382](https://github.com/snownico0722/PaperTodo/actions/runs/34927967382)：candidate full proxy native-input 通过；candidate moving-pointer handoff 通过；candidate prewarm-reentrancy 通过；baseline prewarm-reentrancy harness 按其既有冻结期望通过；baseline moving-pointer job 继续在 changed-coordinate regression 上失败，这是 H2 的预期 A/B 区分，不是 H6 回归。
+
+### 失败与边界
+
+H6 临时执行有三次测试工具/编辑脚本失败并保留记录：`34927497687`（YAML here-string 解析失败）、`34927591427`（edit regex 失败）、`34927691822`（脚本发现此前遗漏的 capacity-side legacy scheduler 调用并主动失败）。前三次均没有形成产品提交；第三次反而补齐了实际 callsite 范围。修正后 run `34927811993` 才生成产品提交。BOM cleanup run `34927859138` 成功。
+
+本轮**没有**新的 input→first-frame、prepare→animation-clock、physical-present、mixed-DPI 或物理闪烁数据，因此不能写成“延迟下降 X ms”。H8/H10 也没有因为统一调度入口而关闭。
+
 ## 下一轮最明确的工作
 
-1. **先给 H5 补 direct focused 量化或决定证据已足够。** 最有价值的是记录 unrelated proxy movement 下 `NotifyInteraction`/quiet-window reset 次数和待预热完成情况；不要为测试另造一套命中语义。如果直接量化需要过重 AppController fixture，则保留当前局部修正和 native-input 证据，不为“证明少一次调用”扩大测试架构。
-2. **H6 统一 graphics prewarm 入口。** 当前 `PaperWindow.EdgeCapsulePreview.cs::ScheduleEdgeCapsuleCompositionPrewarm()` 仍 `SystemIdle` 直接调用 `PrewarmLightweight()`。先做资格回归，再让 PaperWindow 只报告需求、由 coordinator 决定何时真正执行；不要复制第二套 CanPrepare 条件。
-3. **H7 受限 preview Size 恢复。** 补同 request/content generation 的端到端恢复测试，不能只验证 HWND capacity。
-4. **H8 原生时序专项。** 真实 DComp 移动 + 受控 UI stall + 跨进程背景窗口，验证可见前沿不漏点、真实空洞仍穿透。现有 574 assertions 不能替代。
-5. **H10 先量化。** 记录 idle tick / presentation read / queue arbitration / CPU/handle 规模，再决定是否改事件驱动。
+1. **H7 受限 preview Size 恢复。** 先做冻结 baseline/candidate Windows focused test：请求尺寸 > 当前 source capacity → 以受限尺寸打开 → retained proxy/source release → capacity 扩大 → 同一个 live request/content generation 应自动恢复目标尺寸，不依赖关闭重开；必须同时守住 stale request/content identity。
+2. 若 H7 复现，优先区分 `target requested size` 与 `current applied size`，不要用单次 Measure 或仅清 pending capacity 假装业务状态已经恢复。
+3. **H8 原生时序专项仍是高优先级正确性验收。** 真实 DComp 移动 + 受控 UI stall + 跨进程背景窗口，验证可见前沿不漏点、真实空洞仍穿透。
+4. **H10 先量化。** 记录 idle tick / presentation read / queue arbitration / CPU/handle 规模，再决定是否改事件驱动。
 
-当前仍没有新的 request→first-correct-frame、prepare→animation-clock 或物理显示延迟数据；不得把 H5 调度范围收窄、GC、调度正确性或手势修复写成“降低了 X ms”。
+当前仍没有新的 request→first-correct-frame、prepare→animation-clock 或物理显示延迟数据；不得把 H6 调度归一化写成“降低了 X ms”。
