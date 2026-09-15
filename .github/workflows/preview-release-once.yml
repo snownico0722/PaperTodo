@@ -1,4 +1,4 @@
-name: One-time collapse Chinese v4.0.0-beta1 release notes
+name: One-time add no-runtime v4.0.0-beta1 asset
 
 on:
   push:
@@ -9,44 +9,115 @@ permissions:
   contents: write
 
 jobs:
-  reorder:
-    runs-on: ubuntu-latest
+  publish-no-runtime:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
     env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
       RELEASE_TAG: "v4.0.0-beta1"
     steps:
-      - name: Keep Simplified Chinese first but collapsed
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build native LMDB library
+        run: .\native\lmdb\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Read version
+        id: meta
+        run: |
+          $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
+          $version = ([string]$project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText).Trim()
+          if ($version -ne '4.0.0-beta1') { throw "Expected 4.0.0-beta1, got '$version'." }
+          "exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore .\PaperTodo.csproj
+
+      - name: Publish no-runtime single-file executable
+        env:
+          EXE_NAME: ${{ steps.meta.outputs.exe }}
+        run: |
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
+          $publishDir = Join-Path $env:RUNNER_TEMP "publish-no-runtime"
+          Remove-Item -LiteralPath $releaseDir, $publishDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $releaseDir, $publishDir | Out-Null
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o $publishDir `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=false `
+            /p:PublishTrimmed=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Copy-Item -LiteralPath (Join-Path $publishDir 'PaperTodo.exe') -Destination (Join-Path $releaseDir $env:EXE_NAME)
+
+      - name: Upload no-runtime asset and update downloads
         env:
           GH_TOKEN: ${{ github.token }}
+          EXE_NAME: ${{ steps.meta.outputs.exe }}
         run: |
-          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > /tmp/body.md
-          python - <<'PY'
+          $asset = Join-Path $env:GITHUB_WORKSPACE "release\$env:EXE_NAME"
+          gh release upload $env:RELEASE_TAG $asset --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $body = Join-Path $env:GITHUB_WORKSPACE "release\RELEASE_BODY.md"
+          $updated = Join-Path $env:GITHUB_WORKSPACE "release\RELEASE_BODY_UPDATED.md"
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json body --jq '.body' | Out-File -LiteralPath $body -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          @'
           from pathlib import Path
+          import os
 
-          path = Path('/tmp/body.md')
-          body = path.read_text(encoding='utf-8')
+          body_path = Path(os.environ['BODY_PATH'])
+          updated_path = Path(os.environ['UPDATED_PATH'])
+          body = body_path.read_text(encoding='utf-8-sig')
+          name = os.environ['EXE_NAME']
+          url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/{name}"
+          bullet = f"- **Smaller download, .NET Desktop Runtime required / 精简版，需自行安装 .NET 桌面运行库**: [{name}]({url})"
+          if bullet not in body:
+              marker = '## Downloads / 下载'
+              pos = body.find(marker)
+              if pos < 0:
+                  body = body.rstrip() + f"\n\n{marker}\n\n{bullet}\n"
+              else:
+                  body = body.rstrip() + '\n' if not body.endswith('\n') else body
+                  insert_at = len(body)
+                  body = body[:insert_at].rstrip() + '\n' + bullet + '\n'
+          updated_path.write_text(body, encoding='utf-8')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          english_marker = '<details>\n<summary>English changelog</summary>\n\n'
-          english_start = body.find(english_marker)
-          if english_start < 0:
-              raise SystemExit('English details block not found')
-          english_close = body.find('\n</details>', english_start)
-          if english_close < 0:
-              raise SystemExit('English details block is not closed')
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file $updated --prerelease
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          BODY_PATH: ${{ github.workspace }}\release\RELEASE_BODY.md
+          UPDATED_PATH: ${{ github.workspace }}\release\RELEASE_BODY_UPDATED.md
 
-          chinese = body[:english_start].strip()
-          english = body[english_start + len(english_marker):english_close].strip()
-          tail = body[english_close + len('\n</details>'):].strip()
-
-          reordered = (
-              '<details>\n<summary>简体中文更新日志</summary>\n\n'
-              + chinese
-              + '\n\n</details>\n\n'
-              + english
-          )
-          if tail:
-              reordered += '\n\n' + tail
-          reordered += '\n'
-          Path('/tmp/reordered.md').write_text(reordered, encoding='utf-8')
-          PY
-
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file /tmp/reordered.md --prerelease
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-v4.0.0-beta1-win-x64-no-runtime
+          path: release/${{ steps.meta.outputs.exe }}
+          if-no-files-found: error
