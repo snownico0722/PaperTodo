@@ -38,10 +38,19 @@ internal static partial class Program
                 NativeInputMove(point);
                 NativeInputPumpFor(8);
                 var proxy = fixture.Proxy;
+                var dirtiedWindows = new List<PaperWindow>();
                 foreach (var member in proxy.Members)
                 {
                     if (Pr260NeedsPresenterPointerReconcile(member.Window, proxy, point))
                     {
+                        // NativeInputHostFixture deliberately owns only the presentation/native
+                        // adapter, not a fully started AppController. Keep the real PaperWindow ->
+                        // Presenter dirty/reconcile path, but hold the controller notification batch
+                        // exactly as a visual transaction does until the Presenter has settled.
+                        // Otherwise the focused harness crashes in unrelated preview activation
+                        // code before it can observe H2's ordering.
+                        Pr260DeferControllerNotifications(member.Window, true);
+                        dirtiedWindows.Add(member.Window);
                         Pr260InvalidateLocalPointer(member.Window);
                     }
                     else
@@ -65,6 +74,8 @@ internal static partial class Program
                 if (fixture.ReleaseCount == 1)
                 {
                     releasedDuringMovement = true;
+                    foreach (var window in dirtiedWindows)
+                        Pr260DeferControllerNotifications(window, false);
                     break;
                 }
 
@@ -72,6 +83,8 @@ internal static partial class Program
                     () => proxy.Members.All(member => member.Window.IsEdgeCapsuleQueueProxyInputSettled),
                     $"Moving sample {movingSamples}: production Presenter work settles before the next coordinate",
                     () => $"releaseCount={fixture.ReleaseCount} cloaked={NativeInputIsCloaked(fixture.Host.Handle)}");
+                foreach (var window in dirtiedWindows)
+                    Pr260DeferControllerNotifications(window, false);
                 fixture.ThrowIfFailed();
                 Check(fixture.ReleaseCount == 0,
                     "No hidden timer tick releases the source between explicit moving samples");
@@ -181,6 +194,15 @@ internal static partial class Program
             ExceptionDispatchInfo.Capture(error.InnerException).Throw();
             throw;
         }
+    }
+
+    private static void Pr260DeferControllerNotifications(PaperWindow window, bool deferred)
+    {
+        var field = typeof(PaperWindow).GetField(
+            "_edgeCapsuleVisualTransactionNotificationDeferred",
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Production reconcile notification deferral is unavailable");
+        field.SetValue(window, deferred);
     }
 
     private static DeviceScreenPoint Pr260PointInside(
