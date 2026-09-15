@@ -43,7 +43,7 @@ internal static partial class Program
 
             var original = NoteBackground.CreateBrush(
                 blendWithTheme: false,
-                PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center);
             Require(original != null, "valid image produces an ImageBrush");
             Require(original.ImageSource != null, "valid image brush keeps its image source");
             Require(original.IsFrozen, "paper background brush is frozen for UI reuse");
@@ -57,7 +57,7 @@ internal static partial class Program
 
             var bottomLeft = NoteBackground.CreateBrush(
                 blendWithTheme: true,
-                PaperBackgroundLayouts.BottomLeft);
+                layout: PaperBackgroundLayouts.BottomLeft);
             Require(bottomLeft != null && bottomLeft.Opacity < 1.0,
                 "enabled blending mixes the image with the paper palette");
             Require(bottomLeft.Stretch == Stretch.Uniform &&
@@ -67,7 +67,7 @@ internal static partial class Program
 
             var stretched = NoteBackground.CreateBrush(
                 blendWithTheme: false,
-                PaperBackgroundLayouts.Stretch);
+                layout: PaperBackgroundLayouts.Stretch);
             Require(stretched != null && stretched.Stretch == Stretch.Fill,
                 "stretch mode fills the whole paper body");
 
@@ -79,7 +79,7 @@ internal static partial class Program
             File.WriteAllText(backgroundPath, "not an image");
             var badImage = NoteBackground.CreateBrush(
                 blendWithTheme: false,
-                PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center);
             Require(badImage == null, "bad image falls back instead of throwing");
 
             var badHost = new Grid();
