@@ -142,6 +142,97 @@ internal static partial class Program
         }
     }
 
+    internal static void RunPr260ImmediateGestureRegression(bool expectDefect)
+    {
+        Check(NativeInputGetCursorPos(out var original),
+            "Immediate-gesture regression requires an interactive desktop cursor");
+        Check((NativeInputGetAsyncKeyState(1) & 0x8000) == 0 &&
+            (NativeInputGetAsyncKeyState(2) & 0x8000) == 0,
+            "Immediate-gesture regression starts with physical mouse buttons released");
+
+        try
+        {
+            using var fixture = new NativeInputHostFixture(withPeer: true, topDip: 180);
+            var control = fixture.CheckBox;
+            var down = 0;
+            var up = 0;
+            var clicks = 0;
+            var toggles = 0;
+            control.AddHandler(System.Windows.Input.Mouse.PreviewMouseDownEvent,
+                new System.Windows.Input.MouseButtonEventHandler((_, e) =>
+                {
+                    if (e.ChangedButton == System.Windows.Input.MouseButton.Left) down++;
+                }), true);
+            control.AddHandler(System.Windows.Input.Mouse.PreviewMouseUpEvent,
+                new System.Windows.Input.MouseButtonEventHandler((_, e) =>
+                {
+                    if (e.ChangedButton == System.Windows.Input.MouseButton.Left) up++;
+                }), true);
+            control.Click += (_, _) => clicks++;
+            control.Checked += (_, _) => toggles++;
+            control.Unchecked += (_, _) => toggles++;
+
+            fixture.RetainAwayFromControl();
+            fixture.PausePointerSampling();
+            var timer = (System.Windows.Threading.DispatcherTimer)typeof(EdgeCapsuleQueueCompositionProxy)
+                .GetField("_sampleTimer", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(fixture.Proxy)!;
+            var entry = Pr260PointInside(control, 0.30);
+            var press = Pr260PointInside(control, 0.70);
+
+            // Do not seed retained-pointer internals and do not wait for Released/IsMouseOver.
+            // Give the real 16 ms production sampler one changed-coordinate turn at each point,
+            // then press immediately after the second moving turn. The old code re-dirties every
+            // member on that second turn; the candidate can selectively return the target first.
+            timer.Start();
+            NativeInputMove(entry);
+            NativeInputPumpFor(18);
+            NativeInputMove(press);
+            NativeInputPumpFor(18);
+            fixture.ThrowIfFailed();
+            var releasedBeforePress = fixture.ReleaseCount == 1;
+
+            NativeInputSend(0, 0, 0x0002);
+            NativeInputSend(0, 0, 0x0004);
+            // Freeze the observation boundary after the gesture. In the baseline this prevents a
+            // later stationary timer tick from turning a missed first click into a misleading pass.
+            fixture.PausePointerSampling();
+            NativeInputPumpFor(60);
+            fixture.ThrowIfFailed();
+
+            if (expectDefect)
+            {
+                Check(!releasedBeforePress && fixture.ReleaseCount == 0,
+                    "Pinned #260 keeps the target behind the retained proxy through the moving-entry press");
+                Check(fixture.ProxyPresses == 1 && down == 0 && up == 0 && clicks == 0 && toggles == 0,
+                    "Pinned #260 reproduces the user boundary: the first moving-entry click reaches the proxy, not the real WPF control");
+            }
+            else
+            {
+                NativeInputUntil(() => down == 1 && up == 1 && clicks == 1,
+                    "The first moving-entry DOWN/UP reaches the real WPF control exactly once",
+                    () => $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
+                        $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
+                Check(releasedBeforePress && fixture.ReleaseCount == 1 && fixture.ProxyPresses == 0,
+                    "Selective handoff completes before the first press without using the proxy DOWN fallback");
+                Check(down == 1 && up == 1 && clicks == 1 && toggles == 1,
+                    "The immediate checkbox gesture produces one DOWN, one UP, one click and one toggle with no delayed replay");
+                fixture.AssertPeerRetained(control);
+                fixture.CompleteRemainingPeer();
+            }
+
+            Console.WriteLine(
+                $"RESULT pr260-immediate-gesture expectDefect={expectDefect} " +
+                $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
+                $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
+        }
+        finally
+        {
+            NativeInputSend(0, 0, 0x0004);
+            NativeInputMove(new DeviceScreenPoint(original.X, original.Y));
+        }
+    }
+
     private static PaperWindow Pr260WindowFor(NativeInputHostFixture fixture)
     {
         var field = typeof(NativeInputHostFixture).GetField(
@@ -226,8 +317,9 @@ internal static class Pr260MovingHandoffProgram
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            Program.RunPr260MovingHandoffRegression(
-                args.Contains("--expect-moving-handoff-defect", StringComparer.Ordinal));
+            var expectDefect = args.Contains("--expect-moving-handoff-defect", StringComparer.Ordinal);
+            Program.RunPr260MovingHandoffRegression(expectDefect);
+            Program.RunPr260ImmediateGestureRegression(expectDefect);
             return 0;
         }
         catch (Exception error)
