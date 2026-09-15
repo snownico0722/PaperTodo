@@ -1,0 +1,165 @@
+name: PR 270 final cleanup
+
+on:
+  push:
+    branches:
+      - work/paper-background-20260915
+    paths:
+      - .github/workflows/pr270-final-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply cleanup
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path, text):
+              Path(path).write_text(text, encoding="utf-8", newline="\n")
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one match, got {count}")
+              return text.replace(old, new, 1)
+
+          # 1. Restoring already-default background preferences should not create/rewrite
+          #    paper-background.json just because the user clicked Restore defaults.
+          path = Path("src/PaperBackground.cs")
+          text = read(path)
+          old = '''    internal static void ResetPreferences()
+          {
+              var next = new BackgroundPreferences();
+              SavePreferences(next);
+              _preferences = next;
+              InvalidateCache();
+          }
+          '''
+          new = '''    internal static void ResetPreferences()
+          {
+              if (BlendWithTheme &&
+                  string.Equals(Layout, PaperBackgroundLayouts.Center, StringComparison.Ordinal))
+              {
+                  return;
+              }
+
+              var next = new BackgroundPreferences();
+              SavePreferences(next);
+              _preferences = next;
+              InvalidateCache();
+          }
+          '''
+          text = replace_once(text, old, new, "default preference no-op")
+          write(path, text)
+
+          # 2. Clean the settings helper formatting left by the previous review patch.
+          path = Path("src/AppController.Settings.PaperBackground.cs")
+          text = read(path)
+          text = text.replace(
+              "        section.Children.Add(BuildPaperBackgroundLayoutRow());\n\n\n        var loadError",
+              "        section.Children.Add(BuildPaperBackgroundLayoutRow());\n\n        var loadError")
+          old = '''private bool TryResetPaperBackgroundPreferences()
+          {
+              if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+              {
+                  return false;
+              }
+
+              foreach (var window in _windows.Values)
+              {
+                  window.RefreshPaperBackground();
+              }
+              return true;
+          }
+          '''
+          new = '''    private bool TryResetPaperBackgroundPreferences()
+          {
+              if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+              {
+                  return false;
+              }
+
+              foreach (var window in _windows.Values)
+              {
+                  window.RefreshPaperBackground();
+              }
+              return true;
+          }
+          '''
+          text = replace_once(text, old, new, "settings reset formatting")
+          write(path, text)
+
+          # 3. Keep the Todo host wiring, but normalize the block's indentation.
+          path = Path("src/PaperWindow.Todo.cs")
+          text = read(path)
+          old = '''        var scrollViewer = new ScrollViewer
+          {
+              VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+              HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+              Content = _todoPanel,
+              FocusVisualStyle = null
+          };
+          AttachTodoBackgroundHost(scrollViewer);
+          return scrollViewer;
+          '''
+          # Previous automated patch lost indentation on this block; also accept that exact form.
+          if old not in text:
+              old = '''        var scrollViewer = new ScrollViewer
+          {
+              VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+              HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+              Content = _todoPanel,
+              FocusVisualStyle = null
+          };
+          AttachTodoBackgroundHost(scrollViewer);
+          return scrollViewer;
+          '''.replace("          {", "{").replace("              Vertical", "    Vertical").replace("              Horizontal", "    Horizontal").replace("              Content", "    Content").replace("              Focus", "    Focus").replace("          };", "};").replace("          Attach", "Attach").replace("          return", "return")
+          new = '''        var scrollViewer = new ScrollViewer
+          {
+              VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+              HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+              Content = _todoPanel,
+              FocusVisualStyle = null
+          };
+          AttachTodoBackgroundHost(scrollViewer);
+          return scrollViewer;
+          '''
+          text = replace_once(text, old, new, "todo scroll viewer formatting")
+          write(path, text)
+
+          # 4. Test label now describes the paper-background feature it actually covers.
+          path = Path("tests/PaperTodo.MarkdownEditingChecks/Program.cs")
+          text = read(path)
+          text = replace_once(
+              text,
+              'Check("Note background read fallback and write failures", CheckPaperBackgroundToggle);',
+              'Check("Paper background image loading and layout", CheckPaperBackgroundToggle);',
+              "paper background test label")
+          write(path, text)
+
+          # The workflow is only a patch carrier; keep it out of the final PR.
+          Path(".github/workflows/pr270-final-cleanup.yml").unlink()
+          '@ | python -
+
+      - name: Commit cleanup
+        shell: pwsh
+        run: |
+          git config user.name "snownico0722"
+          git config user.email "36026283+snownico0722@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(background): polish final review findings [ci]"
+          git push origin HEAD:work/paper-background-20260915
