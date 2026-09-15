@@ -17,8 +17,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply release prep edits
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           def replace_once(path, old, new):
@@ -64,6 +65,7 @@ jobs:
               'README.md',
               'this document follows the <code>main</code> branch (currently <strong>4.0.0-preview</strong>).',
               'this document follows the <code>main</code> branch (currently <strong>4.0beta1</strong>).')
+          PY
       - name: Check diff
         run: git diff --check
       - name: Commit release prep
