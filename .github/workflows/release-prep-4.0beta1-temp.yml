@@ -15,6 +15,18 @@ jobs:
           fetch-depth: 0
       - name: Apply release prep edits
         run: python3 .github/scripts/release_prep_4_0_beta1_temp.py
+      - name: Validate release notes
+        run: |
+          python3 .github/scripts/test_release_notes.py
+          python3 .github/scripts/release_notes.py \
+            --tag v4.0beta1 \
+            --repository snownico0722/PaperTodo \
+            --assets PaperTodo-v4.0beta1-win-x64-self-contained.exe PaperTodo-v4.0beta1-win-x64-no-runtime.exe \
+            --output /tmp/RELEASE_NOTES.md
+          grep -Fq "Custom Paper Backgrounds" /tmp/RELEASE_NOTES.md
+          grep -Fq "自定义纸片背景" /tmp/RELEASE_NOTES.md
+          grep -Fq "Plugin Localization" /tmp/RELEASE_NOTES.md
+          grep -Fq "插件本地化" /tmp/RELEASE_NOTES.md
       - name: Check and commit
         run: |
           git diff --check
@@ -24,6 +36,6 @@ jobs:
           fi
           git config user.name "snownico0722"
           git config user.email "36026283+snownico0722@users.noreply.github.com"
-          git add PaperTodo.csproj CHANGELOG.md doc/CHANGELOG.en.md README.md
+          git add PaperTodo.csproj CHANGELOG.md doc/CHANGELOG.en.md README.md .github/workflows/release.yml
           git commit -m "chore: prepare 4.0beta1 release [ci]"
           git push origin HEAD:release/4.0beta1-prep
