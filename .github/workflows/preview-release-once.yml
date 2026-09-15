@@ -76,14 +76,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EXE_NAME: ${{ steps.meta.outputs.exe }}
+          BODY_PATH: ${{ github.workspace }}\release\RELEASE_BODY.md
+          UPDATED_PATH: ${{ github.workspace }}\release\RELEASE_BODY_UPDATED.md
         run: |
           $asset = Join-Path $env:GITHUB_WORKSPACE "release\$env:EXE_NAME"
           gh release upload $env:RELEASE_TAG $asset --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $body = Join-Path $env:GITHUB_WORKSPACE "release\RELEASE_BODY.md"
-          $updated = Join-Path $env:GITHUB_WORKSPACE "release\RELEASE_BODY_UPDATED.md"
-          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json body --jq '.body' | Out-File -LiteralPath $body -Encoding utf8
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json body --jq '.body' | Out-File -LiteralPath $env:BODY_PATH -Encoding utf8
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           @'
@@ -98,22 +98,16 @@ jobs:
           bullet = f"- **Smaller download, .NET Desktop Runtime required / 精简版，需自行安装 .NET 桌面运行库**: [{name}]({url})"
           if bullet not in body:
               marker = '## Downloads / 下载'
-              pos = body.find(marker)
-              if pos < 0:
+              if marker not in body:
                   body = body.rstrip() + f"\n\n{marker}\n\n{bullet}\n"
               else:
-                  body = body.rstrip() + '\n' if not body.endswith('\n') else body
-                  insert_at = len(body)
-                  body = body[:insert_at].rstrip() + '\n' + bullet + '\n'
+                  body = body.rstrip() + '\n' + bullet + '\n'
           updated_path.write_text(body, encoding='utf-8')
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file $updated --prerelease
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file $env:UPDATED_PATH --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        env:
-          BODY_PATH: ${{ github.workspace }}\release\RELEASE_BODY.md
-          UPDATED_PATH: ${{ github.workspace }}\release\RELEASE_BODY_UPDATED.md
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
