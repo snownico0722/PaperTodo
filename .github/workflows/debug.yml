@@ -3,137 +3,84 @@ name: Debug
 on:
   push:
     branches:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".github/workflows/pages.yml"
-      - ".github/workflows/release.yml"
-      - ".github/workflows/plugin-samples.yml"
-      - "plugin-samples/**"
-      - "plugins/**"
-  workflow_dispatch:
+      - experiment/pr260-continuation-20260915
 
 permissions:
   contents: read
 
-concurrency:
-  group: debug-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
-    name: Build Debug executables
+  h7-capacity-recovery:
+    name: H7 constrained preview recovery
     runs-on: windows-latest
-    timeout-minutes: 15
-
-    defaults:
-      run:
-        shell: pwsh
-
+    timeout-minutes: 20
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "true"
-
+    defaults:
+      run:
+        shell: pwsh
     steps:
-      - name: Check out source
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-
-      - name: Read project metadata
-        id: meta
+      - name: Apply isolated H7 candidate and regression
         run: |
-          $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
-          $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
-          if ($versionNodes.Count -ne 1) {
-            throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
-          }
-
-          $version = ([string]$versionNodes[0].InnerText).Trim()
-          if ([string]::IsNullOrWhiteSpace($version) -or $version -match '\s') {
-            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$version'."
-          }
-
-          "self_contained_exe=PaperTodo-v$version-debug-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
-          "framework_dependent_exe=PaperTodo-v$version-debug-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
-
-      - name: Restore
-        run: dotnet restore .\PaperTodo.csproj -r win-x64
-
-      - name: Publish Debug executables
-        env:
-          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
-          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+          $ErrorActionPreference = 'Stop'
+          python scripts/pr260_h7_repair_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --stat | Tee-Object -FilePath h7-patch.log
+      - name: Build and run candidate focused checks
         run: |
-          $debugDir = Join-Path $env:GITHUB_WORKSPACE "debug"
-          $selfContainedOut = Join-Path $env:RUNNER_TEMP "debug-self-contained"
-          $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "debug-no-runtime"
-
-          Remove-Item -LiteralPath $debugDir, $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $debugDir, $selfContainedOut, $frameworkDependentOut | Out-Null
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Debug `
-            -r win-x64 `
-            --self-contained true `
-            --no-restore `
-            -o $selfContainedOut `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=false `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=true `
-            /p:PublishTrimmed=false `
-            /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false `
-            /p:DebugType=embedded `
-            /p:DebugSymbols=true
-
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -Destination (Join-Path $debugDir $env:SELF_CONTAINED_EXE)
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Debug `
-            -r win-x64 `
-            --self-contained false `
-            --no-restore `
-            -o $frameworkDependentOut `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=false `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=false `
-            /p:PublishTrimmed=false `
-            /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false `
-            /p:DebugType=embedded `
-            /p:DebugSymbols=true
-
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-          Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $debugDir $env:FRAMEWORK_DEPENDENT_EXE)
-          Get-ChildItem -LiteralPath $debugDir -File | Sort-Object Name | Format-Table Name, Length
-
-      - name: Upload self-contained Debug executable
-        uses: actions/upload-artifact@v7
+          $ErrorActionPreference = 'Stop'
+          dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object -FilePath h7-candidate-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+          & $exe 2>&1 | Tee-Object -FilePath h7-candidate-run.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path h7-candidate-run.log -Pattern 'RESULT pr260-capacity-recovery fixed=True')) { throw 'Candidate did not prove H7 recovery' }
+      - name: Run same regression against pinned PR260 baseline
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'pr260-h7-baseline'
+          git worktree add --detach $root 953ae6266af2bc8c5d1696be7660e5006525202b
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $root submodule update --init --recursive
+          Copy-Item tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs') -Force
+          Push-Location $root
+          try {
+            dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'h7-baseline-build.log')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+            if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+            & $exe 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'h7-baseline-run.log')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+          if (-not (Select-String -Path h7-baseline-run.log -Pattern 'RESULT pr260-capacity-recovery fixed=False')) { throw 'Pinned baseline did not reproduce H7' }
+      - name: Run candidate full native input regression
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+          & $exe --proxy-native-input 2>&1 | Tee-Object -FilePath h7-native-input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          path: debug/${{ steps.meta.outputs.self_contained_exe }}
-          archive: false
-          if-no-files-found: error
-
-      - name: Upload framework-dependent Debug executable
-        uses: actions/upload-artifact@v7
-        with:
-          path: debug/${{ steps.meta.outputs.framework_dependent_exe }}
-          archive: false
-          if-no-files-found: error
+          name: pr260-h7-${{ github.sha }}
+          path: |
+            h7-patch.log
+            h7-candidate-build.log
+            h7-candidate-run.log
+            h7-baseline-build.log
+            h7-baseline-run.log
+            h7-native-input.log
+          retention-days: 3
