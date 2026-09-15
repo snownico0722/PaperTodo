@@ -174,57 +174,77 @@ internal static partial class Program
 
             fixture.RetainAwayFromControl();
             fixture.PausePointerSampling();
+            // The fixture intentionally does not initialise the application-level preview session.
+            // Put that isolated adapter in its production exiting/no-op state so the real sampler
+            // can exercise PaperWindow/Presenter/DComp/input ownership without accidentally starting
+            // an unrelated controller preview activation. CanRouteEdgeCapsuleQueueProxyInput itself
+            // does not depend on controller lifecycle state.
+            Pr260QuiesceControllerAdapter(fixture);
+
             var timer = (System.Windows.Threading.DispatcherTimer)typeof(EdgeCapsuleQueueCompositionProxy)
                 .GetField("_sampleTimer", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(fixture.Proxy)!;
+            var ticks = 0;
+            EventHandler observeTick = (_, _) => ticks++;
+            timer.Tick += observeTick;
             var entry = Pr260PointInside(control, 0.30);
             var press = Pr260PointInside(control, 0.70);
 
-            // Do not seed retained-pointer internals and do not wait for Released/IsMouseOver.
-            // Give the real 16 ms production sampler one changed-coordinate turn at each point,
-            // then press immediately after the second moving turn. The old code re-dirties every
-            // member on that second turn; the candidate can selectively return the target first.
-            timer.Start();
-            NativeInputMove(entry);
-            NativeInputPumpFor(18);
-            NativeInputMove(press);
-            NativeInputPumpFor(18);
-            fixture.ThrowIfFailed();
-            var releasedBeforePress = fixture.ReleaseCount == 1;
-
-            NativeInputSend(0, 0, 0x0002);
-            NativeInputSend(0, 0, 0x0004);
-            // Freeze the observation boundary after the gesture. In the baseline this prevents a
-            // later stationary timer tick from turning a missed first click into a misleading pass.
-            fixture.PausePointerSampling();
-            NativeInputPumpFor(60);
-            fixture.ThrowIfFailed();
-
-            if (expectDefect)
+            try
             {
-                Check(!releasedBeforePress && fixture.ReleaseCount == 0,
-                    "Pinned #260 keeps the target behind the retained proxy through the moving-entry press");
-                Check(fixture.ProxyPresses == 1 && down == 0 && up == 0 && clicks == 0 && toggles == 0,
-                    "Pinned #260 reproduces the user boundary: the first moving-entry click reaches the proxy, not the real WPF control");
-            }
-            else
-            {
-                NativeInputUntil(() => down == 1 && up == 1 && clicks == 1,
-                    "The first moving-entry DOWN/UP reaches the real WPF control exactly once",
-                    () => $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
-                        $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
-                Check(releasedBeforePress && fixture.ReleaseCount == 1 && fixture.ProxyPresses == 0,
-                    "Selective handoff completes before the first press without using the proxy DOWN fallback");
-                Check(down == 1 && up == 1 && clicks == 1 && toggles == 1,
-                    "The immediate checkbox gesture produces one DOWN, one UP, one click and one toggle with no delayed replay");
-                fixture.AssertPeerRetained(control);
-                fixture.CompleteRemainingPeer();
-            }
+                // Do not seed retained-pointer internals and do not wait for Released/IsMouseOver.
+                // Wait only for the two production sampler turns that consume two distinct physical
+                // coordinates. The observer was subscribed after the proxy's production handler, so
+                // seeing tick N means OnSampleTimerTick for that coordinate already ran. This avoids
+                // relying on a nominal 16 ms timer interval and does not insert a stationary sample.
+                timer.Start();
+                NativeInputMove(entry);
+                NativeInputUntil(() => ticks >= 1,
+                    "The production sampler consumes the first moving-entry coordinate");
+                NativeInputMove(press);
+                NativeInputUntil(() => ticks >= 2,
+                    "The production sampler consumes the second changed coordinate before DOWN");
+                fixture.ThrowIfFailed();
+                var releasedBeforePress = fixture.ReleaseCount == 1;
 
-            Console.WriteLine(
-                $"RESULT pr260-immediate-gesture expectDefect={expectDefect} " +
-                $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
-                $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
+                NativeInputSend(0, 0, 0x0002);
+                NativeInputSend(0, 0, 0x0004);
+                // Freeze immediately after the gesture. In the baseline this prevents a later
+                // stationary timer turn from converting a missed first click into a false pass.
+                fixture.PausePointerSampling();
+                NativeInputPumpFor(60);
+                fixture.ThrowIfFailed();
+
+                if (expectDefect)
+                {
+                    Check(!releasedBeforePress && fixture.ReleaseCount == 0,
+                        "Pinned #260 keeps the target behind the retained proxy through two changed-coordinate samples");
+                    Check(fixture.ProxyPresses == 1 && down == 0 && up == 0 && clicks == 0 && toggles == 0,
+                        "Pinned #260 reproduces the selective-handoff boundary: the first press still belongs to the proxy, not the real WPF control");
+                }
+                else
+                {
+                    NativeInputUntil(() => down == 1 && up == 1 && clicks == 1,
+                        "The first moving-entry DOWN/UP reaches the real WPF control exactly once",
+                        () => $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
+                            $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
+                    Check(releasedBeforePress && fixture.ReleaseCount == 1 && fixture.ProxyPresses == 0,
+                        "Selective handoff completes on changed-coordinate input before the first press");
+                    Check(down == 1 && up == 1 && clicks == 1 && toggles == 1,
+                        "The immediate checkbox gesture produces one DOWN, one UP, one click and one toggle with no delayed replay");
+                    fixture.AssertPeerRetained(control);
+                    fixture.CompleteRemainingPeer();
+                }
+
+                Console.WriteLine(
+                    $"RESULT pr260-immediate-gesture expectDefect={expectDefect} ticks={ticks} " +
+                    $"releasedBeforePress={releasedBeforePress} releaseCount={fixture.ReleaseCount} " +
+                    $"proxyPresses={fixture.ProxyPresses} down={down} up={up} clicks={clicks} toggles={toggles}");
+            }
+            finally
+            {
+                timer.Tick -= observeTick;
+            }
         }
         finally
         {
@@ -241,6 +261,22 @@ internal static partial class Program
             throw new InvalidOperationException("Native input fixture PaperWindow is unavailable");
         return field.GetValue(fixture) as PaperWindow ??
             throw new InvalidOperationException("Native input fixture PaperWindow is missing");
+    }
+
+    private static void Pr260QuiesceControllerAdapter(NativeInputHostFixture fixture)
+    {
+        var window = Pr260WindowFor(fixture);
+        var controllerField = typeof(PaperWindow).GetField(
+            "_controller",
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Native input fixture controller is unavailable");
+        var controller = controllerField.GetValue(window) as AppController ??
+            throw new InvalidOperationException("Native input fixture controller is missing");
+        var lifecycle = typeof(AppController).GetField(
+            "_lifecycleState",
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Controller lifecycle field is unavailable");
+        lifecycle.SetValue(controller, Enum.Parse(lifecycle.FieldType, "Exiting"));
     }
 
     private static bool Pr260NeedsPresenterPointerReconcile(
