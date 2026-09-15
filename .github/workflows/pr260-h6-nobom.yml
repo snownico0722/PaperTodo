@@ -1,0 +1,44 @@
+name: PR260 H6 source encoding cleanup
+
+on:
+  push:
+    branches:
+      - experiment/pr260-continuation-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    if: contains(github.event.head_commit.message, '[h6-nobom]')
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Remove accidental UTF-8 BOM without changing text
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'src/PaperWindow.EdgeCapsulePreview.cs'
+          $bytes = [IO.File]::ReadAllBytes($path)
+          if ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) {
+            throw 'Expected the candidate file to contain the temporary UTF-8 BOM'
+          }
+          $text = [Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3)
+          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff -- $path
+      - name: Commit normalized product source
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'ChatGPT Codex Connector'
+          git config user.email 'noreply@openai.com'
+          git add src/PaperWindow.EdgeCapsulePreview.cs
+          if (git diff --cached --quiet) { throw 'Encoding cleanup produced no diff' }
+          git commit -m 'chore(edge-prewarm): preserve source encoding [h6-ci] [native-input-ci] [ci]'
+          git push origin HEAD:experiment/pr260-continuation-20260915
