@@ -44,7 +44,8 @@ internal static partial class Program
 
             var original = PaperBackground.CreateBrush(
                 blendWithTheme: false,
-                layout: PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center,
+                stretch: false);
             Require(original != null, "valid image produces an ImageBrush");
             Require(original.ImageSource != null, "valid image brush keeps its image source");
             Require(original.ImageSource is BitmapSource originalBitmap &&
@@ -54,27 +55,49 @@ internal static partial class Program
             Require(original.IsFrozen, "paper background brush is frozen for UI reuse");
             Require(Math.Abs(original.Opacity - 1.0) < 0.001,
                 "disabled blending keeps the original image opaque");
-            Require(original.Stretch == Stretch.Uniform,
-                "center mode preserves aspect ratio without cropping");
+            Require(original.Stretch == Stretch.None,
+                "center position keeps the image at its native size when stretch is disabled");
             Require(original.AlignmentX == AlignmentX.Center &&
                     original.AlignmentY == AlignmentY.Center,
-                "center mode aligns the image to the center");
+                "center position aligns the image to the center");
 
             var bottomLeft = PaperBackground.CreateBrush(
                 blendWithTheme: true,
-                layout: PaperBackgroundLayouts.BottomLeft);
+                layout: PaperBackgroundLayouts.BottomLeft,
+                stretch: false);
             Require(bottomLeft != null && bottomLeft.Opacity < 1.0,
                 "enabled blending mixes the image with the paper palette");
-            Require(bottomLeft.Stretch == Stretch.Uniform &&
+            Require(bottomLeft.Stretch == Stretch.None &&
                     bottomLeft.AlignmentX == AlignmentX.Left &&
                     bottomLeft.AlignmentY == AlignmentY.Bottom,
-                "bottom-left mode preserves aspect ratio and anchors correctly");
+                "bottom-left position keeps native size and anchors correctly");
+
+            var bottomCenter = PaperBackground.CreateBrush(
+                blendWithTheme: false,
+                layout: PaperBackgroundLayouts.BottomCenter,
+                stretch: false);
+            Require(bottomCenter != null &&
+                    bottomCenter.Stretch == Stretch.None &&
+                    bottomCenter.AlignmentX == AlignmentX.Center &&
+                    bottomCenter.AlignmentY == AlignmentY.Bottom,
+                "bottom-center position keeps native size and anchors correctly");
+
+            var bottomRight = PaperBackground.CreateBrush(
+                blendWithTheme: false,
+                layout: PaperBackgroundLayouts.BottomRight,
+                stretch: false);
+            Require(bottomRight != null &&
+                    bottomRight.Stretch == Stretch.None &&
+                    bottomRight.AlignmentX == AlignmentX.Right &&
+                    bottomRight.AlignmentY == AlignmentY.Bottom,
+                "bottom-right position keeps native size and anchors correctly");
 
             var stretched = PaperBackground.CreateBrush(
                 blendWithTheme: false,
-                layout: PaperBackgroundLayouts.Stretch);
+                layout: PaperBackgroundLayouts.Center,
+                stretch: true);
             Require(stretched != null && stretched.Stretch == Stretch.Fill,
-                "stretch mode fills the whole paper body");
+                "stretch toggle fills the whole paper body independently of position");
 
             var host = new Grid();
             PaperBackground.Apply(host);
@@ -90,7 +113,8 @@ internal static partial class Program
             WriteJpegFixture(candidatePaths[1], width: 1, height: 5000);
             var tall = PaperBackground.CreateBrush(
                 blendWithTheme: false,
-                layout: PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center,
+                stretch: false);
             Require(tall?.ImageSource is BitmapSource tallBitmap &&
                     tallBitmap.PixelWidth <= 4096 &&
                     tallBitmap.PixelHeight == 4096,
@@ -100,7 +124,8 @@ internal static partial class Program
             WriteJpegFixture(candidatePaths[2], width: 5000, height: 1);
             var wide = PaperBackground.CreateBrush(
                 blendWithTheme: false,
-                layout: PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center,
+                stretch: false);
             Require(wide?.ImageSource is BitmapSource wideBitmap &&
                     wideBitmap.PixelWidth == 4096 &&
                     wideBitmap.PixelHeight <= 4096,
@@ -110,7 +135,8 @@ internal static partial class Program
             File.WriteAllText(backgroundPath, "not an image");
             var badImage = PaperBackground.CreateBrush(
                 blendWithTheme: false,
-                layout: PaperBackgroundLayouts.Center);
+                layout: PaperBackgroundLayouts.Center,
+                stretch: false);
             Require(badImage == null, "bad image falls back instead of throwing");
             Require(!string.IsNullOrWhiteSpace(PaperBackground.LoadError),
                 "bad image exposes a diagnostic load error");
@@ -123,6 +149,10 @@ internal static partial class Program
             Require(
                 PaperBackgroundLayouts.Normalize("unknown") == PaperBackgroundLayouts.Center,
                 "unknown layout falls back to center");
+            Require(
+                PaperBackgroundLayouts.Normalize(PaperBackgroundLayouts.LegacyStretch) ==
+                PaperBackgroundLayouts.Center,
+                "legacy stretch layout is no longer treated as a position");
         }
         finally
         {
