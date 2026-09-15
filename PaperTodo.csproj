@@ -19,8 +19,8 @@
     <Version>4.0.0-beta1</Version>
     <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <FileVersion>4.0.0.0</FileVersion>
-    <InformationalVersion>4.0beta1</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v4.0beta1" free of +commit suffixes from SourceLink. -->
+    <InformationalVersion>4.0.0-beta1</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v4.0.0-beta1" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
