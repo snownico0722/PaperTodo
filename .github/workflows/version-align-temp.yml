@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Align public beta naming
         run: |
+          # One-time documentation alignment; this workflow is removed after it runs.
           python3 - <<'PY'
           from pathlib import Path
           replacements = {
