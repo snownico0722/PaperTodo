@@ -266,7 +266,7 @@ static void MarkdownModesMigrateAndRoundTrip()
 
 static void DownwardPreviewDefaultAndRoundTrip()
 {
-    Assert(new AppState().EdgeCapsulePreviewPreferDownward, "new state should use downward preview");
+    Assert(!new AppState().EdgeCapsulePreviewPreferDownward, "new state should not prefer downward preview");
     foreach (var input in new string?[] { null, "true", "false" })
     {
         using var scope = new TempDirectory();
@@ -274,7 +274,7 @@ static void DownwardPreviewDefaultAndRoundTrip()
         var setting = input == null ? "" : ",\"edgeCapsulePreviewPreferDownward\":" + input;
         File.WriteAllText(store.FilePath, "{\"papers\":[]" + setting + "}");
         var state = store.Load();
-        var expected = input != "false";
+        var expected = input == "true";
         Assert(state.EdgeCapsulePreviewPreferDownward == expected,
             $"wrong preview preference for {input ?? "missing"}");
 

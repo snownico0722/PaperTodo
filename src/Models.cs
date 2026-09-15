@@ -480,7 +480,7 @@ public sealed class AppState
     public bool ExperimentalHideInactiveTitleBar { get; set; }
     public bool ExperimentalDockedCapsulesNonTopmost { get; set; }
     public bool ExperimentalEdgeCapsuleHoverPreview { get; set; } = true;
-    public bool EdgeCapsulePreviewPreferDownward { get; set; } = true;
+    public bool EdgeCapsulePreviewPreferDownward { get; set; }
     public bool ExperimentalEdgeCapsuleHoverIntent { get; set; } = true;
     public string ExperimentalEdgeCapsuleHoverIntentSensitivity { get; set; } =
         EdgeCapsuleHoverIntentSensitivities.Medium;

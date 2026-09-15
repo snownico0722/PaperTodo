@@ -29,7 +29,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Live edge previews**: Hover over an edge capsule to browse and interact with content without opening the full paper.
   - **Todo live preview**: Shows a simplified todo list with direct check / uncheck actions. Click the card background to open the full paper; linked-paper and quick-launch actions use stable dedicated click targets.
   - **Note live preview**: Supports up to 6000 characters and follows the note's Markdown rendering.
-  - **Smoother handoff and intent prediction**: Adjustable pointer-intent prediction reduces accidental switching while browsing between capsules. When moving downward, the next card stays near the current pointer position whenever it still fits instead of jumping upward just to fill free space; leaving the browse area retracts it automatically.
+  - **Smoother handoff and intent prediction**: Adjustable pointer-intent prediction reduces accidental switching while browsing between capsules. “Prefer downward expansion while browsing” can be enabled in Settings (off by default); when enabled, downward switches keep the next card near the current pointer whenever it still fits. Leaving the browse area retracts it automatically.
 - **Repeat-click behavior**: Clicking an edge capsule again retracts its paper when the paper is still clearly visible; if the paper is substantially covered by another window, it is brought to the front instead of being collapsed out of sight.
 - **More flexible edge-capsule titles**: Title length can be reduced further, including fully hiding the title.
 - Todo and note capsule icons and titles now align consistently.
@@ -74,9 +74,9 @@ This log is written for general and power users alike. It focuses on user-facing
 #### Appearance, Settings & Interaction
 
 - **Custom paper backgrounds**: Place `papertodo.png`, `papertodo.jpg` or `papertodo.jpeg` beside `PaperTodo.exe` to use a custom paper background.
-  - Appearance settings can show the original image or blend it with paper colors, using Stretch / Center / Bottom Left / Bottom Center / Bottom Right.
+  - Appearance settings can show the original image or blend it with paper colors. Stretch is a separate toggle; position can be Center / Bottom Left / Bottom Center / Bottom Right.
   - Decoding caps the longest edge at 4096 pixels.
-- **Settings redesign**: Settings now uses left-side navigation and improved layout, adapting to the active work area on small screens, high scaling and cross-DPI moves. Switches and hotkey recording refresh locally to reduce flicker.
+- **Settings redesign**: Settings now uses left-side navigation and improved layout, adapting to the active work area on small screens, high scaling and cross-DPI moves. Switches and hotkey recording refresh locally to reduce flicker. Edge browsing settings now live in General instead of Experimental Labs.
 - **Quick close for the active paper**: Expanded papers support `Ctrl+W`, and middle-clicking the title bar performs the same close / collapse action.
 
 #### Experimental Labs Features

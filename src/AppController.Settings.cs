@@ -365,7 +365,7 @@ public sealed partial class AppController
         }
         ArrangeDeepCapsules(animate: false);
         RefreshEdgeCapsuleHoverIntentRuntime();
-        RefreshSettingsRegions("labs.edgePreviewIntent");
+        RefreshSettingsRegions("general.edgeBrowsing");
     }
 
     private void ToggleExperimentalEdgeCapsuleHoverIntent()
@@ -374,7 +374,7 @@ public sealed partial class AppController
             !State.ExperimentalEdgeCapsuleHoverIntent;
         SaveNow();
         RefreshEdgeCapsuleHoverIntentRuntime();
-        RefreshSettingsRegions("labs.edgePreviewIntent");
+        RefreshSettingsRegions("general.edgeBrowsing");
     }
 
     private void SetExperimentalEdgeCapsuleHoverIntentSensitivity(
@@ -996,12 +996,6 @@ public sealed partial class AppController
             BuildSettingsLiveRegion("labs.focus", BuildLabsFocusBehaviorSettings));
         AddLabsMajorSection(
             leftColumn,
-            Strings.Get("LabsEdgeCapsuleHoverIntent"),
-            BuildSettingsLiveRegion(
-                "labs.edgePreviewIntent",
-                BuildLabsEdgeCapsuleHoverIntentSettings));
-        AddLabsMajorSection(
-            leftColumn,
             Strings.Get("LabsWindowCoordination"),
             BuildSettingsLiveRegion("labs.window", BuildLabsWindowCoordinationSettings));
 
@@ -1198,6 +1192,25 @@ public sealed partial class AppController
             tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity",
             topMargin: 4));
         content.Children.Add(options);
+
+        var preferDownwardEnabled = edgePreviewAvailable && previewEnabled;
+        var preferDownwardToggle = SettingsToggle(
+            SettingsSidebarLocalized(
+                "浏览时优先向下展开",
+                "Prefer downward expansion while browsing",
+                "閲覧時は下方向への展開を優先",
+                "탐색 중 아래로 펼치기 우선"),
+            State.EdgeCapsulePreviewPreferDownward,
+            ToggleEdgeCapsulePreviewPreferDownward);
+        preferDownwardToggle.IsEnabled = preferDownwardEnabled;
+        preferDownwardToggle.Opacity = preferDownwardEnabled ? 1.0 : 0.55;
+        content.Children.Add(WrapWithHint(
+            preferDownwardToggle,
+            BuildSettingsHintTooltip(SettingsSidebarLocalized(
+                "默认关闭。开启后，向下浏览边缘胶囊时，如果当前卡片下方空间足够，就保持鼠标处的位置并向下展开；空间不足时仍使用原有补位。关闭时优先利用上一张卡片释放的上方空位。",
+                "Disabled by default. When enabled, browsing edge capsules downward keeps the hovered card in place and expands downward when it fits; otherwise the original placement is used. When disabled, the upper space released by the previous card is preferred.",
+                "初期設定はオフです。有効にすると、エッジカプセルを下方向に閲覧する際、カードが収まる場合はマウス位置を保って下に展開し、収まらない場合は従来の配置を使います。オフでは前のカードが空けた上側の空間を優先します。",
+                "기본값은 꺼짐입니다. 켜면 가장자리 캡슐을 아래로 탐색할 때 공간이 충분하면 마우스 위치를 유지하며 아래로 펼치고, 부족하면 기존 배치를 사용합니다. 끄면 이전 카드가 비운 위쪽 공간을 우선 사용합니다."))));
         card.Child = content;
         return card;
     }
@@ -1892,10 +1905,6 @@ public sealed partial class AppController
         State.ExperimentalCollapsePaperOnDeactivate = false;
         State.ExperimentalHideInactiveTopBarButtons = false;
         State.ExperimentalHideInactiveTitleBar = false;
-        State.ExperimentalEdgeCapsuleHoverPreview = true;
-        State.ExperimentalEdgeCapsuleHoverIntent = true;
-        State.ExperimentalEdgeCapsuleHoverIntentSensitivity =
-            EdgeCapsuleHoverIntentSensitivities.Medium;
         State.ExperimentalAllowLockIconUnlock = true;
         State.ExperimentalShortcutOpacityLevel = 0.35;
         ClearAdvancedShortcutRuntimeState();
@@ -1925,7 +1934,6 @@ public sealed partial class AppController
             window.DisableExperimentalWindowTether();
         }
         RefreshExperimentalWindowRuntime();
-        RefreshEdgeCapsuleHoverIntentRuntime();
         RefreshMcpRuntime();
         SaveNow();
         RefreshExperimentalOpacitySurfaces(animate: false);
@@ -2562,6 +2570,7 @@ public sealed partial class AppController
             _settingsCapsuleCollapseAllCheckBox.IsChecked = State.UseCapsuleCollapseAll;
             _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
         }
+        RefreshSettingsRegions("general.edgeBrowsing");
     }
 
     private void RefreshSettingsSystemVisibilityToggleStates()
