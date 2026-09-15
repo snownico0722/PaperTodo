@@ -18,7 +18,11 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ---
 
-### Unreleased (4.0.0-preview)
+### Unreleased
+
+- None currently.
+
+### v4.0beta1
 
 - **Paper Count Limit**: Raised the total paper limit from 100 to 200; the in-app cleanup prompt still appears when the limit is reached.
 - **Startup and Exit Responsiveness**: Only papers on not-yet-available displays defer restoration; other capsules and papers become available first. Edge notes prepare browsable previews before folded paper shells are built in short, low-priority batches. Context menus and optional initialization no longer block initial restoration, and plugin startup papers await completion instead of polling. Normal exit preserves the final save, withdraws visible surfaces, stops script processes concurrently, and completes the normal window shutdown lifecycle to reduce sequential waits and process-exit delays.
@@ -36,6 +40,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 - **Plugin System & Desktop Micro-Apps**
   - **Codex CLI Bridge**: Send todo items or whole papers to the local Codex CLI, including image attachments, linked paths and related-paper context. Its dedicated paper edits the default prompt: untouched prompts use the built-in text, while edits and intentional clearing are preserved. Includes a PaperTodo plugin creation Skill and development guide, invoked by the default prompt for plugin-building requests.
+  - **Plugin Localization**: Plugin manifests can localize names, descriptions, settings, options, and category labels with culture fallback; Native plugins can also read the current PaperTodo UI language. Changing the PaperTodo UI language now offers “Later” or “Restart now”.
   - **Desktop Micro-App Container**: Note papers can be transformed on demand into dedicated desktop micro-apps (such as Pomodoro timers, analog clocks, review pools, or system monitors). Added a dedicated "Plugins" management center in Settings, with data safely isolated and stored under `plugins/data/`.
     - **Web / Native Dual-Mode Runtime Architecture**:
       - **Web Plugins**: Built on Windows WebView2 using standard web technologies (HTML/CSS/JS), ready to run without compilation.
@@ -56,7 +61,7 @@ This log is written for general and power users alike. It focuses on user-facing
 **Todo & Markdown Enhancements**
 
 - **Built-In Full-Text Search**: <kbd>Ctrl</kbd>+<kbd>F</kbd> searches across all built-in todos and Markdown notes, including completed todos, and shows both current-paper and global hit counts. <kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> or the arrow buttons cycle through matches and jump directly to the matching todo item or note text, automatically showing hidden papers, expanding capsules, and handing the search off between papers. The current todo or note match remains visibly highlighted while the search box keeps keyboard focus. The search box accepts input immediately, grows outward from the paper when needed, can be dragged from its compact right-side rounded bar, count area, or blank area, uses no shadow, and uses vector up/down/close controls.
-- **Custom Note Backgrounds**: Place `background.png`, `background.jpg`, or `background.jpeg` under `custom/note/` to use it as the background for built-in Markdown notes. When a background image is detected, an enable toggle appears automatically in Appearance settings, with display opacity adapted for light and dark themes. The disabled state is remembered; after replacing the image, toggle the setting again or restart PaperTodo to refresh it. A failed toggle save is reported, and the control reflects the actual saved state.
+- **Custom Paper Backgrounds**: Place `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` beside `PaperTodo.exe` to share one custom background across todo papers and built-in Markdown notes. Appearance settings can show the original image or blend it with the current paper color. Layout options include Stretch, Center, Bottom Left, Bottom Center, and Bottom Right; non-stretch modes preserve the image aspect ratio and do not crop it. Invalid images safely fall back with a settings warning; oversized images decode with a 4096-pixel longest-edge cap while smaller images keep their original decode size.
 - **Full Render Is Now WYSIWYG Block Editing**: Markdown display is simplified to Off / Basic / Full Render. Legacy Basic and Enhanced settings migrate to the new Basic, whose visuals match the former Enhanced mode; Full Render remains Full Render, and new/restored defaults use Basic. With “Full Render” selected, headings, lists, blockquotes, code fences, images, and inline styles are shown directly in their final layout while editing, with most Markdown markers hidden. Heading, emphasis, and link markers collapse out of layout so text reflows compactly; task markers, unordered-list markers, and blockquotes use stable visual slots to reduce horizontal jumps, while ordered-list numbers remain the original source text to avoid flicker when switching edit state. Rendered task checkboxes can be clicked directly to toggle `[ ]` / `[x]`; the source Markdown remains authoritative and each toggle participates in normal undo/redo. The block under the caret reveals its source markers for direct editing, and the whole note returns to read-only rendering on blur. “Markdown rendering animation” adds a short fade and is shown only while Full Render is selected.
 - **Unified Markdown Parsing & Consistency**: Headings, blockquotes, lists, code fences, links, basic HTML, escape sequences, and image-code boundaries now share unified Markdown semantics, reducing mismatches across complex nested editing and rendering.
 - **Real-Time Markdown Rendering**: Full Markdown visual rendering is also displayed live during editing.

@@ -16,11 +16,11 @@
     <!-- .NET 9+ marks Windows apphost/single-file hosts CET-compatible by default. Disable that
          opt-in for PaperTodo to avoid User Shadow Stack startup failures on affected legacy Windows builds. -->
     <CETCompat>false</CETCompat>
-    <Version>4.0.0-preview</Version>
+    <Version>4.0.0-beta1</Version>
     <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <FileVersion>4.0.0.0</FileVersion>
-    <InformationalVersion>4.0Preview</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v4.0Preview" free of +commit suffixes from SourceLink. -->
+    <InformationalVersion>4.0beta1</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v4.0beta1" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
