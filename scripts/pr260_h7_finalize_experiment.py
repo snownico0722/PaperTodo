@@ -6,7 +6,8 @@ def replace_once(path: str, old: str, new: str) -> None:
     text = p.read_text(encoding="utf-8-sig")
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f"{path}: expected exactly one match, found {count}")
+        preview = old.splitlines()[0] if old else "<empty>"
+        raise SystemExit(f"{path}: expected exactly one match, found {count}; anchor={preview!r}")
     p.write_text(text.replace(old, new), encoding="utf-8", newline="")
 
 
