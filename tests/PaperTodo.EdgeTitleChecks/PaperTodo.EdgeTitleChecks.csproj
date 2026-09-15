@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>../../app.manifest</ApplicationManifest>
+    <StartupObject Condition="'$(Pr260MovingHandoffHarness)' != 'true'">Program</StartupObject>
+    <StartupObject Condition="'$(Pr260MovingHandoffHarness)' == 'true'">Pr260MovingHandoffProgram</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
