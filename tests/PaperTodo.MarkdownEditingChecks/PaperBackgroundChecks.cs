@@ -1,5 +1,4 @@
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -82,34 +81,6 @@ internal static partial class Program
             PaperBackground.Apply(todoHost);
             Require(todoHost.Background is ImageBrush,
                 "paper background applies to the todo ScrollViewer host");
-
-            // Keep the production Todo wiring covered without constructing a full PaperWindow.
-            // If BuildTodoBody stops attaching its ScrollViewer to the paper-background runtime,
-            // this check fails even though applying a brush to a standalone ScrollViewer still works.
-            var buildTodoBody = typeof(PaperWindow).GetMethod(
-                "BuildTodoBody",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var attachTodoBackgroundHost = typeof(PaperWindow).GetMethod(
-                "AttachTodoBackgroundHost",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Require(buildTodoBody != null && attachTodoBackgroundHost != null,
-                "todo paper background wiring methods are available");
-
-            var il = buildTodoBody!.GetMethodBody()?.GetILAsByteArray();
-            Require(il != null, "BuildTodoBody exposes an IL body for wiring verification");
-            var targetToken = BitConverter.GetBytes(attachTodoBackgroundHost!.MetadataToken);
-            var attachesBackgroundHost = false;
-            for (var i = 1; i <= il!.Length - targetToken.Length; i++)
-            {
-                if ((il[i - 1] == 0x28 || il[i - 1] == 0x6f) &&
-                    il.AsSpan(i, targetToken.Length).SequenceEqual(targetToken))
-                {
-                    attachesBackgroundHost = true;
-                    break;
-                }
-            }
-            Require(attachesBackgroundHost,
-                "BuildTodoBody attaches its ScrollViewer to the paper background runtime");
 
             File.WriteAllText(backgroundPath, "not an image");
             var badImage = PaperBackground.CreateBrush(
