@@ -8,7 +8,6 @@ namespace PaperTodo;
 
 internal static class PaperBackgroundLayouts
 {
-    internal const string LegacyStretch = "stretch";
     internal const string Center = "center";
     internal const string BottomLeft = "bottomLeft";
     internal const string BottomCenter = "bottomCenter";
@@ -277,18 +276,7 @@ internal static class PaperBackground
                 return new BackgroundPreferences();
             }
 
-            if (string.Equals(
-                    loaded.Layout,
-                    PaperBackgroundLayouts.LegacyStretch,
-                    StringComparison.Ordinal))
-            {
-                loaded.Stretch = true;
-                loaded.Layout = PaperBackgroundLayouts.Center;
-            }
-            else
-            {
-                loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
-            }
+            loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
             return loaded;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
