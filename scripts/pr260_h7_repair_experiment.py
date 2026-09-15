@@ -2,6 +2,7 @@ from pathlib import Path
 
 p = Path("scripts/pr260_h7_experiment.py")
 text = p.read_text(encoding="utf-8")
+
 old = '''replace_once(
     "src/PaperWindow.EdgeCapsule.cs",
     """        if (pendingCapacity.HasValue &&
@@ -93,8 +94,34 @@ if text.count(old) != 1:
     raise SystemExit(f"capacity-release repair anchor count={text.count(old)}")
 text = text.replace(old, new)
 
-# The production indentation is nested inside the request constructor; the first draft of the
-# experiment script used an under-indented exact anchor, so repair the script before applying it.
+old = '''    """        var monitor = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
+        var size = descriptor.Size.Normalize(
+            Math.Max(1, monitor.Width - 16),
+            Math.Max(1, monitor.Height - 16));
+        if (!PrepareEdgeCapsuleHostCapacity(size))""",
+    """        var monitor = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
+        var requestedSize = descriptor.Size.Normalize(
+            Math.Max(1, monitor.Width - 16),
+            Math.Max(1, monitor.Height - 16));
+        var size = requestedSize;
+        if (!PrepareEdgeCapsuleHostCapacity(size))""",
+)'''
+new = '''    """            var monitor = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
+            var size = descriptor.Size.Normalize(
+                Math.Max(1, monitor.Width - 16),
+                Math.Max(1, monitor.Height - 16));
+            if (!PrepareEdgeCapsuleHostCapacity(size))""",
+    """            var monitor = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
+            var requestedSize = descriptor.Size.Normalize(
+                Math.Max(1, monitor.Width - 16),
+                Math.Max(1, monitor.Height - 16));
+            var size = requestedSize;
+            if (!PrepareEdgeCapsuleHostCapacity(size))""",
+)'''
+if text.count(old) != 1:
+    raise SystemExit(f"preview-size repair anchor count={text.count(old)}")
+text = text.replace(old, new)
+
 old = '''    """            deferProviderContent
                 ? () => descriptor.CreateContent(size)
                 : null);""",
