@@ -10,13 +10,11 @@ permissions:
 
 jobs:
   align:
-    if: github.event.head_commit.message == 'chore: apply 4.0.0-beta1 naming'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Align public beta naming
         run: |
-          # One-time documentation alignment; this workflow is removed after it runs.
           python3 - <<'PY'
           from pathlib import Path
           replacements = {
@@ -24,16 +22,26 @@ jobs:
               'doc/CHANGELOG.en.md': [('### v4.0beta1', '### v4.0.0-beta1')],
               'README.md': [('currently <strong>4.0beta1</strong>', 'currently <strong>4.0.0-beta1</strong>')],
           }
+          changed = False
           for path, pairs in replacements.items():
               p = Path(path)
               text = p.read_text(encoding='utf-8-sig')
+              original = text
               for old, new in pairs:
-                  if text.count(old) != 1:
-                      raise SystemExit(f'{path}: expected one {old!r}, found {text.count(old)}')
-                  text = text.replace(old, new, 1)
-              p.write_text(text, encoding='utf-8', newline='\n')
+                  if old in text:
+                      text = text.replace(old, new, 1)
+                  elif new not in text:
+                      raise SystemExit(f'{path}: neither expected old nor new text found')
+              if text != original:
+                  p.write_text(text, encoding='utf-8', newline='\n')
+                  changed = True
+          if not changed:
+              print('Beta naming already aligned.')
           PY
           git diff --check
+          if git diff --quiet; then
+            exit 0
+          fi
           git config user.name "snownico0722"
           git config user.email "36026283+snownico0722@users.noreply.github.com"
           git add CHANGELOG.md doc/CHANGELOG.en.md README.md
