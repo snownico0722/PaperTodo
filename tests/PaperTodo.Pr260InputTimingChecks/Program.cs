@@ -55,12 +55,7 @@ internal static class Program
             outputBounds.Top + 12,
             outputBounds.Left + 12 + SourceSize,
             outputBounds.Top + 12 + SourceSize);
-        var targetBounds = new DeviceScreenRect(
-            outputBounds.Left,
-            outputBounds.Top,
-            outputBounds.Right,
-            outputBounds.Bottom);
-        target.SetBounds(targetBounds);
+        target.SetBounds(outputBounds);
 
         var root = new Border
         {
@@ -194,7 +189,7 @@ internal static class Program
             Check(!EdgeCapsuleGeometry.Contains(initialBounds, leakPoint),
                 "The selected leading-edge point must remain outside the stale native input region");
 
-            SetCursorPos(leakPoint.X, leakPoint.Y);
+            SetCursorPos((int)Math.Round(leakPoint.X), (int)Math.Round(leakPoint.Y));
             Thread.Sleep(25);
             mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
             Thread.Sleep(20);
@@ -204,7 +199,7 @@ internal static class Program
             Console.WriteLine(
                 $"PASS h8-real-dcomp-stall-cross-process-input-leak " +
                 $"initial={initialPixels} stalled={stalledPixels} staleRight={initialBounds.Right} " +
-                $"leakPoint={leakPoint.X},{leakPoint.Y} stallMs={StallMilliseconds}");
+                $"leakPoint={leakPoint.X:F0},{leakPoint.Y:F0} stallMs={StallMilliseconds}");
         }
         finally
         {
@@ -268,17 +263,11 @@ internal static class Program
         };
         root.PreviewMouseDown += (_, e) =>
         {
-            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-            {
-                writer.WriteLine("DOWN");
-            }
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left) writer.WriteLine("DOWN");
         };
         root.PreviewMouseUp += (_, e) =>
         {
-            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-            {
-                writer.WriteLine("UP");
-            }
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left) writer.WriteLine("UP");
         };
         window.Show();
         writer.WriteLine("READY");
@@ -320,8 +309,14 @@ internal static class Program
     {
         var dc = GetDC(IntPtr.Zero);
         Check(dc != IntPtr.Zero, "GetDC(NULL) failed");
-        try { return IsRed(GetPixel(dc, point.X, point.Y)); }
-        finally { _ = ReleaseDC(IntPtr.Zero, dc); }
+        try
+        {
+            return IsRed(GetPixel(dc, (int)Math.Round(point.X), (int)Math.Round(point.Y)));
+        }
+        finally
+        {
+            _ = ReleaseDC(IntPtr.Zero, dc);
+        }
     }
 
     private static bool IsRed(uint color)
@@ -371,13 +366,16 @@ internal static class Program
                 PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous);
             var executable = Environment.ProcessPath ?? throw new InvalidOperationException("No process path");
-            var process = Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
                 FileName = executable,
-                ArgumentList = { "--target", pipeName },
                 UseShellExecute = false,
                 CreateNoWindow = true
-            }) ?? throw new InvalidOperationException("Could not start cross-process target");
+            };
+            startInfo.ArgumentList.Add("--target");
+            startInfo.ArgumentList.Add(pipeName);
+            var process = Process.Start(startInfo) ??
+                throw new InvalidOperationException("Could not start cross-process target");
             return new CrossProcessTarget(server, process);
         }
 
@@ -391,17 +389,14 @@ internal static class Program
 
         public void SetBounds(DeviceScreenRect bounds)
         {
-            // The target publishes READY before receiving its final position. Move its first visible
-            // top-level HWND from the parent so the child needs no control channel beyond input counts.
             var deadline = Stopwatch.StartNew();
             IntPtr handle = IntPtr.Zero;
             while (deadline.Elapsed < TimeSpan.FromSeconds(5))
             {
-                handle = FindWindow(null, null);
                 var current = GetTopWindow(IntPtr.Zero);
                 while (current != IntPtr.Zero)
                 {
-                    GetWindowThreadProcessId(current, out var processId);
+                    _ = GetWindowThreadProcessId(current, out var processId);
                     if (processId == _process.Id)
                     {
                         handle = current;
@@ -448,6 +443,12 @@ internal static class Program
         public int Left, Top, Right, Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X, Y;
+    }
+
     private const uint MouseEventLeftDown = 0x0002;
     private const uint MouseEventLeftUp = 0x0004;
 
@@ -462,7 +463,7 @@ internal static class Program
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out DeviceScreenPoint point);
+    private static extern bool GetCursorPos(out NativePoint point);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -503,7 +504,4 @@ internal static class Program
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr FindWindow(string? className, string? windowName);
 }
