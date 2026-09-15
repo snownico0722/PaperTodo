@@ -7,7 +7,7 @@ using PaperTodo;
 
 internal static partial class Program
 {
-    private static void CheckNoteBackgroundToggle()
+    private static void CheckPaperBackgroundToggle()
     {
         var candidatePaths = new[]
         {
@@ -39,9 +39,10 @@ internal static partial class Program
                 encoder.Save(stream);
             }
 
-            Require(NoteBackground.IsAvailable, "papertodo image beside the executable is detected");
+            Require(PaperBackground.IsAvailable, "papertodo image beside the executable is detected");
+            Require(PaperBackground.LoadError == null, "valid background reports no load error");
 
-            var original = NoteBackground.CreateBrush(
+            var original = PaperBackground.CreateBrush(
                 blendWithTheme: false,
                 layout: PaperBackgroundLayouts.Center);
             Require(original != null, "valid image produces an ImageBrush");
@@ -55,7 +56,7 @@ internal static partial class Program
                     original.AlignmentY == AlignmentY.Center,
                 "center mode aligns the image to the center");
 
-            var bottomLeft = NoteBackground.CreateBrush(
+            var bottomLeft = PaperBackground.CreateBrush(
                 blendWithTheme: true,
                 layout: PaperBackgroundLayouts.BottomLeft);
             Require(bottomLeft != null && bottomLeft.Opacity < 1.0,
@@ -65,25 +66,32 @@ internal static partial class Program
                     bottomLeft.AlignmentY == AlignmentY.Bottom,
                 "bottom-left mode preserves aspect ratio and anchors correctly");
 
-            var stretched = NoteBackground.CreateBrush(
+            var stretched = PaperBackground.CreateBrush(
                 blendWithTheme: false,
                 layout: PaperBackgroundLayouts.Stretch);
             Require(stretched != null && stretched.Stretch == Stretch.Fill,
                 "stretch mode fills the whole paper body");
 
             var host = new Grid();
-            NoteBackground.Apply(host);
+            PaperBackground.Apply(host);
             Require(host.Background is ImageBrush,
                 "configured paper background applies to an outer content host");
 
+            var todoHost = new ScrollViewer();
+            PaperBackground.Apply(todoHost);
+            Require(todoHost.Background is ImageBrush,
+                "paper background applies to the todo ScrollViewer host");
+
             File.WriteAllText(backgroundPath, "not an image");
-            var badImage = NoteBackground.CreateBrush(
+            var badImage = PaperBackground.CreateBrush(
                 blendWithTheme: false,
                 layout: PaperBackgroundLayouts.Center);
             Require(badImage == null, "bad image falls back instead of throwing");
+            Require(!string.IsNullOrWhiteSpace(PaperBackground.LoadError),
+                "bad image exposes a diagnostic load error");
 
             var badHost = new Grid();
-            NoteBackground.Apply(badHost);
+            PaperBackground.Apply(badHost);
             Require(ReferenceEquals(badHost.Background, Brushes.Transparent),
                 "bad image keeps the plain paper background");
 

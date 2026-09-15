@@ -1,13 +1,12 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Threading;
 
 namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private UIElement BuildNoteBackgroundSettingsSection()
+    private UIElement BuildPaperBackgroundSettingsSection()
     {
         var section = new StackPanel
         {
@@ -22,7 +21,7 @@ public sealed partial class AppController
                     "Blend with paper colors",
                     "紙面カラーと混合する",
                     "종이 색상과 혼합"),
-                NoteBackground.BlendWithTheme,
+                PaperBackground.BlendWithTheme,
                 TogglePaperBackgroundBlend),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
                 "已检测到 PaperTodo.exe 同目录下的 papertodo.png（也支持 .jpg/.jpeg）。图片会同时用于笔记和待办；关闭此项显示原图，开启后与当前纸片配色混合。替换图片后切换此项、切换位置或重启 PaperTodo 即可刷新。",
@@ -31,12 +30,25 @@ public sealed partial class AppController
                 "PaperTodo.exe와 같은 폴더의 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 노트와 할 일 종이에 함께 사용됩니다. 끄면 원본 이미지를 표시하고, 켜면 현재 종이 색상과 혼합합니다. 이미지를 교체한 뒤 이 옵션이나 위치를 바꾸거나 PaperTodo를 다시 시작하면 새로 고쳐집니다."))));
         section.Children.Add(BuildPaperBackgroundLayoutRow());
 
-        // BuildVisualSettingsPage historically inserts this optional section above both columns.
-        // Move it into the already-built right column after attachment so detecting an image does
-        // not make the entire visual settings page taller.
-        section.Loaded += (_, _) => section.Dispatcher.BeginInvoke(
-            (Action)(() => MovePaperBackgroundSectionIntoVisualRightColumn(section)),
-            DispatcherPriority.Loaded);
+
+        var loadError = PaperBackground.LoadError;
+        if (!string.IsNullOrWhiteSpace(loadError))
+        {
+            var error = new TextBlock
+            {
+                Text = SettingsSidebarLocalized(
+                    "背景图片加载失败，请检查图片文件。",
+                    "The background image could not be loaded. Check the image file.",
+                    "背景画像を読み込めません。画像ファイルを確認してください。",
+                    "배경 이미지를 불러오지 못했습니다. 이미지 파일을 확인하세요."),
+                Foreground = Theme.DangerBrush,
+                FontSize = AppTypography.Scale(11.5),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 5, 0, 0),
+                ToolTip = BuildSettingsHintTooltip(loadError)
+            };
+            section.Children.Add(error);
+        }
         return section;
     }
 
@@ -77,7 +89,7 @@ public sealed partial class AppController
                 (PaperBackgroundLayouts.BottomRight,
                     SettingsSidebarLocalized("右下", "Bottom right", "右下", "오른쪽 아래"))
             ],
-            NoteBackground.Layout,
+            PaperBackground.Layout,
             SetPaperBackgroundLayout);
         if (selector is FrameworkElement selectorElement)
         {
@@ -90,56 +102,15 @@ public sealed partial class AppController
         return row;
     }
 
-    private static void MovePaperBackgroundSectionIntoVisualRightColumn(
-        StackPanel section)
-    {
-        if (section.Parent is not StackPanel wrapper)
-        {
-            return;
-        }
-
-        Grid? columns = null;
-        foreach (UIElement child in wrapper.Children)
-        {
-            if (child is Grid grid && grid.ColumnDefinitions.Count >= 3)
-            {
-                columns = grid;
-                break;
-            }
-        }
-        if (columns == null)
-        {
-            return;
-        }
-
-        StackPanel? rightColumn = null;
-        foreach (UIElement child in columns.Children)
-        {
-            if (child is StackPanel candidate && Grid.GetColumn(candidate) == 2)
-            {
-                rightColumn = candidate;
-                break;
-            }
-        }
-        if (rightColumn == null)
-        {
-            return;
-        }
-
-        wrapper.Children.Remove(section);
-        section.Margin = new Thickness(0, 12, 0, 4);
-        rightColumn.Children.Add(section);
-    }
-
     private void TogglePaperBackgroundBlend()
     {
         ApplyPaperBackgroundSetting(() =>
-            NoteBackground.SetBlendWithTheme(!NoteBackground.BlendWithTheme));
+            PaperBackground.SetBlendWithTheme(!PaperBackground.BlendWithTheme));
     }
 
     private void SetPaperBackgroundLayout(string layout)
     {
-        ApplyPaperBackgroundSetting(() => NoteBackground.SetLayout(layout));
+        ApplyPaperBackgroundSetting(() => PaperBackground.SetLayout(layout));
     }
 
     private void ApplyPaperBackgroundSetting(Action update)
@@ -157,10 +128,20 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
-    // RestoreVisualSettingsPageDefaults still calls the original helper name from #262.
-    // Keep that narrow compatibility point, but map it to the new blend semantics.
-    private bool TrySetNoteBackgroundEnabled(bool enabled) =>
-        TryUpdatePaperBackgroundSetting(() => NoteBackground.SetBlendWithTheme(enabled));
+private bool TryResetPaperBackgroundPreferences()
+{
+    if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+    {
+        return false;
+    }
+
+    foreach (var window in _windows.Values)
+    {
+        window.RefreshPaperBackground();
+    }
+    return true;
+}
+
 
     private bool TryUpdatePaperBackgroundSetting(Action update)
     {

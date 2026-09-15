@@ -10,7 +10,7 @@ internal static partial class Program
     {
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
-        Check("Note background read fallback and write failures", CheckNoteBackgroundToggle);
+        Check("Note background read fallback and write failures", CheckPaperBackgroundToggle);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })

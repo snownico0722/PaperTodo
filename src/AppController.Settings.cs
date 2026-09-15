@@ -2050,6 +2050,12 @@ public sealed partial class AppController
             ToggleCapsuleTextBold,
             leadingDivider: true);
 
+        if (PaperBackground.IsAvailable)
+        {
+            rightColumn.Children.Add(SettingsSoftDivider());
+            rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
+        }
+
         var separator = new Border
         {
             Width = 1,
@@ -2064,16 +2070,7 @@ public sealed partial class AppController
         columns.Children.Add(leftColumn);
         columns.Children.Add(separator);
         columns.Children.Add(rightColumn);
-
-        UIElement content = columns;
-        if (NoteBackground.IsAvailable)
-        {
-            var stack = new StackPanel();
-            stack.Children.Add(BuildNoteBackgroundSettingsSection());
-            stack.Children.Add(columns);
-            content = stack;
-        }
-        return WithSettingsPageRestoreFooter(content, RestoreVisualSettingsPageDefaults);
+        return WithSettingsPageRestoreFooter(columns, RestoreVisualSettingsPageDefaults);
     }
 
     private UIElement WithSettingsPageRestoreFooter(UIElement content, Action restorePageDefaults)
@@ -2105,7 +2102,7 @@ public sealed partial class AppController
 
     private void RestoreVisualSettingsPageDefaults()
     {
-        TrySetNoteBackgroundEnabled(true);
+        TryResetPaperBackgroundPreferences();
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = "system";
         State.ColorScheme = ColorSchemes.Warm;

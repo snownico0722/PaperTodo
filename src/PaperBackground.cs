@@ -24,7 +24,7 @@ internal static class PaperBackgroundLayouts
     };
 }
 
-internal static class NoteBackground
+internal static class PaperBackground
 {
     private sealed class BackgroundPreferences
     {
@@ -50,10 +50,26 @@ internal static class NoteBackground
     private static string? _cachedPath;
     private static long _cachedLength = -1;
     private static DateTime _cachedWriteTimeUtc;
+    private static string? _lastLoadError;
 
     internal static bool IsAvailable => FindPath() != null;
     internal static bool BlendWithTheme => _preferences.BlendWithTheme;
     internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
+
+    internal static string? LoadError
+    {
+        get
+        {
+            if (!IsAvailable)
+            {
+                _lastLoadError = null;
+                return null;
+            }
+
+            _ = CreateBrush(BlendWithTheme, Layout);
+            return _lastLoadError;
+        }
+    }
 
     internal static void SetBlendWithTheme(bool enabled)
     {
@@ -90,6 +106,14 @@ internal static class NoteBackground
         InvalidateCache();
     }
 
+    internal static void ResetPreferences()
+    {
+        var next = new BackgroundPreferences();
+        SavePreferences(next);
+        _preferences = next;
+        InvalidateCache();
+    }
+
     internal static void Apply(Panel? host)
     {
         if (host != null)
@@ -112,6 +136,7 @@ internal static class NoteBackground
         if (path == null)
         {
             InvalidateCache();
+            _lastLoadError = null;
             return null;
         }
 
@@ -141,11 +166,13 @@ internal static class NoteBackground
             };
             ApplyLayout(brush, PaperBackgroundLayouts.Normalize(layout));
             brush.Freeze();
+            _lastLoadError = null;
             return brush;
         }
-        catch
+        catch (Exception ex)
         {
             InvalidateCache();
+            _lastLoadError = ex.Message;
             return null;
         }
     }

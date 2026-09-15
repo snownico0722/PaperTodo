@@ -34,7 +34,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
             new KeyEventHandler(OnPreviewKeyDown),
             handledEventsToo: true);
         owner.AttachMarkdownBodySession(this);
-        owner.AttachNoteBackgroundHost(_root);
+        owner.AttachPaperBackgroundHost(_root);
         try
         {
             var presenter = owner.CreateMarkdownBodyView();
@@ -42,7 +42,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         }
         catch
         {
-            owner.DetachNoteBackgroundHost(_root);
+            owner.DetachPaperBackgroundHost(_root);
             owner.DetachMarkdownBodySession(this);
             throw;
         }
@@ -149,7 +149,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
 
     public void OnThemeChanged(PaperBodyTheme theme)
     {
-        _owner.RefreshNoteBackground();
+        _owner.RefreshPaperBackground();
         NoteBox?.RefreshVisualStyle();
     }
 
@@ -198,7 +198,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         CancelInteractions();
         OnVisibilityChanged(false);
         ResetPresenterState();
-        _owner.DetachNoteBackgroundHost(_root);
+        _owner.DetachPaperBackgroundHost(_root);
         _owner.DetachMarkdownBodySession(this);
     }
 }
