@@ -270,9 +270,9 @@ public sealed partial class PaperWindow
 
     // Queue-proxy pointer sampling is richer than the Presenter's state: the controller still needs
     // every physical point for target/corridor arbitration, while the Presenter only stores whether
-    // the point is over its current interactive surface. Do not manufacture Pointer dirty work when
-    // the same reducer intent would be a no-op; doing so makes the same tick fail the settled-input
-    // handoff test that follows it and can starve selective handoff during continuous in-card motion.
+    // the point is over its current interactive surface. Mirror the PointerSampled reducer here
+    // without mutating it; no-op movement must not manufacture dirty work immediately before the
+    // settled-input handoff check in the same proxy tick.
     internal bool ShouldInvalidateEdgeCapsuleQueueProxyPointer(
         DeviceScreenPoint? pointer,
         EdgeCapsulePresentationFrame presentedFrame)
@@ -282,9 +282,24 @@ public sealed partial class PaperWindow
             EdgeCapsuleGeometry.Contains(
                 presentedFrame.InteractiveBounds,
                 pointer.Value);
-        return EdgeCapsuleReducer.Reduce(
-            _edgeCapsule.Model,
-            EdgeCapsuleIntent.PointerSampled(over)).Changed;
+        over &= _edgeCapsule.State.Slot != EdgeCapsuleSlotState.None &&
+            !_edgeCapsule.PeerReorderActive;
+        var visual = _edgeCapsule.State.Slot switch
+        {
+            EdgeCapsuleSlotState.ExpandedReserved => EdgeCapsuleVisualState.Active,
+            EdgeCapsuleSlotState.CollapsedDocked
+                when _edgeCapsule.State.Gesture is EdgeCapsuleGestureState.Idle or
+                    EdgeCapsuleGestureState.PendingClick =>
+                _edgeCapsule.ContextMenuOpen || over
+                    ? EdgeCapsuleVisualState.Hovered
+                    : EdgeCapsuleVisualState.Resting,
+            EdgeCapsuleSlotState.CollapsedDocked
+                when _edgeCapsule.State.Gesture == EdgeCapsuleGestureState.DockedReordering =>
+                EdgeCapsuleVisualState.Hovered,
+            _ => EdgeCapsuleVisualState.Resting
+        };
+        return _edgeCapsule.PointerOverSurface != over ||
+            _edgeCapsule.State.Visual != visual;
     }
 
     internal void InvalidateEdgeCapsuleQueueProxyPointer(DeviceScreenPoint? pointer)
