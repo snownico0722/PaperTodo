@@ -6,8 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>../../app.manifest</ApplicationManifest>
-    <StartupObject Condition="'$(Pr260H8InputTiming)' == 'true'">Pr260H8InputTimingEntry</StartupObject>
-    <StartupObject Condition="'$(Pr260H8InputTiming)' != 'true'">Program</StartupObject>
+    <StartupObject Condition="'$(Pr260H8DedicatedInputOwner)' == 'true'">Pr260H8DedicatedInputOwnerEntry</StartupObject>
+    <StartupObject Condition="'$(Pr260H8DedicatedInputOwner)' != 'true' and '$(Pr260H8InputTiming)' == 'true'">Pr260H8InputTimingEntry</StartupObject>
+    <StartupObject Condition="'$(Pr260H8DedicatedInputOwner)' != 'true' and '$(Pr260H8InputTiming)' != 'true'">Program</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
