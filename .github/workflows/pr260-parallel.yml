@@ -12,7 +12,7 @@ jobs:
   scoped-prewarm-pointer:
     name: Scoped prewarm pointer candidate
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         shell: pwsh
@@ -22,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
@@ -43,10 +44,12 @@ jobs:
           if (!$pointer.Contains('ObserveEdgePrewarmPointer(pointer)')) {
             throw 'Scoped proxy pointer path no longer uses the canonical de-duplicating observer'
           }
+      - name: Restore product
+        run: dotnet restore .\PaperTodo.csproj
       - name: Build product Release
-        run: dotnet build PaperTodo.csproj -c Release
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
       - name: Build EdgeTitle checks Release
-        run: dotnet build tests/PaperTodo.EdgeTitleChecks -c Release
+        run: dotnet build .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
       - name: Locate EdgeTitle checks executable
         id: checks
         run: |
@@ -61,4 +64,8 @@ jobs:
       - name: Run standard EdgeTitle checks
         run: |
           & '${{ steps.checks.outputs.exe }}'
+          exit $LASTEXITCODE
+      - name: Run full native input checks
+        run: |
+          & '${{ steps.checks.outputs.exe }}' --proxy-native-input
           exit $LASTEXITCODE
