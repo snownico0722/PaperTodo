@@ -26,7 +26,7 @@ internal static partial class Program
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadSelectionChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

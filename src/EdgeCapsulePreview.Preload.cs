@@ -10,7 +10,7 @@ namespace PaperTodo;
 
 // Dispatcher-local, discardable prelayout of eligible edge notes. The retained product is one
 // immutable whole-preview artifact per source: never a detached WPF body or hidden preview tree.
-internal sealed class MarkdownEdgePreviewPreload
+internal sealed partial class MarkdownEdgePreviewPreload
 {
     private static readonly ConditionalWeakTable<Dispatcher, MarkdownEdgePreviewPreload> Instances = new();
     internal static MarkdownEdgePreviewPreload For(Dispatcher dispatcher) =>
@@ -28,7 +28,7 @@ internal sealed class MarkdownEdgePreviewPreload
     private bool _enabled = true;
     internal int ExcerptCount => _excerpts.Count;
     internal int ArtifactCount => _artifacts.Count;
-    internal int PendingCount => _pendingLayout.Count;
+    internal int PendingCount => _pendingLayout.Count + (_selectionDirty ? 1 : 0);
     internal int DeferredCount => _deferred.Count;
     private int RunnableCount => PendingCount - DeferredCount;
     internal long ArtifactHits { get; private set; }
@@ -67,50 +67,6 @@ internal sealed class MarkdownEdgePreviewPreload
         dispatcher.ShutdownStarted += (_, _) => Clear();
     }
 
-    // Preload policy is intentionally broader than the renderer's former paragraph-path threshold.
-    // Whole-preview work is worthwhile when the bounded excerpt is large, has substantial styled
-    // coverage, or has several distinct styled/link pieces. Thresholds are strict.
-    internal static bool IsClearlyHighLoad(MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
-    {
-        if (content.IsEmpty) return false;
-        var totalCharacters = content.Lines.Sum(line => line.Text.Length);
-        if (totalCharacters > 400) return true;
-        if (totalCharacters <= 200 || content.RenderMode == MarkdownRenderModes.Off) return false;
-
-        var styledCharacters = 0;
-        var styledPieces = 0;
-        foreach (var line in content.Lines)
-        {
-            if (line.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing)
-                continue;
-            if (line.WasInsideFence)
-            {
-                if (line.Text.Length > 0)
-                {
-                    styledCharacters += line.Text.Length;
-                    styledPieces++;
-                }
-            }
-            else
-            {
-                foreach (var piece in content.Inlines.Get(line.Text, MarkdownRenderModes.Full).Pieces)
-                {
-                    // Count semantic content, never Enhanced-mode delimiter/URL styling.
-                    if ((piece.Style & ~MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Syntax) == 0 && piece.Link == null)
-                        continue;
-                    styledCharacters += piece.Text.Length;
-                    styledPieces++;
-                }
-            }
-            if (styledCharacters > 100 || styledPieces > 3) return true;
-        }
-        return false;
-    }
-
-    internal static bool ShouldPreload(EdgeCapsulePreviewContext context,
-        MarkdownEdgeCapsulePreviewRenderer.PreviewContent content) =>
-        !content.IsEmpty && (context.PreloadLightContent?.Invoke() == true || IsClearlyHighLoad(content));
-
     internal MarkdownEdgeCapsulePreviewRenderer.PreviewContent Capture(EdgeCapsulePreviewContext context)
     {
         _dispatcher.VerifyAccess();
@@ -122,10 +78,21 @@ internal sealed class MarkdownEdgePreviewPreload
         var source = context.InvalidationSource;
         // Compare the bounded source BEFORE classifying: unchanged previews must not reparse.
         if (_excerpts.TryGetValue(source, out var entry) &&
-            entry.RenderMode == candidate.RenderMode && entry.Truncated == candidate.Truncated &&
-            entry.Lines.SequenceEqual(candidate.Lines)) return entry;
+            SameContent(entry, candidate)) return entry;
         _artifacts.Remove(source);
         _excerpts.Remove(source);
+        if (_candidates.TryGetValue(source, out var registered))
+        {
+            if (SameContent(registered.Content, candidate)) candidate = registered.Content!;
+            else
+            {
+                // Demand remains valid independently of admission. Reconcile an unannounced
+                // text change later, through the same idle/debounce path as ordinary edits.
+                _selectionDirty = true;
+                _work?.Cancel();
+                Arm();
+            }
+        }
         if (ShouldPreload(context, candidate)) _excerpts[source] = candidate;
         return candidate;
     }
@@ -206,8 +173,10 @@ internal sealed class MarkdownEdgePreviewPreload
     {
         _dispatcher.VerifyAccess();
         _excerpts.Remove(source); _artifacts.Remove(source); _pendingLayout.Remove(source); _deferred.Remove(source);
+        if (_candidates.Remove(source)) _selectionDirty = _candidates.Count > 0;
         if (ReferenceEquals(_workingSource, source)) _work?.Cancel();
         if (RunnableCount == 0) _debounce.Stop();
+        else if (_work == null) Arm();
         TracePreload("forget", source);
     }
 
@@ -280,6 +249,9 @@ internal sealed class MarkdownEdgePreviewPreload
             {
                 await Dispatcher.Yield(DispatcherPriority.ContextIdle);
                 if (work.IsCancellationRequested || RunnableCount == 0) break;
+                if (_selectionDirty) await RefreshSelectionAsync(work.Token);
+                if (work.IsCancellationRequested) break;
+                if (_pendingLayout.Count == _deferred.Count) continue;
                 var pair = _pendingLayout.First(item => !_deferred.Contains(item.Key));
                 var defer = false;
                 _workingSource = pair.Key;
@@ -408,6 +380,7 @@ internal sealed class MarkdownEdgePreviewPreload
         _dispatcher.VerifyAccess();
         _debounce.Stop(); _work?.Cancel();
         _pendingLayout.Clear(); _deferred.Clear(); _artifacts.Clear(); _excerpts.Clear();
+        _candidates.Clear(); _selectionDirty = false; _nextCandidateOrder = 0;
     }
 
     [Conditional("DEBUG")]

@@ -225,9 +225,10 @@ internal static class Program
             }
             if (!baseline)
             {
-                if ((name.StartsWith("capsules-") && count <= 10) || name == "preview-before-shell")
+                if (name.StartsWith("capsules-") || name == "preview-before-shell")
                 {
-                    Require(cache.ArtifactCount == count, "small workset did not cache all short notes");
+                    var expected = Math.Min(count, 10);
+                    Require(cache.ArtifactCount == expected, "progressive selection did not fill short-note slots");
                     var first = windows["fixture-0"];
                     var source = (EdgeCapsulePreviewInvalidationSource)Field(first, "_edgeCapsulePreviewInvalidationSource");
                     var keyBefore = source.Version;
@@ -236,12 +237,12 @@ internal static class Program
                     editor.GetType().GetProperty("Text")!.SetValue(editor, "edited short note");
                     first.CommitPendingNoteContentForSave();
                     first.RequestMarkdownPreviewLayoutPreload();
-                    await Until(() => cache.PendingCount == 0 && cache.ArtifactCount == count, "light note edit rewarm");
+                    await Until(() => cache.PendingCount == 0 && cache.ArtifactCount == expected, "light note edit rewarm");
                     Require(source.Version > keyBefore && cache.WarmCompletions > completionsBefore,
                         "real editor changes did not invalidate and rebuild preview content");
                 }
-                if (name == "capsules-11" || name == "preview-off")
-                    Require(cache.ArtifactCount == 0, "heavy filter or feature-off gate was bypassed");
+                if (name == "preview-off")
+                    Require(cache.ArtifactCount == 0, "feature-off gate was bypassed");
             }
             if (name == "cancel-monitor" && !baseline)
             {
