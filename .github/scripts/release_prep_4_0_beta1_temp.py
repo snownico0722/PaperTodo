@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 def replace_once(path: str, old: str, new: str) -> None:
@@ -6,57 +7,88 @@ def replace_once(path: str, old: str, new: str) -> None:
     text = p.read_text(encoding="utf-8-sig")
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:100]!r}")
+        raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:120]!r}")
     p.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
 
 
+release_path = Path(".github/workflows/release.yml")
+release_text = release_path.read_text(encoding="utf-8-sig")
+
+if '"release_version=$releaseVersion" >> $env:GITHUB_OUTPUT' not in release_text:
+    replace_once(
+        str(release_path),
+        '''          # Multiple PropertyGroups exist; .PropertyGroup.Version is an array that stringifies
+          # with a trailing space (e.g. "3.0 "). Read the single Version element instead.
+          $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
+          if ($versionNodes.Count -ne 1) {
+            throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
+          }
+          $version = ([string]$versionNodes[0].InnerText).Trim()
+          if ([string]::IsNullOrWhiteSpace($version) -or $version -match '\\s') {
+            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$version'."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "self_contained_exe=PaperTodo-v$version-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
+          "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT''',
+        '''          # Keep the SDK build version SemVer-compatible while allowing the public release
+          # label to follow PaperTodo's compact naming (for example 4.0beta1).
+          $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
+          $informationalVersionNodes = $project.SelectNodes('/Project/PropertyGroup/InformationalVersion')
+          if ($versionNodes.Count -ne 1) {
+            throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
+          }
+          if ($informationalVersionNodes.Count -ne 1) {
+            throw "PaperTodo.csproj must define exactly one <InformationalVersion> element (found $($informationalVersionNodes.Count))."
+          }
+          $buildVersion = ([string]$versionNodes[0].InnerText).Trim()
+          $releaseVersion = ([string]$informationalVersionNodes[0].InnerText).Trim()
+          if ([string]::IsNullOrWhiteSpace($buildVersion) -or $buildVersion -match '\\s') {
+            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$buildVersion'."
+          }
+          if ([string]::IsNullOrWhiteSpace($releaseVersion) -or $releaseVersion -match '\\s') {
+            throw "PaperTodo.csproj <InformationalVersion> is missing or contains whitespace: '$releaseVersion'."
+          }
+          if ($releaseVersion -notmatch '^[A-Za-z0-9_.-]+$') {
+            throw "PaperTodo.csproj <InformationalVersion> contains unsupported release filename/tag characters: '$releaseVersion'."
+          }
+
+          "build_version=$buildVersion" >> $env:GITHUB_OUTPUT
+          "release_version=$releaseVersion" >> $env:GITHUB_OUTPUT
+          "self_contained_exe=PaperTodo-v$releaseVersion-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
+          "framework_dependent_exe=PaperTodo-v$releaseVersion-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT''',
+    )
+    replace_once(
+        str(release_path),
+        '          name: PaperTodo-v${{ steps.meta.outputs.version }}-win-x64',
+        '          name: PaperTodo-v${{ steps.meta.outputs.release_version }}-win-x64',
+    )
+    replace_once(
+        str(release_path),
+        '              $tag = "v${{ steps.meta.outputs.version }}"',
+        '              $tag = "v${{ steps.meta.outputs.release_version }}"',
+    )
+    replace_once(
+        str(release_path),
+        '          $expectedTag = "v${{ steps.meta.outputs.version }}"',
+        '          $expectedTag = "v${{ steps.meta.outputs.release_version }}"',
+    )
+    print("Updated release workflow to use InformationalVersion for public release naming.")
+else:
+    print("Release workflow public-version mapping is already applied.")
+
 csproj = Path("PaperTodo.csproj").read_text(encoding="utf-8-sig")
-if "<Version>4.0.0-beta1</Version>" in csproj:
-    print("4.0beta1 release prep is already applied; nothing to do.")
-    raise SystemExit(0)
+required_project_values = [
+    "<Version>4.0.0-beta1</Version>",
+    "<InformationalVersion>4.0beta1</InformationalVersion>",
+]
+for value in required_project_values:
+    if value not in csproj:
+        raise SystemExit(f"Missing expected project metadata: {value}")
 
-replace_once(
-    "PaperTodo.csproj",
-    """    <Version>4.0.0-preview</Version>\n    <AssemblyVersion>4.0.0.0</AssemblyVersion>\n    <FileVersion>4.0.0.0</FileVersion>\n    <InformationalVersion>4.0Preview</InformationalVersion>\n    <!-- Keep tray header \"PaperTodo v4.0Preview\" free of +commit suffixes from SourceLink. -->""",
-    """    <Version>4.0.0-beta1</Version>\n    <AssemblyVersion>4.0.0.0</AssemblyVersion>\n    <FileVersion>4.0.0.0</FileVersion>\n    <InformationalVersion>4.0beta1</InformationalVersion>\n    <!-- Keep tray header \"PaperTodo v4.0beta1\" free of +commit suffixes from SourceLink. -->""",
-)
+for path in ("CHANGELOG.md", "doc/CHANGELOG.en.md"):
+    text = Path(path).read_text(encoding="utf-8-sig")
+    if len(re.findall(r"^### v4\.0beta1$", text, flags=re.MULTILINE)) != 1:
+        raise SystemExit(f"{path}: expected exactly one v4.0beta1 section")
 
-replace_once(
-    "CHANGELOG.md",
-    "### Unreleased\n\n- **纸片数量上限**",
-    "### Unreleased\n\n- 暂无\n\n### v4.0beta1\n\n- **纸片数量上限**",
-)
-replace_once(
-    "CHANGELOG.md",
-    "- **自定义笔记背景**：在 `custom/note/` 中放入 `background.png`、`background.jpg` 或 `background.jpeg`，即可为内置 Markdown 笔记使用自定义背景；检测到背景图片后，「外观」设置中会自动显示启用开关，并随浅色 / 深色主题调整显示效果。关闭状态会被记住，替换背景图片后可重新切换开关或重启 PaperTodo 刷新。开关保存失败时会提示，并按实际保存状态显示。",
-    "- **自定义纸片背景**：在 `PaperTodo.exe` 同目录放入 `papertodo.png`、`papertodo.jpg` 或 `papertodo.jpeg`，即可为待办与内置 Markdown 笔记共用自定义背景；「视觉」设置可选择是否与当前纸片配色混合，关闭混合时仍显示原图。支持拉伸、居中、左下、正下、右下；除拉伸外保持原始比例完整显示、不裁切图片。图片损坏或无法加载时安全回退并在设置中显示提示；超大图片按最长边 4096 像素限制解码，小图保持原始尺寸。",
-)
-replace_once(
-    "CHANGELOG.md",
-    "  - **Codex CLI Bridge**：待办项与纸片顶栏可直接把内容交给本机 Codex CLI，支持图片附件、绑定路径及关联纸片上下文；专属纸片可编辑默认提示词，未编辑时使用内置提示词，已编辑或主动清空的内容会保留。随插件提供 PaperTodo 插件制作 Skill 和开发手册，默认在提出制作插件的需求时调用。\n  - **便签微应用容器**",
-    "  - **Codex CLI Bridge**：待办项与纸片顶栏可直接把内容交给本机 Codex CLI，支持图片附件、绑定路径及关联纸片上下文；专属纸片可编辑默认提示词，未编辑时使用内置提示词，已编辑或主动清空的内容会保留。随插件提供 PaperTodo 插件制作 Skill 和开发手册，默认在提出制作插件的需求时调用。\n  - **插件本地化**：插件可通过 manifest 为名称、描述、设置项、选项和分类提供多语言文案，并按当前 PaperTodo 界面语言自动回退；Native 插件也可读取当前界面语言。切换 PaperTodo 界面语言后会提示“稍后”或“立即重启”。\n  - **便签微应用容器**",
-)
-
-replace_once(
-    "doc/CHANGELOG.en.md",
-    "### Unreleased (4.0.0-preview)\n\n- **Paper Count Limit**",
-    "### Unreleased\n\n- None currently.\n\n### v4.0beta1\n\n- **Paper Count Limit**",
-)
-replace_once(
-    "doc/CHANGELOG.en.md",
-    "- **Custom Note Backgrounds**: Place `background.png`, `background.jpg`, or `background.jpeg` under `custom/note/` to use it as the background for built-in Markdown notes. When a background image is detected, an enable toggle appears automatically in Appearance settings, with display opacity adapted for light and dark themes. The disabled state is remembered; after replacing the image, toggle the setting again or restart PaperTodo to refresh it. A failed toggle save is reported, and the control reflects the actual saved state.",
-    "- **Custom Paper Backgrounds**: Place `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` beside `PaperTodo.exe` to share one custom background across todo papers and built-in Markdown notes. Appearance settings can show the original image or blend it with the current paper color. Layout options include Stretch, Center, Bottom Left, Bottom Center, and Bottom Right; non-stretch modes preserve the image aspect ratio and do not crop it. Invalid images safely fall back with a settings warning; oversized images decode with a 4096-pixel longest-edge cap while smaller images keep their original decode size.",
-)
-replace_once(
-    "doc/CHANGELOG.en.md",
-    "  - **Codex CLI Bridge**: Send todo items or whole papers to the local Codex CLI, including image attachments, linked paths and related-paper context. Its dedicated paper edits the default prompt: untouched prompts use the built-in text, while edits and intentional clearing are preserved. Includes a PaperTodo plugin creation Skill and development guide, invoked by the default prompt for plugin-building requests.\n  - **Desktop Micro-App Container**",
-    "  - **Codex CLI Bridge**: Send todo items or whole papers to the local Codex CLI, including image attachments, linked paths and related-paper context. Its dedicated paper edits the default prompt: untouched prompts use the built-in text, while edits and intentional clearing are preserved. Includes a PaperTodo plugin creation Skill and development guide, invoked by the default prompt for plugin-building requests.\n  - **Plugin Localization**: Plugin manifests can localize names, descriptions, settings, options, and category labels with culture fallback; Native plugins can also read the current PaperTodo UI language. Changing the PaperTodo UI language now offers “Later” or “Restart now”.\n  - **Desktop Micro-App Container**",
-)
-
-replace_once(
-    "README.md",
-    "this document follows the <code>main</code> branch (currently <strong>4.0.0-preview</strong>).",
-    "this document follows the <code>main</code> branch (currently <strong>4.0beta1</strong>).",
-)
-
-print("Applied 4.0beta1 release-prep edits.")
+print("4.0beta1 release workflow and changelog metadata validated.")
