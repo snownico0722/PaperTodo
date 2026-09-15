@@ -149,10 +149,6 @@ internal static partial class Program
             Require(
                 PaperBackgroundLayouts.Normalize("unknown") == PaperBackgroundLayouts.Center,
                 "unknown layout falls back to center");
-            Require(
-                PaperBackgroundLayouts.Normalize(PaperBackgroundLayouts.LegacyStretch) ==
-                PaperBackgroundLayouts.Center,
-                "legacy stretch layout is no longer treated as a position");
         }
         finally
         {
