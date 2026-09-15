@@ -92,7 +92,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         public bool IsAvailable =>
             !_disposed &&
             !HasOwner &&
-            Window.Handle != IntPtr.Zero;
+            Window.Handle != IntPtr.Zero && Window.InputHandle != IntPtr.Zero;
 
         public static QueueHost? TryCreate(
             SharedRuntime runtime,
@@ -170,7 +170,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         public bool CanStage(
             EdgeCapsuleQueueCompositionProxy? predecessor) =>
             !_disposed &&
-            Window.Handle != IntPtr.Zero &&
+            Window.Handle != IntPtr.Zero && Window.InputHandle != IntPtr.Zero &&
             Staged == null &&
             (predecessor == null
                 ? Current == null
@@ -263,7 +263,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
             Current = null;
             Staged = null;
             try { Target.SetRoot(null!).CheckError(); } catch { }
-            try { _runtime.Device.Commit().CheckError(); } catch { }
+            try
+            {
+#if DEBUG
+                using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+#endif
+                    _runtime.Device.Commit().CheckError();
+            }
+            catch { }
             try { Target.Dispose(); } catch { }
             try { Window.Dispose(); } catch { }
         }
@@ -465,7 +472,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         internal void ReturnIdleHost(QueueHost host)
         {
             _dispatcher.VerifyAccess();
-            if (_disposed || !host.IsAvailable)
+            if (_disposed || host.HasOwner)
             {
                 return;
             }
@@ -477,6 +484,13 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
                 ReferenceEquals(cached, host))
             {
                 _hosts.Remove(host.QueueKey);
+            }
+            if (!host.IsAvailable)
+            {
+                // Losing only the input HWND leaves a valid DComp output. It is still an
+                // unusable pair and must not remain indexed or become the next warm spare.
+                try { host.Dispose(); } catch { }
+                return;
             }
             if (_spareHosts.Count == 0 && host.ReleaseQueue())
             {

@@ -52,10 +52,27 @@ internal static class EdgeCapsuleQueueProxyGeometry
             Math.Max(first.Bottom, second.Bottom));
     }
 
+    internal static int DownwardBrowseCapacity(
+        DeviceScreenRect compactBounds,
+        DeviceScreenRect previewBounds,
+        int workAreaBottomDevice)
+    {
+        if (compactBounds.IsEmpty || previewBounds.IsEmpty)
+        {
+            return 0;
+        }
+
+        // Several downward transfers may retain earlier gaps while the next owner remains under
+        // the pointer. One preview-height delta is therefore insufficient. Reserve that owner's
+        // possible travel across the work area; followers can extend beyond it on the same output.
+        var previewGrowth = (long)previewBounds.Height - compactBounds.Height;
+        var pointerSideTravel = (long)workAreaBottomDevice - compactBounds.Bottom;
+        return (int)Math.Clamp(Math.Max(previewGrowth, pointerSideTravel), 0, int.MaxValue);
+    }
+
     internal static DeviceScreenRect WithDownwardCapacity(
         DeviceScreenRect bounds,
-        int downwardShiftDevice,
-        int workAreaBottomDevice)
+        int downwardShiftDevice)
     {
         if (bounds.IsEmpty || downwardShiftDevice <= 0)
         {
@@ -65,12 +82,13 @@ internal static class EdgeCapsuleQueueProxyGeometry
         var requestedBottom = Math.Min(
             int.MaxValue,
             (long)bounds.Bottom + downwardShiftDevice);
+        // Followers may extend below the work area. This queue's no-redirection output is not
+        // a WPF bitmap allocation; retain its finite, queue-derived translation capacity instead
+        // of clipping it to the work area (which could even shrink a required source envelope).
         return new DeviceScreenRect(
             bounds.Left,
             bounds.Top,
             bounds.Right,
-            (int)Math.Min(
-                requestedBottom,
-                workAreaBottomDevice));
+            (int)requestedBottom);
     }
 }

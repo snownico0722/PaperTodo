@@ -1,18 +1,37 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace PaperTodo;
 
 /// <summary>
-/// Native output target for one active queue transaction. WS_EX_NOREDIRECTIONBITMAP keeps this
-/// window from allocating another full RGBA backing surface; DirectComposition supplies every
-/// visible pixel.
+/// DirectComposition output and a separate, non-drawing input window. The output is always
+/// mouse-transparent; the input HWND's OS region, not HTTRANSPARENT across threads, excludes holes.
 /// </summary>
 internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
 {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PaintState
+    {
+        public IntPtr DeviceContext;
+        public int Erase;
+        public int Left, Top, Right, Bottom;
+        public int Restore, IncrementalUpdate;
+        private uint _reserved0, _reserved1, _reserved2, _reserved3;
+        private uint _reserved4, _reserved5, _reserved6, _reserved7;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr BeginPaint(IntPtr window, out PaintState paint);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EndPaint(IntPtr window, ref PaintState paint);
+
     private const int GwlWndProc = -4;
     private const int WsPopup = unchecked((int)0x80000000);
     private const int WsExTopmost = 0x00000008;
+    private const int WsExTransparent = 0x00000020;
     private const int WsExToolWindow = 0x00000080;
+    private const int WsExLayered = 0x00080000;
     private const int WsExNoRedirectionBitmap = 0x00200000;
     private const int WsExNoActivate = 0x08000000;
     private const int WmDestroy = 0x0002;
@@ -23,17 +42,22 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private const int WmPaint = 0x000F;
     private const int WmEraseBackground = 0x0014;
     private const int WmLButtonDown = 0x0201;
+    private const int WmLButtonDoubleClick = 0x0203;
     private const int WmRButtonDown = 0x0204;
+    private const int WmRButtonDoubleClick = 0x0206;
     private const int WmMiddleButtonDown = 0x0207;
+    private const int WmMiddleButtonDoubleClick = 0x0209;
     private const int WmDpiChanged = 0x02E0;
     private const int HtClient = 1;
     private const int HtTransparent = -1;
     private const int MaNoActivate = 3;
     private const int SwHide = 0;
+    private const uint LwaAlpha = 0x00000002;
+    private const int RgnOr = 2;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
     private const uint SwpNoOwnerZOrder = 0x0200;
-    private static readonly IntPtr HwndTop = IntPtr.Zero;
+    private static readonly IntPtr HwndNotTopmost = new(-2);
     private static readonly IntPtr HwndTopmost = new(-1);
     private static readonly Dictionary<IntPtr, EdgeCapsuleQueueProxyWindow> Instances = new();
     private static readonly WndProc WindowProcedure = DispatchWindowMessage;
@@ -46,11 +70,23 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private readonly Action _compositionInvalidated;
     private readonly Action _outputLost;
     private IntPtr _previousWindowProcedure;
+    private IntPtr _previousInputWindowProcedure;
+    private DeviceScreenRect _bounds;
+    private bool _boundsKnown = true;
+    private DeviceScreenRect[]? _inputRegions;
+    private DeviceScreenRect[]? _screenInputRegions;
+    private DeviceScreenRect _screenInputBounds;
+    private long _mutationVersion;
+    private bool _positioning;
+    private bool _shown;
+    private bool _topmost;
+    private bool _inputHiddenForFailure;
     private bool _disposed;
     private bool _disposing;
 
     private EdgeCapsuleQueueProxyWindow(
         IntPtr handle,
+        DeviceScreenRect bounds,
         Func<DeviceScreenPoint, bool> containsVisual,
         Action<EdgeCapsulePointerDown> interactionRequested,
         Action environmentChanged,
@@ -58,6 +94,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         Action outputLost)
     {
         Handle = handle;
+        _bounds = bounds;
         _containsVisual = containsVisual;
         _interactionRequested = interactionRequested;
         _environmentChanged = environmentChanged;
@@ -66,6 +103,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     }
 
     public IntPtr Handle { get; private set; }
+    internal IntPtr InputHandle { get; private set; }
 
     public static EdgeCapsuleQueueProxyWindow? TryCreate(
         DeviceScreenRect bounds,
@@ -76,7 +114,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         Action compositionInvalidated,
         Action outputLost)
     {
-        if (bounds.IsEmpty)
+        if (!ValidBounds(bounds))
         {
             return null;
         }
@@ -86,7 +124,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             WsExNoRedirectionBitmap |
             (topmost ? WsExTopmost : 0);
         var handle = CreateWindowEx(
-            exStyle,
+            exStyle | WsExLayered | WsExTransparent,
             "Static",
             string.Empty,
             WsPopup,
@@ -105,6 +143,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
 
         var window = new EdgeCapsuleQueueProxyWindow(
             handle,
+            bounds,
             containsVisual,
             interactionRequested,
             environmentChanged,
@@ -123,34 +162,214 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             window.Dispose();
             return null;
         }
+        // WS_EX_TRANSPARENT alone only documents same-thread paint ordering. Layered windows
+        // explicitly pass mouse input underneath, and DComp supports layered HWND targets.
+        // Keep alpha 255: transparency of the displayed content still comes from the live visual.
+        if (!SetLayeredWindowAttributes(handle, 0, 255, LwaAlpha))
+        {
+            window.Dispose();
+            return null;
+        }
+        var input = CreateWindowEx(exStyle, "Static", string.Empty, WsPopup,
+            bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (input == IntPtr.Zero)
+        {
+            window.Dispose();
+            return null;
+        }
+        window.InputHandle = input;
+        lock (Instances) Instances[input] = window;
+        window._previousInputWindowProcedure = SetWindowLongPtr(input, GwlWndProc, WindowProcedurePointer);
+        // An actual empty HRGN is required. A null HRGN would restore the whole output rectangle.
+        if (window._previousInputWindowProcedure == IntPtr.Zero ||
+            !window.TrySetInputRegions(Array.Empty<DeviceScreenRect>()))
+        {
+            window.Dispose();
+            return null;
+        }
         return window;
     }
 
     public bool Show(DeviceScreenRect bounds, bool topmost)
     {
-        if (_disposed || Handle == IntPtr.Zero || bounds.IsEmpty)
+        if (_disposed || _disposing || _positioning || Handle == IntPtr.Zero ||
+            InputHandle == IntPtr.Zero || !ValidBounds(bounds))
         {
             return false;
         }
-        // SWP_SHOWWINDOW and SWP_NOACTIVATE publish position, size and visibility together.
-        // A second ShowWindow request would repeat that native publication on the cold path.
-        return SetWindowPos(
-            Handle,
-            topmost ? HwndTopmost : HwndTop,
-            bounds.Left,
-            bounds.Top,
-            bounds.Width,
-            bounds.Height,
-            SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
+        var version = ++_mutationVersion;
+        var output = Handle;
+        var input = InputHandle;
+        _positioning = true;
+        try
+        {
+            // A pooled HWND cannot carry old screen-space input into another queue position.
+            // Publication supplies the new presented regions after both windows have moved.
+            if (bounds != _bounds || _inputRegions == null)
+            {
+                _screenInputRegions = null;
+                if (!SetInputRegionsCore(Array.Empty<DeviceScreenRect>(), version, output, input)) return false;
+            }
+            if (!SetWindowPos(output, topmost ? HwndTopmost : HwndNotTopmost,
+                    bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+                    SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder) ||
+                !IsCurrent(version, output, input))
+            { _screenInputRegions = null; return false; }
+            _boundsKnown = false;
+            if (!SetWindowPos(input, topmost ? HwndTopmost : HwndNotTopmost,
+                    bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+                    SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder))
+            {
+                FailInput(version, output, input);
+                return false;
+            }
+            if (!IsCurrent(version, output, input)) return false;
+            _bounds = bounds;
+            _boundsKnown = true;
+            _topmost = topmost;
+            _shown = true;
+            _inputHiddenForFailure = false;
+            return true;
+        }
+        finally { _positioning = false; }
     }
 
     public void Hide()
     {
-        if (!_disposed && Handle != IntPtr.Zero)
-        {
-            _ = ShowWindow(Handle, SwHide);
-        }
+        if (_disposed || _disposing) return;
+        var version = ++_mutationVersion;
+        var output = Handle;
+        var input = InputHandle;
+        _shown = false;
+        _screenInputRegions = null;
+        if (input != IntPtr.Zero) _ = ShowWindow(input, SwHide);
+        if (!IsCurrent(version, output, input)) return;
+        if (output != IntPtr.Zero) _ = ShowWindow(output, SwHide);
+        if (!IsCurrent(version, output, input)) return;
+        if (input != IntPtr.Zero) _ = SetInputRegionsCore(Array.Empty<DeviceScreenRect>(), version, output, input);
     }
+
+    internal bool TrySetInputRegions(IReadOnlyList<DeviceScreenRect> screenBounds)
+    {
+        ArgumentNullException.ThrowIfNull(screenBounds);
+        if (_disposed || _disposing || Handle == IntPtr.Zero || InputHandle == IntPtr.Zero ||
+            (_positioning && screenBounds.Count != 0)) return false;
+        if (!_positioning && !_boundsKnown)
+        {
+            // A failed/reentrant resize may already have moved the HWND. Do not interpret later
+            // screen-space regions against the old requested position in that case.
+            if (!GetWindowRect(InputHandle, out var nativeBounds) || !ValidBounds(nativeBounds.ToDevice()))
+            {
+                FailInput(++_mutationVersion, Handle, InputHandle);
+                return false;
+            }
+            _bounds = nativeBounds.ToDevice();
+            _boundsKnown = true;
+            _inputRegions = null;
+            _screenInputRegions = null;
+        }
+        // The common retained/unchanged tick must neither allocate nor call GDI. This is only a
+        // successful native-command cache, not another presentation or pointer authority.
+        if (!_inputHiddenForFailure && _screenInputBounds == _bounds &&
+            _screenInputRegions is { } cached && cached.Length == screenBounds.Count)
+        {
+            var same = true;
+            for (var index = 0; index < cached.Length; index++)
+                if (cached[index] != screenBounds[index]) { same = false; break; }
+            if (same) return true;
+        }
+        var requested = screenBounds.ToArray();
+        var regions = new List<DeviceScreenRect>(requested.Length);
+        foreach (var screen in requested)
+        {
+            var left = Math.Max(screen.Left, _bounds.Left);
+            var top = Math.Max(screen.Top, _bounds.Top);
+            var right = Math.Min(screen.Right, _bounds.Right);
+            var bottom = Math.Min(screen.Bottom, _bounds.Bottom);
+            if (right <= left || bottom <= top) continue;
+            regions.Add(new DeviceScreenRect(left - _bounds.Left, top - _bounds.Top,
+                right - _bounds.Left, bottom - _bounds.Top));
+        }
+        var normalized = regions.Distinct().OrderBy(rect => rect.Left).ThenBy(rect => rect.Top)
+            .ThenBy(rect => rect.Right).ThenBy(rect => rect.Bottom).ToArray();
+        if (_inputRegions != null && _inputRegions.AsSpan().SequenceEqual(normalized) && !_inputHiddenForFailure)
+        {
+            _screenInputRegions = requested;
+            _screenInputBounds = _bounds;
+            return true;
+        }
+        var version = ++_mutationVersion;
+        var output = Handle;
+        var input = InputHandle;
+        if (!SetInputRegionsCore(normalized, version, output, input)) return false;
+        if (_shown && _inputHiddenForFailure)
+        {
+            _inputHiddenForFailure = false;
+            if (!SetWindowPos(input, _topmost ? HwndTopmost : HwndNotTopmost,
+                    _bounds.Left, _bounds.Top, _bounds.Width, _bounds.Height,
+                    SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder))
+            {
+                FailInput(version, output, input);
+                return false;
+            }
+        }
+        if (!IsCurrent(version, output, input)) return false;
+        _screenInputRegions = requested;
+        _screenInputBounds = _bounds;
+        return true;
+    }
+
+    private bool SetInputRegionsCore(DeviceScreenRect[] regions, long version, IntPtr output, IntPtr input)
+    {
+        if (!IsCurrent(version, output, input) || input == IntPtr.Zero) return false;
+        if (_inputRegions != null && _inputRegions.AsSpan().SequenceEqual(regions)) return true;
+        var union = CreateRectRgn(0, 0, 0, 0);
+        if (union == IntPtr.Zero) { FailInput(version, output, input); return false; }
+        try
+        {
+            foreach (var rect in regions)
+            {
+                var part = CreateRectRgn(rect.Left, rect.Top, rect.Right, rect.Bottom);
+                if (part == IntPtr.Zero) { FailInput(version, output, input); return false; }
+                try
+                {
+                    if (CombineRgn(union, union, part, RgnOr) == 0)
+                    { FailInput(version, output, input); return false; }
+                }
+                finally { _ = DeleteObject(part); }
+            }
+            // SetWindowRgn sends synchronous position messages. A nested request for the old
+            // region must not fast-path against a cache that the outer native call is replacing.
+            _inputRegions = null;
+            _screenInputRegions = null;
+            if (SetWindowRgn(input, union, redraw: false) == 0)
+            { FailInput(version, output, input); return false; }
+            union = IntPtr.Zero; // Ownership transferred even if a synchronous callback replaced us.
+            if (!IsCurrent(version, output, input)) return false;
+            _inputRegions = regions;
+            return true;
+        }
+        finally { if (union != IntPtr.Zero) _ = DeleteObject(union); }
+    }
+
+    private bool IsCurrent(long version, IntPtr output, IntPtr input) =>
+        !_disposed && !_disposing && _mutationVersion == version && Handle == output && InputHandle == input;
+
+    private void FailInput(long version, IntPtr output, IntPtr input)
+    {
+        if (!IsCurrent(version, output, input)) return;
+        _inputRegions = null;
+        _screenInputRegions = null;
+        _inputHiddenForFailure = true;
+        // Keep the visual cover for the caller's existing rollback/handoff, but never leave stale
+        // input regions intercepting another application after a failed region/placement change.
+        if (input != IntPtr.Zero) _ = ShowWindow(input, SwHide);
+    }
+
+    private static bool ValidBounds(DeviceScreenRect bounds) =>
+        (long)bounds.Right - bounds.Left is > 0 and <= 0x03ffffff &&
+        (long)bounds.Bottom - bounds.Top is > 0 and <= 0x03ffffff;
 
     private IntPtr WindowMessage(
         IntPtr hwnd,
@@ -158,12 +377,15 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         IntPtr wParam,
         IntPtr lParam)
     {
+        var isInput = hwnd == InputHandle;
+        var previous = isInput ? _previousInputWindowProcedure : _previousWindowProcedure;
         try
         {
             switch (message)
             {
                 case WmNcHitTest:
                 {
+                    if (!isInput) return new IntPtr(HtTransparent);
                     var packed = lParam.ToInt64();
                     var point = new DeviceScreenPoint(
                         unchecked((short)(packed & 0xFFFF)),
@@ -175,12 +397,22 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
                 case WmEraseBackground:
                     return new IntPtr(1);
                 case WmPaint:
-                    _compositionInvalidated();
-                    _ = ValidateRect(hwnd, IntPtr.Zero);
+                    // Complete the native paint cycle even though DComp owns the pixels.
+                    // ValidateRect alone does not acknowledge this layered output's paint
+                    // request and can leave WM_PAINT spinning on an idle hidden HWND.
+                    _ = BeginPaint(hwnd, out var paint);
+                    try { if (!isInput) _compositionInvalidated(); }
+                    finally { _ = EndPaint(hwnd, ref paint); }
                     return IntPtr.Zero;
                 case WmLButtonDown:
+                case WmLButtonDoubleClick:
                 case WmRButtonDown:
+                case WmRButtonDoubleClick:
                 case WmMiddleButtonDown:
+                case WmMiddleButtonDoubleClick:
+                    // A native double click replaces the second DOWN; it is still a press and
+                    // must obey the same immediate handoff / drop-on-retry ownership boundary.
+                    if (!isInput) return IntPtr.Zero;
                     var packedPoint = lParam.ToInt64();
                     var cursor = new CursorPoint
                     {
@@ -200,9 +432,9 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
                 case WmDestroy:
                     break;
                 case WmNcDestroy:
-                    var destroyedResult = _previousWindowProcedure != IntPtr.Zero
+                    var destroyedResult = previous != IntPtr.Zero
                         ? CallWindowProc(
-                            _previousWindowProcedure,
+                            previous,
                             hwnd,
                             message,
                             wParam,
@@ -212,15 +444,15 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
                     {
                         Instances.Remove(hwnd);
                     }
-                    if (Handle == hwnd)
-                    {
-                        Handle = IntPtr.Zero;
-                    }
+                    ++_mutationVersion;
+                    if (isInput) { InputHandle = IntPtr.Zero; _inputRegions = null; _screenInputRegions = null; }
+                    else if (Handle == hwnd) Handle = IntPtr.Zero;
                     if (!_disposing)
                     {
                         // The output itself is gone, unlike an ordinary display/DPI change where
                         // the last proxy frame can safely remain as a handoff cover.
-                        _outputLost();
+                        if (isInput) _environmentChanged();
+                        else _outputLost();
                     }
                     return destroyedResult;
             }
@@ -236,9 +468,9 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
                 : IntPtr.Zero;
         }
 
-        return _previousWindowProcedure != IntPtr.Zero
+        return previous != IntPtr.Zero
             ? CallWindowProc(
-                _previousWindowProcedure,
+                previous,
                 hwnd,
                 message,
                 wParam,
@@ -268,38 +500,33 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             return;
         }
         _disposing = true;
-        var handle = Handle;
-        if (handle == IntPtr.Zero)
+        ++_mutationVersion;
+        _shown = false;
+        try
         {
-            _disposed = true;
-            _disposing = false;
-            return;
+            // A failure retiring one HWND must not prevent hiding/retiring its partner.
+            if (DestroyOwnedWindow(InputHandle, _previousInputWindowProcedure)) InputHandle = IntPtr.Zero;
+            if (DestroyOwnedWindow(Handle, _previousWindowProcedure)) Handle = IntPtr.Zero;
+            _inputRegions = null;
+            _screenInputRegions = null;
+            _disposed = Handle == IntPtr.Zero && InputHandle == IntPtr.Zero;
         }
+        finally { _disposing = false; }
+    }
+
+    private static bool DestroyOwnedWindow(IntPtr handle, IntPtr previous)
+    {
+        if (handle == IntPtr.Zero) return true;
         _ = ShowWindow(handle, SwHide);
-        if (_previousWindowProcedure != IntPtr.Zero)
-        {
-            if (SetWindowLongPtr(handle, GwlWndProc, _previousWindowProcedure) == IntPtr.Zero)
-            {
-                System.Diagnostics.Trace.TraceWarning(
-                    "Failed to restore edge capsule queue proxy WndProc for HWND 0x{0:X}.",
-                    handle.ToInt64());
-            }
-        }
+        if (previous != IntPtr.Zero && SetWindowLongPtr(handle, GwlWndProc, previous) == IntPtr.Zero)
+            System.Diagnostics.Trace.TraceWarning("Failed to restore proxy WndProc for HWND 0x{0:X}.", handle.ToInt64());
         if (!DestroyWindow(handle))
         {
-            System.Diagnostics.Trace.TraceWarning(
-                "Failed to destroy edge capsule queue proxy HWND 0x{0:X}.",
-                handle.ToInt64());
-            _disposing = false;
-            return;
+            System.Diagnostics.Trace.TraceWarning("Failed to destroy proxy HWND 0x{0:X}.", handle.ToInt64());
+            return false;
         }
-        lock (Instances)
-        {
-            Instances.Remove(handle);
-        }
-        Handle = IntPtr.Zero;
-        _disposed = true;
-        _disposing = false;
+        lock (Instances) Instances.Remove(handle);
+        return true;
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -314,6 +541,13 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left, Top, Right, Bottom;
+        internal readonly DeviceScreenRect ToDevice() => new(Left, Top, Right, Bottom);
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -336,6 +570,24 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         IntPtr hwnd,
         int index,
         IntPtr value);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int mode);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr value);
 
     [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
     private static extern IntPtr CallWindowProc(
@@ -367,9 +619,6 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool ClientToScreen(IntPtr hwnd, ref CursorPoint point);
-
-    [DllImport("user32.dll")]
-    private static extern bool ValidateRect(IntPtr hwnd, IntPtr rect);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyWindow(IntPtr hwnd);

@@ -199,7 +199,13 @@ internal static class Program
             long[]? previewVersions = null;
             if (name is "preview-before-shell" or "early-expand")
             {
-                await cache.StartStartupWork();
+                var firstPass = cache.StartStartupWork();
+                Require(ReferenceEquals(firstPass, cache.StartStartupWork()),
+                    "startup callers did not share the current preview pass");
+                await firstPass;
+                if (!baseline)
+                    Require(!(bool)Field(controller, "_edgePrewarmStartupReady"),
+                        "native preparation became eligible before the preview-first Shell drain");
                 Require(cache.ArtifactCount == count, "previews were not available ahead of shells");
                 Require(windows.Values.All(window => !window.IsShellBuilt), "optional shells blocked the first preview pass");
                 previewVersions = windows.Values.Select(window =>
@@ -217,6 +223,10 @@ internal static class Program
             var ready = Stopwatch.GetTimestamp();
             if (name == "preview-before-shell")
             {
+                await (Task)Field(controller, "_startupShellPrewarmTask");
+                if (!baseline)
+                    Require((bool)Field(controller, "_edgePrewarmStartupReady"),
+                        "completed Shell drain did not release native preparation interest");
                 Require(cache.ArtifactCount == count && cache.WarmCompletions == count,
                     "shell initialization discarded or rebuilt valid preview artifacts");
                 Require(previewVersions!.SequenceEqual(windows.Values.Select(window =>

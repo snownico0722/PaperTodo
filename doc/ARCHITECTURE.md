@@ -363,6 +363,20 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。
 
+开启边缘预览时，符合条件的队列在动画端点验证成功后继续保留当前 cover，包括正常收回到胶囊后的静置状态。指针进入后先消费原有 pointer/preview 工作，等 WPF Presenter 的动画、布局和待提交工作稳定，再把当前输入卡片交还真实 WPF。交接通过不含该卡片的静止 successor 完成：先保留 predecessor root，仅解除该 source 的 cloak，经过原有 flush 并验证其可见，再替换 peer root，由既有 publication/rollback 更新输入映射；其他成员继续保留同一 output/target 和 live source。静止 successor 不推进动画、不取消 Presenter 状态，也不携带旧预热任务的有效性回调。只剩一个成员或遇到失效、交互等边界时，仍使用完整交接。正常后继只重新接管确实发生位移的真实卡片；位置不变的已交还卡片继续由 WPF 处理输入，避免每次队列移动都重新遮蔽它。该卡片后来需要真实位移时仍必须重新准入，不能承诺所有切换都走无同步等待的继承路径。
+
+真实 source 和 output 使用同一产品最大预览尺寸入口，source 保持逐纸片有界，output 另为有限的队列浏览位移预留 envelope，不把每张 WPF bitmap 扩大到整个队列。后继必须落在已有 envelope 内，并保持原生 source identity/capacity；不能继承时仍走显式交接。后继可为同一 live surface 获取独立 COM 引用，发布成功后及时断开 predecessor 引用，不累积历史代链。逐卡交还后，被交还卡片不再存在于当前代理的成员、presentation 或输入集合；其余成员保留 source cloak。整队交回真实窗口后，共享 device/target 和有界 output 池仍可复用。
+
+队列的 DComp 输出窗口始终通过 layered/transparent 样式让出鼠标输入；另一个不绘制的原生窗口只承担有限命中区域。输入窗口的 OS region 来自同一 presented/applied `InteractiveBounds` 的并集，在 publication 和既有指针采样中更新；它不裁剪 DComp 画面，不扩大为 output envelope 或 transfer corridor。透明区域的跨线程、跨应用穿透不依赖 `HTTRANSPARENT`；该返回值只作为输入窗口内部的当前帧校验。交接、后继保留或重试期间，可见卡片仍通过同一采样维护有限命中区域以阻止误点后方，但暂停业务输入转交；真正空白仍由 OS 穿透，隐藏、释放或 cover 丢失后撤销屏蔽。显示、隐藏、容量变化和销毁共同管理两个 HWND，隐藏与复用前撤销旧输入区域；region 更新失败隐藏输入窗口并走既有真实窗口交接。
+
+两个原生窗口用成对 `BeginPaint/EndPaint` 完成 `WM_PAINT` 生命周期，不绘制 GDI 背景；隐藏备用输出也必须消费绘制请求。仅静止输入交还时，保持 predecessor 画面，先验证 outgoing 真实窗口已解除 cloak，再发布不含该窗口的 successor；移动、新增 source 仍走原有 admission cover 边界。静止交还后段失败时，先恢复并确认旧 cover，再恢复 cloak；无法确认则恢复整组真实窗口。
+
+`EdgePrewarmCoordinator` 统一安排一次性 graphics 预热和真实静态队列的提前接管。启动 Shell 稳定或有效生命周期变化后，由 Rendering 调度屏障转入低优先级 Dispatcher，每次只准备一个队列；Rendering 本身不证明 DWM 已显示。静态接管使用实际已应用且原生验证一致的同一组 HWND，保留首次 publication/cloak/rollback 及端点验证，不制造空动画。输入、隐藏、关闭或显示环境变化撤销旧代；暂时未就绪的队列等待真实输入结束或 presentation/lifecycle 事件再次唤醒，不轮询重试。实际 demand 仍可直接走既有正常路径。
+
+调度器在交互及原生准备期间暂停 Markdown 的 speculative 预热；正文 cache 继续独立拥有最新请求、失效版本和不可变 artifact，正在使用的正文 demand 不被取消。调度器不持有第二套纸片状态、正文控件或 surface authority。
+
+保留期间，已经结束的 translation 不冻结 WPF shape；presentation 和输入读取真实 Host 当前 applied frame。静置采样只在指针或 applied frame 改变时唤醒 presenters。原生 capacity 或 DPI 需要改变时，先释放代理再恢复暂存的 source invalidation；输入交互、拖动、隐藏、退出等显式完成不能被普通浏览保留规则拦住。
+
 代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
 
 Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后，cover 才能释放；completion timer 只负责发起完成尝试，不作为 correctness proof。

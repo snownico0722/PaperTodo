@@ -1636,6 +1636,7 @@ public sealed partial class AppController : IDisposable
 
     private void RefreshAfterDisplayMetricsChanged()
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         if (IsExiting)
         {
             return;
@@ -1677,6 +1678,8 @@ public sealed partial class AppController : IDisposable
 
     internal void BeginDeepCapsuleReorderDrag(PaperData draggedPaper)
     {
+        _edgePrewarm?.CancelAll();
+        _edgePrewarm?.NotifyInteraction();
         foreach (var entry in _windows)
         {
             if (string.Equals(entry.Key, draggedPaper.Id, StringComparison.Ordinal))
@@ -1722,6 +1725,7 @@ public sealed partial class AppController : IDisposable
         }
 
         FlushPendingDeepCapsuleArrange();
+        RequestEdgePrewarmForVisibleQueues();
     }
 
     private void FlushPendingDeepCapsuleArrange()
@@ -1772,6 +1776,7 @@ public sealed partial class AppController : IDisposable
 
     public void SetDeepCapsuleContextMenuOpen(string paperId, bool open)
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         if (string.IsNullOrWhiteSpace(paperId))
         {
             return;
@@ -1788,6 +1793,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _windows.TryGetValue(paper.Id, out var window);
@@ -1910,6 +1916,7 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         CancelStartupDisplayRestore();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _paperSurfaceRestoreGeneration++;
@@ -1945,6 +1952,7 @@ public sealed partial class AppController : IDisposable
 
     public void DeletePaper(PaperData paper)
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         paper.IsVisible = false;
         NextVisibilityAnimationVersion(paper.Id);
 
@@ -2576,6 +2584,7 @@ public sealed partial class AppController : IDisposable
         bool animate = false,
         bool flushInitialPresentations = false)
     {
+        using var prewarmMutation = SuspendEdgePrewarmForMutation();
         if (HasDeepCapsuleReorderDragInProgress())
         {
             _deepCapsuleArrangeGate.Defer(animate);
@@ -3627,6 +3636,7 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        DisposeEdgePrewarm();
         CancelStartupDisplayRestore();
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();

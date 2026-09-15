@@ -10,19 +10,19 @@ internal static partial class Program
         using var output = EdgeCapsuleQueueProxyWindow.TryCreate(bounds, false,
             _ => true, received.Add, () => { }, () => { }, () => { });
         Check(output != null, "Create an offscreen HWND to verify signed message coordinates");
-        foreach (var message in new[] { 0x0201, 0x0204, 0x0207 })
+        foreach (var message in new[] { 0x0201, 0x0203, 0x0204, 0x0206, 0x0207, 0x0209 })
         foreach (var point in new[] { (X: 21, Y: 33), (X: -7, Y: -11) })
         {
             // Modifiers and another pressed button must not be reconstructed from message type.
             var keys = new IntPtr(0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010);
             var packed = new IntPtr(unchecked((int)((uint)(ushort)point.X | ((uint)(ushort)point.Y << 16))));
-            SendProxyInputCheckMessage(output!.Handle, message, keys, packed);
+            SendProxyInputCheckMessage(output!.InputHandle, message, keys, packed);
             var actual = received[^1];
             Check(actual == new EdgeCapsulePointerDown(
                     new DeviceScreenPoint(bounds.Left + point.X, bounds.Top + point.Y), message, keys),
                 "Native press retains signed lParam position and original key state, independent of live cursor");
         }
-        Check(received.Count == 6, "Each native press reaches the adapter exactly once");
+        Check(received.Count == 12, "Each native press, including a double-click second press, reaches the adapter exactly once");
 
         using var target = new HwndSource(new HwndSourceParameters("Edge press transfer checks")
         {
@@ -32,7 +32,7 @@ internal static partial class Program
         var delivered = new List<(int Message, IntPtr Keys, IntPtr Position)>();
         target.AddHook((IntPtr hwnd, int message, IntPtr keys, IntPtr position, ref bool handled) =>
         {
-            if (message is 0x0201 or 0x0204 or 0x0207)
+            if (message is 0x0201 or 0x0203 or 0x0204 or 0x0206 or 0x0207 or 0x0209)
             {
                 delivered.Add((message, keys, position)); handled = true;
             }
@@ -44,6 +44,8 @@ internal static partial class Program
         DrainTransactionChecksDispatcher();
         Check(delivered.Count == received.Count && delivered.Select(item => item.Keys).SequenceEqual(received.Select(item => item.KeyState)),
             "Posting to the real source retains every original modifier mask");
+        Check(delivered.Select(item => item.Message).SequenceEqual(received.Select(item => item.Message)),
+            "The source retains each original DOWN or double-click message type");
         Check(delivered.All(item => item.Position.ToInt64() == (17 | (19 << 16))),
             "The handoff converts the resolved endpoint into the real source client coordinates");
         Console.WriteLine("PASS proxy-original-press-coordinates-and-modifiers");

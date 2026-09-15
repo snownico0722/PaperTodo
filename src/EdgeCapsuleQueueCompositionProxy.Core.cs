@@ -14,7 +14,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private const int CompletionGuardMilliseconds = 1;
     private readonly EdgeCapsuleQueueProxyPlan _plan;
     private readonly IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> _members;
-    private readonly EdgeCapsuleQueueCompositionProxy? _predecessor;
+    private EdgeCapsuleQueueCompositionProxy? _predecessor;
+    private readonly bool _hadPredecessor;
     private readonly SharedRuntime _runtime;
     private readonly QueueHost _host;
     private readonly EdgeCapsuleQueueProxyWindow _window;
@@ -23,14 +24,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private readonly IDCompositionVisual _root;
     private readonly DeviceScreenRect _outputBounds;
     private readonly List<VisualState> _visuals = new();
+    private readonly List<DeviceScreenRect> _nativeInputRegions = new();
     private readonly HashSet<IntPtr> _cloakedRealSourceHandles = new();
     private readonly DispatcherTimer _sampleTimer;
     private readonly DispatcherTimer _completionTimer;
     private readonly Action<EdgeCapsulePointerDown> _interactionRequested;
     private readonly Action _environmentChanged;
-    private readonly Func<EdgeCapsuleQueueCompositionProxy, bool> _coverReady;
-    private readonly Action<EdgeCapsuleQueueCompositionProxy> _coverRollback;
-    private readonly Action<EdgeCapsuleQueueCompositionProxy, bool> _completed;
+    private readonly Func<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?, bool> _coverReady;
+    private readonly Action<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?> _coverRollback;
+    private readonly Action<EdgeCapsuleQueueCompositionProxy, bool, bool> _completed;
     private readonly Func<long, bool> _endpointCommitRequested;
     private readonly Func<long, bool> _animationStartRequested;
     private readonly long _sessionOrdinal;
@@ -40,6 +42,11 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private bool _completionRetrySuccess = true;
     private int _completionRetryCount;
     private bool _finishing;
+    private bool _retainedAfterAnimation;
+    internal Action<EdgeCapsuleQueueCompositionProxy, PaperWindow>? SettledInputRequested { get; set; }
+    private bool _hasRetainedPointerSample;
+    private DeviceScreenPoint? _lastRetainedPointer;
+    private EdgeCapsulePresentationFrame[]? _lastRetainedPointerFrames;
     private bool _disposed;
     private bool _starting = true;
     private bool _completionPendingDuringStart;
@@ -69,13 +76,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         Func<long, bool> animationStartRequested,
         Action<EdgeCapsulePointerDown> interactionRequested,
         Action environmentChanged,
-        Func<EdgeCapsuleQueueCompositionProxy, bool> coverReady,
-        Action<EdgeCapsuleQueueCompositionProxy> coverRollback,
-        Action<EdgeCapsuleQueueCompositionProxy, bool> completed)
+        Func<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?, bool> coverReady,
+        Action<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?> coverRollback,
+        Action<EdgeCapsuleQueueCompositionProxy, bool, bool> completed)
     {
         _plan = plan;
         _members = members;
         _predecessor = predecessor;
+        _hadPredecessor = predecessor != null;
         _runtime = runtime;
         _host = host;
         _window = host.Window;
@@ -121,6 +129,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     public bool CoverLost => _coverLost;
     public bool CoverPublished => _coverPublished;
     public IntPtr OutputHandle => _disposed ? IntPtr.Zero : _window.Handle;
+    internal bool IsRetainedForQueueBrowsing =>
+        _retainedAfterAnimation && !_disposed && !_finishing && !_starting &&
+        _coverPublished && !_coverLost && !_sourcesReleased && !_completionTimer.IsEnabled;
 
     internal static void Prewarm(Dispatcher dispatcher)
     {
@@ -174,13 +185,24 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         Func<long, bool> animationStartRequested,
         Action<EdgeCapsulePointerDown> interactionRequested,
         Action environmentChanged,
-        Func<EdgeCapsuleQueueCompositionProxy, bool> coverReady,
-        Action<EdgeCapsuleQueueCompositionProxy> coverRollback,
-        Action<EdgeCapsuleQueueCompositionProxy, bool> completed)
+        Func<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?, bool> coverReady,
+        Action<EdgeCapsuleQueueCompositionProxy, EdgeCapsuleQueueCompositionProxy?> coverRollback,
+        Action<EdgeCapsuleQueueCompositionProxy, bool, bool> completed)
     {
+#if DEBUG
+        using var edgeJournalStage = EdgeDiagnosticObservation.Begin("proxy.create", null);
+#endif
+
         if (members.Count == 0 ||
             members.Count != plan.Members.Count ||
             members.Any(member => member.SourceHandle == IntPtr.Zero) ||
+            (plan.IsStaticPreacquisition &&
+             (predecessor != null || plan.DurationMilliseconds != 0 ||
+              plan.Members.Any(member =>
+                  member.Start != member.Source || member.Source != member.Target ||
+                  EdgeCapsuleQueueProxyPolicy.RequiresTranslation(member.Start, member.Target)))) ||
+            (plan.IsSettledInputHandoff && (predecessor == null ||
+                !predecessor.CanCreateSettledInputSuccessor(plan, members))) ||
             (predecessor != null &&
              !string.Equals(
                  predecessor.QueueKey,

@@ -1232,7 +1232,7 @@ internal static partial class WindowNative
         IntPtr handle, EdgeCapsulePointerDown input, DeviceScreenPoint screenPoint)
     {
         if (handle == IntPtr.Zero || !IsWindow(handle) ||
-            input.Message is not (0x0201 or 0x0204 or 0x0207)) return false;
+            input.Message is not (0x0201 or 0x0203 or 0x0204 or 0x0206 or 0x0207 or 0x0209)) return false;
         var clientPoint = new CursorPoint
         {
             X = (int)Math.Round(screenPoint.X, MidpointRounding.AwayFromZero),

@@ -20,13 +20,14 @@ internal static partial class Program
             if (args.Contains("--artifact-readiness")) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
             else if (args.Contains("--worker-checks")) MarkdownWorkerChecks();
             else if (args.Contains("--review-integration")) ReviewIntegrationChecks();
+            else if (args.Contains("--preload-coordination")) PreloadCoordinationChecks();
             else if (args.Contains("--review-only")) ReviewBoundaryChecks();
             else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();
             else if (args.Contains("--preload-profile")) ProfilePreload(args.Contains("--reverse"));
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); ArtifactReadinessChecks(); PreloadCoordinationChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

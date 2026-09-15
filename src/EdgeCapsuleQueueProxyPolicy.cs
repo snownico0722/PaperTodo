@@ -40,7 +40,11 @@ internal sealed record EdgeCapsuleQueueProxyPlan(
     double DpiScaleY,
     int DurationMilliseconds,
     bool Topmost,
-    IReadOnlyList<EdgeCapsuleQueueProxyMemberPlan> Members);
+    IReadOnlyList<EdgeCapsuleQueueProxyMemberPlan> Members)
+{
+    internal bool IsStaticPreacquisition { get; init; }
+    internal bool IsSettledInputHandoff { get; init; }
+}
 
 /// <summary>
 /// V3 Lite compositor admission. The compositor may translate a stable live
@@ -130,11 +134,46 @@ internal static class EdgeCapsuleQueueProxyPolicy
 
     public static EdgeCapsuleQueueProxyPlan? TryCreate(
         string queueKey,
-        IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates)
+        IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates,
+        bool includeStationaryMembers = false) =>
+        TryCreateCore(queueKey, candidates, includeStationaryMembers, staticPreacquisition: false);
+
+    internal static EdgeCapsuleQueueProxyPlan? TryCreateForStaticRetention(
+        string queueKey,
+        IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates) =>
+        TryCreateCore(queueKey, candidates, includeStationaryMembers: true, staticPreacquisition: true);
+
+    private static EdgeCapsuleQueueProxyPlan? TryCreateCore(
+        string queueKey,
+        IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates,
+        bool includeStationaryMembers,
+        bool staticPreacquisition)
     {
         if (candidates.Count == 0)
         {
             return Reject(queueKey, "no-candidates", candidates);
+        }
+
+        // Normal transactions need a real translation before they acquire stationary peers.
+        // The explicit idle path instead takes an entire settled queue at its current position;
+        // it must never manufacture a movement or omit an incompatible member to appear ready.
+        if (staticPreacquisition)
+        {
+            foreach (var candidate in candidates)
+            {
+                var rejection = StaticPreacquisitionCandidateRejection(candidate, queueKey);
+                if (rejection != null)
+                {
+                    return Reject(queueKey, rejection, candidates, candidate);
+                }
+            }
+        }
+        else
+        {
+            includeStationaryMembers &= candidates.Any(candidate =>
+                RequiresTranslation(candidate.Start, candidate.Target) &&
+                AllowsQueueProxyOwnership(candidate.Authority) &&
+                TranslationCandidateRejection(candidate, queueKey) == null);
         }
 
         var members = new List<EdgeCapsuleQueueProxyMemberPlan>(
@@ -150,14 +189,14 @@ internal static class EdgeCapsuleQueueProxyPolicy
                 // transferring the remaining peers to the successor.
                 continue;
             }
-            if (!translated && !candidate.RetainedByCurrentProxy)
+            if (!translated && !candidate.RetainedByCurrentProxy && !includeStationaryMembers)
             {
                 // Pure Rest/Hover/Preview morph stays in WPF.
                 continue;
             }
 
             var rejection =
-                TranslationCandidateRejection(candidate, queueKey);
+                TranslationCandidateRejection(candidate, queueKey, staticPreacquisition);
             if (rejection != null)
             {
                 // A fresh member can safely remain direct. A retained source
@@ -235,7 +274,7 @@ internal static class EdgeCapsuleQueueProxyPolicy
             candidate => candidate.PaperId,
             candidate => candidate.Motion.DurationMilliseconds,
             StringComparer.Ordinal);
-        var duration = Math.Max(
+        var duration = staticPreacquisition ? 0 : Math.Max(
             1,
             members.Select(member =>
                     durationByPaper.GetValueOrDefault(
@@ -249,7 +288,7 @@ internal static class EdgeCapsuleQueueProxyPolicy
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.admission mode=translation-only outcome=accepted " +
             $"queue={queueKey} candidates={candidates.Count} " +
-            $"members={members.Count} durationMs={duration} " +
+            $"members={members.Count} durationMs={duration} staticPreacquisition={staticPreacquisition} " +
             $"papers={string.Join(',', members.Select(member => EdgeCapsulePerformanceDiagnostics.ShortId(member.PaperId)))}");
 #endif
         return new EdgeCapsuleQueueProxyPlan(
@@ -261,12 +300,42 @@ internal static class EdgeCapsuleQueueProxyPolicy
             first.Start.DpiScaleY,
             duration,
             Topmost: true,
-            members);
+            members)
+        {
+            IsStaticPreacquisition = staticPreacquisition
+        };
+    }
+
+    private static string? StaticPreacquisitionCandidateRejection(
+        EdgeCapsuleQueueProxyCandidate candidate,
+        string queueKey)
+    {
+        if (candidate.Authority != EdgeCapsuleVisualAuthority.RealDocked ||
+            candidate.RetainedByCurrentProxy)
+        {
+            return "static-member-already-owned";
+        }
+        if (candidate.Motion.Kind != EdgeCapsuleMotionKind.Snap ||
+            candidate.Start != candidate.Source ||
+            candidate.Source != candidate.Target ||
+            RequiresTranslation(candidate.Start, candidate.Target))
+        {
+            return "static-member-not-settled";
+        }
+        if (candidate.Target.Surface is not (
+                EdgeCapsuleSurfaceKind.DockedResting or
+                EdgeCapsuleSurfaceKind.DockedHovered or
+                EdgeCapsuleSurfaceKind.DockedActive))
+        {
+            return "static-member-not-browsable";
+        }
+        return TranslationCandidateRejection(candidate, queueKey, staticPreacquisition: true);
     }
 
     private static string? TranslationCandidateRejection(
         EdgeCapsuleQueueProxyCandidate candidate,
-        string queueKey)
+        string queueKey,
+        bool staticPreacquisition = false)
     {
         if (!candidate.Topmost)
         {
@@ -289,7 +358,8 @@ internal static class EdgeCapsuleQueueProxyPolicy
             return "translation-member-hidden";
         }
         if (candidate.Motion.Kind != EdgeCapsuleMotionKind.Animate &&
-            !candidate.RetainedByCurrentProxy)
+            !candidate.RetainedByCurrentProxy &&
+            !staticPreacquisition)
         {
             return $"translation-member-motion-{candidate.Motion.Kind}";
         }

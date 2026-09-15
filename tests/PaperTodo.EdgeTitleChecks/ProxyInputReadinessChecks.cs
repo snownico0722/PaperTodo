@@ -34,11 +34,12 @@ internal static partial class Program
         using var window = EdgeCapsuleQueueProxyWindow.TryCreate(new DeviceScreenRect(0, 0, 100, 40),
             false, _ => true, route, () => { }, () => { }, () => { });
         Check(window != null, "Create native proxy input regression HWND");
+        InitializeProxyCheckHostOwnership(proxy, window!);
         var messages = new[] { 0x0201, 0x0204, 0x0207 };
         void Click()
         {
             foreach (var message in messages)
-                SendProxyInputCheckMessage(window!.Handle, message, IntPtr.Zero, IntPtr.Zero);
+                SendProxyInputCheckMessage(window!.InputHandle, message, IntPtr.Zero, IntPtr.Zero);
         }
         void Ready()
         {

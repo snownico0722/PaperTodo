@@ -49,7 +49,7 @@
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
-| D-037 | 可浏览队列保留已验证的 live authority | Deferred | Edge performance / lifecycle |
+| D-037 | 可浏览队列保留已验证的 live authority | Proposed | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 
 ## 维护规则
@@ -805,7 +805,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 
 ## D-023 — Lightweight Prewarm 保留一次性首用预热
 
-**Status:** Accepted
+**Status:** Accepted（一次性 graphics 预热继续有效；D-037 的调度与真实队列提前接管扩展仍待候选验收）
 
 ### Context
 
@@ -1378,9 +1378,47 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 
 ## D-037 — 可浏览队列提前接管并保留已验证的 live authority
 
-**Status:** Deferred（从 #258 独立审查，尚未成为当前实现）
+**Status:** Proposed（从 #258 拆为 #260 的候选；本分支保留候选；控件输入和穿透已有实机证据，完整交接性能未达原保留方案，长期空闲代价尚待验收）
 
-资源预热不等于长期接管输入。原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`；静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组另行审查。现有短时动画代理、后继接续与显式交接继续保留。控件级悬停、完整手势、空闲观察与预热退让仍须单独验收，不以历史性能数字代替通过。
+资源预热不等于长期接管输入。主线 #258 将本组拆出独立审查；原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`。本分支继续保留静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组，控件级悬停、完整手势与跨进程穿透已补充真实 OS 输入验证；完整交接的性能回退、空闲观察与预热退让仍须独立评估，不以历史性能数字代替通过。按下转交沿用主线的同步交接边界：需要 completion retry 就丢弃旧按下，不保留超时重放队列。
+
+### Context
+
+PR #254 实机数据的连续浏览回放中，代理每次完成后释放 source cloak，使下一次悬停反复进入完整接管。阶段日志显示主要等待集中在可见 authority 的发布、cloak 和真实 HWND 位置提交；创建托管对象和 DComp visual 不是主要耗时。一次性临时预热不能消除每次重新接管的同步边界。
+
+### Decision
+
+- 开启预览且队列仍可浏览、指针不在真实交互区域时，动画端点通过原有 apply/layout/render/verify 后保留当前 live cover，正常收回后也可继承。指针进入稳定成员时恢复真实 WPF 输入：已完成的队列直接交接，仍有局部 shape/布局工作时先等 Presenter 稳定。显式交互或生命周期完成默认必须释放；正常动画完成或明确的静态预接管才获得保留资格。
+- 空闲时可对全部成员已稳定的真实队列提前执行首次接管；静态 plan 明确标识零时长、无位移，不创建伪动画，也不跳过首次显示、cloak、失败回滚与端点确认。队列成员、源 HWND 与调度代在 publication 和最终保留前重新检查。
+- 轻量 coordinator 只拥有调度：Shell 准备完成后通过 Rendering 屏障转到 ApplicationIdle，一次准备一个队列；真实输入期间让路，暂时阻挡由后续真实事件唤醒。隐藏、关闭、拖动、设置与显示失效先取消旧代，稳定后重新请求。正文仍由原 cache/worker 持有，只暂停 speculative 工作，不取消 demand。
+- 首次有真实位移的事务可同时纳入兼容的静止成员，并预留有界 output envelope；后续随机目标能否继承仍由实际队列、source identity/capacity 和 envelope 决定，不以预先猜中下一张纸片为前提，也不承诺跨失效边界命中。
+- 已持有完全相同 source cloak 集合的 successor 通过现有可见 root 保护真实端点更新，再提交新 root；没有 cloak 变化时不重复支付 cloak flush。首次接管、成员增减与失败回滚保留各自原有边界。
+- 同一 source surface 在后继中持有独立 COM 引用；visual/root 仍属于当前代。发布并退休 predecessor 后断开对象引用，避免长期浏览保留整条历史链。
+- 静置时从真实 Host applied frame 读取形状、透明度和输入范围，指针与 applied frame 都未变化时不再逐个 invalidate presenter。DPI 或 capacity 增长先完成代理交接，再处理暂存的失效请求。
+
+### Why / Rejected / Pitfalls
+
+该选择减少日用过程中重复接管的次数，保留 WPF 唯一 shape owner 和 translation-only DComp 边界。不能把动画结束等同于绘制完成，也不能用删除首次可见 cover 的同步边界来制造启动数字上的收益。尝试以 commit completion 替代首次 DWM 等待未显示稳定收益，未采纳。
+
+不能用旧 plan target 作为静置期永久输入快照；真实 WPF 仍会发生 hover、透明度与内容变化。也不能等待“下次动画”才处理被固定 source capacity 阻挡的更新。output envelope 可以超过工作区底边以容纳当前队列位移，但不得因此扩大每张纸片的 WPF surface。
+
+后续输入审查发现两项不同的缺口：常驻 cover 下的全局指针采样只驱动外层 preview，不能替代真实 WPF 子控件的 hover/cursor/完整手势；普通 NOREDIRECTIONBITMAP 输出的 `HTTRANSPARENT` 也不能保证把透明区点击交给其他进程。本地真实跨进程 SendInput 对照确认，旧输出、只加透明样式和禁用窗口三组均未把透明孔洞的按下/抬起交给后方目标；layered/transparent 输出能保持 DComp live-HWND 画面并整窗穿透，单独 region 能排除孔洞但同时裁剪画面。因此显示与有限输入 region 使用两个轻量 HWND，沿用同一 geometry 和采样，不再让显示 envelope 承担桌面命中。稳定后恢复真实 WPF 输入会重新支付交接成本，同条件回放已确认其导致多次 fresh 接管和明显事务等待；仅保留双窗穿透的隔离组维持了切换节奏，但回放进程 CPU 用量仍增加。后续有界消息计数定位到隐藏 layered 输出的 WM_PAINT 风暴：ValidateRect 返回成功却未消费该配置下的更新区，改为 BeginPaint/EndPaint 后无输入启动预热恢复，旧实现失败/新实现通过的原生检查固定该边界；这不等于长期空闲成本已全部验收。不能把保留 device/output 对象等同于保留原常驻路线的全部性能收益，也不能将当前完整候选描述成无损修复。
+
+后续逐卡交还使用既有 outgoing-source successor 边界，而不是让一个长期 generation 另外记录已交还成员。稳定输入目标从新代成员中排除，其他成员继续继承 live authority；已恢复真实输入且没有位移的卡片不因队列中其他成员移动而再次纳入。真实双源检查确认控件 hover、完整按下/释放和捕获取消可用，同时 peer 保持同一 output 下的 cloak。实机对照恢复了多数切换的低事务耗时，但需要重新移动已交还卡片时，仍需 union-cover 和 cloak publication 等待；事务长尾和额外 CPU 成本尚未全部消除。只统计 fresh session 会低估这种代价，因为带一个新 source 的 successor 同样可能昂贵。单胶囊短暂露出桌面的实机观察另行作为可见性交接缺陷跟踪，不能由日志中的 cloak 标志或性能分位数判定已解决。静止输入交还因此先保持旧 cover，确认真实 outgoing source 已可见后再替换 root；成功路径仍共享一次 flush，只有后段失败才增加恢复 cover 的确认边界，随后反向 cloak。不能仅凭中位数下降或 retained 数量增加就判定性能验收完成。
+
+### Consequences / Evidence
+
+每个已准备且未失效的可见队列可能长期占有一个 compositor cover 及当前成员 surface 引用，静置仍有轻量指针采样；不是零资源成本。关闭预览、隐藏、交互、DPI/capacity 或设备失效继续走显式交接。首次接管的同步等待移到交互前，工作本身没有消失；若输入早于准备完成或队列不满足条件，仍走正常接管，不能承诺所有首次输入均命中。
+
+source 首次准备与 output 共用产品最大值，按当前工作区归一化。内置 Todo/Markdown 原本已有最大 envelope；插件从初始 miniSize 改为有效 miniMaxSize 会增加其单纸片 WPF backing surface，这是减少合法尺寸变化时重新接管的明确代价。未声明最大值且 Native 首次 Describe 才报告更大 preferred size 时，仍显式交接、扩容并重建，不提前调用插件内容来猜值。多屏多个缓存的复杂协调不在此选择中；跨显示环境失效保留安全回退，不承诺跨屏命中率。
+
+- `src/AppController.EdgeCapsuleQueueProxy.cs`：队列准入、端点验证、保留与显式交接。
+- `src/AppController.EdgePrewarm.cs` / `src/EdgePrewarmCoordinator.cs`：真实队列准入、可取消调度、生命周期失效和后台正文让路。
+- `src/EdgeCapsuleQueueCompositionProxy.Startup.cs` / `Visuals.cs` / `Routing.cs`：source 集合、独立 COM 引用、代际生命周期与真实 applied frame 输入。
+- `src/PaperWindow.EdgeCapsule.cs`：代理释放后的 DPI/capacity 失效恢复。
+- `tests/PaperTodo.EdgeTitleChecks/ProxyRetentionChecks.cs`：左右边缘/DPI、静止成员准入、保留/强制完成、真实 Host 形状输入及空闲采样；这些检查不替代物理显示帧与长时间设备验证。
+- `src/EdgeCapsuleQueueCompositionProxy.SettledInput.cs` / `tests/PaperTodo.EdgeTitleChecks/ProxyNativeInputChecks.cs`：逐卡恢复输入、真实跨进程穿透、隐藏绘制及先揭示后换 root 的正常/回滚边界。
+- `EXPERIMENTS.md` E-017/E-018：缓存命中不等于免除可见性交接；异步等待缩短同步调用不等于缩短完整接管。保留失败及修正候选，不将局部指标收益自动升级为产品路线。
 
 ---
 
