@@ -34,6 +34,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/pr260_h7_finalize_experiment.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_fixture_finalize.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --stat | Tee-Object -FilePath h7-patch.log
