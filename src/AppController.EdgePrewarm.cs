@@ -10,6 +10,7 @@ public sealed partial class AppController
     private EdgePrewarmCoordinator? _edgePrewarm;
     private bool _edgePrewarmStartupReady;
     private int _edgePrewarmMutationDepth;
+    private DeviceScreenPoint? _edgePrewarmLastPointer;
     private bool _edgePrewarmInputHooked;
 
     private bool EdgePrewarmEnabled => !IsExiting && State.UseCapsuleMode &&
@@ -35,6 +36,7 @@ public sealed partial class AppController
                 () => EdgeCapsuleQueueCompositionProxy.PrewarmLightweight(dispatcher),
                 PrepareStaticEdgeQueue,
                 suspended => MarkdownEdgePreviewPreload.For(dispatcher).SetSuspended(suspended));
+            _edgePrewarmLastPointer = WindowNative.TryGetCursorScreenPosition(out var pointer) ? pointer : null;
             InputManager.Current.PreProcessInput += OnEdgePrewarmInput;
             _edgePrewarmInputHooked = true;
         }
@@ -143,27 +145,14 @@ public sealed partial class AppController
         if (e.StagingItem.Input is MouseButtonEventArgs or MouseWheelEventArgs or KeyEventArgs or TouchEventArgs)
             _edgePrewarm?.NotifyInteraction();
         else if (e.StagingItem.Input is MouseEventArgs)
-            // WPF mouse input is already application-local. Preserve the conservative pause for
-            // real in-app movement without routing it through the desktop-pointer filter below.
-            _edgePrewarm?.NotifyInteraction();
+            ObserveEdgePrewarmPointer(WindowNative.TryGetCursorScreenPosition(out var pointer) ? pointer : null);
     }
 
-    private void ObserveEdgePrewarmPhysicalPointer(
-        PaperWindow inputWindow,
-        DeviceScreenPoint? pointer)
+    private void ObserveEdgePrewarmPointer(DeviceScreenPoint? pointer)
     {
-        if (_edgePrewarm == null ||
-            pointer is not { } point ||
-            !inputWindow.TryGetEdgeCapsuleInteractiveGeometry(out var geometry) ||
-            !EdgeCapsuleGeometry.Contains(geometry.Bounds, point))
-        {
-            return;
-        }
-
-        // Proxy sampling observes the global desktop pointer. Only a pointer actually intersecting
-        // this PaperTodo card is application interaction; motion over another application must not
-        // repeatedly cancel speculative prewarm or Markdown work.
-        _edgePrewarm.NotifyInteraction();
+        if (_edgePrewarmLastPointer == pointer) return;
+        _edgePrewarmLastPointer = pointer;
+        _edgePrewarm?.NotifyInteraction();
     }
 
     internal IDisposable SuspendEdgePrewarmForMutation()
