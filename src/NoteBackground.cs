@@ -1,61 +1,110 @@
 using System.IO;
+using System.Text.Json;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
+internal static class PaperBackgroundLayouts
+{
+    internal const string Stretch = "stretch";
+    internal const string Center = "center";
+    internal const string BottomLeft = "bottomLeft";
+    internal const string BottomCenter = "bottomCenter";
+    internal const string BottomRight = "bottomRight";
+
+    internal static string Normalize(string? layout) => layout switch
+    {
+        Stretch => Stretch,
+        BottomLeft => BottomLeft,
+        BottomCenter => BottomCenter,
+        BottomRight => BottomRight,
+        _ => Center
+    };
+}
+
 internal static class NoteBackground
 {
-    private const int MaxDecodePixelWidth = 4096;
-    private static readonly string DirectoryPath =
-        Path.Combine(AppContext.BaseDirectory, "custom", "note");
-    private static readonly string DisabledMarkerPath =
-        Path.Combine(DirectoryPath, "background.disabled");
-    private static readonly string[] CandidateNames =
-        ["background.png", "background.jpg", "background.jpeg"];
+    private sealed class BackgroundPreferences
+    {
+        public bool BlendWithTheme { get; set; } = true;
+        public string Layout { get; set; } = PaperBackgroundLayouts.Center;
+    }
 
+    private const int MaxDecodePixelWidth = 4096;
+    private const double BlendedImageOpacity = 0.30;
+    private static readonly string[] CandidateNames =
+        ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
+    private static readonly string PreferencesPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PaperTodo",
+        "paper-background.json");
+
+    private static BackgroundPreferences _preferences = LoadPreferences();
     private static BitmapSource? _cachedBitmap;
-    private static ImageBrush? _cachedLightBrush;
-    private static ImageBrush? _cachedDarkBrush;
     private static string? _cachedPath;
     private static long _cachedLength = -1;
     private static DateTime _cachedWriteTimeUtc;
 
     internal static bool IsAvailable => FindPath() != null;
-    internal static bool IsEnabled => IsAvailable && !File.Exists(DisabledMarkerPath);
+    internal static bool BlendWithTheme => _preferences.BlendWithTheme;
+    internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
 
-    internal static void SetEnabled(bool enabled)
+    internal static void SetBlendWithTheme(bool enabled)
     {
-        if (enabled)
-        {
-            // Also clear a stale marker when the image is temporarily absent.
-            File.Delete(DisabledMarkerPath);
-        }
-        else
-        {
-            if (!IsAvailable)
-            {
-                return;
-            }
-            Directory.CreateDirectory(DirectoryPath);
-            File.WriteAllText(DisabledMarkerPath, "disabled");
-        }
-        InvalidateCache();
-    }
-
-    internal static void Apply(MarkdownTextBox? editor)
-    {
-        if (editor == null)
+        if (_preferences.BlendWithTheme == enabled)
         {
             return;
         }
 
-        editor.Background = CreateBrush() ?? Brushes.Transparent;
+        var next = new BackgroundPreferences
+        {
+            BlendWithTheme = enabled,
+            Layout = Layout
+        };
+        SavePreferences(next);
+        _preferences = next;
+        InvalidateCache();
     }
 
-    private static Brush? CreateBrush()
+    internal static void SetLayout(string layout)
     {
-        var path = IsEnabled ? FindPath() : null;
+        var normalized = PaperBackgroundLayouts.Normalize(layout);
+        if (string.Equals(Layout, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var next = new BackgroundPreferences
+        {
+            BlendWithTheme = BlendWithTheme,
+            Layout = normalized
+        };
+        SavePreferences(next);
+        _preferences = next;
+        InvalidateCache();
+    }
+
+    internal static void Apply(Panel? host)
+    {
+        if (host != null)
+        {
+            host.Background = CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+        }
+    }
+
+    internal static void Apply(Control? host)
+    {
+        if (host != null)
+        {
+            host.Background = CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+        }
+    }
+
+    internal static ImageBrush? CreateBrush(bool blendWithTheme, string layout)
+    {
+        var path = FindPath();
         if (path == null)
         {
             InvalidateCache();
@@ -80,16 +129,15 @@ internal static class NoteBackground
                 _cachedPath = path;
                 _cachedLength = length;
                 _cachedWriteTimeUtc = writeTimeUtc;
-                _cachedLightBrush = null;
-                _cachedDarkBrush = null;
             }
 
-            if (Theme.IsDark)
+            var brush = new ImageBrush(_cachedBitmap!)
             {
-                return _cachedDarkBrush ??= CreateImageBrush(_cachedBitmap!, 0.24);
-            }
-
-            return _cachedLightBrush ??= CreateImageBrush(_cachedBitmap!, 0.32);
+                Opacity = blendWithTheme ? BlendedImageOpacity : 1.0
+            };
+            ApplyLayout(brush, PaperBackgroundLayouts.Normalize(layout));
+            brush.Freeze();
+            return brush;
         }
         catch
         {
@@ -106,7 +154,7 @@ internal static class NoteBackground
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+        bitmap.CreateOptions = BitmapCreateOptions.None;
         bitmap.DecodePixelWidth = MaxDecodePixelWidth;
         bitmap.StreamSource = stream;
         bitmap.EndInit();
@@ -114,26 +162,80 @@ internal static class NoteBackground
         return bitmap;
     }
 
-    private static ImageBrush CreateImageBrush(BitmapSource bitmap, double opacity)
+    private static void ApplyLayout(ImageBrush brush, string layout)
     {
-        var brush = new ImageBrush(bitmap)
+        brush.Stretch = layout == PaperBackgroundLayouts.Stretch
+            ? Stretch.Fill
+            : Stretch.Uniform;
+        brush.AlignmentX = layout switch
         {
-            Stretch = Stretch.UniformToFill,
-            AlignmentX = AlignmentX.Center,
-            AlignmentY = AlignmentY.Center,
-            // Keep the current paper palette visible below the image so light/dark themes retain
-            // their intended text contrast without introducing a second color system.
-            Opacity = opacity
+            PaperBackgroundLayouts.BottomLeft => AlignmentX.Left,
+            PaperBackgroundLayouts.BottomRight => AlignmentX.Right,
+            _ => AlignmentX.Center
         };
-        brush.Freeze();
-        return brush;
+        brush.AlignmentY = layout switch
+        {
+            PaperBackgroundLayouts.BottomLeft or
+            PaperBackgroundLayouts.BottomCenter or
+            PaperBackgroundLayouts.BottomRight => AlignmentY.Bottom,
+            _ => AlignmentY.Center
+        };
+    }
+
+    private static BackgroundPreferences LoadPreferences()
+    {
+        try
+        {
+            if (!File.Exists(PreferencesPath))
+            {
+                return new BackgroundPreferences();
+            }
+
+            var loaded = JsonSerializer.Deserialize<BackgroundPreferences>(
+                File.ReadAllText(PreferencesPath));
+            if (loaded == null)
+            {
+                return new BackgroundPreferences();
+            }
+
+            loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
+            return loaded;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new BackgroundPreferences();
+        }
+    }
+
+    private static void SavePreferences(BackgroundPreferences preferences)
+    {
+        var directory = Path.GetDirectoryName(PreferencesPath)!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = PreferencesPath + ".tmp";
+        try
+        {
+            File.WriteAllText(
+                temporaryPath,
+                JsonSerializer.Serialize(preferences));
+            File.Move(temporaryPath, PreferencesPath, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch
+            {
+                // Preserve the original settings write failure.
+            }
+            throw;
+        }
     }
 
     private static void InvalidateCache()
     {
         _cachedBitmap = null;
-        _cachedLightBrush = null;
-        _cachedDarkBrush = null;
         _cachedPath = null;
         _cachedLength = -1;
         _cachedWriteTimeUtc = default;
@@ -143,7 +245,7 @@ internal static class NoteBackground
     {
         foreach (var name in CandidateNames)
         {
-            var path = Path.Combine(DirectoryPath, name);
+            var path = Path.Combine(AppContext.BaseDirectory, name);
             if (File.Exists(path))
             {
                 return path;
