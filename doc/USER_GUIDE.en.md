@@ -1,6 +1,6 @@
 # PaperTodo User Manual
 
-> **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](CHANGELOG.en.md)
+> **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](../CHANGELOG.md)
 
 This document is for everyday users of PaperTodo. If this is your first time using PaperTodo, please start with [1. Quick Start](#1-quick-start); other sections can be referenced as needed.
 

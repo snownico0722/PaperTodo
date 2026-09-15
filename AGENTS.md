@@ -152,9 +152,9 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 
 ## 构建与发布
 
-- `README.md` 为默认英文首页，`README.zh-CN.md` 保留中文，顶部互链；`README.en.md` 只保留旧链接兼容入口。
-- `README.zh-CN.md` 是首页中文折叠区的唯一来源；修改后运行 `python .github/scripts/sync_readme.py`，同步更新 `README.md` 底部默认收起的完整中文 `<details>`，不要手改生成区。
-- Release 说明由 `.github/scripts/release_notes.py` 从 `doc/CHANGELOG.en.md` 与 `CHANGELOG.md` 提取同一版本：英文在前，中文放入 `<details>`，双语下载链接保持展开。发布前必须补齐两种语言的对应版本小节；仅补历史说明时只更新 Release 正文，不重建资产、移动 tag 或改变最新版本。
+- `README.md` 为默认英文首页，`README.zh.md` 保留中文，顶部互链。
+- `README.zh.md` 是首页中文折叠区的唯一来源；修改后运行 `python .github/scripts/sync_readme.py`，同步更新 `README.md` 底部默认收起的完整中文 `<details>`，不要手改生成区。
+- Release 说明由 `.github/scripts/release_notes.py` 从 `CHANGELOG.md` 与 `CHANGELOG.zh.md` 提取同一版本：英文在前，中文放入 `<details>`，双语下载链接保持展开。发布前必须补齐两种语言的对应版本小节；仅补历史说明时只更新 Release 正文，不重建资产、移动 tag 或改变最新版本。
 - 版本号显式维护在 `PaperTodo.csproj`；不要恢复自动递增。
 - `plugin-samples/` 保存插件源码/说明，`plugins/` 保存可直接加载的最终产物；主程序 publish/Release 不捆绑插件。最终插件目录不保留无必要的 PDB/XML/重复 native/shared assemblies。
 - PR 分支 Windows CI 由 HEAD commit marker 控制：`[debug]` → Debug 测试包，`[ci]` → Release build，`[debug-ci]` → 两者。标记必须在本次 push 的最后一个 HEAD；不要为了触发制造空提交。

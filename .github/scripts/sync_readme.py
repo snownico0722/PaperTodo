@@ -11,7 +11,7 @@ END = "<!-- END GENERATED CHINESE README -->"
 
 def render_readme(readme, chinese):
     if not chinese.strip():
-        raise ValueError("README.zh-CN.md is empty.")
+        raise ValueError("README.zh.md is empty.")
     block = (
         START
         + "\n<details>\n<summary>简体中文（点击展开完整 README）</summary>\n\n"
@@ -36,7 +36,7 @@ def main():
     args = parser.parse_args()
     readme_path = ROOT / "README.md"
     readme = readme_path.read_text(encoding="utf-8")
-    chinese = (ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
+    chinese = (ROOT / "README.zh.md").read_text(encoding="utf-8")
     try:
         updated = render_readme(readme, chinese)
     except ValueError as error:
@@ -47,7 +47,7 @@ def main():
     if args.check:
         parser.exit(1, "README.md is out of date; run python .github/scripts/sync_readme.py\n")
     readme_path.write_text(updated, encoding="utf-8", newline="\n")
-    print("Synced the full README.zh-CN.md into README.md.")
+    print("Synced the full README.zh.md into README.md.")
 
 
 if __name__ == "__main__":

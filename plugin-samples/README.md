@@ -1,6 +1,6 @@
 # PaperTodo Plugin Development
 
-**Language: English | [简体中文](README.zh-CN.md)**
+**Language: English | [简体中文](README.zh.md)**
 
 This is the **current PaperTodo plugin development manual**. It documents the plugin contract, runtime boundaries, build workflow, and examples that are available today. It does not preserve protocol history.
 

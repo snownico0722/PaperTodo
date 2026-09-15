@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <strong>Language: English | <a href="README.zh-CN.md">简体中文</a></strong><br>
+  <strong>Language: English | <a href="README.zh.md">简体中文</a></strong><br>
   <a href="https://snownico0722.github.io/PaperTodo/">Official Website</a><br>
-  <a href="doc/USER_GUIDE.en.md">User Manual</a> · <a href="doc/CHANGELOG.en.md">Changelog</a><br>
+  <a href="doc/USER_GUIDE.en.md">User Manual</a> · <a href="CHANGELOG.md">Changelog</a><br>
   <a href="https://qm.qq.com/q/Mp7spYLrig">QQ Group: 551612664 — Strange Magic Research Base</a>
 </p>
 
@@ -120,7 +120,7 @@ On first launch, papers appear on your desktop with a persistent tray icon. If p
 
 - 📖 **[User Manual](doc/USER_GUIDE.en.md)**: Beginner guide, detailed paper & capsule usage, full settings dictionary, and data backup/migration instructions.
 - 🧩 **[Plugin Development Manual](plugin-samples/README.md)**: Understand the plugin architecture, API specifications, and sample implementations.
-- 📋 **[Changelog](doc/CHANGELOG.en.md)**: User-facing release notes and feature history.
+- 📋 **[Changelog](CHANGELOG.md)**: User-facing release notes and feature history.
 
 ---
 
@@ -172,7 +172,7 @@ Special thanks to the [linux.do](https://linux.do/) community.
 <p align="center">
   <strong>语言：简体中文 | <a href="README.md">English</a></strong><br>
   <a href="https://snownico0722.github.io/PaperTodo/">官方网站</a> <br>
-  <a href="doc/USER_GUIDE.md">用户手册</a> · <a href="CHANGELOG.md">更新日志</a><br>
+  <a href="doc/USER_GUIDE.md">用户手册</a> · <a href="CHANGELOG.zh.md">更新日志</a><br>
   <a href="https://qm.qq.com/q/Mp7spYLrig">QQ 交流群：551612664——奇奇怪怪的魔法研究基地</a>
 </p>
 
@@ -223,7 +223,7 @@ Special thanks to the [linux.do](https://linux.do/) community.
 ### 3. 全新插件系统（Preview）
 - **桌面微应用扩展**：便签不仅能记笔记，还可一键切换为时钟、专注番茄钟、复盘池等丰富插件，下一代的windows桌面小组件。
 - **深度融入胶囊与顶栏**：插件同样支持折叠为专属胶囊、边缘悬停卡片与专属顶栏按钮，且数据独立安全保存。
-- **即放即用**：将插件文件夹放入 `plugins/` 目录即可直接识别。如需自行开发插件，可查阅 [插件开发手册](plugin-samples/README.zh-CN.md)。
+- **即放即用**：将插件文件夹放入 `plugins/` 目录即可直接识别。如需自行开发插件，可查阅 [插件开发手册](plugin-samples/README.zh.md)。
 
 ### 4. 极致流畅与全链路高刷调优
 - **全面适配高刷新率**：无论是纸片折叠展开、边缘抽屉滑出、卡片顺滑接续还是跨屏拖拽，全链路动效均经过深度帧率调优，完美适配 120Hz/144Hz/165Hz+ 高刷屏，细腻丝滑、完全不掉帧。
@@ -276,8 +276,8 @@ PaperTodo 为绿色单文件程序，无需安装。请在 [Releases 页面](htt
 ## 详细文档与进阶
 
 - 📖 **[完整用户手册](doc/USER_GUIDE.md)**：包含新手 3 分钟入门指南、待办/笔记深度用法、多屏胶囊调度、全量设置项大字典、脚本编写规则、换机数据迁移教程及常见问题解答（FAQ）。
-- 🧩 **[插件开发手册](plugin-samples/README.zh-CN.md)**：了解 PaperTodo 正文插件扩展机制、协议说明与示例索引。
-- 📋 **[版本更新日志](CHANGELOG.md)**：查阅更新与修复记录。
+- 🧩 **[插件开发手册](plugin-samples/README.zh.md)**：了解 PaperTodo 正文插件扩展机制、协议说明与示例索引。
+- 📋 **[版本更新日志](CHANGELOG.zh.md)**：查阅更新与修复记录。
 
 ---
 
