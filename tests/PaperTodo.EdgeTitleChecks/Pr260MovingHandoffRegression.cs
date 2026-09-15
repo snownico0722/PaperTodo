@@ -20,7 +20,7 @@ internal static partial class Program
             fixture.RetainAwayFromControl();
             fixture.PausePointerSampling();
 
-            var presenter = Pr260PresenterFor(fixture);
+            var targetWindow = Pr260WindowFor(fixture);
             var control = fixture.CheckBox;
             var movingPoints = new[]
             {
@@ -31,13 +31,35 @@ internal static partial class Program
             var movingSamples = 0;
             var stationarySamples = 0;
             var releasedDuringMovement = false;
+            var filteredNoOpSamples = 0;
 
             foreach (var point in movingPoints)
             {
                 NativeInputMove(point);
                 NativeInputPumpFor(8);
-                Pr260InvokeSampleTick(fixture.Proxy);
+                var proxy = fixture.Proxy;
+                foreach (var member in proxy.Members)
+                {
+                    if (Pr260NeedsPresenterPointerReconcile(member.Window, proxy, point))
+                    {
+                        Pr260InvalidateLocalPointer(member.Window);
+                    }
+                    else
+                    {
+                        filteredNoOpSamples++;
+                    }
+                }
                 movingSamples++;
+
+                // This is the part of OnSampleTimerTick that matters for H2, deliberately isolated
+                // from the fixture's intentionally uninitialised AppController. It still uses the
+                // production Presenter dirty path, production settled predicate and production
+                // selective-release delegate. Baseline has no filter helper and therefore dirties
+                // every member on every changed coordinate, exactly like #260.
+                if (proxy.ShouldReleaseForPointerInput(point))
+                {
+                    proxy.SettledInputRequested?.Invoke(proxy, targetWindow);
+                }
                 fixture.ThrowIfFailed();
 
                 if (fixture.ReleaseCount == 1)
@@ -46,12 +68,9 @@ internal static partial class Program
                     break;
                 }
 
-                // Let the production Presenter consume the Pointer dirty work without allowing
-                // another proxy sample. The baseline bug requires another *unchanged* proxy tick
-                // after every changed-coordinate tick even though the Presenter has already settled.
                 NativeInputUntil(
-                    () => presenter.IsSettledForPreacquisition,
-                    $"Moving sample {movingSamples}: the real Presenter settles before the next coordinate",
+                    () => proxy.Members.All(member => member.Window.IsEdgeCapsuleQueueProxyInputSettled),
+                    $"Moving sample {movingSamples}: production Presenter work settles before the next coordinate",
                     () => $"releaseCount={fixture.ReleaseCount} cloaked={NativeInputIsCloaked(fixture.Host.Handle)}");
                 fixture.ThrowIfFailed();
                 Check(fixture.ReleaseCount == 0,
@@ -61,33 +80,39 @@ internal static partial class Program
             if (expectDefect)
             {
                 Check(!releasedDuringMovement && fixture.ReleaseCount == 0,
-                    "Pinned #260 must reproduce the defect: changed coordinates repeatedly prevent selective handoff");
+                    "Pinned #260 must reproduce the defect: each changed coordinate manufactures fresh Pointer work");
 
-                // Do not move the cursor again. A later unchanged sample is the exact escape hatch
-                // in the old implementation: it stops manufacturing Pointer dirty work, so the
-                // already-settled source can finally be handed back to WPF.
+                // A later unchanged proxy sample does not dispatch pointer invalidation. Model that
+                // exact old escape hatch by running only the settled release test/delegate.
                 while (fixture.ReleaseCount == 0 && stationarySamples < 4)
                 {
-                    Pr260InvokeSampleTick(fixture.Proxy);
+                    var proxy = fixture.Proxy;
+                    var point = movingPoints[^1];
+                    if (proxy.ShouldReleaseForPointerInput(point))
+                    {
+                        proxy.SettledInputRequested?.Invoke(proxy, targetWindow);
+                    }
                     stationarySamples++;
                     fixture.ThrowIfFailed();
                     if (fixture.ReleaseCount == 0)
                     {
                         NativeInputUntil(
-                            () => presenter.IsSettledForPreacquisition,
-                            $"Stationary follow-up {stationarySamples}: any stale presentation work settles",
+                            () => proxy.Members.All(member => member.Window.IsEdgeCapsuleQueueProxyInputSettled),
+                            $"Stationary follow-up {stationarySamples}: stale presentation work settles",
                             () => $"releaseCount={fixture.ReleaseCount} cloaked={NativeInputIsCloaked(fixture.Host.Handle)}");
                     }
                 }
                 Check(fixture.ReleaseCount == 1 && stationarySamples > 0,
-                    "Pinned #260 releases only after an unchanged follow-up sample");
+                    "Pinned #260 releases only after a sample that creates no new Pointer dirty work");
+                Check(filteredNoOpSamples == 0,
+                    "Pinned #260 exposes no queue-proxy no-op pointer filter");
             }
             else
             {
                 Check(releasedDuringMovement && fixture.ReleaseCount == 1,
                     "Continuous in-card pointer movement must no longer require a stationary proxy sample before handoff");
-                Check(stationarySamples == 0,
-                    "The fixed path completes selective handoff without injecting a stationary follow-up tick");
+                Check(stationarySamples == 0 && filteredNoOpSamples > 0,
+                    "The fixed path filters reducer-no-op Pointer work and releases during changed-coordinate input");
             }
 
             fixture.AssertPeerRetained(control);
@@ -95,7 +120,7 @@ internal static partial class Program
             Console.WriteLine(
                 $"RESULT pr260-moving-handoff expectDefect={expectDefect} " +
                 $"releasedDuringMovement={releasedDuringMovement} movingSamples={movingSamples} " +
-                $"stationarySamples={stationarySamples}");
+                $"stationarySamples={stationarySamples} filteredNoOpSamples={filteredNoOpSamples}");
         }
         finally
         {
@@ -104,14 +129,58 @@ internal static partial class Program
         }
     }
 
-    private static EdgeCapsulePresenter Pr260PresenterFor(NativeInputHostFixture fixture)
+    private static PaperWindow Pr260WindowFor(NativeInputHostFixture fixture)
     {
         var field = typeof(NativeInputHostFixture).GetField(
-            "_presenter",
+            "_paperWindow",
             BindingFlags.Instance | BindingFlags.NonPublic) ??
-            throw new InvalidOperationException("Native input fixture presenter is unavailable");
-        return field.GetValue(fixture) as EdgeCapsulePresenter ??
-            throw new InvalidOperationException("Native input fixture presenter is missing");
+            throw new InvalidOperationException("Native input fixture PaperWindow is unavailable");
+        return field.GetValue(fixture) as PaperWindow ??
+            throw new InvalidOperationException("Native input fixture PaperWindow is missing");
+    }
+
+    private static bool Pr260NeedsPresenterPointerReconcile(
+        PaperWindow window,
+        EdgeCapsuleQueueCompositionProxy proxy,
+        DeviceScreenPoint pointer)
+    {
+        var method = typeof(PaperWindow).GetMethod(
+            "ShouldInvalidateEdgeCapsuleQueueProxyPointer",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        if (method == null)
+        {
+            // Pinned #260 unconditionally called InvalidateEdgeCapsulePointer after every changed
+            // retained-pointer sample. Absence of the helper is therefore the baseline behaviour.
+            return true;
+        }
+        Check(proxy.TryGetPresentation(window, out var frame),
+            "Moving-handoff filter receives the actual retained presentation frame");
+        try
+        {
+            return (bool)(method.Invoke(window, new object?[] { pointer, frame }) ?? true);
+        }
+        catch (TargetInvocationException error) when (error.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static void Pr260InvalidateLocalPointer(PaperWindow window)
+    {
+        var method = typeof(PaperWindow).GetMethod(
+            "InvalidateEdgeCapsulePointer",
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Production local pointer invalidation is unavailable");
+        try
+        {
+            method.Invoke(window, null);
+        }
+        catch (TargetInvocationException error) when (error.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+            throw;
+        }
     }
 
     private static DeviceScreenPoint Pr260PointInside(
@@ -124,23 +193,6 @@ internal static partial class Program
             control.ActualWidth * horizontalFraction,
             control.ActualHeight * 0.5));
         return DeviceScreenPoint.FromPoint(point);
-    }
-
-    private static void Pr260InvokeSampleTick(EdgeCapsuleQueueCompositionProxy proxy)
-    {
-        var method = typeof(EdgeCapsuleQueueCompositionProxy).GetMethod(
-            "OnSampleTimerTick",
-            BindingFlags.Instance | BindingFlags.NonPublic) ??
-            throw new InvalidOperationException("Production proxy sample callback is unavailable");
-        try
-        {
-            method.Invoke(proxy, new object?[] { null, EventArgs.Empty });
-        }
-        catch (TargetInvocationException error) when (error.InnerException != null)
-        {
-            ExceptionDispatchInfo.Capture(error.InnerException).Throw();
-            throw;
-        }
     }
 }
 
