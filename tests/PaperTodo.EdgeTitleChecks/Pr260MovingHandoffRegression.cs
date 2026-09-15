@@ -19,6 +19,7 @@ internal static partial class Program
             fixture.RetainAwayFromControl();
             fixture.PausePointerSampling();
 
+            var presenter = Pr260PresenterFor(fixture);
             var control = fixture.CheckBox;
             var movingPoints = new[]
             {
@@ -48,7 +49,7 @@ internal static partial class Program
                 // another proxy sample. The baseline bug requires another *unchanged* proxy tick
                 // after every changed-coordinate tick even though the Presenter has already settled.
                 NativeInputUntil(
-                    () => fixture._presenter.IsSettledForPreacquisition,
+                    () => presenter.IsSettledForPreacquisition,
                     $"Moving sample {movingSamples}: the real Presenter settles before the next coordinate",
                     () => $"releaseCount={fixture.ReleaseCount} cloaked={NativeInputIsCloaked(fixture.Host.Handle)}");
                 fixture.ThrowIfFailed();
@@ -72,7 +73,7 @@ internal static partial class Program
                     if (fixture.ReleaseCount == 0)
                     {
                         NativeInputUntil(
-                            () => fixture._presenter.IsSettledForPreacquisition,
+                            () => presenter.IsSettledForPreacquisition,
                             $"Stationary follow-up {stationarySamples}: any stale presentation work settles",
                             () => $"releaseCount={fixture.ReleaseCount} cloaked={NativeInputIsCloaked(fixture.Host.Handle)}");
                     }
@@ -100,6 +101,16 @@ internal static partial class Program
             NativeInputSend(0, 0, 0x0004);
             NativeInputMove(new DeviceScreenPoint(original.X, original.Y));
         }
+    }
+
+    private static EdgeCapsulePresenter Pr260PresenterFor(NativeInputHostFixture fixture)
+    {
+        var field = typeof(NativeInputHostFixture).GetField(
+            "_presenter",
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Native input fixture presenter is unavailable");
+        return field.GetValue(fixture) as EdgeCapsulePresenter ??
+            throw new InvalidOperationException("Native input fixture presenter is missing");
     }
 
     private static DeviceScreenPoint Pr260PointInside(
