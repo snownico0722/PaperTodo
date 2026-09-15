@@ -32,6 +32,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/pr260_h7_experiment.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_finalize_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --stat | Tee-Object -FilePath h7-patch.log
@@ -46,6 +48,7 @@ jobs:
           & $exe 2>&1 | Tee-Object -FilePath h7-candidate-run.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Select-String -Path h7-candidate-run.log -Pattern 'RESULT pr260-capacity-recovery fixed=True')) { throw 'Candidate did not prove H7 recovery' }
+          if (-not (Select-String -Path h7-candidate-run.log -Pattern 'RESULT pr260-capacity-rollback protected=True')) { throw 'Candidate did not prove H7 rollback' }
       - name: Run same regression against pinned PR260 baseline
         shell: pwsh
         run: |
