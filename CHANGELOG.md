@@ -93,6 +93,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 **Optimizations & Fixes**
 
+- Fixed fullscreen avoidance with administrator-elevated fullscreen apps so PaperTodo papers no longer remain above the fullscreen window.
 - **Enhanced Data Persistence Reliability**: Hardened primary state saving logic to reduce the chance of file loss under extreme conditions. Backup cadence is reduced and update-time availability is checked first.
 - **Input Limit Notices**: Todo batch paste that exceeds count/text limits, and notes that reach the editor protection limit, now show an explicit notice instead of silently dropping or rejecting input.
 - **Package Size Optimization**: The Windows single-file package without the .NET runtime was reduced from about 33 MiB to about 17 MiB; testing did not show a meaningful startup-time or working-set regression.
