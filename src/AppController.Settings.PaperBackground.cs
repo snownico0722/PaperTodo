@@ -30,7 +30,6 @@ public sealed partial class AppController
                 "PaperTodo.exe와 같은 폴더의 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 노트와 할 일 종이에 함께 사용됩니다. 끄면 원본 이미지를 표시하고, 켜면 현재 종이 색상과 혼합합니다. 이미지를 교체한 뒤 이 옵션이나 위치를 바꾸거나 PaperTodo를 다시 시작하면 새로 고쳐집니다."))));
         section.Children.Add(BuildPaperBackgroundLayoutRow());
 
-
         var loadError = PaperBackground.LoadError;
         if (!string.IsNullOrWhiteSpace(loadError))
         {
@@ -49,6 +48,7 @@ public sealed partial class AppController
             };
             section.Children.Add(error);
         }
+
         return section;
     }
 
@@ -115,33 +115,33 @@ public sealed partial class AppController
 
     private void ApplyPaperBackgroundSetting(Action update)
     {
-        var changed = TryUpdatePaperBackgroundSetting(update);
-        if (changed)
+        if (TryUpdatePaperBackgroundSetting(update))
         {
-            foreach (var window in _windows.Values)
-            {
-                window.RefreshPaperBackground();
-            }
+            RefreshPaperBackgroundSurfaces();
         }
 
         // Rebuild even on a failed write so the control reflects the value that actually persisted.
         RefreshSettingsWindowContent();
     }
 
-private bool TryResetPaperBackgroundPreferences()
-{
-    if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+    private bool TryResetPaperBackgroundPreferences()
     {
-        return false;
+        if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+        {
+            return false;
+        }
+
+        RefreshPaperBackgroundSurfaces();
+        return true;
     }
 
-    foreach (var window in _windows.Values)
+    private void RefreshPaperBackgroundSurfaces()
     {
-        window.RefreshPaperBackground();
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshPaperBackground();
+        }
     }
-    return true;
-}
-
 
     private bool TryUpdatePaperBackgroundSetting(Action update)
     {
