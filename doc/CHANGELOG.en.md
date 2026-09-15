@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 - None currently.
 
-### v4.0beta1
+### v4.0.0-beta1
 
 - **Paper Count Limit**: Raised the total paper limit from 100 to 200; the in-app cleanup prompt still appears when the limit is reached.
 - **Startup and Exit Responsiveness**: Only papers on not-yet-available displays defer restoration; other capsules and papers become available first. Edge notes prepare browsable previews before folded paper shells are built in short, low-priority batches. Context menus and optional initialization no longer block initial restoration, and plugin startup papers await completion instead of polling. Normal exit preserves the final save, withdraws visible surfaces, stops script processes concurrently, and completes the normal window shutdown lifecycle to reduce sequential waits and process-exit delays.

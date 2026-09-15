@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  The latest stable release is <strong>v3.31</strong>; this document follows the <code>main</code> branch (currently <strong>4.0beta1</strong>).
+  The latest stable release is <strong>v3.31</strong>; this document follows the <code>main</code> branch (currently <strong>4.0.0-beta1</strong>).
 </p>
 
 ---
