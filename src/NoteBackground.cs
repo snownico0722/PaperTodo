@@ -28,6 +28,10 @@ internal static class NoteBackground
 {
     private sealed class BackgroundPreferences
     {
+        public BackgroundPreferences()
+        {
+        }
+
         public bool BlendWithTheme { get; set; } = true;
         public string Layout { get; set; } = PaperBackgroundLayouts.Center;
     }
@@ -90,7 +94,7 @@ internal static class NoteBackground
     {
         if (host != null)
         {
-            host.Background = CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
         }
     }
 
@@ -98,7 +102,7 @@ internal static class NoteBackground
     {
         if (host != null)
         {
-            host.Background = CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
         }
     }
 
