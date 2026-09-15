@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -13,41 +14,154 @@ public sealed partial class AppController
             Margin = new Thickness(2, 0, 4, 4)
         };
         section.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
-            "笔记背景", "Note background", "ノート背景", "노트 배경")));
+            "纸片背景", "Paper background", "紙面背景", "종이 배경")));
         section.Children.Add(WrapWithHint(
             SettingsToggle(
                 SettingsSidebarLocalized(
-                    "启用自定义笔记背景",
-                    "Enable custom note background",
-                    "カスタムノート背景を有効にする",
-                    "사용자 지정 노트 배경 사용"),
-                NoteBackground.IsEnabled,
-                ToggleNoteBackground),
+                    "启用和配色混合",
+                    "Blend with paper colors",
+                    "紙面カラーと混合する",
+                    "종이 색상과 혼합"),
+                NoteBackground.BlendWithTheme,
+                TogglePaperBackgroundBlend),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
-                "已检测到 custom/note/background.png（也支持 .jpg/.jpeg）。背景会自动与当前浅色/深色纸张主题混合；替换文件后重启 PaperTodo 或重新切换此开关即可刷新。",
-                "Detected custom/note/background.png (.jpg/.jpeg are also supported). The image is blended with the current light/dark paper theme. After replacing the file, restart PaperTodo or toggle this setting to refresh it.",
-                "custom/note/background.png を検出しました（.jpg/.jpeg も対応）。現在のライト／ダーク紙面テーマに合わせて自動的に合成します。画像を差し替えた後は PaperTodo を再起動するか、この設定を切り替えて更新してください。",
-                "custom/note/background.png을 감지했습니다(.jpg/.jpeg도 지원). 현재 밝은/어두운 종이 테마와 자동으로 혼합됩니다. 파일을 교체한 뒤 PaperTodo를 다시 시작하거나 이 설정을 전환하면 새로 고쳐집니다."))));
+                "已检测到 PaperTodo.exe 同目录下的 papertodo.png（也支持 .jpg/.jpeg）。图片会同时用于笔记和待办；关闭此项显示原图，开启后与当前纸片配色混合。替换图片后切换此项、切换位置或重启 PaperTodo 即可刷新。",
+                "Detected papertodo.png beside PaperTodo.exe (.jpg/.jpeg are also supported). The image is shared by note and todo papers. Turn this off to show the original image, or on to blend it with the current paper colors. After replacing the image, toggle this option, change its position, or restart PaperTodo to refresh it.",
+                "PaperTodo.exe と同じフォルダーの papertodo.png を検出しました（.jpg/.jpeg も対応）。画像はノートと ToDo の両方で共有されます。オフでは元画像をそのまま表示し、オンでは現在の紙面カラーと混合します。画像を差し替えた後は、この設定か位置を切り替えるか PaperTodo を再起動すると更新されます。",
+                "PaperTodo.exe와 같은 폴더의 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 노트와 할 일 종이에 함께 사용됩니다. 끄면 원본 이미지를 표시하고, 켜면 현재 종이 색상과 혼합합니다. 이미지를 교체한 뒤 이 옵션이나 위치를 바꾸거나 PaperTodo를 다시 시작하면 새로 고쳐집니다."))));
+        section.Children.Add(BuildPaperBackgroundLayoutRow());
+
+        // BuildVisualSettingsPage historically inserts this optional section above both columns.
+        // Move it into the already-built right column after attachment so detecting an image does
+        // not make the entire visual settings page taller.
+        section.Loaded += (_, _) => section.Dispatcher.BeginInvoke(
+            (Action)(() => MovePaperBackgroundSectionIntoVisualRightColumn(section)),
+            DispatcherPriority.Loaded);
         return section;
     }
 
-    private void ToggleNoteBackground()
+    private UIElement BuildPaperBackgroundLayoutRow()
     {
-        TrySetNoteBackgroundEnabled(!NoteBackground.IsEnabled);
-        foreach (var window in _windows.Values)
+        var row = new Grid
         {
-            window.RefreshNoteBackground();
+            Margin = new Thickness(0, 5, 0, 2)
+        };
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star)
+        });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = SettingsSidebarLocalized(
+                "位置", "Position", "位置", "위치"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(label, 0);
+        row.Children.Add(label);
+
+        var selector = CreateSettingsSelect(
+            [
+                (PaperBackgroundLayouts.Stretch,
+                    SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기")),
+                (PaperBackgroundLayouts.Center,
+                    SettingsSidebarLocalized("居中", "Center", "中央", "가운데")),
+                (PaperBackgroundLayouts.BottomLeft,
+                    SettingsSidebarLocalized("左下", "Bottom left", "左下", "왼쪽 아래")),
+                (PaperBackgroundLayouts.BottomCenter,
+                    SettingsSidebarLocalized("正下", "Bottom center", "下中央", "아래 가운데")),
+                (PaperBackgroundLayouts.BottomRight,
+                    SettingsSidebarLocalized("右下", "Bottom right", "右下", "오른쪽 아래"))
+            ],
+            NoteBackground.Layout,
+            SetPaperBackgroundLayout);
+        if (selector is FrameworkElement selectorElement)
+        {
+            selectorElement.Width = 132;
+            selectorElement.Margin = new Thickness(8, 0, 0, 0);
+            selectorElement.HorizontalAlignment = HorizontalAlignment.Right;
         }
-        // Re-read the marker after either outcome so paper content and the clicked toggle reflect
-        // the same final on-disk state even when a failed write had a partial filesystem effect.
+        Grid.SetColumn(selector, 1);
+        row.Children.Add(selector);
+        return row;
+    }
+
+    private static void MovePaperBackgroundSectionIntoVisualRightColumn(
+        StackPanel section)
+    {
+        if (section.Parent is not StackPanel wrapper)
+        {
+            return;
+        }
+
+        Grid? columns = null;
+        foreach (UIElement child in wrapper.Children)
+        {
+            if (child is Grid grid && grid.ColumnDefinitions.Count >= 3)
+            {
+                columns = grid;
+                break;
+            }
+        }
+        if (columns == null)
+        {
+            return;
+        }
+
+        StackPanel? rightColumn = null;
+        foreach (UIElement child in columns.Children)
+        {
+            if (child is StackPanel candidate && Grid.GetColumn(candidate) == 2)
+            {
+                rightColumn = candidate;
+                break;
+            }
+        }
+        if (rightColumn == null)
+        {
+            return;
+        }
+
+        wrapper.Children.Remove(section);
+        section.Margin = new Thickness(0, 12, 0, 4);
+        rightColumn.Children.Add(section);
+    }
+
+    private void TogglePaperBackgroundBlend()
+    {
+        ApplyPaperBackgroundSetting(() =>
+            NoteBackground.SetBlendWithTheme(!NoteBackground.BlendWithTheme));
+    }
+
+    private void SetPaperBackgroundLayout(string layout)
+    {
+        ApplyPaperBackgroundSetting(() => NoteBackground.SetLayout(layout));
+    }
+
+    private void ApplyPaperBackgroundSetting(Action update)
+    {
+        var changed = TryUpdatePaperBackgroundSetting(update);
+        if (changed)
+        {
+            foreach (var window in _windows.Values)
+            {
+                window.RefreshPaperBackground();
+            }
+        }
+
+        // Rebuild even on a failed write so the control reflects the value that actually persisted.
         RefreshSettingsWindowContent();
     }
 
-    private bool TrySetNoteBackgroundEnabled(bool enabled)
+    private bool TryUpdatePaperBackgroundSetting(Action update)
     {
         try
         {
-            NoteBackground.SetEnabled(enabled);
+            update();
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -56,12 +170,13 @@ public sealed partial class AppController
             {
                 PaperNoticeDialog.Show(
                     _settingsWindow,
-                    SettingsSidebarLocalized("笔记背景", "Note background", "ノート背景", "노트 배경"),
                     SettingsSidebarLocalized(
-                        "无法保存笔记背景开关。请检查 custom/note 目录的写入权限。",
-                        "Could not save the note background setting. Check write access to custom/note.",
-                        "ノート背景の設定を保存できませんでした。custom/note の書き込み権限を確認してください。",
-                        "노트 배경 설정을 저장하지 못했습니다. custom/note의 쓰기 권한을 확인하세요.") +
+                        "纸片背景", "Paper background", "紙面背景", "종이 배경"),
+                    SettingsSidebarLocalized(
+                        "无法保存纸片背景设置。请检查 PaperTodo 本地设置目录的写入权限。",
+                        "Could not save the paper background setting. Check write access to PaperTodo's local settings folder.",
+                        "紙面背景の設定を保存できませんでした。PaperTodo のローカル設定フォルダーへの書き込み権限を確認してください。",
+                        "종이 배경 설정을 저장하지 못했습니다. PaperTodo 로컬 설정 폴더의 쓰기 권한을 확인하세요.") +
                     Environment.NewLine + ex.Message);
             }
             return false;
