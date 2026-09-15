@@ -6,9 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>../../app.manifest</ApplicationManifest>
-    <!-- R1 focused A/B swaps only this entry point and leaves the normal EdgeTitle entry point intact. -->
-    <StartupObject Condition="'$(Pr260MovingHandoffHarness)' != 'true'">Program</StartupObject>
+    <!-- Focused A/B harnesses swap only this entry point and leave the normal EdgeTitle entry point intact. -->
+    <StartupObject Condition="'$(Pr260MovingHandoffHarness)' != 'true' and '$(Pr260CallbackLifetimeHarness)' != 'true'">Program</StartupObject>
     <StartupObject Condition="'$(Pr260MovingHandoffHarness)' == 'true'">Pr260MovingHandoffProgram</StartupObject>
+    <StartupObject Condition="'$(Pr260CallbackLifetimeHarness)' == 'true'">Pr260StartupCallbackLifetimeProgram</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
