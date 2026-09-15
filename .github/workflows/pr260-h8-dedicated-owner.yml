@@ -28,15 +28,22 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Relax hosted desktop-pixel observer budget for architecture probe
+      - name: Relax hosted probe budget and make test input HWND explicitly clickable
         run: |
-          $path = '.\tests\PaperTodo.EdgeTitleChecks\Pr260H8DedicatedInputOwnerChecksV2.cs'
-          $text = Get-Content $path -Raw
-          $text = $text.Replace('observerTask.Wait(TimeSpan.FromSeconds(3))', 'observerTask.Wait(TimeSpan.FromSeconds(15))')
-          $text = $text.Replace('observation.Samples >= 5', 'observation.Samples >= 1')
-          Set-Content $path $text -Encoding utf8
+          $v2Path = '.\tests\PaperTodo.EdgeTitleChecks\Pr260H8DedicatedInputOwnerChecksV2.cs'
+          $v2 = Get-Content $v2Path -Raw
+          $v2 = $v2.Replace('observerTask.Wait(TimeSpan.FromSeconds(3))', 'observerTask.Wait(TimeSpan.FromSeconds(15))')
+          $v2 = $v2.Replace('observation.Samples >= 5', 'observation.Samples >= 1')
+          Set-Content $v2Path $v2 -Encoding utf8
+
+          $ownerPath = '.\tests\PaperTodo.EdgeTitleChecks\Pr260H8DedicatedInputOwnerChecks.cs'
+          $owner = Get-Content $ownerPath -Raw
+          $owner = $owner.Replace('                WsPopup,', '                WsPopup | 0x00000100,')
+          Set-Content $ownerPath $owner -Encoding utf8
+
           Write-Host 'Hosted runner patch: observer wait 3s -> 15s; minimum pixel samples 5 -> 1.'
-          Write-Host 'This modifies only the ephemeral runner checkout; committed probe remains strict.'
+          Write-Host 'Hosted runner patch: test-only Static input HWND adds SS_NOTIFY so the final OS gesture reaches its subclassed WndProc.'
+          Write-Host 'These modifications affect only the ephemeral architecture probe checkout; committed sources remain strict.'
       - name: Restore dedicated-owner H8 entry
         run: dotnet restore .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -p:Pr260H8DedicatedInputOwner=true
       - name: Build dedicated-owner H8 entry Release
@@ -54,7 +61,7 @@ jobs:
           $code = $LASTEXITCODE
           "## PR260 H8 dedicated native input owner" >> $env:GITHUB_STEP_SUMMARY
           "This is an architecture probe, not a production fix. It keeps the production DComp output path, leaves the current UI-owned input HWND empty, and creates a test-only input HWND on a separate native owner thread/message loop." >> $env:GITHUB_STEP_SUMMARY
-          "The dedicated owner receives the same absolute QPC animation ticket and updates finite HRGNs while the WPF/Dispatcher thread is deliberately blocked for 360 ms. The hosted runner temporarily relaxes only the slow desktop-pixel observer budget (15 s, one minimum sample); wake-time HRGN checks and mature cross-process tagged input still verify visible-card ownership and vacated-region pass-through." >> $env:GITHUB_STEP_SUMMARY
+          "The dedicated owner receives the same absolute QPC animation ticket and updates finite HRGNs while the WPF/Dispatcher thread is deliberately blocked for 360 ms. The hosted runner temporarily relaxes only the slow desktop-pixel observer budget (15 s, one minimum sample) and adds SS_NOTIFY to the test-only Static HWND so final OS gestures exercise its subclassed WndProc. Wake-time HRGN checks and mature cross-process tagged input still verify visible-card ownership and vacated-region pass-through." >> $env:GITHUB_STEP_SUMMARY
           "Passing this probe would only show that a separate owner removes the UI-message-pump dependency and can stay within the sampled tolerance on this runner. It would not prove physical-frame synchronization or justify production integration without multi-refresh-rate/DPI/CPU-load validation." >> $env:GITHUB_STEP_SUMMARY
           if (Test-Path pr260-h8-owner-run.log) {
             Get-Content pr260-h8-owner-run.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
