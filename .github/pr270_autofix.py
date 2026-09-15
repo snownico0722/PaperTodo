@@ -1,0 +1,264 @@
+from pathlib import Path
+import re
+import textwrap
+
+
+def read(path):
+    return Path(path).read_text(encoding="utf-8")
+
+
+def write(path, text):
+    Path(path).write_text(text, encoding="utf-8", newline="\n")
+
+
+def sub_once(pattern, repl, text, label, flags=0):
+    updated, count = re.subn(pattern, repl, text, count=1, flags=flags)
+    if count != 1:
+        raise RuntimeError(f"{label}: expected one match, got {count}")
+    return updated
+
+
+renames = {
+    "src/NoteBackground.cs": "src/PaperBackground.cs",
+    "src/PaperWindow.NoteBackground.cs": "src/PaperWindow.PaperBackground.cs",
+    "src/AppController.Settings.NoteBackground.cs": "src/AppController.Settings.PaperBackground.cs",
+    "tests/PaperTodo.MarkdownEditingChecks/NoteBackgroundChecks.cs": "tests/PaperTodo.MarkdownEditingChecks/PaperBackgroundChecks.cs",
+}
+for old, new in renames.items():
+    old_path = Path(old)
+    new_path = Path(new)
+    if old_path.exists() and not new_path.exists():
+        old_path.rename(new_path)
+
+# The feature now serves both notes and todos.
+for root in (Path("src"), Path("tests")):
+    for path in root.rglob("*.cs"):
+        text = read(path)
+        updated = text.replace("NoteBackground", "PaperBackground")
+        if updated != text:
+            write(path, updated)
+
+# Background core: diagnose invalid images and reset blend + layout atomically.
+path = Path("src/PaperBackground.cs")
+text = read(path)
+if "private static string? _lastLoadError;" not in text:
+    text = text.replace(
+        "    private static DateTime _cachedWriteTimeUtc;\n",
+        "    private static DateTime _cachedWriteTimeUtc;\n    private static string? _lastLoadError;\n")
+if "internal static string? LoadError" not in text:
+    text = text.replace(
+        "    internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);\n",
+        "    internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);\n\n"
+        "    internal static string? LoadError\n"
+        "    {\n"
+        "        get\n"
+        "        {\n"
+        "            if (!IsAvailable)\n"
+        "            {\n"
+        "                _lastLoadError = null;\n"
+        "                return null;\n"
+        "            }\n\n"
+        "            _ = CreateBrush(BlendWithTheme, Layout);\n"
+        "            return _lastLoadError;\n"
+        "        }\n"
+        "    }\n")
+if "internal static void ResetPreferences()" not in text:
+    marker = "    internal static void Apply(Panel? host)\n"
+    reset = (
+        "    internal static void ResetPreferences()\n"
+        "    {\n"
+        "        var next = new BackgroundPreferences();\n"
+        "        SavePreferences(next);\n"
+        "        _preferences = next;\n"
+        "        InvalidateCache();\n"
+        "    }\n\n"
+    )
+    text = text.replace(marker, reset + marker)
+text = text.replace(
+    "        if (path == null)\n        {\n            InvalidateCache();\n            return null;\n        }",
+    "        if (path == null)\n        {\n            InvalidateCache();\n            _lastLoadError = null;\n            return null;\n        }")
+text = text.replace(
+    "            brush.Freeze();\n            return brush;\n        }\n        catch\n        {\n            InvalidateCache();\n            return null;\n        }",
+    "            brush.Freeze();\n            _lastLoadError = null;\n            return brush;\n        }\n        catch (Exception ex)\n        {\n            InvalidateCache();\n            _lastLoadError = ex.Message;\n            return null;\n        }")
+write(path, text)
+
+# Settings section: no Loaded/Dispatcher reparenting; show a visible image-load error.
+path = Path("src/AppController.Settings.PaperBackground.cs")
+text = read(path).replace("using System.Windows.Threading;\n", "")
+text = re.sub(
+    r"\n\s*// BuildVisualSettingsPage historically inserts.*?DispatcherPriority\.Loaded\);\n",
+    "\n",
+    text,
+    count=1,
+    flags=re.S)
+text = re.sub(
+    r"\n\s*private static void MovePaperBackgroundSectionIntoVisualRightColumn\(.*?\n\s*}\n\n\s*private void TogglePaperBackgroundBlend",
+    "\n\n    private void TogglePaperBackgroundBlend",
+    text,
+    count=1,
+    flags=re.S)
+if "var loadError = PaperBackground.LoadError;" not in text:
+    error_block = textwrap.dedent('''
+        var loadError = PaperBackground.LoadError;
+        if (!string.IsNullOrWhiteSpace(loadError))
+        {
+            var error = new TextBlock
+            {
+                Text = SettingsSidebarLocalized(
+                    "背景图片加载失败，请检查图片文件。",
+                    "The background image could not be loaded. Check the image file.",
+                    "背景画像を読み込めません。画像ファイルを確認してください。",
+                    "배경 이미지를 불러오지 못했습니다. 이미지 파일을 확인하세요."),
+                Foreground = Theme.DangerBrush,
+                FontSize = AppTypography.Scale(11.5),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 5, 0, 0),
+                ToolTip = BuildSettingsHintTooltip(loadError)
+            };
+            section.Children.Add(error);
+        }
+    ''')
+    error_block = textwrap.indent(error_block, "        ").rstrip() + "\n"
+    text = text.replace(
+        "        section.Children.Add(BuildPaperBackgroundLayoutRow());\n",
+        "        section.Children.Add(BuildPaperBackgroundLayoutRow());\n\n" + error_block)
+text = re.sub(
+    r"\n\s*// RestoreVisualSettingsPageDefaults.*?private bool TrySetPaperBackgroundEnabled\(bool enabled\) =>\s*TryUpdatePaperBackgroundSetting\(\(\) => PaperBackground\.SetBlendWithTheme\(enabled\)\);",
+    textwrap.dedent('''
+
+        private bool TryResetPaperBackgroundPreferences()
+        {
+            if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
+            {
+                return false;
+            }
+
+            foreach (var window in _windows.Values)
+            {
+                window.RefreshPaperBackground();
+            }
+            return true;
+        }
+    '''),
+    text,
+    count=1,
+    flags=re.S)
+write(path, text)
+
+# Visual page: put paper background directly in the right column; reset both preferences.
+path = Path("src/AppController.Settings.cs")
+text = read(path)
+if "rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());" not in text:
+    text = sub_once(
+        r'(\s*AddTextStyleEditor\(\s*rightColumn,\s*"SettingsCapsuleText",\s*"TipCapsuleTextStyle",\s*CreateVisualTextSizeSelector\(State\.CapsuleTextSize, SetCapsuleTextSize\),\s*State\.CapsuleTextBold,\s*ToggleCapsuleTextBold,\s*leadingDivider: true\);)',
+        r'''\1
+
+        if (PaperBackground.IsAvailable)
+        {
+            rightColumn.Children.Add(SettingsSoftDivider());
+            rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
+        }''',
+        text,
+        "visual background placement",
+        re.S)
+text = sub_once(
+    r'\n\s*UIElement content = columns;\s*if \(PaperBackground\.IsAvailable\)\s*\{\s*var stack = new StackPanel\(\);\s*stack\.Children\.Add\(BuildPaperBackgroundSettingsSection\(\)\);\s*stack\.Children\.Add\(columns\);\s*content = stack;\s*\}\s*return WithSettingsPageRestoreFooter\(content, RestoreVisualSettingsPageDefaults\);',
+    '\n        return WithSettingsPageRestoreFooter(columns, RestoreVisualSettingsPageDefaults);',
+    text,
+    "remove visual wrapper",
+    re.S)
+text = text.replace("TrySetPaperBackgroundEnabled(true);", "TryResetPaperBackgroundPreferences();")
+write(path, text)
+
+# Todo: attach the background directly to the ScrollViewer created by BuildTodoBody.
+path = Path("src/PaperWindow.Todo.cs")
+text = read(path)
+if "AttachTodoBackgroundHost(scrollViewer);" not in text:
+    text = sub_once(
+        r'return new ScrollViewer\s*\{\s*VerticalScrollBarVisibility = ScrollBarVisibility\.Auto,\s*HorizontalScrollBarVisibility = ScrollBarVisibility\.Disabled,\s*Content = _todoPanel,\s*FocusVisualStyle = null\s*\};',
+        textwrap.dedent('''
+            var scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _todoPanel,
+                FocusVisualStyle = null
+            };
+            AttachTodoBackgroundHost(scrollViewer);
+            return scrollViewer;
+        ''').strip(),
+        text,
+        "todo background host",
+        re.S)
+write(path, text)
+
+# Explicit hosts replace the old global ScrollViewer Loaded class handler.
+path = Path("src/PaperWindow.PaperBackground.cs")
+write(path, textwrap.dedent('''
+    using System.Windows.Controls;
+
+    namespace PaperTodo;
+
+    public sealed partial class PaperWindow
+    {
+        private Panel? _notePaperBackgroundHost;
+        private ScrollViewer? _todoPaperBackgroundHost;
+
+        internal void AttachPaperBackgroundHost(Panel host)
+        {
+            _notePaperBackgroundHost = host;
+            RefreshPaperBackground();
+        }
+
+        internal void DetachPaperBackgroundHost(Panel host)
+        {
+            if (ReferenceEquals(_notePaperBackgroundHost, host))
+            {
+                _notePaperBackgroundHost = null;
+            }
+        }
+
+        internal void AttachTodoBackgroundHost(ScrollViewer host)
+        {
+            _todoPaperBackgroundHost = host;
+            RefreshTodoBackground();
+        }
+
+        internal void RefreshPaperBackground()
+        {
+            PaperBackground.Apply(_notePaperBackgroundHost);
+            RefreshTodoBackground();
+        }
+
+        private void RefreshTodoBackground()
+        {
+            PaperBackground.Apply(_todoPaperBackgroundHost);
+        }
+    }
+''').lstrip())
+
+# Existing background regression check: add Todo-host and diagnostic coverage.
+path = Path("tests/PaperTodo.MarkdownEditingChecks/PaperBackgroundChecks.cs")
+text = read(path)
+if "valid background reports no load error" not in text:
+    text = text.replace(
+        "            Require(PaperBackground.IsAvailable, \"papertodo image beside the executable is detected\");",
+        "            Require(PaperBackground.IsAvailable, \"papertodo image beside the executable is detected\");\n            Require(PaperBackground.LoadError == null, \"valid background reports no load error\");")
+if "paper background applies to the todo ScrollViewer host" not in text:
+    text = text.replace(
+        "            Require(host.Background is ImageBrush,\n                \"configured paper background applies to an outer content host\");",
+        "            Require(host.Background is ImageBrush,\n                \"configured paper background applies to an outer content host\");\n\n            var todoHost = new ScrollViewer();\n            PaperBackground.Apply(todoHost);\n            Require(todoHost.Background is ImageBrush,\n                \"paper background applies to the todo ScrollViewer host\");")
+if "bad image exposes a diagnostic load error" not in text:
+    text = text.replace(
+        "            Require(badImage == null, \"bad image falls back instead of throwing\");",
+        "            Require(badImage == null, \"bad image falls back instead of throwing\");\n            Require(!string.IsNullOrWhiteSpace(PaperBackground.LoadError),\n                \"bad image exposes a diagnostic load error\");")
+write(path, text)
+
+# Remove one-shot patch carriers and this script from the final branch.
+for temporary in (
+    Path(".github/workflows/pr270-autofix.yml"),
+    Path(".github/workflows/pr270-autofix-v2.yml"),
+    Path(".github/pr270_autofix.py"),
+):
+    if temporary.exists():
+        temporary.unlink()
