@@ -1,4 +1,4 @@
-name: One-time reorder v4.0.0-beta1 release notes
+name: One-time collapse Chinese v4.0.0-beta1 release notes
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
     env:
       RELEASE_TAG: "v4.0.0-beta1"
     steps:
-      - name: Put Simplified Chinese changelog first
+      - name: Keep Simplified Chinese first but collapsed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -24,23 +24,24 @@ jobs:
 
           path = Path('/tmp/body.md')
           body = path.read_text(encoding='utf-8')
-          marker = '<details>\n<summary>简体中文更新日志</summary>\n\n'
-          start = body.find(marker)
-          if start < 0:
-              raise SystemExit('Simplified Chinese details block not found')
-          close = body.find('\n</details>', start)
-          if close < 0:
-              raise SystemExit('Simplified Chinese details block is not closed')
 
-          chinese = body[start + len(marker):close].strip()
-          english = body[:start].strip()
-          tail = body[close + len('\n</details>'):].strip()
+          english_marker = '<details>\n<summary>English changelog</summary>\n\n'
+          english_start = body.find(english_marker)
+          if english_start < 0:
+              raise SystemExit('English details block not found')
+          english_close = body.find('\n</details>', english_start)
+          if english_close < 0:
+              raise SystemExit('English details block is not closed')
+
+          chinese = body[:english_start].strip()
+          english = body[english_start + len(english_marker):english_close].strip()
+          tail = body[english_close + len('\n</details>'):].strip()
 
           reordered = (
-              chinese
-              + '\n\n<details>\n<summary>English changelog</summary>\n\n'
+              '<details>\n<summary>简体中文更新日志</summary>\n\n'
+              + chinese
+              + '\n\n</details>\n\n'
               + english
-              + '\n\n</details>'
           )
           if tail:
               reordered += '\n\n' + tail
