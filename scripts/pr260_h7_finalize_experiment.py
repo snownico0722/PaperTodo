@@ -11,10 +11,10 @@ def replace_once(path: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new), encoding="utf-8", newline="")
 
 
-# The first draft switched the live request to restoredRequest before asking the controller to
-# accept the new session size. Its rollback helper still required the old request to be current,
-# making rollback deterministically fail on that boundary. Keep both identities explicit: the
-# request expected to be current at rollback time, and the original constrained request to restore.
+# The first H7 draft switched the live request before asking the controller to adopt the new
+# session size, but its rollback helper still required the old request to be current. Make the
+# request expected at rollback time explicit and restore content from the original constrained
+# request on either pre-switch or post-switch failure.
 replace_once(
     "src/PaperWindow.EdgeCapsulePreviewCapacityRecovery.cs",
     """        if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
@@ -42,7 +42,6 @@ replace_once(
             return false;
         }""",
 )
-
 replace_once(
     "src/PaperWindow.EdgeCapsulePreviewCapacityRecovery.cs",
     """        if (!_controller.TryRestoreEdgeCapsulePreviewSessionSize(
@@ -72,7 +71,6 @@ replace_once(
             return false;
         }""",
 )
-
 replace_once(
     "src/PaperWindow.EdgeCapsulePreviewCapacityRecovery.cs",
     """    private bool TryRollbackConstrainedPreviewContent(
@@ -112,10 +110,9 @@ replace_once(
     }""",
 )
 
-# Use the primary request constructor in both the seven-parameter candidate and the five-parameter
-# pinned #260 baseline. The previous BindingFlags helper could select a record copy constructor and
-# then pass a five/seven element argument array, which caused TargetParameterCountException before
-# either product behavior was exercised.
+# The record also has a copy constructor. Select the primary request constructor by its first two
+# parameter types so the same test source can run against both the 5-field pinned #260 record and
+# the 7-field H7 candidate record.
 replace_once(
     "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
     """        var ctor = typeof(EdgeCapsulePreviewRequest).GetConstructors(CapacityCheckFields).Single();
@@ -146,9 +143,8 @@ replace_once(
         var request = (EdgeCapsulePreviewRequest)ctor.Invoke(args);""",
 )
 
-# QueueKey(PaperData) is a private static helper. CapacityCheckFields is intentionally instance-only
-# for most fixture access, so using it here returned null and the second H7 run died before product
-# recovery was exercised. Resolve the exact static overload instead of weakening the shared flags.
+# QueueKey(PaperData) is a private static overload, while the fixture's shared reflection flags are
+# instance-only. Resolve the exact static helper instead of broadening every fixture lookup.
 replace_once(
     "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
     """        var queueKeyMethod = typeof(AppController).GetMethod("QueueKey", CapacityCheckFields)!;
@@ -162,11 +158,9 @@ replace_once(
         var queueKey = (string)queueKeyMethod.Invoke(null, new object[] { fixture.Paper })!;""",
 )
 
-# MaximumCapacityFixture intentionally creates AppController with GetUninitializedObject so it can
-# focus on HWND/source-capacity behavior without loading user state. H7 now legitimately enters the
-# real controller layout transaction, whose readonly collection/gate fields would normally have
-# been created by field initializers. Recreate only those structural fields the synchronous layout
-# path needs; do not fake queue-proxy ownership or compositor results.
+# MaximumCapacityFixture intentionally bypasses AppController field initializers. H7 legitimately
+# enters the real controller layout transaction, so restore only the structural fields used by that
+# synchronous path; do not fake compositor ownership, source identity or publication results.
 replace_once(
     "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
     """        var controller = GetCapacityCheckField<AppController>(fixture.Window, "_controller");
@@ -196,10 +190,10 @@ replace_once(
 """,
 )
 
-# Recovery and controller-session replacement are synchronous. Pumping ApplicationIdle here would
-# execute the pending Send-priority visual transaction against the intentionally partial controller
-# fixture, testing fixture construction rather than H7. Assert the synchronous state first, abort
-# that queued visual commit, then exercise the rollback boundary independently.
+# Recovery and session replacement are synchronous. Pumping ApplicationIdle here would run the
+# queued visual transaction against this intentionally partial controller fixture, which would test
+# fixture construction instead of H7. Read the synchronous state and abort that queued commit after
+# the happy-path assertions.
 replace_once(
     "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
     """        fixture.Retained.Clear();
@@ -213,72 +207,12 @@ replace_once(
         var actual = GetCapacityCheckField<EdgeCapsulePreviewRequest?>(fixture.Window,""",
 )
 
+# Extend the candidate-only branch with an explicit post-Host-replacement controller rejection.
+# This is the boundary where the first H7 draft's rollback could not match the current request.
 replace_once(
     "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
     """            Check(session is { } restored && restored.Size == target,
                 \"Controller session adopts the recovered size instead of resetting the preview\");
-
-            var restoredContent = actual.Content;""",
-    """            Check(session is { } restored && restored.Size == target,
-                \"Controller session adopts the recovered size instead of resetting the preview\");
-            var pendingVisualCommit = GetCapacityCheckField<DispatcherOperation?>(controller,
-                \"_edgeCapsuleVisualTransactionCommitOperation\");
-            pendingVisualCommit?.Abort();
-
-            var restoredContent = actual.Content;""",
-)
-
-replace_once(
-    "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
-    """            fixture.Window.ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease();
-            fixture.Host.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
-            var rolledBack = GetCapacityCheckField<EdgeCapsulePreviewRequest?>(fixture.Window,""",
-    """            fixture.Window.ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease();
-            var rolledBack = GetCapacityCheckField<EdgeCapsulePreviewRequest?>(fixture.Window,""",
-)
-
-# After the happy-path recovery, put the same live request back into a constrained state while the
-# controller still owns the same paper but deliberately carries a mismatched session size. That
-# allows content replacement to happen, then forces TryRestoreEdgeCapsulePreviewSessionSize to
-# reject. The product must roll both the Host content and the PaperWindow request back atomically.
-replace_once(
-    "tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs",
-    """            Check(session is { } restored && restored.Size == target,
-                \"Controller session adopts the recovered size instead of resetting the preview\");
-            var pendingVisualCommit = GetCapacityCheckField<DispatcherOperation?>(controller,
-                \"_edgeCapsuleVisualTransactionCommitOperation\");
-            pendingVisualCommit?.Abort();
-
-            var restoredContent = actual.Content;
-            Check(fixture.Host.ReplacePreviewContent(
-                    restoredContent,
-                    oldContent,
-                    constrained.ContentSize.Width,
-                    constrained.ContentSize.Height),
-                \"Rollback regression restores a constrained Host setup before forcing controller rejection\");
-            SetCapacityCheckField(fixture.Window, \"_edgeCapsulePreviewRequest\", request);
-            SetCapacityCheckField(fixture.Window, \"_edgeCapsulePendingPreviewCapacity\", target);
-            var mismatchedSessionSize = constrained with
-            {
-                HeightDip = Math.Max(1, constrained.HeightDip - 1)
-            };
-            SetCapacityCheckField(controller, \"_edgeCapsulePreviewSession\",
-                new EdgeCapsulePreviewLayoutSession(queueKey, fixture.Paper.Id, mismatchedSessionSize,
-                    new[] { fixture.Paper.Id }, new Dictionary<string, double>(StringComparer.Ordinal)
-                    { [fixture.Paper.Id] = 0 }));
-
-            fixture.Window.ResumeEdgeCapsuleSourceInvalidationsAfterProxyRelease();
-            var rolledBack = GetCapacityCheckField<EdgeCapsulePreviewRequest?>(fixture.Window,
-                \"_edgeCapsulePreviewRequest\");
-            Check(ReferenceEquals(rolledBack, request) && rolledBack.Size == constrained &&
-                ReferenceEquals(rolledBack.Content, oldContent),
-                \"Controller size rejection restores the original constrained preview request\");
-            Check(fixture.Host.OwnsPreviewContent(oldContent),
-                \"Controller size rejection restores the original constrained Host content\");
-            Check(GetCapacityCheckField<int>(fixture.Window, \"_edgeCapsulePreviewContentGeneration\") ==
-                    contentGeneration,
-                \"Rollback keeps the same preview content generation\");
-            Console.WriteLine(\"RESULT pr260-capacity-rollback protected=True\");
         }
         else""",
     """            Check(session is { } restored && restored.Size == target,
