@@ -268,6 +268,25 @@ public sealed partial class PaperWindow
               _edgeCapsuleHost.MatchesPresentation(endpoint);
     }
 
+    // Queue-proxy pointer sampling is richer than the Presenter's state: the controller still needs
+    // every physical point for target/corridor arbitration, while the Presenter only stores whether
+    // the point is over its current interactive surface. Do not manufacture Pointer dirty work when
+    // the same reducer intent would be a no-op; doing so makes the same tick fail the settled-input
+    // handoff test that follows it and can starve selective handoff during continuous in-card motion.
+    internal bool ShouldInvalidateEdgeCapsuleQueueProxyPointer(
+        DeviceScreenPoint? pointer,
+        EdgeCapsulePresentationFrame presentedFrame)
+    {
+        var over = pointer.HasValue &&
+            presentedFrame.IsHitTestVisible &&
+            EdgeCapsuleGeometry.Contains(
+                presentedFrame.InteractiveBounds,
+                pointer.Value);
+        return EdgeCapsuleReducer.Reduce(
+            _edgeCapsule.Model,
+            EdgeCapsuleIntent.PointerSampled(over)).Changed;
+    }
+
     internal void InvalidateEdgeCapsuleQueueProxyPointer(DeviceScreenPoint? pointer)
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
@@ -276,10 +295,19 @@ public sealed partial class PaperWindow
             return;
         }
 
+        var presentedFrame = ResolveEdgeCapsulePresentedFrame(
+            _edgeCapsule.AppliedPresentation);
+        var needsPresenterReconcile =
+            ShouldInvalidateEdgeCapsuleQueueProxyPointer(
+                pointer,
+                presentedFrame);
         _controller.NotifyEdgeCapsulePreviewPhysicalPointer(
             this,
             pointer);
-        InvalidateEdgeCapsulePointer();
+        if (needsPresenterReconcile)
+        {
+            InvalidateEdgeCapsulePointer();
+        }
     }
 
     internal void FlushEdgeCapsuleQueueProxyEndpoint()
