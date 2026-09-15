@@ -1,0 +1,62 @@
+name: PR260 H8 dedicated input owner
+
+on:
+  push:
+    branches:
+      - exp/pr260-parallel-automation
+
+permissions:
+  contents: read
+
+jobs:
+  dedicated-owner:
+    if: contains(github.event.head_commit.message, '[h8-owner-ci]')
+    name: Dedicated native input owner vs UI stall
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore dedicated-owner H8 entry
+        run: dotnet restore .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -p:Pr260H8DedicatedInputOwner=true
+      - name: Build dedicated-owner H8 entry Release
+        run: |
+          dotnet build .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release --no-restore -p:Pr260H8DedicatedInputOwner=true 2>&1 |
+            Tee-Object -FilePath pr260-h8-owner-build.log
+          exit $LASTEXITCODE
+      - name: Run dedicated-owner real DComp / cross-process probe
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem .\tests\PaperTodo.EdgeTitleChecks\bin\Release -Recurse -Filter PaperTodo.EdgeTitleChecks.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (!$exe) { throw 'Dedicated-owner H8 executable was not produced' }
+          & $exe 2>&1 | Tee-Object -FilePath pr260-h8-owner-run.log
+          $code = $LASTEXITCODE
+          "## PR260 H8 dedicated native input owner" >> $env:GITHUB_STEP_SUMMARY
+          "This is an architecture probe, not a production fix. It keeps the production DComp output path, leaves the current UI-owned input HWND empty, and creates a test-only input HWND on a separate native owner thread/message loop." >> $env:GITHUB_STEP_SUMMARY
+          "The dedicated owner receives the same absolute QPC animation ticket and updates finite HRGNs while the WPF/Dispatcher thread is deliberately blocked for 360 ms. A separate observer samples composed desktop pixels and the real HWND region during the stall, with 12 px tolerance, then mature cross-process tagged input verifies visible-card ownership and vacated-region pass-through after freezing both authorities." >> $env:GITHUB_STEP_SUMMARY
+          "Passing this probe would only show that a separate owner removes the UI-message-pump dependency and can stay within the sampled tolerance on this runner. It would not prove physical-frame synchronization or justify production integration without multi-refresh-rate/DPI/CPU-load validation." >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path pr260-h8-owner-run.log) {
+            Get-Content pr260-h8-owner-run.log | ForEach-Object { "    $_" >> $env:GITHUB_STEP_SUMMARY }
+          }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-h8-dedicated-owner-${{ github.sha }}
+          path: |
+            pr260-h8-owner-build.log
+            pr260-h8-owner-run.log
+          if-no-files-found: ignore
+          retention-days: 2
