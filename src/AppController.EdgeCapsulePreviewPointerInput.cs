@@ -21,7 +21,14 @@ public sealed partial class AppController
         PaperWindow inputWindow,
         DeviceScreenPoint? pointer)
     {
-        ObserveEdgePrewarmPhysicalPointer(inputWindow, pointer);
+        // A retained proxy samples the desktop cursor even while PaperTodo is not foreground.
+        // Preserve the existing interaction de-duplication and conservative live-session behavior,
+        // but do not let unrelated motion over another application repeatedly cancel optional work.
+        if (_edgeCapsulePreviewSession != null ||
+            (pointer.HasValue && inputWindow.IsEdgeCapsuleInteractiveAt(pointer.Value)))
+        {
+            ObserveEdgePrewarmPointer(pointer);
+        }
         if (IsExiting)
         {
             return;
