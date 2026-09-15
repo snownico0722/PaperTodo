@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 internal static class PaperBackgroundLayouts
 {
-    internal const string Stretch = "stretch";
+    internal const string LegacyStretch = "stretch";
     internal const string Center = "center";
     internal const string BottomLeft = "bottomLeft";
     internal const string BottomCenter = "bottomCenter";
@@ -16,7 +16,6 @@ internal static class PaperBackgroundLayouts
 
     internal static string Normalize(string? layout) => layout switch
     {
-        Stretch => Stretch,
         BottomLeft => BottomLeft,
         BottomCenter => BottomCenter,
         BottomRight => BottomRight,
@@ -33,6 +32,7 @@ internal static class PaperBackground
         }
 
         public bool BlendWithTheme { get; set; } = true;
+        public bool Stretch { get; set; }
         public string Layout { get; set; } = PaperBackgroundLayouts.Center;
     }
 
@@ -54,6 +54,7 @@ internal static class PaperBackground
 
     internal static bool IsAvailable => FindPath() != null;
     internal static bool BlendWithTheme => _preferences.BlendWithTheme;
+    internal static bool StretchImage => _preferences.Stretch;
     internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
 
     internal static string? LoadError
@@ -66,7 +67,7 @@ internal static class PaperBackground
                 return null;
             }
 
-            _ = CreateBrush(BlendWithTheme, Layout);
+            _ = CreateBrush(BlendWithTheme, Layout, StretchImage);
             return _lastLoadError;
         }
     }
@@ -81,6 +82,25 @@ internal static class PaperBackground
         var next = new BackgroundPreferences
         {
             BlendWithTheme = enabled,
+            Stretch = StretchImage,
+            Layout = Layout
+        };
+        SavePreferences(next);
+        _preferences = next;
+        InvalidateCache();
+    }
+
+    internal static void SetStretch(bool enabled)
+    {
+        if (StretchImage == enabled)
+        {
+            return;
+        }
+
+        var next = new BackgroundPreferences
+        {
+            BlendWithTheme = BlendWithTheme,
+            Stretch = enabled,
             Layout = Layout
         };
         SavePreferences(next);
@@ -99,6 +119,7 @@ internal static class PaperBackground
         var next = new BackgroundPreferences
         {
             BlendWithTheme = BlendWithTheme,
+            Stretch = StretchImage,
             Layout = normalized
         };
         SavePreferences(next);
@@ -118,7 +139,7 @@ internal static class PaperBackground
     {
         if (host != null)
         {
-            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout, StretchImage) ?? Brushes.Transparent;
         }
     }
 
@@ -126,11 +147,11 @@ internal static class PaperBackground
     {
         if (host != null)
         {
-            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout, StretchImage) ?? Brushes.Transparent;
         }
     }
 
-    internal static ImageBrush? CreateBrush(bool blendWithTheme, string layout)
+    internal static ImageBrush? CreateBrush(bool blendWithTheme, string layout, bool stretch)
     {
         var path = FindPath();
         if (path == null)
@@ -164,7 +185,7 @@ internal static class PaperBackground
             {
                 Opacity = blendWithTheme ? BlendedImageOpacity : 1.0
             };
-            ApplyLayout(brush, PaperBackgroundLayouts.Normalize(layout));
+            ApplyLayout(brush, PaperBackgroundLayouts.Normalize(layout), stretch);
             brush.Freeze();
             _lastLoadError = null;
             return brush;
@@ -222,11 +243,9 @@ internal static class PaperBackground
         return (frame.PixelWidth, frame.PixelHeight);
     }
 
-    private static void ApplyLayout(ImageBrush brush, string layout)
+    private static void ApplyLayout(ImageBrush brush, string layout, bool stretch)
     {
-        brush.Stretch = layout == PaperBackgroundLayouts.Stretch
-            ? Stretch.Fill
-            : Stretch.Uniform;
+        brush.Stretch = stretch ? Stretch.Fill : Stretch.None;
         brush.AlignmentX = layout switch
         {
             PaperBackgroundLayouts.BottomLeft => AlignmentX.Left,
@@ -258,7 +277,18 @@ internal static class PaperBackground
                 return new BackgroundPreferences();
             }
 
-            loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
+            if (string.Equals(
+                    loaded.Layout,
+                    PaperBackgroundLayouts.LegacyStretch,
+                    StringComparison.Ordinal))
+            {
+                loaded.Stretch = true;
+                loaded.Layout = PaperBackgroundLayouts.Center;
+            }
+            else
+            {
+                loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
+            }
             return loaded;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
