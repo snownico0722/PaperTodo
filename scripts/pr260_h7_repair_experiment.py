@@ -90,5 +90,31 @@ new = '''replace_once(
 )
 '''
 if text.count(old) != 1:
-    raise SystemExit(f"repair anchor count={text.count(old)}")
-p.write_text(text.replace(old, new), encoding="utf-8", newline="")
+    raise SystemExit(f"capacity-release repair anchor count={text.count(old)}")
+text = text.replace(old, new)
+
+# The production indentation is nested inside the request constructor; the first draft of the
+# experiment script used an under-indented exact anchor, so repair the script before applying it.
+old = '''    """            deferProviderContent
+                ? () => descriptor.CreateContent(size)
+                : null);""",
+    """            deferProviderContent
+                ? () => descriptor.CreateContent(size)
+                : null,
+            requestedSize,
+            descriptor.CreateContent);""",
+)'''
+new = '''    """                deferProviderContent
+                    ? () => descriptor.CreateContent(size)
+                    : null);""",
+    """                deferProviderContent
+                    ? () => descriptor.CreateContent(size)
+                    : null,
+                requestedSize,
+                descriptor.CreateContent);""",
+)'''
+if text.count(old) != 1:
+    raise SystemExit(f"deferred-content repair anchor count={text.count(old)}")
+text = text.replace(old, new)
+
+p.write_text(text, encoding="utf-8", newline="")
