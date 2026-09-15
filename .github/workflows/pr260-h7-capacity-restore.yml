@@ -1,0 +1,105 @@
+name: PR260 H7 constrained preview recovery
+
+on:
+  push:
+    branches:
+      - experiment/pr260-continuation-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  h7:
+    if: contains(github.event.head_commit.message, '[h7-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Apply H7 candidate and regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/pr260_h7_repair_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_finalize_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_fixture_finalize.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/pr260_h7_testable_core_experiment.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --stat | Tee-Object -FilePath h7-patch.log
+      - name: Build and run candidate focused checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object -FilePath h7-candidate-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+          & $exe 2>&1 | Tee-Object -FilePath h7-candidate-run.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path h7-candidate-run.log -Pattern 'RESULT pr260-capacity-recovery fixed=True')) { throw 'Candidate did not prove H7 recovery' }
+          if (-not (Select-String -Path h7-candidate-run.log -Pattern 'RESULT pr260-capacity-rollback protected=True')) { throw 'Candidate did not prove H7 rollback' }
+      - name: Run same regression against pinned PR260 baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'pr260-h7-baseline'
+          git worktree add --detach $root 953ae6266af2bc8c5d1696be7660e5006525202b
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $root submodule update --init --recursive
+          Copy-Item tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs (Join-Path $root 'tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs') -Force
+          Push-Location $root
+          try {
+            dotnet build tests/PaperTodo.EdgeTitleChecks -c Release 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'h7-baseline-build.log')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+            if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+            & $exe 2>&1 | Tee-Object -FilePath (Join-Path '${{ github.workspace }}' 'h7-baseline-run.log')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+          if (-not (Select-String -Path h7-baseline-run.log -Pattern 'RESULT pr260-capacity-recovery fixed=False')) { throw 'Pinned baseline did not reproduce H7' }
+      - name: Run candidate full native input regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          if (!(Test-Path $exe)) { $exe = 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows/PaperTodo.EdgeTitleChecks.exe' }
+          & $exe --proxy-native-input 2>&1 | Tee-Object -FilePath h7-native-input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit verified H7 candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'chatgpt-codex-connector'
+          git config user.email '14957082+openai@users.noreply.github.com'
+          git add src/EdgeCapsulePreview.cs src/PaperWindow.EdgeCapsulePreview.cs src/PaperWindow.EdgeCapsule.cs `
+            src/PaperWindow.EdgeCapsulePreviewCapacityRecovery.cs src/AppController.EdgeCapsulePreviewCapacityRecovery.cs `
+            tests/PaperTodo.EdgeTitleChecks/ProxyMaximumCapacityChecks.cs
+          git commit -m 'fix(edge): restore constrained live preview after capacity release'
+          git push origin HEAD:experiment/pr260-continuation-20260915
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr260-h7-${{ github.sha }}
+          path: |
+            h7-patch.log
+            h7-candidate-build.log
+            h7-candidate-run.log
+            h7-baseline-build.log
+            h7-baseline-run.log
+            h7-native-input.log
+          retention-days: 3

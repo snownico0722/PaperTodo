@@ -21,7 +21,15 @@ public sealed partial class AppController
         PaperWindow inputWindow,
         DeviceScreenPoint? pointer)
     {
-        ObserveEdgePrewarmPointer(pointer);
+        // Retained proxies sample the desktop cursor even while PaperTodo is not the foreground
+        // application. Do not turn unrelated desktop motion into a global optional-prewarm pause.
+        // Actual WPF input still enters through InputManager, and a live preview session remains
+        // conservative because corridor/transfer/outside motion can affect its visible transaction.
+        if (_edgeCapsulePreviewSession != null ||
+            (pointer.HasValue && inputWindow.IsEdgeCapsuleInteractiveAt(pointer.Value)))
+        {
+            ObserveEdgePrewarmPointer(pointer);
+        }
         if (IsExiting)
         {
             return;

@@ -13,6 +13,19 @@ public sealed partial class AppController
     {
         var generation = ++_pluginStartupPaperGeneration;
         if (IsExiting) return;
+
+        // StartAsync reaches this common tail for both startup branches. A non-empty restore
+        // increments _paperSurfaceRestoreGeneration before it creates any edge hosts and lets the
+        // preview-first/Shell drain call CompleteStartupEdgePrewarm later. If startup began with no
+        // papers, no restore exists to perform that completion step. Mark that genuinely empty
+        // restore as complete here so papers created by the startup command or plugins do not remain
+        // permanently behind the native-prewarm startup gate. Do not use State.Papers.Count: the
+        // empty branch may already have created its default paper before reaching this tail.
+        if (_paperSurfaceRestoreGeneration == 0 && !_edgePrewarmStartupReady)
+        {
+            CompleteStartupEdgePrewarm(startPreviewPreload: false);
+        }
+
         if (visibilityCommand == StartupCommandKind.Hide)
         {
             EnablePluginRuntimeReconciliation();

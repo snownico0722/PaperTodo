@@ -268,6 +268,40 @@ public sealed partial class PaperWindow
               _edgeCapsuleHost.MatchesPresentation(endpoint);
     }
 
+    // Queue-proxy pointer sampling is richer than the Presenter's state: the controller still needs
+    // every physical point for target/corridor arbitration, while the Presenter only stores whether
+    // the point is over its current interactive surface. Mirror the PointerSampled reducer here
+    // without mutating it; no-op movement must not manufacture dirty work immediately before the
+    // settled-input handoff check in the same proxy tick.
+    internal bool ShouldInvalidateEdgeCapsuleQueueProxyPointer(
+        DeviceScreenPoint? pointer,
+        EdgeCapsulePresentationFrame presentedFrame)
+    {
+        var over = pointer.HasValue &&
+            presentedFrame.IsHitTestVisible &&
+            EdgeCapsuleGeometry.Contains(
+                presentedFrame.InteractiveBounds,
+                pointer.Value);
+        over &= _edgeCapsule.State.Slot != EdgeCapsuleSlotState.None &&
+            !_edgeCapsule.PeerReorderActive;
+        var visual = _edgeCapsule.State.Slot switch
+        {
+            EdgeCapsuleSlotState.ExpandedReserved => EdgeCapsuleVisualState.Active,
+            EdgeCapsuleSlotState.CollapsedDocked
+                when _edgeCapsule.State.Gesture is EdgeCapsuleGestureState.Idle or
+                    EdgeCapsuleGestureState.PendingClick =>
+                _edgeCapsule.ContextMenuOpen || over
+                    ? EdgeCapsuleVisualState.Hovered
+                    : EdgeCapsuleVisualState.Resting,
+            EdgeCapsuleSlotState.CollapsedDocked
+                when _edgeCapsule.State.Gesture == EdgeCapsuleGestureState.DockedReordering =>
+                EdgeCapsuleVisualState.Hovered,
+            _ => EdgeCapsuleVisualState.Resting
+        };
+        return _edgeCapsule.PointerOverSurface != over ||
+            _edgeCapsule.State.Visual != visual;
+    }
+
     internal void InvalidateEdgeCapsuleQueueProxyPointer(DeviceScreenPoint? pointer)
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
@@ -276,10 +310,19 @@ public sealed partial class PaperWindow
             return;
         }
 
+        var presentedFrame = ResolveEdgeCapsulePresentedFrame(
+            _edgeCapsule.AppliedPresentation);
+        var needsPresenterReconcile =
+            ShouldInvalidateEdgeCapsuleQueueProxyPointer(
+                pointer,
+                presentedFrame);
         _controller.NotifyEdgeCapsulePreviewPhysicalPointer(
             this,
             pointer);
-        InvalidateEdgeCapsulePointer();
+        if (needsPresenterReconcile)
+        {
+            InvalidateEdgeCapsulePointer();
+        }
     }
 
     internal void FlushEdgeCapsuleQueueProxyEndpoint()
