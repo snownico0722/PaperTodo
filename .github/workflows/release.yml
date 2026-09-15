@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to create or update. Defaults to v<project version>."
+        description: "Release tag to create or update. Defaults to v<public version>."
         required: false
         type: string
       prerelease:
@@ -64,20 +64,32 @@ jobs:
         id: meta
         run: |
           $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
-          # Multiple PropertyGroups exist; .PropertyGroup.Version is an array that stringifies
-          # with a trailing space (e.g. "3.0 "). Read the single Version element instead.
+          # Keep the SDK build version SemVer-compatible while allowing the public release
+          # label to follow PaperTodo's compact naming (for example 4.0beta1).
           $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
+          $informationalVersionNodes = $project.SelectNodes('/Project/PropertyGroup/InformationalVersion')
           if ($versionNodes.Count -ne 1) {
             throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
           }
-          $version = ([string]$versionNodes[0].InnerText).Trim()
-          if ([string]::IsNullOrWhiteSpace($version) -or $version -match '\s') {
-            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$version'."
+          if ($informationalVersionNodes.Count -ne 1) {
+            throw "PaperTodo.csproj must define exactly one <InformationalVersion> element (found $($informationalVersionNodes.Count))."
+          }
+          $buildVersion = ([string]$versionNodes[0].InnerText).Trim()
+          $releaseVersion = ([string]$informationalVersionNodes[0].InnerText).Trim()
+          if ([string]::IsNullOrWhiteSpace($buildVersion) -or $buildVersion -match '\s') {
+            throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$buildVersion'."
+          }
+          if ([string]::IsNullOrWhiteSpace($releaseVersion) -or $releaseVersion -match '\s') {
+            throw "PaperTodo.csproj <InformationalVersion> is missing or contains whitespace: '$releaseVersion'."
+          }
+          if ($releaseVersion -notmatch '^[A-Za-z0-9_.-]+$') {
+            throw "PaperTodo.csproj <InformationalVersion> contains unsupported release filename/tag characters: '$releaseVersion'."
           }
 
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "self_contained_exe=PaperTodo-v$version-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
-          "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
+          "build_version=$buildVersion" >> $env:GITHUB_OUTPUT
+          "release_version=$releaseVersion" >> $env:GITHUB_OUTPUT
+          "self_contained_exe=PaperTodo-v$releaseVersion-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
+          "framework_dependent_exe=PaperTodo-v$releaseVersion-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj
@@ -139,7 +151,7 @@ jobs:
       - name: Upload executable package
         uses: actions/upload-artifact@v7
         with:
-          name: PaperTodo-v${{ steps.meta.outputs.version }}-win-x64
+          name: PaperTodo-v${{ steps.meta.outputs.release_version }}-win-x64
           if-no-files-found: error
           path: |
             release/${{ steps.meta.outputs.self_contained_exe }}
@@ -154,7 +166,7 @@ jobs:
           } else {
             $tag = "${{ inputs.release_tag }}"
             if ([string]::IsNullOrWhiteSpace($tag)) {
-              $tag = "v${{ steps.meta.outputs.version }}"
+              $tag = "v${{ steps.meta.outputs.release_version }}"
             }
           }
 
@@ -163,7 +175,7 @@ jobs:
           }
 
           $isStable = $tag -notmatch '(?i)(alpha|beta|preview|rc)'
-          $expectedTag = "v${{ steps.meta.outputs.version }}"
+          $expectedTag = "v${{ steps.meta.outputs.release_version }}"
           if ($isStable -and $tag -ne $expectedTag) {
             throw "Stable release tag '$tag' does not match the checked-out project version. Expected '$expectedTag'."
           }
