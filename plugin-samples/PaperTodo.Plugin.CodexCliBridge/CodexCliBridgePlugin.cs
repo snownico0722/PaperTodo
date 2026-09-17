@@ -20,6 +20,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
     private sealed class Session : IPaperBodySession
     {
         private readonly PaperBodyContext _context;
+        private readonly string _uiLanguage;
         private readonly TextBlock _title;
         private readonly TextBlock _description;
         private readonly TextBlock _status;
@@ -33,6 +34,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         public Session(PaperBodyContext context)
         {
             _context = context;
+            _uiLanguage = context.UiLanguage;
 
             _title = new TextBlock
             {
@@ -43,7 +45,9 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             };
             _description = new TextBlock
             {
-                Text = "这里的内容会作为默认提示词，在每次从待办项或纸片发送给 Codex 时自动放到最前面。",
+                Text = T(
+                    "这里的内容会作为默认提示词，在每次从待办项或纸片发送给 Codex 时自动放到最前面。",
+                    "This content is used as the default prompt and is automatically prepended whenever a todo or paper is sent to Codex."),
                 TextWrapping = TextWrapping.Wrap,
                 LineHeight = 20,
                 Margin = new Thickness(0, 0, 0, 10)
@@ -57,12 +61,14 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 MinHeight = 180,
                 Padding = new Thickness(10),
                 BorderThickness = new Thickness(1),
-                ToolTip = "默认传入提示词。留空则只发送待办/纸片本身。"
+                ToolTip = T(
+                    "默认传入提示词。留空则只发送待办/纸片本身。",
+                    "Default prompt sent to Codex. Leave it empty to send only the todo or paper content.")
             };
             _status = new TextBlock
             {
                 Margin = new Thickness(0, 8, 0, 0),
-                Text = "正在读取默认提示词…",
+                Text = T("正在读取默认提示词…", "Loading the default prompt…"),
                 TextWrapping = TextWrapping.Wrap
             };
 
@@ -135,13 +141,15 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     _promptBox.Text = prompt;
                     _suppressPromptChanged = false;
                 }
-                _status.Text = "默认提示词已载入。修改后会自动保存。";
+                _status.Text = T(
+                    "默认提示词已载入。修改后会自动保存。",
+                    "Default prompt loaded. Changes are saved automatically.");
                 return true;
             }
 
             if (string.Equals(type, "defaultPromptSaved", StringComparison.Ordinal))
             {
-                _status.Text = "默认提示词已保存。";
+                _status.Text = T("默认提示词已保存。", "Default prompt saved.");
                 return true;
             }
 
@@ -189,7 +197,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
 
             _hasLocalEdit = true;
-            _status.Text = "等待保存…";
+            _status.Text = T("等待保存…", "Waiting to save…");
             _saveTimer.Stop();
             _saveTimer.Start();
         }
@@ -207,7 +215,9 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }));
             if (!sent)
             {
-                _status.Text = "Codex Runtime 暂不可用；重新打开这张纸后会再次读取。";
+                _status.Text = T(
+                    "Codex Runtime 暂不可用；重新打开这张纸后会再次读取。",
+                    "Codex Runtime is unavailable; reopen this paper to try again.");
             }
         }
 
@@ -224,8 +234,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 prompt = _promptBox.Text ?? string.Empty
             }));
             _status.Text = sent
-                ? "正在保存…"
-                : "保存失败：Codex Runtime 暂不可用。";
+                ? T("正在保存…", "Saving…")
+                : T("保存失败：Codex Runtime 暂不可用。", "Save failed: Codex Runtime is unavailable.");
         }
 
         private void ApplyTheme(PaperBodyTheme theme)
@@ -244,6 +254,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             _promptBox.FontFamily = new FontFamily(theme.FontFamily);
             _promptBox.FontSize = 14 * Math.Clamp(theme.FontScale, 0.85, 1.3);
         }
+
+        private string T(string zh, string en) => CodexBridgeText.For(_uiLanguage, zh, en);
 
         private static Brush BrushFrom(string value, Brush fallback)
         {
@@ -264,29 +276,31 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         private const string TopBarActionId = "send-paper-to-codex";
 
         private readonly PaperPluginRuntimeContext _context;
+        private readonly string _uiLanguage;
+        private readonly PaperTodoAction[] _todoAction;
         private readonly IDisposable _workspaceSubscription;
         private readonly IDisposable _runtimePaperSubscription;
         private CodexPromptState _state;
         private bool _disposed;
 
-        private static readonly PaperTodoAction[] TodoAction =
-        [
-            new PaperTodoAction
-            {
-                Id = TodoActionId,
-                Icon = PaperTopBarIcon.Character(">_"),
-                Text = "发送到 Codex CLI",
-                ToolTip = "静默发送到 Codex CLI",
-                Priority = 80,
-                Placement = PaperTodoActionPlacement.Inline |
-                            PaperTodoActionPlacement.ContextMenu
-            }
-        ];
-
         public Runtime(PaperPluginRuntimeContext context)
         {
             _context = context;
+            _uiLanguage = context.UiLanguage;
             _state = CodexPromptState.Read(context.State.Json);
+            _todoAction =
+            [
+                new PaperTodoAction
+                {
+                    Id = TodoActionId,
+                    Icon = PaperTopBarIcon.Character(">_"),
+                    Text = "Codex",
+                    ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
+                    Priority = 80,
+                    Placement = PaperTodoActionPlacement.Inline |
+                                PaperTodoActionPlacement.ContextMenu
+                }
+            ];
 
             context.TodoActions.SetActionHandler(OnTodoAction);
             context.GlobalTopBar.SetActionHandler(OnTopBarAction);
@@ -296,7 +310,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 {
                     Id = TopBarActionId,
                     Icon = PaperTopBarIcon.Character(">_"),
-                    ToolTip = "把当前纸片全文发送到 Codex CLI",
+                    ToolTip = T("把当前纸片全文发送到 Codex CLI", "Send the current paper to Codex CLI"),
                     Priority = 80
                 }
             ]);
@@ -336,7 +350,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 _context.TodoActions.Clear(todo.PaperId, todo.Id);
                 return;
             }
-            _context.TodoActions.SetActions(todo.PaperId, todo.Id, TodoAction);
+            _context.TodoActions.SetActions(todo.PaperId, todo.Id, _todoAction);
         }
 
         private void OnWorkspaceEvent(PaperTodoEvent value)
@@ -403,7 +417,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 JsonSerializer.SerializeToElement(new
                 {
                     type = saved ? "defaultPromptSaved" : "defaultPrompt",
-                    prompt = _state.EffectivePrompt
+                    prompt = _state.EffectivePrompt(_uiLanguage)
                 }));
         }
 
@@ -429,15 +443,26 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                         settings.WorkingDirectory,
                         linkedPath,
                         todo.LinkedPathIsDirectory);
-                    await CodexCliLauncher.RunSilentAsync(
-                        settings,
-                        workingDirectory,
-                        prompt,
-                        imageAttachment);
+                    if (settings.BackgroundExecution)
+                    {
+                        await CodexCliLauncher.RunSilentAsync(
+                            settings,
+                            workingDirectory,
+                            prompt,
+                            imageAttachment);
+                    }
+                    else
+                    {
+                        CodexCliLauncher.RunForeground(
+                            settings,
+                            workingDirectory,
+                            prompt,
+                            imageAttachment);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Trace.WriteLine($"[CodexCliBridge] Silent send failed: {ex}");
+                    Trace.WriteLine($"[CodexCliBridge] Todo send failed: {ex}");
                 }
             });
         }
@@ -451,7 +476,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
 
             var paperId = invocation.TargetPaperId;
-            _ = Task.Run(() =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
@@ -461,21 +486,35 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                         settings.WorkingDirectory,
                         linkedPath: null,
                         linkedPathIsDirectory: null);
-                    CodexCliLauncher.RunForeground(
-                        settings,
-                        workingDirectory,
-                        prompt,
-                        imageAttachment: null);
+                    if (settings.BackgroundExecution)
+                    {
+                        await CodexCliLauncher.RunSilentAsync(
+                            settings,
+                            workingDirectory,
+                            prompt,
+                            imageAttachment: null);
+                    }
+                    else
+                    {
+                        CodexCliLauncher.RunForeground(
+                            settings,
+                            workingDirectory,
+                            prompt,
+                            imageAttachment: null);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Trace.WriteLine($"[CodexCliBridge] Foreground send failed: {ex}");
+                    Trace.WriteLine($"[CodexCliBridge] Paper send failed: {ex}");
                 }
             });
         }
 
         private string AddDefaultPrompt(string content) =>
-            _state.PrependTo(content, Path.GetDirectoryName(typeof(CodexCliBridgePlugin).Assembly.Location)!);
+            _state.PrependTo(
+                content,
+                Path.GetDirectoryName(typeof(CodexCliBridgePlugin).Assembly.Location)!,
+                _uiLanguage);
 
         private string BuildTodoPrompt(TodoSnapshot todo)
         {
@@ -483,11 +522,11 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             builder.AppendLine(todo.Text.Trim());
             builder.AppendLine();
             builder.AppendLine("[PaperTodo context]");
-            builder.Append("来源纸片：").AppendLine(todo.PaperTitle);
+            builder.Append(T("来源纸片：", "Source paper: ")).AppendLine(todo.PaperTitle);
 
             if (!string.IsNullOrWhiteSpace(todo.LinkedPath))
             {
-                builder.Append("绑定路径：").AppendLine(todo.LinkedPath);
+                builder.Append(T("绑定路径：", "Linked path: ")).AppendLine(todo.LinkedPath);
             }
 
             if (!string.IsNullOrWhiteSpace(todo.LinkedPaperId))
@@ -507,8 +546,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
 
             builder.AppendLine();
-            builder.AppendLine("[绑定 PaperTodo 纸片]");
-            builder.Append("标题：").AppendLine(paper.Title);
+            builder.AppendLine(T("[绑定 PaperTodo 纸片]", "[Linked PaperTodo paper]"));
+            builder.Append(T("标题：", "Title: ")).AppendLine(paper.Title);
 
             if (string.Equals(paper.Type, "todo", StringComparison.OrdinalIgnoreCase))
             {
@@ -533,17 +572,20 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
             else
             {
-                builder.AppendLine("（该纸片正文不通过 Workspace 暴露。）");
+                builder.AppendLine(T(
+                    "（该纸片正文不通过 Workspace 暴露。）",
+                    "(This paper's body is not exposed through Workspace.)"));
             }
         }
 
         private string BuildPaperPrompt(string paperId)
         {
             var paper = _context.Workspace.GetPaper(paperId)
-                        ?? throw new InvalidOperationException("目标纸片已经不存在。");
+                        ?? throw new InvalidOperationException(
+                            T("目标纸片已经不存在。", "The target paper no longer exists."));
             var builder = new StringBuilder();
-            builder.AppendLine("[PaperTodo 纸片全文]");
-            builder.Append("标题：").AppendLine(paper.Title);
+            builder.AppendLine(T("[PaperTodo 纸片全文]", "[PaperTodo paper contents]"));
+            builder.Append(T("标题：", "Title: ")).AppendLine(paper.Title);
             builder.AppendLine();
 
             if (string.Equals(paper.Type, "todo", StringComparison.OrdinalIgnoreCase))
@@ -555,7 +597,9 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                         .Append(todo.Text);
                     if (!string.IsNullOrWhiteSpace(todo.LinkedPath))
                     {
-                        builder.Append("  [绑定路径: ").Append(todo.LinkedPath).Append(']');
+                        builder.Append(T("  [绑定路径: ", "  [Linked path: "))
+                            .Append(todo.LinkedPath)
+                            .Append(']');
                     }
                     builder.AppendLine();
                 }
@@ -571,14 +615,20 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 }
                 else
                 {
-                    builder.AppendLine("（该 Note 的正文不通过 Workspace 暴露。）");
+                    builder.AppendLine(T(
+                        "（该 Note 的正文不通过 Workspace 暴露。）",
+                        "(This Note's body is not exposed through Workspace.)"));
                 }
                 return builder.ToString().TrimEnd();
             }
 
-            builder.AppendLine("（当前纸片类型没有可导出的正文，只发送标题。）");
+            builder.AppendLine(T(
+                "（当前纸片类型没有可导出的正文，只发送标题。）",
+                "(This paper type has no exportable body; only the title is sent.)"));
             return builder.ToString().TrimEnd();
         }
+
+        private string T(string zh, string en) => CodexBridgeText.For(_uiLanguage, zh, en);
 
         public void Dispose()
         {
@@ -601,7 +651,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         string CodexPath,
         string WorkingDirectory,
         string Model,
-        string ReasoningEffort)
+        string ReasoningEffort,
+        bool BackgroundExecution)
     {
         internal static CodexBridgeSettings Read(string json)
         {
@@ -613,11 +664,17 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     Text(root, "codexPath", "codex", allowEmpty: false),
                     Text(root, "workingDirectory", string.Empty, allowEmpty: true),
                     Text(root, "model", "gpt-5.6-sol", allowEmpty: true),
-                    Text(root, "reasoningEffort", "xhigh", allowEmpty: true));
+                    Text(root, "reasoningEffort", "xhigh", allowEmpty: true),
+                    Bool(root, "backgroundExecution", fallback: false));
             }
             catch
             {
-                return new CodexBridgeSettings("codex", string.Empty, "gpt-5.6-sol", "xhigh");
+                return new CodexBridgeSettings(
+                    "codex",
+                    string.Empty,
+                    "gpt-5.6-sol",
+                    "xhigh",
+                    BackgroundExecution: false);
             }
         }
 
@@ -629,6 +686,16 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             }
             var text = (value.GetString() ?? string.Empty).Trim();
             return allowEmpty || !string.IsNullOrWhiteSpace(text) ? text : fallback;
+        }
+
+        private static bool Bool(JsonElement root, string name, bool fallback)
+        {
+            if (!root.TryGetProperty(name, out var value) ||
+                (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False))
+            {
+                return fallback;
+            }
+            return value.GetBoolean();
         }
     }
 
@@ -785,7 +852,8 @@ else {
             if (!process.Start())
             {
                 process.Dispose();
-                throw new InvalidOperationException("无法启动 PowerShell/Codex CLI。请检查插件设置中的 Codex CLI 命令。");
+                throw new InvalidOperationException(
+                    "Unable to start PowerShell/Codex CLI. Check the Codex CLI command in plugin settings.");
             }
             return process;
         }
