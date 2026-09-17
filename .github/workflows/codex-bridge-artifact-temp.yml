@@ -1,0 +1,33 @@
+name: Codex Bridge Runtime Artifact
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-codex-bridge-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Rebuild Codex CLI Bridge runtime
+        shell: pwsh
+        run: |
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+      - name: Upload Codex CLI Bridge runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-cli-bridge-runtime
+          path: plugins/tools.codex-cli-bridge.native
+          if-no-files-found: error
