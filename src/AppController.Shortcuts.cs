@@ -31,6 +31,7 @@ public sealed partial class AppController
 
     private void InitializeGlobalHotkeys()
     {
+        ApplyTrayIconVisibility();
         DisposeGlobalHotkeys();
         State.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
         State.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
@@ -90,6 +91,12 @@ public sealed partial class AppController
 
         _ = Application.Current.Dispatcher.InvokeAsync(() =>
         {
+            if (definition.ActionKind != GlobalShortcutActionKind.None)
+            {
+                ExecuteGlobalShortcutAction(definition.ActionKind);
+                return;
+            }
+
             if (definition.ExperimentalKind != ExperimentalShortcutKind.None)
             {
                 ExecuteExperimentalShortcut(definition);
@@ -386,6 +393,12 @@ public sealed partial class AppController
         rows.Children.Add(BuildShortcutGroupLabel(GlobalShortcutGroup.General));
         foreach (var definition in GlobalShortcutCatalog.DefinitionsInGroup(GlobalShortcutGroup.General))
         {
+            if (definition.Id == GlobalShortcutCatalog.TrayMenu &&
+                !State.AdvancedSettingsMode)
+            {
+                continue;
+            }
+
             rows.Children.Add(BuildShortcutRow(definition));
             if (definition.Id == GlobalShortcutCatalog.Hide &&
                 State.AdvancedSettingsMode)
@@ -728,7 +741,9 @@ public sealed partial class AppController
         {
             var label = new TextBlock
             {
-                Text = Strings.Get(definition.LabelKey),
+                Text = definition.Id == GlobalShortcutCatalog.TrayMenu
+                    ? TrayMenuShortcutLabel()
+                    : Strings.Get(definition.LabelKey),
                 Foreground = TrayTextBrush,
                 FontSize = AppTypography.Scale(12.5),
                 VerticalAlignment = VerticalAlignment.Center,
