@@ -1,5 +1,6 @@
 name: Codex Menu Label Runtime Sync
 
+# Temporary branch-only workflow; removed after the runtime output is committed.
 on:
   pull_request:
 
