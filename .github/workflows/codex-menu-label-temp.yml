@@ -1,6 +1,5 @@
 name: Codex Menu Label Runtime Sync
 
-# Temporary branch-only workflow; removed after the runtime output is committed.
 on:
   pull_request:
 
@@ -9,7 +8,6 @@ permissions:
 
 jobs:
   patch-and-rebuild:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,16 +26,17 @@ jobs:
           path = Path('plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexCliBridgePlugin.cs')
           text = path.read_text(encoding='utf-8')
 
-          old = '''        private const string TodoActionId = "send-todo-to-codex";
+          old_constants = '''        private const string TodoActionId = "send-todo-to-codex";
         private const string TopBarActionId = "send-paper-to-codex";'''
-          new = '''        private const string TodoActionId = "send-todo-to-codex";
+          new_constants = '''        private const string TodoActionId = "send-todo-to-codex";
         private const string TodoContextActionId = "send-todo-to-codex-menu";
         private const string TopBarActionId = "send-paper-to-codex";'''
-          if old not in text:
+          if old_constants in text:
+              text = text.replace(old_constants, new_constants, 1)
+          elif new_constants not in text:
               raise SystemExit('Todo action constants block not found')
-          text = text.replace(old, new, 1)
 
-          old = '''            _todoAction =
+          old_actions = '''            _todoAction =
             [
                 new PaperTodoAction
                 {
@@ -50,7 +49,7 @@ jobs:
                                 PaperTodoActionPlacement.ContextMenu
                 }
             ];'''
-          new = '''            _todoAction =
+          new_actions = '''            _todoAction =
             [
                 new PaperTodoAction
                 {
@@ -71,32 +70,36 @@ jobs:
                     Placement = PaperTodoActionPlacement.ContextMenu
                 }
             ];'''
-          if old not in text:
+          if old_actions in text:
+              text = text.replace(old_actions, new_actions, 1)
+          elif new_actions not in text:
               raise SystemExit('Todo action declaration block not found')
-          text = text.replace(old, new, 1)
 
-          old = '''            if (_disposed || !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal))
+          old_guard = '''            if (_disposed || !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal))
             {
                 return;
             }'''
-          new = '''            if (_disposed ||
+          new_guard = '''            if (_disposed ||
                 !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal) &&
                 !string.Equals(invocation.ActionId, TodoContextActionId, StringComparison.Ordinal))
             {
                 return;
             }'''
-          if old not in text:
+          if old_guard in text:
+              text = text.replace(old_guard, new_guard, 1)
+          elif new_guard not in text:
               raise SystemExit('Todo action handler guard not found')
-          text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
 
           readme = Path('plugin-samples/PaperTodo.Plugin.CodexCliBridge/README.md')
           text = readme.read_text(encoding='utf-8')
-          old = '- 每个非空待办项增加紧凑的 `Codex` / `>_` 操作：默认以前台 PowerShell 窗口执行 `codex exec`，可以直接看到 Codex 输出；仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
-          new = '- 每个非空待办项增加 Codex 操作：行内按钮保持紧凑的 `Codex` / `>_`，右键菜单显示“发送到 Codex”；默认以前台 PowerShell 窗口执行 `codex exec`，仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
-          if old not in text:
+          old_readme = '- 每个非空待办项增加紧凑的 `Codex` / `>_` 操作：默认以前台 PowerShell 窗口执行 `codex exec`，可以直接看到 Codex 输出；仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
+          new_readme = '- 每个非空待办项增加 Codex 操作：行内按钮保持紧凑的 `Codex` / `>_`，右键菜单显示“发送到 Codex”；默认以前台 PowerShell 窗口执行 `codex exec`，仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
+          if old_readme in text:
+              text = text.replace(old_readme, new_readme, 1)
+          elif new_readme not in text:
               raise SystemExit('README behavior line not found')
-          readme.write_text(text.replace(old, new, 1), encoding='utf-8')
+          readme.write_text(text, encoding='utf-8')
           PY
       - name: Rebuild Codex CLI Bridge runtime
         shell: pwsh
@@ -104,7 +107,7 @@ jobs:
           & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
             -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Commit source and runtime outputs
+      - name: Commit source and runtime outputs if needed
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -114,5 +117,9 @@ jobs:
             plugin-samples/PaperTodo.Plugin.CodexCliBridge/README.md \
             plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll \
             plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.deps.json
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
           git commit -m "fix(plugin): keep Codex context menu descriptive [ci]"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
