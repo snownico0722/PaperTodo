@@ -4,7 +4,7 @@
 
 ## 行为
 
-- 每个非空待办项增加紧凑的 `Codex` / `>_` 操作：默认以前台 PowerShell 窗口执行 `codex exec`，可以直接看到 Codex 输出；仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。
+- 每个非空待办项增加 Codex 操作：行内按钮保持紧凑的 `Codex` / `>_`，右键菜单显示“发送到 Codex”；默认以前台 PowerShell 窗口执行 `codex exec`，仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。
 - Todo 如果绑定本地 `.png` / `.jpg` / `.jpeg` / `.webp`，通过 Codex CLI 当前的 `--image` 参数作为图片附件发送。
 - Todo 绑定其他本地文件或目录时，会把路径写进 prompt，并优先把对应 Git 仓库根目录（找不到 Git 根时为文件父目录/目录本身）作为 Codex 工作目录。
 - Todo 如果绑定另一张 PaperTodo 纸片，会把可读的 Todo / Markdown 内容一起加入上下文。
