@@ -1,21 +1,19 @@
 name: Codex Menu Label Runtime Sync
 
 on:
-  push:
-    branches:
-      - fix/codex-bridge-localization-foreground
+  pull_request:
 
 permissions:
   contents: write
 
 jobs:
   patch-and-rebuild:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/codex-bridge-localization-foreground
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
@@ -116,4 +114,4 @@ jobs:
             plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll \
             plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.deps.json
           git commit -m "fix(plugin): keep Codex context menu descriptive [ci]"
-          git push origin HEAD:fix/codex-bridge-localization-foreground
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
