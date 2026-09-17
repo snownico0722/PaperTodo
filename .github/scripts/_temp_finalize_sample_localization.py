@@ -4,6 +4,7 @@ from pathlib import Path
 import copy
 import json
 
+# Trigger the temporary branch build after the workflow file itself exists.
 ROOT = Path('.')
 
 # Normalize TopBarWeb to English base + Chinese locale while preserving its existing ja/ko packs.
