@@ -333,7 +333,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
             _retryMode = RetryMode.NavigateHome;
             UpdatePresentation();
             ShowStatus(PluginText.T("正在加载云·原神…"));
-            SetPaperStatus("云原神 · 加载中", PaperCapsuleTone.Muted);
+            SetPaperStatus(PluginText.T("云原神 · 加载中"), PaperCapsuleTone.Muted);
             _webView.CoreWebView2.Navigate(StartUri.AbsoluteUri);
         }
 
@@ -351,7 +351,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
 
             _documentReady = false;
             UpdatePresentation();
-            ShowStatus("正在加载云·原神…");
+            ShowStatus(PluginText.T("正在加载云·原神…"));
         }
 
         private void OnNavigationCompleted(
@@ -567,7 +567,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
                         _documentReady = false;
                         UpdatePresentation();
                         ShowStatus(PluginText.T("正在重新加载云·原神…"));
-                        SetPaperStatus("云原神 · 加载中", PaperCapsuleTone.Muted);
+                        SetPaperStatus(PluginText.T("云原神 · 加载中"), PaperCapsuleTone.Muted);
                         _webView.CoreWebView2.Reload();
                         break;
 
