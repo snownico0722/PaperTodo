@@ -449,6 +449,7 @@ public sealed class AppState
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
     public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; } = true;
+    public bool HideTrayIcon { get; set; }
     [JsonPropertyName("enableTodoNoteLinks")]
     public bool EnableTodoPaperLinks { get; set; } = true;
     [JsonPropertyName("showLinkedNoteName")]

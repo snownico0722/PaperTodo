@@ -12,6 +12,12 @@ internal enum GlobalShortcutGroup
     EdgeRight
 }
 
+internal enum GlobalShortcutActionKind
+{
+    None,
+    TrayMenu
+}
+
 internal enum ExperimentalShortcutKind
 {
     None,
@@ -32,7 +38,8 @@ internal sealed record GlobalShortcutDefinition(
     string PreferredCapsuleSide = "",
     int EdgeOrdinal = 0,
     bool DefaultEnabled = false,
-    ExperimentalShortcutKind ExperimentalKind = ExperimentalShortcutKind.None)
+    ExperimentalShortcutKind ExperimentalKind = ExperimentalShortcutKind.None,
+    GlobalShortcutActionKind ActionKind = GlobalShortcutActionKind.None)
 {
     public bool IsEdgeCapsule =>
         EdgeOrdinal is >= 1 and <= 9 &&
@@ -41,7 +48,8 @@ internal sealed record GlobalShortcutDefinition(
     public bool IsExecutable =>
         StartupCommandKind != StartupCommandKind.None ||
         IsEdgeCapsule ||
-        ExperimentalKind != ExperimentalShortcutKind.None;
+        ExperimentalKind != ExperimentalShortcutKind.None ||
+        ActionKind != GlobalShortcutActionKind.None;
 }
 
 internal static class GlobalShortcutCatalog
@@ -51,6 +59,7 @@ internal static class GlobalShortcutCatalog
     public const string Toggle = "startup.toggle";
     public const string NewTodo = "startup.newTodo";
     public const string NewNote = "startup.newNote";
+    public const string TrayMenu = "startup.trayMenu";
     public const string Exit = "startup.exit";
     public const string CurrentPaperPassive = "labs.passiveCurrent";
     public const string AllSurfacesPassive = "labs.passiveAll";
@@ -212,6 +221,12 @@ internal static class GlobalShortcutCatalog
             new(Toggle, "ShortcutToggleVisibility", "", GlobalShortcutGroup.General, StartupCommandKind.Toggle),
             new(NewTodo, "ShortcutNewTodo", "", GlobalShortcutGroup.General, StartupCommandKind.NewTodo),
             new(NewNote, "ShortcutNewNote", "", GlobalShortcutGroup.General, StartupCommandKind.NewNote),
+            new(
+                TrayMenu,
+                "ShortcutTrayMenu",
+                "",
+                GlobalShortcutGroup.General,
+                ActionKind: GlobalShortcutActionKind.TrayMenu),
             new(Exit, "ShortcutExit", "", GlobalShortcutGroup.General, StartupCommandKind.Exit),
             new(
                 CurrentPaperPassive,
