@@ -4,7 +4,6 @@ from pathlib import Path
 import copy
 import json
 
-# Trigger the temporary branch build after the workflow file itself exists.
 ROOT = Path('.')
 
 # Normalize TopBarWeb to English base + Chinese locale while preserving its existing ja/ko packs.
@@ -66,3 +65,29 @@ if old in text:
 elif new not in text:
     raise SystemExit('ReviewArchive corrupt-settings fallback not found')
 settings_reader.write_text(text, encoding='utf-8')
+
+# The first SampleClock patch intentionally localizes ToString calls, but its broad textual match
+# can catch the inner 24-hour ternary. Restore that expression, then localize DisplayTitle exactly.
+clock = ROOT / 'plugin-samples/PaperTodo.Plugin.SampleClock/SampleClockPlugin.cs'
+text = clock.read_text(encoding='utf-8')
+bad = '''                : (_settings.ShowSeconds ? "HH:mm:ss" : "HH:mm",
+                PluginText.Culture);'''
+good = '''                : (_settings.ShowSeconds ? "HH:mm:ss" : "HH:mm");'''
+if bad in text:
+    text = text.replace(bad, good, 1)
+elif good not in text:
+    raise SystemExit('SampleClock 24-hour ternary not found')
+old = '''            var time = now.ToString(
+                string.Equals(_settings.HourCycle, "12", StringComparison.Ordinal)
+                    ? "hh:mm tt"
+                    : "HH:mm");'''
+new = '''            var time = now.ToString(
+                string.Equals(_settings.HourCycle, "12", StringComparison.Ordinal)
+                    ? "hh:mm tt"
+                    : "HH:mm",
+                PluginText.Culture);'''
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit('SampleClock DisplayTitle formatting block not found')
+clock.write_text(text, encoding='utf-8')
