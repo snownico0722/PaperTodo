@@ -273,6 +273,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
     private sealed class Runtime : IPaperPluginRuntime
     {
         private const string TodoActionId = "send-todo-to-codex";
+        private const string TodoContextActionId = "send-todo-to-codex-menu";
         private const string TopBarActionId = "send-paper-to-codex";
 
         private readonly PaperPluginRuntimeContext _context;
@@ -297,8 +298,16 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                     Text = "Codex",
                     ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
                     Priority = 80,
-                    Placement = PaperTodoActionPlacement.Inline |
-                                PaperTodoActionPlacement.ContextMenu
+                    Placement = PaperTodoActionPlacement.Inline
+                },
+                new PaperTodoAction
+                {
+                    Id = TodoContextActionId,
+                    Icon = PaperTopBarIcon.Character(">_"),
+                    Text = T("发送到 Codex", "Send to Codex"),
+                    ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
+                    Priority = 80,
+                    Placement = PaperTodoActionPlacement.ContextMenu
                 }
             ];
 
@@ -423,7 +432,9 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
 
         private void OnTodoAction(PaperTodoActionInvocation invocation)
         {
-            if (_disposed || !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal))
+            if (_disposed ||
+                !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal) &&
+                !string.Equals(invocation.ActionId, TodoContextActionId, StringComparison.Ordinal))
             {
                 return;
             }
