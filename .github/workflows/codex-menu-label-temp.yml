@@ -1,0 +1,119 @@
+name: Codex Menu Label Runtime Sync
+
+on:
+  push:
+    branches:
+      - fix/codex-bridge-localization-foreground
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-rebuild:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/codex-bridge-localization-foreground
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Split inline and context-menu labels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexCliBridgePlugin.cs')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''        private const string TodoActionId = "send-todo-to-codex";
+        private const string TopBarActionId = "send-paper-to-codex";'''
+          new = '''        private const string TodoActionId = "send-todo-to-codex";
+        private const string TodoContextActionId = "send-todo-to-codex-menu";
+        private const string TopBarActionId = "send-paper-to-codex";'''
+          if old not in text:
+              raise SystemExit('Todo action constants block not found')
+          text = text.replace(old, new, 1)
+
+          old = '''            _todoAction =
+            [
+                new PaperTodoAction
+                {
+                    Id = TodoActionId,
+                    Icon = PaperTopBarIcon.Character(">_"),
+                    Text = "Codex",
+                    ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
+                    Priority = 80,
+                    Placement = PaperTodoActionPlacement.Inline |
+                                PaperTodoActionPlacement.ContextMenu
+                }
+            ];'''
+          new = '''            _todoAction =
+            [
+                new PaperTodoAction
+                {
+                    Id = TodoActionId,
+                    Icon = PaperTopBarIcon.Character(">_"),
+                    Text = "Codex",
+                    ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
+                    Priority = 80,
+                    Placement = PaperTodoActionPlacement.Inline
+                },
+                new PaperTodoAction
+                {
+                    Id = TodoContextActionId,
+                    Icon = PaperTopBarIcon.Character(">_"),
+                    Text = T("发送到 Codex", "Send to Codex"),
+                    ToolTip = T("发送到 Codex CLI", "Send to Codex CLI"),
+                    Priority = 80,
+                    Placement = PaperTodoActionPlacement.ContextMenu
+                }
+            ];'''
+          if old not in text:
+              raise SystemExit('Todo action declaration block not found')
+          text = text.replace(old, new, 1)
+
+          old = '''            if (_disposed || !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal))
+            {
+                return;
+            }'''
+          new = '''            if (_disposed ||
+                !string.Equals(invocation.ActionId, TodoActionId, StringComparison.Ordinal) &&
+                !string.Equals(invocation.ActionId, TodoContextActionId, StringComparison.Ordinal))
+            {
+                return;
+            }'''
+          if old not in text:
+              raise SystemExit('Todo action handler guard not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          readme = Path('plugin-samples/PaperTodo.Plugin.CodexCliBridge/README.md')
+          text = readme.read_text(encoding='utf-8')
+          old = '- 每个非空待办项增加紧凑的 `Codex` / `>_` 操作：默认以前台 PowerShell 窗口执行 `codex exec`，可以直接看到 Codex 输出；仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
+          new = '- 每个非空待办项增加 Codex 操作：行内按钮保持紧凑的 `Codex` / `>_`，右键菜单显示“发送到 Codex”；默认以前台 PowerShell 窗口执行 `codex exec`，仅在插件设置中启用“后台执行”后才隐藏窗口静默运行。'
+          if old not in text:
+              raise SystemExit('README behavior line not found')
+          readme.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Rebuild Codex CLI Bridge runtime
+        shell: pwsh
+        run: |
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit source and runtime outputs
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexCliBridgePlugin.cs \
+            plugin-samples/PaperTodo.Plugin.CodexCliBridge/README.md \
+            plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll \
+            plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.deps.json
+          git commit -m "fix(plugin): keep Codex context menu descriptive [ci]"
+          git push origin HEAD:fix/codex-bridge-localization-foreground
