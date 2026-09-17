@@ -1,0 +1,144 @@
+name: Temporary localize plugin samples
+
+on:
+  push:
+    branches:
+      - feat/localize-plugin-samples
+
+permissions:
+  contents: write
+
+jobs:
+  localize-build-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/localize-plugin-samples
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Apply localization changes
+        shell: pwsh
+        run: |
+          python .github/scripts/_temp_localize_sample_manifests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/scripts/_temp_localize_native_samples.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/scripts/_temp_localize_web_samples.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/scripts/_temp_finalize_sample_localization.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sync Web Clock runtime copy
+        shell: pwsh
+        run: |
+          $source = Join-Path $PWD "plugin-samples/PaperTodo.Plugin.OfficialClockWeb"
+          $runtime = Join-Path $PWD "plugins/official.clock.web"
+          if (Test-Path $runtime) { Remove-Item $runtime -Recurse -Force }
+          New-Item $runtime -ItemType Directory | Out-Null
+          Copy-Item (Join-Path $source "plugin.json") $runtime
+          Copy-Item (Join-Path $source "web") $runtime -Recurse
+
+      - name: Rebuild native sample runtime outputs
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
+            Sort-Object FullName
+          foreach ($project in $projects) {
+            Write-Host "Rebuilding $($project.FullName)"
+            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $project.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build and run plugin checks
+        shell: pwsh
+        run: |
+          dotnet build .\PaperTodo.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project .\tests\PaperTodo.ProtocolPolicyChecks\PaperTodo.ProtocolPolicyChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project .\tests\PaperTodo.PluginApiChecks\PaperTodo.PluginApiChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project .\tests\PaperTodo.CodexCliBridgeChecks\PaperTodo.CodexCliBridgeChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check embedded Web scripts
+        shell: pwsh
+        run: |
+          $htmlFiles = Get-ChildItem plugin-samples,plugins -Recurse -Filter *.html
+          foreach ($html in $htmlFiles) {
+            $content = Get-Content $html.FullName -Raw -Encoding UTF8
+            $matches = [regex]::Matches(
+              $content,
+              '<script(?:\s[^>]*)?>([\s\S]*?)</script>',
+              [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            for ($index = 0; $index -lt $matches.Count; $index++) {
+              $temporary = Join-Path $env:RUNNER_TEMP (
+                "$($html.BaseName)-$index-" + [Guid]::NewGuid().ToString("N") + ".js")
+              Set-Content $temporary $matches[$index].Groups[1].Value -Encoding UTF8
+              node --check $temporary
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+
+      - name: Verify localization coverage
+        shell: pwsh
+        run: |
+          @'
+          import json
+          from pathlib import Path
+
+          expected = {
+              'sample.cloudgenshin.native',
+              'sample.focus-timer.native',
+              'official.clock.web',
+              'sample.protocol21.web',
+              'sample.review-archive.native',
+              'sample.clock.native',
+              'sample.topbar.web',
+              'tools.codex-cli-bridge.native',
+          }
+          found = set()
+          for path in Path('plugin-samples').glob('PaperTodo.Plugin.*/plugin.json'):
+              doc = json.loads(path.read_text(encoding='utf-8'))
+              if doc.get('id') in expected:
+                  found.add(doc['id'])
+                  locales = doc.get('locales') or {}
+                  if not any(key.lower().startswith('zh') for key in locales):
+                      raise SystemExit(f'{path}: missing Chinese locale')
+          missing = expected - found
+          if missing:
+              raise SystemExit(f'missing sample manifests: {sorted(missing)}')
+
+          for path in [
+              Path('src/WebPaperBodySession.cs'),
+              Path('src/WebPaperBodySession.Mini.cs'),
+              Path('src/WebPluginRuntime.cs'),
+          ]:
+              text = path.read_text(encoding='utf-8')
+              if 'uiLanguage =' not in text:
+                  raise SystemExit(f'{path}: initialize payload is missing uiLanguage')
+          print('Plugin sample localization coverage checks passed.')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Commit localized samples and runtime outputs
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugin-samples plugins src
+          if git diff --cached --quiet; then
+            echo "No localization changes to commit."
+            exit 1
+          fi
+          git commit -m "feat(plugin): localize bundled sample plugins [ci]"
+          git push origin HEAD:feat/localize-plugin-samples
