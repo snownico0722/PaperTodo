@@ -4,7 +4,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-codex-bridge-runtime:
@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -25,9 +26,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
-      - name: Upload Codex CLI Bridge runtime
-        uses: actions/upload-artifact@v4
-        with:
-          name: codex-cli-bridge-runtime
-          path: plugins/tools.codex-cli-bridge.native
-          if-no-files-found: error
+      - name: Commit generated runtime outputs
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- `
+            plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll `
+            plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.deps.json
+          if (git diff --cached --quiet) {
+            Write-Host "Runtime outputs are already synchronized."
+            exit 0
+          }
+          git commit -m "build: sync Codex bridge runtime"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
