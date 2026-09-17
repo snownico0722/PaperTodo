@@ -53,14 +53,14 @@ internal static class ReviewArchiveSettingsReader
                 Bool(root, "showDeletedBadge", true),
                 Bool(root, "confirmClear", true),
                 Choice(root, "titleMode", "summary", "summary", "today", "streak", "open", "fixed"),
-                Text(root, "fixedTitle", "复盘记录", 40));
+                Text(root, "fixedTitle", PluginText.T("复盘记录"), 40));
         }
         catch
         {
             return new ReviewArchiveSettings(
                 true, true, false, true, true, true,
                 "completed", "completed", 0, 10000,
-                "utf8bom", "local", true, true, true, "summary", "复盘记录");
+                "utf8bom", "local", true, true, true, "summary", PluginText.T("复盘记录"));
         }
     }
 

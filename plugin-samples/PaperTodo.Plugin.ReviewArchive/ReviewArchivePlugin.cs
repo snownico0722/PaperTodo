@@ -103,20 +103,20 @@ public sealed class ReviewArchivePlugin : IPaperBodyPlugin, IPaperPluginRuntimeP
 
             var title = settings.TitleMode switch
             {
-                "today" => $"今日完成 {todayCount}",
-                "streak" => streak > 0 ? $"连续 {streak} 天" : "等待今日完成",
-                "open" => $"进行中 {openCount}",
+                "today" => PluginText.Format("今日完成 {0}", todayCount),
+                "streak" => streak > 0 ? PluginText.Format("连续 {0} 天", streak) : PluginText.T("等待今日完成"),
+                "open" => PluginText.Format("进行中 {0}", openCount),
                 "fixed" => string.IsNullOrWhiteSpace(settings.FixedTitle)
-                    ? "复盘记录"
+                    ? PluginText.T("复盘记录")
                     : settings.FixedTitle,
-                _ => $"复盘 · {completedRecords} 项"
+                _ => PluginText.Format("复盘 · {0} 项", completedRecords)
             };
 
             var presentation = new PaperCapsulePresentation
             {
                 PreferredWidth = PaperCapsulePresentation.AutomaticWidth,
                 PlainText = title,
-                ToolTip = $"{title} · 进行中 {openCount}",
+                ToolTip = PluginText.Format("{0} · 进行中 {1}", title, openCount),
                 Components = settings.ShowInsights
                     ? new PaperCapsuleComponent[]
                     {
@@ -129,7 +129,7 @@ public sealed class ReviewArchivePlugin : IPaperBodyPlugin, IPaperPluginRuntimeP
                         new()
                         {
                             Kind = PaperCapsuleComponentKind.Text,
-                            Text = $"{openCount} 未完",
+                            Text = PluginText.Format("{0} 未完", openCount),
                             Tone = PaperCapsuleTone.Muted
                         }
                     }

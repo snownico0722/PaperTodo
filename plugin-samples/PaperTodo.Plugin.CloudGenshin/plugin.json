@@ -1,11 +1,17 @@
 {
   "kind": "native",
   "id": "sample.cloudgenshin.native",
-  "name": "云·原神（实验）",
-  "description": "在 PaperTodo 纸片中直接打开云·原神网页版。",
+  "name": "Cloud Genshin (Experimental)",
+  "description": "Open the Cloud Genshin web app directly inside a PaperTodo paper.",
   "version": "1.3.0",
   "apiVersion": "2.1",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.CloudGenshin.dll",
-  "capabilities": []
+  "capabilities": [],
+  "locales": {
+    "zh": {
+      "name": "云·原神（实验）",
+      "description": "在 PaperTodo 纸片中直接打开云·原神网页版。"
+    }
+  }
 }

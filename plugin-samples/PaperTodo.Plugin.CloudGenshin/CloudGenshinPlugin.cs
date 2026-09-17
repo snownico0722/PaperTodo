@@ -45,15 +45,15 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
         private bool _disposed;
         private RetryMode _retryMode = RetryMode.NavigateHome;
         private PaperBodyInputClaims _inputClaims;
-        private string _miniStatusText = "云原神 · 加载中";
+        private string _miniStatusText = PluginText.T("云原神 · 加载中");
         private PaperCapsuleTone _miniStatusTone = PaperCapsuleTone.Muted;
         private CloudGenshinMiniView? _miniView;
 
         public CloudGenshinSession(PaperBodyContext context)
         {
             _context = context;
-            _context.Paper.SetTitle("云·原神");
-            SetPaperStatus("云原神 · 加载中", PaperCapsuleTone.Muted);
+            _context.Paper.SetTitle(PluginText.T("云·原神"));
+            SetPaperStatus(PluginText.T("云原神 · 加载中"), PaperCapsuleTone.Muted);
 
             _root = new Grid
             {
@@ -71,7 +71,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
 
             _statusText = new TextBlock
             {
-                Text = "正在启动云·原神…",
+                Text = PluginText.T("正在启动云·原神…"),
                 Foreground = Brushes.White,
                 FontSize = 13,
                 TextWrapping = TextWrapping.Wrap,
@@ -81,7 +81,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
 
             _retryButton = new Button
             {
-                Content = "重新加载",
+                Content = PluginText.T("重新加载"),
                 Padding = new Thickness(14, 6, 14, 6),
                 Margin = new Thickness(0, 14, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -140,7 +140,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
 
                 _title = new TextBlock
                 {
-                    Text = "云·原神",
+                    Text = PluginText.T("云·原神"),
                     FontWeight = FontWeights.SemiBold,
                     FontSize = 20,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -247,7 +247,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
         {
             try
             {
-                ShowStatus("正在初始化 WebView2…");
+                ShowStatus(PluginText.T("正在初始化 WebView2…"));
                 var environment = await GetEnvironmentAsync();
                 token.ThrowIfCancellationRequested();
 
@@ -255,7 +255,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
                 token.ThrowIfCancellationRequested();
 
                 var core = _webView.CoreWebView2
-                    ?? throw new InvalidOperationException("WebView2 初始化后未返回 CoreWebView2。 ");
+                    ?? throw new InvalidOperationException(PluginText.T("WebView2 初始化后未返回 CoreWebView2。 "));
 
                 core.Settings.AreDefaultContextMenusEnabled = true;
 #if DEBUG
@@ -332,7 +332,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
             _documentReady = false;
             _retryMode = RetryMode.NavigateHome;
             UpdatePresentation();
-            ShowStatus("正在加载云·原神…");
+            ShowStatus(PluginText.T("正在加载云·原神…"));
             SetPaperStatus("云原神 · 加载中", PaperCapsuleTone.Muted);
             _webView.CoreWebView2.Navigate(StartUri.AbsoluteUri);
         }
@@ -365,14 +365,14 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
 
             if (!e.IsSuccess)
             {
-                ShowFailure($"网页加载失败：{e.WebErrorStatus}");
+                ShowFailure($"{PluginText.T("网页加载失败：")}{e.WebErrorStatus}");
                 return;
             }
 
             _documentReady = true;
             _retryMode = RetryMode.NavigateHome;
             _status.Visibility = Visibility.Collapsed;
-            SetPaperStatus("云原神", PaperCapsuleTone.Accent);
+            SetPaperStatus(PluginText.T("云原神"), PaperCapsuleTone.Accent);
             UpdatePresentation();
             if (_presentationVisible)
             {
@@ -403,14 +403,14 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
                 case CoreWebView2ProcessFailedKind.BrowserProcessExited:
                     _documentReady = false;
                     UpdatePresentation();
-                    ShowStatus("WebView2 浏览器进程已退出，正在重建…");
-                    SetPaperStatus("云原神 · 正在重启", PaperCapsuleTone.Warning);
+                    ShowStatus(PluginText.T("WebView2 浏览器进程已退出，正在重建…"));
+                    SetPaperStatus(PluginText.T("云原神 · 正在重启"), PaperCapsuleTone.Warning);
                     _context.Body.RequestReload();
                     break;
 
                 case CoreWebView2ProcessFailedKind.RenderProcessExited:
                     ShowFailure(
-                        "WebView2 渲染进程异常退出。",
+                        PluginText.T("WebView2 渲染进程异常退出。"),
                         RetryMode.ReloadWebView);
                     break;
 
@@ -490,10 +490,10 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
             _documentReady = false;
             _retryMode = retryMode;
             UpdatePresentation();
-            _statusText.Text = $"云·原神加载失败\n\n{message}";
+            _statusText.Text = $"{PluginText.T("云·原神加载失败")}\n\n{message}";
             _retryButton.Visibility = Visibility.Visible;
             _status.Visibility = Visibility.Visible;
-            SetPaperStatus("云原神 · 错误", PaperCapsuleTone.Danger);
+            SetPaperStatus(PluginText.T("云原神 · 错误"), PaperCapsuleTone.Danger);
         }
 
         private void UpdatePresentation()
@@ -566,7 +566,7 @@ public sealed class CloudGenshinPlugin : IPaperBodyPlugin
                     case RetryMode.ReloadWebView when _webView.CoreWebView2 != null:
                         _documentReady = false;
                         UpdatePresentation();
-                        ShowStatus("正在重新加载云·原神…");
+                        ShowStatus(PluginText.T("正在重新加载云·原神…"));
                         SetPaperStatus("云原神 · 加载中", PaperCapsuleTone.Muted);
                         _webView.CoreWebView2.Reload();
                         break;

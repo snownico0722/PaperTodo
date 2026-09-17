@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -175,14 +175,23 @@
       losAngeles: 'America/Los_Angeles'
     });
     const zoneLabels = Object.freeze({
-      local: '本地时间',
-      utc: 'UTC',
-      beijing: '北京时间',
-      tokyo: '东京时间',
-      london: '伦敦时间',
-      newYork: '纽约时间',
-      losAngeles: '洛杉矶时间'
+      local: ['本地时间', 'Local time'],
+      utc: ['UTC', 'UTC'],
+      beijing: ['北京时间', 'Beijing time'],
+      tokyo: ['东京时间', 'Tokyo time'],
+      london: ['伦敦时间', 'London time'],
+      newYork: ['纽约时间', 'New York time'],
+      losAngeles: ['洛杉矶时间', 'Los Angeles time']
     });
+    let uiLanguage = 'en-US';
+    const isChinese = () => /^zh(?:-|$)/i.test(uiLanguage);
+    const locale = () => isChinese() ? 'zh-CN' : 'en-US';
+    const t = (zh, en) => isChinese() ? zh : en;
+    const zoneLabel = value => (zoneLabels[value] || zoneLabels.local)[isChinese() ? 0 : 1];
+    function applyLanguage(value) {
+      uiLanguage = String(value || 'en-US');
+      document.documentElement.lang = locale();
+    }
 
     function applyTheme(theme) {
       if (!theme) return;
@@ -208,7 +217,7 @@
 
     function zonedParts(date) {
       const timeZone = zoneMap[settings.timeZone];
-      const parts = new Intl.DateTimeFormat(undefined, {
+      const parts = new Intl.DateTimeFormat(locale(), {
         timeZone,
         year: 'numeric',
         month: '2-digit',
@@ -233,7 +242,12 @@
           : settings.dateFormat === 'slash' ? `${y}/${m}/${d}`
           : settings.dateFormat === 'us' ? `${m}/${d}/${y}`
           : settings.dateFormat === 'eu' ? `${d}/${m}/${y}`
-          : `${y}年${Number(m)}月${Number(d)}日`;
+          : isChinese()
+            ? `${y}年${Number(m)}月${Number(d)}日`
+            : new Intl.DateTimeFormat(locale(), {
+                timeZone: zoneMap[settings.timeZone],
+                year: 'numeric', month: 'long', day: 'numeric'
+              }).format(date);
       }
       return [base, settings.showWeekday ? parts.weekday : ''].filter(Boolean).join(' · ');
     }
@@ -269,14 +283,16 @@
       const dateText = formatDate(now, parts);
       dateElement.textContent = dateText;
       dateElement.hidden = !dateText;
-      zoneElement.textContent = zoneLabels[settings.timeZone] || '本地时间';
+      zoneElement.textContent = zoneLabel(settings.timeZone);
 
       const clock = zonedClockParts(now);
       const elapsed = Number(clock.hour) * 3600 + Number(clock.minute) * 60 + Number(clock.second);
       const percent = Math.min(100, Math.max(0, elapsed / 864));
       progressElement.style.width = `${percent}%`;
-      dayPercentElement.textContent = `今日 ${percent.toFixed(1)}%`;
-      weekElement.textContent = `第 ${isoWeek(parts.year, parts.month, parts.day)} 周`;
+      dayPercentElement.textContent = `${t('今日', 'Today')} ${percent.toFixed(1)}%`;
+      weekElement.textContent = isChinese()
+        ? `第 ${isoWeek(parts.year, parts.month, parts.day)} 周`
+        : `Week ${isoWeek(parts.year, parts.month, parts.day)}`;
 
     }
 
@@ -289,6 +305,7 @@
     window.addEventListener('papertodo', event => {
       const message = event.detail || {};
       if (message.type === 'initialize') {
+        applyLanguage(message.uiLanguage);
         visible = message.visible !== false;
         applyTheme(message.theme);
         applySettings(message.settings);

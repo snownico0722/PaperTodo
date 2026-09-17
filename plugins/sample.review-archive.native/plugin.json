@@ -1,8 +1,8 @@
 {
   "kind": "native",
   "id": "sample.review-archive.native",
-  "name": "待办复盘记录池",
-  "description": "实时记录待办生命周期、提醒变化和完成趋势，长期保存并导出 Excel 可直接打开的 CSV。",
+  "name": "Todo Review Archive",
+  "description": "Tracks todo lifecycle, reminder changes, and completion trends, keeps a long-lived archive, and exports Excel-friendly CSV.",
   "version": "1.2.0",
   "apiVersion": "2.1",
   "stateVersion": 1,
@@ -19,15 +19,15 @@
   ],
   "settingCategories": [
     {
-      "name": "记录",
+      "name": "Recording",
       "column": "left"
     },
     {
-      "name": "导出",
+      "name": "Export",
       "column": "left"
     },
     {
-      "name": "显示",
+      "name": "Display",
       "column": "right"
     }
   ],
@@ -35,233 +35,338 @@
     {
       "id": "keepDeleted",
       "type": "boolean",
-      "name": "保留已删除来源",
-      "description": "删除原待办或整张待办纸后仍保留复盘记录。",
+      "name": "Keep deleted sources",
+      "description": "Keep review records after the original todo or entire todo paper is deleted.",
       "default": true,
-      "category": "记录"
+      "category": "Recording"
     },
     {
       "id": "showOpenItems",
       "type": "boolean",
-      "name": "显示进行中待办",
-      "description": "在“全部记录”和“进行中”筛选中显示尚未完成的项目。",
+      "name": "Show open todos",
+      "description": "Show unfinished items in the All records and Open filters.",
       "default": false,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "showInsights",
       "type": "boolean",
-      "name": "显示复盘指标",
-      "description": "显示今日、近 7 天、连续完成日和进行中数量。",
+      "name": "Show review metrics",
+      "description": "Show today, last 7 days, completion streak, and open-count metrics.",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "trackCreated",
       "type": "boolean",
-      "name": "记录创建时间",
-      "description": "为新建待办保存精确创建时刻。",
+      "name": "Record creation time",
+      "description": "Store the exact creation time for newly created todos.",
       "default": true,
-      "category": "记录"
+      "category": "Recording"
     },
     {
       "id": "showReminderChanges",
       "type": "boolean",
-      "name": "显示提醒变化",
-      "description": "记录并显示提醒设置、取消和调整次数。",
+      "name": "Show reminder changes",
+      "description": "Record and show reminder creation, removal, and adjustment counts.",
       "default": true,
-      "category": "记录"
+      "category": "Recording"
     },
     {
       "id": "highlightUpcomingReminders",
       "type": "boolean",
-      "name": "高亮近期提醒",
-      "description": "高亮未来 24 小时内和已经到期的待办提醒。",
+      "name": "Highlight upcoming reminders",
+      "description": "Highlight reminders due within 24 hours or already overdue.",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "initialImport",
       "type": "select",
-      "name": "首次导入现有待办",
+      "name": "Initial import of existing todos",
       "default": "completed",
       "options": [
         {
           "value": "none",
-          "name": "不自动导入"
+          "name": "Do not import automatically"
         },
         {
           "value": "completed",
-          "name": "仅已完成"
+          "name": "Completed only"
         },
         {
           "value": "all",
-          "name": "全部待办"
+          "name": "All todos"
         }
       ],
-      "category": "记录"
+      "category": "Recording"
     },
     {
       "id": "defaultFilter",
       "type": "select",
-      "name": "默认筛选",
+      "name": "Default filter",
       "default": "completed",
       "options": [
         {
           "value": "completed",
-          "name": "已完成"
+          "name": "Completed"
         },
         {
           "value": "today",
-          "name": "今天完成"
+          "name": "Completed today"
         },
         {
           "value": "week",
-          "name": "近 7 天"
+          "name": "Last 7 days"
         },
         {
           "value": "month",
-          "name": "近 30 天"
+          "name": "Last 30 days"
         },
         {
           "value": "open",
-          "name": "进行中"
+          "name": "Open"
         },
         {
           "value": "reopened",
-          "name": "重新打开"
+          "name": "Reopened"
         },
         {
           "value": "reminders",
-          "name": "有提醒"
+          "name": "Has reminder"
         },
         {
           "value": "deleted",
-          "name": "源已删除"
+          "name": "Source deleted"
         },
         {
           "value": "all",
-          "name": "全部记录"
+          "name": "All records"
         }
       ],
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "retentionDays",
       "type": "number",
-      "name": "保留天数",
-      "description": "0 表示永久保留。",
+      "name": "Retention days",
+      "description": "0 keeps records forever.",
       "default": 0,
       "min": 0,
       "max": 3650,
       "step": 30,
-      "suffix": "天",
-      "category": "记录"
+      "suffix": "days",
+      "category": "Recording"
     },
     {
       "id": "maxRecords",
       "type": "number",
-      "name": "最大记录数",
+      "name": "Maximum records",
       "default": 10000,
       "min": 100,
       "max": 50000,
       "step": 100,
-      "suffix": "条",
-      "category": "记录"
+      "suffix": "records",
+      "category": "Recording"
     },
     {
       "id": "exportEncoding",
       "type": "select",
-      "name": "CSV 编码",
+      "name": "CSV encoding",
       "default": "utf8bom",
       "options": [
         {
           "value": "utf8bom",
-          "name": "UTF-8 BOM（推荐 Excel）"
+          "name": "UTF-8 BOM (recommended for Excel)"
         },
         {
           "value": "utf8",
           "name": "UTF-8"
         }
       ],
-      "category": "导出"
+      "category": "Export"
     },
     {
       "id": "exportDateFormat",
       "type": "select",
-      "name": "时间格式",
+      "name": "Time format",
       "default": "local",
       "options": [
         {
           "value": "local",
-          "name": "本地时间（到分钟）"
+          "name": "Local time (minutes)"
         },
         {
           "value": "iso",
-          "name": "ISO 风格（到秒）"
+          "name": "ISO style (seconds)"
         }
       ],
-      "category": "导出"
+      "category": "Export"
     },
     {
       "id": "includePaperTitle",
       "type": "boolean",
-      "name": "包含所属纸片",
+      "name": "Include paper title",
       "default": true,
-      "category": "导出"
+      "category": "Export"
     },
     {
       "id": "showDeletedBadge",
       "type": "boolean",
-      "name": "标记来源已删除",
+      "name": "Mark deleted sources",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "confirmClear",
       "type": "boolean",
-      "name": "清空前确认",
+      "name": "Confirm before clearing",
       "default": true,
-      "category": "导出"
+      "category": "Export"
     },
     {
       "id": "titleMode",
       "type": "select",
-      "name": "胶囊标题",
+      "name": "Capsule title",
       "default": "summary",
       "options": [
         {
           "value": "summary",
-          "name": "累计完成项目"
+          "name": "Completed items"
         },
         {
           "value": "today",
-          "name": "今日完成数"
+          "name": "Today’s completed count"
         },
         {
           "value": "streak",
-          "name": "连续完成日"
+          "name": "Completion streak"
         },
         {
           "value": "open",
-          "name": "进行中数量"
+          "name": "Open count"
         },
         {
           "value": "fixed",
-          "name": "固定文字"
+          "name": "Fixed text"
         }
       ],
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "fixedTitle",
       "type": "string",
-      "name": "固定标题",
-      "default": "复盘记录",
+      "name": "Fixed title",
+      "default": "",
       "maxLength": 40,
-      "placeholder": "复盘记录",
-      "category": "显示"
+      "placeholder": "Review Archive",
+      "category": "Display"
     }
   ],
-  "advancedSettings": true
+  "advancedSettings": true,
+  "locales": {
+    "zh": {
+      "name": "待办复盘记录池",
+      "description": "实时记录待办生命周期、提醒变化和完成趋势，长期保存并导出 Excel 可直接打开的 CSV。",
+      "settingCategories": {
+        "Recording": "记录",
+        "Export": "导出",
+        "Display": "显示"
+      },
+      "settings": {
+        "keepDeleted": {
+          "name": "保留已删除来源",
+          "description": "删除原待办或整张待办纸后仍保留复盘记录。"
+        },
+        "showOpenItems": {
+          "name": "显示进行中待办",
+          "description": "在“全部记录”和“进行中”筛选中显示尚未完成的项目。"
+        },
+        "showInsights": {
+          "name": "显示复盘指标",
+          "description": "显示今日、近 7 天、连续完成日和进行中数量。"
+        },
+        "trackCreated": {
+          "name": "记录创建时间",
+          "description": "为新建待办保存精确创建时刻。"
+        },
+        "showReminderChanges": {
+          "name": "显示提醒变化",
+          "description": "记录并显示提醒设置、取消和调整次数。"
+        },
+        "highlightUpcomingReminders": {
+          "name": "高亮近期提醒",
+          "description": "高亮未来 24 小时内和已经到期的待办提醒。"
+        },
+        "initialImport": {
+          "name": "首次导入现有待办",
+          "options": {
+            "none": "不自动导入",
+            "completed": "仅已完成",
+            "all": "全部待办"
+          }
+        },
+        "defaultFilter": {
+          "name": "默认筛选",
+          "options": {
+            "completed": "已完成",
+            "today": "今天完成",
+            "week": "近 7 天",
+            "month": "近 30 天",
+            "open": "进行中",
+            "reopened": "重新打开",
+            "reminders": "有提醒",
+            "deleted": "源已删除",
+            "all": "全部记录"
+          }
+        },
+        "retentionDays": {
+          "name": "保留天数",
+          "description": "0 表示永久保留。",
+          "suffix": "天"
+        },
+        "maxRecords": {
+          "name": "最大记录数",
+          "suffix": "条"
+        },
+        "exportEncoding": {
+          "name": "CSV 编码",
+          "options": {
+            "utf8bom": "UTF-8 BOM（推荐 Excel）",
+            "utf8": "UTF-8"
+          }
+        },
+        "exportDateFormat": {
+          "name": "时间格式",
+          "options": {
+            "local": "本地时间（到分钟）",
+            "iso": "ISO 风格（到秒）"
+          }
+        },
+        "includePaperTitle": {
+          "name": "包含所属纸片"
+        },
+        "showDeletedBadge": {
+          "name": "标记来源已删除"
+        },
+        "confirmClear": {
+          "name": "清空前确认"
+        },
+        "titleMode": {
+          "name": "胶囊标题",
+          "options": {
+            "summary": "累计完成项目",
+            "today": "今日完成数",
+            "streak": "连续完成日",
+            "open": "进行中数量",
+            "fixed": "固定文字"
+          }
+        },
+        "fixedTitle": {
+          "name": "固定标题",
+          "placeholder": "复盘记录"
+        }
+      }
+    }
+  }
 }

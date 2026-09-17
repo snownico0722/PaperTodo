@@ -54,7 +54,7 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
         private PaperBodyTheme _theme;
         private string _lastDisplayTitle = "";
         private string _lastCapsuleSignature = "";
-        private string _capsuleTitle = "时钟";
+        private string _capsuleTitle = PluginText.T("时钟");
         private double _capsuleProgress;
         private bool _capsuleShowProgress = true;
         private ClockCapsuleView? _regularCapsuleView;
@@ -400,8 +400,8 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
                 ? (_settings.ShowSeconds ? "hh:mm:ss" : "hh:mm")
                 : (_settings.ShowSeconds ? "HH:mm:ss" : "HH:mm");
 
-            _time.Text = now.ToString(timeFormat);
-            _meridiem.Text = twelveHour ? now.ToString("tt") : "";
+            _time.Text = now.ToString(timeFormat, PluginText.Culture);
+            _meridiem.Text = twelveHour ? now.ToString("tt", PluginText.Culture) : "";
             _meridiem.Visibility = twelveHour
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -413,7 +413,7 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
             }
             if (_settings.ShowWeekday)
             {
-                dateParts.Add(now.ToString("dddd"));
+                dateParts.Add(now.ToString("dddd", PluginText.Culture));
             }
             _date.Text = string.Join(" · ", dateParts);
             _zone.Text = TimeZoneLabel();
@@ -465,12 +465,12 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
             return _settings.TimeZone switch
             {
                 "utc" => "UTC",
-                "beijing" => "北京时间",
-                "tokyo" => "东京时间",
-                "london" => "伦敦时间",
-                "newYork" => "纽约时间",
-                "losAngeles" => "洛杉矶时间",
-                _ => "本地时间"
+                "beijing" => PluginText.T("北京时间"),
+                "tokyo" => PluginText.T("东京时间"),
+                "london" => PluginText.T("伦敦时间"),
+                "newYork" => PluginText.T("纽约时间"),
+                "losAngeles" => PluginText.T("洛杉矶时间"),
+                _ => PluginText.T("本地时间")
             };
         }
 
@@ -481,7 +481,9 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
                 "slash" => now.ToString("yyyy/MM/dd"),
                 "us" => now.ToString("MM/dd/yyyy"),
                 "eu" => now.ToString("dd/MM/yyyy"),
-                _ => now.ToString("yyyy年M月d日")
+                _ => PluginText.IsChinese
+                    ? now.ToString("yyyy年M月d日", PluginText.Culture)
+                    : now.ToString("MMMM d, yyyy", PluginText.Culture)
             };
 
         private string DisplayTitle(DateTimeOffset now)
@@ -489,14 +491,15 @@ public sealed class SampleClockPlugin : IPaperBodyPlugin
             var time = now.ToString(
                 string.Equals(_settings.HourCycle, "12", StringComparison.Ordinal)
                     ? "hh:mm tt"
-                    : "HH:mm");
+                    : "HH:mm",
+                PluginText.Culture);
             return _settings.TitleMode switch
             {
                 "date" => FormatDate(now),
                 "zone" => $"{TimeZoneLabel()} · {time}",
                 "custom" when !string.IsNullOrWhiteSpace(_settings.CustomTitle) =>
                     _settings.CustomTitle.Trim(),
-                "fixed" => "时钟",
+                "fixed" => PluginText.T("时钟"),
                 _ => time
             };
         }

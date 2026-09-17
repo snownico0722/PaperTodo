@@ -64,10 +64,10 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         {
             Margin = new Thickness(0, 10, 0, 0)
         };
-        var todayCard = CreateInsightCard("今日");
-        var weekCard = CreateInsightCard("近 7 天");
-        var streakCard = CreateInsightCard("连续");
-        var openCard = CreateInsightCard("进行中");
+        var todayCard = CreateInsightCard(PluginText.T("今日"));
+        var weekCard = CreateInsightCard(PluginText.T("近 7 天"));
+        var streakCard = CreateInsightCard(PluginText.T("连续"));
+        var openCard = CreateInsightCard(PluginText.T("进行中"));
         _todayValue = todayCard.Value;
         _weekValue = weekCard.Value;
         _streakValue = streakCard.Value;
@@ -88,15 +88,15 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             Margin = new Thickness(0, 0, 8, 0),
             ItemsSource = new[]
             {
-                new FilterOption("completed", "已完成"),
-                new FilterOption("today", "今天完成"),
-                new FilterOption("week", "近 7 天"),
-                new FilterOption("month", "近 30 天"),
-                new FilterOption("open", "进行中"),
-                new FilterOption("reopened", "重新打开"),
-                new FilterOption("reminders", "有提醒"),
-                new FilterOption("deleted", "源已删除"),
-                new FilterOption("all", "全部记录")
+                new FilterOption("completed", PluginText.T("已完成")),
+                new FilterOption("today", PluginText.T("今天完成")),
+                new FilterOption("week", PluginText.T("近 7 天")),
+                new FilterOption("month", PluginText.T("近 30 天")),
+                new FilterOption("open", PluginText.T("进行中")),
+                new FilterOption("reopened", PluginText.T("重新打开")),
+                new FilterOption("reminders", PluginText.T("有提醒")),
+                new FilterOption("deleted", PluginText.T("源已删除")),
+                new FilterOption("all", PluginText.T("全部记录"))
             },
             DisplayMemberPath = nameof(FilterOption.Name),
             SelectedValuePath = nameof(FilterOption.Id),
@@ -116,7 +116,7 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             Height = 30,
             Padding = new Thickness(8, 4, 8, 4),
             Text = _viewState.Search,
-            ToolTip = "搜索待办正文或所属纸片"
+            ToolTip = PluginText.T("搜索待办正文或所属纸片")
         };
         _searchBox.TextChanged += (_, _) =>
         {
@@ -134,7 +134,7 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
 
         _emptyText = new TextBlock
         {
-            Text = "当前筛选没有记录",
+            Text = PluginText.T("当前筛选没有记录"),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(20),
@@ -142,9 +142,9 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         };
         _list = CreateVirtualizedList();
 
-        _importButton = MakeButton("导入当前");
-        _exportButton = MakeButton("导出 CSV");
-        _clearButton = MakeButton("清空记录");
+        _importButton = MakeButton(PluginText.T("导入当前"));
+        _exportButton = MakeButton(PluginText.T("导出 CSV"));
+        _clearButton = MakeButton(PluginText.T("清空记录"));
         _buttons = [_importButton, _exportButton, _clearButton];
         _importButton.Click += OnImport;
         _exportButton.Click += OnExport;
@@ -377,10 +377,10 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         var upcomingCount = all.Count(item => IsUpcomingReminder(item, now));
 
         _summaryText.Text =
-            $"完成 {completedRecords} 项 / {completionEvents.Length} 次 · 重新打开 {reopenedCount} 次";
+            PluginText.Format("完成 {0} 项 / {1} 次 · 重新打开 {2} 次", completedRecords, completionEvents.Length, reopenedCount);
         _todayValue.Text = todayCount.ToString();
         _weekValue.Text = weekCount.ToString();
-        _streakValue.Text = streak > 0 ? streak + " 天" : "0";
+        _streakValue.Text = streak > 0 ? PluginText.Format("{0} 天", streak) : "0";
         _openValue.Text = openCount.ToString();
         _insightsPanel.Visibility = _settings.ShowInsights
             ? Visibility.Visible
@@ -388,15 +388,15 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
 
         if (!string.IsNullOrWhiteSpace(ReviewArchiveStore.LastSaveError))
         {
-            _hintText.Text = "记录池暂时无法写入：" + ReviewArchiveStore.LastSaveError;
+            _hintText.Text = PluginText.T("记录池暂时无法写入：") + ReviewArchiveStore.LastSaveError;
         }
         else if (upcomingCount > 0)
         {
-            _hintText.Text = $"未来 24 小时有 {upcomingCount} 个待办提醒；记录池独立保存在插件 .runtime 中。";
+            _hintText.Text = PluginText.Format("未来 24 小时有 {0} 个待办提醒；记录池独立保存在插件 .runtime 中。", upcomingCount);
         }
         else
         {
-            _hintText.Text = "记录池独立保存在插件 .runtime 中；删除原待办纸片后仍可复盘和导出。";
+            _hintText.Text = PluginText.T("记录池独立保存在插件 .runtime 中；删除原待办纸片后仍可复盘和导出。");
         }
 
         var filtered = Filter(all)
@@ -453,7 +453,7 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         var now = DateTimeOffset.Now;
         var title = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(record.Text) ? "（空待办）" : record.Text,
+            Text = string.IsNullOrWhiteSpace(record.Text) ? PluginText.T("（空待办）") : record.Text,
             TextWrapping = TextWrapping.Wrap,
             FontWeight = record.Done ? FontWeights.Normal : FontWeights.SemiBold
         };
@@ -466,28 +466,28 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         var lastCompleted = LastEventAt(record, "completed");
         var lastReopened = LastEventAt(record, "reopened");
         metadata.Add(record.Done && lastCompleted.HasValue
-            ? "完成 " + FormatDate(lastCompleted.Value)
+            ? PluginText.T("完成 ") + FormatDate(lastCompleted.Value)
             : lastReopened.HasValue
-                ? "重新打开 " + FormatDate(lastReopened.Value)
-                : "创建 " + FormatDate(record.CreatedAt));
+                ? PluginText.T("重新打开 ") + FormatDate(lastReopened.Value)
+                : PluginText.T("创建 ") + FormatDate(record.CreatedAt));
 
         var completionCount = EventCount(record, "completed");
         if (completionCount > 1)
         {
-            metadata.Add($"完成 {completionCount} 次");
+            metadata.Add(PluginText.Format("完成 {0} 次", completionCount));
         }
         var reopenedCount = EventCount(record, "reopened");
         if (reopenedCount > 1)
         {
-            metadata.Add($"重开 {reopenedCount} 次");
+            metadata.Add(PluginText.Format("重开 {0} 次", reopenedCount));
         }
 
         if (record.ReminderAt.HasValue && !record.Done && !record.SourceDeleted)
         {
             var reminder = record.ReminderAt.Value;
             metadata.Add(reminder <= now
-                ? "提醒已到期 " + FormatDate(reminder)
-                : "提醒 " + FormatDate(reminder));
+                ? PluginText.T("提醒已到期 ") + FormatDate(reminder)
+                : PluginText.T("提醒 ") + FormatDate(reminder));
         }
         if (_settings.ShowReminderChanges)
         {
@@ -496,16 +496,16 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
                 EventCount(record, "reminder-cleared");
             if (reminderChanges > 1)
             {
-                metadata.Add($"提醒调整 {reminderChanges} 次");
+                metadata.Add(PluginText.Format("提醒调整 {0} 次", reminderChanges));
             }
         }
         if (record.Events.Any(value => value.Estimated))
         {
-            metadata.Add("时间为首次观察值");
+            metadata.Add(PluginText.T("时间为首次观察值"));
         }
         if (_settings.ShowDeletedBadge && record.SourceDeleted)
         {
-            metadata.Add("源已删除");
+            metadata.Add(PluginText.T("源已删除"));
         }
 
         var detail = new TextBlock
@@ -548,7 +548,7 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
         var changed = ReviewArchiveStore.ImportCurrent(_context.Workspace, _settings, manual: true);
         if (!changed)
         {
-            _hintText.Text = "当前待办已经全部存在于记录池中。";
+            _hintText.Text = PluginText.T("当前待办已经全部存在于记录池中。");
         }
     }
 
@@ -559,9 +559,11 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             .ToArray();
         var dialog = new SaveFileDialog
         {
-            Title = "导出 PaperTodo 复盘记录",
-            Filter = "CSV 文件 (*.csv)|*.csv",
-            FileName = $"PaperTodo-复盘-{DateTime.Now:yyyyMMdd-HHmm}.csv",
+            Title = PluginText.T("导出 PaperTodo 复盘记录"),
+            Filter = PluginText.T("CSV 文件 (*.csv)|*.csv"),
+            FileName = PluginText.IsChinese
+                ? $"PaperTodo-复盘-{DateTime.Now:yyyyMMdd-HHmm}.csv"
+                : $"PaperTodo-Review-{DateTime.Now:yyyyMMdd-HHmm}.csv",
             AddExtension = true,
             DefaultExt = ".csv"
         };
@@ -576,13 +578,13 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             var encoding = new UTF8Encoding(
                 encoderShouldEmitUTF8Identifier: _settings.ExportEncoding == "utf8bom");
             File.WriteAllText(dialog.FileName, csv, encoding);
-            _hintText.Text = $"已导出 {records.Length} 条：{dialog.FileName}";
+            _hintText.Text = PluginText.Format("已导出 {0} 条：{1}", records.Length, dialog.FileName);
         }
         catch (Exception ex)
         {
             MessageBox.Show(
                 ex.GetBaseException().Message,
-                "导出失败",
+                PluginText.T("导出失败"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -591,29 +593,29 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
     private string BuildCsv(IReadOnlyList<ReviewArchiveRecord> records)
     {
         var builder = new StringBuilder();
-        var headers = new List<string> { "状态", "待办" };
+        var headers = new List<string> { PluginText.T("状态"), PluginText.T("待办") };
         if (_settings.IncludePaperTitle)
         {
-            headers.Add("所属纸片");
+            headers.Add(PluginText.T("所属纸片"));
         }
         headers.AddRange([
-            "创建时间",
-            "最后完成时间",
-            "完成次数",
-            "最后重新打开",
-            "提醒时间",
-            "提醒变更次数",
-            "源已删除",
-            "创建时间精度",
-            "完成时间精度",
-            "来源"]);
+            PluginText.T("创建时间"),
+            PluginText.T("最后完成时间"),
+            PluginText.T("完成次数"),
+            PluginText.T("最后重新打开"),
+            PluginText.T("提醒时间"),
+            PluginText.T("提醒变更次数"),
+            PluginText.T("源已删除"),
+            PluginText.T("创建时间精度"),
+            PluginText.T("完成时间精度"),
+            PluginText.T("来源")]);
         builder.AppendLine(string.Join(',', headers.Select(Csv)));
 
         foreach (var record in records)
         {
             var row = new List<string>
             {
-                record.Done ? "已完成" : "进行中",
+                record.Done ? PluginText.T("已完成") : PluginText.T("进行中"),
                 record.Text
             };
             if (_settings.IncludePaperTitle)
@@ -631,9 +633,9 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
             row.Add(lastReopened.HasValue ? FormatDate(lastReopened.Value) : "");
             row.Add(record.ReminderAt.HasValue ? FormatDate(record.ReminderAt.Value) : "");
             row.Add(reminderChanges.ToString());
-            row.Add(record.SourceDeleted ? "是" : "否");
-            row.Add(record.CreatedAtEstimated ? "首次观察" : "精确");
-            row.Add(record.CompletedAtEstimated ? "首次观察" : record.CompletedAt.HasValue ? "精确" : "");
+            row.Add(record.SourceDeleted ? PluginText.T("是") : PluginText.T("否"));
+            row.Add(record.CreatedAtEstimated ? PluginText.T("首次观察") : PluginText.T("精确"));
+            row.Add(record.CompletedAtEstimated ? PluginText.T("首次观察") : record.CompletedAt.HasValue ? PluginText.T("精确") : "");
             row.Add(record.Origin);
             builder.AppendLine(string.Join(',', row.Select(Csv)));
         }
@@ -647,8 +649,8 @@ internal sealed class ReviewArchiveSession : IPaperBodySession
     {
         if (_settings.ConfirmClear &&
             MessageBox.Show(
-                "确定清空全部复盘记录吗？此操作不会删除 PaperTodo 中的待办。",
-                "清空复盘记录",
+                PluginText.T("确定清空全部复盘记录吗？此操作不会删除 PaperTodo 中的待办。"),
+                PluginText.T("清空复盘记录"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {

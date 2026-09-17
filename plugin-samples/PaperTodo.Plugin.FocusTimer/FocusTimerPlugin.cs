@@ -129,8 +129,8 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             _state = ReadState(context.StateJson);
             var stateChanged = InitializeAndNormalizeState();
 
-            _focusButton = MakeButton("专注");
-            _breakButton = MakeButton("休息");
+            _focusButton = MakeButton(PluginText.T("专注"));
+            _breakButton = MakeButton(PluginText.T("休息"));
             _completedText = new TextBlock
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
@@ -155,7 +155,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 Height = 30,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 DisplayMemberPath = nameof(TodoOption.Label),
-                ToolTip = "选择本轮专注对应的 PaperTodo 待办"
+                ToolTip = PluginText.T("选择本轮专注对应的 PaperTodo 待办")
             };
             _todoBox.SelectionChanged += OnTodoSelectionChanged;
             _todoStatusText = new TextBlock
@@ -223,11 +223,11 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             durationRow.Children.Add(_durationText);
             durationRow.Children.Add(_plusButton);
 
-            _startButton = MakeButton("开始");
+            _startButton = MakeButton(PluginText.T("开始"));
             _startButton.MinWidth = 102;
-            _skipButton = MakeButton("跳过");
+            _skipButton = MakeButton(PluginText.T("跳过"));
             _skipButton.MinWidth = 68;
-            _resetButton = MakeButton("重置");
+            _resetButton = MakeButton(PluginText.T("重置"));
             _resetButton.MinWidth = 68;
 
             var actionRow = new WrapPanel
@@ -320,7 +320,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             }
             else
             {
-                _todoLoadError = "插件未获得 todos.read 权限，无法关联待办。";
+                _todoLoadError = PluginText.T("插件未获得 todos.read 权限，无法关联待办。");
             }
 
             ApplyTheme(context.Body.Theme);
@@ -667,7 +667,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 if (current == null)
                 {
                     ClearLinkedTodo(save: false);
-                    _todoLoadError = "关联待办已不存在。";
+                    _todoLoadError = PluginText.T("关联待办已不存在。");
                     return;
                 }
                 if (!current.Done)
@@ -691,11 +691,11 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             }
             catch (PaperTodoPluginException ex)
             {
-                _todoLoadError = "完成关联待办失败：" + ex.Message;
+                _todoLoadError = PluginText.T("完成关联待办失败：") + ex.Message;
             }
             catch (Exception ex)
             {
-                _todoLoadError = "完成关联待办失败：" + ex.GetBaseException().Message;
+                _todoLoadError = PluginText.T("完成关联待办失败：") + ex.GetBaseException().Message;
             }
         }
 
@@ -723,7 +723,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             }
             catch (Exception ex)
             {
-                _todoLoadError = "选择下一项失败：" + ex.GetBaseException().Message;
+                _todoLoadError = PluginText.T("选择下一项失败：") + ex.GetBaseException().Message;
             }
         }
 
@@ -810,8 +810,8 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             if (_settings.ConfirmReset &&
                 (_state.IsRunning || RemainingSeconds() < DurationSeconds()) &&
                 MessageBox.Show(
-                    "重置当前计时？",
-                    "专注计时器",
+                    PluginText.T("重置当前计时？"),
+                    PluginText.T("专注计时器"),
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question) != MessageBoxResult.Yes)
             {
@@ -910,7 +910,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                         item.Text,
                         item.Done))
                     .ToList();
-                todos.Insert(0, new TodoOption("", "", "不关联待办", "", false));
+                todos.Insert(0, new TodoOption("", "", PluginText.T("不关联待办"), "", false));
                 _todoOptions = todos;
 
                 var current = todos.FirstOrDefault(item =>
@@ -922,7 +922,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 if (missing)
                 {
                     ClearLinkedTodo(save: saveIfMissing);
-                    _todoLoadError = "关联待办已删除或不可访问。";
+                    _todoLoadError = PluginText.T("关联待办已删除或不可访问。");
                 }
 
                 _suppressTodoSelection = true;
@@ -953,10 +953,10 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
         private static string TodoLabel(TodoSnapshot item)
         {
             var text = string.IsNullOrWhiteSpace(item.Text)
-                ? "（空待办）"
+                ? PluginText.T("（空待办）")
                 : Compact(item.Text, 46);
             var paper = string.IsNullOrWhiteSpace(item.PaperTitle)
-                ? "待办纸"
+                ? PluginText.T("待办纸")
                 : Compact(item.PaperTitle, 24);
             return item.Done
                 ? $"✓ {paper} · {text}"
@@ -976,7 +976,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             var full = DurationSeconds();
             var minutes = remaining / 60;
             var seconds = remaining % 60;
-            var modeName = _state.Mode == TimerMode.Focus ? "专注" : "休息";
+            var modeName = _state.Mode == TimerMode.Focus ? PluginText.T("专注") : PluginText.T("休息");
             var currentTodo = CurrentTodo();
 
             _todoHost.Visibility = _settings.ShowLinkedTodo
@@ -984,23 +984,23 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 : Visibility.Collapsed;
             _timeText.Text = $"{minutes:00}:{seconds:00}";
             _statusText.Text = _state.Mode == TimerMode.Focus
-                ? (_state.IsRunning ? "保持专注" : "准备开始")
-                : (_state.IsRunning ? "放松一下" : "休息计时已暂停");
+                ? (_state.IsRunning ? PluginText.T("保持专注") : PluginText.T("准备开始"))
+                : (_state.IsRunning ? PluginText.T("放松一下") : PluginText.T("休息计时已暂停"));
             _completedText.Text = _settings.DailyGoal > 0
-                ? $"今日 {_state.CompletedToday}/{_settings.DailyGoal} · 总计 {_state.CompletedFocusSessions}"
-                : $"今日 {_state.CompletedToday} · 总计 {_state.CompletedFocusSessions}";
+                ? PluginText.Format("今日 {0}/{1} · 总计 {2}", _state.CompletedToday, _settings.DailyGoal, _state.CompletedFocusSessions)
+                : PluginText.Format("今日 {0} · 总计 {1}", _state.CompletedToday, _state.CompletedFocusSessions);
             _completedText.Visibility = _settings.ShowCompleted
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            _durationText.Text = $"{DurationMinutes()} 分钟 · ±{_settings.AdjustStep}";
+            _durationText.Text = PluginText.Format("{0} 分钟 · ±{1}", DurationMinutes(), _settings.AdjustStep);
             _progress.Visibility = _settings.ShowProgress
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             _progress.Maximum = Math.Max(1, full);
             _progress.Value = Math.Clamp(full - remaining, 0, full);
             _startButton.Content = _state.IsRunning
-                ? "暂停"
-                : remaining < full ? "继续" : "开始";
+                ? PluginText.T("暂停")
+                : remaining < full ? PluginText.T("继续") : PluginText.T("开始");
             _minusButton.IsEnabled = !_state.IsRunning && DurationMinutes() > 1;
             _plusButton.IsEnabled = !_state.IsRunning && DurationMinutes() < 180;
 
@@ -1010,17 +1010,17 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             }
             else if (currentTodo == null)
             {
-                _todoStatusText.Text = "本轮未关联待办；选择后可在专注结束时自动完成。";
+                _todoStatusText.Text = PluginText.T("本轮未关联待办；选择后可在专注结束时自动完成。");
             }
             else if (currentTodo.Done)
             {
-                _todoStatusText.Text = "关联待办已完成。";
+                _todoStatusText.Text = PluginText.T("关联待办已完成。");
             }
             else
             {
                 _todoStatusText.Text = _settings.CompleteLinkedTodo
-                    ? "专注结束后将完成此待办。"
-                    : "仅显示关联，不自动修改待办状态。";
+                    ? PluginText.T("专注结束后将完成此待办。")
+                    : PluginText.T("仅显示关联，不自动修改待办状态。");
             }
 
             UpdateModeButtons();
@@ -1028,8 +1028,10 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             {
                 "task" when currentTodo != null =>
                     $"{Compact(currentTodo.Text, 16)} · {minutes:00}:{seconds:00}",
-                "status" => _state.IsRunning ? $"{modeName}中" : $"{modeName}已暂停",
-                "fixed" => "专注计时器",
+                "status" => _state.IsRunning
+                    ? PluginText.Format("{0}中", modeName)
+                    : PluginText.Format("{0}已暂停", modeName),
+                "fixed" => PluginText.T("专注计时器"),
                 _ => $"{modeName} · {minutes:00}:{seconds:00}"
             };
             var capsuleProgress = full <= 0
@@ -1039,9 +1041,9 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
                 modeName,
                 $"{minutes:00}:{seconds:00}",
                 currentTodo == null ? "" : Compact(currentTodo.Text, 30),
-                _state.IsRunning ? "进行中" : "已暂停",
+                _state.IsRunning ? PluginText.T("进行中") : PluginText.T("已暂停"),
                 capsuleProgress,
-                _state.IsRunning ? "暂停" : remaining < full ? "继续" : "开始");
+                _state.IsRunning ? PluginText.T("暂停") : remaining < full ? PluginText.T("继续") : PluginText.T("开始"));
             SetPaperStatus(capsuleTitle, capsuleProgress, remaining, modeName);
         }
 
@@ -1050,7 +1052,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
             var value = (text ?? "").Trim();
             if (value.Length == 0)
             {
-                return "待办";
+                return PluginText.T("待办");
             }
             return value.Length <= limit ? value : value[..Math.Max(1, limit - 1)] + "…";
         }
@@ -1254,7 +1256,7 @@ public sealed class FocusTimerPlugin : IPaperBodyPlugin
 
             var minutes = remaining / 60;
             var seconds = remaining % 60;
-            var runningText = _state.IsRunning ? "进行中" : "已暂停";
+            var runningText = _state.IsRunning ? PluginText.T("进行中") : PluginText.T("已暂停");
             _context.Paper.SetCapsulePresentation(new PaperCapsulePresentation
             {
                 PreferredWidth = PaperCapsulePresentation.AutomaticWidth,

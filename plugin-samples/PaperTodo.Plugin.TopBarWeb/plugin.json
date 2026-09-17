@@ -1,8 +1,8 @@
 {
   "kind": "web",
   "id": "sample.topbar.web",
-  "name": "Top Bar 2.1 示例",
-  "description": "演示 Plugin Runtime Global 顶栏、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
+  "name": "Top Bar 2.1 Sample",
+  "description": "Demonstrates global and paper top-bar actions, plugin shortcuts, own-paper controls, and Workspace access.",
   "version": "1.0.0",
   "apiVersion": "2.1",
   "stateVersion": 1,
@@ -17,8 +17,8 @@
     {
       "id": "togglePaperShortcut",
       "type": "shortcut",
-      "name": "显示 / 隐藏纸片",
-      "description": "由 PaperTodo 注册并执行 paper.toggle；纸片隐藏后仍然有效。",
+      "name": "Show / hide paper",
+      "description": "Registered and executed by PaperTodo as paper.toggle; it remains active while the paper is hidden.",
       "default": "Ctrl+Alt+Shift+U",
       "shortcutAction": "paper.toggle",
       "quick": true
@@ -26,8 +26,8 @@
     {
       "id": "runtimePingShortcut",
       "type": "shortcut",
-      "name": "Plugin Runtime 示例动作",
-      "description": "自定义 action 会投递到 plugin runtime，而不是 body session。",
+      "name": "Plugin Runtime sample action",
+      "description": "Delivers the custom action to the plugin runtime instead of the body session.",
       "default": "",
       "shortcutAction": "runtime.ping"
     }
@@ -72,6 +72,20 @@
         "runtimePingShortcut": {
           "name": "Plugin Runtime 예제 동작",
           "description": "사용자 정의 동작을 body session이 아니라 plugin runtime으로 전달합니다."
+        }
+      }
+    },
+    "zh": {
+      "name": "Top Bar 2.1 示例",
+      "description": "演示 Plugin Runtime Global 顶栏、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
+      "settings": {
+        "togglePaperShortcut": {
+          "name": "显示 / 隐藏纸片",
+          "description": "由 PaperTodo 注册并执行 paper.toggle；纸片隐藏后仍然有效。"
+        },
+        "runtimePingShortcut": {
+          "name": "Plugin Runtime 示例动作",
+          "description": "自定义 action 会投递到 plugin runtime，而不是 body session。"
         }
       }
     }

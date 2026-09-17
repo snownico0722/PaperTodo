@@ -1,8 +1,8 @@
 {
   "kind": "native",
   "id": "sample.focus-timer.native",
-  "name": "专注计时器",
-  "description": "可关联 PaperTodo 待办的 WPF 番茄钟，支持完成联动、自动选择下一项和折叠后台计时。",
+  "name": "Focus Timer",
+  "description": "A WPF Pomodoro timer that can link to PaperTodo todos, complete linked tasks, select the next item, and keep timing while collapsed.",
   "version": "1.4.0",
   "apiVersion": "2.1",
   "stateVersion": 3,
@@ -19,15 +19,15 @@
   ],
   "settingCategories": [
     {
-      "name": "联动",
+      "name": "Integration",
       "column": "left"
     },
     {
-      "name": "显示",
+      "name": "Display",
       "column": "left"
     },
     {
-      "name": "计时",
+      "name": "Timer",
       "column": "right"
     }
   ],
@@ -35,152 +35,225 @@
     {
       "id": "autoStartNext",
       "type": "boolean",
-      "name": "自动开始下一阶段",
-      "description": "专注结束后自动开始休息，休息结束后自动开始专注。",
+      "name": "Auto-start next phase",
+      "description": "Start the break automatically after focus, and start focus automatically after the break.",
       "default": false,
-      "category": "联动"
+      "category": "Integration"
     },
     {
       "id": "showLinkedTodo",
       "type": "boolean",
-      "name": "显示关联待办",
-      "description": "在计时器中显示可实时同步的 PaperTodo 待办选择器。",
+      "name": "Show linked todo",
+      "description": "Show a PaperTodo todo picker that stays synchronized with the workspace.",
       "default": true,
-      "category": "联动"
+      "category": "Integration"
     },
     {
       "id": "completeLinkedTodo",
       "type": "boolean",
-      "name": "专注结束后完成待办",
-      "description": "完整完成一轮专注时，将当前关联待办标记为完成；跳过不触发。",
+      "name": "Complete todo after focus",
+      "description": "Mark the linked todo complete after a full focus session; skipping does not trigger it.",
       "default": false,
-      "category": "联动"
+      "category": "Integration"
     },
     {
       "id": "autoSelectNextTodo",
       "type": "boolean",
-      "name": "完成后选择下一项",
-      "description": "自动完成关联待办后，按纸片和顺序选择下一条未完成待办。",
+      "name": "Select next after completion",
+      "description": "After completing the linked todo, select the next unfinished todo by paper and order.",
       "default": false,
-      "category": "联动"
+      "category": "Integration"
     },
     {
       "id": "showProgress",
       "type": "boolean",
-      "name": "显示进度条",
+      "name": "Show progress bar",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "showCompleted",
       "type": "boolean",
-      "name": "显示完成统计",
+      "name": "Show completion stats",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "focusMinutes",
       "type": "number",
-      "name": "默认专注时长",
+      "name": "Default focus duration",
       "default": 25,
       "min": 1,
       "max": 180,
       "step": 1,
-      "suffix": "分钟",
-      "category": "计时"
+      "suffix": "min",
+      "category": "Timer"
     },
     {
       "id": "breakMinutes",
       "type": "number",
-      "name": "默认休息时长",
+      "name": "Default break duration",
       "default": 5,
       "min": 1,
       "max": 180,
       "step": 1,
-      "suffix": "分钟",
-      "category": "计时"
+      "suffix": "min",
+      "category": "Timer"
     },
     {
       "id": "adjustStep",
       "type": "number",
-      "name": "加减步长",
+      "name": "Adjustment step",
       "default": 5,
       "min": 1,
       "max": 30,
       "step": 1,
-      "suffix": "分钟",
-      "category": "计时"
+      "suffix": "min",
+      "category": "Timer"
     },
     {
       "id": "dailyGoal",
       "type": "number",
-      "name": "每日目标",
-      "description": "0 表示只显示完成数，不显示目标。",
+      "name": "Daily goal",
+      "description": "0 shows only the completed count without a goal.",
       "default": 4,
       "min": 0,
       "max": 24,
       "step": 1,
-      "suffix": "轮",
-      "category": "计时"
+      "suffix": "sessions",
+      "category": "Timer"
     },
     {
       "id": "sound",
       "type": "select",
-      "name": "结束提示音",
+      "name": "Completion sound",
       "default": "asterisk",
       "options": [
         {
           "value": "none",
-          "name": "静音"
+          "name": "Silent"
         },
         {
           "value": "beep",
-          "name": "蜂鸣"
+          "name": "Beep"
         },
         {
           "value": "asterisk",
-          "name": "提示"
+          "name": "Asterisk"
         },
         {
           "value": "exclamation",
-          "name": "警示"
+          "name": "Exclamation"
         }
       ],
-      "category": "计时"
+      "category": "Timer"
     },
     {
       "id": "titleStyle",
       "type": "select",
-      "name": "胶囊标题",
+      "name": "Capsule title",
       "default": "task",
       "options": [
         {
           "value": "task",
-          "name": "待办与倒计时"
+          "name": "Todo and countdown"
         },
         {
           "value": "countdown",
-          "name": "阶段与倒计时"
+          "name": "Phase and countdown"
         },
         {
           "value": "status",
-          "name": "仅阶段状态"
+          "name": "Phase status only"
         },
         {
           "value": "fixed",
-          "name": "固定标题"
+          "name": "Fixed title"
         }
       ],
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "confirmReset",
       "type": "boolean",
-      "name": "重置前确认",
+      "name": "Confirm before reset",
       "default": true,
-      "category": "计时"
+      "category": "Timer"
     }
   ],
   "advancedSettings": true,
-  "primarySettings": 2
+  "primarySettings": 2,
+  "locales": {
+    "zh": {
+      "name": "专注计时器",
+      "description": "可关联 PaperTodo 待办的 WPF 番茄钟，支持完成联动、自动选择下一项和折叠后台计时。",
+      "settingCategories": {
+        "Integration": "联动",
+        "Display": "显示",
+        "Timer": "计时"
+      },
+      "settings": {
+        "autoStartNext": {
+          "name": "自动开始下一阶段",
+          "description": "专注结束后自动开始休息，休息结束后自动开始专注。"
+        },
+        "showLinkedTodo": {
+          "name": "显示关联待办",
+          "description": "在计时器中显示可实时同步的 PaperTodo 待办选择器。"
+        },
+        "completeLinkedTodo": {
+          "name": "专注结束后完成待办",
+          "description": "完整完成一轮专注时，将当前关联待办标记为完成；跳过不触发。"
+        },
+        "autoSelectNextTodo": {
+          "name": "完成后选择下一项",
+          "description": "自动完成关联待办后，按纸片和顺序选择下一条未完成待办。"
+        },
+        "showProgress": {
+          "name": "显示进度条"
+        },
+        "showCompleted": {
+          "name": "显示完成统计"
+        },
+        "focusMinutes": {
+          "name": "默认专注时长",
+          "suffix": "分钟"
+        },
+        "breakMinutes": {
+          "name": "默认休息时长",
+          "suffix": "分钟"
+        },
+        "adjustStep": {
+          "name": "加减步长",
+          "suffix": "分钟"
+        },
+        "dailyGoal": {
+          "name": "每日目标",
+          "description": "0 表示只显示完成数，不显示目标。",
+          "suffix": "轮"
+        },
+        "sound": {
+          "name": "结束提示音",
+          "options": {
+            "none": "静音",
+            "beep": "蜂鸣",
+            "asterisk": "提示",
+            "exclamation": "警示"
+          }
+        },
+        "titleStyle": {
+          "name": "胶囊标题",
+          "options": {
+            "task": "待办与倒计时",
+            "countdown": "阶段与倒计时",
+            "status": "仅阶段状态",
+            "fixed": "固定标题"
+          }
+        },
+        "confirmReset": {
+          "name": "重置前确认"
+        }
+      }
+    }
+  }
 }

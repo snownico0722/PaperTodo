@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Protocol 2.1 示例</title>
+  <title>Protocol 2.1 Sample</title>
   <style>
     :root { color-scheme: light dark; }
     body { margin: 0; padding: 18px; font-family: system-ui, sans-serif; line-height: 1.55; }
@@ -14,10 +14,31 @@
 </head>
 <body>
   <h1>Protocol 2.1</h1>
-  <p>这个 Paper 只负责让 provider Runtime 保持存在。</p>
-  <p>Runtime 会向当前 Todo 发布 <code>SVG + 文字</code> 的行内/右键动作，并向任意 Workspace Paper 发布静态顶栏标签。</p>
-  <p>可用任意 Paper 顶栏的“刷新 2.1”动作重新扫描当前 Workspace。</p>
+  <p id="keepalive">This paper only keeps the provider Runtime alive.</p>
+  <p id="runtime-info">Runtime publishes host-native <code>SVG + text</code> inline/context-menu actions to todos and static top-bar labels to Workspace papers.</p>
+  <p id="refresh-info">Use “Refresh 2.1” from any paper top bar to rescan the current Workspace.</p>
   <script>
+    let uiLanguage = 'en-US';
+    const isChinese = () => /^zh(?:-|$)/i.test(uiLanguage);
+    const t = (zh, en) => isChinese() ? zh : en;
+    function applyLanguage(value) {
+      uiLanguage = String(value || 'en-US');
+      document.documentElement.lang = isChinese() ? 'zh-CN' : 'en';
+      document.title = t('Protocol 2.1 示例', 'Protocol 2.1 Sample');
+      document.querySelector('#keepalive').textContent = t(
+        '这个 Paper 只负责让 provider Runtime 保持存在。',
+        'This paper only keeps the provider Runtime alive.');
+      document.querySelector('#runtime-info').innerHTML = t(
+        'Runtime 会向当前 Todo 发布 <code>SVG + 文字</code> 的行内/右键动作，并向任意 Workspace Paper 发布静态顶栏标签。',
+        'Runtime publishes host-native <code>SVG + text</code> inline/context-menu actions to todos and static top-bar labels to Workspace papers.');
+      document.querySelector('#refresh-info').textContent = t(
+        '可用任意 Paper 顶栏的“刷新 2.1”动作重新扫描当前 Workspace。',
+        'Use “Refresh 2.1” from any paper top bar to rescan the current Workspace.');
+    }
+    window.addEventListener('papertodo', event => {
+      const message = event.detail || {};
+      if (message.type === 'initialize') applyLanguage(message.uiLanguage);
+    });
     papertodo.paper.setHeaderText('Protocol 2.1');
     papertodo.paper.setCapsulePresentation({
       preferredWidth: 0,

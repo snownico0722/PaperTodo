@@ -1,8 +1,8 @@
 {
   "kind": "web",
   "id": "official.clock.web",
-  "name": "Web 时钟",
-  "description": "完整的 Web 插件示例：主题、时区、日期格式、标题和日进度均可配置。",
+  "name": "Web Clock",
+  "description": "A complete Web plugin sample with configurable theme integration, time zones, date formats, title, and day progress.",
   "version": "1.5.0",
   "apiVersion": "2.1",
   "stateVersion": 1,
@@ -21,7 +21,7 @@
     "enabledSetting": "autoStartCapsule",
     "instanceKey": "main",
     "presentation": "capsule",
-    "title": "Web 时钟"
+    "title": "Web Clock"
   },
   "miniMaxSize": {
     "width": 360,
@@ -29,15 +29,15 @@
   },
   "settingCategories": [
     {
-      "name": "显示",
+      "name": "Display",
       "column": "left"
     },
     {
-      "name": "时间与标题",
+      "name": "Time & title",
       "column": "right"
     },
     {
-      "name": "启动",
+      "name": "Startup",
       "column": "right"
     }
   ],
@@ -45,66 +45,66 @@
     {
       "id": "showSeconds",
       "type": "boolean",
-      "name": "显示秒数",
+      "name": "Show seconds",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "showDate",
       "type": "boolean",
-      "name": "显示日期",
+      "name": "Show date",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "showDayProgress",
       "type": "boolean",
-      "name": "显示日进度",
-      "description": "在底部显示今天已经过去的比例。",
+      "name": "Show day progress",
+      "description": "Show how much of the current day has elapsed.",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "autoStartCapsule",
       "type": "boolean",
-      "name": "启动后自动创建时钟胶囊",
-      "description": "PaperTodo 启动稳定后创建或恢复同一个时钟胶囊，不会重复创建。",
+      "name": "Create clock capsule on startup",
+      "description": "Create or restore the same clock capsule after PaperTodo startup without creating duplicates.",
       "default": false,
-      "category": "启动"
+      "category": "Startup"
     },
     {
       "id": "showWeekday",
       "type": "boolean",
-      "name": "显示星期",
+      "name": "Show weekday",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "hourCycle",
       "type": "select",
-      "name": "时间制式",
+      "name": "Hour cycle",
       "default": "24",
       "options": [
         {
           "value": "24",
-          "name": "24 小时"
+          "name": "24-hour"
         },
         {
           "value": "12",
-          "name": "12 小时"
+          "name": "12-hour"
         }
       ],
-      "category": "时间与标题"
+      "category": "Time & title"
     },
     {
       "id": "dateFormat",
       "type": "select",
-      "name": "日期格式",
+      "name": "Date format",
       "default": "long",
       "options": [
         {
           "value": "long",
-          "name": "2026年8月1日"
+          "name": "August 1, 2026"
         },
         {
           "value": "short",
@@ -123,17 +123,17 @@
           "name": "01/08/2026"
         }
       ],
-      "category": "时间与标题"
+      "category": "Time & title"
     },
     {
       "id": "timeZone",
       "type": "select",
-      "name": "时区",
+      "name": "Time zone",
       "default": "local",
       "options": [
         {
           "value": "local",
-          "name": "本地时间"
+          "name": "Local time"
         },
         {
           "value": "utc",
@@ -141,84 +141,167 @@
         },
         {
           "value": "beijing",
-          "name": "北京时间"
+          "name": "Beijing time"
         },
         {
           "value": "tokyo",
-          "name": "东京时间"
+          "name": "Tokyo time"
         },
         {
           "value": "london",
-          "name": "伦敦时间"
+          "name": "London time"
         },
         {
           "value": "newYork",
-          "name": "纽约时间"
+          "name": "New York time"
         },
         {
           "value": "losAngeles",
-          "name": "洛杉矶时间"
+          "name": "Los Angeles time"
         }
       ],
-      "category": "时间与标题"
+      "category": "Time & title"
     },
     {
       "id": "titleMode",
       "type": "select",
-      "name": "胶囊标题",
+      "name": "Capsule title",
       "default": "time",
       "options": [
         {
           "value": "time",
-          "name": "当前时间"
+          "name": "Current time"
         },
         {
           "value": "date",
-          "name": "当前日期"
+          "name": "Current date"
         },
         {
           "value": "zone",
-          "name": "时区和时间"
+          "name": "Time zone and time"
         },
         {
           "value": "fixed",
-          "name": "固定为“时钟”"
+          "name": "Fixed “Clock”"
         },
         {
           "value": "custom",
-          "name": "自定义文字"
+          "name": "Custom text"
         }
       ],
-      "category": "时间与标题"
+      "category": "Time & title"
     },
     {
       "id": "customTitle",
       "type": "string",
-      "name": "自定义标题",
-      "placeholder": "仅在标题模式为自定义时使用",
+      "name": "Custom title",
+      "placeholder": "Used only when the title mode is custom.",
       "maxLength": 40,
       "default": "",
-      "category": "时间与标题"
+      "category": "Time & title"
     },
     {
       "id": "showWeekNumber",
       "type": "boolean",
-      "name": "显示周数",
+      "name": "Show week number",
       "default": true,
-      "category": "显示"
+      "category": "Display"
     },
     {
       "id": "clockScale",
       "type": "number",
-      "name": "时钟字号倍率",
+      "name": "Clock text scale",
       "default": 1,
       "min": 0.75,
       "max": 1.6,
       "step": 0.05,
       "suffix": "×",
-      "category": "显示"
+      "category": "Display"
     }
   ],
   "advancedSettings": true,
-  "runtime": "web/runtime.html"
+  "runtime": "web/runtime.html",
+  "locales": {
+    "zh": {
+      "name": "Web 时钟",
+      "description": "完整的 Web 插件示例：主题、时区、日期格式、标题和日进度均可配置。",
+      "settingCategories": {
+        "Display": "显示",
+        "Time & title": "时间与标题",
+        "Startup": "启动"
+      },
+      "settings": {
+        "showSeconds": {
+          "name": "显示秒数"
+        },
+        "showDate": {
+          "name": "显示日期"
+        },
+        "showDayProgress": {
+          "name": "显示日进度",
+          "description": "在底部显示今天已经过去的比例。"
+        },
+        "autoStartCapsule": {
+          "name": "启动后自动创建时钟胶囊",
+          "description": "PaperTodo 启动稳定后创建或恢复同一个时钟胶囊，不会重复创建。"
+        },
+        "showWeekday": {
+          "name": "显示星期"
+        },
+        "hourCycle": {
+          "name": "时间制式",
+          "options": {
+            "24": "24 小时",
+            "12": "12 小时"
+          }
+        },
+        "dateFormat": {
+          "name": "日期格式",
+          "options": {
+            "long": "2026年8月1日",
+            "short": "2026-08-01",
+            "slash": "2026/08/01",
+            "us": "08/01/2026",
+            "eu": "01/08/2026"
+          }
+        },
+        "timeZone": {
+          "name": "时区",
+          "options": {
+            "local": "本地时间",
+            "utc": "UTC",
+            "beijing": "北京时间",
+            "tokyo": "东京时间",
+            "london": "伦敦时间",
+            "newYork": "纽约时间",
+            "losAngeles": "洛杉矶时间"
+          }
+        },
+        "titleMode": {
+          "name": "胶囊标题",
+          "options": {
+            "time": "当前时间",
+            "date": "当前日期",
+            "zone": "时区和时间",
+            "fixed": "固定为“时钟”",
+            "custom": "自定义文字"
+          }
+        },
+        "customTitle": {
+          "name": "自定义标题",
+          "placeholder": "仅在标题模式为自定义时使用"
+        },
+        "showWeekNumber": {
+          "name": "显示周数"
+        },
+        "clockScale": {
+          "name": "时钟字号倍率",
+          "suffix": "×"
+        }
+      },
+      "startupPaper": {
+        "title": "Web 时钟"
+      }
+    }
+  }
 }

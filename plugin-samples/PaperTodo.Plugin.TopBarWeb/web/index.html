@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -19,14 +19,25 @@
 <body>
   <main>
     <strong>Protocol 2.1 Paper Top Bar</strong>
-    <p id="status">等待宿主初始化…</p>
+    <p id="status">Waiting for host initialization…</p>
     <div class="actions">
-      <button id="toggle-collapsed">折叠 / 展开自身纸片</button>
-      <button id="hide-paper">隐藏自身纸片</button>
+      <button id="toggle-collapsed">Collapse / expand this paper</button>
+      <button id="hide-paper">Hide this paper</button>
     </div>
   </main>
   <script>
     const status = document.querySelector('#status');
+    const toggleButton = document.querySelector('#toggle-collapsed');
+    const hideButton = document.querySelector('#hide-paper');
+    let uiLanguage = 'en-US';
+    const isChinese = () => /^zh(?:-|$)/i.test(uiLanguage);
+    const t = (zh, en) => isChinese() ? zh : en;
+    function applyLanguage(value) {
+      uiLanguage = String(value || 'en-US');
+      document.documentElement.lang = isChinese() ? 'zh-CN' : 'en';
+      toggleButton.textContent = t('折叠 / 展开自身纸片', 'Collapse / expand this paper');
+      hideButton.textContent = t('隐藏自身纸片', 'Hide this paper');
+    }
 
     async function registerPaperTopBar() {
       await papertodo.request('topbar.paper.set', {
@@ -34,7 +45,7 @@
           {
             id: 'paper-info',
             icon: { kind: 'character', value: 'i' },
-            toolTip: '显示这张插件纸片的信息'
+            toolTip: t('显示这张插件纸片的信息', 'Show information about this plugin paper')
           }
         ],
         hiddenHostActions: ['newNotePaper']
@@ -43,13 +54,13 @@
 
     document.querySelector('#toggle-collapsed').addEventListener('click', () => {
       papertodo.paper.toggleCollapsed().catch(error => {
-        status.textContent = `切换失败：${error?.message || error}`;
+        status.textContent = `${t('切换失败：', 'Toggle failed: ')}${error?.message || error}`;
       });
     });
 
     document.querySelector('#hide-paper').addEventListener('click', () => {
       papertodo.paper.hide().catch(error => {
-        status.textContent = `隐藏失败：${error?.message || error}`;
+        status.textContent = `${t('隐藏失败：', 'Hide failed: ')}${error?.message || error}`;
       });
     });
 
@@ -63,13 +74,15 @@
     window.addEventListener('papertodo', event => {
       const message = event.detail || {};
       if (message.type !== 'initialize') return;
-
+      applyLanguage(message.uiLanguage);
 
       registerPaperTopBar()
         .then(() => {
-          status.textContent = 'Paper 顶栏已注册；隐藏后可用插件设置中的快捷键重新显示。';
+          status.textContent = t(
+            'Paper 顶栏已注册；隐藏后可用插件设置中的快捷键重新显示。',
+            'Paper top bar registered; use the plugin shortcut to show the paper again after hiding it.');
         })
-        .catch(error => { status.textContent = `注册失败：${error?.message || error}`; });
+        .catch(error => { status.textContent = `${t('注册失败：', 'Registration failed: ')}${error?.message || error}`; });
     });
   </script>
 </body>

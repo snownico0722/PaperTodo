@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>PaperTodo Top Bar Runtime</title>
@@ -7,6 +7,9 @@
 <body>
 <script>
   const paperIds = new Set();
+  let uiLanguage = 'en-US';
+  const isChinese = () => /^zh(?:-|$)/i.test(uiLanguage);
+  const t = (zh, en) => isChinese() ? zh : en;
 
   async function registerGlobalTopBar() {
     await papertodo.globalTopBar.setActions([
@@ -18,7 +21,7 @@
           renderMode: 'stroke',
           strokeWidth: 1.5
         },
-        toolTip: '读取当前纸片信息'
+        toolTip: t('读取当前纸片信息', 'Inspect the current paper')
       }
     ]);
   }
@@ -29,7 +32,7 @@
     void papertodo.papers.setCapsulePresentation(paperId, {
       preferredWidth: 0,
       plainText: 'Top Bar 2.1',
-      toolTip: 'Protocol 2.1 Top Bar 示例',
+      toolTip: t('Protocol 2.1 Top Bar 示例', 'Protocol 2.1 Top Bar sample'),
       components: [
         { kind: 'glyph', text: 'T' },
         { kind: 'text', text: 'Top Bar 2.1', fill: true }
@@ -84,6 +87,8 @@
   window.addEventListener('papertodo', event => {
     const message = event.detail || {};
     if (message.type !== 'initialize') return;
+    uiLanguage = String(message.uiLanguage || 'en-US');
+    document.documentElement.lang = isChinese() ? 'zh-CN' : 'en';
     replacePapers(message.papers);
     registerGlobalTopBar().catch(error => {
       console.error('PaperTodo Global Top Bar registration failed', error);

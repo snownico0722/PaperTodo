@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>PaperTodo Clock Runtime</title>
@@ -24,14 +24,15 @@
     losAngeles: 'America/Los_Angeles'
   });
   const zoneLabels = Object.freeze({
-    local: '本地时间',
-    utc: 'UTC',
-    beijing: '北京时间',
-    tokyo: '东京时间',
-    london: '伦敦时间',
-    newYork: '纽约时间',
-    losAngeles: '洛杉矶时间'
+    local: ['本地时间', 'Local time'], utc: ['UTC', 'UTC'],
+    beijing: ['北京时间', 'Beijing time'], tokyo: ['东京时间', 'Tokyo time'],
+    london: ['伦敦时间', 'London time'], newYork: ['纽约时间', 'New York time'],
+    losAngeles: ['洛杉矶时间', 'Los Angeles time']
   });
+  let uiLanguage = 'en-US';
+  const isChinese = () => /^zh(?:-|$)/i.test(uiLanguage);
+  const locale = () => isChinese() ? 'zh-CN' : 'en-US';
+  const zoneLabel = value => (zoneLabels[value] || zoneLabels.local)[isChinese() ? 0 : 1];
 
   let settings = { ...defaults };
   const paperIds = new Set();
@@ -52,7 +53,7 @@
 
   function zonedParts(date) {
     const timeZone = zoneMap[settings.timeZone];
-    const parts = new Intl.DateTimeFormat(undefined, {
+    const parts = new Intl.DateTimeFormat(locale(), {
       timeZone,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -69,7 +70,7 @@
       : settings.dateFormat === 'slash' ? `${y}/${m}/${d}`
       : settings.dateFormat === 'us' ? `${m}/${d}/${y}`
       : settings.dateFormat === 'eu' ? `${d}/${m}/${y}`
-      : `${y}年${Number(m)}月${Number(d)}日`;
+      : isChinese() ? `${y}年${Number(m)}月${Number(d)}日` : `${m}/${d}/${y}`;
   }
 
   function zonedClockParts(date) {
@@ -83,9 +84,9 @@
   function titleText(timeText, dateText) {
     if (settings.titleMode === 'date') return dateText || timeText;
     if (settings.titleMode === 'zone') {
-      return `${zoneLabels[settings.timeZone] || '本地时间'} · ${timeText}`;
+      return `${zoneLabel(settings.timeZone)} · ${timeText}`;
     }
-    if (settings.titleMode === 'fixed') return '时钟';
+    if (settings.titleMode === 'fixed') return isChinese() ? '时钟' : 'Clock';
     if (settings.titleMode === 'custom' && String(settings.customTitle || '').trim()) {
       return String(settings.customTitle).trim();
     }
@@ -133,6 +134,8 @@
   window.addEventListener('papertodo', event => {
     const message = event.detail || {};
     if (message.type === 'initialize') {
+      uiLanguage = String(message.uiLanguage || 'en-US');
+      document.documentElement.lang = locale();
       applySettings(message.settings);
       replacePapers(message.papers);
       restartTimer();

@@ -409,6 +409,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
             surface = "runtime",
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
+            uiLanguage = UiLanguages.EffectiveUiCulture.Name,
             permissions = _workspace.GrantedPermissions.OrderBy(value => value).ToArray(),
             settings = ReadSettings(),
             state = runtimeState.State,
