@@ -10,7 +10,7 @@
 "apiVersion": "2.1"
 ```
 
-当前宿主只接受 `2.1` 插件。清理前的实验性 `2.0` 以及更早 manifest 不再兼容加载；旧插件需要更新 manifest，并使用当前 `PaperTodo.Plugin.Abstractions` 重新构建。
+当前宿主最新协议为 `2.2`，并继续兼容 `2.1`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.2` 为目标；已有 `2.1` 插件只要不声明 2.2-only 能力仍可继续运行。
 
 插件公开类型以 [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) 为编译期合同；宿主实际校验和运行行为以当前代码为准。需要理解 PaperTodo 内部 ownership 时再看 [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md)，插件作者不需要先阅读主程序架构才能开始开发。
 
@@ -227,7 +227,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `name` | 显示名称；为空时回退到 ID |
 | `description` | 插件说明 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 必须为 `"2.1"` |
+| `apiVersion` | 新插件使用 `"2.2"`；`"2.1"` 继续兼容加载 |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -295,7 +295,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 
 - `enabledSetting` 必须引用同一 manifest 中的 boolean setting；
 - `instanceKey` 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
-- `presentation` 可为 `capsule`、`expanded` 或 `hidden`；`hidden` 会创建/恢复真实插件 Paper 作为 Runtime owner，但正常启动时不显示它的窗口；
+- `presentation` 可为 `capsule`、`expanded` 或 `hidden`；`hidden` 属于 Protocol 2.2，会创建/恢复真实插件 Paper 作为 Runtime owner，但正常启动时不显示它的窗口；
 - `title` 最长 120 个字符；
 - 创建时机、去重和恢复由宿主管理；插件只声明意图；
 - 如果用户已经把原自动创建纸片改造成其他 provider/type，宿主不会强行接管或偷偷再创建副本。
@@ -450,9 +450,9 @@ Body、Mini 和 Web Runtime 的 `initialize` 都提供各自状态域的 `state`
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`、`action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；`paper.*` 由宿主直接执行，自定义动作需要声明 `runtime`，并复用已有 Runtime action handler 投递，无需配置快捷键。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`，以及 Protocol 2.2 新增的 `action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；`paper.*` 由宿主直接执行，自定义动作需要声明 `runtime`，并复用已有 Runtime action handler 投递，无需配置快捷键。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
 
-`shortcut` 的 `shortcutAction`、`action` 按钮、宿主 `paper.*` 动作和自定义 Runtime 快捷键 action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
+Protocol 2.1 的 `shortcut` 与 Protocol 2.2 的 `action` 按钮、宿主 `paper.*` 动作、自定义 Runtime action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
 
 默认不声明 `advancedSettings`（或为 `false`）时，行为保持原样：最多三个 `quick: true` 设置直接显示在插件卡片上，其余设置通过“更多设置”在**当前卡片内**展开/收起。没有 `quick` 时不会自动猜主要设置。
 
@@ -1128,7 +1128,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 | 示例 | 重点 |
 | --- | --- |
 | `PaperTodo.Plugin.Protocol21Web` | **Protocol 2.1 contribution 专项示例**：Todo 行操作、顶栏标签、最新 TodoSnapshot |
-| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.1 Top Bar 专项示例**：body Paper action + Web Runtime Global action、字符/Stroke SVG、目标 Paper context、Workspace 复用 |
+| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.2 Top Bar/action 专项示例**：body Paper action + Web Runtime Global action、字符/Stroke SVG、目标 Paper context、Workspace 复用 |
 | `PaperTodo.Plugin.SampleClock` | Native 主示例：settings、background updates、标准 capsule、自定义 WPF capsule、dedicated WPF mini |
 | `PaperTodo.Plugin.OfficialClockWeb` | Web 主示例：body/mini 双页面、`miniEntry`、state/settings 同步、startup paper、background updates |
 | `PaperTodo.Plugin.FocusTimer` | Native 有状态交互：正文与 dedicated mini 共享计时 model，mini 内直接开始/暂停/继续 |
@@ -1141,7 +1141,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；当前宿主只接受 `2.1`；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.2`，已有 `2.1` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
