@@ -1,4 +1,4 @@
-name: Temporary settings action verification
+name: Temporary settings action source publication
 on:
   push:
     branches: [feat/codex-skills-mcp-20260918]
@@ -6,10 +6,10 @@ on:
 permissions:
   contents: write
 jobs:
-  verify:
+  publish:
     if: contains(github.event.head_commit.message, '[finalize-actions]')
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -18,193 +18,29 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Apply implementation and review corrections
+      - name: Reproduce the implementation verified by run 35349844452
         shell: python
         run: |
-          from pathlib import Path
-          import re, base64, zlib
-          workflow = Path('.github/workflows/tmp-settings-action-update.yml').read_text(encoding='utf-8-sig')
-          payload = re.search(r"payload = '([^']+)'", workflow).group(1)
-          exec(compile(zlib.decompress(base64.b64decode(payload)), '<reviewed-action-patch>', 'exec'))
-          replace('tests/PaperTodo.ProtocolPolicyChecks/SettingActionChecks.cs',
-              '.Single(c => c.GetParameters().Length > 0 && c.GetParameters()[0].ParameterType == typeof(string));',
-              '.Single(c => c.GetParameters().Length == 1 && c.GetParameters()[0].ParameterType == typeof(string));')
-          p = Path('plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexCliBridgePlugin.cs')
-          raw = p.read_bytes()
-          for old, new in [
-              ('默认传入提示词。留空则只发送待办/纸片本身。', '默认传入提示词。留空不添加默认提示词；技能仍按插件设置注入。'),
-              ('Default prompt sent to Codex. Leave it empty to send only the todo or paper content.', 'Default prompt sent to Codex. Leave it empty to omit the default prompt; skills still follow the plugin settings.')]:
-              a, b = old.encode(), new.encode()
-              assert raw.count(a) == 1
-              raw = raw.replace(a, b)
-          p.write_bytes(raw)
-          replace('tests/PaperTodo.ProtocolPolicyChecks/Program.cs',
-              '            CheckSettingActionBehavior(host);',
-              '            CheckSettingActionBehavior(host);\n            CheckHiddenStartupVisibility(host);')
-          write('tests/PaperTodo.ProtocolPolicyChecks/HiddenStartupVisibilityChecks.cs', '''using System.Collections;
-          using System.IO;
-          using System.Reflection;
-          using System.Runtime.CompilerServices;
-          using System.Text.Json;
-          
-          internal static partial class Program
-          {
-              private static void CheckHiddenStartupVisibility(Assembly host)
-              {
-                  const string provider = "sample.hidden-check";
-                  var controllerType = RequireType(host, "PaperTodo.AppController");
-                  var registryType = RequireType(host, "PaperTodo.PaperBodyPluginRegistry");
-                  var descriptorType = RequireType(host, "PaperTodo.PaperBodyPluginDescriptor");
-                  var manifestType = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
-                  var settingType = RequireType(host, "PaperTodo.PaperBodyPluginSettingManifest");
-                  var startupType = RequireType(host, "PaperTodo.PaperBodyPluginStartupManifest");
-                  var stateType = RequireType(host, "PaperTodo.AppState");
-                  var paperType = RequireType(host, "PaperTodo.PaperData");
-                  var storeType = RequireType(host, "PaperTodo.PaperBodyPluginDataStore");
-                  static void Set(object obj, string key, object value) => obj.GetType().GetProperty(key)!.SetValue(obj, value);
-                  static object New(Type type) => Activator.CreateInstance(type, nonPublic: true)!;
-                  var manifest = New(manifestType);
-                  var startup = New(startupType);
-                  Set(startup, "EnabledSetting", "autoStart");
-                  Set(startup, "Presentation", "hidden");
-                  Set(startup, "InstanceKey", "main");
-                  Set(manifest, "StartupPaper", startup);
-                  var enabled = New(settingType);
-                  Set(enabled, "Id", "autoStart");
-                  Set(enabled, "Type", "boolean");
-                  Set(enabled, "Default", JsonSerializer.SerializeToElement(true));
-                  var settings = Array.CreateInstance(settingType, 1);
-                  settings.SetValue(enabled, 0);
-                  Set(manifest, "Settings", settings);
-                  var descriptor = RuntimeHelpers.GetUninitializedObject(descriptorType);
-                  Set(descriptor, "Id", provider);
-                  Set(descriptor, "DisplayName", "Hidden startup test");
-                  Set(descriptor, "Manifest", manifest);
-                  var registry = RuntimeHelpers.GetUninitializedObject(registryType);
-                  var descriptorsField = registryType.GetField("_descriptors", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                  var descriptors = (IDictionary)Activator.CreateInstance(descriptorsField.FieldType)!;
-                  descriptors.Add(provider, descriptor);
-                  descriptorsField.SetValue(registry, descriptors);
-                  var root = Path.Combine(Path.GetTempPath(), $"PaperTodo.HiddenChecks.{Guid.NewGuid():N}");
-                  var constructor = storeType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                      .Single(c => c.GetParameters().Length == 1 && c.GetParameters()[0].ParameterType == typeof(string));
-                  var store = constructor.Invoke([root]);
-                  SetInstanceField(registryType, registry, "_dataStore", store);
-                  var controller = RuntimeHelpers.GetUninitializedObject(controllerType);
-                  SetInstanceField(controllerType, controller, "_paperBodyPlugins", registry);
-                  SetInstanceField(controllerType, controller, "_suppressDirty", true);
-                  var state = New(stateType);
-                  Set(controller, "State", state);
-                  var papers = (IList)stateType.GetProperty("Papers")!.GetValue(state)!;
-                  var paper = New(paperType);
-                  Set(paper, "Type", "note");
-                  Set(paper, "BodyProviderId", provider);
-                  Set(paper, "StartupOwnerPluginId", provider);
-                  Set(paper, "StartupInstanceKey", "main");
-                  papers.Add(paper);
-                  var method = controllerType.GetMethod("ApplyHiddenPluginStartupPaperVisibility", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                  var commandType = method.GetParameters()[0].ParameterType;
-                  bool Visible() => (bool)paperType.GetProperty("IsVisible")!.GetValue(paper)!;
-                  void Apply(string command) => method.Invoke(controller, [Enum.Parse(commandType, command)]);
-                  try
-                  {
-                      Set(paper, "IsVisible", true);
-                      Apply("None");
-                      Assert(!Visible(), "Normal startup must hide its hidden startup owner before restoring surfaces.");
-                      foreach (var command in new[] { "Show", "Toggle" })
-                      {
-                          Set(paper, "IsVisible", true);
-                          Apply(command);
-                          Assert(Visible(), "Explicit startup visibility commands must not be pre-empted by hidden defaults.");
-                      }
-                      Set(paper, "IsVisible", true);
-                      Set(paper, "BodyProviderId", "different.provider");
-                      Apply("None");
-                      Assert(Visible(), "A user-repurposed paper must not be hidden by its previous plugin owner.");
-                      Set(paper, "BodyProviderId", provider);
-                      Set(enabled, "Default", JsonSerializer.SerializeToElement(false));
-                      Apply("None");
-                      Assert(Visible(), "Disabled auto-start must not impose hidden startup policy.");
-                      Console.WriteLine("Hidden startup: 5 behavior checks passed.");
-                  }
-                  finally
-                  {
-                      ((IDisposable)store).Dispose();
-                      if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
-                  }
-              }
-          }
-          ''')
-          write('tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs', r''' 'use strict';
-          const assert = require('node:assert/strict');
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const vm = require('node:vm');
-          const sample = path.resolve(__dirname, '../../plugin-samples/PaperTodo.Plugin.TopBarWeb');
-          const manifest = JSON.parse(fs.readFileSync(path.join(sample, 'plugin.json'), 'utf8'));
-          const button = manifest.settings.find(s => s.id === 'runtimePingAction');
-          assert.equal(button.type, 'action');
-          assert.equal(button.action, 'runtime.ping');
-          assert.equal(button.default, undefined);
-          assert.ok(manifest.capabilities.includes('runtime'));
-          const script = fs.readFileSync(path.join(sample, 'web/runtime.html'), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
-          const headers = new Map();
-          let onEvent, initialize;
-          const context = {
-            console: { log() {}, error: console.error },
-            window: { addEventListener(name, handler) { if (name === 'papertodo') initialize = handler; } },
-            papertodo: {
-              onEvent(handler) { onEvent = handler; },
-              papers: {
-                async setHeaderText(id, text) { headers.set(id, text); },
-                async setCapsulePresentation() {}
-              },
-              globalTopBar: { async setActions() {} },
-              workspace: { async request() { return {}; } }
-            }
-          };
-          vm.runInNewContext(script, context, { filename: 'TopBarWeb/runtime.html' });
-          (async () => {
-            initialize({ detail: { type: 'initialize', papers: [{ paperId: 'p1' }] } });
-            await onEvent({ type: 'shortcutInvoked', settingId: 'runtimePingAction', actionId: 'runtime.ping' });
-            assert.equal(headers.get('p1'), 'Top Bar 2.1 · 1');
-            await onEvent({ type: 'shortcutInvoked', settingId: 'runtimePingShortcut', actionId: 'runtime.ping' });
-            assert.equal(headers.get('p1'), 'Top Bar 2.1 · 2');
-            await onEvent({ type: 'shortcutInvoked', settingId: 'unknown', actionId: 'other.action' });
-            assert.equal(headers.get('p1'), 'Top Bar 2.1 · 2');
-            console.log('Web settings action sample: 7 behavior checks passed.');
-          })().catch(error => { console.error(error); process.exitCode = 1; });
-          ''')
-          replace('.github/workflows/plugin-samples.yml',
-              '      - name: Check Web plugin scripts\n',
-              '      - name: Check Web settings action behavior\n        shell: pwsh\n        run: node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs\n\n      - name: Check Web plugin scripts\n')
-      - name: Build and verify behavior
+          import subprocess, textwrap
+          previous = subprocess.check_output(['git', 'show', '1af992a28395b7f61abcae9d8393ccde3b0fa5e8:.github/workflows/tmp-settings-action-finalize.yml']).decode('utf-8-sig')
+          begin = previous.index('        run: |\n', previous.index('      - name: Apply implementation and review corrections')) + len('        run: |\n')
+          end = previous.index('      - name: Build and verify behavior', begin)
+          exec(compile(textwrap.dedent(previous[begin:end]), '<verified-implementation>', 'exec'))
+          subprocess.run(['git', 'diff', '--check'], check=True)
+      - name: Rebuild Codex plugin output
         shell: pwsh
         run: |
-          dotnet build ./PaperTodo.csproj -c Release
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project ./tests/PaperTodo.ProtocolPolicyChecks/PaperTodo.ProtocolPolicyChecks.csproj -c Release
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project ./tests/PaperTodo.PluginApiChecks/PaperTodo.PluginApiChecks.csproj -c Release
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project ./tests/PaperTodo.CodexCliBridgeChecks/PaperTodo.CodexCliBridgeChecks.csproj -c Release
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Commit verified implementation
+      - name: Commit tested source without changing workflows
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src plugin-samples plugins tests CHANGELOG.md CHANGELOG.zh.md doc/ARCHITECTURE.md .github/workflows/plugin-samples.yml
+          git add src plugin-samples plugins tests CHANGELOG.md CHANGELOG.zh.md doc/ARCHITECTURE.md
           git diff --cached --stat
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git commit -m '插件设置：自定义动作复用 Runtime 并修复启动隐藏 [ci]'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin "HEAD:$env:GITHUB_REF_NAME"
