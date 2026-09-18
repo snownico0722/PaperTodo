@@ -219,7 +219,15 @@ Provider 当前分三类：
 
 transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MCP protocol 不下沉到 `PaperCommandService`；反过来，transport/presentation 层也不建立另一套核心 mutation 实现。
 
-### 5.4 Protocol 2.1 Top Bar
+### 5.4 Plugin Protocol 2.x
+
+当前最新插件协议是 **2.2**，宿主继续加载 **2.1** 插件。2.1 已发布能力保持原语义；2.2 新增的 manifest/API 契约必须由插件显式声明 `apiVersion: "2.2"`。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+
+- 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
+- 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update/control` 权限。
+- 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
+
+#### Protocol 2.1 Top Bar
 
 Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API，而且 **Paper 与 Global 有不同 owner**：
 
@@ -228,8 +236,8 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 当前稳定边界：
 
-- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。其 `presentation: hidden` 仍创建真实 Runtime-owner Paper，但普通启动恢复不创建可见 surface；显式宿主 paper action 仍可随后显示/展开它。
-- 插件 settings 的 `action` 是无持久化值的命令按钮：`paper.*` 复用已有目标选择与 presentation 路径，自定义 ID 复用 provider Runtime 的 GlobalShortcuts handler / Web `shortcutInvoked` 投递，不要求配置热键。可用性由现有实体 Paper / Runtime handler lease 决定，点击时再次核验；不另建 callback、任务或重试协议。隐藏 startupPaper 只在普通启动恢复前归一化，延迟 startupPaper 阶段不再覆盖用户刚刚发出的显示/展开操作。
+- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。Protocol 2.2 的 `presentation: hidden` 仍创建真实 Runtime-owner Paper，但普通启动恢复不创建可见 surface；显式宿主 paper action 仍可随后显示/展开它.
+- Protocol 2.2 插件 settings 的 `action` 是无持久化值的命令按钮：`paper.*` 复用已有目标选择与 presentation 路径，自定义 ID 复用 provider Runtime 的 GlobalShortcuts handler / Web `shortcutInvoked` 投递，不要求配置热键。可用性由现有实体 Paper / Runtime handler lease 决定，点击时再次核验；不另建 callback、任务或重试协议。隐藏 startupPaper 只在普通启动恢复前归一化，延迟 startupPaper 阶段不再覆盖用户刚刚发出的显示/展开操作。
 - 运行中 provider 从 0→1 张实体插件 paper 时启动 Runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
 - `PaperWindow` 始终拥有顶栏 WPF tree、按钮尺寸/位置、主题、Hover、DPI、字体缩放和 responsive layout；插件只提交 action descriptor。
 - 图标只接受短字符或受限 SVG/WPF Path Data；Path 可以按宿主前景色 Fill 或 Stroke，不接受完整 SVG document、WebView 或任意 WPF tree。
