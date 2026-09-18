@@ -1,0 +1,25 @@
+name: Temporary Settings API workbench
+on:
+  push:
+    branches: [feat/codex-skills-mcp-20260918]
+    paths: [.github/workflows/tmp-settings-api-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Export exact review refs
+        shell: bash
+        run: |
+          mkdir -p /tmp/settings-api-source
+          git bundle create /tmp/settings-api-source/papertodo.bundle HEAD refs/remotes/origin/main
+          git rev-parse HEAD refs/remotes/origin/main > /tmp/settings-api-source/refs.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: settings-api-source
+          path: /tmp/settings-api-source/
+          retention-days: 1
