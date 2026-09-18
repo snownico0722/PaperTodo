@@ -284,6 +284,9 @@ internal static class Program
             settingType.GetProperty("Category")?.PropertyType == typeof(string),
             "Advanced plugin settings must expose an optional category name.");
         Assert(
+            settingType.GetProperty("Action")?.PropertyType == typeof(string),
+            "Plugin settings must expose host-owned paper action metadata for action buttons.");
+        Assert(
             categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
             categoryType.GetProperty("Column")?.PropertyType == typeof(string),
             "Setting categories must carry their display name and optional column placement.");
@@ -312,6 +315,69 @@ internal static class Program
         catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
         {
         }
+
+        var validateSettings = registryType.GetMethod(
+            "ValidateSettings",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ValidateSettings was not found.");
+        var settingsProperty = manifestType.GetProperty("Settings")
+            ?? throw new InvalidOperationException("Manifest Settings property was not found.");
+
+        var actionManifest = Activator.CreateInstance(manifestType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create action manifest.");
+        var actionSetting = Activator.CreateInstance(settingType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create action setting.");
+        settingType.GetProperty("Id")!.SetValue(actionSetting, "editPrompt");
+        settingType.GetProperty("Type")!.SetValue(actionSetting, "action");
+        settingType.GetProperty("Name")!.SetValue(actionSetting, "Edit prompt");
+        settingType.GetProperty("Action")!.SetValue(actionSetting, "paper.expand");
+        var actionSettings = Array.CreateInstance(settingType, 1);
+        actionSettings.SetValue(actionSetting, 0);
+        settingsProperty.SetValue(actionManifest, actionSettings);
+        validateSettings.Invoke(null, [actionManifest]);
+        Assert(
+            string.Equals(
+                settingType.GetProperty("Action")!.GetValue(actionSetting)?.ToString(),
+                "paper.expand",
+                StringComparison.Ordinal),
+            "A host-owned paper.expand action setting must validate without becoming stored settings data.");
+
+        var startupProperty = manifestType.GetProperty("StartupPaper")
+            ?? throw new InvalidOperationException("Manifest StartupPaper property was not found.");
+        var startupType = startupProperty.PropertyType;
+        var validateStartup = registryType.GetMethod(
+            "ValidateStartupPaper",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ValidateStartupPaper was not found.");
+        var hiddenManifest = Activator.CreateInstance(manifestType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create hidden startup manifest.");
+        var enabledSetting = Activator.CreateInstance(settingType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create startup enable setting.");
+        settingType.GetProperty("Id")!.SetValue(enabledSetting, "autoStart");
+        settingType.GetProperty("Type")!.SetValue(enabledSetting, "boolean");
+        settingType.GetProperty("Name")!.SetValue(enabledSetting, "Enable on startup");
+        var hiddenSettings = Array.CreateInstance(settingType, 1);
+        hiddenSettings.SetValue(enabledSetting, 0);
+        settingsProperty.SetValue(hiddenManifest, hiddenSettings);
+        var startup = Activator.CreateInstance(startupType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create startup paper manifest.");
+        startupType.GetProperty("EnabledSetting")!.SetValue(startup, "autoStart");
+        startupType.GetProperty("InstanceKey")!.SetValue(startup, "main");
+        startupType.GetProperty("Presentation")!.SetValue(startup, "hidden");
+        startupProperty.SetValue(hiddenManifest, startup);
+        validateStartup.Invoke(null, [hiddenManifest]);
+        Assert(
+            string.Equals(
+                startupType.GetProperty("Presentation")!.GetValue(startup)?.ToString(),
+                "hidden",
+                StringComparison.Ordinal),
+            "startupPaper.presentation=hidden must be a valid Runtime-owning hidden startup mode.");
+
+        var controller = RequireType(host, "PaperTodo.AppController");
+        Assert(
+            controller.GetMethod("BuildPluginActionSetting", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
+            controller.GetMethod("ApplyHiddenPluginStartupPaperVisibility", BindingFlags.Instance | BindingFlags.NonPublic) != null,
+            "Host UI/startup must expose the action-button and hidden-startup execution paths.");
     }
 
     private static void CheckProtocolBoundaries(Assembly host)
