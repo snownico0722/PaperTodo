@@ -115,10 +115,12 @@ Check(!CodexPromptState.BuiltInDefaultPromptZh.Contains(CodexPromptState.SkillNa
       !CodexPromptState.BuiltInDefaultPromptEn.Contains(CodexPromptState.SkillName),
     "The editable built-in prompt must not embed a plugin skill.");
 Check(CodexPromptState.BuiltInDefaultPromptZh.Contains("Note") &&
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("启用待办关联纸片") &&
       CodexPromptState.BuiltInDefaultPromptZh.Contains("完整写入") &&
       CodexPromptState.BuiltInDefaultPromptZh.Contains("避免过度冗长"),
     "Chinese built-in prompt must keep todos concise, allow linked notes, and avoid verbose notes.");
 Check(CodexPromptState.BuiltInDefaultPromptEn.Contains("link that Note to the todo") &&
+      CodexPromptState.BuiltInDefaultPromptEn.Contains("Enable todo-paper links") &&
       CodexPromptState.BuiltInDefaultPromptEn.Contains("full writes") &&
       CodexPromptState.BuiltInDefaultPromptEn.Contains("avoid unnecessary verbosity"),
     "English built-in prompt must carry the same todo/note length guidance.");
