@@ -256,3 +256,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Committed native plugin outputs do not match their source projects."
           }
+
+      - name: Export rebuilt Codex DLL
+        if: always()
+        shell: pwsh
+        run: |
+          $path = "plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll"
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Rebuilt Codex DLL was not produced."
+          }
+          $base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
+          Write-Host "CODEX_DLL_BASE64_BEGIN"
+          Write-Host $base64
+          Write-Host "CODEX_DLL_BASE64_END"
