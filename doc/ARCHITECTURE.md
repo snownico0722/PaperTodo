@@ -226,7 +226,8 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 当前稳定边界：
 
-- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。
+- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。其 `presentation: hidden` 仍创建真实 Runtime-owner Paper，但普通启动恢复不创建可见 surface；显式宿主 paper action 仍可随后显示/展开它。
+- 插件 settings 的 `action` 类型只声明宿主持有的 `paper.*` presentation 命令；点击由宿主选择该 provider 的目标 Paper 并进入既有 show/hide/expand/collapse/activate 路径，不写入插件 settings JSON，也不建立插件侧第二套窗口控制。
 - 运行中 provider 从 0→1 张实体插件 paper 时启动 Runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
 - `PaperWindow` 始终拥有顶栏 WPF tree、按钮尺寸/位置、主题、Hover、DPI、字体缩放和 responsive layout；插件只提交 action descriptor。
 - 图标只接受短字符或受限 SVG/WPF Path Data；Path 可以按宿主前景色 Fill 或 Stroke，不接受完整 SVG document、WebView 或任意 WPF tree。
