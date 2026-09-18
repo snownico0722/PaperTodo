@@ -63,6 +63,9 @@ public sealed partial class PaperWindow
         bool reserveWhileExpanded)
     {
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        var markOpenedFromEdge = EdgeCapsuleOpenOriginPolicy.ShouldMarkOpenedFromEdge(
+            EdgeCapsuleSlot,
+            paperForm);
         if (paperForm == EdgeCapsulePaperForm.Expanded && !reserveWhileExpanded)
         {
             CloseDeepCapsuleSlotContextMenu();
@@ -70,6 +73,10 @@ public sealed partial class PaperWindow
 
         var accepted = DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PaperFormChanged(paperForm, reserveWhileExpanded));
+        if (accepted && markOpenedFromEdge)
+        {
+            MarkEdgeCapsuleOpenedFromEdge();
+        }
         if (accepted) RequestMarkdownPreviewLayoutPreload();
         return accepted;
     }

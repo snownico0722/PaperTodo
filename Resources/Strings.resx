@@ -1434,4 +1434,6 @@
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
   </data>
+  <data name="LabsMcpSettingsControl" xml:space="preserve"><value>允许控制敏感软件设置</value></data>
+  <data name="TipLabsMcpSettingsControl" xml:space="preserve"><value>允许通过 MCP 修改权限、开机启动、匿名统计等敏感设置；仍需完整写入权限。此权限关闭时 MCP 不能自行开启它。</value></data>
 </root>

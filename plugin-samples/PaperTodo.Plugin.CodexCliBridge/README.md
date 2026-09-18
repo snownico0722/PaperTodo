@@ -28,7 +28,7 @@ Skill 安装在 `skills/papertodo-plugin-creator/SKILL.md`，包含 Web / Native
 
 “开启插件技能”只在发送时追加插件开发 Skill 的用途与绝对路径；“开启本软件操作技能”只追加一段简短的 MCP 操作指引。两者互相独立，也独立于用户可编辑的默认提示词，前台与后台共用同一逻辑；技能正文不会写回提示词编辑框。操作指引与软件设置中的“复制 AI Skill”共用 `src/PaperTodoOperationSkill.cs`，中文界面使用中文，其他语言回退英文。
 
-“允许本插件开启 MCP”允许 Codex 在任务需要 PaperTodo MCP、而 MCP 或所需权限尚未开启时，运行本次上下文提供的 `PaperTodo.exe --enable-mcp-for-codex` 命令。该命令通过已有单实例通道交给正在运行的宿主；宿主重新检查插件仍有纸片、Runtime 正常、当前 `allowMcp` 设置和设置读取状态后，一次性开启 MCP 总开关以及“新增/空白写入”“完整写入”“直接删除”全部 MCP 权限。没有主实例时不启动 GUI；取消勾选后不再允许后续自动开启，但不会自动撤销已经开启的 MCP 权限。
+“允许本插件开启 MCP”允许 Codex 在任务需要 PaperTodo MCP、而 MCP 或所需权限尚未开启时，运行本次上下文提供的 `PaperTodo.exe --enable-mcp-for-codex` 命令。该命令通过已有单实例通道交给正在运行的宿主；宿主重新检查插件仍有纸片、Runtime 正常、当前 `allowMcp` 设置和设置读取状态后，一次性开启 MCP 总开关以及“新增/空白写入”“完整写入”“直接删除”以及“敏感软件设置控制”全部 MCP 权限。没有主实例时不启动 GUI；取消勾选后不再允许后续自动开启，但不会自动撤销已经开启的 MCP 权限。
 
 启用操作技能或允许按需开启 MCP 时，插件用本次 `codex exec -c` 参数注册 `papertodo_bridge` stdio 服务，指向正在运行的 PaperTodo 可执行文件；不改写用户全局 Codex 配置、登录信息或其他 MCP 服务。启动 bridge 本身不会打开 GUI 的 MCP 总开关。写入仍通过现有 MCP / `PaperCommandService` 完成。
 
@@ -63,7 +63,7 @@ Skill 安装在 `skills/papertodo-plugin-creator/SKILL.md`，包含 Web / Native
 
 - **开启插件技能**：运行时注入 `papertodo-plugin-creator` 的指引。
 - **开启本软件操作技能**：运行时注入纸片、待办、笔记的 MCP 操作指引。
-- **允许本插件开启 MCP**：任务需要 MCP 时，允许自动开启 MCP 总开关及新增/空白写入、完整写入、直接删除等全部 MCP 权限。
+- **允许本插件开启 MCP**：任务需要 MCP 时，允许自动开启 MCP 总开关及新增/空白写入、完整写入、直接删除、敏感软件设置控制等全部 MCP 权限。
 
 ## AGENTS.md 优先级
 

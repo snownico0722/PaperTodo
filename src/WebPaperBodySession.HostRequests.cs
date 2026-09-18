@@ -10,6 +10,8 @@ internal static class WebPluginWorkspaceRequests
         string method,
         JsonElement parameters) => method switch
     {
+        "appSettings.list" or "appSettings.get" or "appSettings.set" =>
+            WebPluginSettingsRequests.Execute(host, method, parameters),
         "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
         "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
         "todos.list" => host.ListTodos(

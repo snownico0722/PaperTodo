@@ -340,6 +340,9 @@ public sealed class PaperBodyContext
     public required PaperBodySurfaceContext Body { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
     public required IPaperPluginRuntimeClient Runtime { get; init; }
+    public IPaperSettingsApi SettingsApi => Workspace as IPaperSettingsApi
+        ?? throw new InvalidOperationException("This host does not expose application settings.");
+
     public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
         ?? throw new InvalidOperationException("This host does not expose note image reads.");
     public IPaperPluginPopups Popups => Workspace as IPaperPluginPopups

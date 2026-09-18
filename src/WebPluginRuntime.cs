@@ -292,6 +292,11 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 clearAll() { return request('paperActions.clearAll'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return workspace.request('appSettings.list', {category}); },
+                    get(id) { return workspace.request('appSettings.get', {id}); },
+                    set(id, value) { return workspace.request('appSettings.set', {id, value}); }
+                }),
                 paperActions,
                 noteAssets,
                 popups,

@@ -4,6 +4,8 @@ internal static partial class Program
 {
     static Program()
     {
+        EdgeOpenOriginPolicyChecks();
+
         const string title = "📌本周计划表";
         Check(title.Length > 6,
             "Unicode title fixture must exceed six UTF-16 code units");

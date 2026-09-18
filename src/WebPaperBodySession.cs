@@ -305,6 +305,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 close() { return request('popups.close'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                 noteAssets,
                 popups,
                 surface: 'body',

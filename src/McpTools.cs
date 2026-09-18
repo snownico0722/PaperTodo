@@ -15,6 +15,29 @@ internal sealed class McpTools
         _client = client;
     }
 
+
+    [McpServerTool(Name = "list_settings", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("List public PaperTodo application settings, stable IDs, current values, types, constraints and this caller's writability. Plugin-private settings and internal state are not included.")]
+    public Task<JsonElement> ListSettings(
+        [Description("Optional category from a previous listing.")] string? category = null,
+        CancellationToken cancellationToken = default)
+        => _client.InvokeAsync("list_settings", new { category }, cancellationToken);
+
+    [McpServerTool(Name = "get_setting", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Read one public application setting and its schema. Before creating a Note to link from a todo, check todo.paper_links; do not create an orphan Note when linking is disabled.")]
+    public Task<JsonElement> GetSetting(
+        [Description("Exact public setting ID returned by list_settings.")] string id,
+        CancellationToken cancellationToken = default)
+        => _client.InvokeAsync("get_setting", new { id }, cancellationToken);
+
+    [McpServerTool(Name = "set_setting", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Set one public application setting to a specific value, not a toggle. Requires full writes; sensitive settings additionally need settings-control permission already enabled by the user. Change settings only when the user's request authorizes it; a language change requires restart but does not restart the app.")]
+    public Task<JsonElement> SetSetting(
+        [Description("Exact public setting ID returned by list_settings.")] string id,
+        [Description("JSON value matching the type/constraints returned by get_setting.")] JsonElement value,
+        CancellationToken cancellationToken = default)
+        => _client.InvokeAsync("set_setting", new { id, value }, cancellationToken);
+
     [McpServerTool(
         Name = "list_papers",
         ReadOnly = true,
@@ -103,10 +126,11 @@ internal sealed class McpTools
         [Description("Replacement text. Omit to keep text unchanged.")] string? text = null,
         [Description("Replacement completion state. Omit to keep it unchanged.")] bool? done = null,
         [Description("Paper ID to link from this todo, such as a Note containing longer details. Omit to keep the current link unchanged. Requires PaperTodo full writes.")] string? linked_paper_id = null,
+        [Description("Set true to unlink the todo's linked Paper without deleting the Note. Mutually exclusive with linked_paper_id. Requires full writes.")] bool clear_linked_paper = false,
         CancellationToken cancellationToken = default)
         => _client.InvokeAsync(
             "update_todo",
-            OptionalUpdateParameters(paper_id, todo_id, text, done, linked_paper_id),
+            OptionalUpdateParameters(paper_id, todo_id, text, done, linked_paper_id, clear_linked_paper),
             cancellationToken);
 
     [McpServerTool(
@@ -178,8 +202,11 @@ internal sealed class McpTools
         string todoId,
         string? text,
         bool? done,
-        string? linkedPaperId)
+        string? linkedPaperId,
+        bool clearLinkedPaper = false)
     {
+        if (clearLinkedPaper && linkedPaperId != null)
+            throw new ModelContextProtocol.McpException("linked_paper_id and clear_linked_paper cannot be used together.");
         var parameters = new Dictionary<string, object?>
         {
             ["paper_id"] = paperId,
@@ -193,8 +220,9 @@ internal sealed class McpTools
         {
             parameters["done"] = done.Value;
         }
-        if (linkedPaperId != null)
+        if (linkedPaperId != null || clearLinkedPaper)
         {
+            // Preserve an explicit null at the internal JSON boundary; omitted still means no change.
             parameters["linked_paper_id"] = linkedPaperId;
         }
         return parameters;

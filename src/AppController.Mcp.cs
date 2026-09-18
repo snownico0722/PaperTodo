@@ -13,13 +13,20 @@ public sealed partial class AppController
 
     private void RefreshMcpRuntime()
     {
-        if (IsExiting || !State.McpEnabled)
+        if (IsExiting)
         {
             DisposeMcpRuntime();
             return;
         }
+        if (!State.McpEnabled)
+        {
+            // set_setting(mcp.enabled, false) must finish its response before closing its pipe.
+            _mcpApiHost?.StopAfterResponse();
+            return;
+        }
 
         _mcpCommands ??= new McpCommandService(this, PaperCommands);
+        if (_mcpApiHost?.IsStopping == true) _mcpApiHost = null;
         _mcpApiHost ??= new McpApiHost(
             Application.Current.Dispatcher,
             _mcpCommands);
@@ -58,7 +65,8 @@ public sealed partial class AppController
                 State.McpEnabled,
                 State.McpAllowBlankWrites,
                 State.McpAllowFullWrites,
-                State.McpAllowDeletes);
+                State.McpAllowDeletes,
+                State.McpAllowSettingsControl);
             var target = CodexMcpPermission.FullAccess;
             if (previous == target) return true;
 
@@ -66,6 +74,7 @@ public sealed partial class AppController
             State.McpAllowBlankWrites = target.BlankWrites;
             State.McpAllowFullWrites = target.FullWrites;
             State.McpAllowDeletes = target.Deletes;
+            State.McpAllowSettingsControl = target.SettingsControl;
             MarkDirty();
             if (!TrySaveNow(sync: true))
             {
@@ -73,6 +82,7 @@ public sealed partial class AppController
                 State.McpAllowBlankWrites = previous.BlankWrites;
                 State.McpAllowFullWrites = previous.FullWrites;
                 State.McpAllowDeletes = previous.Deletes;
+                State.McpAllowSettingsControl = previous.SettingsControl;
                 return false;
             }
 
@@ -97,6 +107,13 @@ public sealed partial class AppController
     private void ToggleMcpFullWrites()
     {
         State.McpAllowFullWrites = !State.McpAllowFullWrites;
+        SaveNow();
+        RefreshSettingsRegions("labs.mcp");
+    }
+
+    private void ToggleMcpSettingsControl()
+    {
+        State.McpAllowSettingsControl = !State.McpAllowSettingsControl;
         SaveNow();
         RefreshSettingsRegions("labs.mcp");
     }

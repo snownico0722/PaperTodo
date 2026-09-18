@@ -6,7 +6,8 @@ internal readonly record struct CodexMcpAccess(
     bool Enabled,
     bool BlankWrites,
     bool FullWrites,
-    bool Deletes);
+    bool Deletes,
+    bool SettingsControl);
 
 internal static class CodexMcpPermission
 {
@@ -16,7 +17,8 @@ internal static class CodexMcpPermission
         Enabled: true,
         BlankWrites: true,
         FullWrites: true,
-        Deletes: true);
+        Deletes: true,
+        SettingsControl: true);
 
     // Settings are resolved by the host DataStore, including manifest defaults. Missing
     // settings (old plugin), invalid JSON and failed/inactive runtimes cannot grant access.

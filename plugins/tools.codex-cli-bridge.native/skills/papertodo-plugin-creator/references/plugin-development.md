@@ -494,6 +494,38 @@ Runtime does not borrow the paper-session settings lifecycle. Native code may re
 
 The plugin owns `.runtime/` format versioning, atomic writes, corruption recovery, and capacity control. Do not write ordinary single-Paper UI/business state to both `.runtime/` and `plugins/data/`, or you will create two authoritative copies of the same state.
 
+### 5.5 Public application Settings API
+
+This optional capability controls **PaperTodo's user preferences**, not a provider's own `context.Settings`, `SettingsJson`, state, or `.runtime/`. Native Body and provider Runtime expose `context.SettingsApi` (`IPaperSettingsApi`); Web Body, Mini, and Runtime expose `papertodo.settingsApi`. No new required method is added to `IPaperTodoHostApi`.
+
+Declare `settings.read` for List/Get and `settings.update` for Set. Sensitive settings additionally require `settings.control`. Sensitive entries include MCP authorization, Windows startup, anonymous usage reporting, linked-script execution, and persistent script processes. Permissions are checked before mutation; access to ordinary settings cannot grant control of sensitive ones.
+
+```csharp
+var links = context.SettingsApi.Get("todo.paper_links");
+var todoSettings = context.SettingsApi.List("todo");
+// Only in response to a requested settings change:
+context.SettingsApi.Set("todo.paper_links", true);
+```
+
+```javascript
+const links = await papertodo.settingsApi.get('todo.paper_links');
+const catalog = await papertodo.settingsApi.list('todo');
+await papertodo.settingsApi.set('todo.paper_links', true);
+```
+
+MCP provides `list_settings(category?)`, `get_setting(id)`, and `set_setting(id, value)`. List/Get require MCP enabled; Set requires full writes, and sensitive entries also require the independently enabled **sensitive application-settings control** checkbox. That checkbox cannot authorize its own first activation. Codex's separately authorized automatic-MCP activation can enable all MCP permissions, including this one. Disabling `mcp.enabled` completes the current response before its transport stops.
+
+List returns an array. Each entry has a stable `id`, `category`, localized `title`, `type`, current `value`, caller-specific `writable`, `sensitive`, `requires_restart`, and optional `unavailable_reason`, `min`, `max`, `step`, `max_length`, and `options`. Set returns `setting`, `previous_value`, and `changed`; assigning the current value is a no-op. Query the catalog instead of guessing CLR property names.
+
+The catalog includes general/language/startup, privacy, appearance/fonts/background preferences, Note/Todo/title/capsule options, edge browsing, reminders, window/focus/interaction options, scripts, MCP, and global shortcuts. Values are saved preferences: dependent settings may remain selected but have no effect until their parent feature is enabled. Shortcuts expose `.gesture` and `.enabled`; each edge sequence uses a modifier chord plus 1 and applies that prefix to keys 1–9. Active shortcut-editor drafts/recording and registration conflicts are reported instead of silently overriding them. Language reports `requires_restart: true` and does not force a restart.
+
+Settings are an explicit typed catalog. Per-paper geometry/content, live queue state, migration fields, plugin-private settings, file contents and one-shot UI commands such as import/export/reset are **not** setting values. These retain their existing APIs/owners; no raw `AppState` reflection endpoint is exposed. Future public settings must be explicitly registered with validation and effects.
+
+All three adapters share one service. Core preferences synchronously save through `StateStore`, restore their previous values and coupled state on save failure, then refresh relevant UI/runtime paths. Startup registration and background preferences retain their existing independent persistence owners. Errors include `setting_not_found`, `invalid_setting_value`, `setting_dependency`, `settings_busy`, `setting_read_only`, `shortcut_conflict`, and `save_failed`. A committed setting is not reported as failed merely because a later UI refresh failed.
+
+Todo linking remains available through the existing Workspace update request (`UpdateLinkedPaper=true`, `LinkedPaperId=null` unlinks). MCP adds `update_todo(clear_linked_paper=true)` for unambiguous unlinking; it conflicts with a non-null `linked_paper_id`. Omitting both leaves the link unchanged. Before creating a long-detail Note for a Todo, query `todo.paper_links`; when disabled or unknown, skip that approach unless the user explicitly requests a settings change.
+
+
 ## 6. Workspace Permissions and Data API
 
 A manifest may declare:

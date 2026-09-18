@@ -8,6 +8,10 @@ namespace PaperTodo;
 
 internal sealed class McpPipeClient
 {
+    private readonly string _pipeName;
+    public McpPipeClient() : this(McpApiHost.PipeName) { }
+    internal McpPipeClient(string pipeName) => _pipeName = pipeName;
+
     private const int ConnectTimeoutMilliseconds = 2500;
     private const int ResponseTimeoutMilliseconds = 10_000;
     private static readonly JsonSerializerOptions JsonOptions =
@@ -20,7 +24,7 @@ internal sealed class McpPipeClient
     {
         await using var pipe = new NamedPipeClientStream(
             ".",
-            McpApiHost.PipeName,
+            _pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 

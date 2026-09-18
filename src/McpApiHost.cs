@@ -17,7 +17,9 @@ internal sealed class McpApiHost : IDisposable
         TimeSpan.FromSeconds(10);
 
     private readonly Dispatcher _dispatcher;
-    private readonly McpCommandService _commands;
+    private readonly Func<JsonElement, object?> _execute;
+    private readonly string _pipeName;
+    private readonly CancellationTokenSource _acceptCts = new();
     private readonly CancellationTokenSource _cts = new();
     private Task? _listenerTask;
     private bool _disposed;
@@ -25,9 +27,15 @@ internal sealed class McpApiHost : IDisposable
     public McpApiHost(
         Dispatcher dispatcher,
         McpCommandService commands)
+        : this(dispatcher, commands.Execute, PipeName)
+    {
+    }
+
+    internal McpApiHost(Dispatcher dispatcher, Func<JsonElement, object?> execute, string pipeName)
     {
         _dispatcher = dispatcher;
-        _commands = commands;
+        _execute = execute;
+        _pipeName = pipeName;
     }
 
     public void Start()
@@ -38,21 +46,21 @@ internal sealed class McpApiHost : IDisposable
 
     private async Task ListenAsync(CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        while (!token.IsCancellationRequested && !_acceptCts.IsCancellationRequested)
         {
             try
             {
                 await using var server = new NamedPipeServerStream(
-                    PipeName,
+                    _pipeName,
                     PipeDirection.InOut,
                     1,
                     PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
-                await server.WaitForConnectionAsync(token);
+                await server.WaitForConnectionAsync(_acceptCts.Token);
                 await ProcessConnectionAsync(server, token);
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            catch (OperationCanceledException) when (token.IsCancellationRequested || _acceptCts.IsCancellationRequested)
             {
                 break;
             }
@@ -196,7 +204,7 @@ internal sealed class McpApiHost : IDisposable
             }
 
             var operation = _dispatcher.InvokeAsync(
-                () => _commands.Execute(request),
+                () => _execute(request),
                 DispatcherPriority.Normal,
                 token);
             var result = await operation.Task;
@@ -232,32 +240,43 @@ internal sealed class McpApiHost : IDisposable
         string message)
         => new { id, ok = false, error = new { code, message } };
 
-    public void Dispose()
+    // Stop accepting new requests but let the one already executing report its committed result.
+    // The existing read/write deadlines still bound a stalled client; app exit uses forceful Dispose.
+    internal bool IsStopping => _disposed;
+
+    internal void StopAfterResponse() => Stop(cancelResponse: false);
+
+    public void Dispose() => Stop(cancelResponse: true);
+
+    private void Stop(bool cancelResponse)
     {
         if (_disposed)
         {
+            if (cancelResponse)
+            {
+                try { _cts.Cancel(); }
+                catch (ObjectDisposedException) { } // graceful completion already released it
+            }
             return;
         }
-
         _disposed = true;
-        _cts.Cancel();
+        _acceptCts.Cancel();
+        if (cancelResponse) _cts.Cancel();
         var listener = _listenerTask;
         if (listener == null)
         {
+            _acceptCts.Dispose();
             _cts.Dispose();
             return;
         }
-
-        _ = listener.ContinueWith(
-            completed =>
-            {
-                _ = completed.Exception;
-                _cts.Dispose();
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        _ = listener.ContinueWith(completed =>
+        {
+            _ = completed.Exception;
+            _acceptCts.Dispose();
+            _cts.Dispose();
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
+
 }
 
 internal sealed class McpApiException : Exception

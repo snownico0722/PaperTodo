@@ -494,6 +494,38 @@ Runtime 不借用 paper-session settings 生命周期：Native 随时读取 `Pap
 
 插件自己负责 `.runtime/` 的格式版本、原子写入、损坏恢复和容量控制。普通单纸片 UI/业务状态不要同时写进 `.runtime/` 和 `plugins/data/`，否则会产生两份 authoritative state。
 
+### 5.5 公共软件 Settings API
+
+这是操作 **PaperTodo 面向用户的设置** 的可选能力，不是插件私有的 `context.Settings`、`SettingsJson`、State 或 `.runtime/`。Native Body / provider Runtime 使用 `context.SettingsApi`（`IPaperSettingsApi`）；Web Body / Mini / Runtime 使用 `papertodo.settingsApi`。没有向 `IPaperTodoHostApi` 增加必需方法。
+
+List/Get 需要声明 `settings.read`，Set 需要 `settings.update`；敏感设置额外需要 `settings.control`。MCP 授权、Windows 开机启动、匿名使用统计、点击执行关联脚本、常驻脚本进程属于敏感项。先校验调用方权限再修改；普通设置写权限不能给自己增加敏感控制权限。
+
+```csharp
+var links = context.SettingsApi.Get("todo.paper_links");
+var todoSettings = context.SettingsApi.List("todo");
+// 仅在任务明确要求修改设置时：
+context.SettingsApi.Set("todo.paper_links", true);
+```
+
+```javascript
+const links = await papertodo.settingsApi.get('todo.paper_links');
+const catalog = await papertodo.settingsApi.list('todo');
+await papertodo.settingsApi.set('todo.paper_links', true);
+```
+
+MCP 提供 `list_settings(category?)`、`get_setting(id)`、`set_setting(id, value)`。查询需要 MCP 总开关；修改需要完整写入，敏感项还需要事先开启“允许控制敏感软件设置”，不能靠该请求自己开启自己。另行获准的 Codex 自动开启路径可以开启全部 MCP 权限，包含此权限。关闭 `mcp.enabled` 时先返回本次结果，再停止传输。
+
+List 返回数组。每项包含稳定的 `id`、`category`、本地化 `title`、`type`、当前 `value`、针对调用方权限的 `writable`、`sensitive`、`requires_restart`，以及适用时的 `unavailable_reason`、`min`、`max`、`step`、`max_length`、`options`。Set 返回 `setting`、`previous_value`、`changed`；设置为当前值不会重复保存或刷新。应先查询目录，不能猜内部字段名。
+
+目录覆盖一般/语言/开机启动、隐私、外观/字体/背景偏好、笔记/待办/标题/胶囊、边缘浏览、提醒、窗口/专注/交互、脚本、MCP 和全局快捷键。返回的是保存的偏好：从属选项可能保持勾选，但要等主功能开启才生效。快捷键分别提供 `.gesture`、`.enabled`；每侧胶囊序列用“修饰键组合＋1”配置，同步应用到 1～9。快捷键录制/未提交草稿以及系统注册冲突会明确报错，不静默覆盖。语言标记 `requires_restart: true`，接口不强制退出重启。
+
+目录是显式注册的类型化设置集合。纸片正文/几何、实时队列状态、迁移字段、插件私有设置、文件内容及导入/导出/重置等一次性命令不是设置值，继续由原 API/owner 管理；不提供反射读写 `AppState` 的通道。新增公开设置须明确登记校验与生效处理。
+
+三种入口共用一个服务。核心设置同步通过 `StateStore` 保存，保存失败恢复原值及联动状态；提交成功后再刷新对应界面/Runtime。Windows 启动项、背景偏好沿用各自的持久化 owner。错误包括 `setting_not_found`、`invalid_setting_value`、`setting_dependency`、`settings_busy`、`setting_read_only`、`shortcut_conflict`、`save_failed`。已提交的数据不会因后续界面刷新异常被误报为写入失败。
+
+待办关联沿用 Workspace 更新请求：`UpdateLinkedPaper=true`、`LinkedPaperId=null` 表示解绑。MCP 增加 `update_todo(clear_linked_paper=true)`，与非空 `linked_paper_id` 互斥；两者都省略表示不改关联。准备为长待办创建详细 Note 前，应先查询 `todo.paper_links`；关闭或未知时跳过该方案，除非用户明确要求先改设置。
+
+
 ## 6. Workspace 权限与数据 API
 
 manifest 可声明：

@@ -41,6 +41,9 @@ internal sealed class McpCommandService
         {
             return method switch
             {
+                "list_settings" => ListSettings(parameters),
+                "get_setting" => GetSetting(parameters),
+                "set_setting" => SetSetting(parameters),
                 "list_papers" => ListPapers(parameters),
                 "get_paper" => GetPaper(parameters),
                 "create_todo_paper" => CreateTodoPaper(parameters),
@@ -56,10 +59,41 @@ internal sealed class McpCommandService
                     $"Unknown PaperTodo method: {method}")
             };
         }
+        catch (PaperSettingsException ex)
+        {
+            throw new McpApiException(ex.Code, ex.Message);
+        }
         catch (PaperCommandException ex)
         {
             throw new McpApiException(ex.Code, ex.Message);
         }
+    }
+
+    private PaperSettingSnapshot SettingsAccess(PaperSettingSnapshot setting) =>
+        PaperSettingsService.WithAccess(setting, _controller.State.McpAllowFullWrites,
+            _controller.State.McpAllowSettingsControl);
+
+    private object ListSettings(JsonElement parameters) => new
+    {
+        settings = _controller.PublicSettings.List(OptionalString(parameters, "category", 80))
+            .Select(SettingsAccess).ToArray()
+    };
+
+    private object GetSetting(JsonElement parameters) =>
+        SettingsAccess(_controller.PublicSettings.Get(RequiredString(parameters, "id", 120)));
+
+    private object SetSetting(JsonElement parameters)
+    {
+        RequireFullWrites();
+        var id = RequiredString(parameters, "id", 120);
+        var before = _controller.PublicSettings.Get(id);
+        if (before.Sensitive && !_controller.State.McpAllowSettingsControl)
+            throw new McpApiException("settings_control_disabled",
+                "Sensitive settings require settings-control permission already enabled in PaperTodo.");
+        if (!parameters.TryGetProperty("value", out var value))
+            throw new McpApiException("invalid_params", "value is required.");
+        var result = _controller.PublicSettings.Set(id, value);
+        return result with { Setting = SettingsAccess(result.Setting) };
     }
 
     private object ListPapers(JsonElement parameters)
