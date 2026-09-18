@@ -809,7 +809,7 @@ public sealed partial class AppController
                 owner.Close();
                 _ = Application.Current.Dispatcher.BeginInvoke(
                     (Action)Execute,
-                    DispatcherPriority.Input);
+                    System.Windows.Threading.DispatcherPriority.Input);
                 return;
             }
 
