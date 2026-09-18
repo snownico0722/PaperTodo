@@ -1141,7 +1141,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host accepts only `2.1`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.2`, and new plugins should target `2.2`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
