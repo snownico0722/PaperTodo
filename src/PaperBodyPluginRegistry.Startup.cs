@@ -39,6 +39,11 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "startupPaper.presentation must be 'capsule', 'expanded', or 'hidden'.");
         }
+        if (startup.Presentation == "hidden" && !ApiAtLeast(manifest.ApiVersion, "2.2"))
+        {
+            throw new InvalidDataException(
+                "startupPaper.presentation='hidden' requires apiVersion 2.2 or later.");
+        }
         if (startup.Title.Length > 120)
         {
             throw new InvalidDataException(
