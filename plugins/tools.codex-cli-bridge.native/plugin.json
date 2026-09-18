@@ -86,7 +86,7 @@
       "id": "allowMcp",
       "type": "boolean",
       "name": "Allow this plugin to enable MCP",
-      "description": "Allow on-demand MCP activation when a task needs to write to PaperTodo. Existing write and delete permissions still apply.",
+      "description": "Allow automatic MCP activation when needed, including the master switch and all MCP write/delete permissions.",
       "default": true
     }
   ],
@@ -136,7 +136,7 @@
         },
         "allowMcp": {
           "name": "允许本插件开启 MCP",
-          "description": "需要写入纸片时，允许按需打开 MCP；仍遵循已有写入和删除权限。"
+          "description": "任务需要 MCP 时，允许自动开启 MCP 总开关及全部写入、删除权限。"
         }
       },
       "startupPaper": {
@@ -155,7 +155,7 @@
         },
         "allowMcp": {
           "name": "このプラグインによる MCP の有効化を許可",
-          "description": "書き込みが必要なときに MCP を有効化できます。既存の書き込み・削除権限は維持されます。"
+          "description": "必要なときに MCP のメインスイッチとすべての書き込み・削除権限を自動的に有効化できます。"
         }
       }
     },
@@ -171,7 +171,7 @@
         },
         "allowMcp": {
           "name": "이 플러그인의 MCP 활성화 허용",
-          "description": "쓰기 작업에 필요할 때 MCP를 켤 수 있습니다. 기존 쓰기 및 삭제 권한은 유지됩니다."
+          "description": "필요할 때 MCP 기본 스위치와 모든 쓰기·삭제 권한을 자동으로 켤 수 있습니다."
         }
       }
     }
