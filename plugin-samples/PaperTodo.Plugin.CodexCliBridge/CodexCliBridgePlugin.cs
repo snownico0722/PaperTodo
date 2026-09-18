@@ -62,8 +62,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 Padding = new Thickness(10),
                 BorderThickness = new Thickness(1),
                 ToolTip = T(
-                    "默认传入提示词。留空则只发送待办/纸片本身。",
-                    "Default prompt sent to Codex. Leave it empty to send only the todo or paper content.")
+                    "默认传入提示词。留空不添加默认提示词；技能仍按插件设置注入。",
+                    "Default prompt sent to Codex. Leave it empty to omit the default prompt; skills still follow the plugin settings.")
             };
             _status = new TextBlock
             {

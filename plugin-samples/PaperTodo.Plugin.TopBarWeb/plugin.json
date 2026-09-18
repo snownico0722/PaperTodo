@@ -30,6 +30,13 @@
       "description": "自定义 action 会投递到 plugin runtime，而不是 body session。",
       "default": "",
       "shortcutAction": "runtime.ping"
+    },
+    {
+      "id": "runtimePingAction",
+      "type": "action",
+      "name": "测试 Runtime 动作",
+      "description": "点击后向 Runtime 发送 runtime.ping，并在纸片标题栏显示计数；不需要配置快捷键。",
+      "action": "runtime.ping"
     }
   ],
   "locales": {
@@ -44,6 +51,10 @@
         "runtimePingShortcut": {
           "name": "Plugin Runtime sample action",
           "description": "Delivers the custom action to the plugin runtime instead of the body session."
+        },
+        "runtimePingAction": {
+          "name": "Test Runtime action",
+          "description": "Send runtime.ping and show the count in the paper header. No shortcut binding is needed."
         }
       }
     },
@@ -58,6 +69,10 @@
         "runtimePingShortcut": {
           "name": "Plugin Runtime サンプル操作",
           "description": "カスタム操作を body session ではなく plugin runtime に送ります。"
+        },
+        "runtimePingAction": {
+          "name": "Runtime 動作をテスト",
+          "description": "runtime.ping を送信して紙のヘッダーに回数を表示します。ショートカット設定は不要です。"
         }
       }
     },
@@ -72,6 +87,10 @@
         "runtimePingShortcut": {
           "name": "Plugin Runtime 예제 동작",
           "description": "사용자 정의 동작을 body session이 아니라 plugin runtime으로 전달합니다."
+        },
+        "runtimePingAction": {
+          "name": "Runtime 동작 테스트",
+          "description": "runtime.ping을 보내고 메모 헤더에 횟수를 표시합니다. 단축키 지정은 필요하지 않습니다."
         }
       }
     }

@@ -450,7 +450,7 @@ Body、Mini 和 Web Runtime 的 `initialize` 都提供各自状态域的 `state`
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`、`action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；当前只接受宿主持有的 `paper.*` 动作。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`、`action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；`paper.*` 由宿主直接执行，自定义动作需要声明 `runtime`，并复用已有 Runtime action handler 投递，无需配置快捷键。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
 
 `shortcut` 的 `shortcutAction`、`action` 按钮、宿主 `paper.*` 动作和自定义 Runtime 快捷键 action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
 

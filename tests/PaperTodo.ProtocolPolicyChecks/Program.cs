@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
     private static int Main()
@@ -20,6 +20,8 @@ internal static class Program
             CheckRuntimeTransitions(host);
             CheckCapabilityNormalization(host);
             CheckSettingsLayoutManifest(host);
+            CheckSettingActionBehavior(host);
+            CheckHiddenStartupVisibility(host);
             CheckProtocolBoundaries(host);
             CheckSharedWebInfrastructure(host);
             CheckWebRuntimeRequestRouting(host);

@@ -89,11 +89,23 @@ internal sealed partial class PaperBodyPluginRegistry
                 throw new InvalidDataException(
                     $"Plugin setting '{setting.Id}' has unsupported type '{setting.Type}'.");
             }
-            if (setting.Type == "action" &&
-                !PluginShortcutActions.TryParsePaperAction(setting.Action, out _))
+            if (setting.Type == "action")
             {
-                throw new InvalidDataException(
-                    $"Plugin action setting '{setting.Id}' must use a host-owned paper.* action.");
+                if (setting.Action.Length == 0)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' has an invalid action.");
+                }
+                if (PluginShortcutActions.IsCustomAction(setting.Action) && !hasPluginRuntime)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' uses a custom action but the plugin does not declare runtime.");
+                }
+                if (setting.Default.ValueKind != JsonValueKind.Undefined)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' is a command and cannot declare a default value.");
+                }
             }
             if (setting.Type == "shortcut" && setting.ShortcutAction.Length == 0)
             {

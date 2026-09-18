@@ -450,7 +450,7 @@ A plugin-data failure does not invalidate PaperTodo's core `data.json`.
 
 ### 5.3 Global settings
 
-The host supports `boolean`, `string`, `number`, `select`, `shortcut`, and `action`. `action` is a host-rendered command button rather than stored settings data; it currently accepts host-owned `paper.*` actions. The remaining setting types continue to use the single settings storage/read-write protocol; the two modes below affect host presentation only.
+The host supports `boolean`, `string`, `number`, `select`, `shortcut`, and `action`. `action` is a host-rendered command button rather than stored settings data. Host-owned `paper.*` actions execute directly; a custom action ID requires `runtime` and is delivered through the existing Runtime action handler, without a shortcut binding. The remaining setting types continue to use the single settings storage/read-write protocol; the two modes below affect host presentation only.
 
 For `shortcut` `shortcutAction`, `action` buttons, host `paper.*` actions, and custom Runtime shortcut-action rules, see [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md).
 

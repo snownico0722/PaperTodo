@@ -9,8 +9,12 @@ public sealed partial class AppController
 {
     private int _pluginStartupPaperGeneration;
 
-    private void ApplyHiddenPluginStartupPaperVisibility()
+    private void ApplyHiddenPluginStartupPaperVisibility(StartupCommandKind visibilityCommand)
     {
+        if (visibilityCommand is StartupCommandKind.Show or StartupCommandKind.Toggle)
+        {
+            return;
+        }
         var changed = false;
         foreach (var descriptor in PaperBodyPlugins.Descriptors)
         {
@@ -147,29 +151,24 @@ public sealed partial class AppController
                 changed = true;
             }
 
-            var hidden = startup.Presentation == "hidden";
-            var collapsed = startup.Presentation == "capsule";
-            var visible = !hidden;
-            if (paper.IsVisible != visible || paper.IsCollapsed != collapsed)
+            if (startup.Presentation == "hidden")
             {
-                paper.IsVisible = visible;
+                // Existing papers were normalized before surface restoration. Do not hide again:
+                // the user may have opened the editor while startup was waiting for shell prewarm.
+                // Newly created papers are already hidden because CreatePaper used show: false.
+                EnablePluginRuntimeReconciliation();
+                continue;
+            }
+
+            var collapsed = startup.Presentation == "capsule";
+            if (!paper.IsVisible || paper.IsCollapsed != collapsed)
+            {
+                paper.IsVisible = true;
                 paper.IsCollapsed = collapsed;
                 changed = true;
             }
-
-            // A hidden startup Paper still owns the provider Runtime; only its surface stays absent.
             EnablePluginRuntimeReconciliation();
-            if (hidden)
-            {
-                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
-                {
-                    HidePaper(paper);
-                }
-            }
-            else
-            {
-                ShowPaper(paper, activate: false);
-            }
+            ShowPaper(paper, activate: false);
         }
 
         if (!changed)

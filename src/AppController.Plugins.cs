@@ -764,57 +764,42 @@ public sealed partial class AppController
         button.HorizontalAlignment = HorizontalAlignment.Right;
         button.Margin = new Thickness(0, 5, 0, 0);
         button.ToolTip = PluginSettingToolTip(setting);
+        var isPaperAction = PluginShortcutActions.TryParsePaperAction(setting.Action, out _);
+        var registration = new PluginShortcutRegistration(
+            PluginShortcutCommandId(descriptor.Id, setting.Id),
+            descriptor.Id,
+            setting.Id,
+            setting.Action);
 
-        void Execute()
-        {
-            if (!PluginShortcutActions.TryParsePaperAction(setting.Action, out var paperAction))
+        // WPF owns availability refresh; no polling timer or retained settings-window subscription.
+        var command = new RoutedCommand();
+        button.CommandBindings.Add(new CommandBinding(command,
+            (_, e) =>
             {
-                return;
-            }
-
-            var paper = ResolvePluginShortcutPaper(descriptor.Id);
-            if (paper == null)
+                e.Handled = true;
+                var owner = Window.GetWindow(button);
+                if (isPaperAction && owner != null && ReferenceEquals(owner.Owner, _settingsWindow))
+                {
+                    owner.Close();
+                    // Closing the modal page must re-enable paper windows before activation.
+                    _ = Application.Current.Dispatcher.BeginInvoke(
+                        (Action)(() => ExecutePluginShortcut(registration)),
+                        System.Windows.Threading.DispatcherPriority.Input);
+                }
+                else
+                {
+                    // Custom actions run in the provider Runtime, without closing its settings page.
+                    ExecutePluginShortcut(registration);
+                }
+            },
+            (_, e) =>
             {
-                return;
-            }
-
-            switch (paperAction)
-            {
-                case PluginShortcutPaperAction.Show:
-                    TryShowPluginHostPaper(paper.Id, descriptor.Id, activate: true);
-                    break;
-                case PluginShortcutPaperAction.Hide:
-                    TryHidePluginHostPaper(paper.Id, descriptor.Id);
-                    break;
-                case PluginShortcutPaperAction.Toggle:
-                    TryTogglePluginHostPaperVisibility(paper.Id, descriptor.Id, activate: true);
-                    break;
-                case PluginShortcutPaperAction.Expand:
-                    TryExpandPluginHostPaper(paper.Id, descriptor.Id, activate: true);
-                    break;
-                case PluginShortcutPaperAction.Collapse:
-                    TryCollapsePluginHostPaper(paper.Id, descriptor.Id);
-                    break;
-                case PluginShortcutPaperAction.Activate:
-                    TryActivatePluginHostPaper(paper.Id, descriptor.Id);
-                    break;
-            }
-        }
-
-        button.Click += (_, _) =>
-        {
-            var owner = Window.GetWindow(button);
-            if (owner != null && ReferenceEquals(owner.Owner, _settingsWindow))
-            {
-                owner.Close();
-                _ = Application.Current.Dispatcher.BeginInvoke(
-                    (Action)Execute,
-                    System.Windows.Threading.DispatcherPriority.Input);
-                return;
-            }
-
-            Execute();
-        };
+                e.CanExecute = !IsExiting && (isPaperAction
+                    ? HasEntityPluginPaper(descriptor.Id)
+                    : HasActivePluginShortcutRuntime(descriptor.Id));
+                e.Handled = true;
+            }));
+        button.Command = command;
         return button;
     }
 

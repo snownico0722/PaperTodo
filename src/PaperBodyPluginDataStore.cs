@@ -226,6 +226,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        RejectActionSettingValue(setting);
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -243,6 +244,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginSettingManifest setting,
         JsonElement value)
     {
+        RejectActionSettingValue(setting);
         var normalized = PaperBodyPluginRegistry.NormalizeSettingValue(setting, value);
         lock (_gate)
         {
@@ -257,6 +259,14 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
             document.Settings[setting.Id] = normalized.Clone();
             ScheduleSave(descriptor.Id);
             return normalized;
+        }
+    }
+
+    private static void RejectActionSettingValue(PaperBodyPluginSettingManifest setting)
+    {
+        if (setting.Type == "action")
+        {
+            throw new InvalidOperationException("Action settings are commands, not stored values.");
         }
     }
 
