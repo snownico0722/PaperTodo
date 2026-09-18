@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Interop;
 
 namespace PaperTodo;
 
@@ -239,14 +238,6 @@ public sealed partial class PaperWindow
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
         AbortAllInteractions(InteractionAbortReason.Closing);
-
-        // Hand off before OnClosing detaches/destroys the hidden owner and WPF chooses a
-        // replacement active window. Only the actual foreground paper participates; shutdown,
-        // background deletion and a user who already switched away must not steal focus.
-        if (_controller.IsRunning)
-        {
-            WindowNative.TryHandoffForegroundBeforeClose(new WindowInteropHelper(this).Handle);
-        }
     }
 
     private void CompletePaperWindowClose()
