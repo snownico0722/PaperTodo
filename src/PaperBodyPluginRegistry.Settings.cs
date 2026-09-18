@@ -91,6 +91,11 @@ internal sealed partial class PaperBodyPluginRegistry
             }
             if (setting.Type == "action")
             {
+                if (!ApiAtLeast(manifest.ApiVersion, "2.2"))
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' requires apiVersion 2.2 or later.");
+                }
                 if (setting.Action.Length == 0)
                 {
                     throw new InvalidDataException(
