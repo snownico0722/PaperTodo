@@ -60,6 +60,19 @@ paper.toggle
 
 这些动作由 PaperTodo 直接执行，不要求 body session 当前展开，也不需要插件 plugin runtime 接收回调。
 
+同一组宿主持有的 `paper.*` 动作也可以用于设置页命令按钮。设置项使用 `type: "action"` 与 `action`：
+
+```json
+{
+  "id": "editPrompt",
+  "type": "action",
+  "name": "编辑提示词",
+  "action": "paper.expand"
+}
+```
+
+`action` 设置不保存值，也不会进入插件的 settings JSON；它只让宿主在点击时对该 provider 的目标纸片执行对应 `paper.*` 动作。当前不接受自定义 Runtime action，避免把一次性按钮和全局快捷键回调混成同一生命周期。
+
 为了兼容旧写法，manifest 中的 `show` / `hide` / `toggle` / `expand` / `collapse` / `activate` 也会被宿主归一化为上面对应的 `paper.*` 值。新插件应直接写完整的 `paper.*` 名称。
 
 同一个 provider 有多张纸片时，宿主按这个顺序找目标：
