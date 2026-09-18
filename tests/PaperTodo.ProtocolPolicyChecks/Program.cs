@@ -296,26 +296,28 @@ internal static partial class Program
         var supported = registryType.GetField(
             "SupportedPluginApiVersion",
             BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        Assert(supported == "2.1",
-            "The plugin host must expose Protocol 2.1 as its single supported baseline.");
-        Assert(
-            registryType.GetField(
-                "MinimumPluginApiVersion",
-                BindingFlags.Static | BindingFlags.NonPublic) == null,
-            "The host must not retain a minimum-version compatibility range after Protocol 2.0 removal.");
+        var minimum = registryType.GetField(
+            "MinimumPluginApiVersion",
+            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
+        Assert(supported == "2.2" && minimum == "2.1",
+            "The plugin host must expose Protocol 2.2 while retaining 2.1 compatibility.");
 
         var validateApi = registryType.GetMethod(
             "ValidateManifestApiVersion",
             BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("ValidateManifestApiVersion was not found.");
         validateApi.Invoke(null, new object[] { "2.1" });
-        try
+        validateApi.Invoke(null, new object[] { "2.2" });
+        foreach (var rejected in new[] { "2.0", "2.3", "3.0" })
         {
-            validateApi.Invoke(null, new object[] { "2.0" });
-            throw new InvalidOperationException("Protocol 2.0 manifest compatibility is still active.");
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
-        {
+            try
+            {
+                validateApi.Invoke(null, new object[] { rejected });
+                throw new InvalidOperationException($"Unsupported Protocol {rejected} was accepted.");
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+            {
+            }
         }
 
         var validateSettings = registryType.GetMethod(
@@ -325,8 +327,11 @@ internal static partial class Program
         var settingsProperty = manifestType.GetProperty("Settings")
             ?? throw new InvalidOperationException("Manifest Settings property was not found.");
 
+        var apiVersionProperty = manifestType.GetProperty("ApiVersion")
+            ?? throw new InvalidOperationException("Manifest ApiVersion property was not found.");
         var actionManifest = Activator.CreateInstance(manifestType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create action manifest.");
+        apiVersionProperty.SetValue(actionManifest, "2.2");
         var actionSetting = Activator.CreateInstance(settingType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create action setting.");
         settingType.GetProperty("Id")!.SetValue(actionSetting, "editPrompt");
@@ -342,7 +347,18 @@ internal static partial class Program
                 settingType.GetProperty("Action")!.GetValue(actionSetting)?.ToString(),
                 "paper.expand",
                 StringComparison.Ordinal),
-            "A host-owned paper.expand action setting must validate without becoming stored settings data.");
+            "A Protocol 2.2 paper.expand action setting must validate without becoming stored settings data.");
+
+        apiVersionProperty.SetValue(actionManifest, "2.1");
+        try
+        {
+            validateSettings.Invoke(null, [actionManifest]);
+            throw new InvalidOperationException("Protocol 2.1 unexpectedly accepted an action setting.");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+        {
+        }
+        apiVersionProperty.SetValue(actionManifest, "2.2");
 
         var startupProperty = manifestType.GetProperty("StartupPaper")
             ?? throw new InvalidOperationException("Manifest StartupPaper property was not found.");
@@ -353,6 +369,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("ValidateStartupPaper was not found.");
         var hiddenManifest = Activator.CreateInstance(manifestType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create hidden startup manifest.");
+        apiVersionProperty.SetValue(hiddenManifest, "2.2");
         var enabledSetting = Activator.CreateInstance(settingType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create startup enable setting.");
         settingType.GetProperty("Id")!.SetValue(enabledSetting, "autoStart");
@@ -373,7 +390,17 @@ internal static partial class Program
                 startupType.GetProperty("Presentation")!.GetValue(startup)?.ToString(),
                 "hidden",
                 StringComparison.Ordinal),
-            "startupPaper.presentation=hidden must be a valid Runtime-owning hidden startup mode.");
+            "Protocol 2.2 startupPaper.presentation=hidden must be a valid Runtime-owning hidden startup mode.");
+
+        apiVersionProperty.SetValue(hiddenManifest, "2.1");
+        try
+        {
+            validateStartup.Invoke(null, [hiddenManifest]);
+            throw new InvalidOperationException("Protocol 2.1 unexpectedly accepted hidden startup presentation.");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+        {
+        }
 
         var controller = RequireType(host, "PaperTodo.AppController");
         Assert(
@@ -389,13 +416,13 @@ internal static partial class Program
         var registry = RequireType(host, "PaperTodo.PaperBodyPluginRegistry");
         Assert(
             hostApi.GetMethod("EnsurePresentationProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
-            "Single-baseline Protocol 2.1 must not retain the old presentation version gate.");
+            "Protocol 2.2 compatibility must not restore the removed Protocol 2.0 presentation gate.");
         Assert(
             controller.GetMethod("EnsurePluginTopBarProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
-            "Single-baseline Protocol 2.1 must not retain the old top-bar version gate.");
+            "Protocol 2.2 compatibility must not restore the removed Protocol 2.0 top-bar gate.");
         Assert(
-            registry.GetMethod("ApiAtLeast", BindingFlags.Static | BindingFlags.NonPublic) == null,
-            "Single-baseline Protocol 2.1 must not retain registry compatibility comparisons.");
+            registry.GetMethod("ApiAtLeast", BindingFlags.Static | BindingFlags.NonPublic) != null,
+            "Protocol 2.2 feature gates need one shared major.minor comparison helper.");
     }
 
     private static void CheckSharedWebInfrastructure(Assembly host)
