@@ -1,6 +1,6 @@
-# PaperTodo 2.1：插件快捷键与自身纸片控制
+# PaperTodo 2.1 / 2.2：插件快捷键、设置动作与自身纸片控制
 
-这页说明 Protocol 2.1 中的两类能力：
+这页同时说明 Protocol 2.1 已有的快捷键能力，以及 Protocol 2.2 新增的设置页 `action` 按钮：
 
 - 插件在自己的设置中声明全局快捷键；
 - paper body session 请求显示、隐藏、展开、折叠或激活承载自己的纸片。
@@ -60,7 +60,7 @@ paper.toggle
 
 这些动作由 PaperTodo 直接执行，不要求 body session 当前展开，也不需要插件 plugin runtime 接收回调。
 
-同一组宿主持有的 `paper.*` 动作也可以用于设置页命令按钮。设置项使用 `type: "action"` 与 `action`：
+从 Protocol 2.2 开始，同一组宿主持有的 `paper.*` 动作也可以用于设置页命令按钮。设置项使用 `type: "action"` 与 `action`：
 
 ```json
 {
@@ -119,7 +119,7 @@ Native 复用 `context.GlobalShortcuts.SetActionHandler(...)`，收到现有 `Pa
 
 自定义 action 必须满足：
 
-- 协议版本为 `2.1`；
+- 快捷键自定义 action 可用于 Protocol `2.1+`；设置页 `type: "action"` 按钮要求 Protocol `2.2+`；
 - 插件声明 `runtime`；
 - action id 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
 - action id 不能以 `paper.` 开头（大小写不敏感）；该命名空间由宿主保留；
