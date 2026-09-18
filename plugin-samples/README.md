@@ -295,7 +295,7 @@ Constraints:
 
 - `enabledSetting` must reference a boolean setting in the same manifest;
 - `instanceKey` must be 1–80 ASCII letters, digits, `.`, `_`, or `-`;
-- `presentation` must be `capsule` or `expanded`;
+- `presentation` must be `capsule`, `expanded`, or `hidden`; `hidden` creates/restores the real Paper as a Runtime owner without showing its surface on normal startup;
 - `title` is limited to 120 characters;
 - creation timing, deduplication, and restoration are managed by the host; the plugin only declares intent;
 - if the user has converted the originally auto-created Paper to another provider/type, the host does not forcibly reclaim it or silently create another copy.
@@ -450,9 +450,9 @@ A plugin-data failure does not invalidate PaperTodo's core `data.json`.
 
 ### 5.3 Global settings
 
-The host supports `boolean`, `string`, `number`, `select`, and `shortcut`. There is still only one settings storage/read-write protocol; the two modes below affect host presentation only.
+The host supports `boolean`, `string`, `number`, `select`, `shortcut`, and `action`. `action` is a host-rendered command button rather than stored settings data; it currently accepts host-owned `paper.*` actions. The remaining setting types continue to use the single settings storage/read-write protocol; the two modes below affect host presentation only.
 
-For `shortcut` `shortcutAction`, host `paper.*` actions, and custom Runtime action rules, see [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md).
+For `shortcut` `shortcutAction`, `action` buttons, host `paper.*` actions, and custom Runtime shortcut-action rules, see [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md).
 
 When `advancedSettings` is omitted or `false`, existing behavior remains unchanged: up to three `quick: true` settings are displayed directly on the plugin card, while the rest expand/collapse **inside the same card** through "More settings". If no setting is marked `quick`, the host does not guess which settings are primary.
 
