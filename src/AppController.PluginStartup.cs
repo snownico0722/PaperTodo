@@ -9,6 +9,49 @@ public sealed partial class AppController
 {
     private int _pluginStartupPaperGeneration;
 
+    private void ApplyHiddenPluginStartupPaperVisibility()
+    {
+        var changed = false;
+        foreach (var descriptor in PaperBodyPlugins.Descriptors)
+        {
+            var startup = descriptor.Manifest?.StartupPaper;
+            if (startup?.Presentation != "hidden" ||
+                !StartupSettingEnabled(descriptor, startup))
+            {
+                continue;
+            }
+
+            foreach (var paper in State.Papers.Where(candidate =>
+                         string.Equals(
+                             candidate.StartupOwnerPluginId,
+                             descriptor.Id,
+                             StringComparison.Ordinal) &&
+                         string.Equals(
+                             candidate.StartupInstanceKey,
+                             startup.InstanceKey,
+                             StringComparison.Ordinal) &&
+                         candidate.Type == PaperTypes.Note &&
+                         string.Equals(
+                             candidate.BodyProviderId,
+                             descriptor.Id,
+                             StringComparison.Ordinal)))
+            {
+                if (!paper.IsVisible)
+                {
+                    continue;
+                }
+
+                paper.IsVisible = false;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            MarkDirty();
+        }
+    }
+
     private async void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)
     {
         var generation = ++_pluginStartupPaperGeneration;
@@ -104,16 +147,29 @@ public sealed partial class AppController
                 changed = true;
             }
 
+            var hidden = startup.Presentation == "hidden";
             var collapsed = startup.Presentation == "capsule";
-            if (!paper.IsVisible || paper.IsCollapsed != collapsed)
+            var visible = !hidden;
+            if (paper.IsVisible != visible || paper.IsCollapsed != collapsed)
             {
-                paper.IsVisible = true;
+                paper.IsVisible = visible;
                 paper.IsCollapsed = collapsed;
                 changed = true;
             }
-            // A startup Paper becomes a Runtime owner before its visible Body is attached.
+
+            // A hidden startup Paper still owns the provider Runtime; only its surface stays absent.
             EnablePluginRuntimeReconciliation();
-            ShowPaper(paper, activate: false);
+            if (hidden)
+            {
+                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
+                {
+                    HidePaper(paper);
+                }
+            }
+            else
+            {
+                ShowPaper(paper, activate: false);
+            }
         }
 
         if (!changed)
