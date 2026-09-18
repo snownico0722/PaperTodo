@@ -96,16 +96,17 @@ internal sealed class McpTools
         Destructive = true,
         Idempotent = true,
         OpenWorld = false)]
-    [Description("Fill or replace todo text and/or change completion state. Filling blank text needs additive writes; replacing existing text or state needs full writes.")]
+    [Description("Fill or replace todo text, change completion state, and/or link another PaperTodo paper. Filling blank text needs additive writes; replacing existing text/state or changing a paper link needs full writes.")]
     public Task<JsonElement> UpdateTodo(
         [Description("Exact todo paper ID.")] string paper_id,
         [Description("Exact todo item ID.")] string todo_id,
         [Description("Replacement text. Omit to keep text unchanged.")] string? text = null,
         [Description("Replacement completion state. Omit to keep it unchanged.")] bool? done = null,
+        [Description("Paper ID to link from this todo, such as a Note containing longer details. Omit to keep the current link unchanged. Requires PaperTodo full writes.")] string? linked_paper_id = null,
         CancellationToken cancellationToken = default)
         => _client.InvokeAsync(
             "update_todo",
-            OptionalUpdateParameters(paper_id, todo_id, text, done),
+            OptionalUpdateParameters(paper_id, todo_id, text, done, linked_paper_id),
             cancellationToken);
 
     [McpServerTool(
@@ -176,7 +177,8 @@ internal sealed class McpTools
         string paperId,
         string todoId,
         string? text,
-        bool? done)
+        bool? done,
+        string? linkedPaperId)
     {
         var parameters = new Dictionary<string, object?>
         {
@@ -190,6 +192,10 @@ internal sealed class McpTools
         if (done.HasValue)
         {
             parameters["done"] = done.Value;
+        }
+        if (linkedPaperId != null)
+        {
+            parameters["linked_paper_id"] = linkedPaperId;
         }
         return parameters;
     }
@@ -208,4 +214,8 @@ internal sealed record McpTodoInput
     [JsonPropertyName("reminder_at")]
     [Description("Optional ISO 8601 future reminder date/time with UTC offset. Requires PaperTodo full writes.")]
     public string? ReminderAt { get; init; }
+
+    [JsonPropertyName("linked_paper_id")]
+    [Description("Optional PaperTodo paper ID to link from this todo, such as a Note containing longer details. Requires PaperTodo full writes.")]
+    public string? LinkedPaperId { get; init; }
 }
