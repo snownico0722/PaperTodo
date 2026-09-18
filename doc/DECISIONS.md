@@ -785,7 +785,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 - `runtime` 是显式 opt-in 的 provider 生命周期，但其存在性由实体插件 Paper 集合派生；普通插件没有实体 Paper 时不会仅因安装而运行。
 - 插件没有 Reload/hot-replace UI；修改插件文件后统一重启 PaperTodo，避免同时维护 Web 热重载与 Native CLR 已加载版本两套语义。
 - Web Body/Mini/Runtime 可以复用底层 request/response transport，但各 surface 的 API scope 必须由宿主来源决定，不能靠页面自己声明身份。
-- 当前宿主只接受 `apiVersion: "2.1"`；不再保留 1.8/2.0 兼容基线或按能力版本分支的 Top Bar 路由。
+- 当时宿主只接受 `apiVersion: "2.1"`；后续版本兼容与演进策略由 D-039 更新，Top Bar 的 ownership 决策本身不变。
 
 ### Evidence
 
@@ -1416,3 +1416,47 @@ E-016 的同包对照及去除实验开关后的整合回放支持应用端 owne
 - `src/EdgeCapsulePresenter.cs`：native apply 就绪变化、普通 reconcile 和真实输入优先级。
 - `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
 - `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。
+
+
+---
+
+## D-039 — 插件 API 采用向后兼容的 major.minor 演进
+
+**Status:** Accepted
+
+### Context
+
+Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果仍把 `apiVersion` 固定写成 2.1，manifest/API 的真实能力会持续增长，但插件作者无法从版本号判断哪些能力可用；反过来，如果宿主每次只接受一个精确版本，简单把当前版本改成 2.2 又会让已有 2.1 插件全部拒载。
+
+### Decision
+
+插件协议使用 major.minor 版本演进：
+
+- 当前最新版本为 **2.2**，最低继续兼容 **2.1**。
+- 2.1 插件继续加载并保持 2.1 已发布语义；声明 2.2-only 能力时必须把 manifest 的 `apiVersion` 提升到 2.2。
+- 2.2 首批显式版本化能力包括 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API，以及 `settings.read` / `settings.update` / `settings.control` 权限。
+- 同一未发布 minor 内可以合并多项向后兼容的新契约，不要求每增加一个字段就连续制造 2.3、2.4；一旦 2.2 成为已发布稳定合同，下一批新的插件可见契约使用 2.3。
+- 仅宿主内部实现、性能优化、bugfix，或完全复用既有通用合同而没有新增插件可观察语义时，不提升协议版本。
+- 删除/改名公开字段、改变既有调用语义或其他无法保持旧插件行为的修改，提升 major，例如 3.0。
+
+宿主拒绝低于最低兼容版本以及高于当前实现的未来版本，避免插件在未知合同上静默运行。
+
+### Why
+
+`version` 是插件自身发布版本，`apiVersion` 是宿主与插件之间的合同版本，两者必须独立。minor 表达向后兼容的合同扩展，major 表达破坏兼容；这样版本号能够真实说明能力边界，同时不因为宿主发布新协议就强迫所有旧插件立即重建。
+
+### Consequences
+
+- Registry 需要保留一个最低兼容版本和一个当前最新版本，而不是单一精确版本。
+- 新能力必须在 manifest 校验或权限边界上声明其最低协议版本，避免 2.1 插件“偷用”2.2-only manifest 能力。
+- CI 必须同时保留至少一个 2.1 compatibility sample 和一个 2.2 sample。
+- 文档默认示例面向当前 2.2；历史 2.1 专项文档需要明确哪些部分属于 2.1、哪些是后加的 2.2。
+- 插件自身 semantic version 不跟随宿主 API version 自动变化。
+
+### Evidence
+
+- `src/PaperBodyPluginRegistry.cs`：最低/当前协议版本和版本比较。
+- `src/PaperBodyPluginRegistry.Settings.cs`、`Startup.cs`、`Permissions.cs`：2.2-only manifest 能力门槛。
+- `tests/PaperTodo.ProtocolPolicyChecks/Program.cs`：2.1/2.2 接受范围及 2.2-only 能力拒绝测试。
+- `plugin-samples/PaperTodo.Plugin.Protocol21Web/`：2.1 向后兼容样例。
+- `plugin-samples/PaperTodo.Plugin.TopBarWeb/` 与 Codex CLI Bridge：2.2 样例。
