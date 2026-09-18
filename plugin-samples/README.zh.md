@@ -7,7 +7,7 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.1"
+"apiVersion": "2.2"
 ```
 
 当前宿主最新协议为 `2.2`，并继续兼容 `2.1`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.2` 为目标；已有 `2.1` 插件只要不声明 2.2-only 能力仍可继续运行。
@@ -52,7 +52,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -156,7 +156,7 @@ Native `plugin.json`：
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -257,7 +257,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
   "id": "com.example.weather",
   "name": "天气",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -732,7 +732,7 @@ manifest：
 
 ```json
 {
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
