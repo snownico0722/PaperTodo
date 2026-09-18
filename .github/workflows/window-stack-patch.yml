@@ -1,0 +1,22 @@
+name: Prepare window-stack source patch
+on:
+  push:
+    branches: [tmp/window-stack-patch-20260918]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Prepare exact source blobs without changing any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp tools/window-stack-patch.py "$RUNNER_TEMP/window-stack-patch.py"
+          git checkout --detach f24ea7edf36013ce5a98c08d7a58979e340b996c
+          python "$RUNNER_TEMP/window-stack-patch.py"
