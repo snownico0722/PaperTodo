@@ -215,6 +215,10 @@ jobs:
             throw "Web plugin source and runtime copies are out of sync."
           }
 
+      - name: Check Web settings action behavior
+        shell: pwsh
+        run: node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs
+
       - name: Check Web plugin scripts
         shell: pwsh
         run: |
