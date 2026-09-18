@@ -7,7 +7,7 @@ This is the **current PaperTodo plugin development manual**. It documents the pl
 New plugins use:
 
 ```json
-"apiVersion": "2.1"
+"apiVersion": "2.2"
 ```
 
 The current host exposes Protocol `2.2` and remains backward-compatible with `2.1`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.2`; existing `2.1` plugins can keep running as long as they do not declare 2.2-only features.
@@ -52,7 +52,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -156,7 +156,7 @@ Native `plugin.json`:
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -257,7 +257,7 @@ Both `entry` and `miniEntry` must remain inside the plugin directory. `miniEntry
   "id": "com.example.weather",
   "name": "Weather",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -732,7 +732,7 @@ Manifest:
 
 ```json
 {
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
