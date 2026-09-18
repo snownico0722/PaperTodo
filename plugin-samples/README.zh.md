@@ -295,7 +295,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 
 - `enabledSetting` 必须引用同一 manifest 中的 boolean setting；
 - `instanceKey` 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
-- `presentation` 只能是 `capsule` 或 `expanded`；
+- `presentation` 可为 `capsule`、`expanded` 或 `hidden`；`hidden` 会创建/恢复真实插件 Paper 作为 Runtime owner，但正常启动时不显示它的窗口；
 - `title` 最长 120 个字符；
 - 创建时机、去重和恢复由宿主管理；插件只声明意图；
 - 如果用户已经把原自动创建纸片改造成其他 provider/type，宿主不会强行接管或偷偷再创建副本。
@@ -450,9 +450,9 @@ Body、Mini 和 Web Runtime 的 `initialize` 都提供各自状态域的 `state`
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置仍只有一份存储和读写协议，下面两种只是宿主展示方式。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`、`action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；当前只接受宿主持有的 `paper.*` 动作。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
 
-`shortcut` 的 `shortcutAction`、宿主 `paper.*` 动作和自定义 Runtime action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
+`shortcut` 的 `shortcutAction`、`action` 按钮、宿主 `paper.*` 动作和自定义 Runtime 快捷键 action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
 
 默认不声明 `advancedSettings`（或为 `false`）时，行为保持原样：最多三个 `quick: true` 设置直接显示在插件卡片上，其余设置通过“更多设置”在**当前卡片内**展开/收起。没有 `quick` 时不会自动猜主要设置。
 
