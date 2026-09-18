@@ -278,6 +278,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        ApplyHiddenPluginStartupPaperVisibility();
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         DeferStartupPapersWithoutMonitor();
         var rescuedPapers = EnsurePapersOnScreen();
