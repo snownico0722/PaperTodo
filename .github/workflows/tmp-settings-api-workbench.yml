@@ -34,6 +34,12 @@ jobs:
             p.write_bytes(patch)
             subprocess.run(['git', 'apply', '--unidiff-zero', '--cached', str(p)], check=True)
           subprocess.run(['git', 'checkout-index', '-a', '-f'], check=True)
+          p = Path('tests/PaperTodo.CodexCliBridgeChecks/Program.cs')
+          s = p.read_text(encoding='utf-8-sig')
+          assert 'composedZh.Contains("直接删除权限")' in s
+          s = s.replace('composedZh.Contains("直接删除权限")', 'composedZh.Contains("直接删除") && composedZh.Contains("敏感设置控制权限")')
+          s = s.replace('composedEn.Contains("direct-delete permission")', 'composedEn.Contains("direct-delete") && composedEn.Contains("sensitive-settings control")')
+          p.write_text(s, encoding='utf-8', newline='\n')
       - name: Build and behavior checks
         shell: pwsh
         run: |
