@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Plugin API 2.2**: The plugin protocol now advances to 2.2 while keeping 2.1 plugins load-compatible. New 2.2-only contracts include hidden startup papers, settings action buttons, and the public application Settings API/permissions.
+
 - **Application Settings API**: MCP and Native/Web plugins can query and change public user preferences through one typed catalog, with separate sensitive-setting authorization and save-failure rollback. MCP also supports explicitly unlinking a Todo from its associated paper.
 
 - **Plugin settings actions**: Plugins can now declare custom action buttons handled by their Runtime, such as refresh or connection tests, without configuring a shortcut. Unavailable actions are disabled. Fixed delayed startup restoration hiding a Codex prompt editor that had just been opened.
