@@ -54,15 +54,28 @@ public sealed partial class AppController
                 !CodexMcpPermission.CanEnable(IsRunning, IsPluginRuntimeRunning(pluginId), settings))
                 return false;
 
-            if (State.McpEnabled) return true;
-            State.McpEnabled = true;
+            var previous = new CodexMcpAccess(
+                State.McpEnabled,
+                State.McpAllowBlankWrites,
+                State.McpAllowFullWrites,
+                State.McpAllowDeletes);
+            var target = CodexMcpPermission.FullAccess;
+            if (previous == target) return true;
+
+            State.McpEnabled = target.Enabled;
+            State.McpAllowBlankWrites = target.BlankWrites;
+            State.McpAllowFullWrites = target.FullWrites;
+            State.McpAllowDeletes = target.Deletes;
             MarkDirty();
             if (!TrySaveNow(sync: true))
             {
-                State.McpEnabled = false;
+                State.McpEnabled = previous.Enabled;
+                State.McpAllowBlankWrites = previous.BlankWrites;
+                State.McpAllowFullWrites = previous.FullWrites;
+                State.McpAllowDeletes = previous.Deletes;
                 return false;
             }
-            // Only the master switch changes. Existing write/delete policy remains authoritative.
+
             RefreshMcpRuntime();
             RefreshSettingsRegions("labs.mcp");
             return true;
