@@ -40,6 +40,10 @@ jobs:
           s = s.replace('composedZh.Contains("直接删除权限")', 'composedZh.Contains("直接删除") && composedZh.Contains("敏感设置控制权限")')
           s = s.replace('composedEn.Contains("direct-delete permission")', 'composedEn.Contains("direct-delete") && composedEn.Contains("sensitive-settings control")')
           p.write_text(s, encoding='utf-8', newline='\n')
+          subprocess.run(['git', 'add', str(p)], check=True)
+          # Match the normal Windows CI checkout, including raw C# string literals.
+          subprocess.run(['git', 'config', 'core.autocrlf', 'true'], check=True)
+          subprocess.run(['git', 'checkout-index', '-a', '-f'], check=True)
       - name: Build and behavior checks
         shell: pwsh
         run: |
