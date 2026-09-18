@@ -48,6 +48,9 @@ jobs:
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
+      - name: Real paper and cross-process window stacking checks
+        run: dotnet run --project .\tests\PaperTodo.WindowStackChecks\PaperTodo.WindowStackChecks.csproj -c Release
+
       - name: Markdown semantic checks
         run: dotnet run --project .\tests\PaperTodo.MarkdownSemanticChecks\PaperTodo.MarkdownSemanticChecks.csproj -c Release
 
@@ -68,3 +71,6 @@ jobs:
 
       - name: Startup, shutdown and small-workset checks
         run: dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release
+
+      - name: Window close activation checks
+        run: dotnet run --project .\tests\PaperTodo.WindowCloseActivationChecks\PaperTodo.WindowCloseActivationChecks.csproj -c Release

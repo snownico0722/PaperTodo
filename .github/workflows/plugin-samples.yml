@@ -9,12 +9,17 @@ on:
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
       - "tests/PaperTodo.CodexCliBridgeChecks/**"
+      - "tests/PaperTodo.SettingsApiChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
       - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
+      - "src/PaperSettingsService.cs"
+      - "src/AppController.SettingsApi*.cs"
+      - "src/Models.cs"
+      - "src/Mcp*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
       - "src/WebPaperBodySession*.cs"
@@ -30,12 +35,17 @@ on:
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
       - "tests/PaperTodo.CodexCliBridgeChecks/**"
+      - "tests/PaperTodo.SettingsApiChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
       - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
+      - "src/PaperSettingsService.cs"
+      - "src/AppController.SettingsApi*.cs"
+      - "src/Models.cs"
+      - "src/Mcp*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
       - "src/WebPaperBodySession*.cs"
@@ -71,6 +81,10 @@ jobs:
       - name: Run menu image and popup checks
         shell: pwsh
         run: dotnet run --project .\tests\PaperTodo.PluginApiChecks\PaperTodo.PluginApiChecks.csproj -c Release
+
+      - name: Run public settings and MCP unlink checks
+        shell: pwsh
+        run: dotnet run --project ./tests/PaperTodo.SettingsApiChecks/PaperTodo.SettingsApiChecks.csproj -c Release
 
       - name: Run Codex CLI Bridge prompt checks
         shell: pwsh
