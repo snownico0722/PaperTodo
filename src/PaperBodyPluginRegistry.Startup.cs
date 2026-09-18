@@ -34,10 +34,10 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "startupPaper.instanceKey must contain 1-80 ASCII letters, digits, '.', '_' or '-'.");
         }
-        if (startup.Presentation is not ("capsule" or "expanded"))
+        if (startup.Presentation is not ("capsule" or "expanded" or "hidden"))
         {
             throw new InvalidDataException(
-                "startupPaper.presentation must be 'capsule' or 'expanded'.");
+                "startupPaper.presentation must be 'capsule', 'expanded', or 'hidden'.");
         }
         if (startup.Title.Length > 120)
         {
