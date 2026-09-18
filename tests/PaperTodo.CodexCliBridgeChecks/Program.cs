@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PaperTodo.Plugin.CodexCliBridge;
+using PaperTodo;
 
 var checks = 0;
 void Check(bool condition, string message)
@@ -46,9 +47,11 @@ foreach (var prompt in new[] { "", "  ", "只输出代码\n保留我的规则", 
 var pluginDirectory = Path.Combine(Path.GetTempPath(), "PaperTodo 中文 'quoted' path", "plugins", "tools.codex-cli-bridge.native");
 const string task = "做个番茄钟插件\n保留本次内容";
 var initial = CodexPromptState.Read("{}");
+var defaults = CodexBridgeSettings.Read("{}");
+const string executable = @"C:\PaperTodo O'Brien\PaperTodo.exe";
 var expectedPath = Path.Combine(pluginDirectory, "skills", CodexPromptState.SkillName, "SKILL.md");
 
-var composedZh = initial.PrependTo(task, pluginDirectory, "zh-CN");
+var composedZh = initial.PrependTo(task, pluginDirectory, "zh-CN", defaults, executable);
 Check(composedZh.Contains(CodexPromptState.BuiltInDefaultPromptZh),
     "Chinese UI must send the Chinese built-in prompt.");
 Check(composedZh.Contains("[PaperTodo 默认提示词]"),
@@ -60,7 +63,7 @@ Check(composedZh.Contains(JsonSerializer.Serialize(expectedPath)),
 Check(composedZh.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after Chinese prompt injection.");
 
-var composedEn = initial.PrependTo(task, pluginDirectory, "en-US");
+var composedEn = initial.PrependTo(task, pluginDirectory, "en-US", defaults, executable);
 Check(composedEn.Contains(CodexPromptState.BuiltInDefaultPromptEn),
     "English UI must send the English built-in prompt.");
 Check(composedEn.Contains("[PaperTodo default prompt]"),
@@ -76,7 +79,7 @@ var edited = initial with { DefaultPrompt = "自定义提示词" };
 var restored = CodexPromptState.Read(JsonSerializer.Serialize(edited));
 foreach (var language in new[] { "zh-CN", "en-US" })
 {
-    var composed = restored.PrependTo(task, pluginDirectory, language);
+    var composed = restored.PrependTo(task, pluginDirectory, language, defaults, executable);
     Check(composed.Contains("自定义提示词"), "Saved custom prompt must be sent.");
     Check(!composed.Contains(CodexPromptState.BuiltInDefaultPromptZh),
         "Custom prompts must not have the Chinese built-in instructions appended back.");
@@ -89,8 +92,9 @@ foreach (var prompt in new[] { "", "  " })
     var cleared = CodexPromptState.Read(JsonSerializer.Serialize(edited with { DefaultPrompt = prompt }));
     foreach (var language in new[] { "zh-CN", "en-US" })
     {
-        Check(cleared.PrependTo(task, pluginDirectory, language) == task,
-            "Clearing the prompt must send only the task, including after restart and regardless of UI language.");
+        Check(cleared.PrependTo(task, pluginDirectory, language,
+                defaults with { EnablePluginSkill = false, EnableOperationSkill = false, AllowMcp = false }, executable) == task,
+            "Empty prompt with all switches off must send exactly the task.");
     }
 }
 
@@ -103,5 +107,58 @@ catch (JsonException)
 {
     checks++;
 }
+
+// Each switch is independent of the other two and of the editable default prompt.
+Check(defaults.EnablePluginSkill && defaults.EnableOperationSkill && defaults.AllowMcp,
+    "All three new settings must default to enabled for new and existing installations.");
+Check(!CodexPromptState.BuiltInDefaultPromptZh.Contains(CodexPromptState.SkillName) &&
+      !CodexPromptState.BuiltInDefaultPromptEn.Contains(CodexPromptState.SkillName),
+    "The editable built-in prompt must not embed a plugin skill.");
+for (var mask = 0; mask < 8; mask++)
+foreach (var prompt in new string?[] { null, "", "custom instruction" })
+foreach (var language in new[] { "zh-CN", "en-US" })
+{
+    var settings = CodexBridgeSettings.Read(JsonSerializer.Serialize(new
+    {
+        enablePluginSkill = (mask & 1) != 0,
+        enableOperationSkill = (mask & 2) != 0,
+        allowMcp = (mask & 4) != 0
+    }));
+    var state = new CodexPromptState(prompt);
+    var composed = state.PrependTo(task, pluginDirectory, language, settings, executable);
+    Check(composed.Contains(JsonSerializer.Serialize(expectedPath)) == settings.EnablePluginSkill,
+        "Plugin skill path must follow its own switch.");
+    Check(composed.Contains("get_paper") == settings.EnableOperationSkill,
+        "Operation instructions must follow their own switch.");
+    Check(composed.Contains("--enable-mcp-for-codex") == settings.AllowMcp,
+        "MCP activation instructions must follow their own permission switch.");
+    Check(composed.EndsWith(task, StringComparison.Ordinal), "Task content must remain intact.");
+    Check(state.DefaultPrompt == prompt, "Runtime injection must not modify the editable prompt.");
+    if (settings.AllowMcp)
+        Check(composed.Contains("O''Brien"), "PowerShell activation must quote apostrophes safely.");
+}
+foreach (var invalid in new[] { "false", "null", "0", "\"true\"" })
+{
+    var json = "{\"allowMcp\":" + invalid + "}";
+    Check(!CodexBridgeSettings.Read(json).AllowMcp, "Invalid permission values cannot grant activation.");
+    Check(!CodexMcpPermission.CanEnable(true, true, json), "The host must reject invalid permission values.");
+}
+foreach (var invalid in new[] { "{}", "{broken", "null", "[]", "" })
+    Check(!CodexMcpPermission.CanEnable(true, true, invalid), "Missing/old/corrupt settings must not grant activation.");
+Check(CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":true}"), "A live authorized plugin may activate MCP.");
+Check(!CodexMcpPermission.CanEnable(false, true, "{\"allowMcp\":true}"), "An exiting app cannot activate MCP.");
+Check(!CodexMcpPermission.CanEnable(true, false, "{\"allowMcp\":true}"), "An inactive plugin cannot activate MCP.");
+Check(!CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":false}"), "Revoking the setting must deny later activation.");
+foreach (var prefix in new[] { "", "--", "/" })
+    Check(StartupCommand.Parse(new[] { prefix + "enable-mcp-for-codex" }).Kind == StartupCommandKind.EnableMcpForCodex,
+        "Activation must route through the existing single-instance command parser.");
+Check(!new StartupCommand(StartupCommandKind.EnableMcpForCodex).CreatesPaper,
+    "MCP activation must not create a paper.");
+try
+{
+    CodexBridgeSettings.Read("{broken");
+    throw new InvalidOperationException("Broken settings cannot fall back to enabled permissions.");
+}
+catch (JsonException) { checks++; }
 
 Console.WriteLine($"Codex CLI Bridge: {checks} checks passed.");

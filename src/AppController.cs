@@ -1174,6 +1174,9 @@ public sealed partial class AppController : IDisposable
             case StartupCommandKind.Exit:
                 Exit();
                 break;
+            case StartupCommandKind.EnableMcpForCodex:
+                TryEnableMcpForCodex();
+                break;
         }
     }
 

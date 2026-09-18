@@ -12,6 +12,7 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/PaperTodoOperationSkill.cs" Link="PaperTodoOperationSkill.cs" />
     <ProjectReference Include="..\..\PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />
     <None Update="skills\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\README.md" Link="skills\papertodo-plugin-creator\references\plugin-development.md"

@@ -98,6 +98,8 @@ PaperTodo.exe
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
 
+Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 仅允许写入任务按需发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后开启 MCP 总开关，不改变写入/删除权限。没有现成 GUI 主实例时该命令直接退出，不启动或恢复纸片。
+
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
 
 ### 3.3 辅助进程与插件 Runtime

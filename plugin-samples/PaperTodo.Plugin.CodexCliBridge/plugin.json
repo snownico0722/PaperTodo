@@ -67,6 +67,27 @@
       "description": "Used when no local path is linked. Leave empty to use the user profile directory; environment variables such as %USERPROFILE% are supported.",
       "default": "",
       "maxLength": 1024
+    },
+    {
+      "id": "enablePluginSkill",
+      "type": "boolean",
+      "name": "Enable plugin skill",
+      "description": "Inject the bundled PaperTodo plugin-development skill when sending a task.",
+      "default": true
+    },
+    {
+      "id": "enableOperationSkill",
+      "type": "boolean",
+      "name": "Enable PaperTodo operation skill",
+      "description": "Inject short instructions for operating papers, todos, and notes through MCP.",
+      "default": true
+    },
+    {
+      "id": "allowMcp",
+      "type": "boolean",
+      "name": "Allow this plugin to enable MCP",
+      "description": "Allow on-demand MCP activation when a task needs to write to PaperTodo. Existing write and delete permissions still apply.",
+      "default": true
     }
   ],
   "advancedSettings": true,
@@ -104,10 +125,54 @@
         "workingDirectory": {
           "name": "默认工作目录",
           "description": "没有绑定本地路径时使用。留空则使用用户目录；支持 %USERPROFILE% 等环境变量。"
+        },
+        "enablePluginSkill": {
+          "name": "开启插件技能",
+          "description": "发送任务时注入 PaperTodo 插件制作技能。"
+        },
+        "enableOperationSkill": {
+          "name": "开启本软件操作技能",
+          "description": "发送任务时注入通过 MCP 操作纸片、待办和笔记的简短指引。"
+        },
+        "allowMcp": {
+          "name": "允许本插件开启 MCP",
+          "description": "需要写入纸片时，允许按需打开 MCP；仍遵循已有写入和删除权限。"
         }
       },
       "startupPaper": {
         "title": "Codex CLI"
+      }
+    },
+    "ja": {
+      "settings": {
+        "enablePluginSkill": {
+          "name": "プラグイン制作スキルを有効化",
+          "description": "タスク送信時に PaperTodo プラグイン制作スキルを追加します。"
+        },
+        "enableOperationSkill": {
+          "name": "PaperTodo 操作スキルを有効化",
+          "description": "MCP で紙、タスク、ノートを操作する短い指示を追加します。"
+        },
+        "allowMcp": {
+          "name": "このプラグインによる MCP の有効化を許可",
+          "description": "書き込みが必要なときに MCP を有効化できます。既存の書き込み・削除権限は維持されます。"
+        }
+      }
+    },
+    "ko": {
+      "settings": {
+        "enablePluginSkill": {
+          "name": "플러그인 제작 스킬 사용",
+          "description": "작업 전송 시 PaperTodo 플러그인 제작 스킬을 추가합니다."
+        },
+        "enableOperationSkill": {
+          "name": "PaperTodo 조작 스킬 사용",
+          "description": "MCP로 메모와 할 일을 조작하는 간단한 지침을 추가합니다."
+        },
+        "allowMcp": {
+          "name": "이 플러그인의 MCP 활성화 허용",
+          "description": "쓰기 작업에 필요할 때 MCP를 켤 수 있습니다. 기존 쓰기 및 삭제 권한은 유지됩니다."
+        }
       }
     }
   }

@@ -1,7 +1,6 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace PaperTodo.Plugin.CodexCliBridge;
 
@@ -22,12 +21,10 @@ internal sealed record CodexPromptState(string? DefaultPrompt)
 
     internal const string BuiltInDefaultPromptZh = """
         请完成下方“本次内容”中的任务，优先使用中文交流。
-        当用户提出为 PaperTodo 制作、创建或开发插件（例如“做个番茄钟插件”）时，先调用内置 papertodo-plugin-creator Skill：读取“内置 Skill”提供的 SKILL.md，并按其中的说明完成插件制作、验证和交付。其他任务按用户要求正常处理。
         """;
 
     internal const string BuiltInDefaultPromptEn = """
         Complete the task under "Current content" below. Prefer English for communication.
-        When the user asks to make, create, or develop a plugin for PaperTodo (for example, "make a Pomodoro plugin"), first use the built-in papertodo-plugin-creator Skill: read the SKILL.md referenced under "Built-in Skill" and follow its instructions to implement, verify, and deliver the plugin. Handle other tasks normally according to the user's request.
         """;
 
     internal string EffectivePrompt(string? uiLanguage) =>
@@ -52,35 +49,56 @@ internal sealed record CodexPromptState(string? DefaultPrompt)
         return new CodexPromptState(prompt);
     }
 
-    internal string PrependTo(string content, string pluginDirectory, string? uiLanguage)
+    internal string PrependTo(
+        string content, string pluginDirectory, string? uiLanguage,
+        CodexBridgeSettings settings, string executable)
     {
         var prompt = EffectivePrompt(uiLanguage);
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return content;
-        }
-
-        var skillPath = Path.Combine(pluginDirectory, "skills", SkillName, "SKILL.md");
         var builder = new StringBuilder();
-        builder.AppendLine(CodexBridgeText.For(
-            uiLanguage,
-            "[PaperTodo 默认提示词]",
-            "[PaperTodo default prompt]"));
-        builder.AppendLine(prompt.Trim());
-        builder.AppendLine();
-        builder.AppendLine(CodexBridgeText.For(
-            uiLanguage,
-            "[内置 Skill]",
-            "[Built-in Skill]"));
-        builder.AppendLine(CodexBridgeText.For(
-            uiLanguage,
-            $"{SkillName}：制作 PaperTodo 插件的说明与开发手册。",
-            $"{SkillName}: instructions and development guide for creating PaperTodo plugins."));
-        builder.AppendLine(CodexBridgeText.For(
-            uiLanguage,
-            $"SKILL.md 路径：{JsonSerializer.Serialize(skillPath)}",
-            $"SKILL.md path: {JsonSerializer.Serialize(skillPath)}"));
-        builder.AppendLine();
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                "[PaperTodo 默认提示词]", "[PaperTodo default prompt]"));
+            builder.AppendLine(prompt.Trim());
+            builder.AppendLine();
+        }
+        if (settings.EnablePluginSkill)
+        {
+            var skillPath = Path.Combine(pluginDirectory, "skills", SkillName, "SKILL.md");
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                "[插件技能]", "[Plugin skill]"));
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                $"仅在用户要求制作、创建或开发 PaperTodo 插件时，先读取并遵循 {SkillName}：{JsonSerializer.Serialize(skillPath)}。",
+                $"Only when the user asks to create or develop a PaperTodo plugin, first read and follow {SkillName}: {JsonSerializer.Serialize(skillPath)}."));
+            builder.AppendLine();
+        }
+        if (settings.EnableOperationSkill)
+        {
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                "[PaperTodo 操作技能]", "[PaperTodo operation skill]"));
+            builder.AppendLine(PaperTodoOperationSkill.For(
+                CodexBridgeText.IsChinese(uiLanguage), "papertodo_bridge"));
+            builder.AppendLine();
+        }
+        if (settings.AllowMcp)
+        {
+            // This is a capability hint, not an instruction to enable MCP on every task.
+            var command = "& '" + executable.Replace("'", "''") + "' --enable-mcp-for-codex";
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                "[MCP 按需开启]", "[On-demand MCP activation]"));
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                $"仅当本次任务需要写入 PaperTodo 且 MCP 未开启时，可在 PowerShell 运行：{command}。随后通过 papertodo_bridge MCP 执行；宿主会重新检查插件开关，原有写入/删除权限仍生效。无需写入时不要开启。",
+                $"Only when this task requires writing to PaperTodo and MCP is disabled, you may run in PowerShell: {command}. Then use the papertodo_bridge MCP server. The host rechecks the plugin setting; existing write/delete permissions still apply. Do not enable it for tasks that need no writes."));
+            builder.AppendLine();
+        }
+        else if (settings.EnableOperationSkill)
+        {
+            builder.AppendLine(CodexBridgeText.For(uiLanguage,
+                "本插件未获准自动开启 MCP；仅使用已开启的 MCP，连接不可用时说明原因。",
+                "This plugin may not automatically enable MCP. Use it only if already enabled; explain unavailable connections."));
+            builder.AppendLine();
+        }
+        if (builder.Length == 0) return content;
         builder.AppendLine(CodexBridgeText.For(
             uiLanguage,
             "[本次内容]",

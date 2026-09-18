@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexBridgeSettings.cs" Link="CodexBridgeSettings.cs" />
+    <Compile Include="../../src/CodexMcpPermission.cs" Link="CodexMcpPermission.cs" />
+    <Compile Include="../../src/StartupCommand.cs" Link="StartupCommand.cs" />
+    <Compile Include="../../src/PaperTodoOperationSkill.cs" Link="PaperTodoOperationSkill.cs" />
     <Compile Include="../../plugin-samples/PaperTodo.Plugin.CodexCliBridge/CodexPromptState.cs" Link="CodexPromptState.cs" />
   </ItemGroup>
 </Project>

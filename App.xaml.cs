@@ -82,6 +82,16 @@ public partial class App : Application
             return;
         }
 
+        // This command belongs to a live Codex plugin session. It must never start
+        // a new GUI, restore papers or enable MCP after the original host has exited.
+        if (startupCommand.Kind == StartupCommandKind.EnableMcpForCodex)
+        {
+            _singleInstance.Dispose();
+            _singleInstance = null;
+            Shutdown();
+            return;
+        }
+
         // Listen as soon as this process owns the mutex. Commands received while
         // the controller is loading stay queued until startup is fully complete.
         _singleInstance.StartListener(HandleSingleInstanceCommand);

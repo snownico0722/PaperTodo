@@ -445,7 +445,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 try
                 {
                     var settings = CodexBridgeSettings.Read(_context.Settings.Json);
-                    var prompt = AddDefaultPrompt(BuildTodoPrompt(todo));
+                    var prompt = AddDefaultPrompt(BuildTodoPrompt(todo), settings);
                     var linkedPath = CodexCliLauncher.ResolveExistingPath(todo.LinkedPath);
                     var imageAttachment = CodexCliLauncher.IsSupportedImage(linkedPath)
                         ? linkedPath
@@ -492,7 +492,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
                 try
                 {
                     var settings = CodexBridgeSettings.Read(_context.Settings.Json);
-                    var prompt = AddDefaultPrompt(BuildPaperPrompt(paperId));
+                    var prompt = AddDefaultPrompt(BuildPaperPrompt(paperId), settings);
                     var workingDirectory = CodexCliLauncher.ResolveWorkingDirectory(
                         settings.WorkingDirectory,
                         linkedPath: null,
@@ -521,11 +521,11 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             });
         }
 
-        private string AddDefaultPrompt(string content) =>
+        private string AddDefaultPrompt(string content, CodexBridgeSettings settings) =>
             _state.PrependTo(
                 content,
                 Path.GetDirectoryName(typeof(CodexCliBridgePlugin).Assembly.Location)!,
-                _uiLanguage);
+                _uiLanguage, settings, Environment.ProcessPath!);
 
         private string BuildTodoPrompt(TodoSnapshot todo)
         {
@@ -534,6 +534,8 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             builder.AppendLine();
             builder.AppendLine("[PaperTodo context]");
             builder.Append(T("来源纸片：", "Source paper: ")).AppendLine(todo.PaperTitle);
+            builder.Append("paper_id: ").AppendLine(todo.PaperId);
+            builder.Append("todo_id: ").AppendLine(todo.Id);
 
             if (!string.IsNullOrWhiteSpace(todo.LinkedPath))
             {
@@ -559,6 +561,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             builder.AppendLine();
             builder.AppendLine(T("[绑定 PaperTodo 纸片]", "[Linked PaperTodo paper]"));
             builder.Append(T("标题：", "Title: ")).AppendLine(paper.Title);
+            builder.Append("paper_id: ").AppendLine(paper.Id);
 
             if (string.Equals(paper.Type, "todo", StringComparison.OrdinalIgnoreCase))
             {
@@ -597,6 +600,7 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
             var builder = new StringBuilder();
             builder.AppendLine(T("[PaperTodo 纸片全文]", "[PaperTodo paper contents]"));
             builder.Append(T("标题：", "Title: ")).AppendLine(paper.Title);
+            builder.Append("paper_id: ").AppendLine(paper.Id);
             builder.AppendLine();
 
             if (string.Equals(paper.Type, "todo", StringComparison.OrdinalIgnoreCase))
@@ -658,58 +662,6 @@ public sealed class CodexCliBridgePlugin : IPaperBodyPlugin, IPaperPluginRuntime
         }
     }
 
-    private sealed record CodexBridgeSettings(
-        string CodexPath,
-        string WorkingDirectory,
-        string Model,
-        string ReasoningEffort,
-        bool BackgroundExecution)
-    {
-        internal static CodexBridgeSettings Read(string json)
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-                var root = document.RootElement;
-                return new CodexBridgeSettings(
-                    Text(root, "codexPath", "codex", allowEmpty: false),
-                    Text(root, "workingDirectory", string.Empty, allowEmpty: true),
-                    Text(root, "model", "gpt-6-astra", allowEmpty: true),
-                    Text(root, "reasoningEffort", "xhigh", allowEmpty: true),
-                    Bool(root, "backgroundExecution", fallback: false));
-            }
-            catch
-            {
-                return new CodexBridgeSettings(
-                    "codex",
-                    string.Empty,
-                    "gpt-6-astra",
-                    "xhigh",
-                    BackgroundExecution: false);
-            }
-        }
-
-        private static string Text(JsonElement root, string name, string fallback, bool allowEmpty)
-        {
-            if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
-            {
-                return fallback;
-            }
-            var text = (value.GetString() ?? string.Empty).Trim();
-            return allowEmpty || !string.IsNullOrWhiteSpace(text) ? text : fallback;
-        }
-
-        private static bool Bool(JsonElement root, string name, bool fallback)
-        {
-            if (!root.TryGetProperty(name, out var value) ||
-                (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False))
-            {
-                return fallback;
-            }
-            return value.GetBoolean();
-        }
-    }
-
     private static class CodexCliLauncher
     {
         private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -739,6 +691,12 @@ if ($env:PAPERTODO_CODEX_CWD) {
 }
 if ($env:PAPERTODO_CODEX_IMAGE) {
   $argsList += @('--image', $env:PAPERTODO_CODEX_IMAGE)
+}
+if ($env:PAPERTODO_CODEX_MCP_EXE) {
+  # Windows executable paths are not TOML values; Codex's -c string fallback preserves
+  # spaces, backslashes and apostrophes without PowerShell 5.1 native quote loss.
+  $argsList += @('-c', ('mcp_servers.papertodo_bridge.command=' + $env:PAPERTODO_CODEX_MCP_EXE))
+  $argsList += @('-c', "mcp_servers.papertodo_bridge.args=['--mcp']")
 }
 $argsList += '-'
 $code = 1
@@ -858,6 +816,10 @@ else {
             startInfo.Environment["PAPERTODO_CODEX_DEVELOPER_INSTRUCTIONS"] =
                 ResolvePluginAgentInstructions() ?? string.Empty;
             startInfo.Environment["PAPERTODO_CODEX_FOREGROUND"] = foreground ? "1" : "0";
+            startInfo.Environment["PAPERTODO_CODEX_MCP_EXE"] =
+                settings.EnableOperationSkill || settings.AllowMcp
+                    ? Environment.ProcessPath ?? string.Empty
+                    : string.Empty;
 
             var process = new Process { StartInfo = startInfo };
             if (!process.Start())
