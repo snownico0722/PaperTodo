@@ -320,6 +320,27 @@ internal static partial class Program
             }
         }
 
+        var validateFeatures = registryType.GetMethod(
+            "ValidateProtocolFeatures",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("ValidateProtocolFeatures was not found.");
+        var permissionsProperty = manifestType.GetProperty("Permissions")
+            ?? throw new InvalidOperationException("Manifest Permissions property was not found.");
+        var settingsPermissionManifest = Activator.CreateInstance(manifestType, nonPublic: true)
+            ?? throw new InvalidOperationException("Could not create settings-permission manifest.");
+        manifestType.GetProperty("ApiVersion")!.SetValue(settingsPermissionManifest, "2.1");
+        permissionsProperty.SetValue(settingsPermissionManifest, new[] { "settings.read" });
+        try
+        {
+            validateFeatures.Invoke(null, [settingsPermissionManifest]);
+            throw new InvalidOperationException("Protocol 2.1 unexpectedly accepted settings.read.");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+        {
+        }
+        manifestType.GetProperty("ApiVersion")!.SetValue(settingsPermissionManifest, "2.2");
+        validateFeatures.Invoke(null, [settingsPermissionManifest]);
+
         var validateSettings = registryType.GetMethod(
             "ValidateSettings",
             BindingFlags.Static | BindingFlags.NonPublic)
