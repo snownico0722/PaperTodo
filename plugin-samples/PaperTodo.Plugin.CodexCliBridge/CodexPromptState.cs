@@ -21,10 +21,14 @@ internal sealed record CodexPromptState(string? DefaultPrompt)
 
     internal const string BuiltInDefaultPromptZh = """
         请完成下方“本次内容”中的任务，优先使用中文交流。
+        写入待办项时控制篇幅；如果内容过长，优先把详细内容写入一张 Note 并绑定到该待办。若绑定所需的 MCP“完整写入”权限未开启，提示用户在 PaperTodo 设置中手动开启后再继续。
+        写入笔记时也控制篇幅，避免过度冗长，但不需要为了简短而丢失必要信息或过度压缩。
         """;
 
     internal const string BuiltInDefaultPromptEn = """
         Complete the task under "Current content" below. Prefer English for communication.
+        Keep todo items concise; if the content is too long, put the details in a Note and link that Note to the todo. If the MCP "full writes" permission required for linking is disabled, ask the user to enable it manually in PaperTodo Settings before continuing.
+        Keep notes reasonably concise as well: avoid unnecessary verbosity, but do not over-compress or omit useful information just to make them short.
         """;
 
     internal string EffectivePrompt(string? uiLanguage) =>
