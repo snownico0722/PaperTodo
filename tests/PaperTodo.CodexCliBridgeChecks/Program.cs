@@ -114,6 +114,14 @@ Check(defaults.EnablePluginSkill && defaults.EnableOperationSkill && defaults.Al
 Check(!CodexPromptState.BuiltInDefaultPromptZh.Contains(CodexPromptState.SkillName) &&
       !CodexPromptState.BuiltInDefaultPromptEn.Contains(CodexPromptState.SkillName),
     "The editable built-in prompt must not embed a plugin skill.");
+Check(CodexPromptState.BuiltInDefaultPromptZh.Contains("Note") &&
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("完整写入") &&
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("避免过度冗长"),
+    "Chinese built-in prompt must keep todos concise, allow linked notes, and avoid verbose notes.");
+Check(CodexPromptState.BuiltInDefaultPromptEn.Contains("link that Note to the todo") &&
+      CodexPromptState.BuiltInDefaultPromptEn.Contains("full writes") &&
+      CodexPromptState.BuiltInDefaultPromptEn.Contains("avoid unnecessary verbosity"),
+    "English built-in prompt must carry the same todo/note length guidance.");
 for (var mask = 0; mask < 8; mask++)
 foreach (var prompt in new string?[] { null, "", "custom instruction" })
 foreach (var language in new[] { "zh-CN", "en-US" })
