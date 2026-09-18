@@ -32,6 +32,13 @@ jobs:
           target.write_bytes(patch)
           subprocess.run(['git', 'apply', '--cached', str(target)], check=True)
           subprocess.run(['git', 'checkout-index', '-a', '-f'], check=True)
+          p = Path('src/AppController.SettingsSidebar.cs')
+          text = p.read_text(encoding='utf-8')
+          for name in ['BuildVisualSettingsPage', 'BuildShortcutSettingsPage']:
+            assert name + '())' in text
+            text = text.replace(name + '())', name + ')')
+          p.write_text(text, encoding='utf-8', newline='\n')
+          subprocess.run(['git', 'add', '--', str(p)], check=True)
       - name: Build and settings behavior checks
         shell: pwsh
         run: |
