@@ -262,7 +262,9 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     public string GetSettingsJson(PaperBodyPluginDescriptor descriptor)
     {
-        var settings = descriptor.Manifest?.Settings ?? [];
+        var settings = (descriptor.Manifest?.Settings ?? [])
+            .Where(setting => setting.Type != "action")
+            .ToArray();
         if (settings.Length == 0)
         {
             return "{}";
