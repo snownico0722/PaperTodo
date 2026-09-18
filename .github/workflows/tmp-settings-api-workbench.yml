@@ -25,12 +25,14 @@ jobs:
           from pathlib import Path
           import base64, lzma, hashlib, subprocess, tempfile
           subprocess.run(['git', 'config', 'core.autocrlf', 'false'], check=True)
-          encoded = ''.join(Path(f'.github/settings-api-payload/part{i}').read_text().strip() for i in range(1,5))
-          patch = lzma.decompress(base64.b64decode(encoded))
-          assert hashlib.sha256(patch).hexdigest() == '5e10b9974684efb5e577686652c8322f8c6d55fa9dac47024d12cee9e052025d'
-          p = Path(tempfile.gettempdir()) / 'settings-api.patch'
-          p.write_bytes(patch)
-          subprocess.run(['git', 'apply', '--unidiff-zero', '--cached', str(p)], check=True)
+          initial = ''.join(Path(f'.github/settings-api-payload/part{i}').read_text().strip() for i in range(1,5))
+          review = Path('.github/settings-api-payload/review').read_text().strip()
+          for encoded, digest in [(initial, '5e10b9974684efb5e577686652c8322f8c6d55fa9dac47024d12cee9e052025d'), (review, 'e3c6952e1a69d9e7f8a5cc351fd8c8baa0d94e3aa28cde5c6e43847c048a71dd')]:
+            patch = lzma.decompress(base64.b64decode(encoded))
+            assert hashlib.sha256(patch).hexdigest() == digest
+            p = Path(tempfile.gettempdir()) / 'settings-api.patch'
+            p.write_bytes(patch)
+            subprocess.run(['git', 'apply', '--unidiff-zero', '--cached', str(p)], check=True)
           subprocess.run(['git', 'checkout-index', '-a', '-f'], check=True)
       - name: Build and behavior checks
         shell: pwsh
