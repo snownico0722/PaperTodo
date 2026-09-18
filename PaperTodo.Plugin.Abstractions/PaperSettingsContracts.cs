@@ -29,7 +29,7 @@ public sealed record PaperSettingChangeResult(
     [property: JsonPropertyName("changed")] bool Changed);
 
 /// <summary>
-/// Optional application Settings capability. List/Get need settings.read; Set needs settings.update
+/// Protocol 2.2 optional application Settings capability. List/Get need settings.read; Set needs settings.update
 /// and, for sensitive settings, settings.control. IDs and schemas come from List, not CLR field names.
 /// This is distinct from context.Settings/SettingsJson, which belongs to the plugin itself.
 /// </summary>
