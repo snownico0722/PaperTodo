@@ -697,6 +697,11 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        if (setting.Type == "action")
+        {
+            return BuildPluginActionSetting(descriptor, setting);
+        }
+
         if (setting.Type == "boolean")
         {
             var value = _paperBodyPlugins.DataStore
@@ -748,6 +753,69 @@ public sealed partial class AppController
         Grid.SetColumn(editor, 1);
         row.Children.Add(editor);
         return row;
+    }
+
+    private FrameworkElement BuildPluginActionSetting(
+        PaperBodyPluginDescriptor descriptor,
+        PaperBodyPluginSettingManifest setting)
+    {
+        var button = SettingsTextButton(setting.Name);
+        button.MinWidth = 112;
+        button.HorizontalAlignment = HorizontalAlignment.Right;
+        button.Margin = new Thickness(0, 5, 0, 0);
+        button.ToolTip = PluginSettingToolTip(setting);
+
+        void Execute()
+        {
+            if (!PluginShortcutActions.TryParsePaperAction(setting.Action, out var paperAction))
+            {
+                return;
+            }
+
+            var paper = ResolvePluginShortcutPaper(descriptor.Id);
+            if (paper == null)
+            {
+                return;
+            }
+
+            switch (paperAction)
+            {
+                case PluginShortcutPaperAction.Show:
+                    TryShowPluginHostPaper(paper.Id, descriptor.Id, activate: true);
+                    break;
+                case PluginShortcutPaperAction.Hide:
+                    TryHidePluginHostPaper(paper.Id, descriptor.Id);
+                    break;
+                case PluginShortcutPaperAction.Toggle:
+                    TryTogglePluginHostPaperVisibility(paper.Id, descriptor.Id, activate: true);
+                    break;
+                case PluginShortcutPaperAction.Expand:
+                    TryExpandPluginHostPaper(paper.Id, descriptor.Id, activate: true);
+                    break;
+                case PluginShortcutPaperAction.Collapse:
+                    TryCollapsePluginHostPaper(paper.Id, descriptor.Id);
+                    break;
+                case PluginShortcutPaperAction.Activate:
+                    TryActivatePluginHostPaper(paper.Id, descriptor.Id);
+                    break;
+            }
+        }
+
+        button.Click += (_, _) =>
+        {
+            var owner = Window.GetWindow(button);
+            if (owner != null && ReferenceEquals(owner.Owner, _settingsWindow))
+            {
+                owner.Close();
+                _ = Application.Current.Dispatcher.BeginInvoke(
+                    (Action)Execute,
+                    DispatcherPriority.Input);
+                return;
+            }
+
+            Execute();
+        };
+        return button;
     }
 
     private FrameworkElement BuildPluginStringSetting(
