@@ -62,6 +62,8 @@ Check(composedZh.Contains(JsonSerializer.Serialize(expectedPath)),
     "The bundled Skill must resolve against the actual installation path.");
 Check(composedZh.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after Chinese prompt injection.");
+Check(composedZh.Contains("新增/空白写入") && composedZh.Contains("直接删除权限"),
+    "Chinese MCP activation hint must state that all MCP permissions are enabled automatically.");
 
 var composedEn = initial.PrependTo(task, pluginDirectory, "en-US", defaults, executable);
 Check(composedEn.Contains(CodexPromptState.BuiltInDefaultPromptEn),
@@ -74,6 +76,8 @@ Check(composedEn.Contains(JsonSerializer.Serialize(expectedPath)),
     "English prompt must reference the same bundled Skill path.");
 Check(composedEn.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after English prompt injection.");
+Check(composedEn.Contains("additive/blank writes") && composedEn.Contains("direct-delete permission"),
+    "English MCP activation hint must state that all MCP permissions are enabled automatically.");
 
 var edited = initial with { DefaultPrompt = "自定义提示词" };
 var restored = CodexPromptState.Read(JsonSerializer.Serialize(edited));
@@ -115,14 +119,15 @@ Check(!CodexPromptState.BuiltInDefaultPromptZh.Contains(CodexPromptState.SkillNa
       !CodexPromptState.BuiltInDefaultPromptEn.Contains(CodexPromptState.SkillName),
     "The editable built-in prompt must not embed a plugin skill.");
 Check(CodexPromptState.BuiltInDefaultPromptZh.Contains("Note") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("启用待办关联纸片") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("完整写入") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("避免过度冗长"),
-    "Chinese built-in prompt must keep todos concise, allow linked notes, and avoid verbose notes.");
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("功能未开启，则不要使用") &&
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("不要过度冗长") &&
+      CodexPromptState.BuiltInDefaultPromptZh.Contains("不需要过度精简") &&
+      !CodexPromptState.BuiltInDefaultPromptZh.Contains("手动开启"),
+    "Chinese built-in prompt must keep todos concise, skip linked notes when the feature is off, and keep notes balanced.");
 Check(CodexPromptState.BuiltInDefaultPromptEn.Contains("link that Note to the todo") &&
-      CodexPromptState.BuiltInDefaultPromptEn.Contains("Enable todo-paper links") &&
-      CodexPromptState.BuiltInDefaultPromptEn.Contains("full writes") &&
-      CodexPromptState.BuiltInDefaultPromptEn.Contains("avoid unnecessary verbosity"),
+      CodexPromptState.BuiltInDefaultPromptEn.Contains("is disabled, do not use") &&
+      CodexPromptState.BuiltInDefaultPromptEn.Contains("avoid unnecessary verbosity") &&
+      !CodexPromptState.BuiltInDefaultPromptEn.Contains("enable it manually"),
     "English built-in prompt must carry the same todo/note length guidance.");
 for (var mask = 0; mask < 8; mask++)
 foreach (var prompt in new string?[] { null, "", "custom instruction" })
@@ -156,6 +161,9 @@ foreach (var invalid in new[] { "false", "null", "0", "\"true\"" })
 foreach (var invalid in new[] { "{}", "{broken", "null", "[]", "" })
     Check(!CodexMcpPermission.CanEnable(true, true, invalid), "Missing/old/corrupt settings must not grant activation.");
 Check(CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":true}"), "A live authorized plugin may activate MCP.");
+var fullAccess = CodexMcpPermission.FullAccess;
+Check(fullAccess.Enabled && fullAccess.BlankWrites && fullAccess.FullWrites && fullAccess.Deletes,
+    "Authorized Codex activation must grant the MCP master switch and every MCP write/delete permission.");
 Check(!CodexMcpPermission.CanEnable(false, true, "{\"allowMcp\":true}"), "An exiting app cannot activate MCP.");
 Check(!CodexMcpPermission.CanEnable(true, false, "{\"allowMcp\":true}"), "An inactive plugin cannot activate MCP.");
 Check(!CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":false}"), "Revoking the setting must deny later activation.");
