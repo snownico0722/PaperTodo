@@ -43,7 +43,7 @@ public sealed partial class AppController
             },
             Read = () => JsonSerializer.SerializeToElement(get()),
             Validate = value => ValidatePublicSetting(value, kind, allowed, minimum, maximum, step, id),
-            Begin = value => BeginPublicSettingChange(id, get, set, value.Deserialize<T>()!, effects)
+            Begin = value => BeginSettingChange(id, get, set, value.Deserialize<T>()!, effects)
         };
     }
 
@@ -89,7 +89,7 @@ public sealed partial class AppController
         return value.Clone();
     }
 
-    private PaperSettingChange BeginPublicSettingChange<T>(string id, Func<T> get,
+    private PaperSettingChange BeginSettingChange<T>(string id, Func<T> get,
         Action<T> set, T value, SettingEffects effects)
     {
         var previous = get();
@@ -189,12 +189,17 @@ public sealed partial class AppController
                     MarkDirty();
                     RebuildTrayMenu();
                 }
-                else PublishPublicSettingEffects(effects);
-                RefreshSettingsWindowContent();
+                else PublishSettingEffects(effects);
+                // Theme already refreshes the settings chrome. Typography and mode changes
+                // also affect the whole tree; all other changes update only their own region.
+                if (effects is SettingEffects.Advanced or SettingEffects.Typography)
+                    RefreshSettingsWindowContent();
+                else if (effects != SettingEffects.Theme)
+                    RefreshSettingsForChange(id);
             });
     }
 
-    private void PublishPublicSettingEffects(SettingEffects effects)
+    private void PublishSettingEffects(SettingEffects effects)
     {
         switch (effects)
         {
@@ -222,6 +227,13 @@ public sealed partial class AppController
             case SettingEffects.ImageReferences:
                 foreach (var w in _windows.Values.ToArray()) w.UpdateImageReferenceTextMode(); break;
             case SettingEffects.ExternalExtension:
+                // Update the existing editor before any later focus-loss commit can read it.
+                if (_settingsExternalMarkdownTextBox is { } editor)
+                {
+                    var caret = editor.CaretIndex;
+                    editor.Text = ExternalMarkdownFileExtensions.Normalize(State.ExternalMarkdownExtension);
+                    editor.CaretIndex = Math.Min(caret, editor.Text.Length);
+                }
                 foreach (var w in _windows.Values.ToArray()) w.UpdateExternalMarkdownExtension(); break;
             case SettingEffects.Compress: _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages; break;
             case SettingEffects.TodoRows:
@@ -297,7 +309,7 @@ public sealed partial class AppController
             {
                 if (!SystemSettingsHelper.ToggleStartup(value.GetBoolean()))
                     throw PaperSettingsService.Error("setting_apply_failed", "Could not update the Windows startup registration.");
-            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsWindowContent(); }, () => true);
+            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); }, () => true);
         yield return startup;
         foreach (var definition in new[]
         {
@@ -323,7 +335,7 @@ public sealed partial class AppController
                 try { write(value.Deserialize<T>()!); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 { throw PaperSettingsService.Error("save_failed", "Could not save paper-background preferences."); }
-            }, () => { }, () => { RefreshPaperBackgroundSurfaces(); RefreshSettingsWindowContent(); }, () => true);
+            }, () => { }, () => { RefreshPaperBackgroundSurfaces(); RefreshSettingsForChange(id); }, () => true);
         return setting;
     }
 }

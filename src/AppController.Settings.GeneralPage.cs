@@ -15,15 +15,119 @@ public sealed partial class AppController
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var leftColumn = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 14, 0)
-        };
+        var leftColumn = BuildSettingsLiveRegion("general.options", BuildSettingsGeneralOptions);
         var rightColumn = new StackPanel
         {
             Margin = new Thickness(14, 0, 0, 0)
         };
 
+        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
+        _settingsCapsuleModeCheckBox = SettingsToggle(
+            Strings.Get("TrayCapsuleMode"),
+            State.UseCapsuleMode,
+            ToggleCapsuleMode);
+        _settingsDeepCapsuleModeCheckBox = SettingsToggle(
+            Strings.Get("TrayDeepCapsuleMode"),
+            State.UseDeepCapsuleMode,
+            ToggleDeepCapsuleMode);
+        _settingsDeepCapsuleExpandedSlotCheckBox = SettingsToggle(
+            Strings.Get("SettingsShowDeepCapsuleWhileExpanded"),
+            State.ShowDeepCapsuleWhileExpanded,
+            ToggleDeepCapsuleExpandedSlot);
+        _settingsRememberDeepCapsuleExpandedPositionCheckBox = SettingsToggle(
+            Strings.Get("SettingsRememberDeepCapsuleExpandedPosition"),
+            State.RememberDeepCapsuleExpandedPosition,
+            ToggleRememberDeepCapsuleExpandedPosition);
+        _settingsCapsuleCollapseAllCheckBox = SettingsToggle(
+            Strings.Get("SettingsCapsuleCollapseAll"),
+            State.UseCapsuleCollapseAll,
+            ToggleCapsuleCollapseAll);
+        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(
+            Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"),
+            State.CollapseExpandedDeepCapsuleOnClick,
+            ToggleCollapseExpandedDeepCapsuleOnClick);
+
+        rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
+        rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsDeepCapsuleExpandedSlotCheckBox,
+            "TipShowDeepCapsuleWhileExpanded"));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsRememberDeepCapsuleExpandedPositionCheckBox,
+            "TipRememberDeepCapsuleExpandedPosition"));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsCapsuleCollapseAllCheckBox,
+            "TipCapsuleCollapseAll"));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
+            "TipCollapseExpandedDeepCapsuleOnClick"));
+
+        rightColumn.Children.Add(SettingsSectionLabel(
+            SettingsSidebarLocalized(
+                "边缘浏览",
+                "Edge browsing",
+                "エッジ閲覧",
+                "가장자리 탐색")));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.edgeBrowsing",
+            BuildLabsEdgeCapsuleHoverIntentSettings));
+        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () => WrapWithHint(
+            SettingsToggle(
+                Strings.Get("LabsDockedCapsulesNonTopmost"),
+                State.ExperimentalDockedCapsulesNonTopmost,
+                ToggleExperimentalDockedCapsulesNonTopmost),
+            "TipLabsDockedCapsulesNonTopmost")));
+
+        if (State.AdvancedSettingsMode)
+        {
+            rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsuleAppearance", () => AdvancedSettingsBlock(
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
+                        State.HideEdgeCapsuleCloseButtonOnHover,
+                        ToggleHideEdgeCapsuleCloseButtonOnHover),
+                    BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())),
+                CompactSettingsField(
+                    Strings.Get("SettingsMaxTitleLength"),
+                    CreateMaxTitleLengthStepper(),
+                    editorWidth: 132,
+                    tipKey: "TipMaxTitleLength",
+                    topMargin: 8),
+                CompactSettingsField(
+                    Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"),
+                    CreateDeepCapsuleTitleMeasureLimitStepper(),
+                    editorWidth: 132,
+                    tipKey: "TipDeepCapsuleTitleMeasureLimit",
+                    topMargin: 8))));
+        }
+
+        RefreshSettingsCapsuleToggleStates();
+
+        var separator = new Border
+        {
+            Width = 1,
+            Margin = new Thickness(0, 10, 0, 4),
+            Background = TrayBorderBrush,
+            Opacity = 0.65
+        };
+        Grid.SetColumn(leftColumn, 0);
+        Grid.SetColumn(separator, 1);
+        Grid.SetColumn(rightColumn, 2);
+        columns.Children.Add(leftColumn);
+        columns.Children.Add(separator);
+        columns.Children.Add(rightColumn);
+
+        return WithSettingsPageRestoreFooter(
+            columns,
+            RestoreSettingsSidebarGeneralDefaults);
+    }
+
+    private UIElement BuildSettingsGeneralOptions()
+    {
+        var leftColumn = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 14, 0)
+        };
         leftColumn.Children.Add(CreateUiLanguageSettingsRow());
         leftColumn.Children.Add(WrapWithHint(
             SettingsToggle(
@@ -95,105 +199,8 @@ public sealed partial class AppController
                 ToggleTopBarExternalOpenButton),
             "TipExternalOpenButton"));
 
-        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
-        _settingsCapsuleModeCheckBox = SettingsToggle(
-            Strings.Get("TrayCapsuleMode"),
-            State.UseCapsuleMode,
-            ToggleCapsuleMode);
-        _settingsDeepCapsuleModeCheckBox = SettingsToggle(
-            Strings.Get("TrayDeepCapsuleMode"),
-            State.UseDeepCapsuleMode,
-            ToggleDeepCapsuleMode);
-        _settingsDeepCapsuleExpandedSlotCheckBox = SettingsToggle(
-            Strings.Get("SettingsShowDeepCapsuleWhileExpanded"),
-            State.ShowDeepCapsuleWhileExpanded,
-            ToggleDeepCapsuleExpandedSlot);
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = SettingsToggle(
-            Strings.Get("SettingsRememberDeepCapsuleExpandedPosition"),
-            State.RememberDeepCapsuleExpandedPosition,
-            ToggleRememberDeepCapsuleExpandedPosition);
-        _settingsCapsuleCollapseAllCheckBox = SettingsToggle(
-            Strings.Get("SettingsCapsuleCollapseAll"),
-            State.UseCapsuleCollapseAll,
-            ToggleCapsuleCollapseAll);
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(
-            Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"),
-            State.CollapseExpandedDeepCapsuleOnClick,
-            ToggleCollapseExpandedDeepCapsuleOnClick);
-
-        rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsDeepCapsuleExpandedSlotCheckBox,
-            "TipShowDeepCapsuleWhileExpanded"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox,
-            "TipRememberDeepCapsuleExpandedPosition"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsCapsuleCollapseAllCheckBox,
-            "TipCapsuleCollapseAll"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
-            "TipCollapseExpandedDeepCapsuleOnClick"));
-
-        rightColumn.Children.Add(SettingsSectionLabel(
-            SettingsSidebarLocalized(
-                "边缘浏览",
-                "Edge browsing",
-                "エッジ閲覧",
-                "가장자리 탐색")));
-        rightColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.edgeBrowsing",
-            BuildLabsEdgeCapsuleHoverIntentSettings));
-        rightColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsDockedCapsulesNonTopmost"),
-                State.ExperimentalDockedCapsulesNonTopmost,
-                ToggleExperimentalDockedCapsulesNonTopmost),
-            "TipLabsDockedCapsulesNonTopmost"));
-
-        if (State.AdvancedSettingsMode)
-        {
-            rightColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    SettingsToggle(
-                        Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
-                        State.HideEdgeCapsuleCloseButtonOnHover,
-                        ToggleHideEdgeCapsuleCloseButtonOnHover),
-                    BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())),
-                CompactSettingsField(
-                    Strings.Get("SettingsMaxTitleLength"),
-                    CreateMaxTitleLengthStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipMaxTitleLength",
-                    topMargin: 8),
-                CompactSettingsField(
-                    Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"),
-                    CreateDeepCapsuleTitleMeasureLimitStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipDeepCapsuleTitleMeasureLimit",
-                    topMargin: 8)));
-        }
-
-        RefreshSettingsCapsuleToggleStates();
-
-        var separator = new Border
-        {
-            Width = 1,
-            Margin = new Thickness(0, 10, 0, 4),
-            Background = TrayBorderBrush,
-            Opacity = 0.65
-        };
-        Grid.SetColumn(leftColumn, 0);
-        Grid.SetColumn(separator, 1);
-        Grid.SetColumn(rightColumn, 2);
-        columns.Children.Add(leftColumn);
-        columns.Children.Add(separator);
-        columns.Children.Add(rightColumn);
-
-        return WithSettingsPageRestoreFooter(
-            columns,
-            RestoreSettingsSidebarGeneralDefaults);
+        RefreshSettingsSystemVisibilityToggleStates();
+        return leftColumn;
     }
 
     private void ToggleEdgeCapsulePreviewPreferDownward()

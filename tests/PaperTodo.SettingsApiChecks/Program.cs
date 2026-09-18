@@ -9,7 +9,7 @@ using ModelContextProtocol;
 using PaperTodo;
 using PaperTodo.Plugin;
 
-internal static class Program
+internal static partial class Program
 {
     private static int _checks;
     private static JsonElement Json<T>(T value) => JsonSerializer.SerializeToElement(value);
@@ -66,6 +66,8 @@ internal static class Program
             ServiceBehavior();
             CatalogBehavior();
             AdapterBehavior();
+            SharedUiSettingBehavior();
+            SettingsEditorBehavior();
             Pump(PipeAndUnlinkBehavior());
             WebBridges();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");

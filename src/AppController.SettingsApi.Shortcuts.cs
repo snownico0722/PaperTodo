@@ -129,7 +129,7 @@ public sealed partial class AppController
                 ResetShortcutDraftToSavedState();
                 ClearShortcutApplyFailure();
                 RefreshPluginShortcuts();
-                RefreshSettingsWindowContent();
+                RefreshSettingsForChange("shortcuts.bindings");
             });
     }
 }

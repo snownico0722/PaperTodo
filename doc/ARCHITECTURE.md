@@ -102,7 +102,7 @@ Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bri
 
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
 
-公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。普通修改与敏感控制分别鉴权，权限配置本身不能通过未授权的 Settings 调用自行提权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
+公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。设置页的胶囊、关联、排序等联动修改也复用此服务与生效函数，不另维护一套状态转换。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。普通修改与敏感控制分别鉴权，权限配置本身不能通过未授权的 Settings 调用自行提权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
 
 ### 3.3 辅助进程与插件 Runtime
 
