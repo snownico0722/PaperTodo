@@ -1,0 +1,43 @@
+name: Temporary Protocol 2.2 Native sync
+
+on:
+  push:
+    branches:
+      - feat/codex-skills-mcp-20260918
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: ${{ !contains(github.event.head_commit.message, '[protocol22-sync]') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Protocol policy checks
+        shell: pwsh
+        run: dotnet run --project ./tests/PaperTodo.ProtocolPolicyChecks/PaperTodo.ProtocolPolicyChecks.csproj -c Release
+      - name: Rebuild Codex plugin runtime
+        shell: pwsh
+        run: |
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath ./plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit generated runtime
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/tools.codex-cli-bridge.native
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "build: sync Codex plugin for API 2.2 [protocol22-sync]"
+            git push origin "HEAD:$env:GITHUB_REF_NAME"
+          } else {
+            Write-Host "Runtime already matches source."
+          }
