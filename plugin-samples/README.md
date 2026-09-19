@@ -12,6 +12,25 @@ New plugins use:
 
 The current host exposes Protocol `2.2` and remains backward-compatible with `2.1`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.2`; existing `2.1` plugins can keep running as long as they do not declare 2.2-only features.
 
+### Plugin API version history
+
+`apiVersion` is the **minimum PaperTodo plugin API required by the plugin**, not the plugin's own release version. The host loads a plugin only when:
+
+```text
+MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
+```
+
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.2**.
+
+| API | Status | Main contract milestones |
+| --- | --- | --- |
+| 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
+| 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
+| 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
+| 2.2 | Current | Adds public application Settings API (`settings.read/update/control`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+
+**Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
+
 Public plugin types in [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) are the compile-time contract. Actual host validation and runtime behavior are defined by the current host code. Read [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md) only when you need to understand PaperTodo's internal ownership model; plugin authors do not need to study the host architecture before getting started.
 
 > **Trust boundary: PaperTodo does not provide a security sandbox for plugins.** Both Native and Web plugins must be treated as trusted code. Install plugins only from sources you trust.
