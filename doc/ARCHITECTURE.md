@@ -98,13 +98,19 @@ PaperTodo.exe
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
 
+Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 后，任务需要 MCP 且 MCP 或所需权限未开启时可发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后，一次性开启 MCP 总开关、空白/追加写入、完整写入、直接删除和敏感软件设置控制权限。没有现成 GUI 主实例时该命令直接退出，不启动或恢复纸片；普通 PaperTodo 功能开关（例如待办关联纸片）不由该命令自动修改。
+
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
+
+公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。设置页的胶囊、关联、排序等联动修改也复用此服务与生效函数，不另维护一套状态转换。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。普通修改与敏感控制分别鉴权，权限配置本身不能通过未授权的 Settings 调用自行提权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
+
+跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器鉴权后，进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。待提交编辑与事件沿用现有外部操作边界，保留插件/MCP 来源；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。插件新增 `papers.presentation`（要求 API 2.2）；MCP 复用总开关与完整写入授权，不新增全局权限开关。
 
 ### 3.3 辅助进程与插件 Runtime
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前只接受 **2.1**。清理前的实验性 2.0 不属于当前兼容范围。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
+插件协议当前最新为 **2.2**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1 插件可继续运行，使用 2.2-only 能力的插件必须声明 2.2。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
 一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
@@ -215,7 +221,15 @@ Provider 当前分三类：
 
 transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MCP protocol 不下沉到 `PaperCommandService`；反过来，transport/presentation 层也不建立另一套核心 mutation 实现。
 
-### 5.4 Protocol 2.1 Top Bar
+### 5.4 Plugin Protocol 2.x
+
+当前最新插件协议是 **2.2**，宿主继续加载 **2.1** 插件。2.1 已发布能力保持原语义；2.2 新增的 manifest/API 契约必须由插件显式声明 `apiVersion: "2.2"`。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+
+- 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
+- 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update/control` 权限。
+- 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
+
+#### Protocol 2.1 Top Bar
 
 Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API，而且 **Paper 与 Global 有不同 owner**：
 
@@ -224,7 +238,8 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 当前稳定边界：
 
-- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。
+- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。Protocol 2.2 的 `presentation: hidden` 仍创建真实 Runtime-owner Paper，但普通启动恢复不创建可见 surface；显式宿主 paper action 仍可随后显示/展开它.
+- Protocol 2.2 插件 settings 的 `action` 是无持久化值的命令按钮：`paper.*` 复用已有目标选择与 presentation 路径，自定义 ID 复用 provider Runtime 的 GlobalShortcuts handler / Web `shortcutInvoked` 投递，不要求配置热键。可用性由现有实体 Paper / Runtime handler lease 决定，点击时再次核验；不另建 callback、任务或重试协议。隐藏 startupPaper 只在普通启动恢复前归一化，延迟 startupPaper 阶段不再覆盖用户刚刚发出的显示/展开操作。
 - 运行中 provider 从 0→1 张实体插件 paper 时启动 Runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
 - `PaperWindow` 始终拥有顶栏 WPF tree、按钮尺寸/位置、主题、Hover、DPI、字体缩放和 responsive layout；插件只提交 action descriptor。
 - 图标只接受短字符或受限 SVG/WPF Path Data；Path 可以按宿主前景色 Fill 或 Stroke，不接受完整 SVG document、WebView 或任意 WPF tree。

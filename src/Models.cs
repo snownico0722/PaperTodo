@@ -497,6 +497,8 @@ public sealed class AppState
     public bool McpAllowBlankWrites { get; set; }
     public bool McpAllowFullWrites { get; set; }
     public bool McpAllowDeletes { get; set; }
+    // Separate authorization for changing security/privacy/OS settings through MCP.
+    public bool McpAllowSettingsControl { get; set; }
     public bool ExperimentalCapsuleMagnetism { get; set; }
     public bool ExperimentalCapsuleMagnetScreenEdges { get; set; } = true;
     public bool ExperimentalCapsuleMagnetWindowEdges { get; set; } = true;

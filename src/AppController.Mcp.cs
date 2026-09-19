@@ -13,13 +13,20 @@ public sealed partial class AppController
 
     private void RefreshMcpRuntime()
     {
-        if (IsExiting || !State.McpEnabled)
+        if (IsExiting)
         {
             DisposeMcpRuntime();
             return;
         }
+        if (!State.McpEnabled)
+        {
+            // set_setting(mcp.enabled, false) must finish its response before closing its pipe.
+            _mcpApiHost?.StopAfterResponse();
+            return;
+        }
 
         _mcpCommands ??= new McpCommandService(this, PaperCommands);
+        if (_mcpApiHost?.IsStopping == true) _mcpApiHost = null;
         _mcpApiHost ??= new McpApiHost(
             Application.Current.Dispatcher,
             _mcpCommands);
@@ -41,6 +48,55 @@ public sealed partial class AppController
         RefreshSettingsRegions("labs.mcp");
     }
 
+    internal bool TryEnableMcpForCodex()
+    {
+        const string pluginId = CodexMcpPermission.PluginId;
+        if (!IsRunning || !HasEntityPluginPaper(pluginId) || !IsPluginRuntimeRunning(pluginId) ||
+            !PaperBodyPlugins.TryGet(pluginId, out var descriptor)) return false;
+
+        try
+        {
+            var settings = PaperBodyPlugins.DataStore.GetSettingsJson(descriptor);
+            if (PaperBodyPlugins.DataStore.TryGetReadIssue(pluginId, out _) ||
+                !CodexMcpPermission.CanEnable(IsRunning, IsPluginRuntimeRunning(pluginId), settings))
+                return false;
+
+            var previous = new CodexMcpAccess(
+                State.McpEnabled,
+                State.McpAllowBlankWrites,
+                State.McpAllowFullWrites,
+                State.McpAllowDeletes,
+                State.McpAllowSettingsControl);
+            var target = CodexMcpPermission.FullAccess;
+            if (previous == target) return true;
+
+            State.McpEnabled = target.Enabled;
+            State.McpAllowBlankWrites = target.BlankWrites;
+            State.McpAllowFullWrites = target.FullWrites;
+            State.McpAllowDeletes = target.Deletes;
+            State.McpAllowSettingsControl = target.SettingsControl;
+            MarkDirty();
+            if (!TrySaveNow(sync: true))
+            {
+                State.McpEnabled = previous.Enabled;
+                State.McpAllowBlankWrites = previous.BlankWrites;
+                State.McpAllowFullWrites = previous.FullWrites;
+                State.McpAllowDeletes = previous.Deletes;
+                State.McpAllowSettingsControl = previous.SettingsControl;
+                return false;
+            }
+
+            RefreshMcpRuntime();
+            RefreshSettingsRegions("labs.mcp");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[CodexCliBridge] MCP activation failed: {ex}");
+            return false;
+        }
+    }
+
     private void ToggleMcpBlankWrites()
     {
         State.McpAllowBlankWrites = !State.McpAllowBlankWrites;
@@ -51,6 +107,13 @@ public sealed partial class AppController
     private void ToggleMcpFullWrites()
     {
         State.McpAllowFullWrites = !State.McpAllowFullWrites;
+        SaveNow();
+        RefreshSettingsRegions("labs.mcp");
+    }
+
+    private void ToggleMcpSettingsControl()
+    {
+        State.McpAllowSettingsControl = !State.McpAllowSettingsControl;
         SaveNow();
         RefreshSettingsRegions("labs.mcp");
     }
@@ -223,29 +286,9 @@ public sealed partial class AppController
         TryExitCleanup(RefreshTrayMenu);
     }
 
-    private static string BuildAiMcpSkill()
-    {
-        return string.Join(
-            Environment.NewLine,
-            "# PaperTodo MCP Skill",
-            "",
-            "Use the MCP server named `papertodo` as the user's lightweight PaperTodo workspace.",
-            "",
-            "## Workflow",
-            "- Call `list_papers` first when a paper id is unknown.",
-            "- Call `get_paper` before replacing existing todo text, completion state, or note content.",
-            "- Prefer additive operations (`create_todo_paper`, `create_note`, `add_todos`) when they satisfy the request.",
-            "- Use `update_todo`, `write_note`, `set_todo_reminder`, and delete tools only when the requested mutation requires them.",
-            "- Preserve the user's existing paper structure unless the user explicitly asks to reorganize it.",
-            "- Treat permission errors as PaperTodo policy, not as transport failures; do not retry a rejected mutation with a more destructive tool.",
-            "- For reminders, use an explicit future ISO 8601 time with UTC offset.",
-            "",
-            "## Available tools",
-            "`list_papers`, `get_paper`, `create_todo_paper`, `create_note`, `add_todos`,",
-            "`update_todo`, `set_todo_reminder`, `write_note`, `delete_paper`, `delete_todo`.",
-            "",
-            "Connection details are intentionally separate. Use PaperTodo's “Copy JSON config” button to configure the MCP client.");
-    }
+    private static string BuildAiMcpSkill() =>
+        PaperTodoOperationSkill.For(
+            UiLanguages.EffectiveUiCulture.TwoLetterISOLanguageName == "zh");
 
     private static string BuildJsonMcpConfiguration()
     {

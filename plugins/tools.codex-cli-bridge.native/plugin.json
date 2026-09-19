@@ -4,7 +4,7 @@
   "name": "Codex CLI Bridge",
   "description": "Send PaperTodo todos and paper content directly to the local Codex CLI.",
   "version": "1.2.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.CodexCliBridge.dll",
   "maxPaperInstances": 1,
@@ -23,7 +23,7 @@
       "id": "autoStart",
       "type": "boolean",
       "name": "Enable on startup",
-      "description": "Automatically create a collapsed Codex CLI plugin paper to keep the global todo and top-bar actions available.",
+      "description": "Automatically create a hidden Codex CLI plugin paper to keep the global todo and top-bar actions available.",
       "default": true,
       "quick": true
     },
@@ -67,6 +67,34 @@
       "description": "Used when no local path is linked. Leave empty to use the user profile directory; environment variables such as %USERPROFILE% are supported.",
       "default": "",
       "maxLength": 1024
+    },
+    {
+      "id": "editPrompt",
+      "type": "action",
+      "name": "Edit prompt",
+      "description": "Open the hidden Codex CLI prompt editor.",
+      "action": "paper.expand"
+    },
+    {
+      "id": "enablePluginSkill",
+      "type": "boolean",
+      "name": "Enable plugin skill",
+      "description": "Inject the bundled PaperTodo plugin-development skill when sending a task.",
+      "default": true
+    },
+    {
+      "id": "enableOperationSkill",
+      "type": "boolean",
+      "name": "Enable PaperTodo operation skill",
+      "description": "Inject short instructions for operating papers, todos, and notes through MCP.",
+      "default": true
+    },
+    {
+      "id": "allowMcp",
+      "type": "boolean",
+      "name": "Allow this plugin to enable MCP",
+      "description": "Allow automatic MCP activation when needed, including all write/delete and sensitive application-settings control permissions.",
+      "default": true
     }
   ],
   "advancedSettings": true,
@@ -74,7 +102,7 @@
   "startupPaper": {
     "enabledSetting": "autoStart",
     "instanceKey": "main",
-    "presentation": "capsule",
+    "presentation": "hidden",
     "title": "Codex CLI"
   },
   "locales": {
@@ -83,7 +111,7 @@
       "settings": {
         "autoStart": {
           "name": "启动后自动启用",
-          "description": "自动创建一张折叠的 Codex CLI 插件纸片，用于保持全局待办按钮和顶栏按钮可用。"
+          "description": "自动创建一张默认隐藏的 Codex CLI 插件纸片，用于保持全局待办按钮和顶栏按钮可用。"
         },
         "backgroundExecution": {
           "name": "后台执行",
@@ -104,10 +132,66 @@
         "workingDirectory": {
           "name": "默认工作目录",
           "description": "没有绑定本地路径时使用。留空则使用用户目录；支持 %USERPROFILE% 等环境变量。"
+        },
+        "editPrompt": {
+          "name": "编辑提示词",
+          "description": "打开默认隐藏的 Codex CLI 提示词编辑纸片。"
+        },
+        "enablePluginSkill": {
+          "name": "开启插件技能",
+          "description": "发送任务时注入 PaperTodo 插件制作技能。"
+        },
+        "enableOperationSkill": {
+          "name": "开启本软件操作技能",
+          "description": "发送任务时注入通过 MCP 操作纸片、待办和笔记的简短指引。"
+        },
+        "allowMcp": {
+          "name": "允许本插件开启 MCP",
+          "description": "任务需要 MCP 时，允许自动开启 MCP 总开关及全部写入、删除和敏感软件设置控制权限。"
         }
       },
       "startupPaper": {
         "title": "Codex CLI"
+      }
+    },
+    "ja": {
+      "settings": {
+        "editPrompt": {
+          "name": "プロンプトを編集",
+          "description": "既定で非表示の Codex CLI プロンプト編集用紙片を開きます。"
+        },
+        "enablePluginSkill": {
+          "name": "プラグイン制作スキルを有効化",
+          "description": "タスク送信時に PaperTodo プラグイン制作スキルを追加します。"
+        },
+        "enableOperationSkill": {
+          "name": "PaperTodo 操作スキルを有効化",
+          "description": "MCP で紙、タスク、ノートを操作する短い指示を追加します。"
+        },
+        "allowMcp": {
+          "name": "このプラグインによる MCP の有効化を許可",
+          "description": "必要なときに MCP とすべての書き込み・削除・機密アプリ設定の変更権限を自動的に有効化できます。"
+        }
+      }
+    },
+    "ko": {
+      "settings": {
+        "editPrompt": {
+          "name": "프롬프트 편집",
+          "description": "기본적으로 숨겨진 Codex CLI 프롬프트 편집 종이를 엽니다."
+        },
+        "enablePluginSkill": {
+          "name": "플러그인 제작 스킬 사용",
+          "description": "작업 전송 시 PaperTodo 플러그인 제작 스킬을 추가합니다."
+        },
+        "enableOperationSkill": {
+          "name": "PaperTodo 조작 스킬 사용",
+          "description": "MCP로 메모와 할 일을 조작하는 간단한 지침을 추가합니다."
+        },
+        "allowMcp": {
+          "name": "이 플러그인의 MCP 활성화 허용",
+          "description": "필요할 때 MCP 및 모든 쓰기·삭제·민감한 앱 설정 변경 권한을 자동으로 켤 수 있습니다."
+        }
       }
     }
   }

@@ -305,6 +305,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 close() { return request('popups.close'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                 noteAssets,
                 popups,
                 surface: 'body',
@@ -791,6 +796,18 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
         return method switch
         {
+        "appSettings.list" or
+        "appSettings.get" or
+        "appSettings.set" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+        "papers.show" or
+        "papers.hide" or
+        "papers.toggle" or
+        "papers.expand" or
+        "papers.collapse" or
+        "papers.toggleCollapsed" or
+        "papers.activate" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
         "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
         "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
         "todos.list" => _context.Host.ListTodos(

@@ -67,6 +67,17 @@ internal sealed partial class PaperBodyPluginRegistry
     {
         manifest.Permissions ??= [];
         NormalizeProtocolFeatures(manifest);
+        if (!ApiAtLeast(manifest.ApiVersion, "2.2") &&
+            manifest.Permissions.Any(permission =>
+                (permission?.Trim() ?? "").StartsWith("settings.", StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException(
+                "Application settings permissions require apiVersion 2.2 or later.");
+        }
+        if (!ApiAtLeast(manifest.ApiVersion, "2.2") &&
+            manifest.Permissions.Any(permission =>
+                string.Equals(permission?.Trim(), PaperTodoPermissionNames.PapersPresentation, StringComparison.Ordinal)))
+            throw new InvalidDataException("Cross-paper presentation requires apiVersion 2.2 or later.");
         if (manifest.MaxPaperInstances < 0)
         {
             throw new InvalidDataException(

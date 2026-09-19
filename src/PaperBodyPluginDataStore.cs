@@ -226,6 +226,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        RejectActionSettingValue(setting);
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -243,6 +244,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginSettingManifest setting,
         JsonElement value)
     {
+        RejectActionSettingValue(setting);
         var normalized = PaperBodyPluginRegistry.NormalizeSettingValue(setting, value);
         lock (_gate)
         {
@@ -260,9 +262,19 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         }
     }
 
+    private static void RejectActionSettingValue(PaperBodyPluginSettingManifest setting)
+    {
+        if (setting.Type == "action")
+        {
+            throw new InvalidOperationException("Action settings are commands, not stored values.");
+        }
+    }
+
     public string GetSettingsJson(PaperBodyPluginDescriptor descriptor)
     {
-        var settings = descriptor.Manifest?.Settings ?? [];
+        var settings = (descriptor.Manifest?.Settings ?? [])
+            .Where(setting => setting.Type != "action")
+            .ToArray();
         if (settings.Length == 0)
         {
             return "{}";

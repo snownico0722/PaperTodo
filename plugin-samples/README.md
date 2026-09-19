@@ -2,15 +2,34 @@
 
 **Language: English | [简体中文](README.zh.md)**
 
-This is the **current PaperTodo plugin development manual**. It documents the plugin contract, runtime boundaries, build workflow, and examples that are available today. It does not preserve protocol history.
+This is the **current PaperTodo plugin development manual**. It documents the current plugin contract, runtime boundaries, build workflow, and examples, with a concise API-version history and compatibility summary. Detailed historical trade-offs remain in `doc/DECISIONS.md`.
 
 New plugins use:
 
 ```json
-"apiVersion": "2.1"
+"apiVersion": "2.2"
 ```
 
-The current host accepts only `2.1` plugins. The experimental `2.0` contract that existed before the cleanup, and all earlier manifests, are no longer load-compatible. Older plugins must update their manifest and rebuild against the current `PaperTodo.Plugin.Abstractions`.
+The current host exposes Protocol `2.2` and remains backward-compatible with `2.1`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.2`; existing `2.1` plugins can keep running as long as they do not declare 2.2-only features.
+
+### Plugin API version history
+
+`apiVersion` is the **minimum PaperTodo plugin API required by the plugin**, not the plugin's own release version. The host loads a plugin only when:
+
+```text
+MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
+```
+
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.2**.
+
+| API | Status | Main contract milestones |
+| --- | --- | --- |
+| 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
+| 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
+| 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
+| 2.2 | Current | Adds cross-paper presentation (`papers.presentation`), public application Settings API (`settings.read/update/control`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+
+**Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
 Public plugin types in [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) are the compile-time contract. Actual host validation and runtime behavior are defined by the current host code. Read [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md) only when you need to understand PaperTodo's internal ownership model; plugin authors do not need to study the host architecture before getting started.
 
@@ -52,7 +71,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -156,7 +175,7 @@ Native `plugin.json`:
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -227,7 +246,7 @@ The current manifest supports:
 | `name` | Display name; falls back to the ID when empty |
 | `description` | Plugin description |
 | `version` | Plugin version; must parse as `Version` |
-| `apiVersion` | Must be `"2.1"` |
+| `apiVersion` | Use `"2.2"` for new plugins; `"2.1"` remains load-compatible |
 | `stateVersion` | Target version for host-managed JSON; used by both per-paper frontend state and provider Runtime state; at least 1 |
 | `maxPaperInstances` | Optional; maximum number of real Papers for the same provider. Defaults to `1`; `0` means unlimited. Hidden/collapsed Papers still count |
 | `entry` | Web main page or Native entry DLL; must stay inside the plugin directory |
@@ -257,7 +276,7 @@ Both `entry` and `miniEntry` must remain inside the plugin directory. `miniEntry
   "id": "com.example.weather",
   "name": "Weather",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -295,7 +314,7 @@ Constraints:
 
 - `enabledSetting` must reference a boolean setting in the same manifest;
 - `instanceKey` must be 1–80 ASCII letters, digits, `.`, `_`, or `-`;
-- `presentation` must be `capsule` or `expanded`;
+- `presentation` must be `capsule`, `expanded`, or `hidden`; `hidden` is a Protocol 2.2 feature and creates/restores the real Paper as a Runtime owner without showing its surface on normal startup;
 - `title` is limited to 120 characters;
 - creation timing, deduplication, and restoration are managed by the host; the plugin only declares intent;
 - if the user has converted the originally auto-created Paper to another provider/type, the host does not forcibly reclaim it or silently create another copy.
@@ -450,9 +469,9 @@ A plugin-data failure does not invalidate PaperTodo's core `data.json`.
 
 ### 5.3 Global settings
 
-The host supports `boolean`, `string`, `number`, `select`, and `shortcut`. There is still only one settings storage/read-write protocol; the two modes below affect host presentation only.
+The host supports `boolean`, `string`, `number`, `select`, `shortcut`, and, in Protocol 2.2, `action`. `action` is a host-rendered command button rather than stored settings data. Host-owned `paper.*` actions execute directly; a custom action ID requires `runtime` and is delivered through the existing Runtime action handler, without a shortcut binding. The remaining setting types continue to use the single settings storage/read-write protocol; the two modes below affect host presentation only.
 
-For `shortcut` `shortcutAction`, host `paper.*` actions, and custom Runtime action rules, see [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md).
+For Protocol 2.1 shortcuts plus Protocol 2.2 `action` buttons, host `paper.*` actions, and custom Runtime action rules, see [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md).
 
 When `advancedSettings` is omitted or `false`, existing behavior remains unchanged: up to three `quick: true` settings are displayed directly on the plugin card, while the rest expand/collapse **inside the same card** through "More settings". If no setting is marked `quick`, the host does not guess which settings are primary.
 
@@ -493,6 +512,38 @@ Runtime does not borrow the paper-session settings lifecycle. Native code may re
 - plugin-private data that must outlive any individual Paper.
 
 The plugin owns `.runtime/` format versioning, atomic writes, corruption recovery, and capacity control. Do not write ordinary single-Paper UI/business state to both `.runtime/` and `plugins/data/`, or you will create two authoritative copies of the same state.
+
+### 5.5 Public application Settings API (2.2)
+
+This optional capability controls **PaperTodo's user preferences**, not a provider's own `context.Settings`, `SettingsJson`, state, or `.runtime/`. Native Body and provider Runtime expose `context.SettingsApi` (`IPaperSettingsApi`); Web Body, Mini, and Runtime expose `papertodo.settingsApi`. No new required method is added to `IPaperTodoHostApi`.
+
+Declare `settings.read` for List/Get and `settings.update` for Set. Sensitive settings additionally require `settings.control`. Sensitive entries include MCP authorization, Windows startup, anonymous usage reporting, linked-script execution, and persistent script processes. Permissions are checked before mutation; access to ordinary settings cannot grant control of sensitive ones.
+
+```csharp
+var links = context.SettingsApi.Get("todo.paper_links");
+var todoSettings = context.SettingsApi.List("todo");
+// Only in response to a requested settings change:
+context.SettingsApi.Set("todo.paper_links", true);
+```
+
+```javascript
+const links = await papertodo.settingsApi.get('todo.paper_links');
+const catalog = await papertodo.settingsApi.list('todo');
+await papertodo.settingsApi.set('todo.paper_links', true);
+```
+
+MCP provides `list_settings(category?)`, `get_setting(id)`, and `set_setting(id, value)`. List/Get require MCP enabled; Set requires full writes, and sensitive entries also require the independently enabled **sensitive application-settings control** checkbox. That checkbox cannot authorize its own first activation. Codex's separately authorized automatic-MCP activation can enable all MCP permissions, including this one. Disabling `mcp.enabled` completes the current response before its transport stops.
+
+List returns an array. Each entry has a stable `id`, `category`, localized `title`, `type`, current `value`, caller-specific `writable`, `sensitive`, `requires_restart`, and optional `unavailable_reason`, `min`, `max`, `step`, `max_length`, and `options`. Set returns `setting`, `previous_value`, and `changed`; assigning the current value is a no-op. Query the catalog instead of guessing CLR property names.
+
+The catalog includes general/language/startup, privacy, appearance/fonts/background preferences, Note/Todo/title/capsule options, edge browsing, reminders, window/focus/interaction options, scripts, MCP, and global shortcuts. Values are saved preferences: dependent settings may remain selected but have no effect until their parent feature is enabled. Shortcuts expose `.gesture` and `.enabled`; each edge sequence uses a modifier chord plus 1 and applies that prefix to keys 1–9. Active shortcut-editor drafts/recording and registration conflicts are reported instead of silently overriding them. Language reports `requires_restart: true` and does not force a restart.
+
+Settings are an explicit typed catalog. Per-paper geometry/content, live queue state, migration fields, plugin-private settings, file contents and one-shot UI commands such as import/export/reset are **not** setting values. These retain their existing APIs/owners; no raw `AppState` reflection endpoint is exposed. Future public settings must be explicitly registered with validation and effects.
+
+All three adapters share one service. Core preferences synchronously save through `StateStore`, restore their previous values and coupled state on save failure, then refresh relevant UI/runtime paths. Startup registration and background preferences retain their existing independent persistence owners. Errors include `setting_not_found`, `invalid_setting_value`, `setting_dependency`, `settings_busy`, `setting_read_only`, `shortcut_conflict`, and `save_failed`. A committed setting is not reported as failed merely because a later UI refresh failed.
+
+Todo linking remains available through the existing Workspace update request (`UpdateLinkedPaper=true`, `LinkedPaperId=null` unlinks). MCP adds `update_todo(clear_linked_paper=true)` for unambiguous unlinking; it conflicts with a non-null `linked_paper_id`. Omitting both leaves the link unchanged. Before creating a long-detail Note for a Todo, query `todo.paper_links`; when disabled or unknown, skip that approach unless the user explicitly requests a settings change.
+
 
 ## 6. Workspace Permissions and Data API
 
@@ -582,6 +633,42 @@ Top Bar does not provide a second `GetBodyText/SetBodyText` data path. Continue 
 - custom plugin body: body data remains owned by that provider's own state/capability. The host does not pretend every body is text.
 
 Plugin Workspace and MCP share the same `PaperCommandService` business boundary, so save behavior, failure rollback, UI reconciliation, and event ordering do not get a second duplicate implementation just because the entry path differs.
+
+### Cross-paper presentation (API 2.2)
+
+Declare `"papers.presentation"` in `permissions` and target `apiVersion: "2.2"` to control any existing paper by exact ID, including Todo, Markdown and other providers' papers. This is independent of content-write/delete permissions. Discover IDs separately with `papers.read`; presentation responses do not expose titles or content.
+
+Native Body and Runtime both expose the optional `context.WorkspacePresentation` (`IPaperWorkspacePresentationApi`), without adding required members to the existing Workspace interface:
+
+```csharp
+context.WorkspacePresentation.ShowPaper(paperId, activate: false);
+context.WorkspacePresentation.HidePaper(paperId);
+context.WorkspacePresentation.TogglePaperVisibility(paperId, activate: false);
+context.WorkspacePresentation.ExpandPaper(paperId, activate: false);
+context.WorkspacePresentation.CollapsePaper(paperId);
+context.WorkspacePresentation.TogglePaperCollapsed(paperId, activate: false);
+context.WorkspacePresentation.ActivatePaper(paperId);
+```
+
+Web Body, Mini and Runtime use the existing Workspace request channel:
+
+```js
+await papertodo.workspace.request('papers.show', { paperId, activate: false });
+await papertodo.workspace.request('papers.hide', { paperId });
+await papertodo.workspace.request('papers.toggle', { paperId, activate: false });
+await papertodo.workspace.request('papers.expand', { paperId, activate: false });
+await papertodo.workspace.request('papers.collapse', { paperId });
+await papertodo.workspace.request('papers.toggleCollapsed', { paperId, activate: false });
+await papertodo.workspace.request('papers.activate', { paperId });
+```
+
+Show retains the current folded state; Expand also reveals the paper; Collapse retains visibility and never reveals a hidden paper. Activate reveals a hidden paper and requests focus without forcing expansion. `activate` defaults to `true` for show/expand/toggle operations. The host retains normal capsule eligibility checks; unavailable collapse returns `presentation_unavailable` instead of silently enabling a feature. Missing IDs return `paper_not_found`, never create a paper.
+
+The response is `{ paper_id, is_visible, is_collapsed }`: logical state after request processing, **not animation completion or a synchronous disk-save guarantee**. Existing host transitions and their normal persistence scheduling remain authoritative. Hide never deletes content or removes the Runtime's real Paper owner. Toggles invert state: do not blindly retry an uncertain toggle; read the current state first. Native Runtime background calls are marshalled to the UI dispatcher and disposed contexts are rejected.
+
+The session-scoped 2.1 `context.Presentation` / `papertodo.paper.*` API remains unchanged and still controls only its own host paper without this new permission. Web popups do not gain a generic Workspace API.
+
+MCP exposes `show_paper`, `hide_paper`, `toggle_paper_visibility`, `expand_paper`, `collapse_paper`, `toggle_paper_collapsed` and `activate_paper`, with `paper_id` and the same optional `activate` semantics. All require the MCP master switch and full writes, not deletion or sensitive-setting control. `list_papers` and `get_paper` return `is_collapsed` as well as `is_visible`.
 
 ## 7. Top Bar Extensions (2.1)
 
@@ -700,7 +787,7 @@ Manifest:
 
 ```json
 {
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
@@ -1096,7 +1183,7 @@ For select controls that need host-consistent visuals, use `PaperBodyContext.Bod
 | Sample | Focus |
 | --- | --- |
 | `PaperTodo.Plugin.Protocol21Web` | **Protocol 2.1 contribution-focused sample**: Todo row actions, Top Bar labels, latest `TodoSnapshot` |
-| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.1 Top Bar-focused sample**: body Paper action + Web Runtime Global action, character/Stroke SVG icons, target Paper context, Workspace reuse |
+| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.2 Top Bar/action-focused sample**: body Paper action + Web Runtime Global action, character/Stroke SVG icons, target Paper context, Workspace reuse |
 | `PaperTodo.Plugin.SampleClock` | Main Native sample: settings, background updates, standard capsule, custom WPF capsule, dedicated WPF mini |
 | `PaperTodo.Plugin.OfficialClockWeb` | Main Web sample: body/mini pages, `miniEntry`, state/settings synchronization, startup Paper, background updates |
 | `PaperTodo.Plugin.FocusTimer` | Stateful Native interaction: body and dedicated mini share a timer model; start/pause/resume directly from Mini |
@@ -1109,7 +1196,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host accepts only `2.1`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.2`, and new plugins should target `2.2`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
@@ -1176,7 +1263,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ## 14. Before Submitting a Plugin
 
-- `plugin.json` targets the current `apiVersion: "2.1"`;
+- new `plugin.json` targets the current `apiVersion: "2.2"`; use `2.1` only when intentionally staying within the 2.1 contract;
 - all metadata lives only in `plugin.json`; the Native entry DLL provides behavior only;
 - when declaring `runtime`: Native implements `IPaperPluginRuntimeProvider`; Web provides `runtime.html` next to `entry` by default, or uses `runtime` to select another entry inside the same Web static directory;
 - when Runtime needs plugin settings, use its own `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`; do not borrow a hidden paper session;

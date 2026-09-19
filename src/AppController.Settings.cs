@@ -46,6 +46,19 @@ public sealed partial class AppController
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
+    private void SetSettingFromUi<T>(string id, T value)
+    {
+        try { PublicSettings.Set(id, System.Text.Json.JsonSerializer.SerializeToElement(value)); }
+        catch (PaperSettingsException ex)
+        {
+            Trace.WriteLine($"[Settings] {id}: {ex}");
+            // StateStore already reports persistence failures; restore the clicked controls.
+            if (ex.Code != "save_failed")
+                _trayIcon?.ShowBalloonTip(Strings.Get("SaveFailureTitle"), ex.Message, BalloonIcon.Warning);
+            RefreshSettingsForChange(id);
+        }
+    }
+
     private void SetTheme(string theme)
     {
         State.Theme = theme;
@@ -344,14 +357,7 @@ public sealed partial class AppController
         State.ExperimentalDockedCapsulesNonTopmost =
             !State.ExperimentalDockedCapsulesNonTopmost;
         SaveNow();
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.RefreshDeepCapsuleSlotTopmost();
-        }
-        foreach (var master in _masterCapsules.Values.ToList())
-        {
-            master.RefreshEffectiveTopmost();
-        }
+        PublishSettingEffects(SettingEffects.EdgeTopmost);
     }
 
     private void ToggleExperimentalEdgeCapsuleHoverPreview()
@@ -359,12 +365,7 @@ public sealed partial class AppController
         State.ExperimentalEdgeCapsuleHoverPreview =
             !State.ExperimentalEdgeCapsuleHoverPreview;
         SaveNow();
-        if (!State.ExperimentalEdgeCapsuleHoverPreview)
-        {
-            CloseEdgeCapsulePreview(animate: false, arrange: false);
-        }
-        ArrangeDeepCapsules(animate: false);
-        RefreshEdgeCapsuleHoverIntentRuntime();
+        PublishSettingEffects(SettingEffects.Preview);
         RefreshSettingsRegions("general.edgeBrowsing");
     }
 
@@ -510,14 +511,8 @@ public sealed partial class AppController
 
     private void ApplyTypographySettingsChange()
     {
-        AppTypography.Configure(
-            State.UiFontPreset,
-            State.Zoom,
-            State.CustomFontEnhancedBold,
-            State.TextRenderingProfile);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         SaveNow();
-        RefreshTypography();
+        RefreshPublicSettingsTypography();
         RefreshSettingsWindowContent();
     }
 
@@ -537,12 +532,7 @@ public sealed partial class AppController
         State.MarkdownRenderMode = mode;
         SaveNow();
 
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateMarkdownRenderMode();
-        }
-
-        RebuildTrayMenu();
+        PublishSettingEffects(SettingEffects.Markdown);
     }
 
     private void SetImageReferenceTextMode(string mode)
@@ -556,10 +546,7 @@ public sealed partial class AppController
         State.ImageReferenceTextMode = normalized;
         SaveNow();
 
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateImageReferenceTextMode();
-        }
+        PublishSettingEffects(SettingEffects.ImageReferences);
     }
 
     private UIElement CreateImageReferenceTextModeSelector()
@@ -675,6 +662,7 @@ public sealed partial class AppController
 
     private void CommitExternalMarkdownExtension(TextBox textBox, bool saveImmediately = true)
     {
+        if (!ReferenceEquals(textBox, _settingsExternalMarkdownTextBox)) return;
         var normalized = ExternalMarkdownFileExtensions.Normalize(textBox.Text);
         if (textBox.Text != normalized)
         {
@@ -699,10 +687,7 @@ public sealed partial class AppController
             SaveNow();
         }
 
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateExternalMarkdownExtension();
-        }
+        PublishSettingEffects(SettingEffects.ExternalExtension);
     }
 
     private UIElement CreateSegmentSelector((string Key, string Label)[] segments, string activeKey, Action<string> onSelect)
@@ -806,28 +791,8 @@ public sealed partial class AppController
             () => SetMaxTitleLength(State.MaxTitleLength - 1),
             () => SetMaxTitleLength(State.MaxTitleLength + 1));
 
-    private void SetMaxTitleLength(int value)
-    {
-        var normalized = PaperTitles.NormalizeMaxTitleLength(value);
-        if (State.MaxTitleLength == normalized)
-        {
-            return;
-        }
-
-        State.MaxTitleLength = normalized;
-
-        // Re-clamp existing custom titles to the new limit and refresh everything that shows them.
-        ClampPaperTitlesToMaxLength(normalized);
-
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshPaperTitle();
-        }
-
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-        RebuildTrayMenu();
-    }
+    private void SetMaxTitleLength(int value) =>
+        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
 
     private void ClampPaperTitlesToMaxLength(int maxLength)
     {
@@ -1770,6 +1735,11 @@ public sealed partial class AppController
             directDeletes,
             "TipLabsMcpDeletes"));
 
+        content.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("LabsMcpSettingsControl"),
+                State.McpAllowSettingsControl, ToggleMcpSettingsControl),
+            "TipLabsMcpSettingsControl"));
+
         var status = new TextBlock
         {
             Text = State.McpEnabled
@@ -1912,6 +1882,7 @@ public sealed partial class AppController
         State.McpAllowBlankWrites = false;
         State.McpAllowFullWrites = false;
         State.McpAllowDeletes = false;
+        State.McpAllowSettingsControl = false;
         State.ExperimentalCapsuleMagnetism = false;
         State.ExperimentalCapsuleMagnetScreenEdges = true;
         State.ExperimentalCapsuleMagnetWindowEdges = true;
@@ -2136,10 +2107,7 @@ public sealed partial class AppController
             State.CustomFontEnhancedBold,
             State.TextRenderingProfile);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateImageReferenceTextMode();
-        }
+        PublishSettingEffects(SettingEffects.ImageReferences);
 
         SaveNow();
         // Typography was configured above; the theme refresh rebuilds settings once.
@@ -2845,14 +2813,7 @@ public sealed partial class AppController
     private void ToggleAnimations()
     {
         State.EnableAnimations = !State.EnableAnimations;
-        if (!State.EnableAnimations)
-        {
-            foreach (var window in _windows.Values)
-            {
-                window.SettleAnimationsForDisabledSetting();
-            }
-            ArrangeDeepCapsules(animate: false);
-        }
+        PublishSettingEffects(SettingEffects.Animations);
         SaveNow();
     }
 
@@ -2891,41 +2852,8 @@ public sealed partial class AppController
         RefreshSettingsRegions("general.todos");
     }
 
-    private void ToggleAutoMoveCompletedTodosToBottom()
-    {
-        State.AutoMoveCompletedTodosToBottom =
-            !State.AutoMoveCompletedTodosToBottom;
-
-        if (State.AutoMoveCompletedTodosToBottom)
-        {
-            foreach (var paper in State.Papers.Where(
-                         paper => paper.Type == PaperTypes.Todo))
-            {
-                var ordered = paper.Items
-                    .OrderBy(item => item.Order)
-                    .ToList();
-                var regrouped = ordered
-                    .Where(item => !item.Done)
-                    .Concat(ordered.Where(item => item.Done))
-                    .ToList();
-                if (ordered.Select(item => item.Id)
-                    .SequenceEqual(regrouped.Select(item => item.Id)))
-                {
-                    continue;
-                }
-
-                paper.Items = regrouped;
-                TodoRules.NormalizeOrders(paper.Items);
-                if (_windows.TryGetValue(paper.Id, out var window))
-                {
-                    window.RefreshTodoRowsForExternalChange();
-                }
-            }
-        }
-
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
+    private void ToggleAutoMoveCompletedTodosToBottom() =>
+        SetSettingFromUi("todo.move_completed_to_bottom", !State.AutoMoveCompletedTodosToBottom);
 
     private void ToggleAutoCompressLargeImages()
     {
@@ -2943,24 +2871,11 @@ public sealed partial class AppController
             return;
         }
 
-        State.HidePapersFromTaskbar = !State.HidePapersFromTaskbar;
-        SaveNow();
-        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
-        RefreshSettingsSystemVisibilityToggleStates();
+        SetSettingFromUi("window.hide_from_taskbar", !State.HidePapersFromTaskbar);
     }
 
-    private void ToggleHidePapersFromWindowSwitcher()
-    {
-        State.HidePapersFromWindowSwitcher = !State.HidePapersFromWindowSwitcher;
-        if (State.HidePapersFromWindowSwitcher)
-        {
-            State.HidePapersFromTaskbar = true;
-        }
-
-        SaveNow();
-        RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
-        RefreshSettingsSystemVisibilityToggleStates();
-    }
+    private void ToggleHidePapersFromWindowSwitcher() =>
+        SetSettingFromUi("window.hide_from_switcher", !State.HidePapersFromWindowSwitcher);
 
     private void NormalizePaperSystemVisibilitySettings()
     {
@@ -2981,14 +2896,7 @@ public sealed partial class AppController
     private void TogglePersistentPowerShellProcess()
     {
         State.UsePersistentPowerShellProcess = !State.UsePersistentPowerShellProcess;
-        if (!State.UsePersistentPowerShellProcess)
-        {
-            PaperWindow.StopPersistentScriptProcesses();
-        }
-        else
-        {
-            PaperWindow.EnsurePersistentScriptProcessForSettings(State);
-        }
+        PublishSettingEffects(SettingEffects.Scripts);
 
         SaveNow();
     }
@@ -2996,16 +2904,14 @@ public sealed partial class AppController
     private void TogglePreferPowerShell7()
     {
         State.PreferPowerShell7 = !State.PreferPowerShell7;
-        PaperWindow.StopPersistentScriptProcesses();
-        PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+        PublishSettingEffects(SettingEffects.Scripts);
         SaveNow();
     }
 
     private void ToggleHideScriptRunWindow()
     {
         State.HideScriptRunWindow = !State.HideScriptRunWindow;
-        PaperWindow.StopPersistentScriptProcesses();
-        PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+        PublishSettingEffects(SettingEffects.Scripts);
         SaveNow();
     }
 
@@ -3036,48 +2942,8 @@ public sealed partial class AppController
         ToolTipPreferences.Apply(window, State.EnableToolTips);
     }
 
-    private void ToggleCapsuleMode()
-    {
-        var windows = _windows.Values.ToList();
-        foreach (var window in windows)
-        {
-            window.PrepareForCapsulePresentationModeChange();
-        }
-
-        State.UseCapsuleMode = !State.UseCapsuleMode;
-
-        if (!State.UseCapsuleMode)
-        {
-            State.UseDeepCapsuleMode = false;
-            // Preserve the user's "show master capsule" preference. Disabling capsule mode only
-            // clears live collapse state; the dependent setting remains checked and disabled.
-            State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
-        }
-
-        // Keep IsCollapsed intact until each live window has consumed the mode change.
-        // UpdateCapsuleMode uses that state to perform the capsule-to-paper visual transition.
-        foreach (var window in windows)
-        {
-            window.UpdateCapsuleMode();
-        }
-
-        if (!State.UseCapsuleMode)
-        {
-            // Window-backed papers are already expanded. This also covers papers that do
-            // not currently have a live window.
-            foreach (var paper in State.Papers)
-            {
-                SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
-            }
-        }
-
-        ArrangeDeepCapsules();
-        RestoreMissingVisiblePaperSurfaces();
-        SaveNow();
-        RebuildTrayMenu();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleCapsuleMode() =>
+        SetSettingFromUi("capsule.enabled", !State.UseCapsuleMode);
 
     private void ToggleTopBarNewTodoButton()
     {
@@ -3101,10 +2967,7 @@ public sealed partial class AppController
     {
         State.ShowLinkedPaperName = !State.ShowLinkedPaperName;
 
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshTodoRowsForExternalChange();
-        }
+        PublishSettingEffects(SettingEffects.TodoRows);
 
         SaveNow();
         RefreshSettingsRegions("general.todos");
@@ -3114,10 +2977,7 @@ public sealed partial class AppController
     {
         State.AllowLongLinkedPaperTitles = !State.AllowLongLinkedPaperTitles;
 
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshTodoRowsForExternalChange();
-        }
+        PublishSettingEffects(SettingEffects.TodoRows);
 
         SaveNow();
         RefreshSettingsRegions("general.todos");
@@ -3135,126 +2995,32 @@ public sealed partial class AppController
     {
         State.RunLinkedScriptCapsulesOnClick = !State.RunLinkedScriptCapsulesOnClick;
 
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshTodoRowsForExternalChange();
-        }
+        PublishSettingEffects(SettingEffects.TodoRows);
 
         SaveNow();
         RefreshSettingsRegions("general.todos");
     }
 
-    private void ToggleTodoPaperLinks()
-    {
-        State.EnableTodoPaperLinks = !State.EnableTodoPaperLinks;
-        ClearPaperLinkDropTarget();
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTodoLinkFeature();
-        }
-
-        RefreshCapsuleEligibilityForLinkedPapers();
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
+    private void ToggleTodoPaperLinks() =>
+        SetSettingFromUi("todo.paper_links", !State.EnableTodoPaperLinks);
 
     private void RefreshTopBarNewPaperButtonsSetting()
     {
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTopBarNewPaperButtons();
-        }
+        PublishSettingEffects(SettingEffects.TopBar);
 
         SaveNow();
     }
 
-    private void ToggleDeepCapsuleMode()
-    {
-        var windows = _windows.Values.ToList();
-        foreach (var window in windows)
-        {
-            window.PrepareForCapsulePresentationModeChange();
-        }
+    private void ToggleDeepCapsuleMode() =>
+        SetSettingFromUi("capsule.edge_enabled", !State.UseDeepCapsuleMode);
 
-        List<(PaperWindow Window, PaperWindow.DeepCapsuleModeHandoff Handoff)>? handoffs = null;
-        if (State.UseDeepCapsuleMode)
-        {
-            // Capture normal queue slots before disabling collapse-all and resetting queue
-            // margins; once the hosts are detached, only the stale ordinary X/Y remains.
-            handoffs = new List<(PaperWindow, PaperWindow.DeepCapsuleModeHandoff)>();
-            foreach (var window in windows)
-            {
-                if (window.TryCaptureDeepCapsuleModeHandoff(out var handoff))
-                {
-                    handoffs.Add((window, handoff));
-                }
-            }
-        }
-
-        State.UseDeepCapsuleMode = !State.UseDeepCapsuleMode;
-
-        if (State.UseDeepCapsuleMode && !State.UseCapsuleMode)
-        {
-            State.UseCapsuleMode = true;
-            foreach (var window in _windows.Values)
-            {
-                window.UpdateCapsuleMode();
-            }
-        }
-        else if (!State.UseDeepCapsuleMode)
-        {
-            // Keep the stored master-capsule preference while the docked mode is unavailable.
-            State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
-        }
-
-        foreach (var window in windows)
-        {
-            window.UpdateDeepCapsuleMode();
-        }
-
-        ArrangeDeepCapsules();
-        if (handoffs != null)
-        {
-            foreach (var (window, handoff) in handoffs)
-            {
-                window.RestoreCollapsedSurfaceAfterDeepCapsuleModeDisabled(handoff);
-            }
-        }
-        RestoreMissingVisiblePaperSurfaces();
-        SaveNow();
-        RebuildTrayMenu();
-        RefreshSettingsCapsuleToggleStates();
-    }
-
-    private void ToggleDeepCapsuleExpandedSlot()
-    {
-        var windows = _windows.Values.ToList();
-        foreach (var window in windows)
-        {
-            window.PrepareForCapsulePresentationModeChange();
-        }
-
-        State.ShowDeepCapsuleWhileExpanded = !State.ShowDeepCapsuleWhileExpanded;
-
-        foreach (var window in windows)
-        {
-            window.UpdateDeepCapsuleExpandedSlotMode();
-        }
-
-        ArrangeDeepCapsules(animate: State.EnableAnimations);
-        SaveNow();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleDeepCapsuleExpandedSlot() =>
+        SetSettingFromUi("capsule.show_while_expanded", !State.ShowDeepCapsuleWhileExpanded);
 
     private void ToggleHideEdgeCapsuleCloseButtonOnHover()
     {
         State.HideEdgeCapsuleCloseButtonOnHover = !State.HideEdgeCapsuleCloseButtonOnHover;
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateEdgeCapsuleCloseButtonMode();
-        }
+        PublishSettingEffects(SettingEffects.CapsuleClose);
 
         SaveNow();
     }

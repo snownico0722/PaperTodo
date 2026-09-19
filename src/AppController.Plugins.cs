@@ -697,6 +697,11 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        if (setting.Type == "action")
+        {
+            return BuildPluginActionSetting(descriptor, setting);
+        }
+
         if (setting.Type == "boolean")
         {
             var value = _paperBodyPlugins.DataStore
@@ -748,6 +753,54 @@ public sealed partial class AppController
         Grid.SetColumn(editor, 1);
         row.Children.Add(editor);
         return row;
+    }
+
+    private FrameworkElement BuildPluginActionSetting(
+        PaperBodyPluginDescriptor descriptor,
+        PaperBodyPluginSettingManifest setting)
+    {
+        var button = SettingsTextButton(setting.Name);
+        button.MinWidth = 112;
+        button.HorizontalAlignment = HorizontalAlignment.Right;
+        button.Margin = new Thickness(0, 5, 0, 0);
+        button.ToolTip = PluginSettingToolTip(setting);
+        var isPaperAction = PluginShortcutActions.TryParsePaperAction(setting.Action, out _);
+        var registration = new PluginShortcutRegistration(
+            PluginShortcutCommandId(descriptor.Id, setting.Id),
+            descriptor.Id,
+            setting.Id,
+            setting.Action);
+
+        // WPF owns availability refresh; no polling timer or retained settings-window subscription.
+        var command = new RoutedCommand();
+        button.CommandBindings.Add(new CommandBinding(command,
+            (_, e) =>
+            {
+                e.Handled = true;
+                var owner = Window.GetWindow(button);
+                if (isPaperAction && owner != null && ReferenceEquals(owner.Owner, _settingsWindow))
+                {
+                    owner.Close();
+                    // Closing the modal page must re-enable paper windows before activation.
+                    _ = Application.Current.Dispatcher.BeginInvoke(
+                        (Action)(() => ExecutePluginShortcut(registration)),
+                        System.Windows.Threading.DispatcherPriority.Input);
+                }
+                else
+                {
+                    // Custom actions run in the provider Runtime, without closing its settings page.
+                    ExecutePluginShortcut(registration);
+                }
+            },
+            (_, e) =>
+            {
+                e.CanExecute = !IsExiting && (isPaperAction
+                    ? HasEntityPluginPaper(descriptor.Id)
+                    : HasActivePluginShortcutRuntime(descriptor.Id));
+                e.Handled = true;
+            }));
+        button.Command = command;
+        return button;
     }
 
     private FrameworkElement BuildPluginStringSetting(

@@ -34,10 +34,15 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "startupPaper.instanceKey must contain 1-80 ASCII letters, digits, '.', '_' or '-'.");
         }
-        if (startup.Presentation is not ("capsule" or "expanded"))
+        if (startup.Presentation is not ("capsule" or "expanded" or "hidden"))
         {
             throw new InvalidDataException(
-                "startupPaper.presentation must be 'capsule' or 'expanded'.");
+                "startupPaper.presentation must be 'capsule', 'expanded', or 'hidden'.");
+        }
+        if (startup.Presentation == "hidden" && !ApiAtLeast(manifest.ApiVersion, "2.2"))
+        {
+            throw new InvalidDataException(
+                "startupPaper.presentation='hidden' requires apiVersion 2.2 or later.");
         }
         if (startup.Title.Length > 120)
         {

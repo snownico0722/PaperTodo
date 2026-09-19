@@ -7,6 +7,7 @@
 <body>
 <script>
   const paperIds = new Set();
+  let pingCount = 0;
 
   async function registerGlobalTopBar() {
     await papertodo.globalTopBar.setActions([
@@ -25,7 +26,7 @@
 
   function publishPaper(paperId) {
     if (!paperId) return;
-    void papertodo.papers.setHeaderText(paperId, 'Top Bar 2.1');
+    void papertodo.papers.setHeaderText(paperId, `Top Bar 2.1 · ${pingCount}`);
     void papertodo.papers.setCapsulePresentation(paperId, {
       preferredWidth: 0,
       plainText: 'Top Bar 2.1',
@@ -50,7 +51,9 @@
   papertodo.onEvent(async message => {
     if (message.type === 'shortcutInvoked' &&
         message.actionId === 'runtime.ping') {
-      console.log('PaperTodo custom shortcut', message.settingId, message.actionId);
+      pingCount++;
+      for (const paperId of paperIds) publishPaper(paperId);
+      console.log('PaperTodo custom action', message.settingId, message.actionId);
       return;
     }
 

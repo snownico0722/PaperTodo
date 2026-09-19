@@ -9,7 +9,7 @@ description: 为 PaperTodo 制作、创建或开发可安装的 Web 或 Native �
 
 ## 开发资料与目标位置
 
-- [插件开发手册](references/plugin-development.md) 随本 Skill 一起安装，涵盖当前 Protocol 2.1 的 API、状态、设置、胶囊、Mini、Runtime、构建与示例。按任务读取对应章节，不必全文加载。
+- [插件开发手册](references/plugin-development.md) 随本 Skill 一起安装，涵盖当前 Protocol 2.2（并注明 2.1 兼容边界）的 API、状态、设置、胶囊、Mini、Runtime、构建与示例。按任务读取对应章节，不必全文加载。
 - 手册来自 PaperTodo 仓库的 `plugin-samples/README.md`，由构建直接复制，不单独维护。手册中指向仓库其他文件的相对链接以仓库 `plugin-samples/` 为基准；本地只有安装包时，这些源码不一定存在。
 - 有本地仓库时，先读根目录 `AGENTS.md`，以该版本的 `plugin-samples/README.md` 和 `PaperTodo.Plugin.Abstractions/` 为具体合同。涉及宿主内部结构再按仓库路由读取 `doc/ARCHITECTURE.md`，不用先通读宿主源码。
 - 需要源码且本地没有时，使用 [PaperTodo 仓库](https://github.com/snownico0722/PaperTodo) 中与目标宿主兼容的版本。不要假设安装目录就是源码仓库。
@@ -40,7 +40,7 @@ description: 为 PaperTodo 制作、创建或开发可安装的 Web 或 Native �
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -72,7 +72,7 @@ description: 为 PaperTodo 制作、创建或开发可安装的 Web 或 Native �
 
 ## 开发时保持的边界
 
-- `plugin.json` 是元数据来源，当前协议为 `apiVersion: "2.1"`；不要沿用旧插件协议或杜撰能力名。
+- `plugin.json` 是元数据来源，新插件当前协议目标为 `apiVersion: "2.2"`；宿主仍兼容不使用 2.2-only 能力的 `2.1` 插件；不要沿用旧插件协议或杜撰能力名。
 - Body / Mini 会被回收；需要持续工作的逻辑放在一个 provider Runtime 中。声明 `runtime` 后，Native 实现 `IPaperPluginRuntimeProvider`，Web 提供 Runtime 页面。Runtime 在至少存在一张真实插件纸片时才启动；需要自动启用时再配置 `startupPaper`。
 - Runtime 拥有长期业务状态及纸片标题/胶囊展示，Body / Mini 通过消息提交用户操作。简单无 Runtime 插件可直接使用自身 Paper 与 frontend state。
 - 用户状态变化后及时交给宿主保存。Runtime state、per-paper frontend state、settings 各有自己的用途；不要复制第二份主状态。升级保留已有用户内容，不把读取失败当作空状态回写。

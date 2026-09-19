@@ -278,6 +278,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        ApplyHiddenPluginStartupPaperVisibility(initialVisibilityCommand);
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         DeferStartupPapersWithoutMonitor();
         var rescuedPapers = EnsurePapersOnScreen();
@@ -1173,6 +1174,9 @@ public sealed partial class AppController : IDisposable
                 break;
             case StartupCommandKind.Exit:
                 Exit();
+                break;
+            case StartupCommandKind.EnableMcpForCodex:
+                TryEnableMcpForCodex();
                 break;
         }
     }
@@ -2774,33 +2778,8 @@ public sealed partial class AppController : IDisposable
         SaveNow();
     }
 
-    private void ToggleCapsuleCollapseAll()
-    {
-        State.UseCapsuleCollapseAll = !State.UseCapsuleCollapseAll;
-
-        if (!State.UseCapsuleCollapseAll)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
-        }
-
-        // Collapse-all rides on top of edge-aligned capsules; enabling it implies both prerequisites.
-        if (State.UseCapsuleCollapseAll && (!State.UseCapsuleMode || !State.UseDeepCapsuleMode))
-        {
-            State.UseCapsuleMode = true;
-            State.UseDeepCapsuleMode = true;
-            foreach (var window in _windows.Values)
-            {
-                window.UpdateCapsuleMode();
-                window.UpdateDeepCapsuleMode();
-            }
-        }
-
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-        RebuildTrayMenu();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleCapsuleCollapseAll() =>
+        SetSettingFromUi("capsule.master_enabled", !State.UseCapsuleCollapseAll);
 
     private List<PaperData> DeepCapsulePapersInOrder()
     {

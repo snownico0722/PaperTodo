@@ -621,6 +621,11 @@ internal sealed partial class WebPaperBodySession
                     }
                   });
                   window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                     surface: 'mini', paper, body, mini, runtime,
                     workspace: Object.freeze({ request }),
                     post, request, saveState, flushState,
