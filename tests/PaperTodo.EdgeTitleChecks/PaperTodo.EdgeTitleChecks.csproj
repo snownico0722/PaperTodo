@@ -8,6 +8,8 @@
     <ApplicationManifest>../../app.manifest</ApplicationManifest>
     <StartupObject Condition="'$(Pr260H8InputTiming)' == 'true'">Pr260H8InputTimingEntry</StartupObject>
     <StartupObject Condition="'$(Pr260H8InputTiming)' != 'true'">Program</StartupObject>
+    <!-- An isolated executable entry; ordinary builds do not start either experiment. -->
+    <StartupObject Condition="'$(EdgeRoutes12)' == 'true'">Routes12Entry</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
