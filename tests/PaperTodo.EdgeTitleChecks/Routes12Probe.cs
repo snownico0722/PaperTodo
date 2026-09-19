@@ -363,15 +363,15 @@ internal static partial class Program
     private static extern int Routes12GetMessage(out MSG message, IntPtr window, uint min, uint max);
     [DllImport("user32.dll", EntryPoint = "DispatchMessageW")]
     private static extern IntPtr Routes12DispatchMessage(ref MSG message);
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "TranslateMessage", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool Routes12TranslateMessage(ref MSG message);
     [DllImport("user32.dll", EntryPoint = "PostThreadMessageW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool Routes12PostThreadMessage(uint thread, uint message, IntPtr w, IntPtr l);
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "SetTimer", ExactSpelling = true, SetLastError = true)]
     private static extern nuint Routes12SetTimer(IntPtr hwnd, nuint id, uint interval, IntPtr callback);
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "KillTimer", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool Routes12KillTimer(IntPtr hwnd, nuint id);
 }
