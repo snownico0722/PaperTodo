@@ -796,6 +796,10 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
         return method switch
         {
+        "appSettings.list" or
+        "appSettings.get" or
+        "appSettings.set" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
         "papers.show" or
         "papers.hide" or
         "papers.toggle" or

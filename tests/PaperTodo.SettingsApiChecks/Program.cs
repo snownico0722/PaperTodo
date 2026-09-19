@@ -202,6 +202,32 @@ internal static partial class Program
         Check(c.State.McpAllowSettingsControl, "Explicit sensitive authorization works.");
         WebPluginWorkspaceRequests.Execute(writer, "appSettings.set", Json(new { id = "todo.paper_links", value = true }));
         Check(c.State.EnableTodoPaperLinks, "Web routing preserves JSON booleans and uses Native permission gate.");
+
+        // Exercise the actual Web Body dispatcher. The JS bridge and shared workspace adapter can
+        // both be correct while this middle switch forgets to forward an appSettings.* method.
+        var bodyContext = (PaperBodyContext)RuntimeHelpers.GetUninitializedObject(typeof(PaperBodyContext));
+        Field(bodyContext, "<Workspace>k__BackingField", writer);
+        var bodySession = (WebPaperBodySession)RuntimeHelpers.GetUninitializedObject(typeof(WebPaperBodySession));
+        Field(bodySession, "_context", bodyContext);
+        var bodyDispatcher = typeof(WebPaperBodySession).GetMethod(
+            "ExecuteHostRequest", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var bodyGet = (PaperSettingSnapshot)bodyDispatcher.Invoke(
+            bodySession, ["appSettings.get", Json(new { id = "todo.paper_links" })])!;
+        Check(bodyGet.Value.GetBoolean(),
+            "Web Body dispatcher routes settingsApi.get through the shared settings adapter.");
+        var bodyList = ((IEnumerable<PaperSettingSnapshot>)bodyDispatcher.Invoke(
+            bodySession, ["appSettings.list", Json(new { category = "todo" })])!).ToArray();
+        Check(bodyList.Length == 1 && bodyList[0].Id == "todo.paper_links",
+            "Web Body dispatcher routes settingsApi.list through the shared settings adapter.");
+        _ = bodyDispatcher.Invoke(
+            bodySession, ["appSettings.set", Json(new { id = "todo.paper_links", value = false })]);
+        Check(!c.State.EnableTodoPaperLinks,
+            "Web Body dispatcher routes settingsApi.set through the shared settings adapter.");
+        WebPluginWorkspaceRequests.Execute(writer, "appSettings.set",
+            Json(new { id = "todo.paper_links", value = true }));
+        Check(c.State.EnableTodoPaperLinks,
+            "Direct Web workspace adapter still shares state after Body-dispatch coverage.");
+
         Throws<PaperTodoPluginException>(() => WebPluginWorkspaceRequests.Execute(reader, "appSettings.set", Json(new { id = "todo.paper_links", value = false })), "permission_denied");
         Throws<PaperTodoPluginException>(() => WebPluginWorkspaceRequests.Execute(writer, "appSettings.set", Json(new { id = "todo.paper_links" })), "invalid_params");
         Throws<PaperTodoPluginException>(() => ((IPaperSettingsApi)writer).Get("State.Papers"), "setting_not_found");
