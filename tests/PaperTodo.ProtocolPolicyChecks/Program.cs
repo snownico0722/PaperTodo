@@ -352,6 +352,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Manifest ApiVersion property was not found.");
         var actionManifest = Activator.CreateInstance(manifestType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create action manifest.");
+        manifestType.GetProperty("ApiVersion")!.SetValue(actionManifest, "2.2");
         apiVersionProperty.SetValue(actionManifest, "2.2");
         var actionSetting = Activator.CreateInstance(settingType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create action setting.");
@@ -390,6 +391,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("ValidateStartupPaper was not found.");
         var hiddenManifest = Activator.CreateInstance(manifestType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create hidden startup manifest.");
+        manifestType.GetProperty("ApiVersion")!.SetValue(hiddenManifest, "2.2");
         apiVersionProperty.SetValue(hiddenManifest, "2.2");
         var enabledSetting = Activator.CreateInstance(settingType, nonPublic: true)
             ?? throw new InvalidOperationException("Could not create startup enable setting.");
