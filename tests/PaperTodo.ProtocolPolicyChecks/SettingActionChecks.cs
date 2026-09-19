@@ -30,6 +30,7 @@ internal static partial class Program
         object NewManifest(object setting, bool runtime)
         {
             var manifest = Activator.CreateInstance(manifestType, nonPublic: true)!;
+            manifestType.GetProperty("ApiVersion")!.SetValue(manifest, "2.2");
             var settings = Array.CreateInstance(settingType, 1);
             settings.SetValue(setting, 0);
             manifestType.GetProperty("Settings")!.SetValue(manifest, settings);
