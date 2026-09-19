@@ -12,6 +12,25 @@
 
 当前宿主最新协议为 `2.2`，并继续兼容 `2.1`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.2` 为目标；已有 `2.1` 插件只要不声明 2.2-only 能力仍可继续运行。
 
+### 插件 API 版本历史
+
+`apiVersion` 表示**这个插件最低需要哪一版 PaperTodo 插件 API**，不是插件自己的发布版本。宿主只在下面条件成立时加载：
+
+```text
+MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
+```
+
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.2**。
+
+| API | 状态 | 主要合同里程碑 |
+| --- | --- | --- |
+| 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
+| 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
+| 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
+| 2.2 | 当前最新 | 新增公共软件 Settings API（`settings.read/update/control`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
+
+**升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
+
 插件公开类型以 [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) 为编译期合同；宿主实际校验和运行行为以当前代码为准。需要理解 PaperTodo 内部 ownership 时再看 [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md)，插件作者不需要先阅读主程序架构才能开始开发。
 
 > **信任边界：PaperTodo 不为插件提供安全沙箱。** Native 与 Web 插件都应视为可信代码，只安装可信来源的插件。
