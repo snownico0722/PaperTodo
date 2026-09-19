@@ -1,0 +1,64 @@
+name: Edge routes 1 and 2 experiment
+
+on:
+  push:
+    branches:
+      - exp/edge-routes12-20260920
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-routes12-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  routes:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Capture environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/routes12 | Out-Null
+          git rev-parse HEAD | Set-Content artifacts/routes12/head.txt
+          dotnet --info | Set-Content artifacts/routes12/dotnet-info.txt
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12/display.json
+      - name: Build isolated entry without changing production defaults
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
+          dotnet build tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj -c Release --no-restore -p:EdgeRoutes12=true 2>&1 | Tee-Object artifacts/routes12/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+      - name: Known-bad H8 control and both route prototypes
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Resolve-Path tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe
+          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File artifacts/routes12/entry-sha256.txt
+          & $exe 2>&1 | Tee-Object artifacts/routes12/round0.log
+          if ($LASTEXITCODE -ne 0) { throw "Routes12 failed: $LASTEXITCODE" }
+          'R0 checks are feasibility and settled-endpoint routing only; not dynamic same-frame, production integration, multi-DPI or physical display acceptance.' | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Preserve successes and failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-routes12-${{ github.sha }}
+          path: artifacts/routes12
+          if-no-files-found: warn
