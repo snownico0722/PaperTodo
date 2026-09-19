@@ -2,7 +2,7 @@
 
 **Language: English | [简体中文](README.zh.md)**
 
-This is the **current PaperTodo plugin development manual**. It documents the plugin contract, runtime boundaries, build workflow, and examples that are available today. It does not preserve protocol history.
+This is the **current PaperTodo plugin development manual**. It documents the current plugin contract, runtime boundaries, build workflow, and examples, with a concise API-version history and compatibility summary. Detailed historical trade-offs remain in `doc/DECISIONS.md`.
 
 New plugins use:
 
