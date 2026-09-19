@@ -167,6 +167,8 @@ papertodo.onEvent(message => {
 
 自定义 action 的 Windows 热键只在对应 plugin runtime 有**有效 handler**时注册。Web runtime 导航、进程失败或销毁时，PaperTodo 会立即释放这些自定义热键；页面重新 ready 后再恢复。这样 runtime 坏掉时不会继续抢占一个“按了没反应”的系统快捷键。
 
+> API 2.2 补充：有 `papers.presentation` 权限时，可用 `context.WorkspacePresentation` / `papertodo.workspace.request('papers.show', { paperId })` 控制其他已有纸片。下面的 2.1 自身纸片接口和作用范围保持不变；完整接口与语义见中英文插件开发手册“跨纸片显示控制”。
+
 ## 3. Native：控制承载自己的纸片
 
 paper body session 使用：

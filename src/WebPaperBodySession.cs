@@ -796,6 +796,14 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
         return method switch
         {
+        "papers.show" or
+        "papers.hide" or
+        "papers.toggle" or
+        "papers.expand" or
+        "papers.collapse" or
+        "papers.toggleCollapsed" or
+        "papers.activate" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
         "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
         "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
         "todos.list" => _context.Host.ListTodos(

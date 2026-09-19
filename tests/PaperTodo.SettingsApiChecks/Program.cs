@@ -58,8 +58,9 @@ internal static partial class Program
         }
     };
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--presentation-fixture") return RunPresentationFixture(args[1]);
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
@@ -70,6 +71,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             Pump(PipeAndUnlinkBehavior());
             WebBridges();
+            IsolatedPresentationBehavior();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");
             return 0;
         }

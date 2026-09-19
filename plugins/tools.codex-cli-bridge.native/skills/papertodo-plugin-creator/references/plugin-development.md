@@ -27,7 +27,7 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
-| 2.2 | Current | Adds public application Settings API (`settings.read/update/control`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+| 2.2 | Current | Adds cross-paper presentation (`papers.presentation`), public application Settings API (`settings.read/update/control`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -633,6 +633,42 @@ Top Bar does not provide a second `GetBodyText/SetBodyText` data path. Continue 
 - custom plugin body: body data remains owned by that provider's own state/capability. The host does not pretend every body is text.
 
 Plugin Workspace and MCP share the same `PaperCommandService` business boundary, so save behavior, failure rollback, UI reconciliation, and event ordering do not get a second duplicate implementation just because the entry path differs.
+
+### Cross-paper presentation (API 2.2)
+
+Declare `"papers.presentation"` in `permissions` and target `apiVersion: "2.2"` to control any existing paper by exact ID, including Todo, Markdown and other providers' papers. This is independent of content-write/delete permissions. Discover IDs separately with `papers.read`; presentation responses do not expose titles or content.
+
+Native Body and Runtime both expose the optional `context.WorkspacePresentation` (`IPaperWorkspacePresentationApi`), without adding required members to the existing Workspace interface:
+
+```csharp
+context.WorkspacePresentation.ShowPaper(paperId, activate: false);
+context.WorkspacePresentation.HidePaper(paperId);
+context.WorkspacePresentation.TogglePaperVisibility(paperId, activate: false);
+context.WorkspacePresentation.ExpandPaper(paperId, activate: false);
+context.WorkspacePresentation.CollapsePaper(paperId);
+context.WorkspacePresentation.TogglePaperCollapsed(paperId, activate: false);
+context.WorkspacePresentation.ActivatePaper(paperId);
+```
+
+Web Body, Mini and Runtime use the existing Workspace request channel:
+
+```js
+await papertodo.workspace.request('papers.show', { paperId, activate: false });
+await papertodo.workspace.request('papers.hide', { paperId });
+await papertodo.workspace.request('papers.toggle', { paperId, activate: false });
+await papertodo.workspace.request('papers.expand', { paperId, activate: false });
+await papertodo.workspace.request('papers.collapse', { paperId });
+await papertodo.workspace.request('papers.toggleCollapsed', { paperId, activate: false });
+await papertodo.workspace.request('papers.activate', { paperId });
+```
+
+Show retains the current folded state; Expand also reveals the paper; Collapse retains visibility and never reveals a hidden paper. Activate reveals a hidden paper and requests focus without forcing expansion. `activate` defaults to `true` for show/expand/toggle operations. The host retains normal capsule eligibility checks; unavailable collapse returns `presentation_unavailable` instead of silently enabling a feature. Missing IDs return `paper_not_found`, never create a paper.
+
+The response is `{ paper_id, is_visible, is_collapsed }`: logical state after request processing, **not animation completion or a synchronous disk-save guarantee**. Existing host transitions and their normal persistence scheduling remain authoritative. Hide never deletes content or removes the Runtime's real Paper owner. Toggles invert state: do not blindly retry an uncertain toggle; read the current state first. Native Runtime background calls are marshalled to the UI dispatcher and disposed contexts are rejected.
+
+The session-scoped 2.1 `context.Presentation` / `papertodo.paper.*` API remains unchanged and still controls only its own host paper without this new permission. Web popups do not gain a generic Workspace API.
+
+MCP exposes `show_paper`, `hide_paper`, `toggle_paper_visibility`, `expand_paper`, `collapse_paper`, `toggle_paper_collapsed` and `activate_paper`, with `paper_id` and the same optional `activate` semantics. All require the MCP master switch and full writes, not deletion or sensitive-setting control. `list_papers` and `get_paper` return `is_collapsed` as well as `is_visible`.
 
 ## 7. Top Bar Extensions (2.1)
 

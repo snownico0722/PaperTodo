@@ -27,7 +27,7 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
-| 2.2 | 当前最新 | 新增公共软件 Settings API（`settings.read/update/control`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
+| 2.2 | 当前最新 | 新增跨纸片显示控制（`papers.presentation`）、公共软件 Settings API（`settings.read/update/control`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -633,6 +633,42 @@ Top Bar 不提供另一套 `GetBodyText/SetBodyText`。需要读写目标纸片�
 - 自定义插件正文：正文数据仍由对应 provider 的 state/capability 拥有，宿主不会假装所有正文都是文本。
 
 插件 Workspace 与 MCP 共用 `PaperCommandService` 业务边界，因此保存、失败回滚、UI reconcile 和事件顺序不因为入口不同而复制第二套实现。
+
+### 跨纸片显示控制（API 2.2）
+
+在 `permissions` 声明 `"papers.presentation"`，并使用 `apiVersion: "2.2"`，即可按准确 ID 操作任意已有纸片，包括 Todo、Markdown 和其他插件的纸片。它独立于内容写入、删除权限。查询 ID 另需 `papers.read`；显示控制结果不返回标题或正文。
+
+Native Body 和 Runtime 都通过可选能力 `context.WorkspacePresentation`（`IPaperWorkspacePresentationApi`）调用，不向旧 Workspace 接口添加必实现方法：
+
+```csharp
+context.WorkspacePresentation.ShowPaper(paperId, activate: false);
+context.WorkspacePresentation.HidePaper(paperId);
+context.WorkspacePresentation.TogglePaperVisibility(paperId, activate: false);
+context.WorkspacePresentation.ExpandPaper(paperId, activate: false);
+context.WorkspacePresentation.CollapsePaper(paperId);
+context.WorkspacePresentation.TogglePaperCollapsed(paperId, activate: false);
+context.WorkspacePresentation.ActivatePaper(paperId);
+```
+
+Web Body、Mini、Runtime 沿用 Workspace 请求通道：
+
+```js
+await papertodo.workspace.request('papers.show', { paperId, activate: false });
+await papertodo.workspace.request('papers.hide', { paperId });
+await papertodo.workspace.request('papers.toggle', { paperId, activate: false });
+await papertodo.workspace.request('papers.expand', { paperId, activate: false });
+await papertodo.workspace.request('papers.collapse', { paperId });
+await papertodo.workspace.request('papers.toggleCollapsed', { paperId, activate: false });
+await papertodo.workspace.request('papers.activate', { paperId });
+```
+
+显示保留当前折叠状态；展开同时显示纸片；折叠保留可见性，不会把隐藏纸片弹出。激活会显示隐藏纸片并请求焦点，但不强制展开。显示、展开和两种切换操作的 `activate` 默认是 `true`。仍遵守宿主的胶囊资格检查：无法折叠时返回 `presentation_unavailable`，不偷偷打开功能开关；ID 不存在返回 `paper_not_found`，不会创建新纸片。
+
+结果为 `{ paper_id, is_visible, is_collapsed }`，表示请求处理后的逻辑状态，**不表示动画已完成，也不承诺同步落盘**。窗口、动画和常规保存调度仍归已有宿主流程。隐藏不删除内容，也不移除维持插件 Runtime 的实体 Paper。toggle 会反转状态，结果不明时先查询，不要盲目重试。Native Runtime 后台调用会切回 UI Dispatcher，已销毁的上下文会被拒绝。
+
+2.1 的 `context.Presentation` / `papertodo.paper.*` 不变：仍只操作承载自己的纸片，也不需要此新增权限。Web popup 不获得通用 Workspace 能力。
+
+MCP 对应提供 `show_paper`、`hide_paper`、`toggle_paper_visibility`、`expand_paper`、`collapse_paper`、`toggle_paper_collapsed`、`activate_paper`，参数使用 `paper_id` 和同义的可选 `activate`。全部要求 MCP 总开关和完整写入，不要求删除或敏感设置控制权限。`list_papers` / `get_paper` 同时返回 `is_visible`、`is_collapsed`。
 
 ## 7. Top Bar 扩展（2.1）
 

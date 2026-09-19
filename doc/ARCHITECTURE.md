@@ -104,6 +104,8 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。设置页的胶囊、关联、排序等联动修改也复用此服务与生效函数，不另维护一套状态转换。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。普通修改与敏感控制分别鉴权，权限配置本身不能通过未授权的 Settings 调用自行提权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
 
+跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器鉴权后，进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。待提交编辑与事件沿用现有外部操作边界，保留插件/MCP 来源；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。插件新增 `papers.presentation`（要求 API 2.2）；MCP 复用总开关与完整写入授权，不新增全局权限开关。
+
 ### 3.3 辅助进程与插件 Runtime
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。

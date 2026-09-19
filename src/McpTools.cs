@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 namespace PaperTodo;
 
 [McpServerToolType]
-internal sealed class McpTools
+internal sealed partial class McpTools
 {
     private readonly McpPipeClient _client;
 

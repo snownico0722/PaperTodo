@@ -8,7 +8,7 @@ namespace PaperTodo;
 /// MCP transport adapter. JSON parsing and MCP authorization stay here; all PaperTodo reads,
 /// validation, persistence, rollback and UI reconciliation are delegated to PaperCommandService.
 /// </summary>
-internal sealed class McpCommandService
+internal sealed partial class McpCommandService
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
@@ -44,6 +44,13 @@ internal sealed class McpCommandService
                 "list_settings" => ListSettings(parameters),
                 "get_setting" => GetSetting(parameters),
                 "set_setting" => SetSetting(parameters),
+                "show_paper" => PresentPaper(parameters, PaperPresentationAction.Show),
+                "hide_paper" => PresentPaper(parameters, PaperPresentationAction.Hide),
+                "toggle_paper_visibility" => PresentPaper(parameters, PaperPresentationAction.ToggleVisibility),
+                "expand_paper" => PresentPaper(parameters, PaperPresentationAction.Expand),
+                "collapse_paper" => PresentPaper(parameters, PaperPresentationAction.Collapse),
+                "toggle_paper_collapsed" => PresentPaper(parameters, PaperPresentationAction.ToggleCollapsed),
+                "activate_paper" => PresentPaper(parameters, PaperPresentationAction.Activate),
                 "list_papers" => ListPapers(parameters),
                 "get_paper" => GetPaper(parameters),
                 "create_todo_paper" => CreateTodoPaper(parameters),
@@ -114,6 +121,7 @@ internal sealed class McpCommandService
                     type = paper.Type,
                     title = paper.Title,
                     is_visible = paper.IsVisible,
+                    is_collapsed = paper.IsCollapsed,
                     item_count = paper.Type == PaperTypes.Todo
                         ? _commands.ListTodos(paper.Id, includeBlank: true).Count
                         : 0,
@@ -426,6 +434,7 @@ internal sealed class McpCommandService
                 type = paper.Type,
                 title = paper.Title,
                 is_visible = paper.IsVisible,
+                is_collapsed = paper.IsCollapsed,
                 body_provider_id = paper.BodyProviderId,
                 body_state = bodyState == null
                     ? null
@@ -440,6 +449,7 @@ internal sealed class McpCommandService
             type = paper.Type,
             title = paper.Title,
             is_visible = paper.IsVisible,
+            is_collapsed = paper.IsCollapsed,
             todos = _commands.ListTodos(paper.Id, includeBlank: true)
                 .OrderBy(item => item.Order)
                 .Select(TodoDetails)

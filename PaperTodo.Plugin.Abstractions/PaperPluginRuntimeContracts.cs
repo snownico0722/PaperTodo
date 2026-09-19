@@ -135,6 +135,8 @@ public sealed class PaperPluginRuntimeContext
 
     public IPaperPluginPaperActions PaperActions => Workspace as IPaperPluginPaperActions
         ?? throw new InvalidOperationException("This host does not expose paper menu actions.");
+    public IPaperWorkspacePresentationApi WorkspacePresentation => Workspace as IPaperWorkspacePresentationApi
+        ?? throw new InvalidOperationException("This host does not expose cross-paper presentation controls.");
     public IPaperSettingsApi SettingsApi => Workspace as IPaperSettingsApi
         ?? throw new InvalidOperationException("This host does not expose application settings.");
 

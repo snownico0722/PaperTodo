@@ -8,6 +8,7 @@ public static class PaperTodoPermissionNames
     public const string SettingsUpdate = "settings.update";
     public const string SettingsControl = "settings.control";
 
+    public const string PapersPresentation = "papers.presentation";
     public const string PapersRead = "papers.read";
     public const string PapersObserve = "papers.observe";
     public const string PapersCreate = "papers.create";
@@ -32,6 +33,7 @@ public static class PaperTodoPermissionNames
         SettingsRead,
         SettingsUpdate,
         SettingsControl,
+        PapersPresentation,
         PapersRead,
         PapersObserve,
         PapersCreate,
