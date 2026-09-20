@@ -132,6 +132,17 @@ internal static partial class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetProxyCheckWindowRect(IntPtr window, out ProxyCheckNativeRect bounds);
 
-    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
-    private static extern IntPtr SendProxyInputCheckMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+    private static void SendProxyInputCheckMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam)
+    {
+        if (!PostProxyInputCheckMessage(window, message, wParam, lParam))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        // Production mouse delivery is asynchronous to the WPF thread. Pump here so the dedicated
+        // input owner can synchronously bridge the press back to the UI-owned handoff without a
+        // test-only SendMessage deadlock between the two HWND owner threads.
+        NativeInputPumpFor(35);
+    }
+
+    [DllImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostProxyInputCheckMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 }

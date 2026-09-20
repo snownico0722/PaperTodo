@@ -327,7 +327,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
     }
 
-    private void ConfigureAnimations(long absoluteBeginTimestamp)
+    private EdgeCapsuleQueueInputAnimationTicket? ConfigureAnimations(long absoluteBeginTimestamp)
     {
         foreach (var state in _visuals)
         {
@@ -344,6 +344,18 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 animation => state.Visual.SetOffsetY(animation),
                 absoluteBeginTimestamp);
         }
+
+        if (!RoutesPointerInput) return null;
+        var inputMembers = _members
+            .Where(member => member.Window.CanRouteEdgeCapsuleQueueProxyInput)
+            .Select(member => member.Plan)
+            .ToArray();
+        return inputMembers.Length == 0
+            ? null
+            : new EdgeCapsuleQueueInputAnimationTicket(
+                absoluteBeginTimestamp,
+                _plan.DurationMilliseconds,
+                inputMembers);
     }
 
     private IDCompositionAnimation? ApplyAnimatedValue(
