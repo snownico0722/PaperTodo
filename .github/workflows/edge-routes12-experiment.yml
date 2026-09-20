@@ -104,7 +104,10 @@ jobs:
           $project = Join-Path $env:MAIN_DIR 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
           dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/main-restore.log
           if ($LASTEXITCODE -ne 0) { throw 'Main restore failed' }
-          dotnet build $project -c Release --no-restore -p:StartupObject=MainVsRoute1ComparisonEntry -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/main-build.log
+          $appProject = Join-Path $env:MAIN_DIR 'PaperTodo.csproj'
+          dotnet build $appProject -c Release --no-restore -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/main-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/main-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Main A/B build failed' }
       - name: Build route1 with the same A/B entry
         run: |
@@ -112,7 +115,9 @@ jobs:
           $project = 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
           dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/route1-restore.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 restore failed' }
-          dotnet build $project -c Release --no-restore -p:StartupObject=MainVsRoute1ComparisonEntry -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/route1-build.log
+          dotnet build PaperTodo.csproj -c Release --no-restore -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/route1-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/route1-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 A/B build failed' }
       - name: Run same-machine current-main vs route1 A/B
         timeout-minutes: 8
@@ -138,6 +143,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: edge-routes12-ab-\${{ github.sha }}
+          name: edge-routes12-ab-${{ github.sha }}
           path: artifacts/routes12-ab
           if-no-files-found: warn
