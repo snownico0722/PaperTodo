@@ -449,15 +449,53 @@ internal static class MainVsRoute1ComparisonEntry
     private static PixelSpan FindRedSpan(DeviceScreenRect bounds, int y)
     {
         var dc = GetDC(IntPtr.Zero);
-        if (dc == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        if (dc == IntPtr.Zero)
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        var memory = CreateCompatibleDC(dc);
+        if (memory == IntPtr.Zero)
+        {
+            _ = ReleaseDC(IntPtr.Zero, dc);
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        IntPtr bitmap = IntPtr.Zero;
+        IntPtr previous = IntPtr.Zero;
         try
         {
+            var info = new BitmapInfo
+            {
+                Header = new BitmapInfoHeader
+                {
+                    Size = (uint)Marshal.SizeOf<BitmapInfoHeader>(),
+                    Width = bounds.Width,
+                    Height = -1,
+                    Planes = 1,
+                    BitCount = 32,
+                    Compression = 0
+                }
+            };
+            bitmap = CreateDIBSection(dc, ref info, 0, out var bits, IntPtr.Zero, 0);
+            if (bitmap == IntPtr.Zero || bits == IntPtr.Zero)
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            previous = SelectObject(memory, bitmap);
+            if (previous == IntPtr.Zero || previous == new IntPtr(-1))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            if (!BitBlt(memory, 0, 0, bounds.Width, 1, dc, bounds.Left, y, 0x40CC0020))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+
+            var pixels = new int[bounds.Width];
+            Marshal.Copy(bits, pixels, 0, pixels.Length);
             var left = int.MaxValue;
             var right = int.MinValue;
             var count = 0;
-            for (var x = bounds.Left; x < bounds.Right; x++)
+            for (var index = 0; index < pixels.Length; index++)
             {
-                if (!IsRed(GetPixel(dc, x, y))) continue;
+                var color = unchecked((uint)pixels[index]);
+                var blue = (byte)(color & 0xFF);
+                var green = (byte)((color >> 8) & 0xFF);
+                var red = (byte)((color >> 16) & 0xFF);
+                if (red < 180 || green > 90 || blue > 90) continue;
+                var x = bounds.Left + index;
                 left = Math.Min(left, x);
                 right = Math.Max(right, x + 1);
                 count++;
@@ -466,6 +504,11 @@ internal static class MainVsRoute1ComparisonEntry
         }
         finally
         {
+            if (previous != IntPtr.Zero && previous != new IntPtr(-1))
+                _ = SelectObject(memory, previous);
+            if (bitmap != IntPtr.Zero)
+                _ = DeleteObject(bitmap);
+            _ = DeleteDC(memory);
             _ = ReleaseDC(IntPtr.Zero, dc);
         }
     }
@@ -768,6 +811,29 @@ internal static class MainVsRoute1ComparisonEntry
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfoHeader
+    {
+        internal uint Size;
+        internal int Width;
+        internal int Height;
+        internal ushort Planes;
+        internal ushort BitCount;
+        internal uint Compression;
+        internal uint SizeImage;
+        internal int XPelsPerMeter;
+        internal int YPelsPerMeter;
+        internal uint ClrUsed;
+        internal uint ClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        internal BitmapInfoHeader Header;
+        internal uint Colors;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint { internal int X, Y; }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -816,6 +882,38 @@ internal static class MainVsRoute1ComparisonEntry
 
     [DllImport("gdi32.dll", EntryPoint = "GetPixel")]
     private static extern uint GetPixel(IntPtr dc, int x, int y);
+
+    [DllImport("gdi32.dll", EntryPoint = "CreateCompatibleDC", SetLastError = true)]
+    private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+
+    [DllImport("gdi32.dll", EntryPoint = "DeleteDC")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteDC(IntPtr dc);
+
+    [DllImport("gdi32.dll", EntryPoint = "CreateDIBSection", SetLastError = true)]
+    private static extern IntPtr CreateDIBSection(
+        IntPtr dc,
+        ref BitmapInfo bitmapInfo,
+        uint usage,
+        out IntPtr bits,
+        IntPtr section,
+        uint offset);
+
+    [DllImport("gdi32.dll", EntryPoint = "SelectObject", SetLastError = true)]
+    private static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+
+    [DllImport("gdi32.dll", EntryPoint = "BitBlt", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool BitBlt(
+        IntPtr destination,
+        int x,
+        int y,
+        int width,
+        int height,
+        IntPtr source,
+        int sourceX,
+        int sourceY,
+        uint operation);
 
     [DllImport("gdi32.dll", EntryPoint = "CreateRectRgn", SetLastError = true)]
     private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
