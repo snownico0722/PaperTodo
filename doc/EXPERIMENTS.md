@@ -28,6 +28,8 @@
 | E-015 | 2026-09-14 | WPF请求、HWND原位置保留、代理shape能力及组合对照 | Completed; candidates isolated | D-032 |
 | E-016 | 2026-09-14 | 活动渲染请求正式化、真实交接像素与 HWND 合并对照 | Main integration validated; request adopted, HWND candidates not adopted | D-038 |
 
+输出目录中的历史材料与云端记录的对应关系，以及 E-007 后续逐事件复核，见 [2026-09-20 归档核对](experiments/output-knowledge-audit-20260920.md)。该记录也标明尚在 PR 分支的实验，不改变本页编号或候选状态。
+
 整合编号说明：主线既有 E-001～E-004 保持原编号。本地边缘实验旧 E-003～E-014 顺延为 E-005～E-016；已封存原始目录、报告、commit 和文件名保持不变，阅读其中旧编号时按此对应表解释。
 
 | 封存旧编号 | 当前编号 |
