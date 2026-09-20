@@ -95,6 +95,17 @@ internal static class EdgeBrowsingComparisonEntry
         try
         {
             await controller.StartAsync(createDefaultPaper: false);
+            var stateIds = controller.State.Papers
+                .Select(paper => paper.Id)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            Console.WriteLine("BROWSE_STATE mode=" + mode + " ids=" + string.Join(",", stateIds));
+            Require(
+                stateIds.SequenceEqual(
+                    new[] { "browse-0", "browse-1", "browse-2" },
+                    StringComparer.Ordinal),
+                "fixture state contains unexpected papers: " + string.Join(",", stateIds));
+
             var windows = (Dictionary<string, PaperWindow>)Field(controller, "_windows");
             await UntilAsync(
                 () => windows.Count == 3 &&
