@@ -204,9 +204,17 @@ internal static class EdgeBrowsingComparisonEntry
                 else
                 {
                     fastMisses++;
+                    var actualOwner = CurrentOwnerId(controller) ?? "none";
                     Console.WriteLine(
                         $"BROWSE_TRANSFER mode={mode} phase=fast from={from} to={target.EdgeCapsulePreviewPaperId} " +
-                        $"point={Point(point)} bounds={Rect(bounds)} result=owner-timeout actual={CurrentOwnerId(controller) ?? "none"}");
+                        $"point={Point(point)} bounds={Rect(bounds)} result=owner-timeout actual={actualOwner}");
+                    if (actualOwner != "none" &&
+                        !controller.State.Papers.Any(paper =>
+                            string.Equals(paper.Id, actualOwner, StringComparison.Ordinal)))
+                    {
+                        Console.WriteLine("BROWSE_OWNER_UNIVERSE mode=" + mode + " " +
+                            DescribeOwnerUniverse(controller));
+                    }
                     await Task.Delay(60);
                 }
             }
@@ -321,6 +329,18 @@ internal static class EdgeBrowsingComparisonEntry
     {
         var session = (EdgeCapsulePreviewLayoutSession?)Field(controller, "_edgeCapsulePreviewSession");
         return session?.OwnerPaperId;
+    }
+
+    private static string DescribeOwnerUniverse(AppController controller)
+    {
+        var session = (EdgeCapsulePreviewLayoutSession?)Field(controller, "_edgeCapsulePreviewSession");
+        var windows = (Dictionary<string, PaperWindow>)Field(controller, "_windows");
+        var stateIds = controller.State.Papers.Select(paper => paper.Id).OrderBy(id => id, StringComparer.Ordinal);
+        var windowIds = windows.Keys.OrderBy(id => id, StringComparer.Ordinal);
+        var queueIds = session?.QueuePaperIds ?? Array.Empty<string>();
+        return $"owner={session?.OwnerPaperId ?? "none"} " +
+            $"state=[{string.Join(",", stateIds)}] windows=[{string.Join(",", windowIds)}] " +
+            $"sessionQueue=[{string.Join(",", queueIds)}]";
     }
 
     private static object Field(object instance, string name) =>
