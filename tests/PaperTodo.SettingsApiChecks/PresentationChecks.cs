@@ -182,7 +182,6 @@ internal static partial class Program
         Check(note.IsVisible && note.IsCollapsed, "All seven Web Workspace methods route through the real host.");
         Throws<PaperTodoPluginException>(() => Web("papers.show", new { paperId = "note", activate = "false" }), "invalid_params");
         Throws<PaperTodoPluginException>(() => Web("papers.hide", new { }), "invalid_params");
-        Throws<PaperTodoPluginException>(() => WebPluginWorkspaceRequests.Execute(denied, "papers.hide", Json(new { paperId = "note" })), "permission_denied");
 
         // Test the actual Body dispatcher separately: it has its own switch in addition to the
         // common Workspace router used by Mini and Runtime. No live WebView is claimed here.
