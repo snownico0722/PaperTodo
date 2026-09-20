@@ -8,9 +8,10 @@
     <ApplicationManifest>../../app.manifest</ApplicationManifest>
     <StartupObject Condition="'$(Pr260H8InputTiming)' == 'true'">Pr260H8InputTimingEntry</StartupObject>
     <StartupObject Condition="'$(Pr260H8InputTiming)' != 'true'">Program</StartupObject>
-    <!-- Isolated executable entries; ordinary builds do not start either experiment. -->
+    <!-- Isolated executable entries; ordinary builds do not start experiment probes. -->
     <StartupObject Condition="'$(EdgeRoutes12)' == 'true'">Routes12Entry</StartupObject>
     <StartupObject Condition="'$(EdgeRoutes12R1)' == 'true'">Routes12R1Entry</StartupObject>
+    <StartupObject Condition="'$(EdgeRoutes12R2)' == 'true'">Routes12R2Entry</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
