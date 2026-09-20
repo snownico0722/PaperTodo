@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 namespace PaperTodo;
@@ -195,6 +195,10 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     {
         ArgumentNullException.ThrowIfNull(screenBounds);
         if (_disposed || _disposing || Handle == IntPtr.Zero || _inputOwner == null) return false;
+        // While a committed immutable queue ticket owns translation, Dispatcher-side samples are
+        // observational only. A non-empty refresh must not supersede that native clock; a new queue
+        // generation starts a new ticket, while empty clear/hide/environment invalidation still retire it.
+        if (_inputOwner.IsAnimationActive && screenBounds.Count > 0) return true;
         return _inputOwner.TrySetRegions(screenBounds);
     }
 

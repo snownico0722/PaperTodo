@@ -58,8 +58,8 @@ internal static partial class Program
             monitor.WorkArea.Left + 500,
             monitor.WorkArea.Top + 500);
         var initial = new DeviceScreenRect(bounds.Left + 16, bounds.Top + 20, bounds.Left + 64, bounds.Top + 68);
-        var targetRect = new DeviceScreenRect(initial.Left, initial.Top + 120, initial.Right, initial.Bottom + 120);
-        var x = initial.Left + 24;
+        var targetRect = new DeviceScreenRect(initial.Left + 120, initial.Top, initial.Right + 120, initial.Bottom);
+        var sampleY = initial.Top + 24;
         var environmentChanges = 0;
         var presses = 0;
         var applied = new[] { initial };
@@ -141,8 +141,8 @@ internal static partial class Program
             Check(sourceCloaked, route + ": cover is visible before the real WPF source is cloaked");
             Marshal.ThrowExceptionForHR(NativeInputDwmFlush());
 
-            var initialPixels = Routes12R3CaptureRedVertical(bounds, x);
-            Check(initialPixels.Count >= 40 && Math.Abs(initialPixels.Top - initial.Top) <= 3,
+            var initialPixels = Routes12CaptureRedSpan(bounds, sampleY, out _);
+            Check(initialPixels.Count >= 40 && Math.Abs(initialPixels.Left - initial.Left) <= 3,
                 $"{route}: physical desktop sees initial live pixels ({initialPixels})");
 
             var startFrame = Routes12R3Frame(initial);
@@ -152,8 +152,8 @@ internal static partial class Program
             const int durationMilliseconds = 900;
             var ticket = new EdgeCapsuleQueueInputAnimationTicket(startedAt, durationMilliseconds, [member]);
             animation = device.CreateAnimation();
-            var from = (float)(initial.Top - bounds.Top);
-            var travel = targetRect.Top - initial.Top;
+            var from = (float)(initial.Left - bounds.Left);
+            var travel = targetRect.Left - initial.Left;
             var durationSeconds = durationMilliseconds / 1000.0;
             animation.SetAbsoluteBeginTime(startedAt).CheckError();
             animation.AddCubic(
@@ -163,20 +163,34 @@ internal static partial class Program
                 (float)(-3 * travel / (durationSeconds * durationSeconds)),
                 (float)(travel / (durationSeconds * durationSeconds * durationSeconds))).CheckError();
             animation.End(durationSeconds, from + travel).CheckError();
-            visual.SetOffsetY(animation).CheckError();
-            Check(pair.TryStartInputAnimation(ticket), route + ": production input owner accepts the shared absolute-QPC ticket");
+            visual.SetOffsetX(animation).CheckError();
+
+            // Deliberately hold the DComp transaction before Commit. The dedicated input owner must
+            // remain at the resting HRGN and inactive; starting it before Commit would reproduce an
+            // input-ahead window whenever DComp submission stalls.
+            var preCommitInput = Routes12CaptureInputSpan(pair.InputHandle, bounds, sampleY);
+            Thread.Sleep(90);
+            var delayedInput = Routes12CaptureInputSpan(pair.InputHandle, bounds, sampleY);
+            Check(!pair.IsInputAnimationActive && !preCommitInput.IsEmpty &&
+                delayedInput.Left == preCommitInput.Left && delayedInput.Right == preCommitInput.Right,
+                route + ": delayed DComp commit cannot advance native input authority early");
+
             device.Commit().CheckError();
+            Check(pair.TryStartInputAnimation(ticket),
+                route + ": production input owner activates the shared absolute-QPC ticket only after DComp commit");
             Thread.Sleep(30);
-            Check(pair.TrySetInputRegions(ticket.Sample(Stopwatch.GetTimestamp())) && pair.IsInputAnimationActive,
-                route + ": equivalent UI-side refresh cannot steal the active native animation clock");
+            var updatesBeforeRefresh = pair.InputRegionUpdateCount;
+            Check(pair.TrySetInputRegions([initial]) && pair.IsInputAnimationActive &&
+                pair.InputRegionUpdateCount == updatesBeforeRefresh,
+                route + ": stale non-empty UI refresh cannot steal the active native animation clock");
 
             var updatesBeforeStall = pair.InputRegionUpdateCount;
-            var observer = Task.Run(() => Routes12R3ObserveVertical(pair.InputHandle, bounds, x, 430));
+            var observer = Task.Run(() => Routes12ObserveDynamic(pair.InputHandle, bounds, sampleY, 430));
             Thread.Sleep(430);
             var observations = observer.WaitAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
             Check(pair.InputRegionUpdateCount >= updatesBeforeStall + 4,
                 route + ": native HRGN keeps advancing while the WPF/UI thread is unavailable");
-            var dynamicSummary = Routes12R3Summarize(observations);
+            var dynamicSummary = Routes12Summarize(observations);
             Check(dynamicSummary.Samples >= 5, route + ": observer captured dynamic physical-pixel/HRGN samples");
             Check(dynamicSummary.PixelTravel >= 24 && dynamicSummary.InputTravel >= 24,
                 route + ": both physical pixels and finite input region moved materially during UI stall");
@@ -185,8 +199,8 @@ internal static partial class Program
             Marshal.ThrowExceptionForHR(NativeInputDwmFlush());
             applied = [targetRect];
             Check(pair.TrySetInputRegions(applied), route + ": exact terminal region can be republished after autonomous motion");
-            var terminalPixels = Routes12R3CaptureRedVertical(bounds, x);
-            Check(terminalPixels.Count >= 40 && Math.Abs(terminalPixels.Top - targetRect.Top) <= 4,
+            var terminalPixels = Routes12CaptureRedSpan(bounds, sampleY, out _);
+            Check(terminalPixels.Count >= 40 && Math.Abs(terminalPixels.Left - targetRect.Left) <= 4,
                 $"{route}: terminal DComp pixels reach the intended endpoint ({terminalPixels})");
 
             // Re-use the production finite-input owner with two static members and a real hole.
