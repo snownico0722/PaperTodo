@@ -204,45 +204,49 @@ jobs:
           dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=EdgeBrowsingComparisonEntry 2>&1 | Tee-Object artifacts/routes12-browse/route1-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 browse fixture build failed' }
       - name: Run real continuous edge browsing A/B
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           $ErrorActionPreference = 'Continue'
           $mainBin = Join-Path $env:MAIN_BROWSE_DIR 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
           $routeBin = Resolve-Path 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
-          $mainRun = Join-Path $env:RUNNER_TEMP 'papertodo-browse-main-run'
-          $routeRun = Join-Path $env:RUNNER_TEMP 'papertodo-browse-route1-run'
-          foreach ($dir in @($mainRun, $routeRun)) {
-            if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
-            New-Item -ItemType Directory -Force $dir | Out-Null
-          }
-          Copy-Item (Join-Path $mainBin '*') $mainRun -Recurse -Force
-          Copy-Item (Join-Path $routeBin '*') $routeRun -Recurse -Force
-          # This benchmark is about built-in edge browsing only. Startup-paper plugins can
-          # asynchronously create an extra random-ID Paper after StartAsync and corrupt the
-          # owner sequence, so remove plugin payloads symmetrically from both isolated runs.
-          foreach ($dir in @($mainRun, $routeRun)) {
-            $plugins = Join-Path $dir 'plugins'
-            if (Test-Path $plugins) { Remove-Item -Recurse -Force $plugins }
-          }
-
-          $env:PAPERTODO_BROWSE_AB = '1'
-          $env:PAPERTODO_BROWSE_SOURCE_SHA = $env:MAIN_SHA
-          Push-Location $mainRun
-          & .\PaperTodo.EdgeTitleChecks.exe --mode main 2>&1 | Tee-Object "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/main.log"
-          $mainExit = $LASTEXITCODE
-          Pop-Location
-
           $routeSha = (git rev-parse HEAD).Trim()
-          $env:PAPERTODO_BROWSE_SOURCE_SHA = $routeSha
-          Push-Location $routeRun
-          & .\PaperTodo.EdgeTitleChecks.exe --mode route1 2>&1 | Tee-Object "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/route1.log"
-          $routeExit = $LASTEXITCODE
-          Pop-Location
+          $failures = @()
 
-          Get-Content artifacts/routes12-browse/main.log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
-          Get-Content artifacts/routes12-browse/route1.log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
-          "mainExit=$mainExit route1Exit=$routeExit" | Tee-Object artifacts/routes12-browse/exits.txt
-          if ($mainExit -ne 0 -or $routeExit -ne 0) { throw "Browse A/B failed: main=$mainExit route1=$routeExit" }
+          for ($iteration = 1; $iteration -le 5; $iteration++) {
+            foreach ($mode in @('main', 'route1')) {
+              $sourceBin = if ($mode -eq 'main') { $mainBin } else { $routeBin }
+              $runDir = Join-Path $env:RUNNER_TEMP "papertodo-browse-$mode-$iteration"
+              if (Test-Path $runDir) { Remove-Item -Recurse -Force $runDir }
+              New-Item -ItemType Directory -Force $runDir | Out-Null
+              Copy-Item (Join-Path $sourceBin '*') $runDir -Recurse -Force
+
+              # Built-in browsing only: no startup-paper plugins may inject extra Papers.
+              $plugins = Join-Path $runDir 'plugins'
+              if (Test-Path $plugins) { Remove-Item -Recurse -Force $plugins }
+
+              $env:PAPERTODO_BROWSE_AB = '1'
+              $env:PAPERTODO_BROWSE_SOURCE_SHA = if ($mode -eq 'main') { $env:MAIN_SHA } else { $routeSha }
+              $log = "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/$mode-$iteration.log"
+              Push-Location $runDir
+              & .\PaperTodo.EdgeTitleChecks.exe --mode $mode 2>&1 | Tee-Object $log
+              $exit = $LASTEXITCODE
+              Pop-Location
+
+              if ($exit -ne 0) { $failures += "$mode-$iteration=$exit" }
+              Get-Content $log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+          }
+
+          Get-ChildItem artifacts/routes12-browse/*-*.log |
+            ForEach-Object { Get-Content $_.FullName } |
+            Where-Object { $_ -match '^BROWSE_SUMMARY' } |
+            Set-Content artifacts/routes12-browse/summaries.txt
+
+          if ($failures.Count -gt 0) {
+            $failures -join ' ' | Tee-Object artifacts/routes12-browse/exits.txt
+            throw "Browse A/B repeated runs failed: $($failures -join ', ')"
+          }
+          'all 10 browse runs exited 0' | Tee-Object artifacts/routes12-browse/exits.txt
       - name: Preserve browse A/B evidence
         if: always()
         uses: actions/upload-artifact@v7
