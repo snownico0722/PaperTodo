@@ -108,11 +108,9 @@ internal static partial class Program
         var current = true;
         PaperBodyPluginHostApi Api(params string[] permissions) =>
             new(c, commands, "owner", "tests.presentation", permissions, () => current, () => current);
-        using var denied = Api();
-        using var host = Api(PaperTodoPermissionNames.PapersPresentation, PaperTodoPermissionNames.PapersObserve);
+        using var host = Api(PaperTodoPermissionNames.PapersObserve);
         var api = (IPaperWorkspacePresentationApi)host;
-        using var runtime = new PaperPluginRuntimeWorkspaceApi(c, "tests.presentation",
-            [PaperTodoPermissionNames.PapersPresentation], () => current);
+        using var runtime = new PaperPluginRuntimeWorkspaceApi(c, "tests.presentation", [], () => current);
         var runtimeApi = (IPaperWorkspacePresentationApi)runtime;
         var events = new List<PaperTodoEvent>();
         using var subscription = host.Subscribe(new PaperTodoEventFilter
@@ -120,8 +118,6 @@ internal static partial class Program
             Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.PaperChanged }, ExcludeOwnOperations = false
         }, events.Add);
 
-        Throws<PaperTodoPluginException>(() => ((IPaperWorkspacePresentationApi)denied).ShowPaper("note"), "permission_denied");
-        Check(!note.IsVisible && papers.Count == 3, "Denied calls do not reveal or create papers.");
         var shown = api.ShowPaper("note", activate: false);
         Check(shown.PaperId == "note" && shown.IsVisible && !shown.IsCollapsed, "Native can show another note without unfolding implicitly.");
         await PresentationSettle();
@@ -207,10 +203,7 @@ internal static partial class Program
         var mcpMethods = new[] { "show_paper", "hide_paper", "toggle_paper_visibility", "expand_paper", "collapse_paper", "toggle_paper_collapsed", "activate_paper" };
         c.State.McpAllowFullWrites = false;
         foreach (var method in mcpMethods)
-            Throws<McpApiException>(() => Mcp(method, new { paper_id = "note", activate = false }), "full_writes_disabled");
-        c.State.McpAllowFullWrites = true;
-        foreach (var method in mcpMethods)
-            Check(Mcp(method, new { paper_id = "note", activate = false }) is PaperPresentationResult, "MCP dispatcher: " + method);
+            Check(Mcp(method, new { paper_id = "note", activate = false }) is PaperPresentationResult, "MCP presentation does not require full writes: " + method);
         Mcp("expand_paper", new { paper_id = "note", activate = false });
         Mcp("hide_paper", new { paper_id = "note" });
         await PresentationSettle();
@@ -242,7 +235,6 @@ internal static partial class Program
         current = true;
         await LinkedTitleTruncationBehavior(c, note, todo);
         await PresentationPipeBehavior();
-        PresentationManifestBehavior();
         Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
     }
 
@@ -312,18 +304,4 @@ internal static partial class Program
         }
     }
 
-    private static void PresentationManifestBehavior()
-    {
-        var validate = typeof(PaperBodyPluginRegistry).GetMethod("ValidateProtocolFeatures", BindingFlags.NonPublic | BindingFlags.Static)!;
-        void Validate(string version)
-        {
-            var manifest = new PaperBodyPluginManifest { ApiVersion = version, Permissions = ["papers.presentation"] };
-            try { validate.Invoke(null, [manifest]); }
-            catch (TargetInvocationException ex) when (ex.InnerException != null)
-            { ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
-        }
-        Throws<InvalidDataException>(() => Validate("2.1"));
-        Validate("2.2");
-        Check(PaperTodoPermissionNames.All.Contains("papers.presentation"), "Permission is recognized in API 2.2.");
-    }
 }

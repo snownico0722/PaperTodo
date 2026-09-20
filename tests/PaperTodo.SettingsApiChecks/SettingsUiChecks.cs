@@ -101,7 +101,6 @@ internal static partial class Program
             ("ToggleMcpDeletes", "mcp.deletes", false),
             ("ToggleMcpEnabled", "mcp.enabled", false),
             ("ToggleMcpFullWrites", "mcp.full_writes", false),
-            ("ToggleMcpSettingsControl", "mcp.settings_control", false),
             ("ToggleNoteTextBold", "note.text_bold", false),
             ("ToggleOpenEdgeCapsuleShortcutAtCursor", "shortcuts.open_edge_at_cursor", false),
             ("TogglePersistentPowerShellProcess", "scripts.persistent_process", false),

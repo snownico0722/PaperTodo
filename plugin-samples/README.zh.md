@@ -27,7 +27,7 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
-| 2.2 | 当前最新 | 新增跨纸片显示控制（`papers.presentation`）、公共软件 Settings API（`settings.read/update/control`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
+| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -517,7 +517,7 @@ Runtime 不借用 paper-session settings 生命周期：Native 随时读取 `Pap
 
 这是操作 **PaperTodo 面向用户的设置** 的可选能力，不是插件私有的 `context.Settings`、`SettingsJson`、State 或 `.runtime/`。Native Body / provider Runtime 使用 `context.SettingsApi`（`IPaperSettingsApi`）；Web Body / Mini / Runtime 使用 `papertodo.settingsApi`。没有向 `IPaperTodoHostApi` 增加必需方法。
 
-List/Get 需要声明 `settings.read`，Set 需要 `settings.update`；敏感设置额外需要 `settings.control`。MCP 授权、Windows 开机启动、匿名使用统计、点击执行关联脚本、常驻脚本进程属于敏感项。先校验调用方权限再修改；普通设置写权限不能给自己增加敏感控制权限。
+List/Get 需要声明 `settings.read`，Set 需要 `settings.update`；调用方权限在修改前校验。
 
 ```csharp
 var links = context.SettingsApi.Get("todo.paper_links");
@@ -532,9 +532,9 @@ const catalog = await papertodo.settingsApi.list('todo');
 await papertodo.settingsApi.set('todo.paper_links', true);
 ```
 
-MCP 提供 `list_settings(category?)`、`get_setting(id)`、`set_setting(id, value)`。查询需要 MCP 总开关；修改需要完整写入，敏感项还需要事先开启“允许控制敏感软件设置”，不能靠该请求自己开启自己。另行获准的 Codex 自动开启路径可以开启全部 MCP 权限，包含此权限。关闭 `mcp.enabled` 时先返回本次结果，再停止传输。
+MCP 提供 `list_settings(category?)`、`get_setting(id)`、`set_setting(id, value)`。查询需要 MCP 总开关；修改需要完整写入。另行获准的 Codex 自动开启路径可以开启现有写入和删除权限。关闭 `mcp.enabled` 时先返回本次结果，再停止传输。
 
-List 返回数组。每项包含稳定的 `id`、`category`、本地化 `title`、`type`、当前 `value`、针对调用方权限的 `writable`、`sensitive`、`requires_restart`，以及适用时的 `unavailable_reason`、`min`、`max`、`step`、`max_length`、`options`。Set 返回 `setting`、`previous_value`、`changed`；设置为当前值不会重复保存或刷新。应先查询目录，不能猜内部字段名。
+List 返回数组。每项包含稳定的 `id`、`category`、本地化 `title`、`type`、当前 `value`、针对调用方权限的 `writable`、`requires_restart`，以及适用时的 `unavailable_reason`、`min`、`max`、`step`、`max_length`、`options`。Set 返回 `setting`、`previous_value`、`changed`；设置为当前值不会重复保存或刷新。应先查询目录，不能猜内部字段名。
 
 目录覆盖一般/语言/开机启动、隐私、外观/字体/背景偏好、笔记/待办/标题/胶囊、边缘浏览、提醒、窗口/专注/交互、脚本、MCP 和全局快捷键。返回的是保存的偏好：从属选项可能保持勾选，但要等主功能开启才生效。快捷键分别提供 `.gesture`、`.enabled`；每侧胶囊序列用“修饰键组合＋1”配置，同步应用到 1～9。快捷键录制/未提交草稿以及系统注册冲突会明确报错，不静默覆盖。语言标记 `requires_restart: true`，接口不强制退出重启。
 
@@ -636,7 +636,7 @@ Top Bar 不提供另一套 `GetBodyText/SetBodyText`。需要读写目标纸片�
 
 ### 跨纸片显示控制（API 2.2）
 
-在 `permissions` 声明 `"papers.presentation"`，并使用 `apiVersion: "2.2"`，即可按准确 ID 操作任意已有纸片，包括 Todo、Markdown 和其他插件的纸片。它独立于内容写入、删除权限。查询 ID 另需 `papers.read`；显示控制结果不返回标题或正文。
+使用 `apiVersion: "2.2"` 即可按准确 ID 操作任意已有纸片，包括 Todo、Markdown 和其他插件的纸片，不需要额外的展示权限。查询 ID 另需 `papers.read`；显示控制结果不返回标题或正文。
 
 Native Body 和 Runtime 都通过可选能力 `context.WorkspacePresentation`（`IPaperWorkspacePresentationApi`）调用，不向旧 Workspace 接口添加必实现方法：
 
@@ -666,9 +666,9 @@ await papertodo.workspace.request('papers.activate', { paperId });
 
 结果为 `{ paper_id, is_visible, is_collapsed }`，表示请求处理后的逻辑状态，**不表示动画已完成，也不承诺同步落盘**。窗口、动画和常规保存调度仍归已有宿主流程。隐藏不删除内容，也不移除维持插件 Runtime 的实体 Paper。toggle 会反转状态，结果不明时先查询，不要盲目重试。Native Runtime 后台调用会切回 UI Dispatcher，已销毁的上下文会被拒绝。
 
-2.1 的 `context.Presentation` / `papertodo.paper.*` 不变：仍只操作承载自己的纸片，也不需要此新增权限。Web popup 不获得通用 Workspace 能力。
+2.1 的 `context.Presentation` / `papertodo.paper.*` 不变：仍只操作承载自己的纸片，仍保持自身作用域。Web popup 不获得通用 Workspace 能力。
 
-MCP 对应提供 `show_paper`、`hide_paper`、`toggle_paper_visibility`、`expand_paper`、`collapse_paper`、`toggle_paper_collapsed`、`activate_paper`，参数使用 `paper_id` 和同义的可选 `activate`。全部要求 MCP 总开关和完整写入，不要求删除或敏感设置控制权限。`list_papers` / `get_paper` 同时返回 `is_visible`、`is_collapsed`。
+MCP 对应提供 `show_paper`、`hide_paper`、`toggle_paper_visibility`、`expand_paper`、`collapse_paper`、`toggle_paper_collapsed`、`activate_paper`，参数使用 `paper_id` 和同义的可选 `activate`。只要求 MCP 总开关，不额外要求完整写入或删除权限。`list_papers` / `get_paper` 同时返回 `is_visible`、`is_collapsed`。
 
 ## 7. Top Bar 扩展（2.1）
 

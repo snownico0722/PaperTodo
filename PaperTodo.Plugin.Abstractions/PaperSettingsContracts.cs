@@ -13,7 +13,6 @@ public sealed record PaperSettingSnapshot
     [JsonPropertyName("type")] public required string Type { get; init; }
     [JsonPropertyName("value")] public required JsonElement Value { get; init; }
     [JsonPropertyName("writable")] public bool Writable { get; init; }
-    [JsonPropertyName("sensitive")] public bool Sensitive { get; init; }
     [JsonPropertyName("requires_restart")] public bool RequiresRestart { get; init; }
     [JsonPropertyName("unavailable_reason")] public string? UnavailableReason { get; init; }
     [JsonPropertyName("min")] public double? Min { get; init; }
@@ -29,8 +28,8 @@ public sealed record PaperSettingChangeResult(
     [property: JsonPropertyName("changed")] bool Changed);
 
 /// <summary>
-/// Protocol 2.2 optional application Settings capability. List/Get need settings.read; Set needs settings.update
-/// and, for sensitive settings, settings.control. IDs and schemas come from List, not CLR field names.
+/// Protocol 2.2 optional application Settings capability. List/Get need settings.read; Set needs settings.update.
+/// IDs and schemas come from List, not CLR field names.
 /// This is distinct from context.Settings/SettingsJson, which belongs to the plugin itself.
 /// </summary>
 public interface IPaperSettingsApi

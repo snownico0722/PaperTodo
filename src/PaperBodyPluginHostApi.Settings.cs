@@ -25,8 +25,6 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperSettingsApi
             Require(PaperTodoPermissionNames.SettingsUpdate);
             return SettingsCall(() =>
             {
-                if (_controller.PublicSettings.Get(id).Sensitive)
-                    Require(PaperTodoPermissionNames.SettingsControl);
                 var result = _controller.PublicSettings.Set(id, copy);
                 return result with { Setting = SettingsAccess(result.Setting) };
             });
@@ -35,8 +33,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperSettingsApi
 
     private PaperSettingSnapshot SettingsAccess(PaperSettingSnapshot setting) =>
         PaperSettingsService.WithAccess(setting,
-            _permissions.Contains(PaperTodoPermissionNames.SettingsUpdate),
-            _permissions.Contains(PaperTodoPermissionNames.SettingsControl));
+            _permissions.Contains(PaperTodoPermissionNames.SettingsUpdate));
 
     private static T SettingsCall<T>(Func<T> action)
     {

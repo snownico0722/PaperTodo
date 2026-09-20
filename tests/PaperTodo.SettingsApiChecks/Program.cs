@@ -43,11 +43,10 @@ internal static partial class Program
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
         return controller;
     }
-    private static PaperSettingDefinition Boolean(string id, Func<bool> read, Action<bool> write, Action publish,
-        bool sensitive = false) => new()
+    private static PaperSettingDefinition Boolean(string id, Func<bool> read, Action<bool> write, Action publish) => new()
     {
         Metadata = new PaperSettingSnapshot { Id = id, Category = id.Split('.')[0], Title = id,
-            Type = "boolean", Value = Json(false), Writable = true, Sensitive = sensitive },
+            Type = "boolean", Value = Json(false), Writable = true },
         Read = () => Json(read()),
         Validate = value => value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.Clone() :
             throw PaperSettingsService.Error("invalid_setting_value", "bool required"),
@@ -119,10 +118,8 @@ internal static partial class Program
         reentrant = new PaperSettingsService([definition], () => true,
             () => { Throws<PaperSettingsException>(() => reentrant!.Set("todo.paper_links", Json(false)), "settings_busy"); return true; }, a => a());
         reentrant.Set("todo.paper_links", Json(false));
-        var sensitive = definition.Snapshot() with { Sensitive = true };
-        Check(!PaperSettingsService.WithAccess(sensitive, update: true, control: false).Writable, "Ordinary update cannot control sensitive settings.");
-        Check(!PaperSettingsService.WithAccess(sensitive, update: false, control: true).Writable, "Control alone is not update permission.");
-        Check(PaperSettingsService.WithAccess(sensitive, update: true, control: true).Writable, "Both permissions allow sensitive updates.");
+        Check(!PaperSettingsService.WithAccess(definition.Snapshot(), update: false).Writable, "Read-only access is not writable.");
+        Check(PaperSettingsService.WithAccess(definition.Snapshot(), update: true).Writable, "Update permission makes a writable setting writable.");
     }
 
     private static void CatalogBehavior()
@@ -190,8 +187,7 @@ internal static partial class Program
         var c = Controller();
         c.State.McpEnabled = true;
         var defs = new[] {
-            Boolean("todo.paper_links", () => c.State.EnableTodoPaperLinks, v => c.State.EnableTodoPaperLinks = v, () => { }),
-            Boolean("mcp.settings_control", () => c.State.McpAllowSettingsControl, v => c.State.McpAllowSettingsControl = v, () => { }, sensitive: true)
+            Boolean("todo.paper_links", () => c.State.EnableTodoPaperLinks, v => c.State.EnableTodoPaperLinks = v, () => { })
         };
         var service = new PaperSettingsService(defs, () => true, () => true, a => a());
         Field(c, "_publicSettings", service);
@@ -205,10 +201,6 @@ internal static partial class Program
         var writer = Api(PaperTodoPermissionNames.SettingsRead, PaperTodoPermissionNames.SettingsUpdate);
         ((IPaperSettingsApi)writer).Set("todo.paper_links", false);
         Check(!c.State.EnableTodoPaperLinks, "Native API uses the shared service.");
-        Throws<PaperTodoPluginException>(() => ((IPaperSettingsApi)writer).Set("mcp.settings_control", true), "permission_denied");
-        var controller = Api(PaperTodoPermissionNames.SettingsRead, PaperTodoPermissionNames.SettingsUpdate, PaperTodoPermissionNames.SettingsControl);
-        ((IPaperSettingsApi)controller).Set("mcp.settings_control", true);
-        Check(c.State.McpAllowSettingsControl, "Explicit sensitive authorization works.");
         WebPluginWorkspaceRequests.Execute(writer, "appSettings.set", Json(new { id = "todo.paper_links", value = true }));
         Check(c.State.EnableTodoPaperLinks, "Web routing preserves JSON booleans and uses Native permission gate.");
 
@@ -241,7 +233,7 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => WebPluginWorkspaceRequests.Execute(writer, "appSettings.set", Json(new { id = "todo.paper_links" })), "invalid_params");
         Throws<PaperTodoPluginException>(() => ((IPaperSettingsApi)writer).Get("State.Papers"), "setting_not_found");
         var runtime = new PaperPluginRuntimeWorkspaceApi(c, "sample.settings", [PaperTodoPermissionNames.SettingsRead], () => current);
-        Check(((IPaperSettingsApi)runtime).List().Count == 2, "Runtime optional facade exposes the same catalog.");
+        Check(((IPaperSettingsApi)runtime).List().Count == 1, "Runtime optional facade exposes the same catalog.");
         current = false;
         Throws<PaperTodoPluginException>(() => ((IPaperSettingsApi)writer).Get("todo.paper_links"), "session_closed");
         Throws<PaperTodoPluginException>(() => ((IPaperSettingsApi)runtime).List(), "runtime_closed");
@@ -251,8 +243,6 @@ internal static partial class Program
         Check(!metadata.Writable, "MCP read-only does not advertise writes.");
         Throws<McpApiException>(() => Call("set_setting", new { id = "todo.paper_links", value = false }), "full_writes_disabled");
         c.State.McpAllowFullWrites = true;
-        c.State.McpAllowSettingsControl = false;
-        Throws<McpApiException>(() => Call("set_setting", new { id = "mcp.settings_control", value = true }), "settings_control_disabled");
         Call("set_setting", new { id = "todo.paper_links", value = false });
         Check(!c.State.EnableTodoPaperLinks, "MCP ordinary writes share actual state with Native/Web.");
         c.State.McpEnabled = false;

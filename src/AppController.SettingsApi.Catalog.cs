@@ -23,8 +23,7 @@ public sealed partial class AppController
             () => State.TelemetryEnabled,
             value => State.TelemetryEnabled = value,
             SettingEffects.Telemetry,
-            title: TelemetryStrings.Get("HelpImprove"),
-            sensitive: true);
+            title: TelemetryStrings.Get("HelpImprove"));
         yield return DefineSetting<bool>("general.tooltips",
             () => State.EnableToolTips,
             value => State.EnableToolTips = value,
@@ -183,8 +182,7 @@ public sealed partial class AppController
             () => State.RunLinkedScriptCapsulesOnClick,
             value => State.RunLinkedScriptCapsulesOnClick = value,
             SettingEffects.TodoRows,
-            title: Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"),
-            sensitive: true);
+            title: Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"));
         yield return DefineSetting<bool>("topbar.new_todo",
             () => State.ShowTopBarNewTodoButton,
             value => State.ShowTopBarNewTodoButton = value,
@@ -457,8 +455,7 @@ public sealed partial class AppController
             () => State.UsePersistentPowerShellProcess,
             value => State.UsePersistentPowerShellProcess = value,
             SettingEffects.Scripts,
-            title: Strings.Get("SettingsPersistentPowerShellProcess"),
-            sensitive: true);
+            title: Strings.Get("SettingsPersistentPowerShellProcess"));
         yield return DefineSetting<bool>("scripts.prefer_powershell7",
             () => State.PreferPowerShell7,
             value => State.PreferPowerShell7 = value,
@@ -488,32 +485,22 @@ public sealed partial class AppController
             () => State.McpEnabled,
             value => State.McpEnabled = value,
             SettingEffects.Mcp,
-            title: Strings.Get("LabsMcpEnable"),
-            sensitive: true);
+            title: Strings.Get("LabsMcpEnable"));
         yield return DefineSetting<bool>("mcp.additive_writes",
             () => State.McpAllowBlankWrites,
             value => State.McpAllowBlankWrites = value,
             SettingEffects.Mcp,
-            title: Strings.Get("LabsMcpBlankWrites"),
-            sensitive: true);
+            title: Strings.Get("LabsMcpBlankWrites"));
         yield return DefineSetting<bool>("mcp.full_writes",
             () => State.McpAllowFullWrites,
             value => State.McpAllowFullWrites = value,
             SettingEffects.Mcp,
-            title: Strings.Get("LabsMcpFullWrites"),
-            sensitive: true);
+            title: Strings.Get("LabsMcpFullWrites"));
         yield return DefineSetting<bool>("mcp.deletes",
             () => State.McpAllowDeletes,
             value => State.McpAllowDeletes = value,
             SettingEffects.Mcp,
-            title: Strings.Get("LabsMcpDeletes"),
-            sensitive: true);
-        yield return DefineSetting<bool>("mcp.settings_control",
-            () => State.McpAllowSettingsControl,
-            value => State.McpAllowSettingsControl = value,
-            SettingEffects.Mcp,
-            title: Strings.Get("LabsMcpSettingsControl"),
-            sensitive: true);
+            title: Strings.Get("LabsMcpDeletes"));
         foreach (var definition in CreateExternalSettingsCatalog()) yield return definition;
         foreach (var definition in CreateShortcutSettingsCatalog()) yield return definition;
     }

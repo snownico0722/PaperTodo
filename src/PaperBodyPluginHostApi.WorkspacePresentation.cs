@@ -29,7 +29,6 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperWorkspacePresentati
     private PaperPresentationResult PresentWorkspacePaper(string paperId, PaperPresentationAction action,
         bool activate) => PopupOnUi(() =>
     {
-        Require(PaperTodoPermissionNames.PapersPresentation);
         return Invoke(() => _controller.PresentWorkspacePaper(paperId, action, activate,
             PaperOperationContext.Plugin(_providerId)));
     });

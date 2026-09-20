@@ -91,8 +91,8 @@ internal sealed record CodexPromptState(string? DefaultPrompt)
             builder.AppendLine(CodexBridgeText.For(uiLanguage,
                 "[MCP 按需开启]", "[On-demand MCP activation]"));
             builder.AppendLine(CodexBridgeText.For(uiLanguage,
-                $"当本次任务需要通过 PaperTodo MCP 操作，而 MCP 或所需 MCP 权限尚未开启时，直接在 PowerShell 运行：{command}。随后通过 papertodo_bridge MCP 执行；宿主会重新检查插件开关，并自动开启 MCP 总开关、新增/空白写入、完整写入、直接删除和敏感设置控制权限。无需 MCP 时不要开启。",
-                $"When this task needs PaperTodo MCP and MCP or a required MCP permission is disabled, run this in PowerShell: {command}. Then use the papertodo_bridge MCP server. The host rechecks the plugin setting and automatically enables the MCP master switch plus additive/blank writes, full writes, direct-delete permission, and sensitive-settings control. Do not enable MCP when the task does not need it."));
+                $"当本次任务需要通过 PaperTodo MCP 操作，而 MCP 或所需 MCP 权限尚未开启时，直接在 PowerShell 运行：{command}。随后通过 papertodo_bridge MCP 执行；宿主会重新检查插件开关，并自动开启 MCP 总开关、新增/空白写入、完整写入和直接删除权限。无需 MCP 时不要开启。",
+                $"When this task needs PaperTodo MCP and MCP or a required MCP permission is disabled, run this in PowerShell: {command}. Then use the papertodo_bridge MCP server. The host rechecks the plugin setting and automatically enables the MCP master switch plus additive/blank writes, full writes, and direct-delete permission. Do not enable MCP when the task does not need it."));
             builder.AppendLine();
         }
         else if (settings.EnableOperationSkill)

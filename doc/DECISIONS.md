@@ -1435,7 +1435,7 @@ Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果�
 
 - 当前最新版本为 **2.2**，最低继续兼容 **2.1**。
 - 2.1 插件继续加载并保持 2.1 已发布语义；声明 2.2-only 能力时必须把 manifest 的 `apiVersion` 提升到 2.2。
-- 2.2 首批显式版本化能力包括 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API，以及 `settings.read` / `settings.update` / `settings.control` 权限。
+- 2.2 首批显式版本化能力包括 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API，以及 `settings.read` / `settings.update` 权限。
 - 同一未发布 minor 内可以合并多项向后兼容的新契约，不要求每增加一个字段就连续制造 2.3、2.4；一旦 2.2 成为已发布稳定合同，下一批新的插件可见契约使用 2.3。
 - 仅宿主内部实现、性能优化、bugfix，或完全复用既有通用合同而没有新增插件可观察语义时，不提升协议版本。
 - 删除/改名公开字段、改变既有调用语义或其他无法保持旧插件行为的修改，提升 major，例如 3.0。

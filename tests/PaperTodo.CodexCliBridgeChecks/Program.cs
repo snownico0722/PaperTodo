@@ -62,8 +62,8 @@ Check(composedZh.Contains(JsonSerializer.Serialize(expectedPath)),
     "The bundled Skill must resolve against the actual installation path.");
 Check(composedZh.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after Chinese prompt injection.");
-Check(composedZh.Contains("新增/空白写入") && composedZh.Contains("直接删除") && composedZh.Contains("敏感设置控制权限"),
-    "Chinese MCP activation hint must state that all MCP permissions are enabled automatically.");
+Check(composedZh.Contains("新增/空白写入") && composedZh.Contains("直接删除"),
+    "Chinese MCP activation hint must state that MCP write/delete permissions are enabled automatically.");
 
 var composedEn = initial.PrependTo(task, pluginDirectory, "en-US", defaults, executable);
 Check(composedEn.Contains(CodexPromptState.BuiltInDefaultPromptEn),
@@ -76,8 +76,8 @@ Check(composedEn.Contains(JsonSerializer.Serialize(expectedPath)),
     "English prompt must reference the same bundled Skill path.");
 Check(composedEn.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after English prompt injection.");
-Check(composedEn.Contains("additive/blank writes") && composedEn.Contains("direct-delete") && composedEn.Contains("sensitive-settings control"),
-    "English MCP activation hint must state that all MCP permissions are enabled automatically.");
+Check(composedEn.Contains("additive/blank writes") && composedEn.Contains("direct-delete"),
+    "English MCP activation hint must state that MCP write/delete permissions are enabled automatically.");
 
 var edited = initial with { DefaultPrompt = "自定义提示词" };
 var restored = CodexPromptState.Read(JsonSerializer.Serialize(edited));
@@ -162,7 +162,7 @@ foreach (var invalid in new[] { "{}", "{broken", "null", "[]", "" })
     Check(!CodexMcpPermission.CanEnable( invalid), "Missing/old/corrupt settings must not grant activation.");
 Check(CodexMcpPermission.CanEnable( "{\"allowMcp\":true}"), "A live authorized plugin may activate MCP.");
 var fullAccess = CodexMcpPermission.FullAccess;
-Check(fullAccess.Enabled && fullAccess.BlankWrites && fullAccess.FullWrites && fullAccess.Deletes && fullAccess.SettingsControl,
+Check(fullAccess.Enabled && fullAccess.BlankWrites && fullAccess.FullWrites && fullAccess.Deletes,
     "Authorized Codex activation must grant the MCP master switch and every MCP write/delete permission.");
 Check(!CodexMcpPermission.CanEnable( "{\"allowMcp\":false}"), "Revoking the setting must deny later activation.");
 foreach (var prefix in new[] { "", "--", "/" })

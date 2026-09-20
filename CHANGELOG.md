@@ -22,11 +22,11 @@ This log is written for general and power users alike. It focuses on user-facing
 
 - Lowering the paper-title length limit now immediately updates titles shown in linked Todo items.
 
-- **Cross-paper controls**: MCP and authorized Native/Web plugins can show, hide, expand, collapse or activate existing papers by ID. Showing a paper preserves its collapsed state; hiding never deletes content. MCP paper queries now also report collapsed state.
+- **Cross-paper controls**: MCP and Native/Web plugins can show, hide, expand, collapse or activate existing papers by ID. Showing a paper preserves its collapsed state; hiding never deletes content. MCP paper queries now also report collapsed state.
 
-- **Plugin API 2.2**: The plugin protocol now advances to 2.2 while keeping 2.1 plugins load-compatible. `apiVersion` now means the minimum host API required by a plugin: the host accepts versions from its minimum supported API through its current API, rejects older unsupported plugins, and rejects plugins that require a newer host. New 2.2-only contracts include hidden startup papers, settings action buttons, the public application Settings API/permissions, and permission-controlled cross-paper presentation.
+- **Plugin API 2.2**: The plugin protocol now advances to 2.2 while keeping 2.1 plugins load-compatible. `apiVersion` now means the minimum host API required by a plugin: the host accepts versions from its minimum supported API through its current API, rejects older unsupported plugins, and rejects plugins that require a newer host. New 2.2-only contracts include hidden startup papers, settings action buttons, the public application Settings API/permissions, and cross-paper presentation.
 
-- **Application Settings API**: MCP and Native/Web plugins can query and change public user preferences through one typed catalog, with separate sensitive-setting authorization and save-failure rollback. MCP also supports explicitly unlinking a Todo from its associated paper.
+- **Application Settings API**: MCP and Native/Web plugins can query and change public user preferences through one typed catalog with save-failure rollback. MCP also supports explicitly unlinking a Todo from its associated paper.
 
 - **Plugin settings actions**: Plugins can now declare custom action buttons handled by their Runtime, such as refresh or connection tests, without configuring a shortcut. Unavailable actions are disabled. Fixed delayed startup restoration hiding a Codex prompt editor that had just been opened.
 

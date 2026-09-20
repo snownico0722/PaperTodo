@@ -1443,11 +1443,6 @@ public sealed partial class AppController
             directDeletes,
             "TipLabsMcpDeletes"));
 
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(Strings.Get("LabsMcpSettingsControl"),
-                State.McpAllowSettingsControl, ToggleMcpSettingsControl),
-            "TipLabsMcpSettingsControl"));
-
         var status = new TextBlock
         {
             Text = State.McpEnabled
@@ -1590,7 +1585,6 @@ public sealed partial class AppController
         State.McpAllowBlankWrites = false;
         State.McpAllowFullWrites = false;
         State.McpAllowDeletes = false;
-        State.McpAllowSettingsControl = false;
         State.ExperimentalCapsuleMagnetism = false;
         State.ExperimentalCapsuleMagnetScreenEdges = true;
         State.ExperimentalCapsuleMagnetWindowEdges = true;

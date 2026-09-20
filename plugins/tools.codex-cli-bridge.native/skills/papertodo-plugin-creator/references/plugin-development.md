@@ -27,7 +27,7 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
-| 2.2 | Current | Adds cross-paper presentation (`papers.presentation`), public application Settings API (`settings.read/update/control`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -517,7 +517,7 @@ The plugin owns `.runtime/` format versioning, atomic writes, corruption recover
 
 This optional capability controls **PaperTodo's user preferences**, not a provider's own `context.Settings`, `SettingsJson`, state, or `.runtime/`. Native Body and provider Runtime expose `context.SettingsApi` (`IPaperSettingsApi`); Web Body, Mini, and Runtime expose `papertodo.settingsApi`. No new required method is added to `IPaperTodoHostApi`.
 
-Declare `settings.read` for List/Get and `settings.update` for Set. Sensitive settings additionally require `settings.control`. Sensitive entries include MCP authorization, Windows startup, anonymous usage reporting, linked-script execution, and persistent script processes. Permissions are checked before mutation; access to ordinary settings cannot grant control of sensitive ones.
+Declare `settings.read` for List/Get and `settings.update` for Set. Permissions are checked before mutation.
 
 ```csharp
 var links = context.SettingsApi.Get("todo.paper_links");
@@ -532,9 +532,9 @@ const catalog = await papertodo.settingsApi.list('todo');
 await papertodo.settingsApi.set('todo.paper_links', true);
 ```
 
-MCP provides `list_settings(category?)`, `get_setting(id)`, and `set_setting(id, value)`. List/Get require MCP enabled; Set requires full writes, and sensitive entries also require the independently enabled **sensitive application-settings control** checkbox. That checkbox cannot authorize its own first activation. Codex's separately authorized automatic-MCP activation can enable all MCP permissions, including this one. Disabling `mcp.enabled` completes the current response before its transport stops.
+MCP provides `list_settings(category?)`, `get_setting(id)`, and `set_setting(id, value)`. List/Get require MCP enabled; Set requires full writes. Codex's separately authorized automatic-MCP activation can enable the existing MCP write/delete permissions. Disabling `mcp.enabled` completes the current response before its transport stops.
 
-List returns an array. Each entry has a stable `id`, `category`, localized `title`, `type`, current `value`, caller-specific `writable`, `sensitive`, `requires_restart`, and optional `unavailable_reason`, `min`, `max`, `step`, `max_length`, and `options`. Set returns `setting`, `previous_value`, and `changed`; assigning the current value is a no-op. Query the catalog instead of guessing CLR property names.
+List returns an array. Each entry has a stable `id`, `category`, localized `title`, `type`, current `value`, caller-specific `writable`, `requires_restart`, and optional `unavailable_reason`, `min`, `max`, `step`, `max_length`, and `options`. Set returns `setting`, `previous_value`, and `changed`; assigning the current value is a no-op. Query the catalog instead of guessing CLR property names.
 
 The catalog includes general/language/startup, privacy, appearance/fonts/background preferences, Note/Todo/title/capsule options, edge browsing, reminders, window/focus/interaction options, scripts, MCP, and global shortcuts. Values are saved preferences: dependent settings may remain selected but have no effect until their parent feature is enabled. Shortcuts expose `.gesture` and `.enabled`; each edge sequence uses a modifier chord plus 1 and applies that prefix to keys 1–9. Active shortcut-editor drafts/recording and registration conflicts are reported instead of silently overriding them. Language reports `requires_restart: true` and does not force a restart.
 
@@ -636,7 +636,7 @@ Plugin Workspace and MCP share the same `PaperCommandService` business boundary,
 
 ### Cross-paper presentation (API 2.2)
 
-Declare `"papers.presentation"` in `permissions` and target `apiVersion: "2.2"` to control any existing paper by exact ID, including Todo, Markdown and other providers' papers. This is independent of content-write/delete permissions. Discover IDs separately with `papers.read`; presentation responses do not expose titles or content.
+Target `apiVersion: "2.2"` to control any existing paper by exact ID, including Todo, Markdown and other providers' papers. No extra presentation permission is required. Discover IDs separately with `papers.read`; presentation responses do not expose titles or content.
 
 Native Body and Runtime both expose the optional `context.WorkspacePresentation` (`IPaperWorkspacePresentationApi`), without adding required members to the existing Workspace interface:
 
@@ -666,9 +666,9 @@ Show retains the current folded state; Expand also reveals the paper; Collapse r
 
 The response is `{ paper_id, is_visible, is_collapsed }`: logical state after request processing, **not animation completion or a synchronous disk-save guarantee**. Existing host transitions and their normal persistence scheduling remain authoritative. Hide never deletes content or removes the Runtime's real Paper owner. Toggles invert state: do not blindly retry an uncertain toggle; read the current state first. Native Runtime background calls are marshalled to the UI dispatcher and disposed contexts are rejected.
 
-The session-scoped 2.1 `context.Presentation` / `papertodo.paper.*` API remains unchanged and still controls only its own host paper without this new permission. Web popups do not gain a generic Workspace API.
+The session-scoped 2.1 `context.Presentation` / `papertodo.paper.*` API remains unchanged and still controls only its own host paper through the existing session-scoped API. Web popups do not gain a generic Workspace API.
 
-MCP exposes `show_paper`, `hide_paper`, `toggle_paper_visibility`, `expand_paper`, `collapse_paper`, `toggle_paper_collapsed` and `activate_paper`, with `paper_id` and the same optional `activate` semantics. All require the MCP master switch and full writes, not deletion or sensitive-setting control. `list_papers` and `get_paper` return `is_collapsed` as well as `is_visible`.
+MCP exposes `show_paper`, `hide_paper`, `toggle_paper_visibility`, `expand_paper`, `collapse_paper`, `toggle_paper_collapsed` and `activate_paper`, with `paper_id` and the same optional `activate` semantics. They require the MCP master switch but no additional full-write or delete permission. `list_papers` and `get_paper` return `is_collapsed` as well as `is_visible`.
 
 ## 7. Top Bar Extensions (2.1)
 

@@ -112,11 +112,10 @@ internal sealed class PaperSettingsService
     internal static PaperSettingsException Error(string code, string message) => new(code, message);
 
     // This reports this caller's actual ability, not merely the catalog's global writability.
-    internal static PaperSettingSnapshot WithAccess(PaperSettingSnapshot value, bool update, bool control)
+    internal static PaperSettingSnapshot WithAccess(PaperSettingSnapshot value, bool update)
         => value with
         {
-            Writable = value.Writable && update && (!value.Sensitive || control),
-            UnavailableReason = value.UnavailableReason ?? (!update ? "settings_update_required" :
-                value.Sensitive && !control ? "settings_control_required" : null)
+            Writable = value.Writable && update,
+            UnavailableReason = value.UnavailableReason ?? (!update ? "settings_update_required" : null)
         };
 }

@@ -24,7 +24,7 @@ public sealed partial class AppController
     private PaperSettingDefinition DefineSetting<T>(string id, Func<T> get, Action<T> set,
         SettingEffects effects = SettingEffects.None, string? title = null,
         string[]? options = null, double? minimum = null, double? maximum = null,
-        double? step = null, bool sensitive = false, bool requiresRestart = false,
+        double? step = null, bool requiresRestart = false,
         string description = "")
     {
         var kind = typeof(T) == typeof(bool) ? "boolean" : typeof(T) == typeof(int) ? "integer" :
@@ -36,7 +36,7 @@ public sealed partial class AppController
             {
                 Id = id, Category = id.Split('.')[0], Title = title ?? id, Type = kind,
                 Value = JsonSerializer.SerializeToElement(get()), Writable = true,
-                Sensitive = sensitive, RequiresRestart = requiresRestart, Description = description,
+                RequiresRestart = requiresRestart, Description = description,
                 Min = minimum, Max = maximum, Step = step,
                 MaxLength = kind == "string" ? (id == "note.external_extension" ? 32 : 128) : null,
                 Options = Array.AsReadOnly(options ?? [])
@@ -307,7 +307,7 @@ public sealed partial class AppController
         // These existing owners persist atomically before publishing their in-memory preference.
         // They are not copied into AppState or saved again through a different store.
         var startup = DefineSetting("general.startup", SystemSettingsHelper.IsStartupEnabled,
-            _ => { }, title: Strings.Get("TrayStartup"), sensitive: true);
+            _ => { }, title: Strings.Get("TrayStartup"));
         startup.Begin = value => new PaperSettingChange(
             () =>
             {

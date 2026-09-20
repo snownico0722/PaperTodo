@@ -8,7 +8,7 @@ internal sealed partial class McpTools
 {
     [McpServerTool(Name = "show_paper", ReadOnly = false, Destructive = false,
         Idempotent = true, OpenWorld = false)]
-    [Description("Show an existing paper without changing its collapsed state. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Show an existing paper without changing its collapsed state. Success is logical state, not animation completion.")]
     public Task<JsonElement> ShowPaper(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         [Description("Whether to request activation when showing or expanding.")] bool activate = true,
@@ -17,7 +17,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "hide_paper", ReadOnly = false, Destructive = false,
         Idempotent = true, OpenWorld = false)]
-    [Description("Hide an existing paper without deleting it or its content. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Hide an existing paper without deleting it or its content. Success is logical state, not animation completion.")]
     public Task<JsonElement> HidePaper(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         CancellationToken cancellationToken = default) =>
@@ -25,7 +25,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "toggle_paper_visibility", ReadOnly = false, Destructive = false,
         Idempotent = false, OpenWorld = false)]
-    [Description("Toggle visibility of an existing paper. Not safe to retry blindly. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Toggle visibility of an existing paper. Not safe to retry blindly. Success is logical state, not animation completion.")]
     public Task<JsonElement> TogglePaperVisibility(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         [Description("Whether to request activation when showing or expanding.")] bool activate = true,
@@ -34,7 +34,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "expand_paper", ReadOnly = false, Destructive = false,
         Idempotent = true, OpenWorld = false)]
-    [Description("Expand and show an existing paper. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Expand and show an existing paper. Success is logical state, not animation completion.")]
     public Task<JsonElement> ExpandPaper(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         [Description("Whether to request activation when showing or expanding.")] bool activate = true,
@@ -43,7 +43,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "collapse_paper", ReadOnly = false, Destructive = false,
         Idempotent = true, OpenWorld = false)]
-    [Description("Collapse an existing paper without showing a hidden paper. Requires capsule eligibility. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Collapse an existing paper without showing a hidden paper. Requires capsule eligibility. Success is logical state, not animation completion.")]
     public Task<JsonElement> CollapsePaper(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         CancellationToken cancellationToken = default) =>
@@ -51,7 +51,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "toggle_paper_collapsed", ReadOnly = false, Destructive = false,
         Idempotent = false, OpenWorld = false)]
-    [Description("Toggle collapsed state. Expanding shows the paper; collapsing preserves visibility. Not safe to retry blindly. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Toggle collapsed state. Expanding shows the paper; collapsing preserves visibility. Not safe to retry blindly. Success is logical state, not animation completion.")]
     public Task<JsonElement> TogglePaperCollapsed(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         [Description("Whether to request activation when showing or expanding.")] bool activate = true,
@@ -60,7 +60,7 @@ internal sealed partial class McpTools
 
     [McpServerTool(Name = "activate_paper", ReadOnly = false, Destructive = false,
         Idempotent = true, OpenWorld = false)]
-    [Description("Show and activate an existing paper without forcing it to expand. Requires PaperTodo full writes. Success is logical state, not animation completion.")]
+    [Description("Show and activate an existing paper without forcing it to expand. Success is logical state, not animation completion.")]
     public Task<JsonElement> ActivatePaper(
         [Description("Exact existing paper ID from list_papers.")] string paper_id,
         CancellationToken cancellationToken = default) =>

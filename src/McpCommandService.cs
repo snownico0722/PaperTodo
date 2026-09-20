@@ -77,8 +77,7 @@ internal sealed partial class McpCommandService
     }
 
     private PaperSettingSnapshot SettingsAccess(PaperSettingSnapshot setting) =>
-        PaperSettingsService.WithAccess(setting, _controller.State.McpAllowFullWrites,
-            _controller.State.McpAllowSettingsControl);
+        PaperSettingsService.WithAccess(setting, _controller.State.McpAllowFullWrites);
 
     private object ListSettings(JsonElement parameters) => new
     {
@@ -93,10 +92,6 @@ internal sealed partial class McpCommandService
     {
         RequireFullWrites();
         var id = RequiredString(parameters, "id", 120);
-        var before = _controller.PublicSettings.Get(id);
-        if (before.Sensitive && !_controller.State.McpAllowSettingsControl)
-            throw new McpApiException("settings_control_disabled",
-                "Sensitive settings require settings-control permission already enabled in PaperTodo.");
         if (!parameters.TryGetProperty("value", out var value))
             throw new McpApiException("invalid_params", "value is required.");
         var result = _controller.PublicSettings.Set(id, value);

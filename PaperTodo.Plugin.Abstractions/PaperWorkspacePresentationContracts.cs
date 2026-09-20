@@ -10,7 +10,7 @@ public sealed record PaperPresentationResult(
 
 /// <summary>
 /// Optional API 2.2 capability for any existing paper, including other providers' papers.
-/// Requires papers.presentation. Unlike the session-scoped IPaperPresentationApi, every call
+/// Unlike the session-scoped IPaperPresentationApi, every call
 /// takes an exact paper ID. The host owns windows, animations, focus, geometry and persistence.
 /// Show preserves folding; Expand shows and unfolds; Collapse does not reveal a hidden paper.
 /// Results describe logical state, not visual completion or a synchronous disk-save guarantee.

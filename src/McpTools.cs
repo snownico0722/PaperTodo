@@ -31,7 +31,7 @@ internal sealed partial class McpTools
         => _client.InvokeAsync("get_setting", new { id }, cancellationToken);
 
     [McpServerTool(Name = "set_setting", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Set one public application setting to a specific value, not a toggle. Requires full writes; sensitive settings additionally need settings-control permission already enabled by the user. Change settings only when the user's request authorizes it; a language change requires restart but does not restart the app.")]
+    [Description("Set one public application setting to a specific value, not a toggle. Requires full writes. Change settings only when the user's request authorizes it; a language change requires restart but does not restart the app.")]
     public Task<JsonElement> SetSetting(
         [Description("Exact public setting ID returned by list_settings.")] string id,
         [Description("JSON value matching the type/constraints returned by get_setting.")] JsonElement value,

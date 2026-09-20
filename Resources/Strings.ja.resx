@@ -1385,6 +1385,4 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
   </data>
-  <data name="LabsMcpSettingsControl" xml:space="preserve"><value>機密設定の制御を許可</value></data>
-  <data name="TipLabsMcpSettingsControl" xml:space="preserve"><value>MCP による権限、自動起動、匿名利用統計などの変更を許可します。完全な書き込み権限も必要です。無効な場合、MCP はこの権限を自分で有効にできません。</value></data>
 </root>

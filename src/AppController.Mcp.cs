@@ -59,8 +59,7 @@ public sealed partial class AppController
                 State.McpEnabled,
                 State.McpAllowBlankWrites,
                 State.McpAllowFullWrites,
-                State.McpAllowDeletes,
-                State.McpAllowSettingsControl);
+                State.McpAllowDeletes);
             var target = CodexMcpPermission.FullAccess;
             if (previous == target) return true;
 
@@ -68,7 +67,6 @@ public sealed partial class AppController
             State.McpAllowBlankWrites = target.BlankWrites;
             State.McpAllowFullWrites = target.FullWrites;
             State.McpAllowDeletes = target.Deletes;
-            State.McpAllowSettingsControl = target.SettingsControl;
             MarkDirty();
             if (!TrySaveNow(sync: true))
             {
@@ -76,7 +74,6 @@ public sealed partial class AppController
                 State.McpAllowBlankWrites = previous.BlankWrites;
                 State.McpAllowFullWrites = previous.FullWrites;
                 State.McpAllowDeletes = previous.Deletes;
-                State.McpAllowSettingsControl = previous.SettingsControl;
                 return false;
             }
 
@@ -96,9 +93,6 @@ public sealed partial class AppController
 
     private void ToggleMcpFullWrites() =>
         SetSettingFromUi("mcp.full_writes", !State.McpAllowFullWrites);
-
-    private void ToggleMcpSettingsControl() =>
-        SetSettingFromUi("mcp.settings_control", !State.McpAllowSettingsControl);
 
     private void ToggleMcpDeletes() =>
         SetSettingFromUi("mcp.deletes", !State.McpAllowDeletes);

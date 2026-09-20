@@ -1385,6 +1385,4 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
-  <data name="LabsMcpSettingsControl" xml:space="preserve"><value>Allow sensitive settings control</value></data>
-  <data name="TipLabsMcpSettingsControl" xml:space="preserve"><value>Allow MCP to change permissions, startup registration, anonymous usage statistics and other sensitive settings. Full writes are still required. MCP cannot grant this permission to itself while it is disabled.</value></data>
 </root>

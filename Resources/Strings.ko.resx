@@ -1385,6 +1385,4 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>선택한 이미지 내용이 너무 커서 이번에는 텍스트만 복사했습니다.</value>
   </data>
-  <data name="LabsMcpSettingsControl" xml:space="preserve"><value>민감한 설정 제어 허용</value></data>
-  <data name="TipLabsMcpSettingsControl" xml:space="preserve"><value>MCP가 권한, 시작 프로그램 등록, 익명 사용 통계 등 민감한 설정을 변경하도록 허용합니다. 전체 쓰기 권한도 필요합니다. 꺼져 있을 때 MCP가 스스로 이 권한을 켤 수 없습니다.</value></data>
 </root>
