@@ -146,3 +146,100 @@ jobs:
           name: edge-routes12-ab-${{ github.sha }}
           path: artifacts/routes12-ab
           if-no-files-found: warn
+
+
+  edge-browse-main-vs-route1:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-browse]')
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      MAIN_SHA: c10837bb9efb0b306b993805663b15ea78b1b714
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare exact current-main browse worktree
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/routes12-browse | Out-Null
+          $mainDir = Join-Path $env:RUNNER_TEMP 'papertodo-main-browse'
+          if (Test-Path $mainDir) { Remove-Item -Recurse -Force $mainDir }
+          git worktree add --detach $mainDir $env:MAIN_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create main browse worktree' }
+          git -C $mainDir submodule update --init --recursive
+          if ($LASTEXITCODE -ne 0) { throw 'Could not initialize main browse submodules' }
+          Copy-Item tests/PaperTodo.EdgeTitleChecks/EdgeBrowsingComparison.cs (Join-Path $mainDir 'tests/PaperTodo.EdgeTitleChecks/EdgeBrowsingComparison.cs')
+          git rev-parse HEAD | Set-Content artifacts/routes12-browse/route1-head.txt
+          git -C $mainDir rev-parse HEAD | Set-Content artifacts/routes12-browse/main-head.txt
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12-browse/display.json
+          "MAIN_BROWSE_DIR=$mainDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build exact main browse fixture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:MAIN_BROWSE_DIR 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-browse/main-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse restore failed' }
+          $appProject = Join-Path $env:MAIN_BROWSE_DIR 'PaperTodo.csproj'
+          dotnet build $appProject -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-browse/main-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=EdgeBrowsingComparisonEntry 2>&1 | Tee-Object artifacts/routes12-browse/main-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse fixture build failed' }
+      - name: Build route1 browse fixture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-browse/route1-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse restore failed' }
+          dotnet build PaperTodo.csproj -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-browse/route1-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=EdgeBrowsingComparisonEntry 2>&1 | Tee-Object artifacts/routes12-browse/route1-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse fixture build failed' }
+      - name: Run real continuous edge browsing A/B
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $mainBin = Join-Path $env:MAIN_BROWSE_DIR 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
+          $routeBin = Resolve-Path 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
+          $mainRun = Join-Path $env:RUNNER_TEMP 'papertodo-browse-main-run'
+          $routeRun = Join-Path $env:RUNNER_TEMP 'papertodo-browse-route1-run'
+          foreach ($dir in @($mainRun, $routeRun)) {
+            if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+            New-Item -ItemType Directory -Force $dir | Out-Null
+          }
+          Copy-Item (Join-Path $mainBin '*') $mainRun -Recurse -Force
+          Copy-Item (Join-Path $routeBin '*') $routeRun -Recurse -Force
+
+          $env:PAPERTODO_BROWSE_AB = '1'
+          $env:PAPERTODO_BROWSE_SOURCE_SHA = $env:MAIN_SHA
+          Push-Location $mainRun
+          & .\PaperTodo.EdgeTitleChecks.exe --mode main 2>&1 | Tee-Object "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/main.log"
+          $mainExit = $LASTEXITCODE
+          Pop-Location
+
+          $routeSha = (git rev-parse HEAD).Trim()
+          $env:PAPERTODO_BROWSE_SOURCE_SHA = $routeSha
+          Push-Location $routeRun
+          & .\PaperTodo.EdgeTitleChecks.exe --mode route1 2>&1 | Tee-Object "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/route1.log"
+          $routeExit = $LASTEXITCODE
+          Pop-Location
+
+          Get-Content artifacts/routes12-browse/main.log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content artifacts/routes12-browse/route1.log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+          "mainExit=$mainExit route1Exit=$routeExit" | Tee-Object artifacts/routes12-browse/exits.txt
+          if ($mainExit -ne 0 -or $routeExit -ne 0) { throw "Browse A/B failed: main=$mainExit route1=$routeExit" }
+      - name: Preserve browse A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-routes12-browse-${{ github.sha }}
+          path: artifacts/routes12-browse
+          if-no-files-found: warn
