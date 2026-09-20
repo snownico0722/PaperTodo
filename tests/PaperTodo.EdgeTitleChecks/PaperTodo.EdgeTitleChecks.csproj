@@ -12,6 +12,7 @@
     <StartupObject Condition="'$(EdgeRoutes12)' == 'true'">Routes12Entry</StartupObject>
     <StartupObject Condition="'$(EdgeRoutes12R1)' == 'true'">Routes12R1Entry</StartupObject>
     <StartupObject Condition="'$(EdgeRoutes12R2)' == 'true'">Routes12R2Entry</StartupObject>
+    <StartupObject Condition="'$(EdgeRoutes12R3)' == 'true'">Routes12R3Entry</StartupObject>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
 </Project>
