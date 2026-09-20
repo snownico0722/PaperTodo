@@ -344,6 +344,24 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 animation => state.Visual.SetOffsetY(animation),
                 absoluteBeginTimestamp);
         }
+
+        if (RoutesPointerInput)
+        {
+            var inputMembers = _members
+                .Where(member => member.Window.CanRouteEdgeCapsuleQueueProxyInput)
+                .Select(member => member.Plan)
+                .ToArray();
+            if (inputMembers.Length > 0 &&
+                !_window.TryStartInputAnimation(
+                    new EdgeCapsuleQueueInputAnimationTicket(
+                        absoluteBeginTimestamp,
+                        _plan.DurationMilliseconds,
+                        inputMembers)))
+            {
+                throw new InvalidOperationException(
+                    "The dedicated native input owner could not start the queue animation ticket.");
+            }
+        }
     }
 
     private IDCompositionAnimation? ApplyAnimatedValue(
