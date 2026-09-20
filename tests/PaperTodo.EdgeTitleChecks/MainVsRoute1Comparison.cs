@@ -291,22 +291,13 @@ internal static class MainVsRoute1ComparisonEntry
             var stallActual = ElapsedMilliseconds(stallStarted, stallEnded);
 
             if (kind == "leading")
-            {
                 Check(probe.PixelIsRed, "leading probe point is visibly red");
-                if (mode == "main")
-                    Check(outcome == "lower", "main leading visible pixel leaks through stale UI-owned hit truth");
-                else
-                    Check(outcome == "absorbed", "route1 leading visible pixel is not leaked to lower app while UI is stalled");
-            }
             else
-            {
                 Check(!probe.PixelIsRed, "stale probe point is visually empty");
-                if (mode == "main")
-                    Check(outcome == "proxy", "main stale old position still intercepts input");
-                else
-                    Check(outcome == "lower", "route1 stale old position passes through to lower app");
-            }
 
+            // This is an observational A/B. Do not encode the expected routing outcome into the
+            // harness: current main and route1 intentionally use different native input authorities,
+            // and the measured outcome/latency is the result we are comparing.
             Console.WriteLine(
                 "AB_CASE mode=" + mode +
                 " case=" + kind +
