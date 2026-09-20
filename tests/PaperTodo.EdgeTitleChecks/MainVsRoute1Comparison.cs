@@ -103,11 +103,11 @@ internal static class MainVsRoute1ComparisonEntry
             " leadingOutcome=" + leading.Outcome +
             " leadingDeliveryMs=" + FormatNullable(leading.DeliveryMilliseconds) +
             " leadingPixelTravel=" + leading.PixelTravel +
-            " leadingInputSkewPx=" + leading.InputSkewPixels +
+            " leadingInputCenterSkewPx=" + FormatDouble(leading.InputCenterSkewPixels) +
             " staleOutcome=" + stale.Outcome +
             " staleDeliveryMs=" + FormatNullable(stale.DeliveryMilliseconds) +
             " stalePixelTravel=" + stale.PixelTravel +
-            " staleInputSkewPx=" + stale.InputSkewPixels);
+            " staleInputCenterSkewPx=" + FormatDouble(stale.InputCenterSkewPixels));
 
         MoveMouse(new DeviceScreenPoint(originalCursor.X, originalCursor.Y));
     }
@@ -121,7 +121,12 @@ internal static class MainVsRoute1ComparisonEntry
         DeviceScreenRect target,
         int sampleX)
     {
-        var logicalInput = initial;
+        var logicalInput = EdgeCapsuleGeometry.InteractiveBoundsForAppliedBounds(
+            initial,
+            EdgeCapsuleEdge.Left,
+            1,
+            1,
+            EdgeCapsuleLayout.WindowChromeMargin);
         var proxyPresses = 0;
         long proxyPressTimestamp = 0;
         var source = new Window
@@ -237,11 +242,11 @@ internal static class MainVsRoute1ComparisonEntry
                 Check(pixels.Count >= SourceSize / 2, "probe sees moving DComp pixels");
                 var point = kind == "leading"
                     ? new DeviceScreenPoint(sampleX, Math.Max(initial.Bottom + 4, pixels.Right - 8))
-                    : new DeviceScreenPoint(sampleX, initial.Top + 6);
+                    : new DeviceScreenPoint(sampleX, (logicalInput.Top + logicalInput.Bottom) / 2);
                 var pixelRed = IsRedPixel(point);
                 var inputSpan = mode == "route1"
                     ? CaptureRoute1InputVertical(proxy, outputBounds, sampleX)
-                    : new PixelSpan(initial.Top, initial.Bottom, initial.Height);
+                    : new PixelSpan(logicalInput.Top, logicalInput.Bottom, logicalInput.Height);
                 var injectAt = Stopwatch.GetTimestamp();
                 MoveMouse(point);
                 ClickMouse();
@@ -290,7 +295,9 @@ internal static class MainVsRoute1ComparisonEntry
                 ? ElapsedMilliseconds(probe.InjectTimestamp, deliveryTimestamp)
                 : (double?)null;
             var pixelTravel = probe.Pixels.Left - initial.Top;
-            var inputSkew = probe.Input.IsEmpty ? int.MinValue : probe.Input.Left - probe.Pixels.Left;
+            var inputCenterSkew = probe.Input.IsEmpty
+                ? double.NaN
+                : ((probe.Input.Left + probe.Input.Right) - (probe.Pixels.Left + probe.Pixels.Right)) / 2.0;
             var stallActual = ElapsedMilliseconds(stallStarted, stallEnded);
 
             if (kind == "leading")
@@ -311,7 +318,7 @@ internal static class MainVsRoute1ComparisonEntry
                 " point=" + probe.Point.X.ToString("F0", CultureInfo.InvariantCulture) + "," + probe.Point.Y.ToString("F0", CultureInfo.InvariantCulture) +
                 " pixelRed=" + probe.PixelIsRed +
                 " pixelTravel=" + pixelTravel +
-                " inputSkewPx=" + inputSkew +
+                " inputCenterSkewPx=" + FormatDouble(inputCenterSkew) +
                 " lowerDownDelta=" + lowerDeltaDown +
                 " lowerUpDelta=" + lowerDeltaUp +
                 " proxyPresses=" + pressCount +
@@ -320,7 +327,7 @@ internal static class MainVsRoute1ComparisonEntry
                 " outcome=" + outcome);
 
             logicalInput = target;
-            return new CaseResult(outcome, deliveryMs, pixelTravel, inputSkew);
+            return new CaseResult(outcome, deliveryMs, pixelTravel, inputCenterSkew);
         }
         finally
         {
@@ -542,6 +549,9 @@ internal static class MainVsRoute1ComparisonEntry
 
     private static string FormatNullable(double? value) =>
         value.HasValue ? value.Value.ToString("F1", CultureInfo.InvariantCulture) : "none";
+
+    private static string FormatDouble(double value) =>
+        double.IsNaN(value) ? "nan" : value.ToString("F1", CultureInfo.InvariantCulture);
 
     private static void PumpFor(int milliseconds)
     {
@@ -799,7 +809,7 @@ internal static class MainVsRoute1ComparisonEntry
         string Outcome,
         double? DeliveryMilliseconds,
         int PixelTravel,
-        int InputSkewPixels);
+        double InputCenterSkewPixels);
 
     private readonly record struct InputSnapshot(int Down, int Up, int TaggedDown, int TaggedUp);
 
