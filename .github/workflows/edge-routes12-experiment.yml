@@ -105,7 +105,7 @@ jobs:
           dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/main-restore.log
           if ($LASTEXITCODE -ne 0) { throw 'Main restore failed' }
           $appProject = Join-Path $env:MAIN_DIR 'PaperTodo.csproj'
-          dotnet build $appProject -c Release --no-restore -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/main-app-build.log
+          dotnet build $appProject -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-ab/main-app-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Main app build failed' }
           dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/main-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Main A/B build failed' }
@@ -115,7 +115,7 @@ jobs:
           $project = 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
           dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/route1-restore.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 restore failed' }
-          dotnet build PaperTodo.csproj -c Release --no-restore -p:PaperTodoCompressWindowsSdk=false 2>&1 | Tee-Object artifacts/routes12-ab/route1-app-build.log
+          dotnet build PaperTodo.csproj -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-ab/route1-app-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 app build failed' }
           dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/route1-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Route1 A/B build failed' }
