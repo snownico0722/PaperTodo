@@ -64,22 +64,23 @@ internal static class MainVsRoute1ComparisonEntry
         Check(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "monitor work area is available");
 
         var work = monitor.WorkArea;
+        // Real queue slot motion is vertical along one edge: wall X and capsule width stay fixed.
         var outputBounds = new DeviceScreenRect(
             work.Left + 220,
-            work.Top + 200,
-            work.Left + 220 + SourceSize + Travel + 60,
-            work.Top + 200 + SourceSize + 32);
+            work.Top + 160,
+            work.Left + 220 + SourceSize + 32,
+            work.Top + 160 + SourceSize + Travel + 60);
         var initial = new DeviceScreenRect(
-            outputBounds.Left + 16,
-            outputBounds.Top + 12,
-            outputBounds.Left + 16 + SourceSize,
-            outputBounds.Top + 12 + SourceSize);
+            outputBounds.Left + 12,
+            outputBounds.Top + 16,
+            outputBounds.Left + 12 + SourceSize,
+            outputBounds.Top + 16 + SourceSize);
         var target = new DeviceScreenRect(
-            initial.Left + Travel,
-            initial.Top,
-            initial.Right + Travel,
-            initial.Bottom);
-        var sampleY = initial.Top + SourceSize / 2;
+            initial.Left,
+            initial.Top + Travel,
+            initial.Right,
+            initial.Bottom + Travel);
+        var sampleX = initial.Left + SourceSize / 2;
 
         using var lower = new RemoteTarget(outputBounds);
         WaitUntil(() => lower.Handle != IntPtr.Zero, "lower target ready");
@@ -91,9 +92,9 @@ internal static class MainVsRoute1ComparisonEntry
         WaitUntil(() => lower.Snapshot.Down == 1 && lower.Snapshot.Up == 1, "lower baseline click");
         Check(SetWindowPos(lower.Handle, new IntPtr(-2), 0, 0, 0, 0, 0x0013), "lower target leaves topmost band");
 
-        var leading = RunCase(mode, "leading", lower, outputBounds, initial, target, sampleY);
+        var leading = RunCase(mode, "leading", lower, outputBounds, initial, target, sampleX);
         PumpFor(120);
-        var stale = RunCase(mode, "stale", lower, outputBounds, initial, target, sampleY);
+        var stale = RunCase(mode, "stale", lower, outputBounds, initial, target, sampleX);
 
         var sourceSha = Environment.GetEnvironmentVariable("PAPERTODO_AB_SOURCE_SHA") ?? "unknown";
         Console.WriteLine(
@@ -118,7 +119,7 @@ internal static class MainVsRoute1ComparisonEntry
         DeviceScreenRect outputBounds,
         DeviceScreenRect initial,
         DeviceScreenRect target,
-        int sampleY)
+        int sampleX)
     {
         var logicalInput = initial;
         var proxyPresses = 0;
@@ -202,13 +203,13 @@ internal static class MainVsRoute1ComparisonEntry
             Check(sourceCloaked, "source cloaked after cover publication");
             FlushDesktop();
 
-            var initialPixels = FindRedSpan(outputBounds, sampleY);
+            var initialPixels = FindRedVertical(outputBounds, sampleX);
             Check(initialPixels.Count >= SourceSize / 2, "initial DComp pixels visible");
 
             var startedAt = Stopwatch.GetTimestamp();
             var seconds = DurationMilliseconds / 1000.0;
             animation = device.CreateAnimation();
-            var from = (float)(initial.Left - outputBounds.Left);
+            var from = (float)(initial.Top - outputBounds.Top);
             animation.SetAbsoluteBeginTime(startedAt).CheckError();
             animation.AddCubic(
                 0,
@@ -217,7 +218,7 @@ internal static class MainVsRoute1ComparisonEntry
                 (float)(-3 * Travel / (seconds * seconds)),
                 (float)(Travel / (seconds * seconds * seconds))).CheckError();
             animation.End(seconds, from + Travel).CheckError();
-            visual.SetOffsetX(animation).CheckError();
+            visual.SetOffsetY(animation).CheckError();
             device.Commit().CheckError();
 
             if (mode == "route1")
@@ -232,15 +233,15 @@ internal static class MainVsRoute1ComparisonEntry
                 // Do not DwmFlush here: on hosted Windows it can wait seconds for presentation and
                 // turns a mid-stall sample into an endpoint sample. R1's dynamic probe also samples
                 // physical desktop pixels directly without a per-sample DwmFlush.
-                var pixels = FindRedSpan(outputBounds, sampleY);
+                var pixels = FindRedVertical(outputBounds, sampleX);
                 Check(pixels.Count >= SourceSize / 2, "probe sees moving DComp pixels");
                 var point = kind == "leading"
-                    ? new DeviceScreenPoint(Math.Max(initial.Right + 4, pixels.Right - 8), sampleY)
-                    : new DeviceScreenPoint(initial.Left + 6, sampleY);
+                    ? new DeviceScreenPoint(sampleX, Math.Max(initial.Bottom + 4, pixels.Right - 8))
+                    : new DeviceScreenPoint(sampleX, initial.Top + 6);
                 var pixelRed = IsRedPixel(point);
                 var inputSpan = mode == "route1"
-                    ? CaptureRoute1InputSpan(proxy, outputBounds, sampleY)
-                    : new PixelSpan(initial.Left, initial.Right, initial.Width);
+                    ? CaptureRoute1InputVertical(proxy, outputBounds, sampleX)
+                    : new PixelSpan(initial.Top, initial.Bottom, initial.Height);
                 var injectAt = Stopwatch.GetTimestamp();
                 MoveMouse(point);
                 ClickMouse();
@@ -288,7 +289,7 @@ internal static class MainVsRoute1ComparisonEntry
             var deliveryMs = deliveryTimestamp > 0
                 ? ElapsedMilliseconds(probe.InjectTimestamp, deliveryTimestamp)
                 : (double?)null;
-            var pixelTravel = probe.Pixels.Left - initial.Left;
+            var pixelTravel = probe.Pixels.Left - initial.Top;
             var inputSkew = probe.Input.IsEmpty ? int.MinValue : probe.Input.Left - probe.Pixels.Left;
             var stallActual = ElapsedMilliseconds(stallStarted, stallEnded);
 
@@ -301,7 +302,7 @@ internal static class MainVsRoute1ComparisonEntry
             // harness: current main and route1 intentionally use different native input authorities,
             // and the measured outcome/latency is the result we are comparing.
             Console.WriteLine(
-                "AB_CASE mode=" + mode +
+                "AB_CASE axis=vertical mode=" + mode +
                 " case=" + kind +
                 " stallMs=" + stallActual.ToString("F1", CultureInfo.InvariantCulture) +
                 " probeAtMs=" + probe.ProbeElapsedMilliseconds.ToString("F1", CultureInfo.InvariantCulture) +
@@ -395,10 +396,10 @@ internal static class MainVsRoute1ComparisonEntry
         return property?.GetValue(proxy) is IntPtr value ? value : IntPtr.Zero;
     }
 
-    private static PixelSpan CaptureRoute1InputSpan(
+    private static PixelSpan CaptureRoute1InputVertical(
         EdgeCapsuleQueueProxyWindow proxy,
         DeviceScreenRect bounds,
-        int y)
+        int x)
     {
         var handle = Route1InputHandle(proxy);
         if (handle == IntPtr.Zero) return default;
@@ -411,12 +412,12 @@ internal static class MainVsRoute1ComparisonEntry
             var left = int.MaxValue;
             var right = int.MinValue;
             var count = 0;
-            for (var x = bounds.Left; x < bounds.Right; x++)
+            for (var y = bounds.Top; y < bounds.Bottom; y++)
             {
                 if (!PtInRegion(region, x - windowRect.Left, y - windowRect.Top))
                     continue;
-                left = Math.Min(left, x);
-                right = Math.Max(right, x + 1);
+                left = Math.Min(left, y);
+                right = Math.Max(right, y + 1);
                 count++;
             }
             return count == 0 ? default : new PixelSpan(left, right, count);
@@ -446,7 +447,7 @@ internal static class MainVsRoute1ComparisonEntry
         true,
         true);
 
-    private static PixelSpan FindRedSpan(DeviceScreenRect bounds, int y)
+    private static PixelSpan FindRedVertical(DeviceScreenRect bounds, int x)
     {
         var dc = GetDC(IntPtr.Zero);
         if (dc == IntPtr.Zero)
@@ -467,8 +468,8 @@ internal static class MainVsRoute1ComparisonEntry
                 Header = new BitmapInfoHeader
                 {
                     Size = (uint)Marshal.SizeOf<BitmapInfoHeader>(),
-                    Width = bounds.Width,
-                    Height = -1,
+                    Width = 1,
+                    Height = -bounds.Height,
                     Planes = 1,
                     BitCount = 32,
                     Compression = 0
@@ -480,10 +481,10 @@ internal static class MainVsRoute1ComparisonEntry
             previous = SelectObject(memory, bitmap);
             if (previous == IntPtr.Zero || previous == new IntPtr(-1))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-            if (!BitBlt(memory, 0, 0, bounds.Width, 1, dc, bounds.Left, y, 0x40CC0020))
+            if (!BitBlt(memory, 0, 0, 1, bounds.Height, dc, x, bounds.Top, 0x40CC0020))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
 
-            var pixels = new int[bounds.Width];
+            var pixels = new int[bounds.Height];
             Marshal.Copy(bits, pixels, 0, pixels.Length);
             var left = int.MaxValue;
             var right = int.MinValue;
@@ -495,9 +496,9 @@ internal static class MainVsRoute1ComparisonEntry
                 var green = (byte)((color >> 8) & 0xFF);
                 var red = (byte)((color >> 16) & 0xFF);
                 if (red < 180 || green > 90 || blue > 90) continue;
-                var x = bounds.Left + index;
-                left = Math.Min(left, x);
-                right = Math.Max(right, x + 1);
+                var y = bounds.Top + index;
+                left = Math.Min(left, y);
+                right = Math.Max(right, y + 1);
                 count++;
             }
             return count == 0 ? default : new PixelSpan(left, right, count);
