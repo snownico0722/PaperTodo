@@ -105,33 +105,16 @@ public sealed partial class AppController
         return row;
     }
 
-    private void TogglePaperBackgroundBlend()
-    {
-        ApplyPaperBackgroundSetting(() =>
-            PaperBackground.SetBlendWithTheme(!PaperBackground.BlendWithTheme));
-    }
+    private void TogglePaperBackgroundBlend() =>
+        SetSettingFromUi("appearance.background_blend", !PaperBackground.BlendWithTheme);
 
-    private void TogglePaperBackgroundStretch()
-    {
-        ApplyPaperBackgroundSetting(() =>
-            PaperBackground.SetStretch(!PaperBackground.StretchImage));
-    }
+    private void TogglePaperBackgroundStretch() =>
+        SetSettingFromUi("appearance.background_stretch", !PaperBackground.StretchImage);
 
-    private void SetPaperBackgroundLayout(string layout)
-    {
-        ApplyPaperBackgroundSetting(() => PaperBackground.SetLayout(layout));
-    }
+    private void SetPaperBackgroundLayout(string layout) =>
+        SetSettingFromUi("appearance.background_layout", layout);
 
-    private void ApplyPaperBackgroundSetting(Action update)
-    {
-        if (TryUpdatePaperBackgroundSetting(update))
-        {
-            RefreshPaperBackgroundSurfaces();
-        }
 
-        // Rebuild even on a failed write so the control reflects the value that actually persisted.
-        RefreshSettingsWindowContent();
-    }
 
     private bool TryResetPaperBackgroundPreferences()
     {
@@ -161,20 +144,25 @@ public sealed partial class AppController
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (_settingsWindow != null)
-            {
-                PaperNoticeDialog.Show(
-                    _settingsWindow,
-                    SettingsSidebarLocalized(
-                        "纸片背景", "Paper background", "紙面背景", "종이 배경"),
-                    SettingsSidebarLocalized(
-                        "无法保存纸片背景设置。请检查 PaperTodo 本地设置目录的写入权限。",
-                        "Could not save the paper background setting. Check write access to PaperTodo's local settings folder.",
-                        "紙面背景の設定を保存できませんでした。PaperTodo のローカル設定フォルダーへの書き込み権限を確認してください。",
-                        "종이 배경 설정을 저장하지 못했습니다. PaperTodo 로컬 설정 폴더의 쓰기 권한을 확인하세요.") +
-                    Environment.NewLine + ex.Message);
-            }
+            ShowPaperBackgroundSaveFailure(ex);
             return false;
+        }
+    }
+
+    private void ShowPaperBackgroundSaveFailure(Exception ex)
+    {
+        if (_settingsWindow != null)
+        {
+            PaperNoticeDialog.Show(
+                _settingsWindow,
+                SettingsSidebarLocalized(
+                    "纸片背景", "Paper background", "紙面背景", "종이 배경"),
+                SettingsSidebarLocalized(
+                    "无法保存纸片背景设置。请检查 PaperTodo 本地设置目录的写入权限。",
+                    "Could not save the paper background setting. Check write access to PaperTodo's local settings folder.",
+                    "紙面背景の設定を保存できませんでした。PaperTodo のローカル設定フォルダーへの書き込み権限を確認してください。",
+                    "종이 배경 설정을 저장하지 못했습니다. PaperTodo 로컬 설정 폴더의 쓰기 권한을 확인하세요.") +
+                Environment.NewLine + ex.Message);
         }
     }
 }

@@ -21,10 +21,9 @@ internal static class CodexMcpPermission
         SettingsControl: true);
 
     // Settings are resolved by the host DataStore, including manifest defaults. Missing
-    // settings (old plugin), invalid JSON and failed/inactive runtimes cannot grant access.
-    internal static bool CanEnable(bool appRunning, bool pluginRunning, string settingsJson)
+    // settings or invalid JSON cannot grant access. Runtime lifetime is checked by the caller.
+    internal static bool CanEnable(string settingsJson)
     {
-        if (!appRunning || !pluginRunning) return false;
         try
         {
             using var document = JsonDocument.Parse(settingsJson);

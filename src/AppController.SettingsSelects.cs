@@ -14,8 +14,7 @@ public sealed partial class AppController
             return;
         }
 
-        State.UiLanguage = normalized;
-        SaveNow();
+        if (!SetSettingFromUi("general.language", normalized)) return;
 
         if (_settingsWindow == null ||
             !PaperNoticeDialog.ShowChoice(

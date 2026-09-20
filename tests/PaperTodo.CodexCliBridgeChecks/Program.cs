@@ -156,17 +156,15 @@ foreach (var invalid in new[] { "false", "null", "0", "\"true\"" })
 {
     var json = "{\"allowMcp\":" + invalid + "}";
     Check(!CodexBridgeSettings.Read(json).AllowMcp, "Invalid permission values cannot grant activation.");
-    Check(!CodexMcpPermission.CanEnable(true, true, json), "The host must reject invalid permission values.");
+    Check(!CodexMcpPermission.CanEnable( json), "The host must reject invalid permission values.");
 }
 foreach (var invalid in new[] { "{}", "{broken", "null", "[]", "" })
-    Check(!CodexMcpPermission.CanEnable(true, true, invalid), "Missing/old/corrupt settings must not grant activation.");
-Check(CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":true}"), "A live authorized plugin may activate MCP.");
+    Check(!CodexMcpPermission.CanEnable( invalid), "Missing/old/corrupt settings must not grant activation.");
+Check(CodexMcpPermission.CanEnable( "{\"allowMcp\":true}"), "A live authorized plugin may activate MCP.");
 var fullAccess = CodexMcpPermission.FullAccess;
 Check(fullAccess.Enabled && fullAccess.BlankWrites && fullAccess.FullWrites && fullAccess.Deletes && fullAccess.SettingsControl,
     "Authorized Codex activation must grant the MCP master switch and every MCP write/delete permission.");
-Check(!CodexMcpPermission.CanEnable(false, true, "{\"allowMcp\":true}"), "An exiting app cannot activate MCP.");
-Check(!CodexMcpPermission.CanEnable(true, false, "{\"allowMcp\":true}"), "An inactive plugin cannot activate MCP.");
-Check(!CodexMcpPermission.CanEnable(true, true, "{\"allowMcp\":false}"), "Revoking the setting must deny later activation.");
+Check(!CodexMcpPermission.CanEnable( "{\"allowMcp\":false}"), "Revoking the setting must deny later activation.");
 foreach (var prefix in new[] { "", "--", "/" })
     Check(StartupCommand.Parse(new[] { prefix + "enable-mcp-for-codex" }).Kind == StartupCommandKind.EnableMcpForCodex,
         "Activation must route through the existing single-instance command parser.");

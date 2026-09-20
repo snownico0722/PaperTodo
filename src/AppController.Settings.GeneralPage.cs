@@ -203,11 +203,8 @@ public sealed partial class AppController
         return leftColumn;
     }
 
-    private void ToggleEdgeCapsulePreviewPreferDownward()
-    {
-        State.EdgeCapsulePreviewPreferDownward = !State.EdgeCapsulePreviewPreferDownward;
-        SaveNow();
-    }
+    private void ToggleEdgeCapsulePreviewPreferDownward() =>
+        SetSettingFromUi("edge.preview_prefer_downward", !State.EdgeCapsulePreviewPreferDownward);
 
     private string HideEdgeCapsuleCloseButtonOnHoverTip() =>
         SettingsSidebarLocalized(

@@ -9,7 +9,7 @@ public sealed partial class AppController
     private PaperSettingsService? _publicSettings;
     internal PaperSettingsService PublicSettings => _publicSettings ??= new(
         CreatePublicSettingsCatalog(), () => IsRunning,
-        CommitPendingNoteContentsForSave, TryCommitExternalMutation, RunExternalPostCommitUi);
+        TryCommitExternalMutation, RunExternalPostCommitUi);
 
     private enum SettingEffects
     {
@@ -170,6 +170,10 @@ public sealed partial class AppController
             },
             Publish: () =>
             {
+                if (titles != null)
+                    foreach (var row in titles)
+                        if (!string.Equals(row.Title, row.Paper.Title, StringComparison.Ordinal))
+                            NotifyPaperDisplayTitleChanged(row.Paper.Id);
                 if (effects == SettingEffects.CapsuleMode)
                 {
                     foreach (var window in _windows.Values.ToArray())

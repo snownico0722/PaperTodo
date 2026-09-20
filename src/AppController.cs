@@ -1136,7 +1136,7 @@ public sealed partial class AppController : IDisposable
         return paper?.Type == PaperTypes.Note ? paper : null;
     }
 
-    public void ExecuteStartupCommand(StartupCommand command)
+    public bool ExecuteStartupCommand(StartupCommand command)
     {
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
@@ -1176,9 +1176,9 @@ public sealed partial class AppController : IDisposable
                 Exit();
                 break;
             case StartupCommandKind.EnableMcpForCodex:
-                TryEnableMcpForCodex();
-                break;
+                return TryEnableMcpForCodex();
         }
+        return true;
     }
 
     private int NextVisibilityAnimationVersion(string paperId)

@@ -46,25 +46,28 @@ public sealed partial class AppController
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
-    private void SetSettingFromUi<T>(string id, T value)
+    private bool SetSettingFromUi<T>(string id, T value)
     {
-        try { PublicSettings.Set(id, System.Text.Json.JsonSerializer.SerializeToElement(value)); }
+        try { return PublicSettings.Set(id, System.Text.Json.JsonSerializer.SerializeToElement(value)).Changed; }
         catch (PaperSettingsException ex)
         {
             Trace.WriteLine($"[Settings] {id}: {ex}");
             // StateStore already reports persistence failures; restore the clicked controls.
-            if (ex.Code != "save_failed")
+            if (id == "general.startup")
+                _trayIcon?.ShowBalloonTip(Strings.Get("StartupFailureTitle"), Strings.Get("StartupFailureMessage"), BalloonIcon.Warning);
+            else if (ex.Code == "save_failed" && id.StartsWith("appearance.background_", StringComparison.Ordinal))
+                ShowPaperBackgroundSaveFailure(ex);
+            else if (id == "shortcuts.distinguish_numpad" && ex.Code == "shortcut_conflict")
+                ShowNumpadShortcutModeConflict();
+            else if (ex.Code != "save_failed")
                 _trayIcon?.ShowBalloonTip(Strings.Get("SaveFailureTitle"), ex.Message, BalloonIcon.Warning);
             RefreshSettingsForChange(id);
+            return false;
         }
     }
 
-    private void SetTheme(string theme)
-    {
-        State.Theme = theme;
-        SaveNow();
-        RefreshThemeSurfaces();
-    }
+    private void SetTheme(string theme) =>
+        SetSettingFromUi("appearance.theme", theme);
 
     private UIElement CreateThemeSegmentSelector()
     {
@@ -78,17 +81,8 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, State.Theme, SetTheme);
     }
 
-    private void SetColorScheme(string scheme)
-    {
-        if (!ColorSchemes.IsValid(scheme))
-        {
-            return;
-        }
-
-        State.ColorScheme = scheme;
-        SaveNow();
-        RefreshThemeSurfaces();
-    }
+    private void SetColorScheme(string scheme) =>
+        SetSettingFromUi("appearance.color_scheme", scheme);
 
     private void RefreshThemeSurfaces()
     {
@@ -139,17 +133,8 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
     }
 
-    private void SetUiFontPreset(string preset)
-    {
-        var normalized = UiFontPresets.Normalize(preset);
-        if (State.UiFontPreset == normalized)
-        {
-            return;
-        }
-
-        State.UiFontPreset = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void SetUiFontPreset(string preset) =>
+        SetSettingFromUi("appearance.font_preset", UiFontPresets.Normalize(preset));
 
     private UIElement CreateUiFontPresetSegmentSelector()
     {
@@ -163,17 +148,8 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, UiFontPresets.Normalize(State.UiFontPreset), SetUiFontPreset);
     }
 
-    private void SetTextRenderingProfile(string profile)
-    {
-        var normalized = TextRenderingProfiles.Normalize(profile);
-        if (State.TextRenderingProfile == normalized)
-        {
-            return;
-        }
-
-        State.TextRenderingProfile = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void SetTextRenderingProfile(string profile) =>
+        SetSettingFromUi("appearance.text_rendering", TextRenderingProfiles.Normalize(profile));
 
     private UIElement CreateTextRenderingProfileSegmentSelector()
     {
@@ -190,121 +166,38 @@ public sealed partial class AppController
             SetTextRenderingProfile);
     }
 
-    private void ToggleAdvancedSettingsMode()
-    {
-        // Compact mode only hides less common controls; stored values stay in effect.
-        State.AdvancedSettingsMode = !State.AdvancedSettingsMode;
-        if (!State.AdvancedSettingsMode && _settingsPage == SettingsPage.Labs)
-        {
-            _settingsPage = SettingsPage.General;
-        }
-        _shortcutRecordingCommandId = null;
-        ClearShortcutApplyFailure();
-        SaveNow();
-        RefreshSettingsWindowContent();
-    }
+    private void ToggleAdvancedSettingsMode() =>
+        SetSettingFromUi("general.advanced_settings", !State.AdvancedSettingsMode);
 
-    private void SetOverallFontScale(double scale)
-    {
-        var normalized = OverallFontScales.Normalize(scale);
-        if (Math.Abs(State.Zoom - normalized) < 0.001)
-        {
-            return;
-        }
+    private void SetOverallFontScale(double scale) =>
+        SetSettingFromUi("appearance.font_scale", OverallFontScales.Normalize(scale));
 
-        State.Zoom = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void SetNoteTextSize(string size) =>
+        SetSettingFromUi("note.text_size", VisualTextSizes.Normalize(size));
 
-    private void SetNoteTextSize(string size)
-    {
-        var normalized = VisualTextSizes.Normalize(size);
-        if (State.NoteTextSize == normalized)
-        {
-            return;
-        }
+    private void ToggleNoteTextBold() =>
+        SetSettingFromUi("note.text_bold", !State.NoteTextBold);
 
-        State.NoteTextSize = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void ToggleTodoTextBold() =>
+        SetSettingFromUi("todo.text_bold", !State.TodoTextBold);
 
-    private void ToggleNoteTextBold()
-    {
-        State.NoteTextBold = !State.NoteTextBold;
-        ApplyTypographySettingsChange();
-    }
+    private void ToggleExperimentalInactivePaperOpacity() =>
+        SetSettingFromUi("focus.inactive_opacity_enabled", !State.ExperimentalInactivePaperOpacity);
 
-    private void ToggleTodoTextBold()
-    {
-        State.TodoTextBold = !State.TodoTextBold;
-        ApplyTypographySettingsChange();
-    }
+    private void SetExperimentalInactivePaperOpacityLevel(double opacity) =>
+        SetSettingFromUi("focus.inactive_opacity", ExperimentalOpacityLevels.Normalize( opacity, ExperimentalOpacityLevels.DefaultInactivePaper));
 
-    private void ToggleExperimentalInactivePaperOpacity()
-    {
-        State.ExperimentalInactivePaperOpacity = !State.ExperimentalInactivePaperOpacity;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void ToggleExperimentalRestingCapsuleOpacity() =>
+        SetSettingFromUi("focus.capsule_opacity_enabled", !State.ExperimentalRestingCapsuleOpacity);
 
-    private void SetExperimentalInactivePaperOpacityLevel(double opacity)
-    {
-        var normalized = ExperimentalOpacityLevels.Normalize(
-            opacity,
-            ExperimentalOpacityLevels.DefaultInactivePaper);
-        if (Math.Abs(State.ExperimentalInactivePaperOpacityLevel - normalized) < 0.001)
-        {
-            return;
-        }
+    private void ToggleExperimentalRestingCapsuleOpacityIncludesMaster() =>
+        SetSettingFromUi("focus.opacity_include_master", !State.ExperimentalRestingCapsuleOpacityIncludesMaster);
 
-        State.ExperimentalInactivePaperOpacityLevel = normalized;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void ToggleExperimentalRestingCapsuleOpacityAlways() =>
+        SetSettingFromUi("focus.capsule_opacity_always", !State.ExperimentalRestingCapsuleOpacityAlways);
 
-    private void ToggleExperimentalRestingCapsuleOpacity()
-    {
-        State.ExperimentalRestingCapsuleOpacity = !State.ExperimentalRestingCapsuleOpacity;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
-
-    private void ToggleExperimentalRestingCapsuleOpacityIncludesMaster()
-    {
-        State.ExperimentalRestingCapsuleOpacityIncludesMaster =
-            !State.ExperimentalRestingCapsuleOpacityIncludesMaster;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
-
-    private void ToggleExperimentalRestingCapsuleOpacityAlways()
-    {
-        State.ExperimentalRestingCapsuleOpacityAlways =
-            !State.ExperimentalRestingCapsuleOpacityAlways;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
-
-    private void SetExperimentalRestingCapsuleOpacityLevel(double opacity)
-    {
-        var normalized = ExperimentalOpacityLevels.Normalize(
-            opacity,
-            ExperimentalOpacityLevels.DefaultRestingCapsule);
-        if (Math.Abs(State.ExperimentalRestingCapsuleOpacityLevel - normalized) < 0.001)
-        {
-            return;
-        }
-
-        State.ExperimentalRestingCapsuleOpacityLevel = normalized;
-        SaveNow();
-        RefreshExperimentalOpacitySurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void SetExperimentalRestingCapsuleOpacityLevel(double opacity) =>
+        SetSettingFromUi("focus.capsule_opacity", ExperimentalOpacityLevels.Normalize( opacity, ExperimentalOpacityLevels.DefaultRestingCapsule));
 
     private void RefreshExperimentalOpacitySurfaces(bool animate = true)
     {
@@ -318,23 +211,11 @@ public sealed partial class AppController
         }
     }
 
-    private void ToggleExperimentalHideInactiveTopBarButtons()
-    {
-        State.ExperimentalHideInactiveTopBarButtons =
-            !State.ExperimentalHideInactiveTopBarButtons;
-        SaveNow();
-        RefreshExperimentalFocusPresentationSurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void ToggleExperimentalHideInactiveTopBarButtons() =>
+        SetSettingFromUi("focus.hide_inactive_buttons", !State.ExperimentalHideInactiveTopBarButtons);
 
-    private void ToggleExperimentalHideInactiveTitleBar()
-    {
-        State.ExperimentalHideInactiveTitleBar =
-            !State.ExperimentalHideInactiveTitleBar;
-        SaveNow();
-        RefreshExperimentalFocusPresentationSurfaces();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void ToggleExperimentalHideInactiveTitleBar() =>
+        SetSettingFromUi("focus.hide_inactive_titlebar", !State.ExperimentalHideInactiveTitleBar);
 
     private void RefreshExperimentalFocusPresentationSurfaces()
     {
@@ -344,210 +225,63 @@ public sealed partial class AppController
         }
     }
 
-    private void ToggleExperimentalCollapsePaperOnDeactivate()
-    {
-        State.ExperimentalCollapsePaperOnDeactivate =
-            !State.ExperimentalCollapsePaperOnDeactivate;
-        SaveNow();
-        RefreshSettingsRegions("labs.focus");
-    }
+    private void ToggleExperimentalCollapsePaperOnDeactivate() =>
+        SetSettingFromUi("focus.collapse_on_deactivate", !State.ExperimentalCollapsePaperOnDeactivate);
 
-    private void ToggleExperimentalDockedCapsulesNonTopmost()
-    {
-        State.ExperimentalDockedCapsulesNonTopmost =
-            !State.ExperimentalDockedCapsulesNonTopmost;
-        SaveNow();
-        PublishSettingEffects(SettingEffects.EdgeTopmost);
-    }
+    private void ToggleExperimentalDockedCapsulesNonTopmost() =>
+        SetSettingFromUi("edge.non_topmost", !State.ExperimentalDockedCapsulesNonTopmost);
 
-    private void ToggleExperimentalEdgeCapsuleHoverPreview()
-    {
-        State.ExperimentalEdgeCapsuleHoverPreview =
-            !State.ExperimentalEdgeCapsuleHoverPreview;
-        SaveNow();
-        PublishSettingEffects(SettingEffects.Preview);
-        RefreshSettingsRegions("general.edgeBrowsing");
-    }
+    private void ToggleExperimentalEdgeCapsuleHoverPreview() =>
+        SetSettingFromUi("edge.preview_enabled", !State.ExperimentalEdgeCapsuleHoverPreview);
 
-    private void ToggleExperimentalEdgeCapsuleHoverIntent()
-    {
-        State.ExperimentalEdgeCapsuleHoverIntent =
-            !State.ExperimentalEdgeCapsuleHoverIntent;
-        SaveNow();
-        RefreshEdgeCapsuleHoverIntentRuntime();
-        RefreshSettingsRegions("general.edgeBrowsing");
-    }
+    private void ToggleExperimentalEdgeCapsuleHoverIntent() =>
+        SetSettingFromUi("edge.hover_intent", !State.ExperimentalEdgeCapsuleHoverIntent);
 
-    private void SetExperimentalEdgeCapsuleHoverIntentSensitivity(
-        string sensitivity)
-    {
-        var normalized =
-            EdgeCapsuleHoverIntentSensitivities.Normalize(sensitivity);
-        if (string.Equals(
-                State.ExperimentalEdgeCapsuleHoverIntentSensitivity,
-                normalized,
-                StringComparison.Ordinal))
-        {
-            return;
-        }
+    private void SetExperimentalEdgeCapsuleHoverIntentSensitivity(string sensitivity) =>
+        SetSettingFromUi("edge.hover_sensitivity", EdgeCapsuleHoverIntentSensitivities.Normalize(sensitivity));
 
-        State.ExperimentalEdgeCapsuleHoverIntentSensitivity = normalized;
-        SaveNow();
-        RefreshEdgeCapsuleHoverIntentRuntime();
-    }
+    private void ToggleExperimentalAllowLockIconUnlock() =>
+        SetSettingFromUi("interaction.allow_icon_unlock", !State.ExperimentalAllowLockIconUnlock);
 
-    private void ToggleExperimentalAllowLockIconUnlock()
-    {
-        State.ExperimentalAllowLockIconUnlock =
-            !State.ExperimentalAllowLockIconUnlock;
-        SaveNow();
-        RefreshAdvancedShortcutSurfaces();
-        RefreshSettingsRegions("labs.passive");
-    }
+    private void SetExperimentalShortcutOpacityLevel(double opacity) =>
+        SetSettingFromUi("interaction.shortcut_opacity", ExperimentalOpacityLevels.Normalize(opacity, 0.35));
 
-    private void SetExperimentalShortcutOpacityLevel(double opacity)
-    {
-        var normalized = ExperimentalOpacityLevels.Normalize(opacity, 0.35);
-        if (Math.Abs(State.ExperimentalShortcutOpacityLevel - normalized) < 0.001)
-        {
-            return;
-        }
+    private void ToggleExperimentalTodoReminders() =>
+        SetSettingFromUi("todo.reminders", !State.ExperimentalTodoReminders);
 
-        State.ExperimentalShortcutOpacityLevel = normalized;
-        SaveNow();
-        RefreshAdvancedShortcutSurfaces();
-        RefreshSettingsRegions("labs.passive");
-    }
+    private void ToggleExperimentalTodoReminderShowButton() =>
+        SetSettingFromUi("todo.reminder_button", !State.ExperimentalTodoReminderShowButton);
 
-    private void ToggleExperimentalTodoReminders()
-    {
-        State.ExperimentalTodoReminders = !State.ExperimentalTodoReminders;
-        SaveNow();
-        RefreshTodoReminderFeature();
-        RefreshSettingsRegions("labs.reminders");
-    }
+    private void SetExperimentalTodoReminderQuickMinutes(int minutes) =>
+        SetSettingFromUi("todo.reminder_quick_minutes", ExperimentalTodoReminderOptions.NormalizeQuickMinutes(minutes));
 
-    private void ToggleExperimentalTodoReminderShowButton()
-    {
-        State.ExperimentalTodoReminderShowButton =
-            !State.ExperimentalTodoReminderShowButton;
-        SaveNow();
-        RefreshTodoReminderFeature();
-        RefreshSettingsRegions("labs.reminders");
-    }
+    private void ToggleExperimentalTodoReminderSoundEnabled() =>
+        SetSettingFromUi("todo.reminder_sound_enabled", !State.ExperimentalTodoReminderSoundEnabled);
 
-    private void SetExperimentalTodoReminderQuickMinutes(int minutes)
-    {
-        var normalized =
-            ExperimentalTodoReminderOptions.NormalizeQuickMinutes(minutes);
-        if (State.ExperimentalTodoReminderQuickMinutes == normalized)
-        {
-            return;
-        }
+    private void SetExperimentalTodoReminderSound(string sound) =>
+        SetSettingFromUi("todo.reminder_sound", TodoReminderSoundOptions.Normalize(sound));
 
-        State.ExperimentalTodoReminderQuickMinutes = normalized;
-        SaveNow();
-        RefreshSettingsRegions("labs.reminders");
-    }
+    private void SetTitleTextSize(string size) =>
+        SetSettingFromUi("title.text_size", VisualTextSizes.Normalize(size));
 
-    private void ToggleExperimentalTodoReminderSoundEnabled()
-    {
-        State.ExperimentalTodoReminderSoundEnabled =
-            !State.ExperimentalTodoReminderSoundEnabled;
-        SaveNow();
-        RefreshSettingsRegions("labs.reminders");
-    }
+    private void ToggleTitleTextBold() =>
+        SetSettingFromUi("title.text_bold", !State.TitleTextBold);
 
-    private void SetExperimentalTodoReminderSound(string sound)
-    {
-        var normalized = TodoReminderSoundOptions.Normalize(sound);
-        if (string.Equals(
-                State.ExperimentalTodoReminderSound,
-                normalized,
-                StringComparison.Ordinal))
-        {
-            return;
-        }
+    private void SetCapsuleTextSize(string size) =>
+        SetSettingFromUi("capsule.text_size", VisualTextSizes.Normalize(size));
 
-        State.ExperimentalTodoReminderSound = normalized;
-        SaveNow();
-    }
+    private void ToggleCapsuleTextBold() =>
+        SetSettingFromUi("capsule.text_bold", !State.CapsuleTextBold);
 
-    private void SetTitleTextSize(string size)
-    {
-        var normalized = VisualTextSizes.Normalize(size);
-        if (State.TitleTextSize == normalized)
-        {
-            return;
-        }
 
-        State.TitleTextSize = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void ToggleCustomFontEnhancedBold() =>
+        SetSettingFromUi("appearance.enhanced_bold", !State.CustomFontEnhancedBold);
 
-    private void ToggleTitleTextBold()
-    {
-        State.TitleTextBold = !State.TitleTextBold;
-        ApplyTypographySettingsChange();
-    }
+    private void SetMarkdownRenderMode(string mode) =>
+        SetSettingFromUi("note.markdown_mode", mode);
 
-    private void SetCapsuleTextSize(string size)
-    {
-        var normalized = VisualTextSizes.Normalize(size);
-        if (State.CapsuleTextSize == normalized)
-        {
-            return;
-        }
-
-        State.CapsuleTextSize = normalized;
-        ApplyTypographySettingsChange();
-    }
-
-    private void ToggleCapsuleTextBold()
-    {
-        State.CapsuleTextBold = !State.CapsuleTextBold;
-        ApplyTypographySettingsChange();
-    }
-
-    private void ApplyTypographySettingsChange()
-    {
-        SaveNow();
-        RefreshPublicSettingsTypography();
-        RefreshSettingsWindowContent();
-    }
-
-    private void ToggleCustomFontEnhancedBold()
-    {
-        State.CustomFontEnhancedBold = !State.CustomFontEnhancedBold;
-        ApplyTypographySettingsChange();
-    }
-
-    private void SetMarkdownRenderMode(string mode)
-    {
-        if (!MarkdownRenderModes.IsValid(mode))
-        {
-            return;
-        }
-
-        State.MarkdownRenderMode = mode;
-        SaveNow();
-
-        PublishSettingEffects(SettingEffects.Markdown);
-    }
-
-    private void SetImageReferenceTextMode(string mode)
-    {
-        var normalized = ImageReferenceTextModes.Normalize(mode);
-        if (State.ImageReferenceTextMode == normalized)
-        {
-            return;
-        }
-
-        State.ImageReferenceTextMode = normalized;
-        SaveNow();
-
-        PublishSettingEffects(SettingEffects.ImageReferences);
-    }
+    private void SetImageReferenceTextMode(string mode) =>
+        SetSettingFromUi("note.image_reference_text", ImageReferenceTextModes.Normalize(mode));
 
     private UIElement CreateImageReferenceTextModeSelector()
     {
@@ -564,18 +298,8 @@ public sealed partial class AppController
             SetImageReferenceTextMode);
     }
 
-    private void SetFullscreenTopmostMode(string mode)
-    {
-        var normalized = FullscreenTopmostModes.Normalize(mode);
-        if (State.FullscreenTopmostMode == normalized)
-        {
-            return;
-        }
-
-        State.FullscreenTopmostMode = normalized;
-        RefreshFullscreenAvoidanceRuntime();
-        SaveNow();
-    }
+    private void SetFullscreenTopmostMode(string mode) =>
+        SetSettingFromUi("window.fullscreen_mode", FullscreenTopmostModes.Normalize(mode));
 
     private UIElement CreateFullscreenTopmostModeSegmentSelector()
     {
@@ -588,17 +312,8 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode), SetFullscreenTopmostMode);
     }
 
-    private void SetTodoVisualSize(string size)
-    {
-        var normalized = TodoVisualSizes.Normalize(size);
-        if (State.TodoVisualSize == normalized)
-        {
-            return;
-        }
-
-        State.TodoVisualSize = normalized;
-        ApplyTypographySettingsChange();
-    }
+    private void SetTodoVisualSize(string size) =>
+        SetSettingFromUi("todo.visual_size", TodoVisualSizes.Normalize(size));
 
     private UIElement CreateOverallFontScaleStepper() =>
         CreateSettingsStepper(
@@ -676,18 +391,11 @@ public sealed partial class AppController
     private void SetExternalMarkdownExtension(string extension, bool saveImmediately = true)
     {
         var normalized = ExternalMarkdownFileExtensions.Normalize(extension);
-        if (State.ExternalMarkdownExtension == normalized)
-        {
-            return;
-        }
-
-        State.ExternalMarkdownExtension = normalized;
         if (saveImmediately)
-        {
-            SaveNow();
-        }
-
-        PublishSettingEffects(SettingEffects.ExternalExtension);
+            SetSettingFromUi("note.external_extension", normalized);
+        else
+            // Exit owns the final save. Only transfer its pending editor draft into that snapshot.
+            State.ExternalMarkdownExtension = normalized;
     }
 
     private UIElement CreateSegmentSelector((string Key, string Label)[] segments, string activeKey, Action<string> onSelect)
@@ -2796,39 +2504,14 @@ public sealed partial class AppController
         }
     }
 
-    private void ToggleStartup()
-    {
-        var enabled = SystemSettingsHelper.IsStartupEnabled();
-        if (!SystemSettingsHelper.ToggleStartup(!enabled))
-        {
-            _trayIcon?.ShowBalloonTip(
-                Strings.Get("StartupFailureTitle"),
-                Strings.Get("StartupFailureMessage"),
-                BalloonIcon.Warning);
-        }
-        RebuildTrayMenu();
-        RefreshSettingsWindowContent();
-    }
+    private void ToggleStartup() =>
+        SetSettingFromUi("general.startup", !SystemSettingsHelper.IsStartupEnabled());
 
-    private void ToggleAnimations()
-    {
-        State.EnableAnimations = !State.EnableAnimations;
-        PublishSettingEffects(SettingEffects.Animations);
-        SaveNow();
-    }
+    private void ToggleAnimations() =>
+        SetSettingFromUi("appearance.animations", !State.EnableAnimations);
 
-    private void SetResizeGripMode(string mode)
-    {
-        var normalized = ResizeGripModes.Normalize(mode);
-        if (State.ResizeGripMode == normalized)
-        {
-            return;
-        }
-
-        State.ResizeGripMode = normalized;
-        SaveNow();
-        RefreshApplicationThemeResources();
-    }
+    private void SetResizeGripMode(string mode) =>
+        SetSettingFromUi("window.resize_grip", ResizeGripModes.Normalize(mode));
 
     private UIElement CreateResizeGripModeSegmentSelector()
     {
@@ -2845,28 +2528,19 @@ public sealed partial class AppController
             SetResizeGripMode);
     }
 
-    private void ToggleAutoClearCompletedTodos()
-    {
-        State.AutoClearCompletedTodos = !State.AutoClearCompletedTodos;
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
+    private void ToggleAutoClearCompletedTodos() =>
+        SetSettingFromUi("todo.auto_clear_completed", !State.AutoClearCompletedTodos);
 
     private void ToggleAutoMoveCompletedTodosToBottom() =>
         SetSettingFromUi("todo.move_completed_to_bottom", !State.AutoMoveCompletedTodosToBottom);
 
-    private void ToggleAutoCompressLargeImages()
-    {
-        State.AutoCompressLargeImages = !State.AutoCompressLargeImages;
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-        SaveNow();
-    }
+    private void ToggleAutoCompressLargeImages() =>
+        SetSettingFromUi("note.compress_large_images", !State.AutoCompressLargeImages);
 
     private void ToggleHidePapersFromTaskbar()
     {
         if (State.HidePapersFromWindowSwitcher)
         {
-            State.HidePapersFromTaskbar = true;
             RefreshSettingsSystemVisibilityToggleStates();
             return;
         }
@@ -2893,34 +2567,17 @@ public sealed partial class AppController
         }
     }
 
-    private void TogglePersistentPowerShellProcess()
-    {
-        State.UsePersistentPowerShellProcess = !State.UsePersistentPowerShellProcess;
-        PublishSettingEffects(SettingEffects.Scripts);
+    private void TogglePersistentPowerShellProcess() =>
+        SetSettingFromUi("scripts.persistent_process", !State.UsePersistentPowerShellProcess);
 
-        SaveNow();
-    }
+    private void TogglePreferPowerShell7() =>
+        SetSettingFromUi("scripts.prefer_powershell7", !State.PreferPowerShell7);
 
-    private void TogglePreferPowerShell7()
-    {
-        State.PreferPowerShell7 = !State.PreferPowerShell7;
-        PublishSettingEffects(SettingEffects.Scripts);
-        SaveNow();
-    }
+    private void ToggleHideScriptRunWindow() =>
+        SetSettingFromUi("scripts.hide_run_window", !State.HideScriptRunWindow);
 
-    private void ToggleHideScriptRunWindow()
-    {
-        State.HideScriptRunWindow = !State.HideScriptRunWindow;
-        PublishSettingEffects(SettingEffects.Scripts);
-        SaveNow();
-    }
-
-    private void ToggleToolTips()
-    {
-        State.EnableToolTips = !State.EnableToolTips;
-        SaveNow();
-        RefreshToolTipSetting();
-    }
+    private void ToggleToolTips() =>
+        SetSettingFromUi("general.tooltips", !State.EnableToolTips);
 
     private void RefreshToolTipSetting()
     {
@@ -2945,61 +2602,26 @@ public sealed partial class AppController
     private void ToggleCapsuleMode() =>
         SetSettingFromUi("capsule.enabled", !State.UseCapsuleMode);
 
-    private void ToggleTopBarNewTodoButton()
-    {
-        State.ShowTopBarNewTodoButton = !State.ShowTopBarNewTodoButton;
-        RefreshTopBarNewPaperButtonsSetting();
-    }
+    private void ToggleTopBarNewTodoButton() =>
+        SetSettingFromUi("topbar.new_todo", !State.ShowTopBarNewTodoButton);
 
-    private void ToggleTopBarNewNoteButton()
-    {
-        State.ShowTopBarNewNoteButton = !State.ShowTopBarNewNoteButton;
-        RefreshTopBarNewPaperButtonsSetting();
-    }
+    private void ToggleTopBarNewNoteButton() =>
+        SetSettingFromUi("topbar.new_note", !State.ShowTopBarNewNoteButton);
 
-    private void ToggleTopBarExternalOpenButton()
-    {
-        State.ShowTopBarExternalOpenButton = !State.ShowTopBarExternalOpenButton;
-        RefreshTopBarNewPaperButtonsSetting();
-    }
+    private void ToggleTopBarExternalOpenButton() =>
+        SetSettingFromUi("topbar.external_open", !State.ShowTopBarExternalOpenButton);
 
-    private void ToggleLinkedPaperNameDisplay()
-    {
-        State.ShowLinkedPaperName = !State.ShowLinkedPaperName;
+    private void ToggleLinkedPaperNameDisplay() =>
+        SetSettingFromUi("todo.show_linked_paper_name", !State.ShowLinkedPaperName);
 
-        PublishSettingEffects(SettingEffects.TodoRows);
+    private void ToggleLongLinkedPaperTitles() =>
+        SetSettingFromUi("todo.allow_long_linked_titles", !State.AllowLongLinkedPaperTitles);
 
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
+    private void ToggleHideLinkedPapersFromCapsules() =>
+        SetSettingFromUi("todo.hide_linked_paper_capsules", !State.HideLinkedPapersFromCapsules);
 
-    private void ToggleLongLinkedPaperTitles()
-    {
-        State.AllowLongLinkedPaperTitles = !State.AllowLongLinkedPaperTitles;
-
-        PublishSettingEffects(SettingEffects.TodoRows);
-
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
-
-    private void ToggleHideLinkedPapersFromCapsules()
-    {
-        State.HideLinkedPapersFromCapsules = !State.HideLinkedPapersFromCapsules;
-        RefreshCapsuleEligibilityForLinkedPapers();
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
-
-    private void ToggleRunLinkedScriptCapsulesOnClick()
-    {
-        State.RunLinkedScriptCapsulesOnClick = !State.RunLinkedScriptCapsulesOnClick;
-
-        PublishSettingEffects(SettingEffects.TodoRows);
-
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
+    private void ToggleRunLinkedScriptCapsulesOnClick() =>
+        SetSettingFromUi("scripts.run_linked_on_click", !State.RunLinkedScriptCapsulesOnClick);
 
     private void ToggleTodoPaperLinks() =>
         SetSettingFromUi("todo.paper_links", !State.EnableTodoPaperLinks);
@@ -3017,27 +2639,14 @@ public sealed partial class AppController
     private void ToggleDeepCapsuleExpandedSlot() =>
         SetSettingFromUi("capsule.show_while_expanded", !State.ShowDeepCapsuleWhileExpanded);
 
-    private void ToggleHideEdgeCapsuleCloseButtonOnHover()
-    {
-        State.HideEdgeCapsuleCloseButtonOnHover = !State.HideEdgeCapsuleCloseButtonOnHover;
-        PublishSettingEffects(SettingEffects.CapsuleClose);
+    private void ToggleHideEdgeCapsuleCloseButtonOnHover() =>
+        SetSettingFromUi("capsule.hide_close_button", !State.HideEdgeCapsuleCloseButtonOnHover);
 
-        SaveNow();
-    }
+    private void ToggleCollapseExpandedDeepCapsuleOnClick() =>
+        SetSettingFromUi("capsule.click_to_collapse", !State.CollapseExpandedDeepCapsuleOnClick);
 
-    private void ToggleCollapseExpandedDeepCapsuleOnClick()
-    {
-        State.CollapseExpandedDeepCapsuleOnClick = !State.CollapseExpandedDeepCapsuleOnClick;
-        SaveNow();
-        RefreshSettingsCapsuleToggleStates();
-    }
-
-    private void ToggleRememberDeepCapsuleExpandedPosition()
-    {
-        State.RememberDeepCapsuleExpandedPosition = !State.RememberDeepCapsuleExpandedPosition;
-        SaveNow();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleRememberDeepCapsuleExpandedPosition() =>
+        SetSettingFromUi("capsule.remember_expanded_position", !State.RememberDeepCapsuleExpandedPosition);
 
     private void RestoreMissingVisiblePaperSurfaces()
     {

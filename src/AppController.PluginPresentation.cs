@@ -92,8 +92,9 @@ public sealed partial class AppController
         var id = paperId?.Trim();
         if (string.IsNullOrWhiteSpace(id) || id.Length > 64 || !Enum.IsDefined(action))
             throw new PaperCommandException("invalid_params", "An exact paper ID and a valid presentation action are required.");
-        PrepareExternalPaperOperation();
-        // CommitPendingNoteContentsForSave may invoke plugin code: resolve the target afterwards.
+        // Attribute already-pending user changes before publishing this presentation request.
+        // Showing a paper must not commit the content of unrelated editor/provider sessions.
+        _paperBodyPluginEvents?.ScanNow(PaperOperationContext.User());
         var paper = State.Papers.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal))
             ?? throw new PaperCommandException("paper_not_found", "The requested paper does not exist.");
         using (SuppressPaperPluginEventScans())

@@ -116,13 +116,8 @@ public sealed partial class AppController
             });
     }
 
-    private void ToggleMarkdownEditAnimation()
-    {
-        State.MarkdownEditAnimationEnabled = !State.MarkdownEditAnimationEnabled;
-        SaveNow();
-
-        PublishSettingEffects(SettingEffects.MarkdownAnimations);
-    }
+    private void ToggleMarkdownEditAnimation() =>
+        SetSettingFromUi("note.edit_animations", !State.MarkdownEditAnimationEnabled);
 
     private void RestoreSettingsSidebarNoteDefaults()
     {

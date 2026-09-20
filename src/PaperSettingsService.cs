@@ -38,17 +38,16 @@ internal sealed class PaperSettingsService
 {
     private readonly Dictionary<string, PaperSettingDefinition> _definitions;
     private readonly Func<bool> _running;
-    private readonly Action _prepare;
     private readonly Func<bool> _commit;
     private readonly Action<Action> _publish;
+    // Saving calls live provider sessions; do not allow a provider to nest a second transaction.
     private bool _changing;
 
     internal PaperSettingsService(IEnumerable<PaperSettingDefinition> definitions, Func<bool> running,
-        Action prepare, Func<bool> commit, Action<Action> publish)
+        Func<bool> commit, Action<Action> publish)
     {
         _definitions = definitions.ToDictionary(d => d.Metadata.Id, StringComparer.Ordinal);
         _running = running;
-        _prepare = prepare;
         _commit = commit;
         _publish = publish;
     }
@@ -75,21 +74,13 @@ internal sealed class PaperSettingsService
         var before = definition.Snapshot();
         if (!before.Writable)
             throw Error("setting_read_only", before.UnavailableReason ?? "This setting is read-only.");
-        // Validation and permission checks (in adapters) precede flushing editors or changing state.
+        // Validate once before changing state; the persistence owner synchronizes content when saving.
         var normalized = definition.Validate(value);
         if (JsonElement.DeepEquals(before.Value, normalized))
             return new PaperSettingChangeResult(before, before.Value, false);
         _changing = true;
         try
         {
-            _prepare();
-            EnsureRunning();
-            before = definition.Snapshot();
-            if (!before.Writable)
-                throw Error("setting_read_only", before.UnavailableReason ?? "This setting is read-only.");
-            if (JsonElement.DeepEquals(before.Value, normalized))
-                return new PaperSettingChangeResult(before, before.Value, false);
-
             var change = definition.Begin(normalized);
             try
             {

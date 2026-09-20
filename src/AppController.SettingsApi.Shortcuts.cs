@@ -89,7 +89,6 @@ public sealed partial class AppController
     private PaperSettingChange BeginPublicShortcutChange(Dictionary<string, string>? newBindings,
         Dictionary<string, bool>? newEnabled, bool? newMode)
     {
-        if (PublicShortcutUnavailable() is { } reason) throw PaperSettingsService.Error("settings_busy", reason);
         var oldBindings = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
         var oldEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
         var oldMode = State.DistinguishNumpadShortcutDigits;

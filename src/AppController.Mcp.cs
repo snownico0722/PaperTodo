@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -40,13 +39,8 @@ public sealed partial class AppController
         _mcpCommands = null;
     }
 
-    private void ToggleMcpEnabled()
-    {
-        State.McpEnabled = !State.McpEnabled;
-        RefreshMcpRuntime();
-        SaveNow();
-        RefreshSettingsRegions("labs.mcp");
-    }
+    private void ToggleMcpEnabled() =>
+        SetSettingFromUi("mcp.enabled", !State.McpEnabled);
 
     internal bool TryEnableMcpForCodex()
     {
@@ -58,7 +52,7 @@ public sealed partial class AppController
         {
             var settings = PaperBodyPlugins.DataStore.GetSettingsJson(descriptor);
             if (PaperBodyPlugins.DataStore.TryGetReadIssue(pluginId, out _) ||
-                !CodexMcpPermission.CanEnable(IsRunning, IsPluginRuntimeRunning(pluginId), settings))
+                !CodexMcpPermission.CanEnable(settings))
                 return false;
 
             var previous = new CodexMcpAccess(
@@ -97,33 +91,17 @@ public sealed partial class AppController
         }
     }
 
-    private void ToggleMcpBlankWrites()
-    {
-        State.McpAllowBlankWrites = !State.McpAllowBlankWrites;
-        SaveNow();
-        RefreshSettingsRegions("labs.mcp");
-    }
+    private void ToggleMcpBlankWrites() =>
+        SetSettingFromUi("mcp.additive_writes", !State.McpAllowBlankWrites);
 
-    private void ToggleMcpFullWrites()
-    {
-        State.McpAllowFullWrites = !State.McpAllowFullWrites;
-        SaveNow();
-        RefreshSettingsRegions("labs.mcp");
-    }
+    private void ToggleMcpFullWrites() =>
+        SetSettingFromUi("mcp.full_writes", !State.McpAllowFullWrites);
 
-    private void ToggleMcpSettingsControl()
-    {
-        State.McpAllowSettingsControl = !State.McpAllowSettingsControl;
-        SaveNow();
-        RefreshSettingsRegions("labs.mcp");
-    }
+    private void ToggleMcpSettingsControl() =>
+        SetSettingFromUi("mcp.settings_control", !State.McpAllowSettingsControl);
 
-    private void ToggleMcpDeletes()
-    {
-        State.McpAllowDeletes = !State.McpAllowDeletes;
-        SaveNow();
-        RefreshSettingsRegions("labs.mcp");
-    }
+    private void ToggleMcpDeletes() =>
+        SetSettingFromUi("mcp.deletes", !State.McpAllowDeletes);
 
     internal bool TryCommitMcpMutation()
     {
@@ -133,45 +111,11 @@ public sealed partial class AppController
 
     internal void RunMcpPostCommitUi(Action update)
     {
-        try
-        {
-            update();
-            return;
-        }
+        try { update(); }
         catch (Exception ex)
         {
-            Trace.WriteLine($"PaperTodo post-commit UI refresh failed; retrying at ContextIdle: {ex}");
-        }
-
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null || IsExiting)
-        {
-            return;
-        }
-
-        try
-        {
-            _ = dispatcher.BeginInvoke(
-                (Action)(() =>
-                {
-                    if (IsExiting) return;
-                    try
-                    {
-                        update();
-                    }
-                    catch (Exception ex)
-                    {
-                        // The business mutation is already persisted. Keep that success result,
-                        // but do not turn an arbitrary UI exception into a global capsule/tray
-                        // rebuild that can hide the real failing surface.
-                        Trace.WriteLine($"PaperTodo post-commit UI retry failed: {ex}");
-                    }
-                }),
-                DispatcherPriority.ContextIdle);
-        }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"PaperTodo could not schedule post-commit UI retry: {ex}");
+            // The data is already committed. Do not replay partially completed UI side effects.
+            Trace.WriteLine($"[MCP] Post-commit UI update failed: {ex}");
         }
     }
 

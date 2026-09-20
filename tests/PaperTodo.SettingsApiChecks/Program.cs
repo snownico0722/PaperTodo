@@ -69,6 +69,7 @@ internal static partial class Program
             AdapterBehavior();
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
+            PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
             WebBridges();
             IsolatedPresentationBehavior();
@@ -78,23 +79,31 @@ internal static partial class Program
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 
+    private static void PostCommitFailureDoesNotReplay()
+    {
+        var c = Controller();
+        var calls = 0;
+        c.RunMcpPostCommitUi(() => { calls++; throw new InvalidOperationException("UI refresh failed"); });
+        DrainSettingsUi();
+        Check(calls == 1, "A failed post-commit UI update must not replay its partial side effects.");
+    }
+
     private static void ServiceBehavior()
     {
         var value = false;
         var success = true;
         var saves = 0;
-        var preparations = 0;
         var publications = 0;
         var running = true;
         var definition = Boolean("todo.paper_links", () => value, v => value = v, () => publications++);
-        var service = new PaperSettingsService([definition], () => running, () => preparations++, () => { saves++; return success; }, a => a());
+        var service = new PaperSettingsService([definition], () => running, () => { saves++; return success; }, a => a());
         Check(!service.Get("todo.paper_links").Value.GetBoolean(), "Get returns live state.");
         Check(service.List("todo").Count == 1 && service.List("missing").Count == 0, "Category filtering.");
         Throws<PaperSettingsException>(() => service.Get("EnableTodoPaperLinks"), "setting_not_found");
         Throws<PaperSettingsException>(() => service.Set("Papers", Json(true)), "setting_not_found");
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json("true")), "invalid_setting_value");
-        Check(saves == 0 && preparations == 0, "Invalid inputs do not flush UI or persist.");
-        Check(!service.Set("todo.paper_links", Json(false)).Changed && saves == 0 && preparations == 0, "No-op is side-effect free.");
+        Check(saves == 0, "Invalid inputs do not persist.");
+        Check(!service.Set("todo.paper_links", Json(false)).Changed && saves == 0, "No-op is side-effect free.");
         var changed = service.Set("todo.paper_links", Json(true));
         Check(changed.Changed && !changed.PreviousValue.GetBoolean() && value && saves == 1 && publications == 1, "Set commits then publishes.");
         success = false;
@@ -108,7 +117,7 @@ internal static partial class Program
         // Reentry is tested with the actual in-flight service rather than an independent instance.
         PaperSettingsService? reentrant = null;
         reentrant = new PaperSettingsService([definition], () => true,
-            () => Throws<PaperSettingsException>(() => reentrant!.Set("todo.paper_links", Json(false)), "settings_busy"), () => true, a => a());
+            () => { Throws<PaperSettingsException>(() => reentrant!.Set("todo.paper_links", Json(false)), "settings_busy"); return true; }, a => a());
         reentrant.Set("todo.paper_links", Json(false));
         var sensitive = definition.Snapshot() with { Sensitive = true };
         Check(!PaperSettingsService.WithAccess(sensitive, update: true, control: false).Writable, "Ordinary update cannot control sensitive settings.");
@@ -140,7 +149,7 @@ internal static partial class Program
         Check(extension.Validate(Json("笔记")).GetString() == ".笔记", "Valid Unicode extensions are not needlessly rejected.");
         var saves = 0;
         var success = true;
-        var service = new PaperSettingsService(definitions, () => true, () => { }, () => { saves++; return success; }, _ => { });
+        var service = new PaperSettingsService(definitions, () => true, () => { saves++; return success; }, _ => { });
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.01)), "invalid_setting_value");
@@ -184,7 +193,7 @@ internal static partial class Program
             Boolean("todo.paper_links", () => c.State.EnableTodoPaperLinks, v => c.State.EnableTodoPaperLinks = v, () => { }),
             Boolean("mcp.settings_control", () => c.State.McpAllowSettingsControl, v => c.State.McpAllowSettingsControl = v, () => { }, sensitive: true)
         };
-        var service = new PaperSettingsService(defs, () => true, () => { }, () => true, a => a());
+        var service = new PaperSettingsService(defs, () => true, () => true, a => a());
         Field(c, "_publicSettings", service);
         var current = true;
         PaperBodyPluginHostApi Api(params string[] permissions) => new(c, new PaperCommandService(c), null, "sample.settings", permissions, () => current, () => current);

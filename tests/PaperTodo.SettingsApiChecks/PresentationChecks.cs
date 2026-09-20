@@ -240,9 +240,46 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => api.HidePaper("note"), "session_closed");
         Throws<PaperTodoPluginException>(() => runtimeApi.HidePaper("note"), "runtime_closed");
         current = true;
+        await LinkedTitleTruncationBehavior(c, note, todo);
         await PresentationPipeBehavior();
         PresentationManifestBehavior();
         Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
+    }
+
+    private static async Task LinkedTitleTruncationBehavior(AppController c, PaperData note, PaperData todo)
+    {
+        c.State.EnableAnimations = false;
+        c.State.ShowLinkedPaperName = true;
+        c.State.AllowLongLinkedPaperTitles = true;
+        c.State.EnableTodoPaperLinks = true;
+        c.State.MaxTitleLength = 30;
+        note.Title = "LinkedABC";
+        todo.Items[0].LinkPaper(note.Id);
+        c.ApplyPaperPresentation(todo, PaperPresentationAction.Expand, activate: false);
+        var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[todo.Id];
+        window.RefreshTodoRowsForExternalChange();
+        await PresentationSettle();
+        static IEnumerable<System.Windows.Controls.TextBlock> Labels(DependencyObject root)
+        {
+            if (root is System.Windows.Controls.TextBlock label) yield return label;
+            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+                foreach (var child in Labels(System.Windows.Media.VisualTreeHelper.GetChild(root, i)))
+                    yield return child;
+        }
+        var linkedLabel = Labels(window).First(label => label.Text.Contains(note.Title, StringComparison.Ordinal));
+        var editors = ReadField<Dictionary<string, TodoTextBox>>(window, "_todoEditors");
+        var editor = editors[todo.Items[0].Id];
+        c.PublicSettings.Set("title.max_length", Json(4));
+        await PresentationSettle();
+        Check(note.Title == "Link" && linkedLabel.Text.Contains("Link", StringComparison.Ordinal) &&
+            !linkedLabel.Text.Contains("LinkedABC", StringComparison.Ordinal),
+            "Title truncation updates the actual linked-paper label immediately.");
+        Check(ReferenceEquals(editor, ReadField<Dictionary<string, TodoTextBox>>(window, "_todoEditors")[todo.Items[0].Id]),
+            "Refreshing a linked title does not rebuild the todo editors.");
+        // Verify the UI entry point uses the same post-commit title notification.
+        Invoke(c, "SetMaxTitleLength", 2);
+        Check(note.Title == "Li" && !linkedLabel.Text.Contains("Link", StringComparison.Ordinal),
+            "UI title truncation refreshes the same linked label.");
     }
 
     private static async Task PresentationPipeBehavior()

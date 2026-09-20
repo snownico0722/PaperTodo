@@ -74,11 +74,16 @@ public partial class App : Application
         _singleInstance = new SingleInstanceHelper("PaperTodo-SingleInstance-Mutex", "PaperTodo-SingleInstance-Activate");
         if (!_singleInstance.TryAcquire())
         {
-            _singleInstance.SignalPrimaryInstance(e.Args);
+            var exitCode = _singleInstance.SignalPrimaryInstance(e.Args,
+                waitForResult: startupCommand.Kind == StartupCommandKind.EnableMcpForCodex);
+            if (exitCode != 0 && startupCommand.Kind == StartupCommandKind.EnableMcpForCodex)
+                Console.Error.WriteLine(exitCode == 1
+                    ? "PaperTodo did not enable MCP. Check the Codex plugin and its Allow MCP setting."
+                    : "PaperTodo did not return an MCP enable result.");
             _singleInstance.Dispose();
             _singleInstance = null;
-            Shutdown();
-            Environment.Exit(0);
+            Shutdown(exitCode);
+            Environment.Exit(exitCode);
             return;
         }
 
@@ -88,7 +93,9 @@ public partial class App : Application
         {
             _singleInstance.Dispose();
             _singleInstance = null;
-            Shutdown();
+            Console.Error.WriteLine("PaperTodo is not running; MCP was not enabled.");
+            Shutdown(2);
+            Environment.Exit(2);
             return;
         }
 
@@ -148,18 +155,20 @@ public partial class App : Application
         CompleteSingleInstanceStartup();
     }
 
-    private void HandleSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool HandleSingleInstanceCommand(IReadOnlyList<string> args)
     {
         lock (_singleInstanceCommandGate)
         {
             if (!_singleInstanceCommandsReady)
             {
+                // This command belongs to an already-running plugin, not the startup queue.
+                if (StartupCommand.Parse(args).Kind == StartupCommandKind.EnableMcpForCodex) return false;
                 _pendingSingleInstanceCommands.Enqueue(new List<string>(args));
-                return;
+                return true;
             }
         }
 
-        DispatchSingleInstanceCommand(args);
+        return DispatchSingleInstanceCommand(args);
     }
 
     private void CompleteSingleInstanceStartup()
@@ -182,22 +191,23 @@ public partial class App : Application
         }
     }
 
-    private void DispatchSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool DispatchSingleInstanceCommand(IReadOnlyList<string> args)
     {
         try
         {
-            Dispatcher.Invoke(() => ExecuteSingleInstanceCommand(args));
+            return Dispatcher.Invoke(() => ExecuteSingleInstanceCommand(args));
         }
         catch (InvalidOperationException)
         {
             // The application is already shutting down.
+            return false;
         }
     }
 
-    private void ExecuteSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool ExecuteSingleInstanceCommand(IReadOnlyList<string> args)
     {
         var command = StartupCommand.Parse(args, StartupCommandKind.Show);
-        _controller?.ExecuteStartupCommand(command);
+        return _controller?.ExecuteStartupCommand(command) == true;
     }
 
     private static void ApplyStartupCulturePreference(string preference)
