@@ -229,7 +229,9 @@ internal static class MainVsRoute1ComparisonEntry
             var probeTask = Task.Run(() =>
             {
                 Thread.Sleep(ProbeDelayMilliseconds);
-                FlushDesktop();
+                // Do not DwmFlush here: on hosted Windows it can wait seconds for presentation and
+                // turns a mid-stall sample into an endpoint sample. R1's dynamic probe also samples
+                // physical desktop pixels directly without a per-sample DwmFlush.
                 var pixels = FindRedSpan(outputBounds, sampleY);
                 Check(pixels.Count >= SourceSize / 2, "probe sees moving DComp pixels");
                 var point = kind == "leading"
