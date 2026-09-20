@@ -4,61 +4,177 @@ on:
   push:
     branches:
       - exp/edge-routes12-20260920
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: edge-routes12-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  routes:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-ci]')
+  patch-r4:
+    if: contains(github.event.head_commit.message, '[routes12-r4-patch]')
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     defaults:
       run:
         shell: pwsh
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-      DOTNET_NOLOGO: 'true'
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-          submodules: recursive
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-      - name: Capture environment
+          fetch-depth: 2
+      - name: Apply R4 ownership and commit-order fixes
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force artifacts/routes12 | Out-Null
-          git rev-parse HEAD | Set-Content artifacts/routes12/head.txt
-          dotnet --info | Set-Content artifacts/routes12/dotnet-info.txt
-          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12/display.json
-      - name: Build isolated R3 production entry without changing product startup
-        run: |
-          $ErrorActionPreference = 'Stop'
-          dotnet restore tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj
-          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
-          dotnet build tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj -c Release --no-restore -p:EdgeRoutes12R3Production=true 2>&1 | Tee-Object artifacts/routes12/build.log
-          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-      - name: Route1 input-only production boundary probe
-        timeout-minutes: 7
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $exe = Resolve-Path tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe
-          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File artifacts/routes12/entry-sha256.txt
-          & $exe 2>&1 | Tee-Object artifacts/routes12/routes12.log
-          if ($LASTEXITCODE -ne 0) { throw "Routes12 failed: $LASTEXITCODE" }
-          'R3 keeps the production DComp output on the WPF thread and moves only the finite input HWND/HRGN clock to a dedicated native owner. The legacy H8 SetWindowSubclass observer cannot attach cross-thread and is deliberately not run in this entry; R0-R2 preserve its known-bad evidence. Hosted Windows evidence is not full application capture/drag handoff, physical high-refresh, or mixed-DPI acceptance.' | Add-Content $env:GITHUB_STEP_SUMMARY
-      - name: Preserve successes and failures
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: edge-routes12-${{ github.sha }}
-          path: artifacts/routes12
-          if-no-files-found: warn
+          function Replace-Once([string]$Path, [string]$Pattern, [string]$Replacement) {
+            $text = [IO.File]::ReadAllText($Path)
+            $regex = [Text.RegularExpressions.Regex]::new($Pattern, [Text.RegularExpressions.RegexOptions]::Singleline)
+            $matches = $regex.Matches($text)
+            if ($matches.Count -ne 1) { throw "Expected one match in $Path, got $($matches.Count)" }
+            $text = $regex.Replace($text, [Text.RegularExpressions.MatchEvaluator]{ param($m) $Replacement }, 1)
+            [IO.File]::WriteAllText($Path, $text, [Text.UTF8Encoding]::new($false))
+          }
+
+          $visuals = @'
+              private EdgeCapsuleQueueInputAnimationTicket? ConfigureAnimations(long absoluteBeginTimestamp)
+              {
+                  foreach (var state in _visuals)
+                  {
+                      state.OffsetXAnimation = ApplyAnimatedValue(
+                          state.StartOffsetX,
+                          state.TargetOffsetX,
+                          value => state.Visual.SetOffsetX(value),
+                          animation => state.Visual.SetOffsetX(animation),
+                          absoluteBeginTimestamp);
+                      state.OffsetYAnimation = ApplyAnimatedValue(
+                          state.StartOffsetY,
+                          state.TargetOffsetY,
+                          value => state.Visual.SetOffsetY(value),
+                          animation => state.Visual.SetOffsetY(animation),
+                          absoluteBeginTimestamp);
+                  }
+          
+                  if (!RoutesPointerInput) return null;
+                  var inputMembers = _members
+                      .Where(member => member.Window.CanRouteEdgeCapsuleQueueProxyInput)
+                      .Select(member => member.Plan)
+                      .ToArray();
+                  return inputMembers.Length == 0
+                      ? null
+                      : new EdgeCapsuleQueueInputAnimationTicket(
+                          absoluteBeginTimestamp,
+                          _plan.DurationMilliseconds,
+                          inputMembers);
+              }
+          
+              private IDCompositionAnimation? ApplyAnimatedValue
+          '@
+          Replace-Once 'src/EdgeCapsuleQueueCompositionProxy.Visuals.cs' '(?s)    private void ConfigureAnimations\(long absoluteBeginTimestamp\)\s*\{.*?\r?\n    \}\r?\n\r?\n    private IDCompositionAnimation\? ApplyAnimatedValue' $visuals
+
+          $startup = @'
+                          var inputTicket = ConfigureAnimations(animationTimestamp);
+          #if DEBUG
+                          using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
+          #endif
+                              _device.Commit().CheckError();
+                          // The input owner receives the same absolute QPC only after DComp accepted the
+                          // visual transaction. If Commit stalls, HRGN remains at the old finite region;
+                          // activation immediately samples the elapsed ticket instead of starting a new clock.
+                          if (inputTicket != null && !_window.TryStartInputAnimation(inputTicket))
+                          {
+                              throw new InvalidOperationException(
+                                  "The dedicated native input owner could not activate the committed queue animation ticket.");
+                          }
+                          _animationStartedAtTimestamp = animationTimestamp;
+          '@
+          Replace-Once 'src/EdgeCapsuleQueueCompositionProxy.Startup.cs' '                ConfigureAnimations\(animationTimestamp\);\r?\n#if DEBUG\r?\n                using \(var edgeJournalNative = EdgeDiagnosticObservation.Begin\("native\.dcomp-commit"\)\)\r?\n#endif\r?\n                    _device\.Commit\(\)\.CheckError\(\);\r?\n                _animationStartedAtTimestamp = animationTimestamp;' $startup
+
+          $regions = @'
+              internal bool TrySetInputRegions(IReadOnlyList<DeviceScreenRect> screenBounds)
+              {
+                  ArgumentNullException.ThrowIfNull(screenBounds);
+                  if (_disposed || _disposing || Handle == IntPtr.Zero || _inputOwner == null) return false;
+                  // While a committed immutable queue ticket owns translation, Dispatcher-side samples are
+                  // observational only. A non-empty refresh must not supersede that native clock; a new queue
+                  // generation starts a new ticket, while empty clear/hide/environment invalidation still retire it.
+                  if (_inputOwner.IsAnimationActive && screenBounds.Count > 0) return true;
+                  return _inputOwner.TrySetRegions(screenBounds);
+              }
+          
+              internal bool TryStartInputAnimation
+          '@
+          Replace-Once 'src/EdgeCapsuleQueueProxyWindow.cs' '(?s)    internal bool TrySetInputRegions\(IReadOnlyList<DeviceScreenRect> screenBounds\)\s*\{.*?\r?\n    \}\r?\n\r?\n    internal bool TryStartInputAnimation' $regions
+
+          $testDefs = @'
+                  var targetRect = new DeviceScreenRect(initial.Left + 120, initial.Top, initial.Right + 120, initial.Bottom);
+                  var sampleY = initial.Top + 24;
+          '@
+          Replace-Once 'tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs' '        var targetRect = new DeviceScreenRect\(initial\.Left, initial\.Top \+ 120, initial\.Right, initial\.Bottom \+ 120\);\r?\n        var x = initial\.Left \+ 24;' $testDefs
+
+          $initialPixels = @'
+                      var initialPixels = Routes12CaptureRedSpan(bounds, sampleY, out _);
+                      Check(initialPixels.Count >= 40 && Math.Abs(initialPixels.Left - initial.Left) <= 3,
+                          $"{route}: physical desktop sees initial live pixels ({initialPixels})");
+          '@
+          Replace-Once 'tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs' '            var initialPixels = Routes12R3CaptureRedVertical\(bounds, x\);\r?\n            Check\(initialPixels\.Count >= 40 && Math\.Abs\(initialPixels\.Top - initial\.Top\) <= 3,\r?\n                \$"\{route\}: physical desktop sees initial live pixels \(\{initialPixels\}\)"\);' $initialPixels
+
+          $dynamic = @'
+                      animation = device.CreateAnimation();
+                      var from = (float)(initial.Left - bounds.Left);
+                      var travel = targetRect.Left - initial.Left;
+                      var durationSeconds = durationMilliseconds / 1000.0;
+                      animation.SetAbsoluteBeginTime(startedAt).CheckError();
+                      animation.AddCubic(
+                          0,
+                          from,
+                          (float)(3 * travel / durationSeconds),
+                          (float)(-3 * travel / (durationSeconds * durationSeconds)),
+                          (float)(travel / (durationSeconds * durationSeconds * durationSeconds))).CheckError();
+                      animation.End(durationSeconds, from + travel).CheckError();
+                      visual.SetOffsetX(animation).CheckError();
+          
+                      // Deliberately hold the DComp transaction before Commit. The dedicated input owner must
+                      // remain at the resting HRGN and inactive; starting it before Commit would reproduce an
+                      // input-ahead window whenever DComp submission stalls.
+                      var preCommitInput = Routes12CaptureInputSpan(pair.InputHandle, bounds, sampleY);
+                      Thread.Sleep(90);
+                      var delayedInput = Routes12CaptureInputSpan(pair.InputHandle, bounds, sampleY);
+                      Check(!pair.IsInputAnimationActive && !preCommitInput.IsEmpty &&
+                          delayedInput.Left == preCommitInput.Left && delayedInput.Right == preCommitInput.Right,
+                          route + ": delayed DComp commit cannot advance native input authority early");
+          
+                      device.Commit().CheckError();
+                      Check(pair.TryStartInputAnimation(ticket),
+                          route + ": production input owner activates the shared absolute-QPC ticket only after DComp commit");
+                      Thread.Sleep(30);
+                      var updatesBeforeRefresh = pair.InputRegionUpdateCount;
+                      Check(pair.TrySetInputRegions([initial]) && pair.IsInputAnimationActive &&
+                          pair.InputRegionUpdateCount == updatesBeforeRefresh,
+                          route + ": stale non-empty UI refresh cannot steal the active native animation clock");
+          
+                      var updatesBeforeStall = pair.InputRegionUpdateCount;
+                      var observer = Task.Run(() => Routes12ObserveDynamic(pair.InputHandle, bounds, sampleY, 430));
+                      Thread.Sleep(430);
+                      var observations = observer.WaitAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+                      Check(pair.InputRegionUpdateCount >= updatesBeforeStall + 4,
+                          route + ": native HRGN keeps advancing while the WPF/UI thread is unavailable");
+                      var dynamicSummary = Routes12Summarize(observations);
+          '@
+          Replace-Once 'tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs' '(?s)            animation = device\.CreateAnimation\(\);\r?\n            var from = \(float\)\(initial\.Top - bounds\.Top\);.*?            var dynamicSummary = Routes12R3Summarize\(observations\);' $dynamic
+
+          $terminal = @'
+                      var terminalPixels = Routes12CaptureRedSpan(bounds, sampleY, out _);
+                      Check(terminalPixels.Count >= 40 && Math.Abs(terminalPixels.Left - targetRect.Left) <= 4,
+                          $"{route}: terminal DComp pixels reach the intended endpoint ({terminalPixels})");
+          '@
+          Replace-Once 'tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs' '            var terminalPixels = Routes12R3CaptureRedVertical\(bounds, x\);\r?\n            Check\(terminalPixels\.Count >= 40 && Math\.Abs\(terminalPixels\.Top - targetRect\.Top\) <= 4,\r?\n                \$"\{route\}: terminal DComp pixels reach the intended endpoint \(\{terminalPixels\}\)"\);' $terminal
+
+          git checkout HEAD^ -- .github/workflows/edge-routes12-experiment.yml
+          git diff --check
+          git diff -- src/EdgeCapsuleQueueCompositionProxy.Visuals.cs src/EdgeCapsuleQueueCompositionProxy.Startup.cs src/EdgeCapsuleQueueProxyWindow.cs tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs
+          git config user.name 'PaperTodo routes12 automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/EdgeCapsuleQueueCompositionProxy.Visuals.cs src/EdgeCapsuleQueueCompositionProxy.Startup.cs src/EdgeCapsuleQueueProxyWindow.cs tests/PaperTodo.EdgeTitleChecks/Routes12R3InputOnlyIntegrationProbe.cs .github/workflows/edge-routes12-experiment.yml
+          git commit -m 'fix(edge): commit visual before native input activation [routes12-ci] [ci]'
+          git push origin HEAD:exp/edge-routes12-20260920
