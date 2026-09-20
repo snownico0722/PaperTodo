@@ -41,7 +41,7 @@ internal static partial class Program
         var afterStart = pair.InputRegionUpdateCount;
         Thread.Sleep(220);
         var afterAutomatic = pair.InputRegionUpdateCount;
-        var automaticSpan = Routes12CaptureInputSpan(pair.InputHandle, bounds, initial.Left + 24, vertical: true);
+        var automaticSpan = Routes12R3CaptureInputVertical(pair.InputHandle, bounds, initial.Left + 24);
 
         // If automatic WM_TIMER delivery is the failing link, inject the same message manually.
         // This does not claim a fix; it distinguishes timer delivery from ticket sampling/SetWindowRgn.
@@ -53,7 +53,7 @@ internal static partial class Program
             Thread.Sleep(18);
         }
         var afterManual = pair.InputRegionUpdateCount;
-        var manualSpan = Routes12CaptureInputSpan(pair.InputHandle, bounds, initial.Left + 24, vertical: true);
+        var manualSpan = Routes12R3CaptureInputVertical(pair.InputHandle, bounds, initial.Left + 24);
 
         Console.WriteLine(
             $"R5_TIMER_DIAG baseline={baseline} afterStart={afterStart} afterAutomatic={afterAutomatic} " +
