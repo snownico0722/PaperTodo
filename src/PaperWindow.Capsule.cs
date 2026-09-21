@@ -720,7 +720,10 @@ var expandedHeight = collapsed
             _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
             _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
             _startTransitionChromeMargin = startChromeMargin;
-            _targetTransitionChromeMargin = _paperChrome.Margin.Left;
+            // _paper.IsCollapsed already reflects the target form here. Do not read the
+            // source chrome's current margin: collapse targets the 8-DIP WPF gutter while
+            // expanded native papers target edge-to-edge chrome.
+            _targetTransitionChromeMargin = UsesNativePaperChrome ? 0 : WindowChromeMargin;
 
             // Establish the initial visual BEFORE native placement can resize the HWND and
             // synchronously run WPF layout. Otherwise the full-size chrome is exposed first,
