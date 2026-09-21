@@ -2862,7 +2862,7 @@ public sealed partial class AppController : IDisposable
             _saveTimer.Stop();
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
-            CommitPendingNoteContentsForSave();
+            CommitPendingMarkdownContentsForSave();
             var version = Interlocked.Increment(ref _saveVersion);
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
@@ -2912,18 +2912,18 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    internal void CommitPendingNoteContentsForSave()
+    internal void CommitPendingMarkdownContentsForSave()
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
-            // Note commit touches WPF controls; only run on the UI thread.
+            // Markdown editor commit touches WPF controls; only run on the UI thread.
             return;
         }
 
         foreach (var window in _windows.Values)
         {
-            window.CommitPendingNoteContentForSave();
+            window.CommitPendingMarkdownContentForSave();
         }
     }
 
