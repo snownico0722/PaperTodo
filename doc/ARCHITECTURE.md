@@ -104,7 +104,7 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
 
-跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。展示请求只建立事件来源边界，不预先提交其他纸片的内容；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。该能力属于 API 2.2，但不新增插件 permission 或 MCP 完整写入门槛；MCP 仍受总开关控制。
+跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。展示请求只建立事件来源边界，不预先提交其他纸片的内容；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。外部写入只有在目标本身是正在编辑的内置 Markdown 时，才先把该目标的待提交文字写回模型，再执行插件/MCP 修改；不同目标不会因此提交彼此正文。该能力属于 API 2.2，但不新增插件 permission 或 MCP 完整写入门槛；MCP 仍受总开关控制。
 
 ### 3.3 辅助进程与插件 Runtime
 
@@ -184,6 +184,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 ### 4.4 插件状态
 
 插件 settings、Runtime state 与 per-paper state 由 `PaperBodyPluginDataStore` 独立保存在每个 provider 的普通 JSON 文件，不塞回 `data.json`。文件不存在才使用默认状态；已有文件读取失败则原样报告失败，不缓存空数据、不切换恢复文件。保存沿用写临时文件再替换的一次写入完整性。插件自己的备份、恢复或数据库由插件管理，宿主不为其维护第二数据路径。旧恢复文件不再自动选用，也不自动删除或迁移。插件页和快捷键注册使用已有的局部错误展示/失败状态，不让单个插件的数据错误终止其他插件配置。
+核心 `data.json` 保存只同步 PaperTodo 自己的内置 Markdown 编辑状态；第三方 `IPaperBodySession.Commit()` 仍是正文生命周期的 best-effort 回调，不作为核心保存或其他纸片外部写入的全局保存钩子。
 
 ## 5. Paper 与 paper-body 插件
 
