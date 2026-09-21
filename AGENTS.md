@@ -100,7 +100,7 @@ Markdown 当前保持轻量。若要扩展到网络图片、表格、附件、�
 - 不绕过 `StateStore` 建立第二套主状态写入；保留版本化写入和退出同步保存语义。
 - 不绕过 `NoteImageStore` 直接开启 LMDB transaction；图片 GC / id reuse 不能在保护引用扫描不可信时继续执行。
 - provider settings / per-paper plugin state 由 `PaperBodyPluginDataStore` 管理；不要塞回 `data.json`，也不要让插件自行建立另一套会与宿主竞争的 authoritative state。宿主不提供插件业务数据恢复系统；只保留普通文件读写和一次写入完整性，不恢复 `.json.recovered` 分流。插件自己的业务存储、备份和恢复由插件负责。
-- 核心保存只同步内置 Markdown 的待提交文本；不要把第三方 `IPaperBodySession.Commit()` 恢复成全局保存钩子。外部写入只有在目标就是该内置 Markdown 时才先提交目标用户文本，不因修改其他纸片而提交无关正文。
+- 核心保存只同步内置 Markdown 的待提交文本；不要把第三方 `IPaperBodySession.Commit()` 恢复成全局保存钩子。外部写入只有在目标就是该内置 Markdown 时才先提交目标用户文本；修改其他纸片不得因此调用无关第三方正文的 `Commit()`。
 - 启动解析失败时不能用默认空状态覆盖旧数据；crash handler 不走普通“最后强存一次”流程。
 - 普通纸片几何与 edge slot/expanded 恢复几何不能互相覆盖。
 - 外部打开笔记的临时文件后缀只做文件名合法性校验；不要擅自收窄成固定白名单。
