@@ -1,0 +1,23 @@
+name: Plugin simplification workspace
+on:
+  push:
+    branches: [refactor/plugin-boundary-simplify-20260922]
+    paths: [.github/workflows/plugin-simplify-work.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Export fixed base source
+        run: git archive --format=zip --output=source.zip be0d20837fdb1668db36ed1349791d9324a04f01
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-simplify-base-source
+          path: source.zip
+          retention-days: 2
