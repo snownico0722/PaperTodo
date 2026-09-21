@@ -621,7 +621,7 @@ const dispose = papertodo.onHostEvent(
 
 Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, and `note.changed`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
 
-Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. MCP creation/append likewise accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
+Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not Commit unrelated bodies. Core `data.json` saves likewise synchronize only built-in Markdown text and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
 ### 6.1 Body read/write boundary
 
