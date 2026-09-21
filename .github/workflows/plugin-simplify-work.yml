@@ -52,18 +52,19 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Write-Host '::endgroup::'
           }
-      - name: Rebuild shipped native plugins
+      - name: Rebuild changed native plugin
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($project in @(Get-ChildItem plugin-samples -Recurse -Filter *.csproj | Sort-Object FullName)) {
-            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $project.FullName
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+          $project = './plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj'
           $dll = './plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll'
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $project
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $first = (Get-FileHash $dll -Algorithm SHA256).Hash
-          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath './plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj'
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $project
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ((Get-FileHash $dll -Algorithm SHA256).Hash -ne $first) { throw 'Archive output differs on rebuild.' }
+          # The build script rewrites unchanged generated JSON with Windows line endings.
+          git restore --source=HEAD --worktree -- plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.deps.json plugins/sample.review-archive.native/plugin.json
       - name: Commit verified result and remove preparation files
         run: |
           $ErrorActionPreference = 'Stop'
