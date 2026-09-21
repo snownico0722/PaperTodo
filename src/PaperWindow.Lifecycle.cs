@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 
 namespace PaperTodo;
 
@@ -241,6 +242,26 @@ public sealed partial class PaperWindow
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
         AbortAllInteractions(InteractionAbortReason.Closing);
+
+        HandoffForegroundBeforeSurfaceRemoval();
+    }
+
+    private void HandoffForegroundBeforeSurfaceRemoval()
+    {
+        // Native hide/close can activate a same-thread paper behind an external window, even
+        // without a hidden owner. Choose from the live stack immediately before removal, not
+        // at the start of a fade or in a delayed focus-repair callback. The native helper checks
+        // actual foreground again, so background removal and a newer user activation are no-ops.
+        if (_controller.IsRunning)
+        {
+            WindowNative.TryHandoffForegroundBeforeClose(
+                new WindowInteropHelper(this).Handle,
+                static handle => HwndSource.FromHwnd(handle)?.RootVisual is not PaperWindow paper ||
+                    (paper._windowLifecycle == PaperWindowLifecycleState.Alive &&
+                     paper._paper.IsVisible && !paper.IsExperimentalPassive));
+        }
+        // In particular, HideAll marks every paper invisible before withdrawing their HWNDs:
+        // none of those still-visible, soon-to-hide papers may become the handoff target.
     }
 
     private void CompletePaperWindowClose()

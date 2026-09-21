@@ -3705,6 +3705,7 @@ public sealed partial class PaperWindow : Window
 
     internal void HideWithoutGeometrySave()
     {
+        HandoffForegroundBeforeSurfaceRemoval();
         MoveWindowWithoutGeometrySave(Hide);
     }
 

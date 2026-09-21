@@ -9,6 +9,53 @@ public sealed partial class AppController
 {
     private int _pluginStartupPaperGeneration;
 
+    private void ApplyHiddenPluginStartupPaperVisibility(StartupCommandKind visibilityCommand)
+    {
+        if (visibilityCommand is StartupCommandKind.Show or StartupCommandKind.Toggle)
+        {
+            return;
+        }
+        var changed = false;
+        foreach (var descriptor in PaperBodyPlugins.Descriptors)
+        {
+            var startup = descriptor.Manifest?.StartupPaper;
+            if (startup?.Presentation != "hidden" ||
+                !StartupSettingEnabled(descriptor, startup))
+            {
+                continue;
+            }
+
+            foreach (var paper in State.Papers.Where(candidate =>
+                         string.Equals(
+                             candidate.StartupOwnerPluginId,
+                             descriptor.Id,
+                             StringComparison.Ordinal) &&
+                         string.Equals(
+                             candidate.StartupInstanceKey,
+                             startup.InstanceKey,
+                             StringComparison.Ordinal) &&
+                         candidate.Type == PaperTypes.Note &&
+                         string.Equals(
+                             candidate.BodyProviderId,
+                             descriptor.Id,
+                             StringComparison.Ordinal)))
+            {
+                if (!paper.IsVisible)
+                {
+                    continue;
+                }
+
+                paper.IsVisible = false;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            MarkDirty();
+        }
+    }
+
     private async void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)
     {
         var generation = ++_pluginStartupPaperGeneration;
@@ -104,6 +151,15 @@ public sealed partial class AppController
                 changed = true;
             }
 
+            if (startup.Presentation == "hidden")
+            {
+                // Existing papers were normalized before surface restoration. Do not hide again:
+                // the user may have opened the editor while startup was waiting for shell prewarm.
+                // Newly created papers are already hidden because CreatePaper used show: false.
+                EnablePluginRuntimeReconciliation();
+                continue;
+            }
+
             var collapsed = startup.Presentation == "capsule";
             if (!paper.IsVisible || paper.IsCollapsed != collapsed)
             {
@@ -111,7 +167,6 @@ public sealed partial class AppController
                 paper.IsCollapsed = collapsed;
                 changed = true;
             }
-            // A startup Paper becomes a Runtime owner before its visible Body is attached.
             EnablePluginRuntimeReconciliation();
             ShowPaper(paper, activate: false);
         }

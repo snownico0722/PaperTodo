@@ -33,13 +33,15 @@ public sealed partial class PaperWindow
         EnsureTodoSelectionInputHooks();
         RebuildTodoRows();
 
-        return new ScrollViewer
+        var scrollViewer = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = _todoPanel,
             FocusVisualStyle = null
         };
+        AttachTodoBackgroundHost(scrollViewer);
+        return scrollViewer;
     }
 
 

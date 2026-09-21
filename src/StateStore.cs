@@ -521,10 +521,7 @@ public sealed class StateStore
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
 
-        if (!MarkdownRenderModes.IsValid(state.MarkdownRenderMode))
-        {
-            state.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
-        }
+        state.MarkdownRenderMode = MarkdownRenderModes.Normalize(state.MarkdownRenderMode);
 
         state.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Normalize(state.ExternalMarkdownExtension);
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);

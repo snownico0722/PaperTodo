@@ -280,6 +280,7 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        ApplyHiddenPluginStartupPaperVisibility(initialVisibilityCommand);
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         DeferStartupPapersWithoutMonitor();
         var rescuedPapers = EnsurePapersOnScreen();
@@ -450,7 +451,7 @@ public sealed partial class AppController : IDisposable
 
     public PaperData? CreatePaper(string type, bool show = true, PaperData? sourcePaper = null)
     {
-        if (State.Papers.Count >= 100)
+        if (State.Papers.Count >= 200)
         {
             ShowPaperLimitDialog();
             return null;
@@ -1137,7 +1138,7 @@ public sealed partial class AppController : IDisposable
         return paper?.Type == PaperTypes.Note ? paper : null;
     }
 
-    public void ExecuteStartupCommand(StartupCommand command)
+    public bool ExecuteStartupCommand(StartupCommand command)
     {
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
@@ -1176,7 +1177,10 @@ public sealed partial class AppController : IDisposable
             case StartupCommandKind.Exit:
                 Exit();
                 break;
+            case StartupCommandKind.EnableMcpForCodex:
+                return TryEnableMcpForCodex();
         }
+        return true;
     }
 
     private int NextVisibilityAnimationVersion(string paperId)
@@ -2792,33 +2796,8 @@ public sealed partial class AppController : IDisposable
         SaveNow();
     }
 
-    private void ToggleCapsuleCollapseAll()
-    {
-        State.UseCapsuleCollapseAll = !State.UseCapsuleCollapseAll;
-
-        if (!State.UseCapsuleCollapseAll)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
-        }
-
-        // Collapse-all rides on top of edge-aligned capsules; enabling it implies both prerequisites.
-        if (State.UseCapsuleCollapseAll && (!State.UseCapsuleMode || !State.UseDeepCapsuleMode))
-        {
-            State.UseCapsuleMode = true;
-            State.UseDeepCapsuleMode = true;
-            foreach (var window in _windows.Values)
-            {
-                window.UpdateCapsuleMode();
-                window.UpdateDeepCapsuleMode();
-            }
-        }
-
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-        RebuildTrayMenu();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleCapsuleCollapseAll() =>
+        SetSettingFromUi("capsule.master_enabled", !State.UseCapsuleCollapseAll);
 
     private List<PaperData> DeepCapsulePapersInOrder()
     {

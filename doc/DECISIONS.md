@@ -51,19 +51,19 @@
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
 | D-037 | 可浏览队列保留已验证的 live authority | Deferred | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
-
-| D-039 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-040 | 主题 / Window integration |
-| D-040 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
-| D-041 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
-| D-042 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-043 | 主题 / Window integration |
-| D-043 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-044 | 主题 / Window integration |
-| D-044 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
-| D-045 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental; sampling superseded by D-046 | 主题 / Rendering |
-| D-046 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Superseded by D-048 | 主题 / Rendering |
-| D-047 | Aero 独立模糊与材质光照分层 | Experimental | 主题 / Rendering |
-| D-048 | 统一液态背景、连续尺寸适配与清透 Aero | Experimental | 主题 / Rendering |
-| D-049 | 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度 | Partially superseded by D-050 | 主题 / Rendering |
-| D-050 | 实际辅助窗口共用液态背景处理与材质清理 | Experimental | 主题 / Rendering |
+| D-039 | 插件 API 采用向后兼容的 major.minor 演进 | Accepted | 插件 / 兼容性 |
+| D-040 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-041 | 主题 / Window integration |
+| D-041 | 原生云母使用单一窗口外框，验证最终桌面像素 | Accepted | 主题 / Window integration |
+| D-042 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
+| D-043 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-044 | 主题 / Window integration |
+| D-044 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-045 | 主题 / Window integration |
+| D-045 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
+| D-046 | 液态皮肤对局部真实背景折射，显式接受截图排除代价 | Experimental; sampling superseded by D-047 | 主题 / Rendering |
+| D-047 | 清透中心由桌面合成，窄边缘采样与非阻塞呈现 | Superseded by D-049 | 主题 / Rendering |
+| D-048 | Aero 独立模糊与材质光照分层 | Experimental | 主题 / Rendering |
+| D-049 | 统一液态背景、连续尺寸适配与清透 Aero | Experimental | 主题 / Rendering |
+| D-050 | 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度 | Partially superseded by D-051 | 主题 / Rendering |
+| D-051 | 实际辅助窗口共用液态背景处理与材质清理 | Experimental | 主题 / Rendering |
 
 ## 维护规则
 
@@ -798,7 +798,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 - `runtime` 是显式 opt-in 的 provider 生命周期，但其存在性由实体插件 Paper 集合派生；普通插件没有实体 Paper 时不会仅因安装而运行。
 - 插件没有 Reload/hot-replace UI；修改插件文件后统一重启 PaperTodo，避免同时维护 Web 热重载与 Native CLR 已加载版本两套语义。
 - Web Body/Mini/Runtime 可以复用底层 request/response transport，但各 surface 的 API scope 必须由宿主来源决定，不能靠页面自己声明身份。
-- 当前宿主只接受 `apiVersion: "2.1"`；不再保留 1.8/2.0 兼容基线或按能力版本分支的 Top Bar 路由。
+- 当时宿主只接受 `apiVersion: "2.1"`；后续版本兼容与演进策略由 D-039 更新，Top Bar 的 ownership 决策本身不变。
 
 ### Evidence
 
@@ -1430,11 +1430,55 @@ E-016 的同包对照及去除实验开关后的整合回放支持应用端 owne
 - `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
 - `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。
 
+
 ---
 
-## D-039 — 普通窗口原生 Mica 与 layered 胶囊边界
+## D-039 — 插件 API 采用向后兼容的 major.minor 演进
 
-**Status:** Superseded by D-040（替代外框/裁切实现，保留原生材质与 Edge 边界）
+**Status:** Accepted
+
+### Context
+
+Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果仍把 `apiVersion` 固定写成 2.1，manifest/API 的真实能力会持续增长，但插件作者无法从版本号判断哪些能力可用；反过来，如果宿主每次只接受一个精确版本，简单把当前版本改成 2.2 又会让已有 2.1 插件全部拒载。
+
+### Decision
+
+插件协议使用 major.minor 版本演进：
+
+- 当前最新版本为 **2.2**，最低继续兼容 **2.1**。
+- 2.1 插件继续加载并保持 2.1 已发布语义；声明 2.2-only 能力时必须把 manifest 的 `apiVersion` 提升到 2.2。
+- 2.2 首批显式版本化能力包括 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API，以及 `settings.read` / `settings.update` 权限。
+- 同一未发布 minor 内可以合并多项向后兼容的新契约，不要求每增加一个字段就连续制造 2.3、2.4；一旦 2.2 成为已发布稳定合同，下一批新的插件可见契约使用 2.3。
+- 仅宿主内部实现、性能优化、bugfix，或完全复用既有通用合同而没有新增插件可观察语义时，不提升协议版本。
+- 删除/改名公开字段、改变既有调用语义或其他无法保持旧插件行为的修改，提升 major，例如 3.0。
+
+宿主拒绝低于最低兼容版本以及高于当前实现的未来版本，避免插件在未知合同上静默运行。
+
+### Why
+
+`version` 是插件自身发布版本，`apiVersion` 是宿主与插件之间的合同版本，两者必须独立。minor 表达向后兼容的合同扩展，major 表达破坏兼容；这样版本号能够真实说明能力边界，同时不因为宿主发布新协议就强迫所有旧插件立即重建。
+
+### Consequences
+
+- Registry 需要保留一个最低兼容版本和一个当前最新版本，而不是单一精确版本。
+- 新能力必须在 manifest 校验或权限边界上声明其最低协议版本，避免 2.1 插件“偷用”2.2-only manifest 能力。
+- CI 必须同时保留至少一个 2.1 compatibility sample 和一个 2.2 sample。
+- 文档默认示例面向当前 2.2；历史 2.1 专项文档需要明确哪些部分属于 2.1、哪些是后加的 2.2。
+- 插件自身 semantic version 不跟随宿主 API version 自动变化。
+
+### Evidence
+
+- `src/PaperBodyPluginRegistry.cs`：最低/当前协议版本和版本比较。
+- `src/PaperBodyPluginRegistry.Settings.cs`、`Startup.cs`、`Permissions.cs`：2.2-only manifest 能力门槛。
+- `tests/PaperTodo.ProtocolPolicyChecks/Program.cs`：2.1/2.2 接受范围及 2.2-only 能力拒绝测试。
+- `plugin-samples/PaperTodo.Plugin.Protocol21Web/`：2.1 向后兼容样例。
+- `plugin-samples/PaperTodo.Plugin.TopBarWeb/` 与 Codex CLI Bridge：2.2 样例。
+
+---
+
+## D-040 — 普通窗口原生 Mica 与 layered 胶囊边界
+
+**Status:** Superseded by D-041（替代外框/裁切实现，保留原生材质与 Edge 边界）
 
 ### Context
 
@@ -1464,7 +1508,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-040 — 原生云母使用单一窗口外框，验证最终桌面像素
+## D-041 — 原生云母使用单一窗口外框，验证最终桌面像素
 
 **Status:** Accepted
 
@@ -1494,13 +1538,13 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 - `tests/PaperTodo.MicaChecks/Program.cs`、`VisualChecks.cs` 与 Release CI 的桌面/WPF 双通道捕获。
 
 
-## D-041 — 透色亚克力试用可调色 accent，保留单窗口边界
+## D-042 — 透色亚克力试用可调色 accent，保留单窗口边界
 
 **Status:** Experimental（仅透色模式；Windows 11 真机视觉与拖动性能待验）
 
 ### Context
 
-标准和透色亚克力原先共享固定的系统 Acrylic；降低 WPF 白色覆盖层强度后，用户反馈透色模式明显发灰。用户授权试用社区 WPF 可调色接法。D-040 的单窗口和形态动画边界继续有效。
+标准和透色亚克力原先共享固定的系统 Acrylic；降低 WPF 白色覆盖层强度后，用户反馈透色模式明显发灰。用户授权试用社区 WPF 可调色接法。D-041 的单窗口和形态动画边界继续有效。
 
 ### Decision / Why
 
@@ -1517,11 +1561,11 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-042 — 自绘材质顶栏不再叠加 native caption，清透玻璃不用磨砂
+## D-043 — 自绘材质顶栏不再叠加 native caption，清透玻璃不用磨砂
 
-**Status:** Superseded by D-043（仅纠正所有材质统一零 glass 的选择）。
+**Status:** Superseded by D-044（仅纠正所有材质统一零 glass 的选择）。
 
-日期：2026-09-10。补充 D-040 / D-041，替代其 full/top-1 glass margin 细节，不替代单窗口边界。
+日期：2026-09-10。补充 D-041 / D-042，替代其 full/top-1 glass margin 细节，不替代单窗口边界。
 
 用户真机反馈暴露了 WPF-only 图像检查的盲区：透明 WPF 顶栏下仍有固定 CAPTION_COLOR 的实色 native 带；透色模式保留顶部 1 DIP glass 还可能露出亮线。Windows 独立探针对比确认固定 caption 色与最终桌面顶栏／正文色差有关。
 
@@ -1533,9 +1577,9 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-043 — 系统材质保留 full glass，清透接法的零边距不通用
+## D-044 — 系统材质保留 full glass，清透接法的零边距不通用
 
-**Status:** Partially superseded by D-044（不支持现代 alpha 的系统继续使用此兼容路径）
+**Status:** Partially superseded by D-045（不支持现代 alpha 的系统继续使用此兼容路径）
 
 **Context / Why:** `d36a4f47` 把全部材质的实际 DWM glass margin 归零，同时关闭 legacy alpha。用户反馈云母纯黑、带半透明画刷的亚克力／描图纸／Aero 为深灰：透明 WPF 像素没有系统材质承接，白色覆盖层只能把黑底混成灰底。原生 API 成功、顶栏与正文同色，都不能证明背景已正确合成。独立探针原本使用 full glass，不能据此推导所有接法都应清零。
 
@@ -1546,23 +1590,23 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-044 — 显式 redirection alpha 消除材质下方原生 caption
+## D-045 — 显式 redirection alpha 消除材质下方原生 caption
 
 **Status:** Experimental
 
 **Context / Why:** full glass 保住了系统材质，但即使 WPF 顶栏完全透明，原生 extended caption 仍可盖住背景。均匀色的 Server 回退材质会隐藏这个错误；仅比较顶栏与正文同色不够。
 
-**Decision:** Windows 11 26100+ 设置 `DWMWA_REDIRECTIONBITMAP_ALPHA`，成功后才将系统材质的实际 glass margin 归零。API 不支持时保留 D-043 的 full glass，绝不恢复无 alpha 的零 glass 黑底路线。仅改变现有 adapter 的合成参数，不创建第二个内容 HWND、负 margin 或窗口 region。释放时清理自己启用的属性。
+**Decision:** Windows 11 26100+ 设置 `DWMWA_REDIRECTIONBITMAP_ALPHA`，成功后才将系统材质的实际 glass margin 归零。API 不支持时保留 D-044 的 full glass，绝不恢复无 alpha 的零 glass 黑底路线。仅改变现有 adapter 的合成参数，不创建第二个内容 HWND、负 margin 或窗口 region。释放时清理自己启用的属性。
 
 **Evidence:** `NativeMicaBackdrop.Refresh`、`DwmMicaApi.SetRedirectionAlpha`；`NativeSurfaceChecks.CheckCaptionSentinel` 故意将原生 caption 设成紫红色并验证最终桌面顶栏像素不变，使用旧 full-glass 路径的紫红色正对照，并避免在取样前泵 UI 消息导致 marker 被刷新重置；另保留黑底／能力失败回退检查。微软 `DWMWINDOWATTRIBUTE` 文档明确 alpha 通道要求 premultiplied 内容、最低 build 26100。旧 OS 的顶栏视觉与真实 Windows 11 多屏效果不能借用 Server 的结果作已验收结论。
 
 ---
 
-## D-045 — 局部真实背景折射与截图排除的显式代价
+## D-046 — 局部真实背景折射与截图排除的显式代价
 
-**Status:** Experimental；整面采样与位移贴图由 D-046 替代，采样隐私、截图排除与生命周期边界继续适用。
+**Status:** Experimental；整面采样与位移贴图由 D-047 替代，采样隐私、截图排除与生命周期边界继续适用。
 
-**Context:** 用户明确要求真实背景折射，拒绝只用透明度、高光或磨砂背景来近似。原 D-042 的不采样选择只继续适用于其他材质，不足以实现此要求。
+**Context:** 用户明确要求真实背景折射，拒绝只用透明度、高光或磨砂背景来近似。原 D-043 的不采样选择只继续适用于其他材质，不足以实现此要求。
 
 **Decision:** 仅展开液态纸片启用局部实时桌面采样；通过 WDA_EXCLUDEFROMCAPTURE 排除自身，位移图和 WPF shader 折射真实背景，不影响正文。设置保存独立开关，并说明活跃纸片会被部分截图／录屏／共享接口忽略。采样只在本机内存中存活，不写文件、不上传、不采集历史；多张排除的液态纸片不会相互出现在背景中。
 
@@ -1573,24 +1617,24 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-046 — 清透中心由桌面合成，窄边缘采样与非阻塞呈现
+## D-047 — 清透中心由桌面合成，窄边缘采样与非阻塞呈现
 
-**Status:** Superseded by D-048
+**Status:** Superseded by D-049
 
 **Context:** 用户在实机反馈整面折射非常卡，重底色和中心放大不符合其 index-main 清透玻璃参考。已有单工作线程与单帧背压没有消除整面 GDI 回读、全尺寸位图上传和 UI 等待渲染锁的开销。
 
 **Decision:** 中心直接使用原生透明通道，只在四个非重叠窄边缘中采样和折射。最初参考 index-main 的向内 `(1-d/bezel)^1.5` 曲线；后续使用曲面厚度与 Snell 折射率生成一次性 512×1 系数表，距离和法线仍解析计算，避免拖动尺寸时主线程生成整张位移贴图。源图显式绑定 sampler，避免先缩放进整面再二次裁切。最新帧经合并 Background 通知挂接一次呈现节拍并零等待锁定；处理完立即解绑 Rendering，未变帧不上传也不维持界面动画节拍，移动只调整 crop 并唤醒后台。不改 HWND、编辑器或 Edge 归属。
 
-**Trade-offs:** GDI 并未变成零拷贝 GPU capture；驱动慢时窄边缘仍可能滞后，但中心不再等待采样。保留 D-045 的截图排除限制。清透变体降低遮色，不再声称任意黑白背景都满足固定文字对比度；实色／高对比度回退保持可读性验证。HDR、多屏实机和高速拖动仍需真人验证。没有用降低整个 UI 帧率或冻结整张背景冒充优化。
+**Trade-offs:** GDI 并未变成零拷贝 GPU capture；驱动慢时窄边缘仍可能滞后，但中心不再等待采样。保留 D-046 的截图排除限制。清透变体降低遮色，不再声称任意黑白背景都满足固定文字对比度；实色／高对比度回退保持可读性验证。HDR、多屏实机和高速拖动仍需真人验证。没有用降低整个 UI 帧率或冻结整张背景冒充优化。
 
 **Evidence:** `LensCaptureLayout`、`DesktopLensCapture`、`SkinBorder.Refraction`；`RefractionChecks` 检查边缘预算、中心零位移、同帧折射、静止不重复上传、真实背景更新和生命周期，并记录 CI 输入回调延迟（不当作实机 FPS）。`SkinChecks` 保留实色回退对比度检查，清透材质单独检查透明范围及主题参考背景。
 
 
 ---
 
-## D-047 — Aero 低染色模糊 recipe 与材质光照分层
+## D-048 — Aero 低染色模糊 recipe 与材质光照分层
 
-**Status:** Partially superseded by D-049 / D-050（后者移除旧釉面材质；state=3 黑底禁区保留）
+**Status:** Partially superseded by D-050 / D-051（后者移除旧釉面材质；state=3 黑底禁区保留）
 
 **Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
 
@@ -1603,15 +1647,15 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-048 — 统一液态背景、连续尺寸适配与清透 Aero
+## D-049 — 统一液态背景、连续尺寸适配与清透 Aero
 
-**Status:** Partially superseded by D-049（光学曲线、表面绘制顺序和 Aero 后端；采样预算与生命周期保留）
+**Status:** Partially superseded by D-050（光学曲线、表面绘制顺序和 Aero 后端；采样预算与生命周期保留）
 
-**Context:** 用户实机反馈 D-046 仍像一圈卡顿的扭曲，Aero 截图是乳白蓝色板。中心原生透明、边缘单独采样造成空间和时间不一致；Snell 曲线的内侧峰值、固定 18 DIP 厚度和四条独立区域的回读开销放大了问题。Aero 的浅蓝白底色与宽反光重复遮住背景。
+**Context:** 用户实机反馈 D-047 仍像一圈卡顿的扭曲，Aero 截图是乳白蓝色板。中心原生透明、边缘单独采样造成空间和时间不一致；Snell 曲线的内侧峰值、固定 18 DIP 厚度和四条独立区域的回读开销放大了问题。Aero 的浅蓝白底色与宽反光重复遮住背景。
 
-**Decision:** 液态使用同一有限分辨率背景源完成整面轻散射／透色，只有温和的边缘位移，正文不进入 shader。借鉴 index-main 的单调 1.5 次方肩部，平滑内角法线，去掉内侧位移峰值与色散。尺寸由 DIP 短边和面积共同约束，厚度、模糊和遮色连续调整。只做一次 GDI 回读，总纹理上限 196,608 像素，抗锯齿降采样并留 48 DIP world-space 移动余量；保留最新帧背压、零等待 TryLock、未变帧不上传和空闲解绑。Aero 保留 D-047 的兼容合成路径，原生染色降至最小非零值，WPF 改用较低 alpha 的蓝色透光层和有明确边界的固定宽度反射，不新增截图排除。
+**Decision:** 液态使用同一有限分辨率背景源完成整面轻散射／透色，只有温和的边缘位移，正文不进入 shader。借鉴 index-main 的单调 1.5 次方肩部，平滑内角法线，去掉内侧位移峰值与色散。尺寸由 DIP 短边和面积共同约束，厚度、模糊和遮色连续调整。只做一次 GDI 回读，总纹理上限 196,608 像素，抗锯齿降采样并留 48 DIP world-space 移动余量；保留最新帧背压、零等待 TryLock、未变帧不上传和空闲解绑。Aero 保留 D-048 的兼容合成路径，原生染色降至最小非零值，WPF 改用较低 alpha 的蓝色透光层和有明确边界的固定宽度反射，不新增截图排除。
 
-**Trade-offs:** 不恢复旧全分辨率整窗捕获；上传预算比 D-046 的上限低，但 WPF 背景 shader 覆盖整面。它仍依赖 GDI SDR 回读，不能声称解决所有驱动／HDR／高刷新率延迟。D-045 的截图排除限制保留。Aero 的系统 blur 半径仍由 Windows 管理，不冒充 Windows 7 原生主题。文字对比度仍依赖背景，高对比度和失败路径保持实色回退。
+**Trade-offs:** 不恢复旧全分辨率整窗捕获；上传预算比 D-047 的上限低，但 WPF 背景 shader 覆盖整面。它仍依赖 GDI SDR 回读，不能声称解决所有驱动／HDR／高刷新率延迟。D-046 的截图排除限制保留。Aero 的系统 blur 半径仍由 Windows 管理，不冒充 Windows 7 原生主题。文字对比度仍依赖背景，高对比度和失败路径保持实色回退。
 
 **Validation:** `RefractionChecks` 检查同帧折射差异、中心不变形、真实背景变化、尺寸连续性、单次采样与预算、静止解绑及资源生命周期。`MaterialStudyChecks` 输出实际纸片在明暗主题与小／大／窄／宽尺寸上的桌面画面；Aero 保留白色／蓝色后窗对照和视差检查。Windows CI 的合成器与输入延迟仅作诊断，最终外观和拖动流畅度仍需 Windows 11 实机验收。
 
@@ -1620,9 +1664,9 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ---
 
-## D-049 — 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度
+## D-050 — 玻璃表面位于采样背景之上，Aero 清透合成与辅助材质强度
 
-**Status:** Partially superseded by D-050（辅助表面真实背景处理及色散；Aero alpha 保留）
+**Status:** Partially superseded by D-051（辅助表面真实背景处理及色散；Aero alpha 保留）
 
 **Context:** 用户反复反馈液态像一圈扭曲、Aero 仍过度磨砂。父 Border 的反光绘制位于不透明采样 DrawingVisual 之下，会被真正背景盖住；降低 state=4 的染色 alpha 也不能降低系统 Acrylic 的模糊半径。
 
@@ -1633,9 +1677,9 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Validation / limits:** 原生互斥与失败回退、配色选择与旧配置、辅助表面强度及前景像素、菜单模板实例化、真实背景变化／清漆叠层和编辑器身份检查进入 `PaperTodo.MicaChecks`。Aero 必须响应真实后窗白／蓝对照且不占用 sampler，不再通过系统 Acrylic 也失败来跳过。Windows CI 不代替用户对真实 Windows 11、HDR、混合 DPI 和高刷新率流畅度的验收。
 
 
-## D-050 · 实际辅助窗口共用液态背景处理与材质清理（2026-09-11）
+## D-051 · 实际辅助窗口共用液态背景处理与材质清理（2026-09-11）
 
-**Status:** Experimental；替代 D-048 的取消色散和 D-049 的辅助面静态强度语义，保留其 Aero alpha 后端。
+**Status:** Experimental；替代 D-049 的取消色散和 D-050 的辅助面静态强度语义，保留其 Aero alpha 后端。
 
 **Context / Why:** 用户仍看不到边缘高光／色散，并明确要求胶囊与菜单的弱档也处理背景，而不是只给实色表面染色。
 
@@ -1644,3 +1688,4 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Lifetime / limits:** 沿用背景预算和单帧 mailbox；监听源 HWND、祖先 opacity 与卸载并逐源释放。实时处理有独立开关，并明确所有采样表面的截图／共享排除副作用。Mica/Acrylic 近似、SDR、混合 DPI 和主观审美边界不冒充原生或真人验收。
 
 **Validation:** 实际 layered 窗口、生产 popup／submenu 模板测试两个强度档、真实 RGB 分色与折射的开关像素对照、前景不变、所有者隔离及隐藏／半透明／关闭恢复；同时保留主纸片与编辑回归。
+

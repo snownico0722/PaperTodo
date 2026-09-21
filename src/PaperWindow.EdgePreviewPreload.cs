@@ -39,7 +39,10 @@ public sealed partial class PaperWindow
         // Only queue a weak reader here. Even the eligibility parse waits for the shared 500ms.
         var weak = new WeakReference<PaperWindow>(this);
         cache.RequestLayout(_edgeCapsulePreviewInvalidationSource,
-            () => weak.TryGetTarget(out var window) ? window.ReadMarkdownPreloadTarget() : MarkdownEdgePreviewPreload.ReadResult.Discard);
+            () => weak.TryGetTarget(out var window) && window.CanPreloadMarkdownText
+                ? window.CreateEdgeCapsulePreviewContext() : null,
+            content => weak.TryGetTarget(out var window)
+                ? window.ReadMarkdownPreloadTarget(content) : MarkdownEdgePreviewPreload.ReadResult.Discard);
     }
 
     private void ResumeMarkdownPreviewPreload()
@@ -72,7 +75,8 @@ public sealed partial class PaperWindow
         if (e.NewValue is true) ResumeMarkdownPreviewPreload();
     }
 
-    private MarkdownEdgePreviewPreload.ReadResult ReadMarkdownPreloadTarget()
+    private MarkdownEdgePreviewPreload.ReadResult ReadMarkdownPreloadTarget(
+        MarkdownEdgeCapsulePreviewRenderer.PreviewContent content)
     {
         var cache = MarkdownEdgePreviewPreload.For(Dispatcher);
         if (!CanPreloadMarkdownText)
@@ -87,26 +91,21 @@ public sealed partial class PaperWindow
         var host = _edgeCapsuleHost;
         var generation = _bodySessionGeneration;
         var context = CreateEdgeCapsulePreviewContext();
-        if (!MarkdownEdgePreviewPreload.ShouldPreload(context, cache.Capture(context)))
+        if (!cache.ShouldPreload(context, content))
             return MarkdownEdgePreviewPreload.ReadResult.Discard;
-        var descriptor = MarkdownEdgeCapsulePreviewProvider.Instance.Describe(context);
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
-        var size = descriptor.Size.Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
+        var size = MarkdownEdgeCapsulePreviewProvider.MeasureSize(context, content)
+            .Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
         // Preloading never grows HWND capacity or takes presentation authority.
         if (!TryConstrainEdgeCapsulePreviewToCurrentHostCapacity(size, out size))
             return MarkdownEdgePreviewPreload.ReadResult.Deferred;
         return MarkdownEdgePreviewPreload.ReadResult.Ready(new(context, anchor, size, () =>
             CanPreloadMarkdownText && generation == _bodySessionGeneration &&
-            ReferenceEquals(host, _edgeCapsuleHost)));
+            ReferenceEquals(host, _edgeCapsuleHost), content));
     }
 }
 
 public sealed partial class AppController
 {
     internal bool MarkdownPreviewPreloadingAllowed => !IsExiting;
-
-    // Count actual live, eligible edge notes, not all persisted papers or cached artifacts.
-    // This is also read after edits; light notes do not lose eligibility after their first warm.
-    internal bool PreloadAllEdgeMarkdownNotes => !IsExiting &&
-        _windows.Values.Count(window => window.CanPreloadMarkdownText) is > 0 and <= SmallPrewarmPaperLimit;
 }

@@ -76,6 +76,50 @@ public sealed partial class AppController
         _settingsNativePalette = State.ColorScheme;
     }
 
+    private void RefreshSettingsForChange(string id)
+    {
+        if (id is "window.hide_from_taskbar" or "window.hide_from_switcher")
+        {
+            RefreshSettingsSystemVisibilityToggleStates();
+            return;
+        }
+        if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
+            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+        {
+            RefreshSettingsCapsuleToggleStates();
+            return;
+        }
+        if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
+        var region = id switch
+        {
+            "appearance.animations" or "window.fullscreen_mode" => "general.options",
+            "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" => "general.capsuleAppearance",
+            "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
+            "edge.non_topmost" => "general.edgeTopmost",
+            "scripts.run_linked_on_click" => "general.todos",
+            "note.markdown_mode" or "note.edit_animations" => "note.markdown",
+            "note.compress_large_images" => "note.images",
+            _ when id.StartsWith("todo.reminder", StringComparison.Ordinal) => "labs.reminders",
+            _ => id.Split('.')[0] switch
+            {
+                "general" or "topbar" => "general.options",
+                "privacy" => "general.telemetry",
+                "appearance" => "visual.options",
+                "todo" => "general.todos",
+                "edge" => "general.edgeBrowsing",
+                "focus" => "labs.focus",
+                "interaction" => "labs.passive",
+                "window" => "labs.window",
+                "scripts" => "note.scripts",
+                "shortcuts" => "shortcuts.bindings",
+                "mcp" => "labs.mcp",
+                _ => ""
+            }
+        };
+        RefreshSettingsRegions(region);
+        if (region == "shortcuts.bindings") RefreshSettingsRegions("labs.passive");
+    }
+
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
         // Navigation replaces page content, not the HWND's material owner. Keep its
@@ -421,8 +465,8 @@ public sealed partial class AppController
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
         SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
         SettingsPage.Note => BuildSettingsSidebarNotePage(),
-        SettingsPage.Visual => BuildVisualSettingsPageWithNoteBackground(),
-        SettingsPage.Shortcuts => BuildShortcutSettingsPage(),
+        SettingsPage.Visual => BuildSettingsLiveRegion("visual.options", BuildVisualSettingsPage),
+        SettingsPage.Shortcuts => BuildSettingsLiveRegion("shortcuts.bindings", BuildShortcutSettingsPage),
         SettingsPage.Plugins => BuildPluginsSettingsPage(),
         SettingsPage.Labs => BuildLabsSettingsPage(),
         _ => BuildSettingsSidebarGeneralPage()

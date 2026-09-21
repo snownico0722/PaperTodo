@@ -8,12 +8,19 @@ on:
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
+      - "tests/PaperTodo.CodexCliBridgeChecks/**"
+      - "tests/PaperTodo.SettingsApiChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
       - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
+      - "src/PaperSettingsService.cs"
+      - "src/AppController.Settings*.cs"
+      - "src/AppController.cs"
+      - "src/Models.cs"
+      - "src/Mcp*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
       - "src/WebPaperBodySession*.cs"
@@ -28,12 +35,19 @@ on:
       - "plugins/**"
       - "tests/PaperTodo.ProtocolPolicyChecks/**"
       - "tests/PaperTodo.PluginApiChecks/**"
+      - "tests/PaperTodo.CodexCliBridgeChecks/**"
+      - "tests/PaperTodo.SettingsApiChecks/**"
       - "PaperTodo.csproj"
       - "src/AppController.Plugin*.cs"
       - "src/AppController.Shortcuts.cs"
       - "src/GlobalHotkeys.cs"
       - "src/PaperPluginRuntime*.cs"
       - "src/PaperBodyPlugin*.cs"
+      - "src/PaperSettingsService.cs"
+      - "src/AppController.Settings*.cs"
+      - "src/AppController.cs"
+      - "src/Models.cs"
+      - "src/Mcp*.cs"
       - "src/PaperWindow.Plugin*.cs"
       - "src/Plugin*.cs"
       - "src/WebPaperBodySession*.cs"
@@ -70,6 +84,14 @@ jobs:
         shell: pwsh
         run: dotnet run --project .\tests\PaperTodo.PluginApiChecks\PaperTodo.PluginApiChecks.csproj -c Release
 
+      - name: Run public settings and MCP unlink checks
+        shell: pwsh
+        run: dotnet run --project ./tests/PaperTodo.SettingsApiChecks/PaperTodo.SettingsApiChecks.csproj -c Release
+
+      - name: Run Codex CLI Bridge prompt checks
+        shell: pwsh
+        run: dotnet run --project ./tests/PaperTodo.CodexCliBridgeChecks/PaperTodo.CodexCliBridgeChecks.csproj -c Release
+
       - name: Validate plugin manifests
         shell: pwsh
         run: |
@@ -81,8 +103,8 @@ jobs:
             Write-Host "Validating $($manifest.FullName)"
             $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
               ConvertFrom-Json -Depth 100
-            if ($document.apiVersion -ne "2.1") {
-              throw "$($manifest.FullName) must target apiVersion 2.1."
+            if ($document.apiVersion -notin @("2.1", "2.2")) {
+              throw "$($manifest.FullName) must target a supported apiVersion (2.1 or 2.2)."
             }
           }
 
@@ -115,7 +137,7 @@ jobs:
             throw "SampleClock must exercise native custom capsule views."
           }
 
-      - name: Validate protocol 2.1 top bar sample
+      - name: Validate protocol 2.1 compatibility and 2.2 top bar sample
         shell: pwsh
         run: |
           $root = "plugin-samples/PaperTodo.Plugin.TopBarWeb"
@@ -123,8 +145,13 @@ jobs:
           $bodySource = Get-Content (Join-Path $root "web/index.html") -Raw -Encoding UTF8
           $runtimeSource = Get-Content (Join-Path $root "web/runtime.html") -Raw -Encoding UTF8
 
-          if ($manifest.apiVersion -ne "2.1") {
-            throw "TopBarWeb must target apiVersion 2.1."
+          if ($manifest.apiVersion -ne "2.2") {
+            throw "TopBarWeb uses action settings and must target apiVersion 2.2."
+          }
+          $protocol21 = Get-Content "plugin-samples/PaperTodo.Plugin.Protocol21Web/plugin.json" -Raw -Encoding UTF8 |
+            ConvertFrom-Json -Depth 100
+          if ($protocol21.apiVersion -ne "2.1") {
+            throw "Protocol21Web must remain on apiVersion 2.1 to prove backward compatibility."
           }
           if ($manifest.capabilities -notcontains "runtime") {
             throw "TopBarWeb must declare the runtime capability."
@@ -145,7 +172,7 @@ jobs:
           )
           foreach ($pattern in $runtimePatterns) {
             if ($runtimeSource -notmatch $pattern) {
-              throw "TopBarWeb Runtime is missing required protocol 2.1 coverage: $pattern"
+              throw "TopBarWeb Runtime is missing required protocol 2.2 coverage: $pattern"
             }
           }
 
@@ -178,7 +205,7 @@ jobs:
               $runtimeContract -notmatch 'interface\s+IPaperGlobalTopBarApi' -or
               $runtimeContract -notmatch 'interface\s+IPaperGlobalShortcutApi' -or
               $runtimeContract -notmatch 'interface\s+IPaperPluginRuntimeProvider') {
-            throw "Protocol 2.1 top-bar/Runtime/shortcut/presentation contracts are incomplete."
+            throw "Protocol 2.x top-bar/Runtime/shortcut/presentation contracts are incomplete."
           }
 
       - name: Validate Web source and runtime copies
@@ -208,6 +235,10 @@ jobs:
             $difference | Format-Table | Out-String | Write-Host
             throw "Web plugin source and runtime copies are out of sync."
           }
+
+      - name: Check Web settings action behavior
+        shell: pwsh
+        run: node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs
 
       - name: Check Web plugin scripts
         shell: pwsh

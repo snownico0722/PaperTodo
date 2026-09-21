@@ -4,6 +4,8 @@ namespace PaperTodo.Plugin;
 
 public static class PaperTodoPermissionNames
 {
+    public const string SettingsRead = "settings.read";
+    public const string SettingsUpdate = "settings.update";
     public const string PapersRead = "papers.read";
     public const string PapersObserve = "papers.observe";
     public const string PapersCreate = "papers.create";
@@ -25,6 +27,8 @@ public static class PaperTodoPermissionNames
 
     public static IReadOnlySet<string> All { get; } = new[]
     {
+        SettingsRead,
+        SettingsUpdate,
         PapersRead,
         PapersObserve,
         PapersCreate,

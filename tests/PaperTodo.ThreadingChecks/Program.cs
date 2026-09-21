@@ -20,6 +20,8 @@ internal static partial class Program
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),
         ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation),
+        ("single-instance-real-results", CheckSingleInstanceResults),
+        ("single-instance-lost-result", CheckSingleInstanceLostResult),
         ("inactive-titlebar-chrome-layout", CheckInactiveTitleBarChrome),
         ("remembered-paper-dpi-restore", CheckRememberedPaperRestore)
     ];

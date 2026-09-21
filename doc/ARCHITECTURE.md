@@ -98,13 +98,19 @@ PaperTodo.exe
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
 
+Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 后，任务需要 MCP 且 MCP 或所需权限未开启时可发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后，一次性开启 MCP 总开关、空白/追加写入、完整写入和直接删除权限。该命令等待主实例的实际执行结果：退出码 0 表示宿主执行成功，1 表示宿主拒绝或执行失败，2 表示主实例不存在或未收到确认；传输失败不重放已经发送的命令。没有现成 GUI 主实例时不启动或恢复纸片；普通 PaperTodo 功能开关（例如待办关联纸片）不由该命令自动修改。
+
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
+
+公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
+
+跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。展示请求只建立事件来源边界，不预先提交其他纸片的内容；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。该能力属于 API 2.2，但不新增插件 permission 或 MCP 完整写入门槛；MCP 仍受总开关控制。
 
 ### 3.3 辅助进程与插件 Runtime
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前只接受 **2.1**。清理前的实验性 2.0 不属于当前兼容范围。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
+插件协议当前最新为 **2.2**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1 插件可继续运行，使用 2.2-only 能力的插件必须声明 2.2。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
 一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
@@ -193,7 +199,7 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 四种装饰皮肤由 `SkinBorder` 绘制：描图纸固定纤维、液态玻璃、Aero 和物理像素风。材质不管理布局、命中或窗口；Edge shape/layout 与 DComp translation-only 边界不变。`MaterialRelief` 按 host 圆角及开口边界缓存预算内的法线高光；液态反光始终绘制于背景采样之上。`SkinBorder.LensLight` 监听实际 `HwndSource.RootVisual` 的指针（包括 popup），Aero 窗口位置驱动固定宽度反光视差；不运行空闲动画。主纸片、各类胶囊、右键及子菜单复用液态折射、RGB 分离采样和表面绘制，文字和图标不进入 effect。`MatchAuxiliaryMaterialStrength` 关闭时减弱光学处理，并在表面染色之后、高光与正文之前增加语义纸色的可读性层，使弱档更接近普通纸片而非更加透明；开启时使用完整处理且不加该底层。两档不衰减正文、外轮廓或整窗 opacity。分层小窗口的云母／亚克力用局部场景 Gaussian diffusion 近似；不声称等同系统 Mica 壁纸算法，主窗口 DWM 不变。Aero 小窗口直接使用既有 alpha。失效、高对比度、系统禁用透明或部分透明时保留实色回退。已删除的皮肤 ID 由通用 Normalize 回退 paper，没有保留旧材质绘制。
 
-配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-049。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 clearGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥；内部 `clearGlass` recipe 只由液态皮肤映射，不写入旧 MicaBackdropType，使用空 blur region 的 alpha composition，不启用磨砂背景（兼容路径见 D-043，现代透明通道见 D-044）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND，不进入这个原生适配器；背景处理由同一个 SkinBorder 持有，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-040）。
+配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框，完成或中断时恢复目标形态的尺寸与缩放能力；内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-050。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 clearGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥；内部 `clearGlass` recipe 只由液态皮肤映射，不写入旧 MicaBackdropType，使用空 blur region 的 alpha composition，不启用磨砂背景（兼容路径见 D-044，现代透明通道见 D-045）。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND，不进入这个原生适配器；背景处理由同一个 SkinBorder 持有，也不改变 DComp translation-only ownership。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-041）。
 
 液态玻璃的真实背景折射由 `SkinBorder.Refraction` 持有，偏好 `AppState.LiquidGlassRefraction` 经现有 `StateStore` 保存。可见且不透明的纸片、设置、胶囊、右键和子菜单按其各自实际 HWND 使用。位于 `Border.Child` 前的容器按「采样背景 → 表面染色／反光／owner 描边 → 正文」排序，避免不透明背景视觉盖住父 Border 的材质反光；表面绘制缓存按材质／几何刷新，不新增定时器。统一背景避免透明中心与不同步的边缘拼接。`LiquidRefractionEffect` 用少量双线性采样进行轻散射、饱和度和局部 RGB 色散处理，正文区域的背景按屏幕坐标原比例映射，不围绕随尺寸变化的窗口中心缩放；采样背景与光学查找表经各效果本地的原像素 BitmapCacheBrush 送入 shader，避免 ImageBrush 按输出尺寸创建中间纹理而再次重采样；正文与按钮始终不参与 shader；边缘使用 `LensDisplacement` 共享 512×1 的五次平滑曲线，RG 两通道保存 16 位位移，端点一阶和二阶导数归零；位移上限涵盖最外侧 RGB 通道，光学圆角至少覆盖曲面过渡宽度，避免边缘折返与内角焦点。光学圆角只影响背景采样，不改变 host 轮廓或命中。`GlassMetrics` 按 DIP、短边和面积连续计算边缘厚度与位移；正文区域的散射、遮色与饱和度不随尺寸变化，窄长面板的边缘保持轻薄，不拉伸圆角或生成全尺寸位移图。正文／编辑器／命中／布局／HWND 归属不变。
 
@@ -224,9 +230,19 @@ Provider 当前分三类：
 - 保存失败回滚内存状态；
 - 提交后刷新必要 UI 并发布外部变更事件。
 
+跨纸片 show/hide/expand 等展示请求只建立事件来源边界并调用既有展示入口，不预先提交其他纸片的内容。公共设置不再在保存前额外提交一遍所有编辑器；序列化时所需的同步仍由保存入口负责。提交后的 UI 刷新只执行一次，异常记录日志，不整段重试。
+
 transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MCP protocol 不下沉到 `PaperCommandService`；反过来，transport/presentation 层也不建立另一套核心 mutation 实现。
 
-### 5.4 Protocol 2.1 Top Bar
+### 5.4 Plugin Protocol 2.x
+
+当前最新插件协议是 **2.2**，宿主继续加载 **2.1** 插件。2.1 已发布能力保持原语义；2.2 新增的 manifest/API 契约必须由插件显式声明 `apiVersion: "2.2"`。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+
+- 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
+- 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限。
+- 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
+
+#### Protocol 2.1 Top Bar
 
 Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API，而且 **Paper 与 Global 有不同 owner**：
 
@@ -235,7 +251,8 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 当前稳定边界：
 
-- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。
+- `startupPaper` 在启动阶段先决定是否创建/恢复真实插件 paper；之后才按最终实体 paper 集合 reconcile Global Runtime。Protocol 2.2 的 `presentation: hidden` 仍创建真实 Runtime-owner Paper，但普通启动恢复不创建可见 surface；显式宿主 paper action 仍可随后显示/展开它.
+- Protocol 2.2 插件 settings 的 `action` 是无持久化值的命令按钮：`paper.*` 复用已有目标选择与 presentation 路径，自定义 ID 复用 provider Runtime 的 GlobalShortcuts handler / Web `shortcutInvoked` 投递，不要求配置热键。可用性由现有实体 Paper / Runtime handler lease 决定，点击时再次核验；不另建 callback、任务或重试协议。隐藏 startupPaper 只在普通启动恢复前归一化，延迟 startupPaper 阶段不再覆盖用户刚刚发出的显示/展开操作。
 - 运行中 provider 从 0→1 张实体插件 paper 时启动 Runtime，从 1→0 时 Dispose；删除、隐藏、折叠非最后一张不会撤销 Global action。
 - `PaperWindow` 始终拥有顶栏 WPF tree、按钮尺寸/位置、主题、Hover、DPI、字体缩放和 responsive layout；插件只提交 action descriptor。
 - 图标只接受短字符或受限 SVG/WPF Path Data；Path 可以按宿主前景色 Fill 或 Stroke，不接受完整 SVG document、WebView 或任意 WPF tree。
@@ -278,7 +295,7 @@ Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验
 
 冷渲染与预热共用唯一的 `PrepareArtifactAsync`：UI 捕获内容、样式、字体、DPI 和资源冻结副本，共享 `MarkdownLayoutWorker` STA 完成 `TextFormatter` 排版，UI 校验外观后组合冻结 Drawing、尺寸、截断状态与全局链接矩形。普通短行也走这条路径，不保留 WPF block renderer、重段落控件或同步渲染退路。保留的短/长行装饰差异只用于兼容既有画面，不再决定 renderer。Worker 不持有 UI 控件、可变语义缓存或业务回调；需求优先于预热，按可见行短批次让出并检查取消，空闲时等待 Dispatcher。
 
-`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact。边缘浏览开启时，小工作集包含轻内容在内的非空内置 Markdown 笔记都可预热，较多来源仍沿用重内容筛选；计数只包含当前存活、可见且已进入边缘队列的内置 Markdown 纸片。启动恢复直接唤醒首批工作，使用现有 Edge Host 和模型生成预览，不等待折叠纸片的完整 Shell。队列暴露本轮完成 Task 供可选 Shell 预建排序，日常失效与调度仍由队列自身拥有。首次标题和胶囊 UI 初始化不把未变化的 Markdown 内容当成编辑作废；实际文本规范化、编辑及资源变更仍走原失效路径，后续编辑保留一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
+`MarkdownEdgePreviewPreload` 只筛选、排队并缓存合格来源的完整 artifact。边缘浏览开启时，保留全部重内容；不足目标数量时按三档逐步放宽，从后续档位补足，跨档只取缺额。同档优先保留已入选来源，再按稳定注册顺序选择，空内容不占名额。候选只包含当前存活、可见且已进入边缘队列的内置 Markdown 纸片；弱 reader 与有界内容由同一预热队列保留，内容未变时复用分类，扫描逐来源让出 UI。删除、离队或内容变化通过原合并延迟重新选取并补位，不增加轮询或第二套调度。启动恢复直接唤醒首批工作，使用现有 Edge Host 和模型生成预览，不等待折叠纸片的完整 Shell。队列暴露本轮完成 Task 供可选 Shell 预建排序，日常失效与调度仍由队列自身拥有。首次标题和胶囊 UI 初始化不把未变化的 Markdown 内容当成编辑作废；实际文本规范化、编辑及资源变更仍走原失效路径，后续编辑保留一次性合并延迟。每来源最多一份当前结果，不做鼠标邻居预测或固定数量淘汰；内容版本、摘要、宽度、字体、缩放、DPI 和资源必须匹配。预热准备到卡片高度上限，较矮 viewport 本地裁剪；冷 miss 只准备实际可见范围，不把不完整的短结果冒充通用预热。缓存不构造或保留隐藏 View/Body，不借出或归还控件。
 
 `MarkdownEdgeCapsulePreviewViewport` 是唯一的准备、取消和发布 owner：命中取 artifact，未命中异步调用同一个 builder，两者都进入 `Publish`，挂载一个正文绘制面及原生链接控件。只有完整结果发布后才启用正文输入；链接的捕获、释放、焦点和键盘由 `MarkdownPreviewLinkHit` 保留 WPF 行为，完全裁掉的链接禁用，背景仍交给打开纸片手势。同一视图、内容和尺寸可短暂收起后复用；内容、外观、DPI 或尺寸失效重新准备，卸载释放挂载元素。
 
@@ -431,6 +448,8 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 - 标题区中键采用 mouse-down / mouse-up 同区确认，只在展开且未进入高级交互锁定时触发。
 - 两种手势最终都向现有 `_closeButton` 发送同一个 routed `Click`，因此“关闭按钮此刻意味着折叠、隐藏还是其他既有策略”仍只有一个 owner，不在快捷手势中复制。
 - 从 `NOACTIVATE` 胶囊显式打开纸片时，激活路径以 OS foreground HWND 为最终 truth；必要时补 `Activate` / foreground 请求后再 `Focus`，避免 WPF `IsActive` / focus 状态残留在旧窗口。
+
+纸片实际隐藏与销毁前共用 `PaperWindow` 的前台交接入口，以当前 OS foreground 和实时 Z-order 选择仍可操作的下一窗口；批量隐藏已标记不可见的纸片不参与接替。业务关闭语义、数据删除与辅助 owner 生命周期不由此入口改变。后台撤下、退出和用户已切走时不主动激活；不保留旧前台窗口、不排队重试抢焦点。
 
 ### 7.2 匿名使用统计
 

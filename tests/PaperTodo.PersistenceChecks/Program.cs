@@ -16,7 +16,9 @@ var checks = new (string Name, Action Run)[]
     ("shutdown-skips-deferred-plugin-cleanup", ShutdownSkipsDeferredPluginCleanup),
     ("temp-validator-failure-keeps-old-target", TempValidatorFailureKeepsOldTarget),
     ("flush-failure-keeps-old-target", FlushFailureKeepsOldTarget),
-    ("replace-retries-transient-sharing-failures", ReplaceRetriesTransientSharingFailures)
+    ("replace-retries-transient-sharing-failures", ReplaceRetriesTransientSharingFailures),
+    ("markdown-modes-migrate-and-roundtrip", MarkdownModesMigrateAndRoundTrip),
+    ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
 var failed = 0;
@@ -225,6 +227,64 @@ static void ReplaceRetriesTransientSharingFailures()
     Assert(File.ReadAllText(target) == "new", "transient replace failures did not eventually commit");
     Assert(operations.ReplaceCalls == 3, $"expected 3 replace attempts, got {operations.ReplaceCalls}");
     Assert(operations.DelayCalls == 2, $"expected 2 retry delays, got {operations.DelayCalls}");
+}
+
+static void MarkdownModesMigrateAndRoundTrip()
+{
+    Assert(new AppState().MarkdownRenderMode == MarkdownRenderModes.Basic,
+        "new state should default to Basic");
+    var cases = new (string? Input, string Expected)[]
+    {
+        ("\"off\"", MarkdownRenderModes.Off),
+        ("\"basic\"", MarkdownRenderModes.Basic),
+        ("\"enhanced\"", MarkdownRenderModes.Basic),
+        ("\"full\"", MarkdownRenderModes.Full),
+        ("\"unknown\"", MarkdownRenderModes.Basic),
+        ("null", MarkdownRenderModes.Basic),
+        (null, MarkdownRenderModes.Basic)
+    };
+
+    foreach (var (input, expected) in cases)
+    {
+        using var scope = new TempDirectory();
+        var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+        var setting = input == null ? "" : ",\"markdownRenderMode\":" + input;
+        File.WriteAllText(store.FilePath,
+            "{\"papers\":[{\"id\":\"mode-note\",\"type\":\"note\",\"content\":\"# Keep **source**\"}]" + setting + "}");
+        var state = store.Load();
+        Assert(state.MarkdownRenderMode == expected, $"wrong migration for {input ?? "missing"}");
+        Assert(state.Papers.Single().Content == "# Keep **source**", "mode migration changed note content");
+
+        store.SaveJsonSync(store.SerializeState(state), version: 1);
+        using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
+        Assert(saved.RootElement.GetProperty("markdownRenderMode").GetString() == expected,
+            "save retained a legacy/invalid Markdown mode");
+        Assert(NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().MarkdownRenderMode == expected,
+            "Markdown mode changed after reload");
+    }
+}
+
+static void DownwardPreviewDefaultAndRoundTrip()
+{
+    Assert(!new AppState().EdgeCapsulePreviewPreferDownward, "new state should not prefer downward preview");
+    foreach (var input in new string?[] { null, "true", "false" })
+    {
+        using var scope = new TempDirectory();
+        var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+        var setting = input == null ? "" : ",\"edgeCapsulePreviewPreferDownward\":" + input;
+        File.WriteAllText(store.FilePath, "{\"papers\":[]" + setting + "}");
+        var state = store.Load();
+        var expected = input == "true";
+        Assert(state.EdgeCapsulePreviewPreferDownward == expected,
+            $"wrong preview preference for {input ?? "missing"}");
+
+        store.SaveJsonSync(store.SerializeState(state), version: 1);
+        using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
+        Assert(saved.RootElement.GetProperty("edgeCapsulePreviewPreferDownward").GetBoolean() == expected,
+            "save lost the preview preference");
+        Assert(NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().EdgeCapsulePreviewPreferDownward == expected,
+            "preview preference changed after reload");
+    }
 }
 
 static StateStore NewStore(string directory, IDurableAtomicFileWriter writer) =>

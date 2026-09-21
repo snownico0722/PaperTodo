@@ -183,55 +183,24 @@ jobs:
 
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
+      - name: Set up Python for release notes
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
       - name: Write release notes
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
+          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
         run: |
-          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
-          $tag = "${{ steps.release.outputs.tag }}"
-          $selfContained = "${{ steps.meta.outputs.self_contained_exe }}"
-          $frameworkDependent = "${{ steps.meta.outputs.framework_dependent_exe }}"
-          $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
-          if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
-            throw "CHANGELOG.md not found."
-          }
-
-          $lines = Get-Content -LiteralPath $changelogPath
-          $headingPattern = '^\s*###\s+' + [regex]::Escape($tag) + '(\s|$)'
-          $start = -1
-          for ($i = 0; $i -lt $lines.Count; $i++) {
-            if ($lines[$i] -match $headingPattern) {
-              $start = $i
-              break
-            }
-          }
-
-          if ($start -lt 0) {
-            throw "CHANGELOG.md does not contain a release section for $tag."
-          }
-
-          $end = $lines.Count
-          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
-            if ($lines[$i] -match '^\s*###\s+v') {
-              $end = $i
-              break
-            }
-          }
-
-          $changelogNotes = (($lines[($start + 1)..($end - 1)] -join "`n").Trim())
-          if ([string]::IsNullOrWhiteSpace($changelogNotes)) {
-            throw "CHANGELOG.md section for $tag is empty."
-          }
-
-          $notesLines = @(
-            $changelogNotes,
-            "",
-            "下载:",
-            "",
-            "- 完整版（含 .NET 运行库）：${selfContained}",
-            "- 精简版（需自行安装 .NET 运行库）：${frameworkDependent}"
-          )
-
-          Set-Content -LiteralPath (Join-Path $releaseDir "RELEASE_NOTES.md") -Value ($notesLines -join "`n") -Encoding utf8
+          python .github/scripts/release_notes.py `
+            --tag $env:RELEASE_TAG `
+            --repository $env:GITHUB_REPOSITORY `
+            --assets $env:SELF_CONTAINED_EXE $env:FRAMEWORK_DEPENDENT_EXE `
+            --output release/RELEASE_NOTES.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

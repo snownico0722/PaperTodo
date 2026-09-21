@@ -67,6 +67,8 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
     public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];
     public PaperBodyPluginStartupManifest? StartupPaper { get; set; }
+    public Dictionary<string, PaperBodyPluginLocaleManifest> Locales { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public string DirectoryPath { get; internal set; } = "";
     public string EntryPath { get; internal set; } = "";
@@ -82,13 +84,14 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 
 /// <summary>
 /// Discovers one fully trusted, unsandboxed native or local Web plugin from each self-contained
-/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.1 has no plugin hot-reload contract: code,
+/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.x has no plugin hot-reload contract: code,
 /// manifest and Web file changes are discovered on the next app start. Loaded native assemblies
 /// remain loaded for the process lifetime.
 /// </summary>
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
-    internal const string SupportedPluginApiVersion = "2.1";
+    internal const string MinimumPluginApiVersion = "2.1";
+    internal const string SupportedPluginApiVersion = "2.2";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -258,6 +261,9 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         ValidateSettings(manifest);
         ValidateStartupPaper(manifest);
         ValidateProtocolFeatures(manifest);
+        PaperBodyPluginLocalization.ValidateAndApply(
+            manifest,
+            UiLanguages.EffectiveUiCulture);
 
         var kind = NormalizeKind(manifest.Kind);
         manifest.DirectoryPath = Path.GetFullPath(directory);
@@ -605,17 +611,18 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private static void ValidateManifestApiVersion(string pluginApiVersion)
     {
-        if (string.Equals(
-                pluginApiVersion,
-                SupportedPluginApiVersion,
-                StringComparison.Ordinal))
+        if (ApiAtLeast(pluginApiVersion, MinimumPluginApiVersion) &&
+            ApiAtLeast(SupportedPluginApiVersion, pluginApiVersion))
         {
             return;
         }
 
         throw new InvalidDataException(
-            $"Unsupported plugin API version {pluginApiVersion}; host requires {SupportedPluginApiVersion}.");
+            $"Unsupported plugin API version {pluginApiVersion}; host supports {MinimumPluginApiVersion} through {SupportedPluginApiVersion}.");
     }
+
+    private static bool ApiAtLeast(string actual, string required) =>
+        Version.Parse(actual).CompareTo(Version.Parse(required)) >= 0;
 
     private static Version ParseVersion(string? value)
     {

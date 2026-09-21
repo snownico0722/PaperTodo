@@ -456,7 +456,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 var syntax =
                     (previewLine.FenceKind is MarkdownFenceLineKind.Opening or MarkdownFenceLineKind.Closing) &&
-                    content.RenderMode == MarkdownRenderModes.Enhanced
+                    content.RenderMode == MarkdownRenderModes.Basic
                     ? InlineStyle.Syntax : InlineStyle.None;
                 blocks.Add(new(ArtifactBlockKind.Text,
                     Raw(line, previewLine.FenceKind == MarkdownFenceLineKind.None &&
@@ -468,7 +468,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
             var trimmed = line.TrimStart();
             var prefixLength = line.Length - trimmed.Length;
-            var prefixStyle = content.RenderMode == MarkdownRenderModes.Enhanced
+            var prefixStyle = content.RenderMode == MarkdownRenderModes.Basic
                 ? InlineStyle.Syntax : InlineStyle.None;
             var baseStyle = ArtifactBaseStyle.Normal;
             string? renderedPrefix = null;
@@ -495,7 +495,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             {
                 var markerStart = prefixLength;
                 prefixLength += unordered.Groups[1].Index;
-                if (content.RenderMode == MarkdownRenderModes.Enhanced)
+                if (content.RenderMode == MarkdownRenderModes.Basic)
                 {
                     renderedPrefix = line[..markerStart] + "•" + line[(markerStart + 1)..prefixLength];
                     prefixStyle = InlineStyle.None;
@@ -503,7 +503,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             }
             else if (HorizontalRulePattern.IsMatch(trimmed))
             {
-                if (content.RenderMode == MarkdownRenderModes.Enhanced)
+                if (content.RenderMode == MarkdownRenderModes.Basic)
                     blocks.Add(new(ArtifactBlockKind.Rule,
                         Raw("\u200B", ArtifactBaseStyle.Normal), RuleTextVisible: false, RuleFullSpan: true));
                 else

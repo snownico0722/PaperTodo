@@ -167,7 +167,7 @@ internal static partial class Program
             viewport.AssertFullRender("preview with pending redraw");
             viewport.Box.SetPreviewMode(false);
             viewport.Box.CaretOffset = 12;
-            viewport.Box.SetMarkdownRenderMode(MarkdownRenderModes.Enhanced);
+            viewport.Box.SetMarkdownRenderMode(MarkdownRenderModes.Basic);
             viewport.Flush();
             viewport.AssertFullRender("mode switch with pending redraw");
             viewport.Box.SetMarkdownRenderMode(MarkdownRenderModes.Full);

@@ -17,8 +17,12 @@ internal static partial class Program
             new(new(), () => "readiness", false, () => new string('文', 450),
                 () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
                 () => new Style(), () => "", _ => { }, source);
-        MarkdownEdgePreviewPreload.ReadResult Ready(EdgeCapsulePreviewInvalidationSource source) =>
-            MarkdownEdgePreviewPreload.ReadResult.Ready(new(Context(source), root, new(460, 410), () => true));
+        MarkdownEdgePreviewPreload.ReadResult Ready(EdgeCapsulePreviewInvalidationSource source, Panel anchor)
+        {
+            var context = Context(source);
+            return MarkdownEdgePreviewPreload.ReadResult.Ready(
+                new(context, anchor, new(460, 410), () => true, cache.Capture(context)));
+        }
         void PumpFor(int milliseconds)
         {
             var timer = Stopwatch.StartNew();
@@ -33,14 +37,14 @@ internal static partial class Program
             cache.RequestLayout(source, () =>
             {
                 reads++;
-                return blocked ? MarkdownEdgePreviewPreload.ReadResult.Deferred : Ready(source);
+                return blocked ? MarkdownEdgePreviewPreload.ReadResult.Deferred : Ready(source, root);
             });
             UntilReview(() => cache.DeferredCount == 1, "temporarily unavailable source is retained dormant");
             PumpFor(650);
             Require(reads == 1 && cache.PendingCount == 1 && cache.ArtifactCount == 0,
                 "a deferred reader is not polled while its host is unavailable");
             var other = new EdgeCapsulePreviewInvalidationSource();
-            cache.RequestLayout(other, () => Ready(other));
+            cache.RequestLayout(other, () => Ready(other, root));
             UntilReview(() => cache.ArtifactCount == 1 && cache.PendingCount == 1,
                 "unavailable source does not stall unrelated work");
             Require(reads == 1, "unrelated requests do not wake dormant readers");
@@ -51,7 +55,7 @@ internal static partial class Program
             {
                 peerReads++;
                 cache.Resume(source);
-                return Ready(peer);
+                return Ready(peer, root);
             });
             UntilReview(() => cache.ArtifactCount == 3 && cache.PendingCount == 0,
                 "resumed work continues after the current peer");
@@ -61,7 +65,7 @@ internal static partial class Program
             cache.Clear();
             cache.RequestLayout(source, () => MarkdownEdgePreviewPreload.ReadResult.Deferred);
             UntilReview(() => cache.DeferredCount == 1, "dormant request precedes replacement");
-            cache.RequestLayout(source, () => Ready(source));
+            cache.RequestLayout(source, () => Ready(source, root));
             UntilReview(() => cache.ArtifactCount == 1 && cache.PendingCount == 0,
                 "new content replaces a dormant reader");
             cache.Clear();
@@ -83,7 +87,7 @@ internal static partial class Program
                     cache.Resume(source);
                     return MarkdownEdgePreviewPreload.ReadResult.Deferred;
                 }
-                return Ready(source);
+                return Ready(source, root);
             });
             UntilReview(() => cache.PendingCount == 0 && cache.ArtifactCount == 1,
                 "recovery before Deferred registration is not lost");
@@ -103,7 +107,7 @@ internal static partial class Program
         {
             cache.RequestLayout(hostSource, () => !anchor.IsLoaded || !anchor.IsVisible
                 ? MarkdownEdgePreviewPreload.ReadResult.Deferred
-                : MarkdownEdgePreviewPreload.ReadResult.Ready(new(Context(hostSource), anchor, new(460, 410), () => true)));
+                : Ready(hostSource, anchor));
             UntilReview(() => cache.DeferredCount == 1, "real hidden host defers without guessing its DPI");
             Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "readiness monitor");
             var model = EdgeCapsuleModel.Initial with

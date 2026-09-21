@@ -16,11 +16,11 @@
     <!-- .NET 9+ marks Windows apphost/single-file hosts CET-compatible by default. Disable that
          opt-in for PaperTodo to avoid User Shadow Stack startup failures on affected legacy Windows builds. -->
     <CETCompat>false</CETCompat>
-    <Version>4.0.0-preview</Version>
+    <Version>4.0.0-beta1</Version>
     <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <FileVersion>4.0.0.0</FileVersion>
-    <InformationalVersion>4.0Preview</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v4.0Preview" free of +commit suffixes from SourceLink. -->
+    <InformationalVersion>4.0.0-beta1</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v4.0.0-beta1" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -71,9 +71,9 @@
     <!-- Keep restore inputs independent of publish options, including publishing without restoring. -->
     <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-    <PackageReference Include="ModelContextProtocol" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
     <!-- DirectComposition wraps live layered WPF capsule HWNDs without per-frame pixel copies or
          the Windows App SDK runtime. Opening captures one compact shell; the queue proxy is
          transient and falls back to the normal HWND path when a surface cannot be created. -->

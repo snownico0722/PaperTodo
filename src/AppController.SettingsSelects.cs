@@ -14,8 +14,36 @@ public sealed partial class AppController
             return;
         }
 
-        State.UiLanguage = normalized;
-        SaveNow();
+        if (!SetSettingFromUi("general.language", normalized)) return;
+
+        if (_settingsWindow == null ||
+            !PaperNoticeDialog.ShowChoice(
+                _settingsWindow,
+                SettingsSidebarLocalized(
+                    "重启 PaperTodo",
+                    "Restart PaperTodo",
+                    "PaperTodo を再起動",
+                    "PaperTodo 다시 시작"),
+                SettingsSidebarLocalized(
+                    "界面语言将在重启 PaperTodo 后生效。要现在立即重启吗？",
+                    "The interface language will take effect after restarting PaperTodo. Restart now?",
+                    "表示言語は PaperTodo の再起動後に反映されます。今すぐ再起動しますか？",
+                    "인터페이스 언어는 PaperTodo를 다시 시작한 후 적용됩니다. 지금 다시 시작할까요?"),
+                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
+                SettingsSidebarLocalized(
+                    "立即重启",
+                    "Restart now",
+                    "今すぐ再起動",
+                    "지금 다시 시작")))
+        {
+            return;
+        }
+
+        if (Application.Current is App app)
+        {
+            app.RequestRestartAfterExit();
+        }
+        Exit();
     }
 
     private UIElement CreateUiLanguageSettingsRow() =>

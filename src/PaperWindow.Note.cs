@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
@@ -16,6 +17,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     internal const int NoteTextMaxLength = 100000;
+    private const int WindowsErrorNoAssociation = 1155;
     private static readonly object PersistentScriptProcessLock = new();
     private static readonly Dictionary<string, Process> PersistentScriptProcesses = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object ActiveScriptProcessLock = new();
@@ -1007,10 +1009,7 @@ public sealed partial class PaperWindow
         try
         {
             var path = WriteExternalMarkdownFile();
-            Process.Start(new ProcessStartInfo(path)
-            {
-                UseShellExecute = true
-            });
+            OpenExternalNoteFile(path);
         }
         catch (Exception ex)
         {
@@ -1019,6 +1018,27 @@ public sealed partial class PaperWindow
                 Strings.Get("OpenMarkdownFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    private static void OpenExternalNoteFile(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == WindowsErrorNoAssociation)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "notepad.exe",
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(path);
+            Process.Start(startInfo);
         }
     }
 

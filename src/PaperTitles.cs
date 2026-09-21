@@ -43,9 +43,15 @@ public static class PaperTitles
 
     public static string CleanCustomTitle(string? title, int maxLength)
     {
-        var cleaned = (title ?? "").Trim();
-        cleaned = string.Join("", cleaned.Where(ch => !char.IsControl(ch)));
+        var cleaned = NormalizeCustomTitle(title);
         return TakeTextElements(cleaned, Math.Clamp(maxLength, 1, MaxTitleLength));
+    }
+
+    internal static bool ExceedsTextElementLimit(string? title, int maxLength)
+    {
+        var cleaned = NormalizeCustomTitle(title);
+        var limit = Math.Clamp(maxLength, 1, MaxTitleLength);
+        return StringInfo.ParseCombiningCharacters(cleaned).Length > limit;
     }
 
     public static string EffectiveTitle(PaperData paper, int fallbackNumber)
@@ -59,6 +65,12 @@ public static class PaperTitles
     public static string CapsuleText(PaperData paper, int fallbackNumber)
     {
         return EffectiveTitle(paper, fallbackNumber);
+    }
+
+    private static string NormalizeCustomTitle(string? title)
+    {
+        var cleaned = (title ?? "").Trim();
+        return string.Join("", cleaned.Where(ch => !char.IsControl(ch)));
     }
 
     private static string TakeTextElements(string text, int maxLength)

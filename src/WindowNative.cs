@@ -33,6 +33,7 @@ internal static partial class WindowNative
 
     private const int GwlExStyle = -20;
     private const int GwlpHwndParent = -8;
+    private const uint GwHwndNext = 2;
     private const uint GwOwner = 4;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExTopmost = 0x00000008;
@@ -41,6 +42,7 @@ internal static partial class WindowNative
     private const int WsExAppWindow = 0x00040000;
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;
+    private const int FullscreenAvoidanceFallbackAttempts = 2;
     private static readonly IntPtr DpiAwarenessContextSystemAware = new(-2);
     private static readonly IntPtr HwndTop = IntPtr.Zero;
     private static readonly IntPtr HwndBottom = new(1);
@@ -305,45 +307,53 @@ internal static partial class WindowNative
 
     // Set topmost / no-topmost without moving, sizing, or activating the window. Fullscreen
     // avoidance is owner-aware for non-topmost targets because ShowInTaskbar=false gives WPF
-    // windows a hidden owner.
-    public static void ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
+    // windows a hidden owner. The native result is verified so a denied cross-integrity relative
+    // insertion can fall back to lowering only PaperTodo's own HWND group.
+    public static bool ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
     {
-        ApplyTopmostZOrder(new WindowInteropHelper(window).Handle, topmost, insertAfter);
+        return ApplyTopmostZOrder(new WindowInteropHelper(window).Handle, topmost, insertAfter);
     }
 
-    public static void ApplyTopmostZOrder(IntPtr handle, bool topmost, IntPtr insertAfter)
+    public static bool ApplyTopmostZOrder(IntPtr handle, bool topmost, IntPtr insertAfter)
     {
         if (handle == IntPtr.Zero)
         {
-            return;
+            return false;
         }
 
-        SetWindowPos(
+        var bandApplied = SetWindowPos(
             handle,
             topmost ? HwndTopmost : HwndNoTopmost,
             0, 0, 0, 0,
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
 
-        if (!topmost && insertAfter != IntPtr.Zero)
+        if (topmost || insertAfter == IntPtr.Zero)
         {
-            ApplyFullscreenAvoidanceZOrder(handle, insertAfter);
+            return bandApplied;
         }
+
+        return ApplyFullscreenAvoidanceZOrder(handle, insertAfter);
     }
 
-    private static void ApplyFullscreenAvoidanceZOrder(IntPtr handle, IntPtr insertAfter)
+    private static bool ApplyFullscreenAvoidanceZOrder(IntPtr handle, IntPtr insertAfter)
     {
-        if (insertAfter == handle ||
-            !IsWindow(insertAfter) ||
-            (GetWindowLong(insertAfter, GwlExStyle) & WsExTopmost) != 0)
+        if (insertAfter == handle || !IsWindow(insertAfter))
         {
-            // The caller already removed the visible HWND from the topmost band. That alone
-            // places it behind a topmost fullscreen target; invalid targets need no relative move.
-            return;
+            // The target disappeared (or is the surface itself). Demotion is still a valid safe
+            // state, but there is no live foreign HWND left whose relative order can be verified.
+            return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0;
+        }
+
+        if ((GetWindowLong(insertAfter, GwlExStyle) & WsExTopmost) != 0)
+        {
+            // A non-topmost PaperTodo HWND is necessarily behind a topmost fullscreen target.
+            return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0;
         }
 
         const uint flags = SwpNoMove | SwpNoSize | SwpNoActivate;
         var owner = GetWindow(handle, GwOwner);
-        if (!IsHiddenOwnerFromSameProcess(handle, owner))
+        var hasHiddenOwner = IsHiddenOwnerFromSameProcess(handle, owner);
+        if (!hasHiddenOwner)
         {
             // Preserve unrelated or visible owners and retain the original single-HWND behavior.
             _ = SetWindowPos(
@@ -351,24 +361,86 @@ internal static partial class WindowNative
                 insertAfter,
                 0, 0, 0, 0,
                 flags | SwpNoOwnerZOrder);
-            return;
+        }
+        else
+        {
+            // WPF implements ShowInTaskbar=false with an invisible owner. Move that owner behind
+            // the fullscreen target first so target -> visible window -> owner becomes possible.
+            var ownerMoved = SetWindowPos(
+                owner,
+                insertAfter,
+                0, 0, 0, 0,
+                flags);
+
+            // If the owner move succeeded, freeze it at the committed position while inserting
+            // the visible surface. If it failed, let Windows adjust the owner for this first try.
+            _ = SetWindowPos(
+                handle,
+                insertAfter,
+                0, 0, 0, 0,
+                flags | (ownerMoved ? SwpNoOwnerZOrder : 0u));
         }
 
-        // WPF implements ShowInTaskbar=false with an invisible owner. Move that owner behind
-        // the fullscreen target first so target -> visible window -> owner becomes possible.
-        var ownerMoved = SetWindowPos(
-            owner,
-            insertAfter,
-            0, 0, 0, 0,
-            flags);
+        if (IsWindowBehind(handle, insertAfter))
+        {
+            return true;
+        }
 
-        // If the owner move succeeded, freeze it at the committed position while inserting the
-        // visible surface. If it failed, let Windows adjust the owner as a bounded fallback.
-        _ = SetWindowPos(
-            handle,
-            insertAfter,
-            0, 0, 0, 0,
-            flags | (ownerMoved ? SwpNoOwnerZOrder : 0u));
+        // UIPI can reject using a High-integrity fullscreen HWND as hWndInsertAfter even though
+        // PaperTodo may freely reorder its own Medium-integrity windows. Lower only our own group,
+        // then read the real Z-order back. Keep the retry bounded so a pathological shell state
+        // cannot create an unbounded 1-second controller loop against the same target.
+        for (var attempt = 0; attempt < FullscreenAvoidanceFallbackAttempts; attempt++)
+        {
+            if (hasHiddenOwner)
+            {
+                _ = SetWindowPos(
+                    owner,
+                    HwndBottom,
+                    0, 0, 0, 0,
+                    flags);
+            }
+
+            _ = SetWindowPos(
+                handle,
+                HwndBottom,
+                0, 0, 0, 0,
+                flags | SwpNoOwnerZOrder);
+
+            if (IsWindowBehind(handle, insertAfter))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWindowBehind(IntPtr handle, IntPtr reference)
+    {
+        if (handle == IntPtr.Zero ||
+            reference == IntPtr.Zero ||
+            handle == reference ||
+            !IsWindow(handle) ||
+            !IsWindow(reference))
+        {
+            return false;
+        }
+
+        // GetWindow(GW_HWNDNEXT) walks downward through the top-level Z-order. Cap the traversal
+        // defensively even though Windows' Z-order list is expected to be acyclic.
+        var current = GetWindow(reference, GwHwndNext);
+        for (var inspected = 0; current != IntPtr.Zero && inspected < 4096; inspected++)
+        {
+            if (current == handle)
+            {
+                return true;
+            }
+
+            current = GetWindow(current, GwHwndNext);
+        }
+
+        return false;
     }
 
     private static bool IsHiddenOwnerFromSameProcess(IntPtr handle, IntPtr owner)

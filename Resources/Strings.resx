@@ -101,9 +101,6 @@
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>基础</value>
   </data>
-  <data name="MarkdownRenderEnhanced" xml:space="preserve">
-    <value>增强</value>
-  </data>
   <data name="MarkdownRenderFull" xml:space="preserve">
     <value>完全渲染</value>
   </data>
@@ -330,7 +327,7 @@
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>纸片已达到 100 张上限。
+    <value>纸片已达到 200 张上限。
 请删除不再需要的纸片后再新建。</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
@@ -582,9 +579,8 @@
 需同时放置 papertodo 与 PaperTodo_Bold（.ttf/.otf）。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>基础：为md渲染轻量高亮。
-增强：标题、列表和强调更美观。
-完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记（不占宽度、内容紧凑重排）；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
+    <value>基础：保留 Markdown 标记，淡化语法标记，并显示列表圆点、分割线等轻量排版。
+完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown 渲染动画</value>

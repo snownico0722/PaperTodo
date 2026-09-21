@@ -26,7 +26,7 @@ internal static partial class Program
             else if (args.Contains("--preload-memory")) PreloadMemory();
             else if (args.Contains("--profile")) Profile();
             else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadSelectionChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -73,7 +73,7 @@ internal static partial class Program
             ("long-code", "```\n" + new string('文', 5500) + "\n```"),
             ("many-links", string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ", 120)))
         };
-        foreach (var mode in new[] { MarkdownRenderModes.Enhanced, MarkdownRenderModes.Full })
+        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
         foreach (var fixture in fixtures)
         {
             var rows = new List<double[]>();
@@ -127,7 +127,7 @@ internal static partial class Program
         preload.SetEnabledForChecks(preparation != "cold");
         var warmStarted = Stopwatch.GetTimestamp();
         if (preparation == "layout")
-            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true)));
+            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true, preload.Capture(context))));
         var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
         var hitsBefore = preload.ArtifactHits;
         var allocation = GC.GetAllocatedBytesForCurrentThread();
