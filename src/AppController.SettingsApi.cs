@@ -13,7 +13,7 @@ public sealed partial class AppController
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, ToolTips, Animations, Theme, Typography, Markdown,
+        None, Advanced, Telemetry, ToolTips, Animations, Theme, Skin, NativeMaterial, Typography, Markdown,
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen, Resize,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
@@ -93,6 +93,8 @@ public sealed partial class AppController
         Action<T> set, T value, SettingEffects effects)
     {
         var previous = get();
+        var previousPaperSkin = State.PaperSkin;
+        var previousMicaBackdropType = State.MicaBackdropType;
         if (id == "window.hide_from_taskbar" && value is false && State.HidePapersFromWindowSwitcher)
             throw PaperSettingsService.Error("setting_dependency", "Disable window.hide_from_switcher first.");
         if (id == "shortcuts.distinguish_numpad")
@@ -127,6 +129,8 @@ public sealed partial class AppController
             Apply: () =>
             {
                 set(value);
+                if (id == "appearance.paper_skin" && value is string skin && PaperSkins.IsSystemMaterial(skin))
+                    State.MicaBackdropType = PaperSkins.NativeBackdrop(skin);
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
@@ -153,6 +157,13 @@ public sealed partial class AppController
             Rollback: () =>
             {
                 set(previous);
+                if (id == "appearance.paper_skin")
+                {
+                    // Preserve the legacy null migration sentinel and the last system recipe
+                    // exactly if persistence rejects the skin change.
+                    State.PaperSkin = previousPaperSkin;
+                    State.MicaBackdropType = previousMicaBackdropType;
+                }
                 State.HidePapersFromTaskbar = oldTaskbar;
                 if (oldQueues != null && oldMargins != null)
                 {
@@ -214,6 +225,8 @@ public sealed partial class AppController
                 break;
             case SettingEffects.Telemetry: TelemetryService.SetEnabled(State.TelemetryEnabled); break;
             case SettingEffects.Theme: RefreshThemeSurfaces(); break;
+            case SettingEffects.Skin: RefreshSkinSurfaces(); break;
+            case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
             case SettingEffects.Typography: RefreshPublicSettingsTypography(); break;
             case SettingEffects.ToolTips: RefreshToolTipSetting(); break;
             case SettingEffects.Animations:

@@ -135,12 +135,8 @@ public sealed partial class AppController
         return CreateSegmentSelector(segments, ColorSchemes.Normalize(State.ColorScheme), SetColorScheme);
     }
 
-    private void ToggleMicaAlwaysActive()
-    {
-        State.MicaAlwaysActive = !State.MicaAlwaysActive;
-        SaveNow();
-        RefreshMicaSettings();
-    }
+    private void ToggleMicaAlwaysActive() =>
+        SetSettingFromUi("appearance.native_material_always_active", !State.MicaAlwaysActive);
 
     private void RefreshMicaSettings()
     {

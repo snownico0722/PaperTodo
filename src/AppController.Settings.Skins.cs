@@ -11,11 +11,7 @@ public sealed partial class AppController
     private void SetPaperSkin(string id)
     {
         if (!PaperSkins.IsValid(id) || PaperSkins.Resolve(State) == id) return;
-        State.PaperSkin = id;
-        // Retain the last native recipe for older experimental builds.
-        if (PaperSkins.IsSystemMaterial(id)) State.MicaBackdropType = PaperSkins.NativeBackdrop(id);
-        SaveNow();
-        RefreshThemeSurfaces();
+        if (!SetSettingFromUi("appearance.paper_skin", id)) return;
 
         var restartRequired = PaperSkins.UsesNativeBackdrop(id) &&
             NativeMicaBackdrop.IsSupported &&
@@ -108,15 +104,13 @@ public sealed partial class AppController
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
                 {
-                    State.MatchAuxiliaryMaterialStrength = !State.MatchAuxiliaryMaterialStrength;
-                    SaveNow(); RefreshThemeSurfaces();
+                    SetSettingFromUi("appearance.match_auxiliary_material", !State.MatchAuxiliaryMaterialStrength);
                 }), "TipMatchAuxiliaryMaterial"));
         if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
         {
             panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
             {
-                State.LiquidGlassRefraction = !State.LiquidGlassRefraction;
-                SaveNow(); RefreshSkinSurfaces();
+                SetSettingFromUi("appearance.live_refraction", !State.LiquidGlassRefraction);
             }), "TipLiveRefraction"));
             panel.Children.Add(new TextBlock
             {

@@ -141,6 +141,12 @@ internal static partial class Program
         var rendering = definitions.Single(d => d.Metadata.Id == "appearance.text_rendering");
         foreach (var token in new[] { TextRenderingProfiles.Standard, TextRenderingProfiles.Soft, TextRenderingProfiles.Sharp })
             Check(rendering.Validate(Json(token)).GetString() == token, "All existing rendering tokens remain valid.");
+        var colorScheme = definitions.Single(d => d.Metadata.Id == "appearance.color_scheme");
+        foreach (var token in ColorSchemes.All)
+            Check(colorScheme.Validate(Json(token)).GetString() == token, "All visible color-scheme tokens remain valid.");
+        var paperSkin = definitions.Single(d => d.Metadata.Id == "appearance.paper_skin");
+        foreach (var token in PaperSkins.All)
+            Check(paperSkin.Validate(Json(token)).GetString() == token, "All visible paper-skin tokens remain valid.");
         var extension = definitions.Single(d => d.Metadata.Id == "note.external_extension");
         Check(extension.Validate(Json("*.MD")).GetString() == ".md", "Filename extension uses UI normalization.");
         Check(extension.Validate(Json("笔记")).GetString() == ".笔记", "Valid Unicode extensions are not needlessly rejected.");
@@ -148,9 +154,18 @@ internal static partial class Program
         var success = true;
         var service = new PaperSettingsService(definitions, () => true, () => { saves++; return success; }, _ => { });
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
+        Check(service.Get("appearance.paper_skin").Options.Count == PaperSkins.All.Length,
+            "Public settings exposes every paper skin.");
+        Check(service.Get("appearance.match_auxiliary_material").Type == "boolean" &&
+            service.Get("appearance.live_refraction").Type == "boolean" &&
+            service.Get("appearance.native_material_always_active").Type == "boolean",
+            "All visible material toggles share the public settings catalog.");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.01)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
+        Throws<PaperSettingsException>(() => service.Set("appearance.paper_skin", Json("unknown")), "invalid_setting_value");
+        service.Set("appearance.color_scheme", Json(ColorSchemes.Neutral));
+        Check(c.State.ColorScheme == ColorSchemes.Neutral, "Neutral palette remains selectable through the shared settings path.");
         Throws<PaperSettingsException>(() => service.Set("note.external_extension", Json("../../tmp")), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("window.hide_from_taskbar", Json(false)), "setting_dependency");
         service.Set("todo.paper_links", Json(false));
@@ -158,7 +173,21 @@ internal static partial class Program
         success = false;
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json(true)), "save_failed");
         Check(!c.State.EnableTodoPaperLinks, "Real catalog rollback restores the preference.");
+        c.State.PaperSkin = null;
+        c.State.ColorScheme = ColorSchemes.Mica;
+        c.State.MicaBackdropType = MicaBackdropTypes.ClearAcrylic;
+        Throws<PaperSettingsException>(() => service.Set("appearance.paper_skin", Json(PaperSkins.Acrylic)), "save_failed");
+        Check(c.State.PaperSkin == null && c.State.MicaBackdropType == MicaBackdropTypes.ClearAcrylic,
+            "Failed skin save restores both the legacy null sentinel and prior native recipe.");
         success = true;
+        service.Set("appearance.paper_skin", Json(PaperSkins.Mica));
+        Check(c.State.PaperSkin == PaperSkins.Mica && c.State.MicaBackdropType == MicaBackdropTypes.Mica,
+            "Successful system skin keeps the compatibility native recipe in the same transaction.");
+        service.Set("appearance.match_auxiliary_material", Json(true));
+        service.Set("appearance.live_refraction", Json(false));
+        service.Set("appearance.native_material_always_active", Json(true));
+        Check(c.State.MatchAuxiliaryMaterialStrength && !c.State.LiquidGlassRefraction && c.State.MicaAlwaysActive,
+            "Material toggles mutate through the shared catalog.");
         service.Set("window.hide_from_switcher", Json(false));
         service.Set("window.hide_from_taskbar", Json(false));
         success = false;
