@@ -5,6 +5,8 @@ on:
     paths: [.github/workflows/plugin-simplify-work.yml]
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
 concurrency:
   group: plugin-boundary-simplify-20260922
   cancel-in-progress: false
