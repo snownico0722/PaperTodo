@@ -9,9 +9,9 @@ using PaperTodo.Plugin;
 
 internal static partial class Program
 {
-    private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note)
+    private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
-        ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note);
+        ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         CreationOwnsInitialTodoFields(c, note);
         MultilinePluginTooltips();
         ReviewArchiveSavesWithoutBackup();
@@ -19,7 +19,7 @@ internal static partial class Program
     }
 
     private static void ReadsAndNotificationsDoNotCommitOrReplaceBodies(
-        AppController c, PaperData owner, PaperData note)
+        AppController c, PaperData owner, PaperData note, PaperData todo)
     {
         var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[owner.Id];
         var host = ReadField<PaperBodyHost>(window, "_paperBodyHost");
@@ -46,6 +46,31 @@ internal static partial class Program
                 }
                 Throws<PaperCommandException>(() => commands.ReadNoteImage(note.Id, "missing"), "asset_not_found");
                 Check(probe.Commits == 0, "Paper/todo/note/image reads must never commit an unrelated live body.");
+
+                commands.AppendTodos(new AppendTodosRequest
+                {
+                    PaperId = todo.Id,
+                    Todos = [new TodoCreateItem { Text = "external target" }]
+                }, PaperOperationContext.Plugin("tests.boundary"));
+                Check(probe.Commits == 0,
+                    "An external write to another paper must not Commit an unrelated body.");
+
+                var noteWindow = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[note.Id];
+                var markdown = ReadField<MarkdownPaperBodySession>(noteWindow, "_markdownBodySession");
+                var box = markdown.NoteBox ?? throw new InvalidOperationException("Markdown editor is not available.");
+                box.Text = "user target edit";
+                Check(note.Content != box.PersistentText,
+                    "Fixture must keep the target Markdown edit pending before the external write.");
+                commands.WriteNote(new WriteNoteRequest
+                {
+                    PaperId = note.Id,
+                    Mode = NoteWriteMode.Append,
+                    Content = "\nplugin append"
+                }, PaperOperationContext.Plugin("tests.boundary"));
+                Check(note.Content == "user target edit\nplugin append",
+                    "A write to the same Markdown paper commits the user's pending text before the plugin write.");
+                Check(probe.Commits == 0,
+                    "Target Markdown ordering must not invoke Commit on an unrelated body.");
             }
             finally { c.State.McpEnabled = oldEnabled; }
 
