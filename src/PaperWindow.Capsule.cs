@@ -825,6 +825,13 @@ var expandedHeight = collapsed
         // null Effect (snap suppression) can't make the local `is DropShadowEffect` update
         // silently no-op and leave the wrong shadow parameters on the capsule/expanded form.
         ApplyPaperChromePresentation();
+        // ApplyPaperChromePresentation selects the target form's margin. During an animated
+        // form change the current frame still owns geometry, so immediately re-apply the
+        // current transition progress before the first animation tick can be presented.
+        if (animate)
+        {
+            UpdateTransitionVisuals(TransitionProgress);
+        }
         RestoreCollapseStartPositionIfNeeded(shouldRestoreCollapseStartPosition, collapseStartLeft, collapseStartTop);
 
         if (animate)
