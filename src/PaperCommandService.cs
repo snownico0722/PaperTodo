@@ -169,10 +169,10 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        _controller.PrepareExternalPaperOperation(paper);
         var inputs = request.Todos?.ToArray() ?? [];
         ValidateTodoInputs(
             inputs,
@@ -214,7 +214,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (request.Text == null &&
             !request.Done.HasValue &&
             !request.Order.HasValue &&
@@ -228,6 +227,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        _controller.PrepareExternalPaperOperation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -353,7 +353,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (!_controller.State.ExperimentalTodoReminders)
         {
             throw Error(
@@ -364,6 +363,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        _controller.PrepareExternalPaperOperation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -408,7 +408,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Note);
@@ -421,6 +420,7 @@ internal sealed partial class PaperCommandService
                 "note_body_not_markdown",
                 "Writing note content only applies to the built-in Markdown body.");
         }
+        _controller.PrepareExternalPaperOperation(paper);
         var content = request.Content ?? "";
         if (content.Length > PaperWindow.NoteTextMaxLength)
         {
@@ -476,10 +476,10 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        _controller.PrepareExternalPaperOperation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -523,8 +523,8 @@ internal sealed partial class PaperCommandService
         PaperOperationContext context)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(RequiredId(paperId, "paperId"));
+        _controller.PrepareExternalPaperOperation(paper);
         var papers = _controller.State.Papers;
         var originalIndex = papers.IndexOf(paper);
         var affectedLinks = papers
