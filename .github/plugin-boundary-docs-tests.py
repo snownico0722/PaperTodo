@@ -7,6 +7,7 @@ def save(p,s):
     (R/p).write_text(s,encoding='utf-8',newline='\n')
 p='tests/PaperTodo.SettingsApiChecks/PresentationChecks.cs';s=(R/p).read_text();save(p,rep(s,'        await LinkedTitleTruncationBehavior(c, note, todo);','        await LinkedTitleTruncationBehavior(c, note, todo);\n        await PluginBoundaryBehavior(c, owner, note);'))
 p='tests/PaperTodo.SettingsApiChecks/Program.cs';s=(R/p).read_text();save(p,rep(s,'ex is McpApiException c ? c.Code : "";','ex is McpApiException c ? c.Code : ex is PaperCommandException d ? d.Code : "";'))
+p='tests/PaperTodo.ProtocolPolicyChecks/Program.cs';s=(R/p).read_text();save(p,rep(s,'body.GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null','RequireType(host, "PaperTodo.WebPluginRuntimeInfrastructure").GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null'))
 p='tests/PaperTodo.SettingsApiChecks/PaperTodo.SettingsApiChecks.csproj';s=(R/p).read_text();save(p,rep(s,'<ProjectReference Include="../../PaperTodo.csproj" />','<ProjectReference Include="../../PaperTodo.csproj" />\n    <ProjectReference Include="../../plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj" />'))
 p='tests/PaperTodo.PersistenceChecks/Program.cs';s=(R/p).read_text()
 s=rep(s,'    ("plugin-system-shutdown-skips-final-flush", PluginSystemShutdownSkipsFinalFlush),','''    ("plugin-data-uses-one-normal-file", PluginDataUsesOneNormalFile),
