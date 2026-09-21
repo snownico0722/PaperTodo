@@ -86,10 +86,10 @@ jobs:
       - name: Export inspected diff
         if: always()
         run: |
-          git diff be0d20837fdb1668db36ed1349791d9324a04f01 --binary --output=../plugin-boundary-inspected.diff
+          git diff be0d20837fdb1668db36ed1349791d9324a04f01 --binary --output=plugin-boundary-inspected.diff
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: plugin-boundary-inspected-diff
-          path: ../plugin-boundary-inspected.diff
+          path: plugin-boundary-inspected.diff
           retention-days: 3
