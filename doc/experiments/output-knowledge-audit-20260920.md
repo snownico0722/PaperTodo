@@ -8,7 +8,7 @@
 
 - 云端主线固定为 [`c10837bb9efb0b306b993805663b15ea78b1b714`](https://github.com/snownico0722/PaperTodo/commit/c10837bb9efb0b306b993805663b15ea78b1b714)。通过 GitHub API 核对分支和文件 blob SHA，再与本地相同 Git 对象比对，未将本地较旧 main 当作云端现状。
 - 主线 `doc/EXPERIMENTS.md` blob：`d5cafba323286e3dff1715507d7b09b34b82064f`；`doc/DECISIONS.md` blob：`3066f17b062a2bf48f1d1231f5b25e45c73ec554`。
-- PR #260 检查 HEAD：`953ae6266af2bc8c5d1696be7660e5006525202b`，仍为 Draft、未合并。PR #290 检查 HEAD：`922108e0b22c194d3fe373ecf00801243533eace`，仍为 Draft、未合并。
+- PR #260 检查 HEAD：`953ae6266af2bc8c5d1696be7660e5006525202b`，仍为 Draft、未合并。PR #290 的 SoftwareOnly 候选已完成取证并按失败实验收口：专用实现不进入主线，只归档实验记录与逐轮数据。
 - 路线 3 的原候选 #265 已关闭、未合并；知识整理 #267 已合并。#238 的实际 API 状态为已合并，其旧描述中的 Draft 字样不能代替当前状态。
 - 本地检查 `正式版/输出` 的完整文件体积清单、主要最终报告/索引、相关 JSON，以及下文导航检查两次失败日志；没有逐一重新解释全部原始 journal、图像或 45 万个文件的内容。
 
@@ -37,7 +37,7 @@
 | `pr238-windows-validation` | [#238](https://github.com/snownico0722/PaperTodo/pull/238)、主线 D-032～D-035 | 调度与输入边界、共享 STA、不可变 artifact 到单 renderer 的后续替代关系；旧测试包不代表当前实现 |
 | `pr260-user-test-20260915`、其构建脚本 | [#260](https://github.com/snownico0722/PaperTodo/pull/260) | 是旧测试交付材料；核心产品修复与取舍已经记录在该 PR，未发现需新立决策的独立结论 |
 
-SoftwareOnly 的新资料实际在 `输出` 之外的 `diagnostics` 目录；已保存于 [#290 的实验记录及逐轮 CSV](https://github.com/snownico0722/PaperTodo/blob/922108e0b22c194d3fe373ecf00801243533eace/doc/experiments/edge-software-rendering-20260920.md)。它不应被算作此次 `输出` 目录内唯一尚存的结论。
+SoftwareOnly 的新资料实际在 `输出` 之外的 `diagnostics` 目录；已整理为 [SoftwareOnly 渲染实验记录及逐轮 CSV](edge-software-rendering-20260920.md) 进入主线归档。它不应被算作此次 `输出` 目录内唯一尚存的结论。
 
 本地封存报告的旧编号并非云端当前编号：旧 E-003～E-014 在主线整合后对应 E-005～E-016，例如本地 `.NET 11` README 的 E-012 实为当前 E-014。#265 历史上的 E-017/D-039 也不能与 #260 的 E-017/E-018 混用。核对必须同时看提交、目录和标题。
 
