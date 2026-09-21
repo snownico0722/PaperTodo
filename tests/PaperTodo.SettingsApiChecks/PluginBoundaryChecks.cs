@@ -65,9 +65,9 @@ internal static partial class Program
                 {
                     PaperId = note.Id,
                     Mode = NoteWriteMode.Append,
-                    Content = "\nplugin append"
+                    Content = "plugin append"
                 }, PaperOperationContext.Plugin("tests.boundary"));
-                Check(note.Content == "user target edit\nplugin append",
+                Check(note.Content == "user target edit" + Environment.NewLine + "plugin append",
                     "A write to the same Markdown paper commits the user's pending text before the plugin write.");
                 Check(probe.Commits == 0,
                     "Target Markdown ordering must not invoke Commit on an unrelated body.");
