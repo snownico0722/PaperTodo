@@ -295,7 +295,10 @@ internal static class VisualChecks
         window.UpdateLayout();
         Program.Assert(Math.Abs(window.Width - width) < 0.01 && Math.Abs(window.Height - height) < 0.01 &&
             Math.Abs(chrome.ActualWidth - paperWidth) <= 1 && Math.Abs(chrome.ActualHeight - paperHeight) <= 1,
-            "clearing the final animation frame must not introduce the old 16 DIP size jump");
+            $"clearing the final animation frame must not introduce the old 16 DIP size jump: " +
+            $"window {width}x{height} -> {window.Width}x{window.Height}; " +
+            $"chrome {paperWidth}x{paperHeight} -> {chrome.ActualWidth}x{chrome.ActualHeight}; " +
+            $"margin={chrome.Margin}");
         Program.Assert(window.ResizeMode == (collapsed ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip),
             "settling an interrupted animation restores its final resize policy");
     }
