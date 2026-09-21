@@ -5,19 +5,89 @@ on:
     paths: [.github/workflows/plugin-simplify-work.yml]
 permissions:
   contents: read
+concurrency:
+  group: plugin-boundary-simplify-20260922
+  cancel-in-progress: false
 jobs:
-  source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Export fixed base source
-        run: git archive --format=zip --output=source.zip be0d20837fdb1668db36ed1349791d9324a04f01
-      - uses: actions/upload-artifact@v4
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
         with:
-          name: plugin-simplify-base-source
-          path: source.zip
-          retention-days: 2
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Apply scoped changes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .github/plugin-boundary-apply.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/plugin-boundary-docs-tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and run behavior suites
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build ./PaperTodo.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($suite in @('SettingsApiChecks','PersistenceChecks','ProtocolPolicyChecks','PluginApiChecks','CodexCliBridgeChecks','ThreadingChecks','LifecycleChecks')) {
+            Write-Host "::group::$suite"
+            dotnet run --project "tests/PaperTodo.$suite/PaperTodo.$suite.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host '::endgroup::'
+          }
+      - name: Rebuild shipped native plugins
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($project in @(Get-ChildItem plugin-samples -Recurse -Filter *.csproj | Sort-Object FullName)) {
+            & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $project.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $dll = './plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll'
+          $first = (Get-FileHash $dll -Algorithm SHA256).Hash
+          & ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath './plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $dll -Algorithm SHA256).Hash -ne $first) { throw 'Archive output differs on rebuild.' }
+      - name: Commit verified result and remove preparation files
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch origin refactor/plugin-boundary-simplify-20260922
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((git rev-parse FETCH_HEAD) -ne $env:GITHUB_SHA) { throw 'Branch moved during validation.' }
+          git rm .github/plugin-boundary-apply.py .github/plugin-boundary-docs-tests.py .github/plugin-boundary-patch.0.b64 .github/workflows/plugin-simplify-work.yml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add -- AGENTS.md CHANGELOG.md CHANGELOG.zh.md Resources doc src plugin-samples plugins tests
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '精简插件职责：移除恢复分流、读取提交和额外限制 [ci]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/refactor/plugin-boundary-simplify-20260922
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git log -1 --format='%H %s'
+      - name: Export inspected diff
+        if: always()
+        run: |
+          git diff be0d20837fdb1668db36ed1349791d9324a04f01 --binary --output=../plugin-boundary-inspected.diff
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plugin-boundary-inspected-diff
+          path: ../plugin-boundary-inspected.diff
+          retention-days: 3
