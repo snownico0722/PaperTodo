@@ -34,6 +34,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _updating;
     private bool _disposed;
     private bool _refreshQueued;
+    private bool _contentRendered;
     private string? _accentMaterial;
     internal bool UsesRedirectionAlpha { get; private set; }
 
@@ -90,6 +91,20 @@ internal sealed class NativeMicaBackdrop : IDisposable
         var chrome = _getChrome();
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
+
+        // A fresh HWND can enter Clear Acrylic accent/redirection mode before WPF has
+        // produced its first redirected bitmap. On current Windows compositors that can
+        // leave a permanently blank accent surface even after later invalidation. Let WPF
+        // publish one ordinary opaque frame first; switching an already-rendered HWND is
+        // unaffected and still takes the normal path below.
+        if (_material == MicaBackdropTypes.ClearAcrylic && !_contentRendered)
+        {
+            var paper = Theme.PaperBrush;
+            _source.CompositionTarget.BackgroundColor = ((SolidColorBrush)paper).Color;
+            _window.Background = paper;
+            _setSurface(paper);
+            return;
+        }
 
         var eligible = _canPresent() && _window.Opacity >= 1 && chrome.Opacity >= 1 &&
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
@@ -226,11 +241,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     private void OnContentRendered(object? sender, EventArgs e)
     {
-        // A fresh Clear Acrylic HWND can enter alpha/redirection mode before WPF has
-        // populated its first redirected bitmap. Switching an existing HWND works because
-        // that bitmap already exists. Reapply exactly once after the first real WPF present
-        // so DWM receives the premultiplied-alpha content instead of an empty transparent map.
+        // Fresh Clear Acrylic is intentionally deferred until this first real WPF present.
+        // At this point the redirected bitmap contains the actual control tree, so enabling
+        // accent/redirection cannot freeze an empty startup surface.
         _window.ContentRendered -= OnContentRendered;
+        _contentRendered = true;
         if (!_disposed && _requested && _material == MicaBackdropTypes.ClearAcrylic)
             Refresh(_requested, _dark, force: true);
     }
