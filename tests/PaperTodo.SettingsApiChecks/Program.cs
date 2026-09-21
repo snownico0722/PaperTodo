@@ -168,8 +168,10 @@ internal static partial class Program
         Check(c.State.ColorScheme == ColorSchemes.Neutral, "Neutral palette remains selectable through the shared settings path.");
         Throws<PaperSettingsException>(() => service.Set("note.external_extension", Json("../../tmp")), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("window.hide_from_taskbar", Json(false)), "setting_dependency");
+        var savesBeforeTodoLink = saves;
         service.Set("todo.paper_links", Json(false));
-        Check(!c.State.EnableTodoPaperLinks && saves == 1, "Catalog setter changes the exact backing feature.");
+        Check(!c.State.EnableTodoPaperLinks && saves == savesBeforeTodoLink + 1,
+            "Catalog setter changes the exact backing feature and commits once.");
         success = false;
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json(true)), "save_failed");
         Check(!c.State.EnableTodoPaperLinks, "Real catalog rollback restores the preference.");
