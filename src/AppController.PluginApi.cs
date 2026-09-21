@@ -69,14 +69,18 @@ public sealed partial class AppController
             contentAvailable ? paper.Content ?? "" : "");
     }
 
-    internal void PrepareExternalPaperOperation()
+    internal void PrepareExternalPaperOperation(PaperData? targetPaper = null)
     {
-        // Markdown edits live in the editor until CommitPendingNoteContentsForSave() copies them
-        // into PaperData. A prior mutation-stamp scan may already have observed the revision before
-        // that copy happened, so the external-operation boundary must diff unconditionally here.
-        // Otherwise the newly committed user edit can be misattributed to the following MCP/plugin
-        // operation.
-        CommitPendingNoteContentsForSave();
+        // Only a command that targets the same built-in Markdown paper needs to order pending user
+        // text before the external mutation. Do not Commit unrelated notes or third-party bodies.
+        if (targetPaper != null &&
+            targetPaper.Type == PaperTypes.Note &&
+            string.Equals(targetPaper.BodyProviderId, PaperBodyProviderIds.Markdown, StringComparison.Ordinal) &&
+            _windows.TryGetValue(targetPaper.Id, out var window))
+        {
+            window.CommitPendingMarkdownContentForSave();
+        }
+
         _paperBodyPluginEvents?.ScanNow(PaperOperationContext.User());
     }
 
@@ -137,7 +141,7 @@ public sealed partial class AppController
         string title,
         string providerId)
     {
-        PrepareExternalPaperOperation();
+        PrepareExternalPaperOperation(paper);
         using (SuppressPaperPluginEventScans())
         {
             UpdatePaperTitle(paper, title);
