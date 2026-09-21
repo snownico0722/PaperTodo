@@ -1260,12 +1260,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>プラグインプロトコル {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>データを読み取れないため空の状態で実行しています。新しいデータは復旧ファイルに保存されます。</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>元のデータを読み取れないため、復旧データファイルを使用しています。</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>フォルダーを開く</value>
   </data>

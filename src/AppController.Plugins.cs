@@ -91,7 +91,15 @@ public sealed partial class AppController
             Strings.Format("PluginsLoadedCountFormat", descriptors.Count)));
         foreach (var descriptor in descriptors)
         {
-            root.Children.Add(BuildPluginDescriptorCard(descriptor));
+            try
+            {
+                root.Children.Add(BuildPluginDescriptorCard(descriptor));
+            }
+            catch (Exception ex)
+            {
+                root.Children.Add(BuildPluginIssueCard(new PaperBodyPluginLoadIssue(
+                    descriptor.SourcePath, ex.GetBaseException().Message)));
+            }
         }
 
         if (_paperBodyPlugins.Issues.Count > 0)
@@ -138,14 +146,6 @@ public sealed partial class AppController
         });
 
         var settings = descriptor.Manifest?.Settings ?? [];
-        PaperBodyPluginDataReadIssue? dataIssue = null;
-        if (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
-            _paperBodyPlugins.DataStore.TryGetReadIssue(
-                descriptor.Id,
-                out var detectedDataIssue))
-        {
-            dataIssue = detectedDataIssue;
-        }
         if (settings.Length > 0)
         {
             content.ColumnDefinitions.Add(new ColumnDefinition
@@ -155,7 +155,7 @@ public sealed partial class AppController
         }
 
         var text = new StackPanel();
-        var status = PluginStatusFor(descriptor, dataIssue != null);
+        var status = PluginStatusFor(descriptor);
         var titleRow = new Grid();
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition
@@ -166,7 +166,7 @@ public sealed partial class AppController
         _pluginStatusRefreshers[descriptor.Id] = () =>
             ApplyPluginStatusDot(
                 statusDot,
-                PluginStatusFor(descriptor, dataIssue != null));
+                PluginStatusFor(descriptor));
         Grid.SetColumn(statusDot, 0);
         titleRow.Children.Add(statusDot);
 
@@ -214,23 +214,6 @@ public sealed partial class AppController
             TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = descriptor.SourcePath
         });
-        if (dataIssue != null)
-        {
-            text.Children.Add(new TextBlock
-            {
-                Text = Strings.Get(
-                    dataIssue.UsingEmptyState
-                        ? "PluginsDataRecoveryPending"
-                        : "PluginsDataRecoveryActive"),
-                Foreground = Theme.DangerBrush,
-                FontSize = AppTypography.Scale(10.5),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, settings.Length > 0 ? 14 : 0, 0),
-                ToolTip = string.IsNullOrWhiteSpace(dataIssue.Details)
-                    ? dataIssue.ActivePath
-                    : $"{dataIssue.ActivePath}{Environment.NewLine}{dataIssue.Details}"
-            });
-        }
         Grid.SetColumn(text, 0);
         content.Children.Add(text);
 

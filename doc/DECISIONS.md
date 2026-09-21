@@ -654,7 +654,7 @@ PR #94 为完成 V3 Lite 曾引入 source export、finalizer、clean-state verif
 
 ## D-020 — 插件状态与核心 `data.json` 分域持久化
 
-**Status:** Accepted
+**Status:** Partially superseded by D-040（恢复分流部分由 D-040 替代；数据分域与附属清理边界保留）
 
 ### Context
 
@@ -689,7 +689,7 @@ Paper body plugin 引入后，provider settings、provider-scoped Runtime state�
 
 ## D-021 — 插件与 MCP 共用 `PaperCommandService` 作为外部业务命令边界
 
-**Status:** Accepted
+**Status:** Partially superseded by D-040（读取前提交部分由 D-040 替代；共享 mutation 边界保留）
 
 ### Context
 
@@ -1461,3 +1461,33 @@ Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果�
 - `tests/PaperTodo.ProtocolPolicyChecks/Program.cs`：2.1/2.2 接受范围及 2.2-only 能力拒绝测试。
 - `plugin-samples/PaperTodo.Plugin.Protocol21Web/`：2.1 向后兼容样例。
 - `plugin-samples/PaperTodo.Plugin.TopBarWeb/` 与 Codex CLI Bridge：2.2 样例。
+
+
+---
+
+## D-040 — 插件基础读写不承担业务恢复，查询与普通通知不扩大副作用
+
+**Status:** Accepted
+
+### Context
+
+协议 1.2 的恢复分流在读取错误后生成空文档、改写另一条文件路径，并把恢复标记传播到插件页与后来的 MCP 启用条件。共享外部操作准备又让只读查询提交所有正文；复盘插件的提交会写入整个记录池。为小操作追加这些职责，会扩大正常调用和失败的影响范围。
+
+### Decision
+
+- 保留插件数据与核心数据分域及一次保存的临时文件替换；删除宿主 `.json.recovered` 路径、恢复标记和基于它的权限阻断。不存在的文件可默认初始化；已有文件读不出来就报告读取失败，不以空数据继续。旧恢复文件保留在磁盘但不自动选择、迁移或删除。
+- 插件自己的长期业务数据、备份与恢复由插件负责。复盘示例移除自己的 `.bak` 回退和复制，使用原来的临时文件替换；本轮不改变关闭时保存和失败保存计时策略。
+- Paper/Todo/Note/图片查询不触发正文提交或强制同步，接受模型相对实时编辑的短暂延迟；实际 mutation 的提交、回滚和事件来源处理保持不变。
+- 普通正文通知异常不升级成正文销毁；新建待办的初始属性属于创建/追加权限；轻弹窗外链复用正文已有系统打开，不新增权限或桥接接口。
+- 首次后台启动失败不重试，实际成功运行后的故障保留原有有界恢复，不创建新的错误分类或恢复状态。
+
+### Why
+
+宿主负责稳定接口与当前操作，不替每个插件定义业务数据恢复策略。删除扩大职责的分支，比在恢复文件、读取同步和失败补偿上继续加状态更可控。参数有效性、已有内容修改权限和一次保存的完整性不是本次删除对象。
+
+### Evidence
+
+- `src/PaperBodyPluginDataStore.cs`、`src/AppController.Mcp.cs`：单路径读写与当前有效设置。
+- `src/PaperCommandService.cs`、`src/PaperCommandService.NoteAssets.cs`：纯读取；mutation 仍保留原准备。
+- `src/PaperWindow.PluginBodies.cs`、`src/AppController.PluginRuntime.cs`：普通通知与首次启动失败。
+- `tests/PaperTodo.PersistenceChecks/Program.cs`、`tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs`：真实文件、调用次数、初始属性和后台生命周期回归。

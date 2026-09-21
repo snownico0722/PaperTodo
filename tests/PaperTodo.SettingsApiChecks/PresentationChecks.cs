@@ -233,6 +233,7 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => runtimeApi.HidePaper("note"), "runtime_closed");
         current = true;
         await LinkedTitleTruncationBehavior(c, note, todo);
+        await PluginBoundaryBehavior(c, owner, note);
         await PresentationPipeBehavior();
         Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
     }

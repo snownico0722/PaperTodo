@@ -985,11 +985,12 @@ public sealed partial class PaperWindow
 
     private void InvokeBodySession(
         Action<IPaperBodySession> callback,
-        bool disableOnFailure = true)
+        bool disableOnFailure = false)
     {
         var failure = _paperBodyHost.Invoke(callback);
         if (failure != null)
         {
+            Trace.TraceWarning("Plugin body callback failed: {0}: {1}", _paper.BodyProviderId, failure);
             if (!disableOnFailure ||
                 _windowLifecycle != PaperWindowLifecycleState.Alive)
             {
@@ -1045,7 +1046,7 @@ public sealed partial class PaperWindow
 
     internal void CommitCurrentPaperBody()
     {
-        InvokeBodySession(item => item.Commit());
+        InvokeBodySession(item => item.Commit(), disableOnFailure: true);
     }
 
     internal void CancelCurrentPaperBodyInteractions()

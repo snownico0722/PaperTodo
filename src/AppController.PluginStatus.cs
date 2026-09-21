@@ -20,11 +20,9 @@ public sealed partial class AppController
     }
 
     private PluginPageStatus PluginStatusFor(
-        PaperBodyPluginDescriptor descriptor,
-        bool hasDataIssue)
+        PaperBodyPluginDescriptor descriptor)
     {
-        if (hasDataIssue ||
-            HasPluginRuntimeFailure(descriptor.Id) ||
+        if (HasPluginRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
                  PluginIssueMatchesDescriptor(issue, descriptor))) ||

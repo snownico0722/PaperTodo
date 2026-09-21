@@ -1260,12 +1260,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>플러그인 프로토콜 {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>데이터를 읽지 못해 빈 상태를 사용 중입니다. 새 데이터는 복구 파일에 저장됩니다.</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>원본 데이터를 읽지 못해 복구 데이터 파일을 사용 중입니다.</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>폴더 열기</value>
   </data>

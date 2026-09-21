@@ -73,12 +73,7 @@ internal static class PluginContributionPolicy
                 required: true,
                 "invalid_todo_action_text",
                 "Todo action text");
-            var tooltip = NormalizeText(
-                source.ToolTip,
-                MaximumToolTipLength,
-                required: false,
-                "invalid_todo_action_tooltip",
-                "Todo action tooltip");
+            var tooltip = NormalizeToolTip(source.ToolTip, "invalid_todo_action_tooltip");
             var icon = NormalizeIcon(source.Icon, required: true, "invalid_todo_action_icon");
             const PaperTodoActionPlacement supported =
                 PaperTodoActionPlacement.Inline |
@@ -132,12 +127,7 @@ internal static class PluginContributionPolicy
                     required: true,
                     "invalid_topbar_label_text",
                     "Top-bar label text"),
-                ToolTip = NormalizeText(
-                    label.ToolTip,
-                    MaximumToolTipLength,
-                    required: false,
-                    "invalid_topbar_label_tooltip",
-                    "Top-bar label tooltip"),
+                ToolTip = NormalizeToolTip(label.ToolTip, "invalid_topbar_label_tooltip"),
                 Icon = label.Icon == null
                     ? null
                     : NormalizeIcon(label.Icon, required: false, "invalid_topbar_label_icon")
@@ -164,6 +154,15 @@ internal static class PluginContributionPolicy
                 $"{noun} ids must contain 1-{MaximumIdentifierLength} ASCII letters, digits, '.', '_' or '-'.");
         }
         return normalized;
+    }
+
+    private static string NormalizeToolTip(string? value, string code)
+    {
+        var text = value?.Trim() ?? string.Empty;
+        if (text.Length > MaximumToolTipLength)
+            throw new PaperTodoPluginException(code,
+                $"Tooltips cannot exceed {MaximumToolTipLength} characters.");
+        return text;
     }
 
     private static string NormalizeText(

@@ -236,14 +236,14 @@ internal sealed record McpTodoInput
     public required string Text { get; init; }
 
     [JsonPropertyName("done")]
-    [Description("Whether the todo starts completed. Setting true requires PaperTodo full writes.")]
+    [Description("Whether the new todo starts completed.")]
     public bool Done { get; init; }
 
     [JsonPropertyName("reminder_at")]
-    [Description("Optional ISO 8601 future reminder date/time with UTC offset. Requires PaperTodo full writes.")]
+    [Description("Optional ISO 8601 future reminder date/time with UTC offset for the new todo.")]
     public string? ReminderAt { get; init; }
 
     [JsonPropertyName("linked_paper_id")]
-    [Description("Optional PaperTodo paper ID to link from this todo, such as a Note containing longer details. Requires PaperTodo full writes.")]
+    [Description("Optional PaperTodo paper ID to link from the new todo, such as a Note containing longer details.")]
     public string? LinkedPaperId { get; init; }
 }

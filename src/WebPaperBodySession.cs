@@ -414,7 +414,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             e.Cancel = true;
             if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var external))
             {
-                TryOpenExternalNavigation(external);
+                WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(external);
             }
             return;
         }
@@ -479,7 +479,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         e.Handled = true;
         if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
         {
-            _ = TryOpenExternalNavigation(uri);
+            _ = WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri);
         }
     }
 
@@ -495,7 +495,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
-        if (TryOpenExternalNavigation(uri))
+        if (WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri))
         {
             e.Cancel = true;
         }
@@ -505,27 +505,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
             string.Equals(uri.GetLeftPart(UriPartial.Authority), _expectedOrigin, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryOpenExternalNavigation(Uri uri)
-    {
-        if (uri.Scheme is not ("http" or "https" or "mailto"))
-        {
-            return false;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true
-            });
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private void ShowWebView()

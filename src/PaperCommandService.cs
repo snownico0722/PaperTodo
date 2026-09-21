@@ -25,7 +25,6 @@ internal sealed partial class PaperCommandService
     public IReadOnlyList<PaperSnapshot> ListPapers(string? type = null)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (type != null && type is not PaperTypes.Todo and not PaperTypes.Note)
         {
             throw Error("invalid_params", "type must be 'todo' or 'note'.");
@@ -40,7 +39,6 @@ internal sealed partial class PaperCommandService
     public PaperSnapshot? GetPaper(string paperId)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = FindPaper(RequiredId(paperId, "paperId"));
         return paper == null ? null : _controller.CapturePaperSnapshot(paper);
     }
@@ -50,7 +48,6 @@ internal sealed partial class PaperCommandService
         bool includeBlank = false)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var normalizedPaperId = string.IsNullOrWhiteSpace(paperId)
             ? null
             : RequiredId(paperId, "paperId");
@@ -77,7 +74,6 @@ internal sealed partial class PaperCommandService
     public NoteSnapshot? GetNote(string paperId)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = FindPaper(RequiredId(paperId, "paperId"));
         if (paper == null)
         {

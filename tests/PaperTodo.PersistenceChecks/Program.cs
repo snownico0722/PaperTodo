@@ -11,6 +11,9 @@ var checks = new (string Name, Action Run)[]
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
     ("older-save-version-cannot-overwrite-newer", OlderSaveVersionCannotOverwriteNewer),
     ("backup-recovery-is-preserved-until-normal-save", BackupRecoveryIsPreservedUntilNormalSave),
+    ("plugin-data-uses-one-normal-file", PluginDataUsesOneNormalFile),
+    ("unreadable-plugin-data-does-not-become-empty", UnreadablePluginDataDoesNotBecomeEmpty),
+    ("legacy-plugin-recovery-file-is-not-selected", LegacyPluginRecoveryFileIsNotSelected),
     ("plugin-system-shutdown-skips-final-flush", PluginSystemShutdownSkipsFinalFlush),
     ("plugin-normal-dispose-still-final-flushes", PluginNormalDisposeStillFinalFlushes),
     ("shutdown-skips-deferred-plugin-cleanup", ShutdownSkipsDeferredPluginCleanup),
@@ -139,6 +142,54 @@ static void BackupRecoveryIsPreservedUntilNormalSave()
     Assert(!recoveredStore.TryRefreshBackupFromPrimary(),
         "backup used for recovery was allowed to refresh immediately");
     Assert(ReadTheme(recoveredStore.BackupPath) == "light", "recovery backup was changed");
+}
+
+static void PluginDataUsesOneNormalFile()
+{
+    using var scope = new TempDirectory();
+    var path = Path.Combine(scope.Path, "data", "sample.plugin.json");
+    using (var store = new PaperBodyPluginDataStore(scope.Path))
+    {
+        Assert(!store.TryReadPaperState("sample.plugin", "p", out _), "missing file is a new plugin");
+        store.SavePaperState("sample.plugin", "p", 1, "{\"value\":7}");
+    }
+    using var loaded = new PaperBodyPluginDataStore(scope.Path);
+    Assert(loaded.TryReadPaperState("sample.plugin", "p", out var state), "normal file was not persisted");
+    using var json = JsonDocument.Parse(state.Json);
+    Assert(json.RootElement.GetProperty("value").GetInt32() == 7, "saved state did not roundtrip");
+    Assert(Directory.GetFiles(Path.GetDirectoryName(path)!).Single() == path, "created an alternate state file");
+}
+
+static void UnreadablePluginDataDoesNotBecomeEmpty()
+{
+    using var scope = new TempDirectory();
+    var path = Path.Combine(scope.Path, "data", "sample.plugin.json");
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    const string original = "{broken plugin data";
+    File.WriteAllText(path, original);
+    using (var store = new PaperBodyPluginDataStore(scope.Path))
+    {
+        AssertThrows<JsonException>(() => store.ReadPaperState("sample.plugin", "p"), "unreadable data was hidden");
+        AssertThrows<JsonException>(() => store.SavePaperState("sample.plugin", "p", 1, "{}"), "write accepted an unreadable document");
+    }
+    Assert(File.ReadAllText(path) == original, "failed read replaced original data");
+    Assert(Directory.GetFiles(Path.GetDirectoryName(path)!).Length == 1, "failed read created a recovery file");
+}
+
+static void LegacyPluginRecoveryFileIsNotSelected()
+{
+    using var scope = new TempDirectory();
+    var path = Path.Combine(scope.Path, "data", "sample.plugin.json");
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    const string legacy = "legacy contents left for manual use";
+    File.WriteAllText(path + ".recovered", legacy);
+    using (var store = new PaperBodyPluginDataStore(scope.Path))
+    {
+        Assert(!store.TryReadPaperState("sample.plugin", "p", out _), "legacy file was selected");
+        store.SavePaperState("sample.plugin", "p", 1, "{}");
+    }
+    Assert(File.Exists(path), "normal state path was not used");
+    Assert(File.ReadAllText(path + ".recovered") == legacy, "legacy file was modified or removed");
 }
 
 static void PluginSystemShutdownSkipsFinalFlush()

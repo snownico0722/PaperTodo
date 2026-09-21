@@ -20,6 +20,9 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Simpler plugin reads and failure handling**: Reading papers, todos, notes or images no longer commits other bodies. Plugin state uses only its normal data file; unreadable data reports an error instead of creating empty recovery state. Existing recovery files are not deleted automatically. Ordinary theme, font or activation callback errors no longer replace the plugin body; a first Runtime startup failure is no longer retried automatically.
+- **Plugin interaction and todo creation**: New and appended todos can include their initial completion, reminder and link fields without permission to modify existing items. Action/label tooltips support multiple lines, and popup web/mail links open through the system default application. Review Archive saving no longer depends on a separate backup file.
+
 - Lowering the paper-title length limit now immediately updates titles shown in linked Todo items.
 
 - **Cross-paper controls**: MCP and Native/Web plugins can show, hide, expand, collapse or activate existing papers by ID. Showing a paper preserves its collapsed state; hiding never deletes content. MCP paper queries now also report collapsed state.

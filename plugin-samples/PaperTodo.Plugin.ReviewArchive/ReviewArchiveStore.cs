@@ -35,9 +35,7 @@ internal static class ReviewArchiveStore
                 typeof(ReviewArchivePlugin).Assembly.Location) ?? AppContext.BaseDirectory;
             var runtimeDirectory = Path.Combine(pluginDirectory, ".runtime");
             _path = Path.Combine(runtimeDirectory, "review-archive.json");
-            _document = ReadDocument(_path) ??
-                ReadDocument(_path + ".bak") ??
-                new ReviewArchiveDocument();
+            _document = ReadDocument(_path) ?? new ReviewArchiveDocument();
         }
     }
 
@@ -665,10 +663,6 @@ internal static class ReviewArchiveStore
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temp = path + ".tmp";
             File.WriteAllText(temp, json, new UTF8Encoding(false));
-            if (File.Exists(path))
-            {
-                File.Copy(path, path + ".bak", overwrite: true);
-            }
             File.Move(temp, path, overwrite: true);
             LastSaveError = "";
         }

@@ -72,16 +72,9 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         {
             Require(PaperTodoPermissionNames.NotesAppend);
         }
-        if (type == PaperTypes.Todo && request.Todos is { Count: > 0 } todos)
+        if (type == PaperTypes.Todo && request.Todos is { Count: > 0 })
         {
             Require(PaperTodoPermissionNames.TodosAppend);
-            if (todos.Any(item =>
-                    item.Done ||
-                    item.ReminderAt.HasValue ||
-                    !string.IsNullOrWhiteSpace(item.LinkedPaperId)))
-            {
-                Require(PaperTodoPermissionNames.TodosUpdate);
-            }
         }
         return Invoke(() => _commands.CreatePaper(
             request,
@@ -92,13 +85,6 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
     {
         ArgumentNullException.ThrowIfNull(request);
         Require(PaperTodoPermissionNames.TodosAppend);
-        if ((request.Todos ?? []).Any(item =>
-                item.Done ||
-                item.ReminderAt.HasValue ||
-                !string.IsNullOrWhiteSpace(item.LinkedPaperId)))
-        {
-            Require(PaperTodoPermissionNames.TodosUpdate);
-        }
         return Invoke(() => _commands.AppendTodos(
             request,
             PaperOperationContext.Plugin(_providerId)));

@@ -26,7 +26,7 @@ internal static partial class Program
             if (code != null)
             {
                 var actual = ex is PaperSettingsException a ? a.Code : ex is PaperTodoPluginException b ? b.Code :
-                    ex is McpApiException c ? c.Code : "";
+                    ex is McpApiException c ? c.Code : ex is PaperCommandException d ? d.Code : "";
                 Check(actual == code, $"Expected {code}, got {actual}.");
             }
             else _checks++;

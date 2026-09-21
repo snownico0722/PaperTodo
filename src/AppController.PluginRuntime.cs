@@ -281,7 +281,8 @@ public sealed partial class AppController
                     descriptor,
                     new InvalidOperationException(
                         "The Web plugin runtime failed while completing startup."),
-                    "startup-ready");
+                    "startup-ready",
+                    retry: slot.FailureCount > 0);
                 return;
             }
 
@@ -334,7 +335,9 @@ public sealed partial class AppController
                 return;
             }
 
-            HandlePluginRuntimeFailure(slot, descriptor, ex, "start");
+            // FailureCount is already nonzero only when a running Runtime started recovery.
+            // Do not retry a plugin that has never completed startup.
+            HandlePluginRuntimeFailure(slot, descriptor, ex, "start", retry: slot.FailureCount > 0);
         }
     }
 

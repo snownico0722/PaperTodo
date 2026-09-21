@@ -64,7 +64,7 @@ PaperTodo.exe
 | 应用级业务协调 | `AppController` | `AppState`、窗口集合、保存调度、托盘、全局 runtime、跨纸片协调 |
 | 核心持久化 | `StateStore` | `data.json` / backup 的加载、恢复和版本化写入 |
 | 图片资产 | `NoteImageStore` | LMDB 生命周期、串行访问、图片编号、缓存和回收 |
-| 插件状态 | `PaperBodyPluginDataStore` | provider settings、provider Runtime state 与 per-paper frontend state 的独立保存/恢复 |
+| 插件状态 | `PaperBodyPluginDataStore` | provider settings、provider Runtime state 与 per-paper frontend state 的独立读写 |
 | 外部 Paper/Todo/Note 命令 | `PaperCommandService` | 插件/MCP 共用的验证、mutation、同步提交/回滚和事件发布 |
 | 单纸片 UI | `PaperWindow` | paper WPF shell、普通交互、provider 选择、子系统适配 |
 | paper-body session | `PaperBodyHost` | 当前 `IPaperBodySession` 的 attach / invoke / commit / dispose |
@@ -137,7 +137,7 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 - 每张 Paper 的 frontend/body state 写入上限是 **10 MiB**；整个 provider 的 PluginRuntime state 写入上限是 **20 MiB**。二者是独立额度。既有超限数据仍可读取，宿主不会截断；只有新的写入会按所属层级拒绝。
 - Runtime state 若来自高于当前插件 `stateVersion` 的版本，宿主拒绝启动该 Runtime，保留原数据并把插件标记为 Issue；旧版本 state 可以由插件读取后自行迁移。
 - Body/Mini -> Runtime 消息不跨 Runtime interruption 排队。Web renderer 暂不可接收时 `runtime.post(...)` 明确失败为 `runtime_unavailable`，绝不返回成功后静默丢消息。业务重试、去重和时效判断属于插件。
-- 自动恢复 Backoff 期间保留最后一次 Runtime presentation，避免 UI 闪烁；进入最终 `Failed` 后清除 Runtime 动态 Header/Capsule 并回退到 Paper/插件的普通静态展示。
+- 首次 Runtime 启动失败直接进入 `Failed`，不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后发生的 Web 后台故障仍使用既有有界恢复；恢复 Backoff 期间保留最后一次 Runtime presentation，进入最终 `Failed` 后清除动态展示。
 - `Papers.List()` 是 Runtime 启动时的全量快照；`Papers.Subscribe(...)` 只报告订阅后的增量，不为启动前已存在的 Paper 重放 `PaperAdded`。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`；启动失败、Backoff/Failed 或 Web document 不可投递期间不承诺该事件必达。
 - Todo actions 与 Top Bar labels 是 2.1 的 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。
 
@@ -151,9 +151,9 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 | --- | --- | --- | --- |
 | 核心应用与纸片状态 | `data.json` + `data.backup.json` | `StateStore` | 保持可迁移、可恢复的结构化业务状态 |
 | Note 图片二进制 | `note-assets.lmdb` | `NoteImageStore` / `LmdbImageDatabase` | 大体积二进制与 JSON 分离，独立做引用/容量管理 |
-| 插件 settings / Runtime state / per-paper frontend state | `plugins/data/*.json` | `PaperBodyPluginDataStore` | 插件后端、前端与核心状态解耦，独立迁移和恢复 |
+| 插件 settings / Runtime state / per-paper frontend state | `plugins/data/*.json` | `PaperBodyPluginDataStore` | 插件后端、前端与核心状态解耦，提供单文件读写 |
 
-这三类数据不能因为“都属于一张纸”就合并成一个写入协议。核心状态保存、图片回收和插件状态恢复具有不同失败语义，因此保持各自 authority。
+这三类数据不能因为“都属于一张纸”就合并成一个写入协议。核心状态保存、图片回收和插件状态读写具有不同失败语义，因此保持各自 authority。
 
 ### 4.2 核心状态
 
@@ -183,7 +183,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 ### 4.4 插件状态
 
-插件 settings 与 per-paper state 由 `PaperBodyPluginDataStore` 独立保存，不塞回 `data.json`。插件数据读失败时保留原始问题源，并通过受控 recovery 路径继续；插件数据故障不应把核心 Paper 数据变成不可加载。
+插件 settings、Runtime state 与 per-paper state 由 `PaperBodyPluginDataStore` 独立保存在每个 provider 的普通 JSON 文件，不塞回 `data.json`。文件不存在才使用默认状态；已有文件读取失败则原样报告失败，不缓存空数据、不切换恢复文件。保存沿用写临时文件再替换的一次写入完整性。插件自己的备份、恢复或数据库由插件管理，宿主不为其维护第二数据路径。旧恢复文件不再自动选用，也不自动删除或迁移。插件页和快捷键注册使用已有的局部错误展示/失败状态，不让单个插件的数据错误终止其他插件配置。
 
 ## 5. Paper 与 paper-body 插件
 
@@ -209,6 +209,8 @@ Provider 当前分三类：
 
 插件文件不在当前进程中做热重载。安装、删除或修改插件目录后统一重启 PaperTodo，让下一进程重新完成 manifest discovery 和所需 runtime/DLL 激活。
 
+正文创建失败仍显示已有错误页；主题、字号、激活、失活、缩放等普通会话通知失败只记录本次错误，不提交或销毁现有正文。
+
 ### 5.3 外部读写
 
 插件 `Workspace` 与 GUI 侧 MCP 对 Paper/Todo/Note 的共享业务 mutation 统一进入 `PaperCommandService`。该边界负责：
@@ -218,6 +220,8 @@ Provider 当前分三类：
 - 保存成功才完成外部 mutation；
 - 保存失败回滚内存状态；
 - 提交后刷新必要 UI 并发布外部变更事件。
+
+Paper/Todo/Note 及笔记图片查询只读取当前模型/资产，不提交任何正文、不主动同步编辑器。查询可能暂时落后于正在输入的文字，由原编辑/保存流程正常同步；内容 mutation 的准备、同步保存和失败回滚边界不变。
 
 跨纸片 show/hide/expand 等展示请求只建立事件来源边界并调用既有展示入口，不预先提交其他纸片的内容。公共设置不再在保存前额外提交一遍所有编辑器；序列化时所需的同步仍由保存入口负责。提交后的 UI 刷新只执行一次，异常记录日志，不整段重试。
 
@@ -276,7 +280,7 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 `PluginPopupHost` 为既有 session / Runtime 承载一个临时、可交互窗口。右键与原有顶栏点击传递一次性的屏幕位置；宿主只在显示时约束到工作区，以窗口失活作为关闭边界，不监视原控件或来源窗口的位置。窗口内容与主题由插件处理，壳和释放由宿主处理；它不是 Paper，不延长 provider Runtime 存活，也没有常驻独立窗口入口。
 
-Web 弹窗复用可见 WebView 环境及本地 origin。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
+Web 弹窗复用可见 WebView 环境及本地 origin。普通网页/邮件链接交给与正文共用的系统外部打开入口，弹窗自身不导航；下载限制和消息作用域不变。独立文档消息校验仅服务于主题、初始数据、只读图片、向创建者发消息及关闭；不复制通用 Workspace 写入桥。Body / Runtime 网页导航回收对应弹窗和菜单贡献，进程故障分类与现有 Web Runtime 共用。API 用法以 `plugin-samples/README.md` 为准。
 
 ### 内置笔记的边缘预览
 

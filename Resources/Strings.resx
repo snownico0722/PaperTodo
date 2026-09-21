@@ -1273,12 +1273,6 @@
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>插件协议 {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>数据读取失败，当前使用空数据；新数据将写入恢复文件。</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>原数据读取失败，当前使用恢复数据文件。</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>打开目录</value>
   </data>

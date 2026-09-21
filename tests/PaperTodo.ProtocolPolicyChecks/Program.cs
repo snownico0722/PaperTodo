@@ -762,7 +762,7 @@ internal static partial class Program
             "The current ready plugin document must retain normal host-request authority.");
 
         Assert(
-            body.GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null,
+            RequireType(host, "PaperTodo.WebPluginRuntimeInfrastructure").GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null,
             "Web body must have an explicit system-shell path for external top-level navigation.");
     }
 

@@ -111,10 +111,22 @@ public sealed partial class AppController
                     setting.ShortcutAction);
                 _pluginShortcutRegistrations[commandId] = registration;
 
-                var binding = bindingOverrides != null &&
+                string binding;
+                try
+                {
+                    binding = bindingOverrides != null &&
                               bindingOverrides.TryGetValue(commandId, out var overridden)
-                    ? overridden
-                    : ReadPluginShortcutBinding(descriptor, setting);
+                        ? overridden
+                        : ReadPluginShortcutBinding(descriptor, setting);
+                }
+                catch (Exception ex)
+                {
+                    // A failed plugin read must not abort registration of unrelated shortcuts.
+                    Trace.TraceWarning("Plugin shortcut settings could not be read: {0}: {1}",
+                        descriptor.Id, ex.GetBaseException().Message);
+                    _pluginShortcutStatuses[commandId] = ShortcutUiStatus.RegistrationFailed;
+                    continue;
+                }
                 desiredBindings[commandId] = binding;
 
                 if (string.Equals(commandId, excludedCommandId, StringComparison.Ordinal) ||
