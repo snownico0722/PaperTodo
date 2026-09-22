@@ -176,36 +176,44 @@ public sealed partial class AppController
             return;
         }
 
-        var surfaced = false;
+        var openedFirst = false;
         try
         {
             OpenTodoReminderTarget(due[0].Paper, due[0].Item);
-            surfaced = true;
+            openedFirst = true;
         }
         catch
         {
             // A stale paper surface may still allow the tray notification to surface.
         }
+
+        var balloonSurfaced = false;
         try
         {
-            surfaced |= ShowTodoReminderBalloon(due);
+            balloonSurfaced = ShowTodoReminderBalloon(due);
         }
         catch
         {
-            // Keep the reminder pending when neither delivery path is available.
+            // Keep reminders pending when their delivery path was not available.
         }
 
-        if (!surfaced)
+        if (!openedFirst && !balloonSurfaced)
         {
             ScheduleTodoReminderRetry();
             return;
         }
 
+        // A successful multi-reminder balloon represents the whole due batch. If only the first
+        // paper could be opened, acknowledge only that first item and leave the rest pending.
+        var delivered = balloonSurfaced
+            ? due
+            : due.Take(1).ToList();
+
         // Sound is an optional presentation channel. A bad custom file or unavailable system
         // sound must never keep a successfully surfaced reminder pending.
         PlayTodoReminderSound();
 
-        foreach (var (paper, item) in due)
+        foreach (var (paper, item) in delivered)
         {
             item.ReminderTriggered = true;
             if (item.ReminderAt is { } reminderAt &&
@@ -215,7 +223,7 @@ public sealed partial class AppController
             }
         }
 
-        foreach (var paperGroup in due.GroupBy(
+        foreach (var paperGroup in delivered.GroupBy(
                      entry => entry.Paper.Id,
                      StringComparer.Ordinal))
         {
@@ -227,7 +235,14 @@ public sealed partial class AppController
         }
 
         SaveNow();
-        RefreshTodoReminderSchedule();
+        if (delivered.Count < due.Count)
+        {
+            ScheduleTodoReminderRetry();
+        }
+        else
+        {
+            RefreshTodoReminderSchedule();
+        }
     }
 
     private void OpenTodoReminderTarget(

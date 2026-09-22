@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/platform-Windows%20x64-555" alt="platform">
   <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET">
   <img src="https://img.shields.io/badge/UI-WPF-0078d4" alt="UI">
+  <a href="https://hellogithub.com/repository/snownico0722/PaperTodo" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=9adac990f66445c58b6be0a70b1734b8&claim_uid=ZRN8AOH73TorfIK&theme=small" alt="Featured｜HelloGitHub" /></a>
 </p>
 
 <p align="center">
@@ -170,6 +171,7 @@ Thanks to the [linux.do](https://linux.do/) community for the support.
   <img src="https://img.shields.io/badge/platform-Windows%20x64-555" alt="platform">
   <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET">
   <img src="https://img.shields.io/badge/UI-WPF-0078d4" alt="UI">
+  <a href="https://hellogithub.com/repository/snownico0722/PaperTodo" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=9adac990f66445c58b6be0a70b1734b8&claim_uid=ZRN8AOH73TorfIK&theme=small" alt="Featured｜HelloGitHub" /></a>
 </p>
 <p align="center">
   <strong>语言：简体中文 | <a href="README.md">English</a></strong><br>

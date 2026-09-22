@@ -419,6 +419,9 @@ Runtime state 与 Body/Mini 的 per-paper frontend state 是不同数据：Runti
 
 ## 5. 状态、设置与 `.runtime`
 
+后台首次启动失败不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后的网页后台故障仍沿用有界恢复。正文的普通主题、字体、激活等通知失败只记录错误，不替换当前正文；真正创建正文失败仍显示原有错误页。
+
+
 ### 5.1 宿主代管状态
 
 每个插件的宿主管理状态位于：
@@ -456,16 +459,11 @@ papertodo.registerStateProvider(() => currentState);
 
 Body、Mini 和 Web Runtime 的 `initialize` 都提供各自状态域的 `state`、`stateVersion`、`targetStateVersion`。Web 插件自己负责把旧 shape 归一化为当前 shape，并在真实迁移后保存。Native Runtime 不调用 Body 的 `MigrateState(...)`，而是比较 `context.State.StateVersion` / `TargetStateVersion` 并在迁移后显式调用 `State.Save(...)`。已保存版本高于目标版本时，Body 不会创建、Runtime 不会启动，宿主也不会猜测降级；不要因为解析失败直接用空对象覆盖旧状态。
 
-### 5.2 恢复行为
+### 5.2 基础存储与读取失败
 
-宿主读取正常数据文件失败时：
+宿主只读写普通的 `<插件 ID>.json`。文件不存在才采用默认状态；已有文件无法读取就报告错误，不假装是空数据，也不改写另一条路径。一次保存保留原有临时文件替换方式。旧 `.json.recovered` 文件不再自动选用，也不自动迁移或删除。
 
-- 保留原文件；
-- 当前进程从空插件状态继续；
-- 后续写入稳定的 `<插件 ID>.json.recovered`；
-- `.recovered` 存在时后续优先使用它。
-
-插件数据故障不会让 PaperTodo 核心 `data.json` 失效。
+插件自己的业务数据备份、恢复或数据库由插件负责。单个插件的数据错误不会使核心 `data.json` 无法读取；不要另造一份与宿主管理状态竞争写入的副本。
 
 ### 5.3 全局 settings
 
@@ -590,7 +588,7 @@ notes.write
 几个容易遗漏的权限组合：
 
 - 创建带正文的 Note：除了 `papers.create` 还需要 `notes.append`；
-- 创建/追加带完成状态、提醒或 `linkedPaperId` 的 Todo：还需要 `todos.update`；
+- 新建/追加待办的初始完成状态、提醒与 `linkedPaperId` 属于创建/追加权限；修改已有待办仍需要 `todos.update`；
 - `todos.setReminder` 使用 `todos.update`；
 - `notes.write` 的 append/fill-blank 使用 `notes.append`，replace 使用 `notes.replace`；
 - paper session 插件不能删除承载当前 active session 的 paper；Runtime 没有 host paper，因此不受这条单纸片自删除限制。
@@ -623,6 +621,8 @@ const dispose = papertodo.onHostEvent(
 ```
 
 可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+
+纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。
 
 ### 6.1 正文读写边界
 
@@ -918,7 +918,7 @@ await papertodo.popup.post({ selected: imageId }); // 创建者收到 popupMessa
 papertodo.popup.close();
 ```
 
-弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，外部跳转、新窗口和下载被取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
+弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，普通网页/邮件链接和外部新窗口请求交给系统默认程序打开，弹窗自身不导航；下载仍取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
 
 `NoteAssets.ReadImage(paperId, imageId)` 返回 `PaperNoteImage` 的 MIME 和独立编码字节；Web 的 `bytes` 为 Base64。沿用 `notes.read`，只读内置 Markdown 笔记拥有的图片，单次上限 16 MiB。缺失、损坏或归属错误报告 `asset_not_found`，超限报告 `asset_too_large`；不提供图片写入、磁盘路径或内部存储对象，也不承诺整篇笔记的原子导出快照。
 

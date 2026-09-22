@@ -5,12 +5,6 @@ using System.Threading;
 
 namespace PaperTodo;
 
-internal sealed record PaperBodyPluginDataReadIssue(
-    string ActivePath,
-    bool RecoveredFileExists,
-    bool UsingEmptyState,
-    string Details);
-
 internal sealed class PaperBodyStoredState
 {
     public int Version { get; set; } = 1;
@@ -28,7 +22,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     private const int StorageVersion = 1;
     private const int SaveDebounceMilliseconds = 750;
     private const int ForceSaveMilliseconds = 10_000;
-    private const string RecoveredSuffix = ".json.recovered";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -57,9 +50,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     private readonly object _gate = new();
     private readonly Dictionary<string, PluginDataDocument> _cache =
-        new(StringComparer.Ordinal);
-    private readonly HashSet<string> _recoveredProviderIds = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, PaperBodyPluginDataReadIssue> _readIssues =
         new(StringComparer.Ordinal);
     private readonly HashSet<string> _dirtyProviderIds = new(StringComparer.Ordinal);
     private readonly Timer _saveTimer;
@@ -295,18 +285,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         }
     }
 
-    public bool TryGetReadIssue(
-        string providerId,
-        out PaperBodyPluginDataReadIssue issue)
-    {
-        lock (_gate)
-        {
-            ThrowIfDisposed();
-            _ = Load(providerId);
-            return _readIssues.TryGetValue(providerId, out issue!);
-        }
-    }
-
     public void RemovePaperStateEverywhere(string paperId)
     {
         if (string.IsNullOrWhiteSpace(paperId))
@@ -341,7 +319,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                 catch
                 {
                     // One plugin's unreadable data must not block deletion of the paper itself or
-                    // cleanup of other plugins. Load records the problem for the plugin page.
+                    // cleanup of other plugins. Reads of that plugin still report the original failure.
                 }
             }
 
@@ -389,51 +367,17 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
             return cached;
         }
 
+        var path = DataPath(providerId);
         PluginDataDocument document;
-        var primaryPath = DataPath(providerId);
-        var recoveredPath = RecoveredDataPath(providerId);
-        if (File.Exists(recoveredPath))
+        try
         {
-            _recoveredProviderIds.Add(providerId);
-            try
-            {
-                document = ReadDocument(recoveredPath);
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: true,
-                    UsingEmptyState: false,
-                    Details: "");
-            }
-            catch (Exception ex)
-            {
-                document = NewDocument();
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: true,
-                    UsingEmptyState: true,
-                    ex.GetBaseException().Message);
-            }
+            document = ReadDocument(path);
         }
-        else if (File.Exists(primaryPath))
+        catch (FileNotFoundException)
         {
-            try
-            {
-                document = ReadDocument(primaryPath);
-            }
-            catch (Exception ex)
-            {
-                // Preserve the unreadable original. This process runs from an empty document and
-                // all later writes go to the single stable .recovered file.
-                document = NewDocument();
-                _recoveredProviderIds.Add(providerId);
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: false,
-                    UsingEmptyState: true,
-                    ex.GetBaseException().Message);
-            }
+            document = NewDocument();
         }
-        else
+        catch (DirectoryNotFoundException)
         {
             document = NewDocument();
         }
@@ -475,17 +419,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                      SearchOption.TopDirectoryOnly))
         {
             providerIds.Add(Path.GetFileNameWithoutExtension(path));
-        }
-        foreach (var path in Directory.EnumerateFiles(
-                     DataRoot,
-                     "*" + RecoveredSuffix,
-                     SearchOption.TopDirectoryOnly))
-        {
-            var fileName = Path.GetFileName(path);
-            if (fileName.EndsWith(RecoveredSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                providerIds.Add(fileName[..^RecoveredSuffix.Length]);
-            }
         }
         return providerIds;
     }
@@ -550,22 +483,8 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     private void SaveNow(string providerId, PluginDataDocument document)
     {
-        var useRecovered = _recoveredProviderIds.Contains(providerId);
-        var path = useRecovered
-            ? RecoveredDataPath(providerId)
-            : DataPath(providerId);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
-        _atomicWriter.Write(path, bytes);
-
-        if (useRecovered)
-        {
-            _readIssues.TryGetValue(providerId, out var existingIssue);
-            _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                path,
-                RecoveredFileExists: true,
-                UsingEmptyState: false,
-                existingIssue?.Details ?? "");
-        }
+        _atomicWriter.Write(DataPath(providerId), bytes);
     }
 
     internal void SuppressFinalFlushOnDispose()
@@ -587,9 +506,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     private string DataPath(string providerId) =>
         Path.Combine(DataRoot, providerId + ".json");
-
-    private string RecoveredDataPath(string providerId) =>
-        Path.Combine(DataRoot, providerId + RecoveredSuffix);
 
     private static bool JsonElementEquals(JsonElement left, JsonElement right)
     {

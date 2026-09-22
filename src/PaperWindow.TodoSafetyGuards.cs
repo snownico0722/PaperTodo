@@ -49,21 +49,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        string? raw;
-        try
-        {
-            raw = e.DataObject.GetDataPresent(DataFormats.UnicodeText)
-                ? e.DataObject.GetData(DataFormats.UnicodeText) as string
-                : e.DataObject.GetDataPresent(DataFormats.Text)
-                    ? e.DataObject.GetData(DataFormats.Text) as string
-                    : null;
-        }
-        catch
-        {
-            return;
-        }
-
-        if (string.IsNullOrEmpty(raw))
+        if (!TryGetTodoPastingText(e.DataObject, out var raw))
         {
             return;
         }
@@ -97,6 +83,28 @@ public sealed partial class PaperWindow
                     string.Join(Environment.NewLine, messages));
             }),
             DispatcherPriority.Background);
+    }
+
+    private static bool TryGetTodoPastingText(
+        IDataObject dataObject,
+        out string raw)
+    {
+        raw = "";
+        try
+        {
+            raw = dataObject.GetDataPresent(DataFormats.UnicodeText)
+                ? dataObject.GetData(DataFormats.UnicodeText) as string ?? ""
+                : dataObject.GetDataPresent(DataFormats.Text)
+                    ? dataObject.GetData(DataFormats.Text) as string ?? ""
+                    : "";
+        }
+        catch
+        {
+            raw = "";
+            return false;
+        }
+
+        return raw.Length > 0;
     }
 
     private static TodoPasteLimitNotice AnalyzeTodoPasteLimits(

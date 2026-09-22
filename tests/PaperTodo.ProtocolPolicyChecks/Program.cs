@@ -29,6 +29,7 @@ internal static partial class Program
             CheckUnifiedPluginRuntime(host, abstractions);
             CheckWebBodyNavigationIdentity(host);
             CheckManifestRuntimeAndMiniContracts(host);
+            CheckWebMiniSurfaceRecoveryBridge(host);
             CheckGlobalTopBarPriority(host, abstractions);
             CheckPluginRuntimeSettings(host, abstractions);
             CheckProtocol21Contributions(host, abstractions);
@@ -762,7 +763,7 @@ internal static partial class Program
             "The current ready plugin document must retain normal host-request authority.");
 
         Assert(
-            body.GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null,
+            RequireType(host, "PaperTodo.WebPluginRuntimeInfrastructure").GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null,
             "Web body must have an explicit system-shell path for external top-level navigation.");
     }
 
@@ -783,6 +784,151 @@ internal static partial class Program
         Assert(
             paperWindow.GetNestedType("MiniMaximumManifestView", BindingFlags.NonPublic) == null,
             "PaperWindow still owns a second miniMaxSize manifest parser.");
+    }
+
+    private static void CheckWebMiniSurfaceRecoveryBridge(Assembly host)
+    {
+        var body = RequireType(host, "PaperTodo.WebPaperBodySession");
+        var miniHost = body.GetNestedType(
+            "WebPluginMiniViewHost",
+            BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Web mini host type was not found.");
+        var buildBridge = miniHost.GetMethod(
+            "BuildMiniBridgeScript",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Web mini bridge builder was not found.");
+
+        const string expectedOrigin = "https://mini-policy.test";
+        var bridgeScript = buildBridge.Invoke(null, [expectedOrigin, true]) as string
+            ?? throw new InvalidOperationException(
+                "Web mini bridge builder returned no script.");
+
+        var harness = """
+            'use strict';
+            const fs = require('node:fs');
+            const vm = require('node:vm');
+            const posted = [];
+            const hostListeners = [];
+            const interactive = {
+              getBoundingClientRect() {
+                return { left: 10, top: 20, right: 50, bottom: 60 };
+              }
+            };
+            const documentObject = {
+              readyState: 'complete',
+              documentElement: {},
+              querySelectorAll(selector) {
+                return selector === '[data-papertodo-interactive]' ? [interactive] : [];
+              },
+              addEventListener() {}
+            };
+            const windowObject = {
+              location: { origin: 'https://mini-policy.test' },
+              innerWidth: 100,
+              innerHeight: 100,
+              chrome: {
+                webview: {
+                  postMessage(value) { posted.push(value); },
+                  addEventListener(type, listener) {
+                    if (type === 'message') hostListeners.push(listener);
+                  }
+                }
+              },
+              addEventListener() {},
+              dispatchEvent() {}
+            };
+            windowObject.top = windowObject;
+            globalThis.window = windowObject;
+            globalThis.location = windowObject.location;
+            globalThis.document = documentObject;
+            globalThis.MutationObserver = class MutationObserver { observe() {} };
+            globalThis.getComputedStyle = () => ({
+              display: 'block',
+              visibility: 'visible',
+              pointerEvents: 'auto'
+            });
+            globalThis.requestAnimationFrame = callback => { callback(); return 1; };
+            globalThis.CustomEvent = class CustomEvent {
+              constructor(type, init) { this.type = type; this.detail = init?.detail; }
+            };
+
+            const bridge = fs.readFileSync(process.argv[2], 'utf8');
+            vm.runInThisContext(bridge, { filename: 'WebPaperBodySession.Mini.bridge.js' });
+
+            const initialRegions = posted.filter(value => value?.type === 'miniInteractiveRegions');
+            if (initialRegions.length !== 1) {
+              throw new Error('Initial interactive regions were not published exactly once.');
+            }
+
+            for (const listener of hostListeners) {
+              listener({ data: { type: 'miniSurfacePresentProbe', token: 'probe-token' } });
+            }
+
+            const regionIndexes = posted
+              .map((value, index) => value?.type === 'miniInteractiveRegions' ? index : -1)
+              .filter(index => index >= 0);
+            const probeIndex = posted.findIndex(value =>
+              value?.type === 'miniSurfacePresentProbeResult' &&
+              value?.payload?.token === 'probe-token');
+            process.stdout.write(JSON.stringify({
+              regionCount: regionIndexes.length,
+              finalRegionIndex: regionIndexes.at(-1),
+              probeIndex
+            }));
+            """;
+
+        var temporaryRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"PaperTodo.WebMiniRecoveryChecks.{Guid.NewGuid():N}");
+        var harnessPath = Path.Combine(temporaryRoot, "mini-recovery-harness.cjs");
+        var bridgePath = Path.Combine(temporaryRoot, "WebPaperBodySession.Mini.bridge.js");
+        Directory.CreateDirectory(temporaryRoot);
+        File.WriteAllText(harnessPath, harness, new UTF8Encoding(false));
+        File.WriteAllText(bridgePath, bridgeScript, new UTF8Encoding(false));
+        try
+        {
+            var startInfo = new ProcessStartInfo("node")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            startInfo.ArgumentList.Add(harnessPath);
+            startInfo.ArgumentList.Add(bridgePath);
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException(
+                    "Could not start Node.js for the Web mini recovery check.");
+            var standardOutput = process.StandardOutput.ReadToEndAsync();
+            var standardError = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(15_000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                throw new TimeoutException(
+                    "The Web mini recovery check timed out after 15 seconds.");
+            }
+            Assert(Task.WaitAll([standardOutput, standardError], 5_000),
+                "Node.js output did not close after the Web mini recovery check exited.");
+            var error = standardError.GetAwaiter().GetResult();
+            Assert(process.ExitCode == 0,
+                $"The generated Web mini bridge failed in Node.js: {error}");
+
+            using var result = JsonDocument.Parse(
+                standardOutput.GetAwaiter().GetResult());
+            var root = result.RootElement;
+            Assert(root.GetProperty("regionCount").GetInt32() == 2,
+                "Surface recovery must republish unchanged interactive regions.");
+            Assert(
+                root.GetProperty("finalRegionIndex").GetInt32() <
+                root.GetProperty("probeIndex").GetInt32(),
+                "Interactive regions must reach the host before surface recovery completes.");
+        }
+        finally
+        {
+            try { Directory.Delete(temporaryRoot, recursive: true); } catch { }
+        }
     }
 
     private static void CheckGlobalTopBarPriority(Assembly host, Assembly abstractions)

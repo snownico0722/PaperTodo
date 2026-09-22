@@ -149,7 +149,6 @@ internal sealed partial class McpCommandService
             _controller.State.MaxTitleLength);
         var show = OptionalBoolean(parameters, "show") ?? true;
         var todos = ReadTodoInputs(parameters, required: false);
-        RequireFullWritesForTodoMetadata(todos);
 
         var result = _commands.CreatePaper(
             new CreatePaperRequest
@@ -194,7 +193,6 @@ internal sealed partial class McpCommandService
         RequireAdditiveWrites();
         var paperId = RequiredString(parameters, "paper_id", 64);
         var todos = ReadTodoInputs(parameters, required: true);
-        RequireFullWritesForTodoMetadata(todos);
         var result = _commands.AppendTodos(
             new AppendTodosRequest
             {
@@ -548,18 +546,6 @@ internal sealed partial class McpCommandService
             });
         }
         return result;
-    }
-
-    private void RequireFullWritesForTodoMetadata(
-        IReadOnlyList<TodoCreateItem> inputs)
-    {
-        if (inputs.Any(input =>
-                input.Done ||
-                input.ReminderAt.HasValue ||
-                !string.IsNullOrWhiteSpace(input.LinkedPaperId)))
-        {
-            RequireFullWrites();
-        }
     }
 
     private void RequireAdditiveWrites()

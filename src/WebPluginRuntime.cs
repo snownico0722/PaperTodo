@@ -399,9 +399,15 @@ internal sealed partial class WebPluginRuntime : IDisposable
         }
 
         _reloadRecoveryPending = false;
+        IReadOnlyList<PaperPluginRuntimePaper> startupPapers;
         if (_papers is PaperPluginRuntimePapersApi runtimePapers)
         {
             runtimePapers.ResetWebDocumentPresentation();
+            startupPapers = runtimePapers.CaptureStartupSnapshot();
+        }
+        else
+        {
+            startupPapers = _papers.List();
         }
         _documentReady = true;
         _extensionDocumentToken = Guid.NewGuid().ToString("N");
@@ -419,7 +425,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
             state = runtimeState.State,
             stateVersion = runtimeState.Version,
             targetStateVersion = _state.TargetStateVersion,
-            papers = _papers.List()
+            papers = startupPapers
         });
         _startupReady.TrySetResult(true);
     }
@@ -437,12 +443,21 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
             case WebPluginProcessFailurePolicy.Recovery.Reload:
+                if (!CanRecoverRendererByReload(_startupCompleted))
+                {
+                    FailStartupOrRestart(
+                        "The Web Runtime renderer failed while completing startup.");
+                    return;
+                }
                 RecoverRendererByReload();
                 return;
             default:
                 return;
         }
     }
+
+    internal static bool CanRecoverRendererByReload(bool startupCompleted) =>
+        startupCompleted;
 
     private void RecoverRendererByReload()
     {

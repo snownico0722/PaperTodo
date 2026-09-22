@@ -378,6 +378,8 @@ Web equivalent:
 await papertodo.runtime.post(message);
 ```
 
+A Runtime that fails its first startup is not automatically retried. A settings change or the next normal startup can try again. Existing bounded recovery after a successfully running Web Runtime fails is unchanged. Ordinary Body theme/font/activation notifications that throw are logged without replacing the live body; body creation failures still use the host error view.
+
 The call reports only whether the current Runtime accepted the message. PaperTodo does not provide a business-level ACK, persistent message bus, automatic retry, or exactly-once delivery.
 
 ### 4.4 `PaperBodyContext.TopBar` / `Workspace`
@@ -456,16 +458,11 @@ papertodo.registerStateProvider(() => currentState);
 
 `initialize` for Body, Mini, and Web Runtime contains the `state`, `stateVersion`, and `targetStateVersion` for that surface's own state domain. Web plugins are responsible for normalizing old shapes into the current shape and saving after a real migration. Native Runtime does not call the Body's `MigrateState(...)`; instead compare `context.State.StateVersion` / `TargetStateVersion` and explicitly call `State.Save(...)` after migrating. If saved state is newer than the target version, Body is not created and Runtime does not start; the host does not guess a downgrade path. Do not overwrite old state with an empty object merely because parsing failed.
 
-### 5.2 Recovery behavior
+### 5.2 Basic storage and read failures
 
-If the host cannot read the normal plugin data file:
+The host reads and writes one normal `<plugin ID>.json` file. A missing file uses default state; an existing unreadable file reports an error without substituting an empty document or changing the write path. Saving retains the existing temporary-file replacement. Old `.json.recovered` files are not selected, migrated, or deleted automatically.
 
-- it preserves the original file;
-- the current process continues from empty plugin state;
-- later writes go to a stable `<plugin ID>.json.recovered` file;
-- once `.recovered` exists, later runs prefer it.
-
-A plugin-data failure does not invalidate PaperTodo's core `data.json`.
+Plugins own recovery/backup policies for their own business data; they can use their own files or database. A plugin-data failure does not invalidate PaperTodo's core `data.json`. Do not create a second writable copy of host-managed state.
 
 ### 5.3 Global settings
 
@@ -590,7 +587,7 @@ notes.write
 Permission combinations that are easy to miss:
 
 - creating a Note with initial body content requires `notes.append` in addition to `papers.create`;
-- creating/appending a Todo with completion state, reminder, or `linkedPaperId` also requires `todos.update`;
+- creation/append permission covers a new Todo's initial completion state, reminder and `linkedPaperId`; updating an existing Todo still requires `todos.update`;
 - `todos.setReminder` uses `todos.update`;
 - `notes.write` append/fill-blank operations use `notes.append`, while replace uses `notes.replace`;
 - a paper-session plugin cannot delete the Paper that hosts its own active session; Runtime has no host Paper and is not subject to this single-Paper self-deletion restriction.
@@ -623,6 +620,8 @@ const dispose = papertodo.onHostEvent(
 ```
 
 Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, and `note.changed`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+
+Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
 ### 6.1 Body read/write boundary
 
@@ -918,7 +917,7 @@ await papertodo.popup.post({ selected: imageId }); // creator receives popupMess
 papertodo.popup.close();
 ```
 
-A popup can read initial data, receive theme events, read permitted Note images, send messages to its creator, and close itself. **It does not directly receive general Workspace write access, menu registration, or the ability to open another popup.** Business writes are handled by the creator. Initial data and each message are limited to 64 KiB. The entry accepts local HTML only; external navigation, new windows, and downloads are cancelled. Navigation invalidates old message credentials. Recoverable Web helper-process failures do not close the popup; main renderer or browser failures close it and report `popupError` to the creator.
+A popup can read initial data, receive theme events, read permitted Note images, send messages to its creator, and close itself. **It does not directly receive general Workspace write access, menu registration, or the ability to open another popup.** Business writes are handled by the creator. Initial data and each message are limited to 64 KiB. The entry accepts local HTML only. HTTP/HTTPS/mailto links and external new-window requests open through the system default application without navigating the popup. Downloads remain cancelled. Navigation invalidates old message credentials. Recoverable Web helper-process failures do not close the popup; main renderer or browser failures close it and report `popupError` to the creator.
 
 `NoteAssets.ReadImage(paperId, imageId)` returns the MIME type and separately encoded bytes from `PaperNoteImage`; Web exposes `bytes` as Base64. It reuses `notes.read`, can read only images owned by built-in Markdown Notes, and has a 16 MiB limit per read. Missing, corrupt, or ownership-mismatched assets report `asset_not_found`; oversized assets report `asset_too_large`. The API does not expose image writes, disk paths, or internal storage objects, and it does not promise an atomic export snapshot of an entire Note.
 

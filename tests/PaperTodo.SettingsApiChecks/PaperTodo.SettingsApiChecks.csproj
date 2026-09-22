@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" />
+    <ProjectReference Include="../../plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj" /></ItemGroup>
   <ItemGroup><None Update="bridge-check.cjs" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

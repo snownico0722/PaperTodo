@@ -51,8 +51,7 @@ public sealed partial class AppController
         try
         {
             var settings = PaperBodyPlugins.DataStore.GetSettingsJson(descriptor);
-            if (PaperBodyPlugins.DataStore.TryGetReadIssue(pluginId, out _) ||
-                !CodexMcpPermission.CanEnable(settings))
+            if (!CodexMcpPermission.CanEnable(settings))
                 return false;
 
             var previous = new CodexMcpAccess(
