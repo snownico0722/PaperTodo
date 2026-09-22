@@ -131,8 +131,11 @@ internal static class MaterialDragBenchmarks
                     sawNativeMovingWhilePressed = true;
                 }
                 if (surfaces.Any(surface =>
-                    surface.BackgroundSessionState?.GetType()
-                        .GetField("_dragSnapshotActive", Private)?.GetValue(surface) is true))
+                {
+                    var session = surface.BackgroundSessionState;
+                    return session?.GetType()
+                        .GetField("_dragSnapshotActive", Private)?.GetValue(session) is true;
+                }))
                 {
                     sawDragSnapshotWhilePressed = true;
                 }
