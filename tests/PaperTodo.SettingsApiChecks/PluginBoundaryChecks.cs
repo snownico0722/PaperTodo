@@ -15,6 +15,7 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         MultilinePluginTooltips();
         ReviewArchiveSavesWithoutBackup();
+        ReviewArchiveUnreadableDataFailsClosed();
         await InitialRuntimeFailureDoesNotRetry(c);
     }
 
@@ -235,6 +236,41 @@ internal static partial class Program
         finally
         {
             pathField.SetValue(null, oldPath); docField.SetValue(null, oldDoc);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void ReviewArchiveUnreadableDataFailsClosed()
+    {
+        var type = typeof(PaperTodo.Plugin.ReviewArchive.ReviewArchivePlugin).Assembly
+            .GetType("PaperTodo.Plugin.ReviewArchive.ReviewArchiveStore")!;
+        var read = type.GetMethod(
+            "ReadDocument",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "PaperTodo.ArchiveReadChecks-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "review-archive.json");
+            const string original = "{broken review archive";
+            File.WriteAllText(path, original);
+            try
+            {
+                _ = read.Invoke(null, [path]);
+                throw new InvalidOperationException(
+                    "Unreadable review archive was treated as missing.");
+            }
+            catch (TargetInvocationException ex) when (
+                ex.InnerException is JsonException or InvalidDataException)
+            {
+                Check(File.ReadAllText(path) == original,
+                    "Unreadable review archive bytes must remain untouched.");
+            }
+        }
+        finally
+        {
             Directory.Delete(root, recursive: true);
         }
     }

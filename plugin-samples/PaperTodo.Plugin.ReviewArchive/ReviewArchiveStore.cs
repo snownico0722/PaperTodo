@@ -462,21 +462,19 @@ internal static class ReviewArchiveStore
     {
         try
         {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
             var document = JsonSerializer.Deserialize<ReviewArchiveDocument>(
                 File.ReadAllText(path),
-                JsonOptions);
-            if (document == null)
-            {
-                return null;
-            }
+                JsonOptions)
+                ?? throw new InvalidDataException(
+                    "Review archive deserialized to null.");
             NormalizeDocument(document);
             return document;
         }
-        catch
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
         {
             return null;
         }

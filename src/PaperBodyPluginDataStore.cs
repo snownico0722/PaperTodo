@@ -368,8 +368,19 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         }
 
         var path = DataPath(providerId);
-        // A missing file is a new plugin. An unreadable file is a failed read, not empty data.
-        var document = File.Exists(path) ? ReadDocument(path) : NewDocument();
+        PluginDataDocument document;
+        try
+        {
+            document = ReadDocument(path);
+        }
+        catch (FileNotFoundException)
+        {
+            document = NewDocument();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            document = NewDocument();
+        }
 
         _cache.Add(providerId, document);
         return document;

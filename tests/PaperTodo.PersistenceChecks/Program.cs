@@ -13,6 +13,7 @@ var checks = new (string Name, Action Run)[]
     ("backup-recovery-is-preserved-until-normal-save", BackupRecoveryIsPreservedUntilNormalSave),
     ("plugin-data-uses-one-normal-file", PluginDataUsesOneNormalFile),
     ("unreadable-plugin-data-does-not-become-empty", UnreadablePluginDataDoesNotBecomeEmpty),
+    ("plugin-data-non-file-path-is-not-treated-as-missing", PluginDataNonFilePathIsNotTreatedAsMissing),
     ("legacy-plugin-recovery-file-is-not-selected", LegacyPluginRecoveryFileIsNotSelected),
     ("plugin-system-shutdown-skips-final-flush", PluginSystemShutdownSkipsFinalFlush),
     ("plugin-normal-dispose-still-final-flushes", PluginNormalDisposeStillFinalFlushes),
@@ -194,6 +195,28 @@ static void UnreadablePluginDataDoesNotBecomeEmpty()
     }
     Assert(File.ReadAllText(path) == original, "failed read replaced original data");
     Assert(Directory.GetFiles(Path.GetDirectoryName(path)!).Length == 1, "failed read created a recovery file");
+}
+
+static void PluginDataNonFilePathIsNotTreatedAsMissing()
+{
+    using var scope = new TempDirectory();
+    var path = Path.Combine(scope.Path, "data", "sample.plugin.json");
+    Directory.CreateDirectory(path);
+    using var store = new PaperBodyPluginDataStore(scope.Path);
+    try
+    {
+        _ = store.ReadPaperState("sample.plugin", "p");
+        throw new InvalidOperationException(
+            "A non-file plugin data path was treated as a missing file.");
+    }
+    catch (UnauthorizedAccessException)
+    {
+    }
+    catch (IOException)
+    {
+    }
+    Assert(Directory.Exists(path),
+        "Plugin data read failure replaced the existing path.");
 }
 
 static void LegacyPluginRecoveryFileIsNotSelected()

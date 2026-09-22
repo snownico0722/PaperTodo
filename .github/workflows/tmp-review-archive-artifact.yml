@@ -1,0 +1,31 @@
+name: Temporary ReviewArchive artifact
+
+on:
+  pull_request:
+    paths:
+      - "plugin-samples/PaperTodo.Plugin.ReviewArchive/**"
+      - ".github/workflows/tmp-review-archive-artifact.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-review-archive:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build ReviewArchive installed output
+        shell: pwsh
+        run: |
+          ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath ./plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-archive-built
+          path: plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll
+          if-no-files-found: error
