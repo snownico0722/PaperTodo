@@ -12,42 +12,32 @@ public sealed partial class AppController
     private readonly Dictionary<string, Action> _pluginStatusRefreshers =
         new(StringComparer.Ordinal);
 
-    private enum PluginPageStatus
-    {
-        Disabled,
-        Stopped,
-        Running,
-        Issue
-    }
+    private sealed record PluginPageState(
+        bool Enabled,
+        bool Running,
+        bool HasIssue);
 
     private sealed record PluginStateSwitchParts(
         Button Button,
         Border Track,
         Border Thumb);
 
-    private PluginPageStatus PluginStatusFor(
+    private PluginPageState PluginStateFor(
         PaperBodyPluginDescriptor descriptor)
     {
-        if (!IsPluginEnabled(descriptor.Id))
-        {
-            return PluginPageStatus.Disabled;
-        }
-
-        if (HasPluginRuntimeFailure(descriptor.Id) ||
+        var enabled = IsPluginEnabled(descriptor.Id);
+        var running = enabled &&
+            (IsPluginRuntimeRunning(descriptor.Id) ||
+             _windows.Values.Any(window =>
+                 window.HasRunningPluginBody(descriptor.Id)));
+        var hasIssue =
+            HasPluginRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
                  PluginIssueMatchesDescriptor(issue, descriptor))) ||
             _windows.Values.Any(window =>
-                window.HasFailedPluginBody(descriptor.Id)))
-        {
-            return PluginPageStatus.Issue;
-        }
-
-        return IsPluginRuntimeRunning(descriptor.Id) ||
-               _windows.Values.Any(window =>
-                   window.HasRunningPluginBody(descriptor.Id))
-            ? PluginPageStatus.Running
-            : PluginPageStatus.Stopped;
+                window.HasFailedPluginBody(descriptor.Id));
+        return new PluginPageState(enabled, running, hasIssue);
     }
 
     private static bool PluginIssueMatchesDescriptor(
@@ -78,23 +68,18 @@ public sealed partial class AppController
         }
     }
 
-    private Border CreatePluginStatusDot(PluginPageStatus status)
+    private Border CreatePluginIssueDot()
     {
-        var dot = new Border
+        return new Border
         {
             Width = 7,
             Height = 7,
             CornerRadius = new CornerRadius(3.5),
             Margin = new Thickness(0, 0, 7, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            Background = status == PluginPageStatus.Issue
-                ? Theme.DangerBrush
-                : TrayWeakTextBrush
+            Background = Theme.DangerBrush,
+            ToolTip = Strings.Get("PluginsStatusIssue")
         };
-        dot.ToolTip = Strings.Get(status == PluginPageStatus.Issue
-            ? "PluginsStatusIssue"
-            : "PluginsStatusStopped");
-        return dot;
     }
 
     private PluginStateSwitchParts CreatePluginStateSwitch(
@@ -132,39 +117,36 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center
         };
         var parts = new PluginStateSwitchParts(button, track, thumb);
-        ApplyPluginStateSwitch(parts, PluginStatusFor(descriptor));
+        ApplyPluginStateSwitch(parts, PluginStateFor(descriptor));
         button.Click += (_, _) =>
         {
             TogglePluginEnabled(descriptor);
-            ApplyPluginStateSwitch(parts, PluginStatusFor(descriptor));
+            ApplyPluginStateSwitch(parts, PluginStateFor(descriptor));
         };
         return parts;
     }
 
     private void ApplyPluginStateSwitch(
         PluginStateSwitchParts parts,
-        PluginPageStatus status)
+        PluginPageState state)
     {
-        var enabled = status != PluginPageStatus.Disabled;
-        var running = status == PluginPageStatus.Running;
-        parts.Thumb.HorizontalAlignment = enabled
+        parts.Thumb.HorizontalAlignment = state.Enabled
             ? HorizontalAlignment.Right
             : HorizontalAlignment.Left;
-        parts.Track.Background = !enabled
+        parts.Track.Background = !state.Enabled
             ? Theme.DangerBrush
-            : running
+            : state.Running
                 ? new SolidColorBrush(
                     Theme.IsDark
                         ? Color.FromRgb(93, 190, 121)
                         : Color.FromRgb(55, 145, 82))
                 : TrayWeakTextBrush;
-        parts.Track.Opacity = enabled && !running ? 0.62 : 1;
-        parts.Button.ToolTip = Strings.Get(status switch
-        {
-            PluginPageStatus.Disabled => "PluginsStatusDisabled",
-            PluginPageStatus.Running => "PluginsStatusRunning",
-            _ => "PluginsStatusStopped"
-        });
+        parts.Track.Opacity = state.Enabled && !state.Running ? 0.62 : 1;
+        parts.Button.ToolTip = Strings.Get(!state.Enabled
+            ? "PluginsStatusDisabled"
+            : state.Running
+                ? "PluginsStatusRunning"
+                : "PluginsStatusStopped");
     }
 
     internal void QueuePluginStatusRefresh()
