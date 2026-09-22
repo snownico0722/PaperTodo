@@ -622,10 +622,10 @@ public sealed partial class PaperWindow
             }
             catch (Exception ex)
             {
-                if (_windowLifecycle == PaperWindowLifecycleState.Alive)
-                {
-                    ReplaceBodyWithFailure(ex.GetBaseException().Message);
-                }
+                Trace.TraceWarning(
+                    "Plugin body context callback failed. Provider={0}; Exception={1}",
+                    providerId,
+                    ex.GetBaseException());
             }
         }), priority);
     }

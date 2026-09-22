@@ -226,6 +226,14 @@ internal static partial class Program
         _ = PopupWindow(readOnly);
         Assert(((Border)VisualTreeHelper.GetParent(readOnly.View)).IsKeyboardFocusWithin, "Read-only content left focus in source.");
         readOnlyPopup.Close();
+
+        var throwingTheme = new Content(throwOnTheme: true);
+        var throwingPopup = host.Open(new(550, 300), new(), _ => throwingTheme);
+        _ = PopupWindow(throwingTheme);
+        host.RefreshTheme();
+        Assert(throwingPopup.IsOpen && throwingTheme.ThemeCount >= 2,
+            "A plugin theme callback failure revoked the popup.");
+        throwingPopup.Close();
     }
 
     private static void PopupLifetime()
@@ -388,12 +396,16 @@ internal static partial class Program
         catch (PaperTodoPluginException ex) when (ex.Code == code) { return; }
         throw new Exception($"Expected plugin error: {code}");
     }
-    private sealed class Content(FrameworkElement? view = null) : IPaperPluginPopupContent
+    private sealed class Content(FrameworkElement? view = null, bool throwOnTheme = false) : IPaperPluginPopupContent
     {
         public FrameworkElement View { get; } = view ?? new TextBlock { Text = "Plugin content" };
         public int DisposeCount;
         public int ThemeCount;
-        public void OnThemeChanged(PaperBodyTheme theme) => ThemeCount++;
+        public void OnThemeChanged(PaperBodyTheme theme)
+        {
+            ThemeCount++;
+            if (throwOnTheme) throw new InvalidOperationException("Injected popup theme failure.");
+        }
         public void Dispose() => DisposeCount++;
     }
     private sealed class Temp : IDisposable
