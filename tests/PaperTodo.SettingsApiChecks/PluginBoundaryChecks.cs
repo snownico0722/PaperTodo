@@ -12,6 +12,7 @@ internal static partial class Program
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
+        ExternalSavePreservesRuntimeCallbackDirtyState(c);
         CreationOwnsInitialTodoFields(c, note);
         MultilinePluginTooltips();
         ReviewArchiveSavesWithoutBackup();
@@ -140,6 +141,111 @@ internal static partial class Program
                 "Ordinary callback errors leave the existing body session and visual in place.");
         }
         finally { Field(host, "<Current>k__BackingField", original); }
+    }
+
+    private static void ExternalSavePreservesRuntimeCallbackDirtyState(AppController c)
+    {
+        const string id = "tests.post-save-dirty";
+        var registry = c.PaperBodyPlugins;
+        var descriptors = ReadField<Dictionary<string, PaperBodyPluginDescriptor>>(registry, "_descriptors");
+        var loaded = ReadField<IDictionary>(registry, "_loadedNativeByDirectory");
+        var path = Path.Combine(AppContext.BaseDirectory, "plugins", id);
+        var manifest = new PaperBodyPluginManifest
+        {
+            Id = id,
+            Kind = "native",
+            ApiVersion = "2.2",
+            Capabilities = ["runtime"],
+            DirectoryPath = path
+        };
+        var descriptor = new PaperBodyPluginDescriptor(
+            id,
+            "Post-save dirty test",
+            "",
+            new Version(1, 0),
+            "2.2",
+            1,
+            PaperBodyPluginKind.Native,
+            PaperBodyCapabilities.None,
+            PaperTodoPermissionNames.None,
+            path,
+            path,
+            "fixture",
+            typeof(BoundaryRuntimePlugin),
+            manifest);
+        var loadedType = typeof(PaperBodyPluginRegistry).GetNestedType(
+            "LoadedNativePlugin",
+            BindingFlags.NonPublic)!;
+        loaded[path] = Activator.CreateInstance(
+            loadedType,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            [path, descriptor, null],
+            null)!;
+        descriptors[id] = descriptor;
+
+        var removed = new PaperData
+        {
+            Id = "post-save-removed",
+            Type = PaperTypes.Note,
+            BodyProviderId = id,
+            IsVisible = false
+        };
+        var survivor = new PaperData
+        {
+            Id = "post-save-survivor",
+            Type = PaperTypes.Note,
+            BodyProviderId = id,
+            IsVisible = false
+        };
+        c.State.Papers.Add(removed);
+        c.State.Papers.Add(survivor);
+
+        try
+        {
+            // Start from a settled application save so this check isolates dirty state created
+            // synchronously by the Runtime PaperRemoved callback after the external snapshot write.
+            c.SaveNow(sync: true);
+            BoundaryRuntimePlugin.Starts = 0;
+            BoundaryRuntimePlugin.Fail = false;
+            BoundaryRuntimePlugin.Configure = context =>
+            {
+                _ = context.Papers.Subscribe(value =>
+                {
+                    if (value.Kind == PaperPluginRuntimeEventKind.PaperRemoved &&
+                        string.Equals(value.PaperId, removed.Id, StringComparison.Ordinal))
+                    {
+                        context.Papers.SetTitle(survivor.Id, "changed after save");
+                    }
+                });
+            };
+
+            c.ReconcilePluginRuntimes();
+            Check(BoundaryRuntimePlugin.Starts == 1,
+                "Post-save dirty fixture Runtime did not start.");
+
+            _ = c.PaperCommands.DeletePaper(
+                removed.Id,
+                PaperOperationContext.Plugin("tests.boundary"));
+
+            Check(survivor.Title == "changed after save",
+                "Runtime PaperRemoved callback did not mutate surviving paper.");
+            Check(ReadField<bool>(c, "_hasPendingDirty"),
+                "A Runtime mutation created after the external snapshot save lost its dirty state.");
+            Check(ReadField<System.Windows.Threading.DispatcherTimer>(c, "_saveTimer").IsEnabled,
+                "A Runtime mutation created after the external snapshot save lost its save timer.");
+
+            c.SaveNow(sync: true);
+        }
+        finally
+        {
+            BoundaryRuntimePlugin.Configure = null;
+            c.State.Papers.Remove(removed);
+            c.State.Papers.Remove(survivor);
+            c.ReconcilePluginRuntimes();
+            descriptors.Remove(id);
+            loaded.Remove(path);
+        }
     }
 
     private static void CreationOwnsInitialTodoFields(AppController c, PaperData linked)
@@ -299,6 +405,7 @@ internal static partial class Program
         c.State.Papers.Add(paper);
         try
         {
+            BoundaryRuntimePlugin.Configure = null;
             BoundaryRuntimePlugin.Starts = 0; BoundaryRuntimePlugin.Fail = true;
             c.ReconcilePluginRuntimes();
             await Task.Delay(1300);
@@ -349,11 +456,13 @@ public sealed class BoundaryRuntimePlugin : IPaperBodyPlugin, IPaperPluginRuntim
 {
     public static bool Fail;
     public static int Starts;
+    public static Action<PaperPluginRuntimeContext>? Configure;
     public IPaperBodySession Create(PaperBodyContext context) => throw new NotSupportedException();
     public IPaperPluginRuntime CreatePluginRuntime(PaperPluginRuntimeContext context)
     {
         Starts++;
         if (Fail) throw new InvalidOperationException("Test startup failure");
+        Configure?.Invoke(context);
         return new Runtime();
     }
     private sealed class Runtime : IPaperPluginRuntime { public void Dispose() { } }
