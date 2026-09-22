@@ -145,6 +145,10 @@ internal static partial class Program
 
     private static void ExternalSavePreservesRuntimeCallbackDirtyState(AppController c)
     {
+        // Settle pre-existing application edits before installing the temporary Runtime fixture.
+        // Saving after the fixture is installed would itself reconcile and start that Runtime.
+        c.SaveNow(sync: true);
+
         const string id = "tests.post-save-dirty";
         var registry = c.PaperBodyPlugins;
         var descriptors = ReadField<Dictionary<string, PaperBodyPluginDescriptor>>(registry, "_descriptors");
@@ -203,9 +207,6 @@ internal static partial class Program
 
         try
         {
-            // Start from a settled application save so this check isolates dirty state created
-            // synchronously by the Runtime PaperRemoved callback after the external snapshot write.
-            c.SaveNow(sync: true);
             BoundaryRuntimePlugin.Starts = 0;
             BoundaryRuntimePlugin.Fail = false;
             BoundaryRuntimePlugin.Configure = context =>
