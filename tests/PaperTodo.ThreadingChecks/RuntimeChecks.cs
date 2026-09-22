@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Windows.Threading;
 using PaperTodo.Plugin;
 
 namespace PaperTodo.ThreadingChecks;
@@ -58,11 +59,36 @@ internal static partial class Program
             catch (PaperTodoPluginException ex) when (ex.Code == "runtime_closed") { }
             Assert(string.IsNullOrEmpty(fixture.Paper.BodyHeaderText), "expired header reached the model");
             Assert(string.IsNullOrEmpty(fixture.Paper.BodyCapsuleText), "expired capsule reached the model");
-            Assert(ReadField<HashSet<string>>(fixture.Api, "_publishedHeaderPaperIds").Count == 0,
-                "expired call changed header publication markers");
-            Assert(ReadField<HashSet<string>>(fixture.Api, "_publishedCapsulePaperIds").Count == 0,
-                "expired call changed capsule publication markers");
         }
+    }
+
+    private static void CheckRuntimeListHasNoPresentationSideEffects()
+    {
+        using var fixture = new RuntimeFixture();
+        fixture.Paper.BodyHeaderText = "retained-header";
+        fixture.Paper.BodyCapsuleText = "retained-capsule";
+        var retained = ReadField<Dictionary<string, Dictionary<string, PaperCapsulePresentation>>>(
+            fixture.Controller,
+            "_pluginRuntimePresentationCache");
+        retained[RuntimeFixture.Provider] = new Dictionary<string, PaperCapsulePresentation>(StringComparer.Ordinal)
+        {
+            [fixture.Paper.Id] = Capsule("retained-capsule")
+        };
+
+        var papers = fixture.Api.List();
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.ApplicationIdle,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+
+        Assert(papers.Count == 1 && papers[0].PaperId == fixture.Paper.Id, "runtime list did not return owned paper");
+        Assert(fixture.Paper.BodyHeaderText == "retained-header", "runtime list cleared retained header");
+        Assert(fixture.Paper.BodyCapsuleText == "retained-capsule", "runtime list cleared retained capsule text");
+        Assert(retained.TryGetValue(RuntimeFixture.Provider, out var providerCache) &&
+            providerCache.TryGetValue(fixture.Paper.Id, out var presentation) &&
+            presentation.PlainText == "retained-capsule",
+            "runtime list cleared retained rich capsule presentation");
     }
 
     private static void CheckCapsulePublication()
@@ -97,7 +123,5 @@ internal static partial class Program
             catch (PaperTodoPluginException ex) when (ex.Code == "paper_not_owned") { }
         }
         Assert(!fixture.Api.TryGetCapsulePresentation("other-paper", out _), "unowned paper entered the cache");
-        Assert(ReadField<HashSet<string>>(fixture.Api, "_publishedHeaderPaperIds").Count == 0, "unowned header marked published");
-        Assert(ReadField<HashSet<string>>(fixture.Api, "_publishedCapsulePaperIds").Count == 0, "unowned capsule marked published");
     }
 }

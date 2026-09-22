@@ -16,6 +16,7 @@ internal static partial class Program
         ("shared-easings-worker-first", CheckFrozenEasings),
         ("menu-scale-refresh", CheckMenuScaleRefresh),
         ("runtime-expired-queued-calls", CheckExpiredRuntimeCalls),
+        ("runtime-list-no-presentation-side-effects", CheckRuntimeListHasNoPresentationSideEffects),
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),

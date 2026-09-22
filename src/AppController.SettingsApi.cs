@@ -288,8 +288,11 @@ public sealed partial class AppController
                 }
                 break;
             case SettingEffects.Scripts:
-                PaperWindow.StopPersistentScriptProcesses();
-                PaperWindow.EnsurePersistentScriptProcessForSettings(State); break;
+                if (State.UsePersistentPowerShellProcess)
+                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                else
+                    PaperWindow.StopPersistentScriptProcesses();
+                break;
             case SettingEffects.VisibilitySnapshot: ClearVisibilityShortcutRestoreSnapshot(); break;
             case SettingEffects.Mcp: RefreshMcpRuntime(); break;
         }
