@@ -563,13 +563,6 @@ public sealed class StateStore
         state.ExperimentalTetherMinimizedBehavior =
             ExperimentalTetherVisibilityModes.Normalize(
                 state.ExperimentalTetherMinimizedBehavior);
-        if (state.ShowTopBarNewPaperButtons is bool showTopBarNewPaperButtons)
-        {
-            state.ShowTopBarNewTodoButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewNoteButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewPaperButtons = null;
-        }
-
         state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
         if (!state.UseCapsuleMode)
