@@ -202,7 +202,7 @@ internal static partial class Program
             path, path, "fixture", typeof(BoundaryRuntimePlugin), manifest);
         var loadedType = typeof(PaperBodyPluginRegistry).GetNestedType("LoadedNativePlugin", BindingFlags.NonPublic)!;
         loaded[path] = Activator.CreateInstance(loadedType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            null, [path, "fixture", descriptor, null], null)!;
+            null, [path, descriptor, null], null)!;
         descriptors[id] = descriptor;
         var paper = new PaperData { Id = "failure-owner", Type = PaperTypes.Note, BodyProviderId = id, IsVisible = false };
         c.State.Papers.Add(paper);
