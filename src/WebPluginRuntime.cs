@@ -377,7 +377,9 @@ internal sealed partial class WebPluginRuntime : IDisposable
         object? sender,
         CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (!ReferenceEquals(sender, _webView.CoreWebView2) ||
+        if (_disposed ||
+            !_isActive() ||
+            !ReferenceEquals(sender, _webView.CoreWebView2) ||
             !_hasDocumentNavigation ||
             e.NavigationId != _documentNavigationId)
         {
