@@ -30,7 +30,7 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsLiveRefraction").Append("TipLiveRefraction").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsLiveBackgroundProcessing").Append("TipLiveBackgroundProcessing").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
