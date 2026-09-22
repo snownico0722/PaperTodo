@@ -23,23 +23,23 @@ internal static class IncrementalSnapshotChecks
 
     private static void CheckSmallDocumentsUseFullParse()
     {
-        if (MarkdownSemanticDocument.FullParseThresholdChars != 2000)
+        if (MarkdownSemanticDocument.FullParseThresholdChars != 8_000)
         {
             throw new InvalidOperationException(
                 $"FAIL small-document policy: threshold={MarkdownSemanticDocument.FullParseThresholdChars}");
         }
 
-        var source = "before\n\n```text\n" + new string('x', 1_200) + "\n```\n\nafter\n";
+        var source = "before\n\n```text\n" + new string('x', 7_200) + "\n```\n\nafter\n";
         var document = new TextDocument(source);
         using var semantics = new MarkdownSemanticDocument(document);
-        document.Insert(source.IndexOf(new string('x', 20), StringComparison.Ordinal) + 600, "Z");
+        document.Insert(source.IndexOf(new string('x', 20), StringComparison.Ordinal) + 3_600, "Z");
 
         if (!semantics.TryGetCurrent(out var actual))
         {
             throw new InvalidOperationException("FAIL small-document policy: no current snapshot");
         }
         AssertEquivalent(MarkdownSemanticSnapshot.Parse(document.Text), actual, "small document full parse");
-        Console.WriteLine("PASS small documents parse fully below 2K");
+        Console.WriteLine("PASS small documents parse fully below 8K");
     }
 
     private static void CheckLargePlainEditStaysLocal()
