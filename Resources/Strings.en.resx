@@ -1254,6 +1254,9 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>More settings</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>Settings unavailable</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>Hide settings</value>
   </data>
