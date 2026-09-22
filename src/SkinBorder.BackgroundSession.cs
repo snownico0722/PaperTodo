@@ -297,7 +297,7 @@ internal sealed partial class SkinBorder
                 _owner.PaintMaterialDetails(dc);
                 dc.Pop();
                 // The native owner may hide this stroke, but never let a live scene cover it.
-                if (_owner.ShowOuterBorder)
+                if (_owner.DrawBaseOuterBorder)
                     dc.DrawGeometry(_owner.BorderBrush, null, _owner._borderRing);
                 _finishVersion = _owner._surfaceVersion; _finishBorderBrush = _owner.BorderBrush;
             }
