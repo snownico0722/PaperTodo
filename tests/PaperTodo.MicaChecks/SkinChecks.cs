@@ -139,9 +139,10 @@ internal static class SkinChecks
     }
     private static void CheckAuxiliaryMaterials(AppController controller)
     {
-        var old = controller.State.MatchAuxiliaryMaterialStrength;
+        var old = (controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline);
         try
         {
+            controller.State.HideSurfaceOutline = false;
             foreach (var mode in new[] { "light", "dark" })
             foreach (var skin in PaperSkins.All.Where(s => s != PaperSkins.Paper))
             {
@@ -186,7 +187,10 @@ internal static class SkinChecks
             }
             Console.WriteLine("PASS auxiliary materials: main stable, capsule/menu strength, opaque foreground, hit tests and real menu templates.");
         }
-        finally { controller.State.MatchAuxiliaryMaterialStrength = old; }
+        finally
+        {
+            (controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline) = old;
+        }
     }
     private static void CheckDockedOutline(AppController controller)
     {
