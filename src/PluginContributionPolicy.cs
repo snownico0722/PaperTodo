@@ -159,9 +159,13 @@ internal static class PluginContributionPolicy
     private static string NormalizeToolTip(string? value, string code)
     {
         var text = value?.Trim() ?? string.Empty;
-        if (text.Length > MaximumToolTipLength)
-            throw new PaperTodoPluginException(code,
-                $"Tooltips cannot exceed {MaximumToolTipLength} characters.");
+        if (text.Length > MaximumToolTipLength ||
+            text.Any(ch => char.IsControl(ch) && ch != '\r' && ch != '\n'))
+        {
+            throw new PaperTodoPluginException(
+                code,
+                $"Tooltips cannot exceed {MaximumToolTipLength} characters and may contain only normal line-break control characters.");
+        }
         return text;
     }
 

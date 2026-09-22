@@ -205,6 +205,10 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
             [new() { Text = "Summary", ToolTip = new string('x', 161) }]), "invalid_topbar_label_tooltip");
         Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
+            [new() { Text = "Summary", ToolTip = "ok\u0001bad" }]), "invalid_topbar_label_tooltip");
+        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
+            [new() { Text = "Summary", ToolTip = "ok\tbad" }]), "invalid_topbar_label_tooltip");
+        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
             [new() { Text = "Bad\nlabel" }]), "invalid_topbar_label_text");
     }
 
