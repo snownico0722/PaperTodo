@@ -23,9 +23,10 @@ internal static partial class Program
             window.Show();
             window.UpdateLayout();
             var handle = new WindowInteropHelper(window).Handle;
-            Assert(handle != IntPtr.Zero &&
-                WindowNative.TryGetWindowDeviceBounds(window, out var original),
-                "native batch fixture window unavailable");
+            Assert(handle != IntPtr.Zero,
+                "native batch fixture window handle unavailable");
+            Assert(WindowNative.TryGetWindowDeviceBounds(window, out var original),
+                "native batch fixture window bounds unavailable");
 
             var shifted = new DeviceScreenRect(
                 original.Left + 24,
