@@ -29,9 +29,19 @@
     <SatelliteResourceLanguages>en;ja;ko</SatelliteResourceLanguages>
     <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;tests\**;tools\**;vendor\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- PR #301 only: opt-in MicaController experiment. Normal PaperTodo builds keep #227's
+         dependency-free DWM backdrop path and existing publish behavior. -->
+    <PaperTodoMicaControllerExperiment Condition="'$(PaperTodoMicaControllerExperiment)' == ''">false</PaperTodoMicaControllerExperiment>
+    <WindowsPackageType Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">true</EnableMsixTooling>
+    <IncludeAllContentForSelfExtract Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">
+    <DefineConstants>$(DefineConstants);PAPERTODO_MICA_CONTROLLER_EXPERIMENT</DefineConstants>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Compress the WinRT projection in ordinary builds and no-runtime packages.
@@ -72,6 +82,8 @@
     <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1"
+                      Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
     <!-- DirectComposition wraps live layered WPF capsule HWNDs without per-frame pixel copies or

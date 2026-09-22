@@ -39,6 +39,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _refreshQueued;
     private bool _contentRendered;
     private string? _accentMaterial;
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+    private AdjustableMicaControllerBackdrop? _adjustableMica;
+    internal bool UsesAdjustableMicaController => _adjustableMica?.IsActive == true;
+#endif
     internal bool UsesRedirectionAlpha { get; private set; }
 
     internal bool IsActive { get; private set; }
@@ -77,6 +81,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
         window.ContentRendered += OnContentRendered;
         window.IsVisibleChanged += OnVisibilityChanged;
         window.StateChanged += OnStateChanged;
+        window.Activated += OnActivationChanged;
+        window.Deactivated += OnActivationChanged;
         window.Closed += OnClosed;
     }
 
@@ -136,6 +142,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
             var glass = _material == AeroGlassMaterial;
             var accent = clear;
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+            if (!enable || _material != MicaBackdropTypes.Mica)
+                _adjustableMica?.Disable();
+#endif
             IsActive = false;
             LastHResult = 0;
             if (_accentMaterial != null && (!enable || _accentMaterial != _material))
@@ -156,8 +166,28 @@ internal sealed class NativeMicaBackdrop : IDisposable
                     LastHResult = _native.ExtendFrame(hwnd, accent || glass ? 0 : -1);
                 }
                 if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
-                if (LastHResult >= 0) LastHResult = _native.SetBackdrop(hwnd,
-                    glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
+                if (LastHResult >= 0)
+                {
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+                    if (_material == MicaBackdropTypes.Mica)
+                    {
+                        LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.None);
+                        if (LastHResult >= 0)
+                        {
+                            _adjustableMica ??= new AdjustableMicaControllerBackdrop();
+                            var usedController = _adjustableMica.TryApply(
+                                hwnd, dark, transparency, _alwaysActive || _window.IsActive);
+                            if (!usedController)
+                                LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
+                        }
+                    }
+                    else
+#endif
+                    {
+                        LastHResult = _native.SetBackdrop(hwnd,
+                            glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
+                    }
+                }
                 if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
                 if (LastHResult >= 0 && accent)
                 {
@@ -219,6 +249,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // Once per actual native refresh, never on movement or stable layout.
             _native.InvalidateContent(hwnd);
             QueueContentRepaint();
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+            _adjustableMica?.SetInputActive(_alwaysActive || _window.IsActive);
+#endif
             if (enable && !IsActive)
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }
@@ -284,6 +317,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
         Refresh(_requested, _dark);
 
     private void OnStateChanged(object? sender, EventArgs e) => QueueRefresh();
+    private void OnActivationChanged(object? sender, EventArgs e)
+    {
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+        _adjustableMica?.SetInputActive(_alwaysActive || _window.IsActive);
+#endif
+    }
     private void OnOpacityChanged(object? sender, EventArgs e)
     {
         Refresh(_requested, _dark);
@@ -331,6 +370,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _window.ContentRendered -= OnContentRendered;
         _window.IsVisibleChanged -= OnVisibilityChanged;
         _window.StateChanged -= OnStateChanged;
+        _window.Activated -= OnActivationChanged;
+        _window.Deactivated -= OnActivationChanged;
         _window.Closed -= OnClosed;
         _opacity.RemoveValueChanged(_window, OnOpacityChanged);
         if (_observedChrome != null)
@@ -346,6 +387,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
             if (UsesRedirectionAlpha) _native.SetRedirectionAlpha(_source.Handle, false);
         }
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+        _adjustableMica?.Dispose();
+        _adjustableMica = null;
+#endif
         UsesRedirectionAlpha = false;
         IsActive = false;
         _source = null;
