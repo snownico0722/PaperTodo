@@ -3408,9 +3408,8 @@ public sealed partial class AppController : IDisposable
         return SystemParameters.WorkArea;
     }
 
-    // Per-queue vertical rest position, keyed by (monitor, edge). Falls back to the legacy global
-    // margin when a queue has no stored value, so old configs are unchanged and a queue's first
-    // slide forks it from the global default.
+    // Per-queue vertical rest position, keyed by (monitor, edge). Missing entries use the current
+    // product default directly; the per-queue dictionary is the only persisted authority.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
         var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
@@ -3425,10 +3424,7 @@ public sealed partial class AppController : IDisposable
             : EdgeCapsuleLayout.StartTopMargin;
     }
 
-    // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the
-    // per-queue dictionary. Must clear the dict too: layout reads per-queue values first, so
-    // leaving stale entries would resurrect old queue heights when the mode is re-enabled (and
-    // persist them to data.json). Single chokepoint so no reset path forgets the dict again.
+    // Reset every persisted per-queue start height to the product default.
     private void ResetDeepCapsuleStartTopMargins()
     {
         State.DeepCapsuleQueueStartTopMargins.Clear();
