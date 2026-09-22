@@ -1276,8 +1276,20 @@
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>打开目录</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>重启 PaperTodo 并重新扫描插件</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>重启 PaperTodo</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>重启后将重新扫描并加载正文插件。是否立即重启？</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>立即重启</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>发现 {0} 个正文插件</value>
+    <value>{0}个</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>加载问题</value>
@@ -1303,6 +1315,9 @@
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>找不到正文插件：{0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0}（已禁用）</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>正文类型</value>
   </data>
@@ -1311,6 +1326,12 @@
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo 内置 Markdown 编辑、预览与图片正文。</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>正文插件已关闭</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>“{0}”已禁用。可在设置 → 插件中重新启用。</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>正文插件无法运行</value>
@@ -1408,7 +1429,10 @@
     <value>插件有问题</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>当前未使用</value>
+    <value>插件已启用，当前未运行</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>插件已禁用</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>插件运行中</value>
