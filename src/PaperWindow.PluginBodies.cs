@@ -201,15 +201,6 @@ public sealed partial class PaperWindow
                 _controller.ImageStore);
         }
 
-        if (!_controller.IsPluginEnabled(providerId))
-        {
-            _controller.PaperBodyPlugins.TryGet(providerId, out var disabledDescriptor);
-            _bodyDescriptor = disabledDescriptor;
-            _bodyDisabled = true;
-            return new DisabledPaperBodySession(
-                disabledDescriptor?.DisplayName ?? providerId);
-        }
-
         if (!_controller.PaperBodyPlugins.TryGet(providerId, out var descriptor))
         {
             _bodyDescriptor = null;
@@ -218,6 +209,13 @@ public sealed partial class PaperWindow
                 this,
                 providerId,
                 Strings.Format("PluginsMissingProviderFormat", providerId));
+        }
+
+        if (!_controller.IsPluginEnabled(providerId))
+        {
+            _bodyDescriptor = descriptor;
+            _bodyDisabled = true;
+            return new DisabledPaperBodySession(descriptor.DisplayName);
         }
 
         _bodyDescriptor = descriptor;
