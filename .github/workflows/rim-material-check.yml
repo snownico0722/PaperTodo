@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
         run: |
           $dragOut = Join-Path $env:RUNNER_TEMP 'rim-evidence/drag.json'
-          dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -- --drag-benchmark $dragOut *> "$env:RUNNER_TEMP/rim-evidence/logs/drag.txt"
+          dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -- --drag-snapshot-timing $dragOut *> "$env:RUNNER_TEMP/rim-evidence/logs/drag.txt"
           $code = $LASTEXITCODE
           Get-Content "$env:RUNNER_TEMP/rim-evidence/logs/drag.txt" -Tail 80
           if ($code -ne 0) { throw 'Real drag benchmark failed' }
