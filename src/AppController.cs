@@ -147,7 +147,6 @@ public sealed partial class AppController : IDisposable
         RefreshApplicationThemeResources();
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
-        var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
         var protectedImageIdsForReuse = TryCollectUnprotectedImages();
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
@@ -182,11 +181,6 @@ public sealed partial class AppController : IDisposable
             _forceSaveTimer.Stop();
             SaveNow();
         };
-
-        if (strippedInternalImageMarkers)
-        {
-            MarkDirty();
-        }
 
         _topmostRefreshTimer = new DispatcherTimer
         {
@@ -223,27 +217,6 @@ public sealed partial class AppController : IDisposable
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.TimeChanged += OnSystemTimeChanged;
-    }
-
-    private bool StripInternalImageRenderMarkersFromState()
-    {
-        var changed = false;
-        foreach (var paper in State.Papers)
-        {
-            if (paper.Type != PaperTypes.Note || string.IsNullOrEmpty(paper.Content))
-            {
-                continue;
-            }
-
-            var cleaned = MarkdownImageReferences.StripRenderMarkers(paper.Content);
-            if (!string.Equals(cleaned, paper.Content, StringComparison.Ordinal))
-            {
-                paper.Content = cleaned;
-                changed = true;
-            }
-        }
-
-        return changed;
     }
 
     public async Task StartAsync(

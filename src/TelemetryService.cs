@@ -935,7 +935,7 @@ internal static class TelemetryService
                     try
                     {
                         imageCount = MarkdownImageReferences
-                            .CollectImageIds(MarkdownImageReferences.StripRenderMarkers(content))
+                            .CollectImageIds(content)
                             .Distinct(StringComparer.Ordinal)
                             .Count();
                     }

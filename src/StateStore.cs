@@ -217,8 +217,7 @@ public sealed class StateStore
                 return false;
             }
 
-            var content = MarkdownImageReferences.StripRenderMarkers(paper.Content ?? "");
-            foreach (var imageId in MarkdownImageReferences.CollectImageIds(content))
+            foreach (var imageId in MarkdownImageReferences.CollectImageIds(paper.Content))
             {
                 imageIds.Add(imageId);
             }
