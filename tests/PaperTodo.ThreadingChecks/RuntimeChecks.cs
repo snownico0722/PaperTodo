@@ -89,6 +89,51 @@ internal static partial class Program
             providerCache.TryGetValue(fixture.Paper.Id, out var presentation) &&
             presentation.PlainText == "retained-capsule",
             "runtime list cleared retained rich capsule presentation");
+
+        var addedBeforeStartupSnapshot = new PaperData
+        {
+            Id = "paper-2",
+            Type = PaperTypes.Note,
+            BodyProviderId = RuntimeFixture.Provider
+        };
+        fixture.Controller.State.Papers.Add(addedBeforeStartupSnapshot);
+        var events = new List<PaperPluginRuntimeEvent>();
+        using var subscription = fixture.Api.Subscribe(events.Add);
+
+        var ordinaryList = fixture.Api.List();
+        fixture.Api.Reconcile();
+        Assert(ordinaryList.Any(paper => paper.PaperId == addedBeforeStartupSnapshot.Id) &&
+            events.Count == 1 &&
+            events[0].Kind == PaperPluginRuntimeEventKind.PaperAdded &&
+            events[0].PaperId == addedBeforeStartupSnapshot.Id,
+            "ordinary runtime list unexpectedly changed the event baseline");
+
+        events.Clear();
+        var addedDuringStartup = new PaperData
+        {
+            Id = "paper-3",
+            Type = PaperTypes.Note,
+            BodyProviderId = RuntimeFixture.Provider
+        };
+        fixture.Controller.State.Papers.Add(addedDuringStartup);
+        var startupSnapshot = fixture.Api.CaptureStartupSnapshot();
+        fixture.Api.Reconcile();
+        Assert(startupSnapshot.Any(paper => paper.PaperId == addedDuringStartup.Id) &&
+            events.Count == 0,
+            "startup snapshot paper was reported again as PaperAdded");
+
+        var addedAfterStartup = new PaperData
+        {
+            Id = "paper-4",
+            Type = PaperTypes.Note,
+            BodyProviderId = RuntimeFixture.Provider
+        };
+        fixture.Controller.State.Papers.Add(addedAfterStartup);
+        fixture.Api.Reconcile();
+        Assert(events.Count == 1 &&
+            events[0].Kind == PaperPluginRuntimeEventKind.PaperAdded &&
+            events[0].PaperId == addedAfterStartup.Id,
+            "post-startup paper did not produce PaperAdded");
     }
 
     private static void CheckCapsulePublication()
