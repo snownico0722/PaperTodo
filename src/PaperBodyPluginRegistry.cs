@@ -1,8 +1,6 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using PaperTodo.Plugin;
@@ -104,7 +102,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private sealed record LoadedNativePlugin(
         string DirectoryPath,
-        string Fingerprint,
         PaperBodyPluginDescriptor Descriptor,
         NativePluginLoadContext LoadContext);
 
@@ -463,7 +460,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             ?? throw new InvalidOperationException(
                 "The native plugin manifest is unavailable.");
         var directory = manifest.DirectoryPath;
-        var fingerprint = PluginFolderFingerprint(directory);
         var loadContext = new NativePluginLoadContext(manifest.EntryPath);
         IPaperBodyPlugin? plugin = null;
         try
@@ -482,12 +478,10 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             // plugin.json is the sole metadata authority; the CLR type contributes behavior only.
             var descriptor = discoveredDescriptor with
             {
-                Fingerprint = fingerprint,
                 NativePluginType = pluginType
             };
             _loadedNativeByDirectory[directory] = new LoadedNativePlugin(
                 directory,
-                fingerprint,
                 descriptor,
                 loadContext);
             if (_descriptors.TryGetValue(descriptor.Id, out var current) &&
@@ -632,60 +626,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
                 $"Plugin version '{value}' is not a valid version.");
         }
         return parsed;
-    }
-
-    private static string PluginFolderFingerprint(string directory)
-    {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                     .Where(path => !IsRuntimePath(directory, path))
-                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
-        {
-            var relative = Path.GetRelativePath(directory, path).Replace('\\', '/');
-            hash.AppendData(Encoding.UTF8.GetBytes(relative));
-            hash.AppendData(new byte[] { 0 });
-            using var stream = File.OpenRead(path);
-            var buffer = new byte[64 * 1024];
-            int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                hash.AppendData(buffer.AsSpan(0, read));
-            }
-            hash.AppendData(new byte[] { 0 });
-        }
-        return Convert.ToHexString(hash.GetHashAndReset());
-    }
-
-    private static string DiscoveryFingerprint(
-        string manifestPath,
-        string entryPath,
-        string? miniEntryPath = null,
-        string? runtimePath = null)
-    {
-        var manifest = new FileInfo(manifestPath);
-        var entry = new FileInfo(entryPath);
-        var value = $"discovery:{manifest.Length}:{manifest.LastWriteTimeUtc.Ticks}:" +
-            $"{entry.Length}:{entry.LastWriteTimeUtc.Ticks}";
-        if (!string.IsNullOrWhiteSpace(miniEntryPath))
-        {
-            var mini = new FileInfo(miniEntryPath);
-            value += $":{mini.Length}:{mini.LastWriteTimeUtc.Ticks}";
-        }
-        if (!string.IsNullOrWhiteSpace(runtimePath))
-        {
-            var runtime = new FileInfo(runtimePath);
-            value += $":{runtime.Length}:{runtime.LastWriteTimeUtc.Ticks}";
-        }
-        return value;
-    }
-
-    private static bool IsRuntimePath(string directory, string path)
-    {
-        var relative = Path.GetRelativePath(directory, path);
-        return relative.Split(
-                new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-                StringSplitOptions.RemoveEmptyEntries)
-            .Any(part => string.Equals(part, ".runtime", StringComparison.OrdinalIgnoreCase));
     }
 
     public void Dispose()
