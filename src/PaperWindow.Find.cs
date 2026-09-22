@@ -227,6 +227,11 @@ public sealed partial class PaperWindow
                 RebuildFindMatches(preserveCurrent: false);
             }
         };
+        input.AddHandler(
+            Keyboard.LostKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler((_, _) =>
+                QueueBuiltInFindPopupFocusExitCheck()),
+            handledEventsToo: true);
         input.PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)

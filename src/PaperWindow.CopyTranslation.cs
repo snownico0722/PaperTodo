@@ -16,11 +16,6 @@ public sealed partial class PaperWindow
             new KeyEventHandler(OnPaperWindowPreviewKeyDown),
             handledEventsToo: true);
         EventManager.RegisterClassHandler(
-            typeof(TextBox),
-            Keyboard.LostKeyboardFocusEvent,
-            new KeyboardFocusChangedEventHandler(OnAnyTextBoxLostKeyboardFocus),
-            handledEventsToo: true);
-        EventManager.RegisterClassHandler(
             typeof(PaperWindow),
             ContextMenuService.ContextMenuOpeningEvent,
             new ContextMenuEventHandler(OnCopyTranslationContextMenuOpening),
@@ -64,29 +59,6 @@ public sealed partial class PaperWindow
         }
 
         OnCopyTranslationPreviewKeyDown(window, e);
-    }
-
-    private static void OnAnyTextBoxLostKeyboardFocus(
-        object sender,
-        KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is not TextBox textBox || Application.Current == null)
-        {
-            return;
-        }
-
-        // Popup content lives in a separate HWND, so the owner Window can already be inactive
-        // before focus later leaves the search box for another application. Match only the
-        // host-owned find input and let that PaperWindow settle the final focus state.
-        foreach (Window candidate in Application.Current.Windows)
-        {
-            if (candidate is PaperWindow window &&
-                ReferenceEquals(window._findInput, textBox))
-            {
-                window.QueueBuiltInFindPopupFocusExitCheck();
-                return;
-            }
-        }
     }
 
     private static void OnCopyTranslationPreviewKeyDown(
