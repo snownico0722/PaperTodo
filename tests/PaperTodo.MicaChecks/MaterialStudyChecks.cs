@@ -56,18 +56,21 @@ internal static class MaterialStudyChecks
                         "Aero stays visible to screenshot APIs and never starts a desktop sampler");
                     rear.Background = background; Wait(100);
                     var brush = (LinearGradientBrush)typeof(SkinBorder).GetField("_aeroReflection", Program.Private)!.GetValue(surface)!;
-                    var shift = (TranslateTransform)brush.Transform;
-                    var oldX = shift.X; var width = brush.EndPoint.X - brush.StartPoint.X;
+                    // Assert the rendered translation, not the concrete transform type:
+                    // a single MatrixTransform update preserves both former X/Y offsets.
+                    var shift = brush.Transform;
+                    var oldX = shift.Value.OffsetX; var width = brush.EndPoint.X - brush.StartPoint.X;
                     Program.Assert(surface.HasAeroReflectionSubscription, "Aero has only a visible-window movement subscription");
                     window.Left += 90; Wait(80);
-                    Program.Assert(Math.Abs(shift.X - oldX + 9) < .01 && brush.MappingMode == BrushMappingMode.Absolute,
+                    Program.Assert(Math.Abs(shift.Value.OffsetX - oldX + 9) < .01 && brush.MappingMode == BrushMappingMode.Absolute,
                         "Aero reflection shifts continuously in world-space rather than stretching the diagonal");
                     window.Width += 80; Wait(80);
                     Program.Assert(Math.Abs(brush.EndPoint.X - brush.StartPoint.X - width) < .001,
                         "Aero reflection width is independent of window resize");
                     using (NativeSurfaceChecks.Capture(window, output, $"study-aero-{mode}-moved")) { }
                     controller.State.EnableAnimations = false; window.RefreshSkin(); Wait(30);
-                    Program.Assert(!surface.HasAeroReflectionSubscription, "disabling animation detaches Aero parallax");
+                    Program.Assert(!surface.HasAeroReflectionSubscription && shift.Value.IsIdentity,
+                        "disabling animation detaches Aero parallax and resets its translation");
                 }
                 if (skin == PaperSkins.Aero)
                 {
