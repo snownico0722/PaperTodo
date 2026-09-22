@@ -893,11 +893,15 @@ public sealed partial class PaperWindow
             return;
         }
         if (_controller.PaperBodyPlugins.TryGet(normalized, out var targetDescriptor) &&
-            targetDescriptor.Kind != PaperBodyPluginKind.BuiltIn &&
-            (!_controller.IsPluginEnabled(normalized) ||
-             !_controller.CanAssignPluginProvider(_paper, targetDescriptor)))
+            targetDescriptor.Kind != PaperBodyPluginKind.BuiltIn)
         {
-            MessageBox.Show(
+            if (!_controller.IsPluginEnabled(normalized))
+            {
+                return;
+            }
+            if (!_controller.CanAssignPluginProvider(_paper, targetDescriptor))
+            {
+                MessageBox.Show(
                 this,
                 Strings.Format(
                     "PluginInstanceLimitMessage",
@@ -905,8 +909,9 @@ public sealed partial class PaperWindow
                     targetDescriptor.Manifest?.MaxPaperInstances ?? 1),
                 Strings.Get("PluginInstanceLimitTitle"),
                 MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
+                    MessageBoxImage.Information);
+                return;
+            }
         }
 
         CommitPendingEditsForSave();
