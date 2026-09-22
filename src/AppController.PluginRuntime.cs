@@ -77,6 +77,7 @@ public sealed partial class AppController
         public PluginRuntimeState State { get; set; }
         public Guid RuntimeId { get; set; }
         public PluginRuntimeLifetime? Lifetime { get; set; }
+        public IDisposable? StartingRuntime { get; set; }
         public PluginRuntimeLease? Lease { get; set; }
         public int FailureCount { get; set; }
         public int RetryGeneration { get; set; }
@@ -257,6 +258,11 @@ public sealed partial class AppController
                 runtimeId,
                 lifetime);
 
+            if (ReferenceEquals(slot.StartingRuntime, lease.Runtime))
+            {
+                slot.StartingRuntime = null;
+            }
+
             if (!IsCurrentPluginRuntimeSlot(slot, runtimeId) ||
                 !IsPluginRuntimeDesired(descriptor.Id))
             {
@@ -436,6 +442,7 @@ public sealed partial class AppController
                     IsActive,
                     () => RequestPluginRuntimeRestart(runtimeId, descriptor.Id));
                 runtime = webRuntime;
+                slot.StartingRuntime = webRuntime;
                 await webRuntime.StartAsync();
             }
             else
@@ -467,6 +474,10 @@ public sealed partial class AppController
         }
         catch
         {
+            if (ReferenceEquals(slot.StartingRuntime, runtime))
+            {
+                slot.StartingRuntime = null;
+            }
             lifetime.TryDeactivate();
             try { runtime?.Dispose(); } catch { }
             try { papers.Dispose(); } catch { }
@@ -715,8 +726,11 @@ public sealed partial class AppController
         slot.State = PluginRuntimeState.Disposing;
         slot.Lifetime?.TryDeactivate();
         slot.Lifetime = null;
+        var startingRuntime = slot.StartingRuntime;
+        slot.StartingRuntime = null;
         var lease = slot.Lease;
         slot.Lease = null;
+        try { startingRuntime?.Dispose(); } catch { }
         lease?.Dispose();
     }
 
