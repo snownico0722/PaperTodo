@@ -33,7 +33,8 @@ internal static class SkinChecks
             foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsLiveBackgroundProcessing").Append("TipLiveBackgroundProcessing").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
-        var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations);
+        var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
+            controller.State.EnableAnimations, controller.State.HideSurfaceOutline);
         try
         {
             CheckOriginalNativeRendering(controller); CheckAuxiliaryMaterials(controller);
@@ -81,12 +82,16 @@ internal static class SkinChecks
         }
         finally
         {
-            (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme, controller.State.EnableAnimations) = before;
+            (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
+                controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
             Theme.Invalidate();
         }
     }
     private static void CheckOriginalNativeRendering(AppController controller)
     {
+        // This comparison intentionally enables the ordinary border; hide-outline behavior
+        // and the independent active/focus capsule outline are checked separately.
+        controller.State.HideSurfaceOutline = false;
         controller.State.ColorScheme = ColorSchemes.Neutral;
         foreach (var mode in new[] { "light", "dark" })
         foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
@@ -129,6 +134,8 @@ internal static class SkinChecks
         Program.Assert(controller.State.ColorScheme == ColorSchemes.Warm &&
             ((SolidColorBrush)Theme.PaperBrush).Color == Color.FromRgb(255, 249, 234),
             "leaving a native skin restores the independent saved color choice");
+        controller.State.HideSurfaceOutline = true;
+        Theme.Invalidate();
     }
     private static void CheckAuxiliaryMaterials(AppController controller)
     {
@@ -183,6 +190,9 @@ internal static class SkinChecks
     }
     private static void CheckDockedOutline(AppController controller)
     {
+        // Active/focus outline is a distinct semantic layer and remains visible even
+        // while the ordinary outer border is hidden.
+        controller.State.HideSurfaceOutline = true;
         foreach (var skin in Decorated)
         foreach (var left in new[] { true, false })
         {
