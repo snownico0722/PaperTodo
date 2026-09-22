@@ -22,6 +22,7 @@ var checks = new (string Name, Action Run)[]
     ("replace-retries-transient-sharing-failures", ReplaceRetriesTransientSharingFailures),
     ("markdown-modes-migrate-and-roundtrip", MarkdownModesMigrateAndRoundTrip),
     ("obsolete-topbar-aggregate-is-ignored", ObsoleteTopBarAggregateIsIgnored),
+    ("disabled-capsule-mode-keeps-queue-layout-memory", DisabledCapsuleModeKeepsQueueLayoutMemory),
     ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
@@ -143,6 +144,24 @@ static void BackupRecoveryIsPreservedUntilNormalSave()
     Assert(!recoveredStore.TryRefreshBackupFromPrimary(),
         "backup used for recovery was allowed to refresh immediately");
     Assert(ReadTheme(recoveredStore.BackupPath) == "light", "recovery backup was changed");
+}
+
+static void DisabledCapsuleModeKeepsQueueLayoutMemory()
+{
+    using var scope = new TempDirectory();
+    var state = NewState("light");
+    state.UseCapsuleMode = false;
+    state.UseDeepCapsuleMode = false;
+    state.UseCapsuleCollapseAll = false;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|left"] = 37.5;
+
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    var loaded = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+
+    Assert(loaded.DeepCapsuleQueueStartTopMargins.TryGetValue("DISPLAY1|left", out var margin) &&
+           Math.Abs(margin - 37.5) < 0.001,
+        "disabled capsule mode discarded remembered queue layout");
 }
 
 static void PluginDataUsesOneNormalFile()

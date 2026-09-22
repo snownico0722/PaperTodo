@@ -169,6 +169,10 @@ internal static partial class Program
         Throws<PaperSettingsException>(() => service.Set("capsule.enabled", Json(false)), "save_failed");
         Check(c.State.UseCapsuleMode && c.State.UseDeepCapsuleMode && c.State.CapsuleCollapseAllActiveQueues["saved"] &&
             c.State.DeepCapsuleQueueStartTopMargins["saved"] == 25, "Capsule dependency and queue rollback.");
+        success = true;
+        service.Set("capsule.enabled", Json(false));
+        Check(!c.State.UseCapsuleMode && c.State.DeepCapsuleQueueStartTopMargins["saved"] == 25,
+            "Disabling capsule mode preserves remembered per-queue layout.");
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "abcdef", Items = [new PaperItem { Text = "done", Done = true, Order = 0 }, new PaperItem { Text = "open", Order = 1 }] };
         c.State.Papers.Add(paper);
         Throws<PaperSettingsException>(() => service.Set("title.max_length", Json(2)), "save_failed");
