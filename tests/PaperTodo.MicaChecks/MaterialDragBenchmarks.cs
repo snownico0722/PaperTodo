@@ -20,12 +20,52 @@ internal static class MaterialDragBenchmarks
     private sealed record Counters(long Draws, long Refreshes, long RegionQueries, long Layouts,
         long Projections, long SceneDraws, long Frames, long Captures, long Pixels, long BusyFrames);
 
+    internal const string FixtureMarker = ".papertodo-drag-fixture";
+    internal static int RunIsolated(string output)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "PaperTodo.DragChecks", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            // The real controller persists beside its executable. Never load/copy user data
+            // or reuse settings left by a previous benchmark process.
+            foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory, "*", SearchOption.AllDirectories))
+            {
+                var extension = Path.GetExtension(file);
+                if (extension is not (".exe" or ".dll" or ".pdb") &&
+                    !file.EndsWith(".deps.json") && !file.EndsWith(".runtimeconfig.json")) continue;
+                var destination = Path.Combine(directory, Path.GetRelativePath(AppContext.BaseDirectory, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(file, destination);
+            }
+            File.WriteAllText(Path.Combine(directory, FixtureMarker), "isolated drag benchmark");
+            var start = new ProcessStartInfo(Path.Combine(directory, "PaperTodo.MicaChecks.exe"))
+            {
+                WorkingDirectory = directory, UseShellExecute = false,
+                RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
+            };
+            start.ArgumentList.Add("--drag-fixture"); start.ArgumentList.Add(Path.GetFullPath(output));
+            using var child = Process.Start(start)!;
+            var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
+            if (!child.WaitForExit(240_000))
+            {
+                child.Kill(entireProcessTree: true); child.WaitForExit();
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                throw new TimeoutException("Isolated drag benchmark did not finish.");
+            }
+            Console.Write(stdout.GetAwaiter().GetResult()); Console.Error.Write(stderr.GetAwaiter().GetResult());
+            return child.ExitCode;
+        }
+        finally { try { Directory.Delete(directory, recursive: true); } catch (IOException) { } }
+    }
+
     internal static void Run(AppController controller, string output)
     {
         typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
         controller.State.Theme = "light";
         controller.State.ColorScheme = ColorSchemes.Warm;
         controller.State.UseCapsuleMode = true;
+        controller.State.UseDeepCapsuleMode = false;
         controller.State.MatchAuxiliaryMaterialStrength = true;
         controller.State.ExperimentalInactivePaperOpacity = false;
         controller.State.ExperimentalRestingCapsuleOpacity = false;
@@ -129,7 +169,7 @@ internal static class MaterialDragBenchmarks
             return IntPtr.Zero;
         };
         source.AddHook(hook);
-        var start = target.PointToScreen(new Point(Math.Min(100, target.ActualWidth * .55), target.ActualHeight * .5));
+        var start = target.PointToScreen(new Point(target.ActualWidth * (c.Capsule ? .55 : .5), target.ActualHeight * .5));
         Program.Assert(start.X > 100 && start.Y > 80, "input trajectory has room without screen docking");
         SetCursorPos((int)start.X, (int)start.Y); Wait(60);
         var before = ReadCounters();
