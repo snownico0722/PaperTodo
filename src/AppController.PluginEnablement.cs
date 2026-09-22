@@ -64,6 +64,16 @@ public sealed partial class AppController
         // reconcile from the same host-owned enablement gate.
         RefreshPluginShortcuts();
         ReconcilePluginRuntimes();
-        QueuePluginStatusUiRefresh();
+        if (_settingsWindow is { IsVisible: true } &&
+            _settingsPage == SettingsPage.Plugins)
+        {
+            _ = System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                (Action)RefreshSettingsWindowContent,
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+        else
+        {
+            QueuePluginStatusUiRefresh();
+        }
     }
 }
