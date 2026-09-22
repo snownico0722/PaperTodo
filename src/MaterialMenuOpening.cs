@@ -79,7 +79,7 @@ internal sealed class MaterialMenuOpening
     private int _generation;
     internal bool IsPending => _pending;
 
-    internal static bool NeedsBackground => AppController.Current?.State.LiquidGlassRefraction != false &&
+    internal static bool NeedsBackground => AppController.Current?.State.LiveBackgroundProcessing != false &&
         PaperSkins.UsesNativeBackdrop(Theme.Skin) && Theme.Skin != PaperSkins.Aero &&
         !SystemParameters.HighContrast && DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
 
@@ -132,7 +132,7 @@ internal sealed class MaterialMenuOpening
                     // Loaded is too late to decide the first render's recipe.
                     surface.RefreshSkin();
                     var requested = InitialBounds(content, _target(), _placement());
-                    var capture = DesktopLensCapture.PreparePopupAsync(requested, Theme.Skin == PaperSkins.LiquidGlass, cancel.Token);
+                    var capture = DesktopLensCapture.PreparePopupAsync(requested, cancel.Token);
                     try { frame = await capture.WaitAsync(TimeSpan.FromMilliseconds(300), cancel.Token); }
                     catch
                     {

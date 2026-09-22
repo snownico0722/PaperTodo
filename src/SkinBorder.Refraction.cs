@@ -6,7 +6,6 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Effects;
-using System.Windows.Media.Media3D;
 
 namespace PaperTodo;
 
@@ -15,17 +14,10 @@ internal sealed partial class SkinBorder
     private sealed class LensScene
     {
         internal readonly DrawingVisual Visual = new();
-        private LiquidRefractionEffect? _effect;
-        internal LiquidRefractionEffect Effect => _effect ??= new();
         internal readonly BlurEffect Diffusion = new() { KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
         internal Rect? ImageBounds;
-        internal Size? LiquidSize;
         internal WriteableBitmap? Bitmap;
-        internal BitmapCacheBrush? SceneBrush;
         internal LensCaptureLayout.Scene? Layout;
-        internal (Size Size, CornerRadius Radius, double DpiX, double DpiY, int Width, int Height,
-            int PixelsX, int PixelsY, bool Dark, double Strength, double Refraction, double Dispersion)? OpticalKey;
-
     }
     private ContainerVisual? _refractionVisual;
     private DrawingVisual? _opticalFinish;
@@ -105,8 +97,6 @@ internal sealed partial class SkinBorder
     private string? _requestedSkin;
     private DesktopLensCapture.Region? _captureGeometry;
     private bool _refractionFailed, _evidenceFrozen, _renderingSubscribed, _cropDirty;
-    private double _refractionStrength = 1;
-    private double _dispersionStrength = 1;
     internal bool IsRefractionActive => _capture != null && _scene?.Layout != null;
     internal bool HasRefractionWorker => _capture != null;
     internal bool HasRefractionRenderSubscription => _renderingSubscribed;
@@ -138,7 +128,7 @@ internal sealed partial class SkinBorder
         var source = IsLoaded && !IsOutline && !UseLightweightMaterial && !_highContrast && PaperSkins.UsesNativeBackdrop(Skin)
             ? PresentationSource.FromVisual(this) as HwndSource : null;
         ObserveMaterialHost(source);
-        var enabled = AppController.Current?.State.LiquidGlassRefraction != false;
+        var enabled = AppController.Current?.State.LiveBackgroundProcessing != false;
         var active = enabled && RequestsLiveBackground && IsLoaded && IsVisible && !_highContrast &&
             IsMaterialHostVisible && ActualWidth >= 8 && ActualHeight >= 8 &&
             DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
@@ -264,8 +254,6 @@ internal sealed partial class SkinBorder
             scene.Bitmap = bitmap;
             scene.ImageBounds = null;
             // Both the current effect and later recipe switches use this exact bitmap.
-            scene.SceneBrush = LiquidRefractionEffect.CreateSampler(bitmap);
-            if (Skin == PaperSkins.LiquidGlass) scene.Effect.Scene = scene.SceneBrush;
         }
         scene.Layout = layout;
         RefractionUploadedPixels += (long)bitmap.PixelWidth * bitmap.PixelHeight;
@@ -293,65 +281,19 @@ internal sealed partial class SkinBorder
         // The capture rectangle rounds out to physical pixels, but the optical
         // surface must retain its exact DIP extent at fractional desktop scaling.
         var size = RenderSize;
-        if (Skin != PaperSkins.LiquidGlass)
+        // Blur an overscanned scene before clipping the shell, so there is no dark halo
+        // from transparent pixels and no blur of text or menu items.
+        var imageBounds = new Rect(0, 0, bounds.Width / dpi.DpiScaleX, bounds.Height / dpi.DpiScaleY);
+        scene.Visual.Offset = new Vector((bounds.X - origin.X) / dpi.DpiScaleX, (bounds.Y - origin.Y) / dpi.DpiScaleY);
+        if (scene.ImageBounds != imageBounds)
         {
-            // Blur an overscanned scene BEFORE clipping the shell, so there is no
-            // dark halo from transparent pixels and no blur of text or menu items.
-            // Keep drawing/effect coordinates fixed in the cached scene. Pure motion
-            // changes only the visual offset, rather than re-recording a large blur.
-            var imageBounds = new Rect(0, 0, bounds.Width / dpi.DpiScaleX, bounds.Height / dpi.DpiScaleY);
-            scene.Visual.Offset = new Vector((bounds.X - origin.X) / dpi.DpiScaleX, (bounds.Y - origin.Y) / dpi.DpiScaleY);
-            if (scene.ImageBounds != imageBounds)
-            {
-                using var dc = scene.Visual.RenderOpen(); dc.DrawImage(scene.Bitmap, imageBounds);
-                RefractionSceneDrawCount++;
-                scene.ImageBounds = imageBounds;
-            }
-            scene.Diffusion.Radius = Theme.MaterialColors.Diffusion * MaterialStrength;
-            scene.OpticalKey = null; scene.LiquidSize = null;
-            scene.Visual.Effect = scene.Diffusion;
+            using var dc = scene.Visual.RenderOpen();
+            dc.DrawImage(scene.Bitmap, imageBounds);
+            RefractionSceneDrawCount++;
+            scene.ImageBounds = imageBounds;
         }
-        else
-        {
-            scene.Visual.Offset = new Vector();
-            if (!ReferenceEquals(scene.Visual.Effect, scene.Effect))
-            {
-                scene.Effect.Scene = scene.SceneBrush!;
-                scene.Visual.Effect = scene.Effect; scene.ImageBounds = null;
-            }
-            if (scene.LiquidSize != size)
-            {
-                using var dc = scene.Visual.RenderOpen(); dc.DrawRectangle(Brushes.Transparent, null, new Rect(size));
-                scene.LiquidSize = size; RefractionSceneDrawCount++;
-            }
-            scene.Effect.Crop = new Point4D(size.Width * dpi.DpiScaleX / bounds.Width, size.Height * dpi.DpiScaleY / bounds.Height,
-                (origin.X - bounds.X) / bounds.Width, (origin.Y - bounds.Y) / bounds.Height);
-            var opticalKey = (size, CornerRadius, dpi.DpiScaleX, dpi.DpiScaleY, bounds.Width, bounds.Height, tile.PixelWidth, tile.PixelHeight,
-                _dark, MaterialStrength, _refractionStrength, _dispersionStrength);
-            if (scene.OpticalKey != opticalKey)
-            {
-                scene.OpticalKey = opticalKey;
-                var metrics = GlassMetrics.For(RenderSize, _dark);
-                scene.Effect.Extent = new Point4D(size.Width, size.Height, 1 / Math.Max(.001, metrics.Bezel), 1);
-                var limit = Math.Min(ActualWidth, ActualHeight) * .5;
-                scene.Effect.Radii = new Point4D(Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopLeft)),
-                    Math.Min(limit, metrics.OpticalRadius(CornerRadius.TopRight)),
-                    Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomRight)),
-                    Math.Min(limit, metrics.OpticalRadius(CornerRadius.BottomLeft)));
-                var bend = metrics.Displacement * _refractionStrength * MaterialStrength;
-                scene.Effect.Shift = new Point(bend * dpi.DpiScaleX / bounds.Width, bend * dpi.DpiScaleY / bounds.Height);
-                // Never sharpen an upscaled low-resolution sample into a pixel grid on a
-                // very large paper. Scattering has a half-source-texel floor in addition to bilinear sampling.
-                var blur = metrics.Blur * MaterialStrength;
-                scene.Effect.Scattering = new Point4D(
-                    Math.Max(blur * dpi.DpiScaleX / bounds.Width, .5 / tile.PixelWidth),
-                    Math.Max(blur * dpi.DpiScaleY / bounds.Height, .5 / tile.PixelHeight),
-                    1 + (metrics.Saturation - 1) * MaterialStrength, 1);
-                scene.Effect.Dispersion = GlassMetrics.ChromaticSpread * _dispersionStrength;
-                // The same paint as the static fallback goes ABOVE this opaque scene.
-                // Otherwise it disappears under the DrawingVisual, leaving just a bright rim.
-            }
-        }
+        scene.Diffusion.Radius = Theme.MaterialColors.Diffusion * MaterialStrength;
+        scene.Visual.Effect = scene.Diffusion;
         RefreshOpticalFinish();
         _cropDirty = false;
         RefractionProjectionCount++;
@@ -372,28 +314,6 @@ internal sealed partial class SkinBorder
             dc.DrawGeometry(BorderBrush, null, _borderRing);
             _finishVersion = _surfaceVersion; _finishBorderBrush = BorderBrush;
         }
-    }
-    private Point4D LiquidTint
-    {
-        get
-        {
-            var color = Theme.MaterialColors.Surface;
-            return new(color.R / 255d, color.G / 255d, color.B / 255d, GlassMetrics.For(RenderSize, _dark).Tint);
-        }
-    }
-    internal void SetRefractionStrengthForEvidence(double value)
-    {
-        _refractionStrength = value;
-        if (_scene?.Layout is not { } layout) return;
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var metrics = GlassMetrics.For(RenderSize, _dark);
-        _scene.Effect.Shift = new Point(metrics.Displacement * dpi.DpiScaleX * value * MaterialStrength / layout.Bounds.Width,
-            metrics.Displacement * dpi.DpiScaleY * value * MaterialStrength / layout.Bounds.Height);
-    }
-    internal void SetDispersionForEvidence(double value)
-    {
-        _dispersionStrength = value;
-        if (_scene != null) _scene.Effect.Dispersion = GlassMetrics.ChromaticSpread * value;
     }
     internal IDisposable FreezeRefractionForEvidence()
     {

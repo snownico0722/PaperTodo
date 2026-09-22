@@ -59,8 +59,8 @@ public sealed partial class AppController
             SettingEffects.Theme,
             title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
         yield return DefineSetting<bool>("appearance.live_refraction",
-            () => State.LiquidGlassRefraction,
-            value => State.LiquidGlassRefraction = value,
+            () => State.LiveBackgroundProcessing,
+            value => State.LiveBackgroundProcessing = value,
             SettingEffects.Skin,
             title: Strings.Get("SettingsLiveRefraction"));
         yield return DefineSetting<bool>("appearance.native_material_always_active",

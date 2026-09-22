@@ -16,9 +16,7 @@ internal static class MaterialRelief
     {
         if (size.Width <= 0 || size.Height <= 0 || !double.IsFinite(size.Width) || !double.IsFinite(size.Height))
         { var empty = new DrawingGroup(); empty.Freeze(); return empty; }
-        var liquid = skin == PaperSkins.LiquidGlass;
-        var bevel = Math.Min(liquid ? Math.Clamp(GlassMetrics.For(size, dark).Bezel * .4, 3, 9) : 4,
-            Math.Min(size.Width, size.Height) / 2);
+        var bevel = Math.Min(4, Math.Min(size.Width, size.Height) / 2);
         var band = Math.Min(Math.Max(bevel, Math.Max(Math.Max(corners.TopLeft, corners.TopRight),
             Math.Max(corners.BottomLeft, corners.BottomRight))) + 1, Math.Min(size.Width, size.Height) / 2);
         var areas = new List<Rect>
@@ -46,14 +44,14 @@ internal static class MaterialRelief
                 var radius = p.Y < size.Height / 2
                     ? p.X < size.Width / 2 ? corners.TopLeft : corners.TopRight
                     : p.X < size.Width / 2 ? corners.BottomLeft : corners.BottomRight;
-                var (distance, n) = LensDisplacement.Surface(p, size, radius);
+                var (distance, n) = Surface(p, size, radius);
                 if (distance < .4 || distance >= bevel) continue;
                 // Docked host edges remain open; neither diffuse nor glossy light may
                 // manufacture a seam where its authoritative border is zero-width.
                 if (n.X < 0 && border.Left == 0 || n.X > 0 && border.Right == 0 ||
                     n.Y < 0 && border.Top == 0 || n.Y > 0 && border.Bottom == 0) continue;
                 var rim = 1 - distance / bevel;
-                var slope = (liquid ? 2.2 : 1.65) * rim * rim;
+                var slope = 1.65 * rim * rim;
                 var nz = 1 / Math.Sqrt(1 + slope * slope);
                 var nx = n.X * slope * nz; var ny = n.Y * slope * nz;
                 var diffuse = Math.Clamp(-.32 * nx - .46 * ny + .83 * nz, 0, 1);
@@ -62,10 +60,8 @@ internal static class MaterialRelief
                 // A narrow highlight and transmitted shadow define glass thickness.
                 // Neither one creates a broad opaque inner frame.
                 var shadow = .16 * rim * (1 - diffuse);
-                // Grazing-angle reflection supplies a fine outer highlight, while the
-                // specular lobe rolls across the curved shoulder. No broad white bezel.
-                var fresnel = liquid ? .06 + .94 * Math.Pow(1 - nz, 5) : 0;
-                var gloss = (specular * .92 + fresnel * .55) * rim;
+                // The specular lobe rolls across the curved shoulder without a broad white bezel.
+                var gloss = specular * .92 * rim;
                 var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .16;
                 gloss = Math.Clamp(gloss + bounce, 0, .75);
                 if (dark) gloss *= .72;
@@ -83,4 +79,22 @@ internal static class MaterialRelief
         }
         drawing.Freeze(); return drawing;
     }
+    private static (double Distance, Vector Normal) Surface(Point p, Size size, double radius)
+    {
+        var half = new Vector(size.Width / 2, size.Height / 2);
+        var v = new Vector(p.X - half.X, p.Y - half.Y);
+        radius = Math.Clamp(radius, 0, Math.Min(half.X, half.Y));
+        var q = new Vector(Math.Abs(v.X) - half.X + radius, Math.Abs(v.Y) - half.Y + radius);
+        var outside = new Vector(Math.Max(q.X, 0), Math.Max(q.Y, 0));
+        var length = outside.Length;
+        var distance = radius - length - Math.Min(Math.Max(q.X, q.Y), 0);
+        var blend = Math.Clamp((q.X - q.Y) * .5 + .5, 0, 1);
+        var flatNormal = new Vector(blend, 1 - blend);
+        flatNormal.Normalize();
+        var normal = length > .0001
+            ? new Vector(outside.X / length * (v.X < 0 ? -1 : 1), outside.Y / length * (v.Y < 0 ? -1 : 1))
+            : new Vector(flatNormal.X * (v.X < 0 ? -1 : 1), flatNormal.Y * (v.Y < 0 ? -1 : 1));
+        return (distance, normal);
+    }
+
 }

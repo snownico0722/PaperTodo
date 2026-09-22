@@ -192,13 +192,12 @@ internal sealed class DesktopLensCapture : IDisposable
     }
     internal static Int32Rect DesktopBounds => new(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
 
-    internal static Task<Frame?> PreparePopupAsync(Int32Rect requested, bool liquid, CancellationToken token) => Task.Run(() =>
+    internal static Task<Frame?> PreparePopupAsync(Int32Rect requested, CancellationToken token) => Task.Run(() =>
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
         try
         {
             token.ThrowIfCancellationRequested();
-            if (liquid) LiquidRefractionEffect.PrepareBytecode();
             var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
             var layout = LensCaptureLayout.Create(requested, geometry, DesktopBounds);
             if (layout == null) return null;

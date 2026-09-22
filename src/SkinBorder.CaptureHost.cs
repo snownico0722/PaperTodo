@@ -41,30 +41,6 @@ internal sealed partial class SkinBorder
     private IntPtr MaterialHostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (message == 0x0002 /* WM_DESTROY */) { StopRefraction(); return IntPtr.Zero; }
-        if (message == 0x0047 /* WM_WINDOWPOSCHANGED */ && lParam != IntPtr.Zero &&
-            _capture != null && _scene?.Layout != null && Skin == PaperSkins.LiquidGlass)
-        {
-            var position = Marshal.PtrToStructure<MaterialWindowPos>(lParam);
-            // Native caption dragging moves the HWND outside WPF's Rendering cadence.
-            // Feed the matching crop into this window-position transaction, rather than
-            // leaving its previous crop attached until a later dispatcher/render pass.
-            // Resize/show/hide/frame changes still use the full lifecycle below.
-            const uint sizeOrVisibility = 0x0020 /* FRAMECHANGED */ | 0x0040 /* SHOWWINDOW */ | 0x0080 /* HIDEWINDOW */;
-            if ((position.Flags & 0x0001 /* NOSIZE */) != 0 && (position.Flags & sizeOrVisibility) == 0)
-            {
-                if ((position.Flags & 0x0002 /* NOMOVE */) == 0)
-                {
-                    _capture.MarkMoving();
-                    _cropDirty = true;
-                    try { UpdateRefractionCrop(); if (_cropDirty) RequestRefractionRender(); }
-                    catch (Exception ex) when (ex is InvalidOperationException or ExternalException or ArgumentException)
-                    { FailRefraction(ex); }
-                }
-                // Do not consume the message: HwndTarget must still synchronize its
-                // render target, and DefWindowProc must still send WM_MOVE/WM_SIZE.
-                return IntPtr.Zero;
-            }
-        }
         if (message is 0x0047 /* WINDOWPOSCHANGED */ or 0x0018 /* SHOWWINDOW */ or 0x02e0 /* DPICHANGED */
             or 0x007e /* DISPLAYCHANGE */ or 0x031e /* DWMCOMPOSITIONCHANGED */ or 0x001a /* SETTINGCHANGE */)
         {
@@ -140,6 +116,6 @@ internal sealed partial class SkinBorder
     private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
         IsLoaded && IsVisible && !_highContrast && IsMaterialHostVisible &&
         DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
-    private bool RequestsLiveBackground => !UseLightweightMaterial && !SuppressLiveBackgroundForOpening && (Skin == PaperSkins.LiquidGlass ||
-        IsAuxiliary && Skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic or PaperSkins.TracingPaper);
+    private bool RequestsLiveBackground => !UseLightweightMaterial && !SuppressLiveBackgroundForOpening &&
+        IsAuxiliary && Skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.ClearAcrylic or PaperSkins.TracingPaper;
 }

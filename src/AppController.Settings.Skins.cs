@@ -95,7 +95,7 @@ public sealed partial class AppController
         var skin = PaperSkins.Resolve(State);
         panel.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsPaperSkin")), skin switch
         {
-            PaperSkins.TracingPaper => "TipSkinTracingPaper", PaperSkins.LiquidGlass => "TipSkinLiquidGlass",
+            PaperSkins.TracingPaper => "TipSkinTracingPaper",
             PaperSkins.Aero => "TipSkinAero", PaperSkins.Pixel => "TipSkinPixel", _ => "TipPaperSkin"
         }));
         panel.Children.Add(CreateSettingsSelect(
@@ -108,9 +108,9 @@ public sealed partial class AppController
                 }), "TipMatchAuxiliaryMaterial"));
         if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
         {
-            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiquidGlassRefraction, () =>
+            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiveBackgroundProcessing, () =>
             {
-                SetSettingFromUi("appearance.live_refraction", !State.LiquidGlassRefraction);
+                SetSettingFromUi("appearance.live_refraction", !State.LiveBackgroundProcessing);
             }), "TipLiveRefraction"));
             panel.Children.Add(new TextBlock
             {

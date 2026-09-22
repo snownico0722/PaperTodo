@@ -44,7 +44,6 @@ internal sealed class NativeMicaBackdrop : IDisposable
     internal static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621);
     internal const double CornerRadius = 8;
     // Internal composition recipe, never a saved MicaBackdropType / UI choice.
-    internal const string ClearGlassMaterial = "clearGlass";
     internal const string AeroGlassMaterial = "aeroGlass";
 
     internal NativeMicaBackdrop(Window window, Func<Border?> getChrome,
@@ -84,7 +83,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (material != null) _material = material is ClearGlassMaterial or AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
+        if (material != null) _material = material == AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
         var wasForcedActive = IsActive && _alwaysActive;
         if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
         if (_updating) return;
@@ -121,7 +120,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
-            var glass = _material is ClearGlassMaterial or AeroGlassMaterial;
+            var glass = _material == AeroGlassMaterial;
             var accent = clear;
             IsActive = false;
             LastHResult = 0;

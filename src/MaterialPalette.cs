@@ -25,7 +25,6 @@ internal readonly record struct MaterialPalette(Color Surface, Color NativeOverl
             PaperSkins.Mica => (.065, dark ? 226 : 222, dark ? 25 : 20, 38d),
             PaperSkins.Acrylic => (.12, dark ? 165 : 145, dark ? 30 : 26, 26d),
             PaperSkins.ClearAcrylic => (.18, dark ? 95 : 75, dark ? 31 : 28, 12d),
-            PaperSkins.LiquidGlass => (.09, dark ? 56 : 22, 0, 0d),
             PaperSkins.Aero => (.72, dark ? 54 : 27, 0, 0d),
             PaperSkins.TracingPaper => (.04, dark ? 226 : 211, 0, 18d),
             _ => (0d, 255, 0, 0d)

@@ -14,10 +14,6 @@ internal sealed partial class SkinBorder
         StartPoint = new Point(-180, -100), EndPoint = new Point(680, 430),
         SpreadMethod = GradientSpreadMethod.Reflect
     };
-    private readonly RadialGradientBrush _lensLight = new(Colors.White, Colors.Transparent)
-    {
-        MappingMode = BrushMappingMode.Absolute, RadiusX = 96, RadiusY = 96
-    };
     private DrawingGroup? _relief;
     private (Size Size, CornerRadius Radius, Thickness Border, double DpiX, double DpiY, string Skin, bool Dark)? _reliefKey;
 
@@ -77,25 +73,6 @@ internal sealed partial class SkinBorder
                 _aeroReflection.Transform = _reflectionShift;
                 _shine = _aeroReflection;
                 break;
-            case PaperSkins.LiquidGlass:
-                var lens = LiquidTint;
-                var clear = Color.FromRgb((byte)Math.Round(lens.X * 255), (byte)Math.Round(lens.Y * 255), (byte)Math.Round(lens.Z * 255));
-                _fill = Frozen(new SolidColorBrush(WithAlpha(clear, opaque ? (byte)255 : (byte)Math.Round(lens.W * 255))));
-                // A soft clear-coat reflection gives the whole face depth; the shoulder
-                // is not the only cue. It sits over the captured scene, never the editor.
-                _shine = Frozen(new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(White(_dark ? 12 : 24), 0), new(White(0), .34),
-                    new(White(0), .72), new(White(_dark ? 5 : 10), 1)
-                }, new Point(0, 0), new Point(.35, 1)));
-                _glint = Frozen(new LinearGradientBrush(new GradientStopCollection
-                {
-                    new(White(_dark ? 115 : 155), 0), new(White(12), .25),
-                    new(White(0), .55), new(White(_dark ? 65 : 100), 1)
-                }, new Point(0, 0), new Point(1, 1)));
-                _lensLight.GradientStops[0].Color = White(_dark ? 170 : 205);
-                UpdateLensLightGeometry();
-                break;
             case PaperSkins.Pixel:
                 var retro = Mix(paper, _dark ? Color.FromRgb(22, 29, 46) : Color.FromRgb(240, 235, 217), .42);
                 _fill = Frozen(new SolidColorBrush(retro));
@@ -110,14 +87,12 @@ internal sealed partial class SkinBorder
 
     private void PaintMaterialDetails(DrawingContext dc)
     {
-        if (UseLightweightMaterial && Skin is PaperSkins.Aero or PaperSkins.LiquidGlass)
+        if (UseLightweightMaterial && Skin == PaperSkins.Aero)
         {
-            // Preview changes size every frame. Keep the existing gradient and hairline,
-            // without rebuilding normal-map strips or subscribing to pointer lighting.
-            if (Skin == PaperSkins.LiquidGlass) dc.DrawGeometry(_glint, null, _glintRing);
+            // Preview changes size every frame without rebuilding relief strips.
             return;
         }
-        if (Skin is PaperSkins.Aero or PaperSkins.LiquidGlass)
+        if (Skin == PaperSkins.Aero)
         {
             var dpi = VisualTreeHelper.GetDpi(this);
             var key = (RenderSize, CornerRadius, BorderThickness, dpi.DpiScaleX, dpi.DpiScaleY, Skin, _dark);
@@ -127,13 +102,6 @@ internal sealed partial class SkinBorder
                 _reliefKey = key;
             }
             dc.DrawDrawing(_relief);
-        }
-        if (Skin == PaperSkins.LiquidGlass)
-        {
-            dc.DrawGeometry(_glint, null, _glintRing);
-            // Circular pointer light complements the cached curved-shoulder highlight;
-            // it does not add a full-panel opacity-mask intermediate.
-            dc.DrawGeometry(_lensLight, null, _glintRing);
         }
         if (Skin == PaperSkins.Pixel && !IsCapsule && HeaderHeight > 0)
         {
