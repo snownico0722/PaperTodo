@@ -46,6 +46,22 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         return OnUi(() => _controller.GetPluginRuntimePapers(_providerId));
     }
 
+    internal IReadOnlyList<PaperPluginRuntimePaper> CaptureStartupSnapshot()
+    {
+        EnsureUsable();
+        return OnUi(() =>
+        {
+            var snapshot = _controller.GetPluginRuntimePapers(_providerId);
+            lock (_gate)
+            {
+                EnsureUsableLocked();
+                _knownPaperIds.Clear();
+                _knownPaperIds.UnionWith(snapshot.Select(paper => paper.PaperId));
+            }
+            return snapshot;
+        });
+    }
+
     public PaperPluginRuntimePaper? Get(string paperId)
     {
         EnsureUsable();
