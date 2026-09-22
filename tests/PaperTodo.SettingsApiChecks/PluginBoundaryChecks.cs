@@ -58,6 +58,57 @@ internal static partial class Program
                 var noteWindow = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[note.Id];
                 var markdown = ReadField<MarkdownPaperBodySession>(noteWindow, "_markdownBodySession");
                 var box = markdown.NoteBox ?? throw new InvalidOperationException("Markdown editor is not available.");
+
+                var noteEvents = new List<PaperTodoEvent>();
+                using (c.PaperBodyPluginEvents.Subscribe(
+                    Guid.NewGuid(),
+                    "tests.boundary",
+                    new PaperTodoEventFilter
+                    {
+                        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.NoteChanged },
+                        ExcludeOwnOperations = true
+                    },
+                    noteEvents.Add))
+                {
+                    var persistedBeforeUnrelatedWrite = note.Content;
+                    box.Text = "user unrelated edit";
+                    Check(note.Content != box.PersistentText,
+                        "Fixture must keep an unrelated Markdown edit pending.");
+
+                    commands.AppendTodos(new AppendTodosRequest
+                    {
+                        PaperId = todo.Id,
+                        Todos = [new TodoCreateItem { Text = "external while note pending" }]
+                    }, PaperOperationContext.Plugin("tests.boundary"));
+
+                    Check(note.Content == persistedBeforeUnrelatedWrite,
+                        "An external write to another paper must not commit pending Markdown.");
+                    Check(ReadField<bool>(c, "_hasPendingDirty"),
+                        "The unrelated Markdown edit must remain pending after the external sync save.");
+                    Check(ReadField<System.Windows.Threading.DispatcherTimer>(c, "_saveTimer").IsEnabled,
+                        "The unrelated Markdown edit must keep its normal save timer.");
+
+                    c.SaveNow(sync: true);
+                    c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+                    Check(noteEvents.OfType<NoteChangedEvent>().Any(value =>
+                            value.Metadata.Origin == PaperTodoEventOrigin.User),
+                        "The unrelated Markdown edit must be published as a user change.");
+                }
+
+                box.Text = "user invalid write edit";
+                var beforeInvalidWrite = note.Content;
+                Throws<PaperCommandException>(() => commands.WriteNote(
+                    new WriteNoteRequest
+                    {
+                        PaperId = note.Id,
+                        Mode = NoteWriteMode.Append,
+                        Content = new string('x', PaperWindow.NoteTextMaxLength + 1)
+                    },
+                    PaperOperationContext.Plugin("tests.boundary")), "content_too_long");
+                Check(note.Content == beforeInvalidWrite &&
+                      box.PersistentText == "user invalid write edit",
+                    "An invalid note write must not commit the user's pending target text.");
+
                 box.Text = "user target edit";
                 Check(note.Content != box.PersistentText,
                     "Fixture must keep the target Markdown edit pending before the external write.");

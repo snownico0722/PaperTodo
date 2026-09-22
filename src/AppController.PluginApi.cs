@@ -84,6 +84,21 @@ public sealed partial class AppController
         _paperBodyPluginEvents?.ScanNow(PaperOperationContext.User());
     }
 
+    internal string CurrentMarkdownContentForExternalRead(PaperData paper)
+    {
+        if (paper.Type == PaperTypes.Note &&
+            string.Equals(
+                paper.BodyProviderId,
+                PaperBodyProviderIds.Markdown,
+                StringComparison.Ordinal) &&
+            _windows.TryGetValue(paper.Id, out var window))
+        {
+            return window.CurrentMarkdownContentForExternalRead();
+        }
+
+        return paper.Content ?? "";
+    }
+
     internal IDisposable SuppressPaperPluginEventScans() =>
         _paperBodyPluginEvents?.SuppressScans() ?? EmptyDisposable.Instance;
 
@@ -95,8 +110,41 @@ public sealed partial class AppController
 
     internal bool TryCommitExternalMutation()
     {
+        // Persist this external mutation without settling unrelated Markdown editors. If an
+        // unrelated Markdown edit is already pending, its existing dirty state and save timers
+        // remain responsible for the later full application save.
+        var hasPendingMarkdown = _windows.Values.Any(
+            window => window.HasPendingMarkdownContentForSave);
+
         MarkDirty();
-        return TrySaveNow(sync: true);
+        long? attemptedVersion = null;
+        try
+        {
+            var version = Interlocked.Increment(ref _saveVersion);
+            NotifyPluginEventMutationStampChanged();
+            attemptedVersion = version;
+            var json = _store.SerializeState(State);
+            _store.SaveJsonSync(json, version);
+            if (!hasPendingMarkdown && !IsExiting)
+            {
+                TryReleaseUnreferencedImageCache();
+            }
+            TryFlushPendingPluginPaperStateDeletes();
+            _hasShownSaveFailure = false;
+
+            if (!hasPendingMarkdown)
+            {
+                _saveTimer.Stop();
+                _forceSaveTimer.Stop();
+                _hasPendingDirty = false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            HandleSaveFailure(ex, attemptedVersion);
+            return false;
+        }
     }
 
     internal void RecordExternalTodoMutationUndoStep(

@@ -420,32 +420,16 @@ internal sealed partial class PaperCommandService
                 "note_body_not_markdown",
                 "Writing note content only applies to the built-in Markdown body.");
         }
-        _controller.PrepareExternalPaperOperation(paper);
         var content = request.Content ?? "";
-        if (content.Length > PaperWindow.NoteTextMaxLength)
-        {
-            throw Error(
-                "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
-        }
+        var current = _controller.CurrentMarkdownContentForExternalRead(paper);
+        _ = BuildNoteWriteResult(current, content, request.Mode);
+
+        // Only a request that is already valid may settle pending user text and establish
+        // user-before-external ordering for this same Markdown paper.
+        _controller.PrepareExternalPaperOperation(paper);
 
         var original = paper.Content ?? "";
-        var result = request.Mode switch
-        {
-            NoteWriteMode.FillBlank when original.Length == 0 => content,
-            NoteWriteMode.FillBlank => throw Error(
-                "note_not_blank",
-                "fillBlank can only write to an empty note."),
-            NoteWriteMode.Append => AppendNoteText(original, content),
-            NoteWriteMode.Replace => content,
-            _ => throw Error("invalid_params", "Unknown note write mode.")
-        };
-        if (result.Length > PaperWindow.NoteTextMaxLength)
-        {
-            throw Error(
-                "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
-        }
+        var result = BuildNoteWriteResult(original, content, request.Mode);
 
         if (string.Equals(result, original, StringComparison.Ordinal))
         {
@@ -770,6 +754,37 @@ internal sealed partial class PaperCommandService
                 "invalid_params",
                 "reminderAt must be in the future.");
         }
+    }
+
+    private static string BuildNoteWriteResult(
+        string original,
+        string content,
+        NoteWriteMode mode)
+    {
+        if (content.Length > PaperWindow.NoteTextMaxLength)
+        {
+            throw Error(
+                "content_too_long",
+                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+        }
+
+        var result = mode switch
+        {
+            NoteWriteMode.FillBlank when original.Length == 0 => content,
+            NoteWriteMode.FillBlank => throw Error(
+                "note_not_blank",
+                "fillBlank can only write to an empty note."),
+            NoteWriteMode.Append => AppendNoteText(original, content),
+            NoteWriteMode.Replace => content,
+            _ => throw Error("invalid_params", "Unknown note write mode.")
+        };
+        if (result.Length > PaperWindow.NoteTextMaxLength)
+        {
+            throw Error(
+                "content_too_long",
+                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+        }
+        return result;
     }
 
     private static string AppendNoteText(string original, string content)

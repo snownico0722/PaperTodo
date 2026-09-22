@@ -119,6 +119,12 @@ public sealed partial class PaperWindow
     internal void CommitPendingMarkdownContentForSave() =>
         _markdownBodySession?.Commit();
 
+    internal bool HasPendingMarkdownContentForSave =>
+        _markdownBodySession?.ContentDirty == true;
+
+    internal string CurrentMarkdownContentForExternalRead() =>
+        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
+
     private void CommitPendingNoteContent()
     {
         if (_paper.Type == PaperTypes.Note)
