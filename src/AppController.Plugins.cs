@@ -53,27 +53,52 @@ public sealed partial class AppController
             }
         };
 
+        var descriptors = _paperBodyPlugins.Descriptors
+            .Where(descriptor => descriptor.Kind != PaperBodyPluginKind.BuiltIn)
+            .ToArray();
+
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition
         {
             Width = new GridLength(1, GridUnitType.Star)
         });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        heading.Children.Add(new TextBlock
         {
             Text = Strings.Get("PluginsPageTitle"),
             Foreground = TrayTextBrush,
             FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
-        };
+        });
+        heading.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("PluginsLoadedCountFormat", descriptors.Length),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.Medium,
+            Margin = new Thickness(7, 0, 1, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var restart = SettingsIconButton("↻", Strings.Get("PluginsRestartTooltip"));
+        restart.Width = 23;
+        restart.Height = 23;
+        restart.Margin = new Thickness(2, 0, 0, 0);
+        restart.Click += (_, _) => ConfirmPluginRestart();
+        heading.Children.Add(restart);
+
         var openFolder = PluginPageButton(Strings.Get("PluginsOpenFolder"));
         openFolder.Margin = new Thickness(8, 0, 0, 0);
         openFolder.ToolTip = _paperBodyPlugins.PluginRoot;
         openFolder.Click += (_, _) => OpenPluginFolder();
-        Grid.SetColumn(title, 0);
+        Grid.SetColumn(heading, 0);
         Grid.SetColumn(openFolder, 1);
-        header.Children.Add(title);
+        header.Children.Add(heading);
         header.Children.Add(openFolder);
         root.Children.Add(header);
 
@@ -83,12 +108,9 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11.5),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 7, 0, 0)
+            Margin = new Thickness(0, 4, 0, 1)
         });
 
-        var descriptors = _paperBodyPlugins.Descriptors;
-        root.Children.Add(SettingsSectionLabel(
-            Strings.Format("PluginsLoadedCountFormat", descriptors.Count)));
         foreach (var descriptor in descriptors)
         {
             try
@@ -112,6 +134,26 @@ public sealed partial class AppController
         }
 
         return root;
+    }
+
+    private void ConfirmPluginRestart()
+    {
+        if (_settingsWindow == null ||
+            !PaperNoticeDialog.ShowChoice(
+                _settingsWindow,
+                Strings.Get("PluginsRestartTitle"),
+                Strings.Get("PluginsRestartMessage"),
+                Strings.Get("CommonCancel"),
+                Strings.Get("PluginsRestartNow")))
+        {
+            return;
+        }
+
+        if (Application.Current is App app)
+        {
+            app.RequestRestartAfterExit();
+        }
+        Exit();
     }
 
     private Button PluginPageButton(string text)
@@ -162,13 +204,9 @@ public sealed partial class AppController
         {
             Width = new GridLength(1, GridUnitType.Star)
         });
-        var statusDot = CreatePluginStatusDot(status);
-        _pluginStatusRefreshers[descriptor.Id] = () =>
-            ApplyPluginStatusDot(
-                statusDot,
-                PluginStatusFor(descriptor));
-        Grid.SetColumn(statusDot, 0);
-        titleRow.Children.Add(statusDot);
+        var stateSwitch = CreatePluginStateSwitch(descriptor);
+        Grid.SetColumn(stateSwitch.Button, 0);
+        titleRow.Children.Add(stateSwitch.Button);
 
         var titleFlow = new TextBlock
         {
@@ -184,6 +222,15 @@ public sealed partial class AppController
             FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold
         });
+        var warningRun = new System.Windows.Documents.Run(
+            status == PluginPageStatus.Issue ? "  ⚠" : "")
+        {
+            Foreground = Theme.DangerBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            ToolTip = Strings.Get("PluginsStatusIssue")
+        };
+        titleFlow.Inlines.Add(warningRun);
         titleFlow.Inlines.Add(new System.Windows.Documents.Run(
             $" — {PluginKindText(descriptor.Kind)} · v{PluginVersionText(descriptor.Version)} · s{descriptor.ApiVersion}")
         {
@@ -191,6 +238,12 @@ public sealed partial class AppController
             FontSize = AppTypography.Scale(10.5),
             FontWeight = FontWeights.Medium
         });
+        _pluginStatusRefreshers[descriptor.Id] = () =>
+        {
+            var refreshed = PluginStatusFor(descriptor);
+            ApplyPluginStateSwitch(stateSwitch, refreshed);
+            warningRun.Text = refreshed == PluginPageStatus.Issue ? "  ⚠" : "";
+        };
         Grid.SetColumn(titleFlow, 1);
         titleRow.Children.Add(titleFlow);
         text.Children.Add(titleRow);
@@ -265,14 +318,14 @@ public sealed partial class AppController
             more.Children.Add(BuildPluginSettingControl(descriptor, setting));
         }
 
-        var toggle = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-        toggle.MinWidth = 0;
+        var toggle = SettingsIconButton("⌄", Strings.Get("PluginsMoreSettings"));
         toggle.HorizontalAlignment = HorizontalAlignment.Left;
         toggle.Click += (_, _) =>
         {
             var expand = more.Visibility != Visibility.Visible;
             more.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
-            toggle.Content = Strings.Get(
+            toggle.Content = expand ? "⌃" : "⌄";
+            toggle.ToolTip = Strings.Get(
                 expand ? "PluginsLessSettings" : "PluginsMoreSettings");
         };
 
@@ -351,8 +404,7 @@ public sealed partial class AppController
         Grid.SetColumn(finalPrimary, 0);
         tail.Children.Add(finalPrimary);
 
-        var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-        more.MinWidth = 0;
+        var more = SettingsIconButton("⚙", Strings.Get("PluginsMoreSettings"));
         more.Margin = new Thickness(8, 4, 0, 0);
         more.HorizontalAlignment = HorizontalAlignment.Right;
         more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
@@ -777,9 +829,11 @@ public sealed partial class AppController
             },
             (_, e) =>
             {
-                e.CanExecute = !IsExiting && (isPaperAction
-                    ? HasEntityPluginPaper(descriptor.Id)
-                    : HasActivePluginShortcutRuntime(descriptor.Id));
+                e.CanExecute = !IsExiting &&
+                    IsPluginEnabled(descriptor.Id) &&
+                    (isPaperAction
+                        ? HasEntityPluginPaper(descriptor.Id)
+                        : HasActivePluginShortcutRuntime(descriptor.Id));
                 e.Handled = true;
             }));
         button.Command = command;
