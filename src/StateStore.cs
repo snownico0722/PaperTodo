@@ -415,6 +415,8 @@ public sealed class StateStore
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.GlobalHotkeys ??= new Dictionary<string, string>();
         state.GlobalHotkeyEnabled ??= new Dictionary<string, bool>();
+        state.DisabledPluginIds ??= new List<string>();
+        state.DisabledPluginIds = NormalizeDisabledPluginIds(state.DisabledPluginIds);
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
 
@@ -470,6 +472,18 @@ public sealed class StateStore
             }
         }
     }
+
+    private static List<string> NormalizeDisabledPluginIds(IEnumerable<string?> values) =>
+        values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Where(value => !string.Equals(
+                value,
+                PaperBodyProviderIds.Markdown,
+                StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
 
     private static void RemoveNonFiniteValues(Dictionary<string, double> values)
     {
@@ -574,6 +588,8 @@ public sealed class StateStore
         state.DeepCapsuleTitleMeasureCharacterLimit = EdgeCapsuleTitleLimit.Normalize(state.DeepCapsuleTitleMeasureCharacterLimit);
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
         state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(state.GlobalHotkeyEnabled);
+        state.DisabledPluginIds ??= new List<string>();
+        state.DisabledPluginIds = NormalizeDisabledPluginIds(state.DisabledPluginIds);
 
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
