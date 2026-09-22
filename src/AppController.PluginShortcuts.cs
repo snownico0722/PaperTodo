@@ -96,7 +96,9 @@ public sealed partial class AppController
 
         foreach (var descriptor in _paperBodyPlugins.Descriptors)
         {
-            if (descriptor.Kind == PaperBodyPluginKind.BuiltIn || descriptor.Manifest == null)
+            if (descriptor.Kind == PaperBodyPluginKind.BuiltIn ||
+                descriptor.Manifest == null ||
+                !IsPluginEnabled(descriptor.Id))
             {
                 continue;
             }
