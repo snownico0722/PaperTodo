@@ -117,6 +117,7 @@ public sealed partial class AppController
             window => window.HasPendingMarkdownContentForSave);
 
         MarkDirty();
+        var committedStateRevision = Interlocked.Read(ref _stateRevision);
         long? attemptedVersion = null;
         try
         {
@@ -132,7 +133,11 @@ public sealed partial class AppController
             TryFlushPendingPluginPaperStateDeletes();
             _hasShownSaveFailure = false;
 
-            if (!hasPendingMarkdown)
+            // Post-save cleanup can synchronously invoke Runtime Paper callbacks. If one of those
+            // callbacks mutates application state, its new dirty state belongs to a later save and
+            // must not be cleared as though it were part of the snapshot written above.
+            if (!hasPendingMarkdown &&
+                committedStateRevision == Interlocked.Read(ref _stateRevision))
             {
                 _saveTimer.Stop();
                 _forceSaveTimer.Stop();
