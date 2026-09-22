@@ -1458,10 +1458,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>Native backdrops require Windows 11 22H2 or later.</value>
   </data>
-  <data name="SettingsLiveRefraction" xml:space="preserve">
+  <data name="SettingsLiveBackgroundProcessing" xml:space="preserve">
     <value>Live background processing</value>
   </data>
-  <data name="TipLiveRefraction" xml:space="preserve">
+  <data name="TipLiveBackgroundProcessing" xml:space="preserve">
     <value>Processes local backgrounds in memory; nothing is saved or uploaded. Sampled windows may be missing from screenshots, recordings or screen sharing. Turn this off before sharing.</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">

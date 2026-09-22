@@ -157,7 +157,7 @@ internal static partial class Program
         Check(service.Get("appearance.paper_skin").Options.Count == PaperSkins.All.Length,
             "Public settings exposes every paper skin.");
         Check(service.Get("appearance.match_auxiliary_material").Type == "boolean" &&
-            service.Get("appearance.live_refraction").Type == "boolean" &&
+            service.Get("appearance.live_background_processing").Type == "boolean" &&
             service.Get("appearance.native_material_always_active").Type == "boolean",
             "All visible material toggles share the public settings catalog.");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
@@ -186,7 +186,7 @@ internal static partial class Program
         Check(c.State.PaperSkin == PaperSkins.Mica && c.State.MicaBackdropType == MicaBackdropTypes.Mica,
             "Successful system skin keeps the compatibility native recipe in the same transaction.");
         service.Set("appearance.match_auxiliary_material", Json(true));
-        service.Set("appearance.live_refraction", Json(false));
+        service.Set("appearance.live_background_processing", Json(false));
         service.Set("appearance.native_material_always_active", Json(true));
         Check(c.State.MatchAuxiliaryMaterialStrength && !c.State.LiveBackgroundProcessing && c.State.MicaAlwaysActive,
             "Material toggles mutate through the shared catalog.");

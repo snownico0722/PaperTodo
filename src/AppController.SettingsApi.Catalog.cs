@@ -58,11 +58,11 @@ public sealed partial class AppController
             value => State.MatchAuxiliaryMaterialStrength = value,
             SettingEffects.Theme,
             title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
-        yield return DefineSetting<bool>("appearance.live_refraction",
+        yield return DefineSetting<bool>("appearance.live_background_processing",
             () => State.LiveBackgroundProcessing,
             value => State.LiveBackgroundProcessing = value,
             SettingEffects.Skin,
-            title: Strings.Get("SettingsLiveRefraction"));
+            title: Strings.Get("SettingsLiveBackgroundProcessing"));
         yield return DefineSetting<bool>("appearance.native_material_always_active",
             () => State.MicaAlwaysActive,
             value => State.MicaAlwaysActive = value,

@@ -1507,10 +1507,10 @@
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
   </data>
-  <data name="SettingsLiveRefraction" xml:space="preserve">
+  <data name="SettingsLiveBackgroundProcessing" xml:space="preserve">
     <value>实时背景处理</value>
   </data>
-  <data name="TipLiveRefraction" xml:space="preserve">
+  <data name="TipLiveBackgroundProcessing" xml:space="preserve">
     <value>实时处理局部背景，仅在本机内存中使用，不保存或上传。开启采样的窗口可能无法被截图、录屏或共享；分享前关闭此项。</value>
   </data>
   <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">

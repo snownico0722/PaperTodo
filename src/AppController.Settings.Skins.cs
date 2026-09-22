@@ -108,10 +108,10 @@ public sealed partial class AppController
                 }), "TipMatchAuxiliaryMaterial"));
         if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
         {
-            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveRefraction"), State.LiveBackgroundProcessing, () =>
+            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveBackgroundProcessing"), State.LiveBackgroundProcessing, () =>
             {
-                SetSettingFromUi("appearance.live_refraction", !State.LiveBackgroundProcessing);
-            }), "TipLiveRefraction"));
+                SetSettingFromUi("appearance.live_background_processing", !State.LiveBackgroundProcessing);
+            }), "TipLiveBackgroundProcessing"));
             panel.Children.Add(new TextBlock
             {
                 Text = Strings.Get("SkinCaptureNotice"), TextWrapping = TextWrapping.Wrap,
