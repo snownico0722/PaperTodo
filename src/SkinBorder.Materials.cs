@@ -15,27 +15,29 @@ internal sealed partial class SkinBorder
         SpreadMethod = GradientSpreadMethod.Reflect
     };
     private DrawingGroup? _relief;
+    internal bool HasMaterialRelief => _relief != null;
     private (Size Size, CornerRadius Radius, Thickness Border, double DpiX, double DpiY, string Skin, bool Dark)? _reliefKey;
 
     private void EnsureBrushes(Color background)
     {
-        var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background, UseLightweightMaterial ? default : RenderSize);
+        var palette = Theme.MaterialColors;
+        var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background,
+            palette, Theme.PaperBrush, Theme.ActiveBrush, UseLightweightMaterial);
         if (_brushKey == key) return;
         _brushKey = key;
+        BrushBuildCount++;
         _surfaceVersion++;
-        var palette = Theme.MaterialColors;
         var paper = palette.Surface;
         if (UseLightweightMaterial && PaperSkins.UsesNativeBackdrop(Skin))
         {
             _fill = Frozen(new SolidColorBrush(palette.Preview));
             _shine = _header = Brushes.Transparent;
-            _glint = Gradient(0, White(_dark ? 40 : 80), 1, White(8));
             return;
         }
         var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
         byte alpha = opaque ? (byte)255 : (byte)(_dark ? 226 : 211);
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
-        _shine = _glint = _header = Brushes.Transparent;
+        _shine = _header = Brushes.Transparent;
         switch (Skin)
         {
             case PaperSkins.Mica:
@@ -98,7 +100,7 @@ internal sealed partial class SkinBorder
             var key = (RenderSize, CornerRadius, BorderThickness, dpi.DpiScaleX, dpi.DpiScaleY, Skin, _dark);
             if (_reliefKey != key)
             {
-                _relief = MaterialRelief.Create(RenderSize, CornerRadius, BorderThickness, dpi, Skin, _dark);
+                _relief = MaterialRelief.Create(RenderSize, CornerRadius, BorderThickness, dpi, _dark);
                 _reliefKey = key;
             }
             dc.DrawDrawing(_relief);

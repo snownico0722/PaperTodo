@@ -56,7 +56,7 @@ public sealed partial class AppController
         yield return DefineSetting<bool>("appearance.match_auxiliary_material",
             () => State.MatchAuxiliaryMaterialStrength,
             value => State.MatchAuxiliaryMaterialStrength = value,
-            SettingEffects.Theme,
+            SettingEffects.Skin,
             title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
         yield return DefineSetting<bool>("appearance.live_background_processing",
             () => State.LiveBackgroundProcessing,

@@ -149,7 +149,7 @@ internal static class NativeSurfaceChecks
     {
         var surface = window is PaperWindow paper
             ? (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)! : null;
-        using var frozen = surface?.IsRefractionActive == true ? surface.FreezeRefractionForEvidence() : null;
+        using var frozen = surface?.IsBackgroundActive == true ? surface.FreezeBackgroundForEvidence() : null;
         if (frozen != null) Wait();
         DwmFlush();
         Program.Assert(GetWindowRect(new WindowInteropHelper(window).Handle, out var r), "native bounds available");

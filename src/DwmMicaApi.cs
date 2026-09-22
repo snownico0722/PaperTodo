@@ -35,21 +35,32 @@ internal sealed class DwmMicaApi : INativeMicaApi
     internal const int SystemBackdropAttribute = 38;
     public bool IsSupported => NativeMicaBackdrop.IsSupported;
     public bool HighContrast => System.Windows.SystemParameters.HighContrast;
-    public bool CompositionEnabled => DwmIsCompositionEnabled(out var enabled) >= 0 && enabled;
+    private bool? _compositionEnabled, _transparencyEnabled;
+    internal int EnvironmentReadCount { get; private set; }
+    public bool CompositionEnabled => _compositionEnabled ??= ReadComposition();
+    private bool ReadComposition()
+    {
+        EnvironmentReadCount++;
+        return DwmIsCompositionEnabled(out var enabled) >= 0 && enabled;
+    }
+    internal bool EffectsEnabled => CompositionEnabled && TransparencyEnabled;
+    internal void InvalidateEnvironment() => _compositionEnabled = _transparencyEnabled = null;
     public bool TransparencyEnabled
     {
-        get
+        get => _transparencyEnabled ??= ReadTransparency();
+    }
+    private bool ReadTransparency()
+    {
+        EnvironmentReadCount++;
+        try
         {
-            try
-            {
-                using var key = Registry.CurrentUser.OpenSubKey(
-                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-                return key?.GetValue("EnableTransparency") is not int value || value != 0;
-            }
-            catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
-            {
-                return false;
-            }
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("EnableTransparency") is not int value || value != 0;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
         }
     }
 

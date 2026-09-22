@@ -13,15 +13,16 @@ namespace PaperTodo;
 /// <summary>Bounded local background sampling. Worker owns GDI, dispatcher owns WPF.
 /// One latest-frame mailbox and one coalesced presentation notification; no UI-thread capture/wait.
 /// Samples are neither saved nor uploaded. A changed exclusion lease stops capture.</summary>
-internal sealed class DesktopLensCapture : IDisposable
+internal sealed class DesktopBackgroundCapture : IDisposable
 {
     internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
     internal sealed class Frame : IDisposable
     {
-        internal readonly LensCaptureLayout.Scene Layout;
+        internal readonly BackgroundCaptureLayout.Scene Layout;
         internal readonly byte[] Pixels;
         private int _disposed;
-        internal Frame(LensCaptureLayout.Scene layout, byte[] pixels) => (Layout, Pixels) = (layout, pixels);
+        internal bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+        internal Frame(BackgroundCaptureLayout.Scene layout, byte[] pixels) => (Layout, Pixels) = (layout, pixels);
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
@@ -38,7 +39,7 @@ internal sealed class DesktopLensCapture : IDisposable
     private readonly AutoResetEvent _wake = new(false);
     private readonly Task _worker;
     private Region _region;
-    private Frame? _latest;
+    private readonly FrameSlot _frames = new();
     private int _disposed;
     private long _motionUntil, _captures, _published, _sampledPixels;
     private static long ClockMilliseconds => (long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency));
@@ -49,18 +50,60 @@ internal sealed class DesktopLensCapture : IDisposable
     internal const int ActiveInterval = 100;
     internal const int MovingInterval = ActiveInterval;
     internal static int CaptureInterval(bool moving, int quiet) => !moving && quiet >= 10 ? 250 : ActiveInterval;
+    internal IntPtr WindowHandle => _hwnd;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
     internal long CaptureCount => Interlocked.Read(ref _captures);
     internal long PublishedCount => Interlocked.Read(ref _published);
     internal long SampledPixels => Interlocked.Read(ref _sampledPixels);
-    internal Frame? TakeLatest() => Interlocked.Exchange(ref _latest, null);
+    internal Frame? TakeLatest() => _frames.Take();
+    internal Task Completion => _worker;
 
-    internal DesktopLensCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed, Action? frameReady = null)
+    internal sealed class FrameSlot : IDisposable
+    {
+        private readonly object _gate = new();
+        private Frame? _latest;
+        private bool _stopped;
+        internal bool Publish(Frame frame)
+        {
+            Frame? previous;
+            bool accepted;
+            lock (_gate)
+            {
+                accepted = !_stopped;
+                previous = accepted ? _latest : frame;
+                if (accepted) _latest = frame;
+            }
+            previous?.Dispose();
+            return accepted;
+        }
+        internal Frame? Take()
+        {
+            lock (_gate)
+            {
+                var frame = _latest;
+                _latest = null;
+                return frame;
+            }
+        }
+        public void Dispose()
+        {
+            Frame? last;
+            lock (_gate)
+            {
+                _stopped = true;
+                last = _latest;
+                _latest = null;
+            }
+            last?.Dispose();
+        }
+    }
+
+    internal DesktopBackgroundCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed, Action? frameReady = null)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             throw new PlatformNotSupportedException("Background exclusion requires Windows 10 2004 or later.");
         if (!GetWindowDisplayAffinity(hwnd, out _oldAffinity) || !SetWindowDisplayAffinity(hwnd, 0x11))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot exclude the lens from its own background.");
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot exclude the surface from its own background.");
         _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _failed = failed; _frameReady = frameReady;
         try
         {
@@ -72,10 +115,12 @@ internal sealed class DesktopLensCapture : IDisposable
             SetWindowDisplayAffinity(hwnd, _oldAffinity); _cancel.Dispose(); _wake.Dispose(); throw;
         }
     }
-    internal void SetRegion(Region region)
+    internal bool SetRegion(Region region)
     {
-        if (_region == region || IsStopped) return;
-        Volatile.Write(ref _region, region); MarkMoving();
+        if (Volatile.Read(ref _region) == region || IsStopped) return false;
+        Volatile.Write(ref _region, region);
+        MarkMoving();
+        return true;
     }
     internal void MarkMoving()
     {
@@ -93,7 +138,7 @@ internal sealed class DesktopLensCapture : IDisposable
         {
             var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
             var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L; var lastSample = next - ActiveInterval;
-            LensCaptureLayout.Scene? oldLayout = null;
+            BackgroundCaptureLayout.Scene? oldLayout = null;
             Int32Rect oldDesktop = default;
             Region? oldGeometry = null;
             DwmFlush(); // Exclusion is established before the first background sample.
@@ -106,7 +151,7 @@ internal sealed class DesktopLensCapture : IDisposable
                 if (moving) next = Math.Max(Math.Max(driverPauseUntil, lastSample + ActiveInterval), Math.Min(next, now));
                 if (now < next)
                 {
-                    if (WaitHandle.WaitAny(waits, (int)Math.Min(125, next - now)) == 0) break;
+                    if (WaitHandle.WaitAny(waits, (int)Math.Min(int.MaxValue, next - now)) == 0) break;
                     continue;
                 }
                 var started = Stopwatch.GetTimestamp();
@@ -117,7 +162,7 @@ internal sealed class DesktopLensCapture : IDisposable
                 if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
                     throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
                 var desktop = DesktopBounds;
-                var layout = LensCaptureLayout.Create(window, geometry, desktop,
+                var layout = BackgroundCaptureLayout.Create(window, geometry, desktop,
                     oldGeometry?.Padding == geometry.Padding && oldDesktop == desktop ? oldLayout : null);
                 if (layout == null) continue;
                 var changed = oldLayout != layout;
@@ -131,7 +176,7 @@ internal sealed class DesktopLensCapture : IDisposable
                 if (changed)
                 {
                     var frame = new Frame(layout, surface.Snapshot());
-                    Interlocked.Exchange(ref _latest, frame)?.Dispose();
+                    if (!_frames.Publish(frame)) break;
                     Interlocked.Increment(ref _published);
                     NotifyFrameReady();
                     quiet = 0;
@@ -143,7 +188,7 @@ internal sealed class DesktopLensCapture : IDisposable
                 // get breathing room rather than a continuous GPU-readback loop.
                 var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                 // Readback remains low-rate even during dragging. Slow drivers still get
-                // backpressure; motion and the shader use the retained scene at render cadence.
+                // backpressure; motion uses the retained scene at render cadence.
                 var interval = CaptureInterval(moving, quiet);
                 var completed = ClockMilliseconds;
                 driverPauseUntil = completed + Math.Max(1, (long)(elapsed * .5));
@@ -162,7 +207,7 @@ internal sealed class DesktopLensCapture : IDisposable
         finally
         {
             surface?.Dispose();
-            if (IsStopped) Interlocked.Exchange(ref _latest, null)?.Dispose();
+            if (IsStopped) _frames.Dispose();
             if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
         }
     }
@@ -184,7 +229,7 @@ internal sealed class DesktopLensCapture : IDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cancel.Cancel();
-        Interlocked.Exchange(ref _latest, null)?.Dispose();
+        _frames.Dispose();
         if (GetWindowDisplayAffinity(_hwnd, out var current) && current == 0x11)
             SetWindowDisplayAffinity(_hwnd, _oldAffinity);
         _ = _worker.ContinueWith(_ => { _cancel.Dispose(); _wake.Dispose(); }, CancellationToken.None,
@@ -199,10 +244,10 @@ internal sealed class DesktopLensCapture : IDisposable
         {
             token.ThrowIfCancellationRequested();
             var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
-            var layout = LensCaptureLayout.Create(requested, geometry, DesktopBounds);
+            var layout = BackgroundCaptureLayout.Create(requested, geometry, DesktopBounds);
             if (layout == null) return null;
             using var surface = new CaptureSurface();
-            surface.Capture(layout); GdiFlush(); surface.RememberChangedPixels();
+            surface.Capture(layout); GdiFlush();
             token.ThrowIfCancellationRequested();
             return new Frame(layout, surface.Snapshot());
         }
@@ -228,7 +273,7 @@ internal sealed class DesktopLensCapture : IDisposable
             if (_screen != IntPtr.Zero) _dc = CreateCompatibleDC(_screen);
             if (_dc == IntPtr.Zero) { Dispose(); throw new Win32Exception(Marshal.GetLastWin32Error()); }
         }
-        internal void Capture(LensCaptureLayout.Scene tile)
+        internal void Capture(BackgroundCaptureLayout.Scene tile)
         {
             if (_width != tile.PixelWidth || _height != tile.PixelHeight)
             {
@@ -263,10 +308,12 @@ internal sealed class DesktopLensCapture : IDisposable
             if (_last.Length != pixels.Length) _last = new byte[pixels.Length];
             pixels.CopyTo(_last); return true;
         }
-        internal byte[] Snapshot()
+        internal unsafe byte[] Snapshot()
         {
-            var bytes = ArrayPool<byte>.Shared.Rent(_last.Length);
-            _last.CopyTo(bytes, 0); return bytes;
+            var length = checked(_width * _height * 4);
+            var bytes = ArrayPool<byte>.Shared.Rent(length);
+            new ReadOnlySpan<byte>((void*)_bits, length).CopyTo(bytes);
+            return bytes;
         }
         private void ReleaseBitmap()
         {

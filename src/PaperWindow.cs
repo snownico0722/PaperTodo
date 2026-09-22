@@ -1838,7 +1838,7 @@ public sealed partial class PaperWindow : Window
     {
         _nativeMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin),
             _controller.State.MicaAlwaysActive, force);
-        (_paperChrome as SkinBorder)?.RefreshRefraction();
+        (_paperChrome as SkinBorder)?.RefreshBackground();
     }
 
     private void RestorePaperChromeThemeReferences()

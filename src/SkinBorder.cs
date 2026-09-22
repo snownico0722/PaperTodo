@@ -13,17 +13,17 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),
         new FrameworkPropertyMetadata(PaperSkins.Paper, FrameworkPropertyMetadataOptions.AffectsRender,
-            (d, _) => { var border = (SkinBorder)d; border.SyncLensLight(); border.RefreshRefraction(); }));
+            (d, _) => { var border = (SkinBorder)d; border.OnSurfaceRoleChanged(); }));
     public static readonly DependencyProperty IsCapsuleProperty = DependencyProperty.Register(
         nameof(IsCapsule), typeof(bool), typeof(SkinBorder),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
-            (d, _) => ((SkinBorder)d).RefreshRefraction()));
+            (d, _) => ((SkinBorder)d).OnSurfaceRoleChanged()));
     public string Skin { get => (string)GetValue(SkinProperty); set => SetValue(SkinProperty, value); }
     public bool IsCapsule { get => (bool)GetValue(IsCapsuleProperty); set => SetValue(IsCapsuleProperty, value); }
     public static readonly DependencyProperty IsMenuProperty = DependencyProperty.Register(
         nameof(IsMenu), typeof(bool), typeof(SkinBorder),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
-            (d, _) => ((SkinBorder)d).RefreshRefraction()));
+            (d, _) => ((SkinBorder)d).OnSurfaceRoleChanged()));
     public bool IsMenu { get => (bool)GetValue(IsMenuProperty); set => SetValue(IsMenuProperty, value); }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
     internal double MaterialStrength => IsAuxiliary &&
@@ -36,9 +36,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             (d, _) =>
             {
                 var surface = (SkinBorder)d;
-                surface._brushKey = null;
-                surface._relief = null; surface._reliefKey = null;
-                surface.SyncLensLight(); surface.RefreshRefraction();
+                surface.OnSurfaceRoleChanged();
             }));
     public bool UseLightweightMaterial
     {
@@ -55,45 +53,70 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     }
     private int _surfaceVersion;
     private bool _dark, _highContrast, _animateReflection;
-    private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Paper, Size Size)? _brushKey;
+    private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Background,
+        MaterialPalette Palette, Brush Paper, Brush Active, bool Lightweight)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
-    private Brush _glint = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
     private Geometry _shape = Geometry.Empty, _borderRing = Geometry.Empty;
-    private Geometry _glintRing = Geometry.Empty;
     public static readonly DependencyProperty HeaderHeightProperty = DependencyProperty.Register(
         nameof(HeaderHeight), typeof(double), typeof(SkinBorder),
-        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, _) => ((SkinBorder)d)._surfaceVersion++));
     public double HeaderHeight { get => (double)GetValue(HeaderHeightProperty); set => SetValue(HeaderHeightProperty, value); }
     private static readonly Brush LightFibers = CreateFibers(false);
     private static readonly Brush DarkFibers = CreateFibers(true);
 
     public SkinBorder()
     {
-        InitializeRefraction();
+        SizeChanged += (_, _) =>
+        {
+            _background?.ResetFailure();
+            PresentPreparedMenuBackground();
+            RefreshBackground();
+        };
         Loaded += (_, _) => { LoadedSurfaces.Add(new(this)); RefreshSkin(); };
         Unloaded += (_, _) =>
         {
-            DetachLensLight();
+            ReleaseMaterialResources();
             LoadedSurfaces.RemoveAll(reference => !reference.TryGetTarget(out var surface) || ReferenceEquals(surface, this));
         };
-        IsVisibleChanged += (_, _) => SyncLensLight();
+        IsVisibleChanged += (_, _) => RefreshBackground();
         RefreshSkin();
+    }
+
+    private bool _applyingSkin;
+    private (string Skin, bool Dark, bool HighContrast, MaterialPalette Palette, Brush Paper, Brush Active,
+        double Strength, bool Lightweight)? _appearance;
+    internal int GeometryBuildCount { get; private set; }
+    internal int BrushBuildCount { get; private set; }
+
+    private void OnSurfaceRoleChanged()
+    {
+        if (UseLightweightMaterial) { _relief = null; _reliefKey = null; }
+        if (!_applyingSkin) RefreshSkin();
     }
 
     internal void RefreshSkin()
     {
-        _brushKey = null;
-        _geometryKey = null;
         _dark = Theme.IsDark;
         _highContrast = SystemParameters.HighContrast;
         _animateReflection = AppController.Current?.State.EnableAnimations == true;
-        Skin = Theme.Skin;
-        RenderOptions.SetEdgeMode(this, PaperSkins.Decorate(Skin, _highContrast) && Skin == PaperSkins.Pixel
-            ? EdgeMode.Aliased : EdgeMode.Unspecified);
-        SyncLensLight();
-        RefreshRefraction();
-        InvalidateVisual();
+        _applyingSkin = true;
+        try { SetCurrentValue(SkinProperty, Theme.Skin); }
+        finally { _applyingSkin = false; }
+        var appearance = (Skin, _dark, _highContrast, Theme.MaterialColors, Theme.PaperBrush,
+            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial);
+        if (_appearance != appearance)
+        {
+            _appearance = appearance;
+            // Cache keys own invalidation. Palette changes do not destroy geometry and
+            // geometry changes do not destroy size-independent brushes.
+            _surfaceVersion++;
+            RenderOptions.SetEdgeMode(this, Skin == PaperSkins.Pixel && !_highContrast
+                ? EdgeMode.Aliased : EdgeMode.Unspecified);
+            InvalidateVisual();
+        }
+        RefreshBackground();
     }
     internal static void Refresh(Border? border)
     {
@@ -105,8 +128,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         PresentPreparedMenuBackground();
         if (IsMenu)
         {
-            if (!_menuRendered) { FirstMenuRenderUsedBackground = _refractionVisual != null; _menuRendered = true; }
-            if (RequestsLiveBackground && _refractionVisual == null) MenuFallbackRenderCount++;
+            if (!_menuRendered) { FirstMenuRenderUsedBackground = BackgroundVisual != null; _menuRendered = true; }
+            if (RequestsLiveBackground && BackgroundVisual == null) MenuFallbackRenderCount++;
         }
         var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
         if (_highContrast || !PaperSkins.IsDecorated(Skin) && !(systemMaterial && IsAuxiliary))
@@ -131,24 +154,23 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         }
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
-        EnsureBrushes(_refractionVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
-        if (_refractionVisual != null)
+        EnsureBrushes(BackgroundVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
+        if (BackgroundVisual != null)
         {
             // Keep a cheap base for pixels temporarily outside the cached scene. The
             // actual finish belongs only above the scene, never duplicated underneath.
             PaintMaterialBase(dc);
-            _refractionVisual.Clip = _shape;
+            BackgroundVisual.Clip = _shape;
             // Arrange has committed RenderSize before this paint. Publish the matching
             // background extent/crop in this same render, not a later Rendering callback
             // that would briefly stretch the old scene beneath the newly sized shell.
-            UpdateRefractionCrop();
-            RefreshOpticalFinish();
+            _background!.Project();
             return;
         }
         dc.PushClip(_shape);
         // Both auxiliary strengths retain actual background processing. Only an unavailable
         // source falls back to an opaque base; no foreground or HWND opacity is altered.
-        if (IsAuxiliary && !UseLightweightMaterial && _refractionVisual == null && !HasAuxiliaryTransmission)
+        if (IsAuxiliary && !UseLightweightMaterial && BackgroundVisual == null && !HasAuxiliaryTransmission)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
         dc.PushOpacity(MaterialStrength);
@@ -199,16 +221,10 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         var key = (RenderSize, CornerRadius, BorderThickness, pixel, IsCapsule, dpi.DpiScaleX, dpi.DpiScaleY);
         if (_geometryKey == key) return;
         _geometryKey = key;
+        GeometryBuildCount++;
         _surfaceVersion++;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
         _borderRing = Ring(new Thickness(), BorderThickness);
-        // Only a hairline optical reflection, never the old nested 3-9 DIP bezel.
-        var unit = 1 / dpi.DpiScaleX;
-        _glintRing = Ring(Sides(unit), Sides(unit));
-
-        Thickness Sides(double width) => new(
-            BorderThickness.Left > 0 ? width : 0, BorderThickness.Top > 0 ? width : 0,
-            BorderThickness.Right > 0 ? width : 0, BorderThickness.Bottom > 0 ? width : 0);
         Geometry Ring(Thickness inset, Thickness width)
         {
             if (width == new Thickness()) return Geometry.Empty;

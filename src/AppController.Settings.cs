@@ -87,13 +87,13 @@ public sealed partial class AppController
     private void RefreshThemeSurfaces()
     {
         Theme.Invalidate();
-        SkinBorder.RefreshLoadedSurfaces();
         RefreshApplicationThemeResources();
         foreach (var window in _windows.Values)
         {
             window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+        SkinBorder.RefreshLoadedSurfaces();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -142,9 +142,9 @@ public sealed partial class AppController
     {
         foreach (var window in _windows.Values)
         {
-            window.RefreshNativeMica(force: true);
+            window.RefreshNativeMica();
         }
-        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: true);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive);
     }
 
     private void SetUiFontPreset(string preset) =>

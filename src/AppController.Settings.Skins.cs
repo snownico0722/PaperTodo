@@ -133,11 +133,5 @@ public sealed partial class AppController
         return panel;
     }
     // Paint subscriptions only: do not rebuild editors when animations are toggled.
-    private void RefreshSkinSurfaces()
-    {
-        foreach (var window in _windows.Values) window.RefreshSkin();
-        foreach (var master in _masterCapsules.Values) master.UpdateTheme();
-        if (_settingsWindow?.Content is Border border) SkinBorder.Refresh(border);
-        SkinBorder.RefreshLoadedSurfaces();
-    }
+    private void RefreshSkinSurfaces() => SkinBorder.RefreshLoadedSurfaces();
 }

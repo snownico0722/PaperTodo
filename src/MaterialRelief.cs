@@ -12,8 +12,13 @@ namespace PaperTodo;
 internal static class MaterialRelief
 {
     internal static DrawingGroup Create(Size size, CornerRadius corners, Thickness border, DpiScale dpi,
-        string skin, bool dark)
+        bool dark) => Create(size, corners, border, dpi, dark, out _);
+
+    internal readonly record struct BuildMetrics(int Pixels, int LightingEvaluations, int ReusedLighting);
+    internal static DrawingGroup Create(Size size, CornerRadius corners, Thickness border, DpiScale dpi,
+        bool dark, out BuildMetrics metrics, bool reuseStraightEdges = true)
     {
+        metrics = default;
         if (size.Width <= 0 || size.Height <= 0 || !double.IsFinite(size.Width) || !double.IsFinite(size.Height))
         { var empty = new DrawingGroup(); empty.Freeze(); return empty; }
         var bevel = Math.Min(4, Math.Min(size.Width, size.Height) / 2);
@@ -29,6 +34,10 @@ internal static class MaterialRelief
             areas.Add(new(size.Width - band, band, band, size.Height - band * 2));
         }
         var drawing = new DrawingGroup();
+        // Along an axis-aligned straight edge, illumination depends only on depth, not
+        // on surface length. Reuse EXACT depth/normal samples; corners stay analytic.
+        var edgeColors = new Dictionary<(double Depth, double X, double Y), uint>();
+        var pixels = 0; var evaluations = 0; var reused = 0;
         using (var dc = drawing.Open())
         foreach (var area in areas)
         {
@@ -50,35 +59,53 @@ internal static class MaterialRelief
                 // manufacture a seam where its authoritative border is zero-width.
                 if (n.X < 0 && border.Left == 0 || n.X > 0 && border.Right == 0 ||
                     n.Y < 0 && border.Top == 0 || n.Y > 0 && border.Bottom == 0) continue;
-                var rim = 1 - distance / bevel;
-                var slope = 1.65 * rim * rim;
-                var nz = 1 / Math.Sqrt(1 + slope * slope);
-                var nx = n.X * slope * nz; var ny = n.Y * slope * nz;
-                var diffuse = Math.Clamp(-.32 * nx - .46 * ny + .83 * nz, 0, 1);
-                var half = Math.Clamp(-.18 * nx - .26 * ny + .949 * nz, 0, 1);
-                var specular = Math.Pow(half, 55);
-                // A narrow highlight and transmitted shadow define glass thickness.
-                // Neither one creates a broad opaque inner frame.
-                var shadow = .16 * rim * (1 - diffuse);
-                // The specular lobe rolls across the curved shoulder without a broad white bezel.
-                var gloss = specular * .92 * rim;
-                var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .16;
-                gloss = Math.Clamp(gloss + bounce, 0, .75);
-                if (dark) gloss *= .72;
-                var alpha = gloss + shadow * (1 - gloss);
-                if (alpha <= 0) continue;
+                var key = (distance, n.X, n.Y);
+                var straight = reuseStraightEdges && (n.X == 0 || n.Y == 0);
+                if (!straight || !edgeColors.TryGetValue(key, out var color))
+                {
+                    color = Shade(distance, n, bevel, dark);
+                    evaluations++;
+                    if (straight) edgeColors[key] = color;
+                }
+                else reused++;
                 var i = (y * w + x) * 4;
-                // Premultiplied white/cool reflection + a neutral transmitted shadow.
-                bytes[i] = (byte)Math.Round(255 * gloss);
-                bytes[i + 1] = (byte)Math.Round(253 * gloss);
-                bytes[i + 2] = (byte)Math.Round(250 * gloss);
-                bytes[i + 3] = (byte)Math.Round(255 * alpha);
+                bytes[i] = (byte)color;
+                bytes[i + 1] = (byte)(color >> 8);
+                bytes[i + 2] = (byte)(color >> 16);
+                bytes[i + 3] = (byte)(color >> 24);
             }
             var bitmap = BitmapSource.Create(w, h, 96, 96, PixelFormats.Pbgra32, null, bytes, w * 4);
             bitmap.Freeze(); dc.DrawImage(bitmap, area);
+            pixels += w * h;
         }
+        metrics = new(pixels, evaluations, reused);
         drawing.Freeze(); return drawing;
     }
+    private static uint Shade(double distance, Vector n, double bevel, bool dark)
+    {
+        var rim = 1 - distance / bevel;
+        var slope = 1.65 * rim * rim;
+        var nz = 1 / Math.Sqrt(1 + slope * slope);
+        var nx = n.X * slope * nz; var ny = n.Y * slope * nz;
+        var diffuse = Math.Clamp(-.32 * nx - .46 * ny + .83 * nz, 0, 1);
+        var half = Math.Clamp(-.18 * nx - .26 * ny + .949 * nz, 0, 1);
+        var specular = Math.Pow(half, 55);
+        // A narrow highlight and transmitted shadow define glass thickness.
+        // Neither one creates a broad opaque inner frame.
+        var shadow = .16 * rim * (1 - diffuse);
+        // The specular lobe rolls across the curved shoulder without a broad white bezel.
+        var gloss = specular * .92 * rim;
+        var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .16;
+        gloss = Math.Clamp(gloss + bounce, 0, .75);
+        if (dark) gloss *= .72;
+        var alpha = gloss + shadow * (1 - gloss);
+        if (alpha <= 0) return 0;
+        return (uint)(byte)Math.Round(255 * gloss) |
+            (uint)(byte)Math.Round(253 * gloss) << 8 |
+            (uint)(byte)Math.Round(250 * gloss) << 16 |
+            (uint)(byte)Math.Round(255 * alpha) << 24;
+    }
+
     private static (double Distance, Vector Normal) Surface(Point p, Size size, double radius)
     {
         var half = new Vector(size.Width / 2, size.Height / 2);

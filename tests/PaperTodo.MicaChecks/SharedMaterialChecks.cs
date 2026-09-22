@@ -40,14 +40,14 @@ internal static class SharedMaterialChecks
             window.Show();
             Ready(surface, 0, "layered Acrylic capsule starts bounded background diffusion");
             var hwnd = new WindowInteropHelper(window).Handle;
-            Program.Assert(DesktopLensCapture.ReadAffinity(hwnd) == 0x11 && !surface.HasLensLightSubscription,
+            Program.Assert(DesktopBackgroundCapture.ReadAffinity(hwnd) == 0x11 && !surface.HasAeroReflectionSubscription,
                 "auxiliary Acrylic owns its exclusion lease without pointer-light behavior");
 
             var full = Snapshot(surface);
             controller.State.MatchAuxiliaryMaterialStrength = false;
             surface.RefreshSkin();
             Wait(120);
-            Program.Assert(surface.HasRefractionWorker && surface.MaterialStrength == .4,
+            Program.Assert(surface.HasBackgroundWorker && surface.MaterialStrength == .4,
                 "quiet capsule keeps its bounded background worker rather than becoming a static fake");
             var quiet = Snapshot(surface);
             Program.Assert(PixelDifference(full, quiet) > 500, "full/quiet capsule processing visibly differs");
@@ -56,16 +56,16 @@ internal static class SharedMaterialChecks
             surface.UseLightweightMaterial = true;
             surface.UpdateLayout();
             Render(surface);
-            var previewFrames = surface.RefractionFrameCount;
+            var previewFrames = surface.BackgroundFrameCount;
             for (var size = 0; size < 4; size++)
             {
                 window.Width += 10;
                 window.UpdateLayout();
                 Render(surface);
                 Wait(20);
-                Program.Assert(!surface.HasRefractionWorker && !surface.HasRefractionRenderSubscription &&
-                    !surface.HasLensLightSubscription && surface.RefractionFrameCount == previewFrames &&
-                    typeof(SkinBorder).GetField("_relief", Program.Private)!.GetValue(surface) == null,
+                Program.Assert(!surface.HasBackgroundWorker && !surface.HasBackgroundRenderSubscription &&
+                    !surface.HasAeroReflectionSubscription && surface.BackgroundFrameCount == previewFrames &&
+                    !surface.HasMaterialRelief,
                     "lightweight preview resizing has no capture, render retry, parallax or relief rebuild");
             }
             window.Width = 360;
@@ -78,16 +78,16 @@ internal static class SharedMaterialChecks
 
             window.Opacity = .8;
             Wait(60);
-            Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0,
+            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
                 "externally requested partial opacity releases background processing");
-            var count = surface.RefractionFrameCount;
+            var count = surface.BackgroundFrameCount;
             window.Opacity = 1;
             Ready(surface, count, "opacity restoration resumes without recreating the capsule");
             window.Hide();
             Wait(60);
-            Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0,
+            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
                 "hidden capsule releases capture");
-            count = surface.RefractionFrameCount;
+            count = surface.BackgroundFrameCount;
             window.Show();
             Ready(surface, count, "reshown capsule resumes");
 
@@ -109,7 +109,7 @@ internal static class SharedMaterialChecks
             Ready(menuSurface, 0, "actual context menu receives bounded background diffusion");
             Program.Assert(menuSurface.FirstMenuRenderUsedBackground, "root menu first paint already contains its prepared scene");
             var menuHwnd = ((HwndSource)PresentationSource.FromVisual(menuSurface)!).Handle;
-            Program.Assert(menuHwnd != hwnd && DesktopLensCapture.ReadAffinity(menuHwnd) == 0x11,
+            Program.Assert(menuHwnd != hwnd && DesktopBackgroundCapture.ReadAffinity(menuHwnd) == 0x11,
                 "context menu excludes its own popup, not the owner");
 
             foreach (var fullStrength in new[] { false, true })
@@ -117,7 +117,7 @@ internal static class SharedMaterialChecks
                 controller.State.MatchAuxiliaryMaterialStrength = fullStrength;
                 SkinBorder.RefreshLoadedSurfaces();
                 Wait(100);
-                Program.Assert(menuSurface.HasRefractionWorker && surface.HasRefractionWorker &&
+                Program.Assert(menuSurface.HasBackgroundWorker && surface.HasBackgroundWorker &&
                     menuSurface.MaterialStrength == (fullStrength ? 1 : .4),
                     "both menu strength settings retain actual background diffusion");
                 Save(Render(menuSurface), $"shared-menu-{fullStrength}");
@@ -131,24 +131,24 @@ internal static class SharedMaterialChecks
             Ready(submenuSurface, 0, "actual submenu has its own sampled background");
             Program.Assert(submenuSurface.FirstMenuRenderUsedBackground, "submenu first paint already contains its prepared scene");
             var subHwnd = ((HwndSource)PresentationSource.FromVisual(submenuSurface)!).Handle;
-            Program.Assert(subHwnd != menuHwnd && subHwnd != hwnd && DesktopLensCapture.ReadAffinity(subHwnd) == 0x11,
+            Program.Assert(subHwnd != menuHwnd && subHwnd != hwnd && DesktopBackgroundCapture.ReadAffinity(subHwnd) == 0x11,
                 "submenu owns a distinct background lease");
             Save(Render(submenuSurface), "shared-submenu-live");
 
             parent.IsSubmenuOpen = false;
             menu.IsOpen = false;
             Wait(100);
-            Program.Assert(!menuSurface.HasRefractionWorker && !submenuSurface.HasRefractionWorker && surface.HasRefractionWorker,
+            Program.Assert(!menuSurface.HasBackgroundWorker && !submenuSurface.HasBackgroundWorker && surface.HasBackgroundWorker,
                 "closing popup/submenu releases only their workers, not the owner");
 
             foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic, PaperSkins.TracingPaper })
             {
-                var worker = typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(surface);
+                var worker = surface.BackgroundSessionState?.Capture;
                 controller.State.PaperSkin = skin;
                 Theme.Invalidate();
                 surface.RefreshSkin();
-                Program.Assert(surface.IsRefractionActive && ReferenceEquals(worker,
-                    typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(surface)),
+                Program.Assert(surface.IsBackgroundActive && ReferenceEquals(worker,
+                    surface.BackgroundSessionState?.Capture),
                     $"{skin} changes its diffusion recipe without discarding the sampled scene");
                 controller.State.MatchAuxiliaryMaterialStrength = true;
                 surface.RefreshSkin();
@@ -158,7 +158,7 @@ internal static class SharedMaterialChecks
                 surface.RefreshSkin();
                 Wait(80);
                 quiet = Snapshot(surface);
-                Program.Assert(surface.HasRefractionWorker && PixelDifference(full, quiet) > 500,
+                Program.Assert(surface.HasBackgroundWorker && PixelDifference(full, quiet) > 500,
                     $"{skin} weak processing retains diffusion and transmission");
                 CheckPaperDistance(full, quiet, surface, skin);
             }
@@ -167,17 +167,17 @@ internal static class SharedMaterialChecks
             Theme.Invalidate();
             surface.RefreshSkin();
             Wait(80);
-            Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0,
+            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
                 "Aero uses layered transmission without desktop exclusion");
 
             controller.State.PaperSkin = PaperSkins.Acrylic;
             Theme.Invalidate();
             surface.RefreshSkin();
-            Ready(surface, surface.RefractionFrameCount, "Acrylic background processing returns after Aero");
+            Ready(surface, surface.BackgroundFrameCount, "Acrylic background processing returns after Aero");
             controller.State.LiveBackgroundProcessing = false;
             SkinBorder.RefreshLoadedSurfaces();
             Wait(60);
-            Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(hwnd) == 0,
+            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
                 "global background-processing switch restores screenshot visibility on auxiliary surfaces");
         }
         finally
@@ -232,7 +232,7 @@ internal static class SharedMaterialChecks
 
     private static byte[] Snapshot(SkinBorder surface)
     {
-        using var frozen = surface.FreezeRefractionForEvidence();
+        using var frozen = surface.FreezeBackgroundForEvidence();
         Wait(60);
         return Pixels(Render(surface));
     }
@@ -275,10 +275,10 @@ internal static class SharedMaterialChecks
     private static void Ready(SkinBorder surface, int previous, string reason)
     {
         var clock = Stopwatch.StartNew();
-        while (surface.RefractionFrameCount <= previous && surface.RefractionFailure == null && clock.ElapsedMilliseconds < 6000)
+        while (surface.BackgroundFrameCount <= previous && surface.BackgroundFailure == null && clock.ElapsedMilliseconds < 6000)
             Wait(30);
-        Program.Assert(surface.HasRefractionWorker && surface.RefractionFrameCount > previous,
-            $"{reason}: {surface.RefractionFailure ?? "timeout"}");
+        Program.Assert(surface.HasBackgroundWorker && surface.BackgroundFrameCount > previous,
+            $"{reason}: {surface.BackgroundFailure ?? "timeout"}");
     }
 
     private static void Wait(int ms)

@@ -23,6 +23,7 @@ public static class PaperSkins
         Resolve(state?.PaperSkin, state?.ColorScheme, state?.MicaBackdropType);
     public static bool UsesNativeBackdrop(string? id) => id is Mica or Acrylic or ClearAcrylic or
         TracingPaper or Aero;
+    internal static bool UsesSampledAuxiliary(string? id) => id is Mica or Acrylic or ClearAcrylic or TracingPaper;
     public static bool IsSystemMaterial(string? id) => id is Mica or Acrylic or ClearAcrylic;
     public static bool IsDecorated(string? id) => id is TracingPaper or Aero or Pixel;
     public static bool Decorate(string? id, bool highContrast) => !highContrast && IsDecorated(id);

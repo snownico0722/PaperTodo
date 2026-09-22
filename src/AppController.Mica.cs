@@ -25,6 +25,7 @@ public sealed partial class AppController
             {
                 _nativeMicaPreferenceRefreshQueued = false;
                 if (IsExiting) return;
+                DwmMicaApi.Instance.InvalidateEnvironment();
                 // Refresh semantic foreground colors too, including fixed light/dark in HC.
                 RefreshThemeSurfaces();
             }), DispatcherPriority.Background);

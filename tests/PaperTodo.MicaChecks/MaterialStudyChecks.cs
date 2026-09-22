@@ -32,7 +32,7 @@ internal static class MaterialStudyChecks
                 controller.State.EnableAnimations = true;
                 Theme.Invalidate();
                 window = new PaperWindow(new PaperData { Type = PaperTypes.Note, Title = "材质 · 日常笔记",
-                    Content = "# 留一点桌面空间\n\n正文与按钮保持清晰。\n\n- 整理今天的想法\n- 拖动纸片，观察光线\n- 背景只在边缘发生折射\n\n**材质不应妨碍阅读。**",
+                    Content = "# 留一点桌面空间\n\n正文与按钮保持清晰。\n\n- 整理今天的想法\n- 拖动纸片，观察光线\n- 背景透色，正文清晰\n\n**材质不应妨碍阅读。**",
                     X = 100, Y = 90, Width = 432, Height = 370, AlwaysOnTop = true }, controller);
                 window.Show(); window.Activate(); Wait(300);
                 var surface = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(window)!;
@@ -52,13 +52,13 @@ internal static class MaterialStudyChecks
                         "light Aero must not turn a genuine white rear window into a black underlay");
                     var response = Math.Abs(wp.R-bp.R) + Math.Abs(wp.G-bp.G) + Math.Abs(wp.B-bp.B);
                     Program.Assert(response > 50, "clear Aero responds to the real rear window without Acrylic blur");
-                    Program.Assert(!surface.HasRefractionWorker && DesktopLensCapture.ReadAffinity(new WindowInteropHelper(window).Handle) == 0,
+                    Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(new WindowInteropHelper(window).Handle) == 0,
                         "Aero stays visible to screenshot APIs and never starts a desktop sampler");
                     rear.Background = background; Wait(100);
                     var brush = (LinearGradientBrush)typeof(SkinBorder).GetField("_aeroReflection", Program.Private)!.GetValue(surface)!;
                     var shift = (TranslateTransform)brush.Transform;
                     var oldX = shift.X; var width = brush.EndPoint.X - brush.StartPoint.X;
-                    Program.Assert(surface.HasLensLightSubscription, "Aero has only a visible-window movement subscription");
+                    Program.Assert(surface.HasAeroReflectionSubscription, "Aero has only a visible-window movement subscription");
                     window.Left += 90; Wait(80);
                     Program.Assert(Math.Abs(shift.X - oldX + 9) < .01 && brush.MappingMode == BrushMappingMode.Absolute,
                         "Aero reflection shifts continuously in world-space rather than stretching the diagonal");
@@ -67,7 +67,7 @@ internal static class MaterialStudyChecks
                         "Aero reflection width is independent of window resize");
                     using (NativeSurfaceChecks.Capture(window, output, $"study-aero-{mode}-moved")) { }
                     controller.State.EnableAnimations = false; window.RefreshSkin(); Wait(30);
-                    Program.Assert(!surface.HasLensLightSubscription, "disabling animation detaches Aero parallax");
+                    Program.Assert(!surface.HasAeroReflectionSubscription, "disabling animation detaches Aero parallax");
                 }
                 if (skin == PaperSkins.Aero)
                 {
@@ -80,7 +80,7 @@ internal static class MaterialStudyChecks
                     }
                 }
                 window.Hide(); Wait(30);
-                Program.Assert(!surface.HasLensLightSubscription && !surface.HasRefractionWorker,
+                Program.Assert(!surface.HasAeroReflectionSubscription && !surface.HasBackgroundWorker,
                     "hidden study surface has no optical subscription/capture worker");
                 window.CloseForReal(); window = null;
             }
@@ -100,7 +100,7 @@ internal static class MaterialStudyChecks
         {
             var clock = Stopwatch.StartNew();
             var drawing = MaterialRelief.Create(new Size(420, 340), new CornerRadius(16),
-                new Thickness(0, 1, 1, 1), new DpiScale(scale, scale), skin, false);
+                new Thickness(0, 1, 1, 1), new DpiScale(scale, scale), false);
             var images = drawing.Children.OfType<ImageDrawing>().Select(i => (BitmapSource)i.ImageSource).ToArray();
             Program.Assert(drawing.IsFrozen && images.Length == 4 && images.All(i => i.IsFrozen) &&
                 images.Sum(i => i.PixelWidth * i.PixelHeight) < 270000, "frozen perimeter-only lighting has a bounded raster budget");

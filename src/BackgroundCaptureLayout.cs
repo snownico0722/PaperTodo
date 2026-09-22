@@ -5,16 +5,21 @@ namespace PaperTodo;
 
 /// <summary>One coherent, bounded scene on a screen-anchored sampling grid.
 /// Moving a surface changes its crop, not the phase of the downsampling filter.</summary>
-internal static class LensCaptureLayout
+internal static class BackgroundCaptureLayout
 {
     internal const long PixelBudget = 1_048_576;
+    // Menus do not follow a pointer drag. Their 48-DIP inner guard still exceeds the
+    // largest diffusion radius (38 DIP); capsules retain the proven 128-DIP motion guard.
+    // Keep this invariant across weak/full and recipe switches so the same scene survives.
+    internal static int Padding(bool menu, DpiScale dpi) =>
+        (int)Math.Min(1024, Math.Ceiling((menu ? 96 : 256) * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
     internal sealed record Scene(Int32Rect Bounds, int PixelWidth, int PixelHeight);
 
-    internal static Scene? Create(Int32Rect window, DesktopLensCapture.Region region, Int32Rect desktop, Scene? previous = null)
+    internal static Scene? Create(Int32Rect window, DesktopBackgroundCapture.Region region, Int32Rect desktop, Scene? previous = null)
     {
         var w = region.Width; var h = region.Height;
         if (w <= 0 || h <= 0 || w > 32768 || h > 32768 || region.Padding is < 0 or > 1024)
-            throw new InvalidOperationException("Invalid liquid surface dimensions.");
+            throw new InvalidOperationException("Invalid background surface dimensions.");
         var left = Math.Max(desktop.X, window.X + region.OffsetX - region.Padding);
         var top = Math.Max(desktop.Y, window.Y + region.OffsetY - region.Padding);
         var right = Math.Min(desktop.X + desktop.Width, window.X + region.OffsetX + w + region.Padding);

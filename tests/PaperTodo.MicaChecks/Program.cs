@@ -184,6 +184,18 @@ internal static class Program
                 }
                 finally { other.Close(); }
             });
+            Check("activation-only preferences do not reinstall native backdrops", () =>
+            {
+                using var f = new Fixture();
+                f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica, false);
+                var calls = f.Api.BackdropCalls;
+                f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica, true);
+                Assert(f.Backdrop.IsActive && f.Api.NonClientActive && f.Api.BackdropCalls == calls,
+                    "activation styling is independent from native material installation");
+                f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica, false);
+                Assert(f.Api.BackdropCalls == calls && f.Api.NonClientActive == f.Window.IsActive,
+                    "removing the override restores real activation without restarting the backdrop");
+            });
             Check("setup failures never publish a transparent shell", () =>
             {
                 foreach (var stage in new[] { "alpha-disable", "frame", "dark", "backdrop" })
@@ -258,6 +270,7 @@ internal static class Program
                 controller.State.UseCapsuleMode = true;
                 controller.State.UseDeepCapsuleMode = false;
                 controller.State.ExperimentalInactivePaperOpacity = false;
+                Check("material ownership, caches, cancellation and capture handoffs", () => MaterialRefactorChecks.Run(controller));
                 Check("readable opaque semantic palette in light and dark", () =>
                 {
                     controller.State.ColorScheme = "mica";

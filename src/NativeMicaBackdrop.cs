@@ -26,7 +26,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private readonly DependencyPropertyDescriptor _opacity;
     private HwndSource? _source;
     private Border? _observedChrome;
-    private (bool Requested, bool Dark, bool Eligible, bool Rounded, string Material, bool AlwaysActive)? _applied;
+    private readonly record struct NativeRequest(bool Requested, bool Dark, bool Eligible, bool Rounded,
+        string Material, Color BorderColor);
+    private NativeRequest? _applied;
     private bool _requested;
     private bool _dark;
     private string _material = MicaBackdropTypes.Mica;
@@ -85,6 +87,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _dark = dark;
         if (material != null) _material = material == AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
         var wasForcedActive = IsActive && _alwaysActive;
+        var activationChanged = alwaysActive.HasValue && _alwaysActive != alwaysActive.Value;
         if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
         if (_updating) return;
         var chrome = _getChrome();
@@ -109,8 +112,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
-        var state = (requested, dark, eligible, rounded, _material, _alwaysActive);
-        if (!force && _applied == state) return;
+        var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
+        var state = new NativeRequest(requested, dark, eligible, rounded, _material, edge);
+        if (!force && _applied == state)
+        {
+            if (activationChanged && (IsActive || wasForcedActive))
+                _native.SetNonClientActive(_source.Handle, IsActive && _alwaysActive || _window.IsActive);
+            return;
+        }
 
         _updating = true;
         try
@@ -161,7 +170,6 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
             // DWM owns the outer corners and border. No SetWindowRgn: it invalidates native
             // rounding/shadow and used to turn the paper's shadow margin into a second frame.
-            var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
             var edgeColor = edge.R | edge.G << 8 | edge.B << 16; // COLORREF, no alpha
             // Do not put a solid native caption back underneath the transparent header.
             // COLOR_DEFAULT allows the system material to continue below the WPF header.
@@ -210,7 +218,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 Debug.WriteLine($"Native Mica fallback: HWND={hwnd}, HRESULT=0x{LastHResult:X8}");
         }
         finally { _updating = false; }
-        if (chrome is SkinBorder skin) skin.RefreshRefraction();
+        if (chrome is SkinBorder skin) skin.RefreshBackground();
     }
 
     private bool _contentRepaintQueued;
@@ -292,7 +300,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
         }
         if (message is 0x031E /* WM_DWMCOMPOSITIONCHANGED */ or 0x0320 /* WM_DWMCOLORIZATIONCOLORCHANGED */ or
             0x031A /* WM_THEMECHANGED */ or 0x001A /* WM_SETTINGCHANGE */ or 0x02E0 /* WM_DPICHANGED */)
+        {
+            if (_native is DwmMicaApi api) api.InvalidateEnvironment();
             QueueRefresh();
+        }
         return IntPtr.Zero;
     }
 
@@ -336,10 +347,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _observedChrome = null;
     }
 
-    internal static Brush GetActiveSurfaceBrush(string? material, bool dark)
+    private static readonly Brush LightAcrylicSurface = CreateAcrylicSurface(false);
+    private static readonly Brush DarkAcrylicSurface = CreateAcrylicSurface(true);
+    internal static Brush GetActiveSurfaceBrush(string? material, bool dark) =>
+        material == MicaBackdropTypes.Acrylic ? dark ? DarkAcrylicSurface : LightAcrylicSurface : Brushes.Transparent;
+
+    private static Brush CreateAcrylicSurface(bool dark)
     {
-        if (material == MicaBackdropTypes.Acrylic)
-        {
             // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
             // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
             // noise and lifts the darkness, producing a clean, luminous frosted glass.
@@ -349,7 +363,5 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;
-        }
-        return Brushes.Transparent;
     }
 }

@@ -157,7 +157,7 @@ internal static class SkinChecks
                     Program.Assert(quiet.AsSpan(center, 4).SequenceEqual(full.AsSpan(center, 4)) && full[center+1] == 255,
                         "foreground marker remains fully opaque and unchanged");
                     Program.Assert(surface.IsHitTestVisible && surface.Child.IsHitTestVisible &&
-                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasRefractionWorker,
+                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasBackgroundWorker,
                         "unattached auxiliary content remains hit-testable without starting a source-less worker");
                     var edge = (40*240)*4;
                     Program.Assert(quiet.AsSpan(edge,4).SequenceEqual(full.AsSpan(edge,4)), "host stroke does not fade with material strength");

@@ -73,20 +73,34 @@ internal sealed class MaterialMenuOpening
     private readonly Func<FrameworkElement?> _content;
     private readonly Func<UIElement?> _target;
     private readonly Func<PlacementMode> _placement;
-    private CancellationTokenSource? _cancel;
+    private readonly Func<Int32Rect, CancellationToken, Task<DesktopBackgroundCapture.Frame?>> _capture;
+    private OpeningRequest? _request;
     private FrameworkElement? _anchor;
-    private bool _pending, _ready;
-    private int _generation;
-    internal bool IsPending => _pending;
+    private bool _ready;
+    internal bool IsPending => _request != null;
+
+    // A request is an identity, not a second menu state machine. Only the preparation
+    // continuation disposes its CTS; Cancel merely revokes permission to publish/open.
+    private sealed class OpeningRequest : IDisposable
+    {
+        private readonly CancellationTokenSource _source = new();
+        internal CancellationToken Token { get; }
+        private bool _disposed;
+        internal OpeningRequest() => Token = _source.Token;
+        internal void Cancel() { if (!_disposed && !Token.IsCancellationRequested) _source.Cancel(); }
+        public void Dispose() { if (_disposed) return; _disposed = true; _source.Dispose(); }
+    }
 
     internal static bool NeedsBackground => AppController.Current?.State.LiveBackgroundProcessing != false &&
-        PaperSkins.UsesNativeBackdrop(Theme.Skin) && Theme.Skin != PaperSkins.Aero &&
+        PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
         !SystemParameters.HighContrast && DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
 
     internal MaterialMenuOpening(FrameworkElement owner, DependencyProperty isOpen, Func<FrameworkElement?> content,
-        Func<UIElement?> target, Func<PlacementMode> placement)
+        Func<UIElement?> target, Func<PlacementMode> placement,
+        Func<Int32Rect, CancellationToken, Task<DesktopBackgroundCapture.Frame?>>? capture = null)
     {
         _owner = owner; _isOpen = isOpen; _content = content; _target = target; _placement = placement;
+        _capture = capture ?? DesktopBackgroundCapture.PreparePopupAsync;
         owner.Unloaded += (_, _) => Cancel();
     }
 
@@ -96,28 +110,31 @@ internal sealed class MaterialMenuOpening
         if (_ready) return true;
         if (!NeedsBackground || _placement() is PlacementMode.Custom or PlacementMode.Absolute or PlacementMode.AbsolutePoint)
             return true;
-        if (!_pending)
+        if (_request == null)
         {
-            _pending = true;
-            var version = ++_generation;
-            _cancel = new CancellationTokenSource();
+            var request = _request = new OpeningRequest();
             InputManager.Current.PreProcessInput += OnPendingInput;
             _anchor = _target() as FrameworkElement;
             if (_anchor != null) _anchor.Unloaded += OnAnchorUnloaded;
-            _owner.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Prepare(version)));
+            // The dispatcher adapter is the async-void boundary; preparation itself is
+            // an awaitable operation. Exceptions still reach the normal UI dispatcher.
+            _owner.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(async () =>
+            {
+                await PrepareAsync(request);
+            }));
         }
         return false;
     }
 
-    private async void Prepare(int version)
+    private async Task PrepareAsync(OpeningRequest request)
     {
-        if (!_pending || version != _generation || _cancel == null) return;
-        var cancel = _cancel;
-        DesktopLensCapture.Frame? frame = null;
+        using var lifetime = request;
+        DesktopBackgroundCapture.Frame? frame = null;
         SkinBorder? surface = null;
         var failed = false;
         try
         {
+            if (!ReferenceEquals(request, _request) || request.Token.IsCancellationRequested) return;
             var content = _content();
             if (content == null) { failed = true; }
             else
@@ -132,11 +149,11 @@ internal sealed class MaterialMenuOpening
                     // Loaded is too late to decide the first render's recipe.
                     surface.RefreshSkin();
                     var requested = InitialBounds(content, _target(), _placement());
-                    var capture = DesktopLensCapture.PreparePopupAsync(requested, cancel.Token);
-                    try { frame = await capture.WaitAsync(TimeSpan.FromMilliseconds(300), cancel.Token); }
+                    var capture = _capture(requested, request.Token);
+                    try { frame = await capture.WaitAsync(TimeSpan.FromMilliseconds(300), request.Token); }
                     catch
                     {
-                        if (!cancel.IsCancellationRequested) cancel.Cancel();
+                        request.Cancel();
                         // A slow GDI call cannot be interrupted. Dispose any late result;
                         // it must never reopen a dismissed menu or leak pooled screen data.
                         _ = capture.ContinueWith(t =>
@@ -157,12 +174,12 @@ internal sealed class MaterialMenuOpening
         { failed = true; Debug.WriteLine("Menu background preparation: " + ex.Message); }
         finally
         {
-            if (version != _generation || !_pending || _owner.Dispatcher.HasShutdownStarted)
+            if (!ReferenceEquals(request, _request) || _owner.Dispatcher.HasShutdownStarted)
                 frame?.Dispose();
             else
             {
                 DetachPendingInput();
-                _pending = false; _ready = true; _cancel = null;
+                _request = null; _ready = true;
                 // Failure gets one stable fallback for this opening, not a delayed flash
                 // from fallback to glass. The next open can try again.
                 if (!NeedsBackground) { frame?.Dispose(); frame = null; failed = false; }
@@ -174,14 +191,15 @@ internal sealed class MaterialMenuOpening
                 // Replay only this still-current request; preserve bindings on submenus.
                 _owner.SetCurrentValue(_isOpen, true);
             }
-            cancel.Dispose();
         }
     }
 
     private void Cancel()
     {
-        ++_generation; _pending = _ready = false;
-        _cancel?.Cancel(); _cancel?.Dispose(); _cancel = null;
+        var request = _request;
+        _request = null;
+        _ready = false;
+        request?.Cancel();
         DetachPendingInput();
     }
     private void DetachPendingInput()
