@@ -14,6 +14,8 @@ internal static partial class Program
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         CreationOwnsInitialTodoFields(c, note);
+        TodoPasteUsesEventPayload();
+        PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         MultilinePluginTooltips();
         ReviewArchiveSavesWithoutBackup();
         ReviewArchiveUnreadableDataFailsClosed();
@@ -311,6 +313,70 @@ internal static partial class Program
             { PaperId = paper.Id, Todos = [items[1]] }), "paper_links_disabled");
         Check(!c.State.EnableTodoPaperLinks, "Creation must not silently turn on the link feature.");
         c.State.EnableTodoPaperLinks = true;
+    }
+
+    private static void TodoPasteUsesEventPayload()
+    {
+        const string eventText = "event A\nevent second";
+        var data = new DataObject();
+        data.SetData(DataFormats.UnicodeText, eventText);
+
+        var read = typeof(PaperWindow).GetMethod(
+            "TryGetTodoPastingText",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Todo paste event reader was not found.");
+        object?[] args = [data, null];
+        var accepted = (bool)(read.Invoke(null, args) ?? false);
+        Check(accepted && string.Equals(args[1] as string, eventText, StringComparison.Ordinal),
+            "Todo paste preflight and execution must use the current event payload.");
+    }
+
+    private static void PartialReminderDeliveryKeepsUnsurfacedItemsPending(AppController c)
+    {
+        var previousEnabled = c.State.ExperimentalTodoReminders;
+        var previousSound = c.State.ExperimentalTodoReminderSoundEnabled;
+        var tray = ReadField<object?>(c, "_trayIcon");
+        var now = DateTimeOffset.Now;
+        var paper = new PaperData
+        {
+            Id = "tests.partial-reminder-delivery",
+            Type = PaperTypes.Todo,
+            IsVisible = false,
+            Items =
+            [
+                new PaperItem { Id = "reminder-1", Text = "first", Order = 0, ReminderAt = now.AddSeconds(-2) },
+                new PaperItem { Id = "reminder-2", Text = "second", Order = 1, ReminderAt = now.AddSeconds(-1) }
+            ]
+        };
+        c.State.Papers.Add(paper);
+
+        try
+        {
+            c.State.ExperimentalTodoReminders = true;
+            c.State.ExperimentalTodoReminderSoundEnabled = false;
+            Field(c, "_trayIcon", null!);
+
+            _ = Invoke(c, "ProcessDueTodoReminders", now);
+
+            Check(paper.Items[0].ReminderTriggered && !paper.Items[1].ReminderTriggered,
+                "Opening only the first due reminder must not acknowledge the unseen remainder.");
+            var timer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
+            Check(timer?.IsEnabled == true,
+                "Unsurfaced due reminders must remain scheduled for retry.");
+        }
+        finally
+        {
+            _ = Invoke(c, "StopTodoReminderTimer");
+            Field(c, "_trayIcon", tray!);
+            c.State.ExperimentalTodoReminders = previousEnabled;
+            c.State.ExperimentalTodoReminderSoundEnabled = previousSound;
+            if (c.State.Papers.Contains(paper))
+            {
+                _ = c.PaperCommands.DeletePaper(
+                    paper.Id,
+                    PaperOperationContext.User());
+            }
+        }
     }
 
     private static void MultilinePluginTooltips()

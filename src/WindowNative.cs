@@ -984,7 +984,7 @@ internal static partial class WindowNative
             _inspectMilliseconds += diagnostic.InspectMilliseconds;
 #endif
 
-            if (sameAsNative)
+            if (sameAsNative && !hasPendingBounds)
             {
                 UnchangedWindowCount++;
 #if DEBUG

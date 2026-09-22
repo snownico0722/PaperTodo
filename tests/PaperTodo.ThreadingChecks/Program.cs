@@ -24,7 +24,8 @@ internal static partial class Program
         ("single-instance-real-results", CheckSingleInstanceResults),
         ("single-instance-lost-result", CheckSingleInstanceLostResult),
         ("inactive-titlebar-chrome-layout", CheckInactiveTitleBarChrome),
-        ("remembered-paper-dpi-restore", CheckRememberedPaperRestore)
+        ("remembered-paper-dpi-restore", CheckRememberedPaperRestore),
+        ("native-batch-return-to-origin", CheckNativeWindowBatchReturnToOrigin)
     ];
 
     private static void CheckPaperResources() =>
