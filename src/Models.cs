@@ -31,9 +31,6 @@ public static class MarkdownRenderModes
     public const string Basic = "basic";
     public const string Full = "full";
 
-    // Old builds persisted "enhanced" as a separate mode. Keep only the wire token for migration.
-    private const string LegacyEnhanced = "enhanced";
-
     public static bool IsValid(string? mode)
     {
         return mode is Off or Basic or Full;
@@ -42,7 +39,7 @@ public static class MarkdownRenderModes
     public static string Normalize(string? mode) => mode switch
     {
         Off => Off,
-        Basic or LegacyEnhanced => Basic,
+        Basic => Basic,
         Full => Full,
         _ => Basic
     };
@@ -541,8 +538,6 @@ public sealed class AppState
     // so unplugging the anchored monitor gracefully lands the stack on a surviving screen.
     public string DeepCapsuleMonitorDeviceName { get; set; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ShowTopBarNewPaperButtons { get; set; }
 }
 
 public sealed class PaperData
