@@ -151,7 +151,8 @@ public sealed partial class PaperWindow
         title = !string.IsNullOrWhiteSpace(_pluginDisplayTitle)
             ? _pluginDisplayTitle
             : _paper.BodyHeaderText;
-        return !IsCurrentBodyProviderMarkdown &&
+        return !_bodyDisabled &&
+            !IsCurrentBodyProviderMarkdown &&
             (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
@@ -159,7 +160,8 @@ public sealed partial class PaperWindow
     internal bool TryGetPluginCapsuleTitle(out string title)
     {
         title = _paper.BodyCapsuleText;
-        return !IsCurrentBodyProviderMarkdown &&
+        return !_bodyDisabled &&
+            !IsCurrentBodyProviderMarkdown &&
             (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
@@ -928,6 +930,7 @@ public sealed partial class PaperWindow
     {
         if (_paper.Type != PaperTypes.Note ||
             IsClosed ||
+            !IsShellBuilt ||
             !string.Equals(
                 NormalizeBodyProviderId(_paper.BodyProviderId),
                 providerId,
