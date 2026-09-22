@@ -1254,6 +1254,9 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>추가 설정</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>설정을 사용할 수 없음</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>설정 접기</value>
   </data>
