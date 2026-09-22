@@ -19,7 +19,6 @@ public sealed partial class PaperWindow
             !_bodyDisabled &&
             _controller.IsPluginEnabled(providerId) &&
             _paperBodyHost.HasCurrent &&
-            _bodyRuntimeVisible &&
             string.Equals(
                 NormalizeBodyProviderId(_paper.BodyProviderId),
                 providerId,
