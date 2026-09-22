@@ -230,18 +230,17 @@ internal static partial class WindowNative
             SetWindowLongPtr(handle, GwlpHwndParent, hiddenOwner);
         }
 
-        // Ensure WS_EX_TOOLWINDOW is cleared from the paper in both cases. This undoes the
-        // style that older versions may have left behind.
-        var exStyle = GetWindowLong(handle, GwlExStyle);
-        var cleaned = (exStyle & ~WsExToolWindow) & ~WsExAppWindow;
-        if (visible)
+        // The hidden-owner technique needs the paper itself to stop forcing an app-window entry.
+        // A visible paper keeps its normal WPF extended styles; no cross-version style cleanup is
+        // needed because HWND state does not survive the process that created it.
+        if (!visible)
         {
-            // No special ex-style needed when visible in switcher.
-            cleaned = exStyle & ~WsExToolWindow;
-        }
-        if (cleaned != exStyle)
-        {
-            SetWindowLong(handle, GwlExStyle, cleaned);
+            var exStyle = GetWindowLong(handle, GwlExStyle);
+            var cleaned = exStyle & ~WsExAppWindow;
+            if (cleaned != exStyle)
+            {
+                SetWindowLong(handle, GwlExStyle, cleaned);
+            }
         }
 
         SetWindowPos(
