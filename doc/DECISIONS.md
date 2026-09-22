@@ -60,7 +60,8 @@
 | D-045 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
 | D-048 | Aero 独立透明合成与材质光照分层 | Experimental | 主题 / Rendering |
 | D-050 | Aero 清透合成与辅助材质强度 | Partially superseded by D-051 | 主题 / Rendering |
-| D-051 | 实际辅助窗口背景处理与材质清理 | Experimental | 主题 / Rendering |
+| D-051 | 实际辅助窗口背景处理与材质清理 | Partially superseded by D-052 | 主题 / Rendering |
+| D-052 | 材质绘制、原生背景与可选采样职责收敛 | Experimental | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1625,7 +1626,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-051 · 实际辅助窗口背景处理与材质清理（2026-09-11）
 
-**Status:** Experimental；替代 D-050 的辅助面静态强度语义，保留其 Aero alpha 后端。
+**Status:** Partially superseded by D-052（资源与缓存边界）；保留辅助面真实背景与 Aero alpha 后端。
 
 **Context / Why:** 用户要求胶囊与菜单的弱档也真实处理背景，而不是只给实色表面染色。
 
@@ -1634,3 +1635,25 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Lifetime / limits:** 背景处理沿用像素预算、单最新帧 mailbox 和逐源释放；监听源 HWND、祖先 opacity 与卸载。独立开关明确软件采样表面的截图／共享排除副作用。辅助 Mica/Acrylic 只是软件近似，SDR、混合 DPI 和主观审美边界不冒充原生或真人验收。
 
 **Validation:** 实际 layered 窗口、生产 popup／submenu 模板测试两个强度档、前景不变、所有者隔离及隐藏／半透明／关闭恢复；同时保留主纸片与编辑回归。
+
+---
+
+## D-052 — 材质绘制、原生背景与可选采样职责收敛（2026-09-22）
+
+**Status:** Experimental
+
+**Context / Why:** #227 多轮材质实验后，功能已收敛，但绘制控件仍承担采样线程、HWND 观察、取消和缓存失效；普通原生窗口也会注册采样相关监听，辅助开关会重建无关顶栏图标，改变尺寸又重建不依赖尺寸的渐变。用户要求完整重构，同时必须理解旧修复的原因，不以减少代码行为为由恢复已解决的黑底、首帧闪烁、菜单打不开或编辑器重建。
+
+**Decision:** 保留 NativeMicaBackdrop 的原生合成所有权，SkinBorder 保留绘制和轻量接入，将采样／位图／呈现资源收敛到可选 BackgroundSession，实际 HWND 与祖先透明度订阅收敛到 MaterialSurfaceHost。仅辅助采样或 Aero 透光／视差需要观察；不创建通用插件化材质框架、全局截图中心或额外窗口。设置变化沿现有共享事务发布，按画刷、几何、采样、动画分别失效。原生环境值缓存通过真实系统事件更新；激活外观独立于背景安装。
+
+**Preserved historical fixes:**
+- `37c10b27` 的真实右键回归：WPF ContextMenuService 使用 SetCurrentValue。异步预备完成后必须重放仍有效的请求，不能仅 CoerceValue 读回被强制为 false 的默认值。
+- `8d22d040` 的 Clear Acrylic 首帧：accent 不能先于真正 ContentRendered 启用。重新请求重绘不等价于已经产生首张 redirected bitmap。
+- `cabd99a` 的呈现与采样：预备首帧和映射变化必须冻结完成后发布，像素与世界坐标一起切换；同一区域保留可写位图复用；沿用 SRCCOPY，避免 CAPTUREBLT 扰动指针；实时 popup 的动画仍用本地值关闭，防止动态资源重新引入 Fade。
+- D-044 / D-045 的 full glass 与现代 alpha 能力顺序不改。零 margin 不是适用于所有系统的通用修复。PaperWindow/Edge 的尺寸、形状、DComp translation-only、正文与撤销栈 owner 不改。
+
+**Performance boundaries:** 菜单的采样余量独立于拖动胶囊，模糊半径、采样节拍与弱档真实背景语义不变。较小覆盖范围可能在高 DPI 下恢复原像素密度，因此不能把面积降幅冒充所有机器上的速度或内存降幅。Aero 仅缓存直边相同深度／法线的光照结果，以明暗、异形圆角、开口和分数 DPI 的逐字节对照约束。保留缓冲清零、零等待上传、背景与正文分离、每个 popup 独立释放和截图排除提示，不为了少几次拷贝削弱所有权。
+
+**Research / alternatives:** 阅读 [WPF UI WindowBackdrop](https://github.com/lepoco/wpfui/blob/ffebacd61058170cf63864b7d5aa730cffff848a/src/Wpf.Ui/Controls/Window/WindowBackdrop.cs) 的窄原生适配边界；阅读 [dotnet/wpf WriteableBitmap](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Imaging/WriteableBitmap.cs)、[issue 5816](https://github.com/dotnet/wpf/issues/5816) 的锁与缩放冻结讨论和 [BlurEffect 原生实现](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/WpfGfx/core/resources/BlurEffect.cpp)。这些支持不跨异步持锁、后台准备／UI 短上传、明确 native 与软件采样边界；不是把第三方库直接替换进本项目的理由。截图排除仍服从 [SetWindowDisplayAffinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity) 的本进程顶层窗口与 DWM 限制，并非安全／DRM 边界。未引入新的 capture 后端、降低应用帧率或用先开普通纸片再补材质掩饰首帧延迟。
+
+**Validation:** MaterialRefactorChecks 检查并发最新帧交接／停止、缓存失效、主窗口无采样资源、Aero 像素等价、菜单取消／替换／迟到结果／卸载／超时。既有 MicaChecks 保留真实原生窗口、生产右键与子菜单、首帧素材、前景像素、位图复用、截图排除和设置切页。MaterialBenchmarks 为可选测试入口，使用同一 harness 在两个版本独立进程测 CPU 指令记录时间、线程分配和菜单 Opened 延迟；不是屏幕 FPS、GPU/DWM 占用或 Windows 11 人工视觉验收。

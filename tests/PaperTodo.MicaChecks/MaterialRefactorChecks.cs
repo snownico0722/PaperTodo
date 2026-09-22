@@ -99,8 +99,16 @@ internal static class MaterialRefactorChecks
             var region = new DesktopBackgroundCapture.Region(0, 0, window.Width, window.Height, padding);
             var menu = BackgroundCaptureLayout.Create(window, region, desktop)!;
             var legacy = BackgroundCaptureLayout.Create(window, region with { Padding = (int)(256 * scale) }, desktop)!;
-            Program.Assert((long)menu.PixelWidth * menu.PixelHeight < (long)legacy.PixelWidth * legacy.PixelHeight,
-                "stationary popup samples fewer pixels without changing scene scale or blur radius");
+            var menuPixels = (long)menu.PixelWidth * menu.PixelHeight;
+            var legacyPixels = (long)legacy.PixelWidth * legacy.PixelHeight;
+            var menuStep = menu.Bounds.Width / menu.PixelWidth;
+            var legacyStep = legacy.Bounds.Width / legacy.PixelWidth;
+            Program.Assert((long)menu.Bounds.Width * menu.Bounds.Height < (long)legacy.Bounds.Width * legacy.Bounds.Height &&
+                menuStep <= legacyStep && menuPixels <= BackgroundCaptureLayout.PixelBudget,
+                "smaller menu coverage retains or improves sample density within the same pixel budget");
+            if (menuStep == legacyStep)
+                Program.Assert(menuPixels < legacyPixels, "equal-density menu sampling eliminates unused pixels");
+            Console.WriteLine($"MENU COVERAGE @{scale}: {legacyPixels} -> {menuPixels} pixels; source step {legacyStep} -> {menuStep}.");
             var moved = window; moved.X += (int)(20 * scale);
             Program.Assert(ReferenceEquals(menu, BackgroundCaptureLayout.Create(moved, region, desktop, menu)),
                 "ordinary popup placement adjustments keep the primed scene and sampling phase");

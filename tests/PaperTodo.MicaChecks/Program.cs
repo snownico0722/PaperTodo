@@ -29,6 +29,11 @@ internal static class Program
                 xaml.Root.Element(ns + "Application.Resources")!.Nodes());
             app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
         }
+        if (args.Length == 2 && args[0] == "--benchmark")
+        {
+            try { using var controller = new AppController(); MaterialBenchmarks.Run(controller, args[1]); return 0; }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        }
         var temp = Path.Combine(Path.GetTempPath(), "PaperTodo.NativeMicaChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         try
