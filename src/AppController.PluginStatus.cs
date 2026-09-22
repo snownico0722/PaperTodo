@@ -107,6 +107,7 @@ public sealed partial class AppController
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             Content = track,
+            Style = BuildSettingsCloseButtonStyle(),
             Focusable = false,
             Cursor = System.Windows.Input.Cursors.Hand,
             VerticalAlignment = VerticalAlignment.Center
