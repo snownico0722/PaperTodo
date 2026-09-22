@@ -56,6 +56,7 @@ public sealed partial class AppController
         var descriptors = _paperBodyPlugins.Descriptors
             .Where(descriptor => descriptor.Kind != PaperBodyPluginKind.BuiltIn)
             .ToArray();
+        _pluginStatusRefreshers.Clear();
 
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition
