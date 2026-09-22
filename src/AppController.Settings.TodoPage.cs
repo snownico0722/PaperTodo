@@ -30,6 +30,12 @@ public sealed partial class AppController
         var content = new StackPanel();
         content.Children.Add(WrapWithHint(
             SettingsToggle(
+                Strings.Get("SettingsShowTodoBottomBar"),
+                State.ShowTodoBottomBar,
+                ToggleTodoBottomBar),
+            "TipShowTodoBottomBar"));
+        content.Children.Add(WrapWithHint(
+            SettingsToggle(
                 Strings.Get("SettingsAutoClearCompletedTodos"),
                 State.AutoClearCompletedTodos,
                 ToggleAutoClearCompletedTodos),
@@ -117,6 +123,7 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarTodoDefaults()
     {
+        State.ShowTodoBottomBar = true;
         State.AutoClearCompletedTodos = false;
         State.AutoMoveCompletedTodosToBottom = false;
         State.EnableTodoPaperLinks = true;
@@ -135,6 +142,7 @@ public sealed partial class AppController
 
         foreach (var window in _windows.Values)
         {
+            window.RefreshTodoRowsForExternalChange();
             window.UpdateTodoLinkFeature();
         }
         RefreshCapsuleEligibilityForLinkedPapers();

@@ -62,6 +62,7 @@ internal static partial class Program
             ("ToggleAutoClearCompletedTodos", "todo.auto_clear_completed", false),
             ("ToggleAutoCompressLargeImages", "note.compress_large_images", false),
             ("ToggleAutoMoveCompletedTodosToBottom", "todo.move_completed_to_bottom", false),
+            ("ToggleTodoBottomBar", "todo.bottom_bar", false),
             ("ToggleCapsuleCollapseAll", "capsule.master_enabled", false),
             ("ToggleCapsuleMode", "capsule.enabled", false),
             ("ToggleCapsuleTextBold", "capsule.text_bold", false),

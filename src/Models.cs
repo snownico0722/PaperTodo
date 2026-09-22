@@ -418,6 +418,7 @@ public sealed class AppState
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public bool ShowTodoBottomBar { get; set; } = true;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
