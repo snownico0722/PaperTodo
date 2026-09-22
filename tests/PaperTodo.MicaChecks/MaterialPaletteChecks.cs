@@ -9,7 +9,7 @@ internal static class MaterialPaletteChecks
     internal static void Run(AppController controller)
     {
         var saved = (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-            controller.State.MatchAuxiliaryMaterialStrength, controller.State.ShowSurfaceOutline);
+            controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline);
         try
         {
             foreach (var dark in new[] { false, true })
@@ -62,8 +62,8 @@ internal static class MaterialPaletteChecks
                     var pixel = new byte[4]; image.CopyPixels(new Int32Rect(0, 18, 1, 1), pixel, 4, 0);
                     return Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
                 }
-                controller.State.ShowSurfaceOutline = true; surface.RefreshSkin(); var outlined = Edge();
-                controller.State.ShowSurfaceOutline = false; surface.RefreshSkin(); var clean = Edge();
+                controller.State.HideSurfaceOutline = false; surface.RefreshSkin(); var outlined = Edge();
+                controller.State.HideSurfaceOutline = true; surface.RefreshSkin(); var clean = Edge();
                 Program.Assert(outlined.R > 180 && outlined.G < 100 && clean.R > 220 && clean.G > 220 && clean.B > 220,
                     "outer-border preference removes only the visible stroke while retaining the surface fill");
             }
@@ -71,7 +71,7 @@ internal static class MaterialPaletteChecks
         finally
         {
             (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-                controller.State.MatchAuxiliaryMaterialStrength, controller.State.ShowSurfaceOutline) = saved;
+                controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline) = saved;
             Theme.Invalidate();
         }
     }
