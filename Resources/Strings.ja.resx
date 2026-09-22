@@ -1263,8 +1263,20 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>フォルダーを開く</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>PaperTodo を再起動してプラグインを再スキャン</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>PaperTodo を再起動</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>再起動して本文プラグインを再スキャンし、読み込みますか？</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>今すぐ再起動</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>本文プラグイン {0} 件を検出</value>
+    <value>{0} 件</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>読み込みの問題</value>
@@ -1290,6 +1302,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>本文プラグインが見つかりません：{0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0}（無効）</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>本文の種類</value>
   </data>
@@ -1298,6 +1313,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo 内蔵の Markdown 編集・プレビュー・画像本文です。</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>本文プラグインは無効です</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>「{0}」は無効です。設定 → プラグインから再度有効にできます。</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>本文プラグインを実行できません</value>
@@ -1359,7 +1380,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>プラグインに問題があります</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>現在未使用</value>
+    <value>プラグインは有効ですが、現在は実行されていません</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>プラグインは無効です</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>プラグインは実行中です</value>
