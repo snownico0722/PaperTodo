@@ -419,8 +419,8 @@ public sealed class AppState
     public string? PaperSkin { get; set; }
     // Layered auxiliary materials can process a bounded local background in memory.
     public bool LiveBackgroundProcessing { get; set; } = true;
-    // Keeps layout/border thickness intact while optionally suppressing only the visible outer stroke.
-    public bool ShowSurfaceOutline { get; set; } = true;
+    // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
+    public bool HideSurfaceOutline { get; set; } = true;
     public bool MatchAuxiliaryMaterialStrength { get; set; }
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
