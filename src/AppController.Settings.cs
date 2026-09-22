@@ -2522,6 +2522,9 @@ public sealed partial class AppController
             SetResizeGripMode);
     }
 
+    private void ToggleTodoBottomBar() =>
+        SetSettingFromUi("todo.bottom_bar", !State.ShowTodoBottomBar);
+
     private void ToggleAutoClearCompletedTodos() =>
         SetSettingFromUi("todo.auto_clear_completed", !State.AutoClearCompletedTodos);
 

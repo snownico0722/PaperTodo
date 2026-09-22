@@ -65,6 +65,7 @@ internal static partial class Program
         {
             ServiceBehavior();
             CatalogBehavior();
+            TodoMoveBehavior();
             AdapterBehavior();
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
@@ -143,6 +144,8 @@ internal static partial class Program
             Check(rendering.Validate(Json(token)).GetString() == token, "All existing rendering tokens remain valid.");
         var extension = definitions.Single(d => d.Metadata.Id == "note.external_extension");
         Check(extension.Validate(Json("*.MD")).GetString() == ".md", "Filename extension uses UI normalization.");
+        var bottomBar = definitions.Single(d => d.Metadata.Id == "todo.bottom_bar");
+        Check(bottomBar.Read().GetBoolean(), "Todo bottom bar is enabled by default.");
         Check(extension.Validate(Json("笔记")).GetString() == ".笔记", "Valid Unicode extensions are not needlessly rejected.");
         var saves = 0;
         var success = true;
@@ -155,6 +158,8 @@ internal static partial class Program
         Throws<PaperSettingsException>(() => service.Set("window.hide_from_taskbar", Json(false)), "setting_dependency");
         service.Set("todo.paper_links", Json(false));
         Check(!c.State.EnableTodoPaperLinks && saves == 1, "Catalog setter changes the exact backing feature.");
+        service.Set("todo.bottom_bar", Json(false));
+        Check(!c.State.ShowTodoBottomBar && saves == 2, "Todo bottom-bar setting changes the live preference.");
         success = false;
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json(true)), "save_failed");
         Check(!c.State.EnableTodoPaperLinks, "Real catalog rollback restores the preference.");
@@ -185,6 +190,56 @@ internal static partial class Program
         Check(!paper.Items[0].Done && paper.Items[0].Order == 0 && paper.Items[1].Order == 1, "Completed group is reordered just like Settings UI.");
         service.Set("title.max_length", Json(2));
         Check(paper.Title == "ab", "Successful max length applies existing title semantics.");
+    }
+
+    private static void TodoMoveBehavior()
+    {
+        static PaperItem Item(string id, int order) => new() { Id = id, Text = id, Order = order };
+
+        var items = new List<PaperItem>
+        {
+            Item("a", 0),
+            Item("b", 1),
+            Item("c", 2),
+            Item("d", 3),
+            Item("e", 4)
+        };
+
+        Check(
+            TodoRules.TryCreateMovedOrder(
+                items,
+                new[] { "b", "d" },
+                "e",
+                insertAfter: true,
+                out var movedAfter),
+            "Non-contiguous selected todos can move as one group.");
+        Check(
+            movedAfter.Select(item => item.Id).SequenceEqual(new[] { "a", "c", "e", "b", "d" }),
+            "Group drag preserves the selected todos' relative order.");
+        Check(
+            items.Select(item => item.Id).SequenceEqual(new[] { "a", "b", "c", "d", "e" }),
+            "Planning a group move does not mutate the current paper before undo is captured.");
+
+        Check(
+            TodoRules.TryCreateMovedOrder(
+                items,
+                new[] { "b", "d" },
+                "a",
+                insertAfter: false,
+                out var movedBefore),
+            "A selected group can move before an existing todo.");
+        Check(
+            movedBefore.Select(item => item.Id).SequenceEqual(new[] { "b", "d", "a", "c", "e" }),
+            "Moving before a target keeps group order stable.");
+
+        Check(
+            !TodoRules.TryCreateMovedOrder(
+                items,
+                new[] { "b", "d" },
+                "d",
+                insertAfter: true,
+                out _),
+            "A selected todo is never a valid drop target for its own group.");
     }
 
     private static void AdapterBehavior()

@@ -143,6 +143,11 @@ public sealed partial class AppController
             value => State.AutoCompressLargeImages = value,
             SettingEffects.Compress,
             title: Strings.Get("SettingsAutoCompressLargeImages"));
+        yield return DefineSetting<bool>("todo.bottom_bar",
+            () => State.ShowTodoBottomBar,
+            value => State.ShowTodoBottomBar = value,
+            SettingEffects.TodoRows,
+            title: Strings.Get("SettingsShowTodoBottomBar"));
         yield return DefineSetting<bool>("todo.auto_clear_completed",
             () => State.AutoClearCompletedTodos,
             value => State.AutoClearCompletedTodos = value,

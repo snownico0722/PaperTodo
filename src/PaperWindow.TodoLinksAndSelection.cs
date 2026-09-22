@@ -879,21 +879,6 @@ public sealed partial class PaperWindow
         _todoGroupDragRestingOpacities.Clear();
     }
 
-    private bool RestrictTodoGroupDragToTrash()
-    {
-        if (!IsTodoGroupDrag)
-        {
-            return false;
-        }
-
-        if (_todoDrag != null)
-        {
-            _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
-        }
-        return true;
-    }
-
     private string TodoDragGhostText(string fallback)
     {
         return IsTodoGroupDrag
