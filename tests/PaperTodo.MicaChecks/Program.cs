@@ -34,6 +34,11 @@ internal static class Program
             try { using var controller = new AppController(); MaterialBenchmarks.Run(controller, args[1]); return 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         }
+        if (args.Length == 1 && args[0] == "--mica-controller-experiment")
+        {
+            try { using var controller = new AppController(); RunMicaControllerExperiment(controller); return 0; }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        }
         if (args.Length == 2 && args[0] == "--drag-benchmark")
             return MaterialDragBenchmarks.RunIsolated(args[1]);
         if (args.Length == 2 && args[0] == "--drag-snapshot-timing")
@@ -393,6 +398,108 @@ internal static class Program
     }
     internal static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static bool Transparent(Brush brush) => brush is SolidColorBrush solid && solid.Color.A == 0;
+    private static void RunMicaControllerExperiment(AppController controller)
+    {
+        typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
+        var saved = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
+            controller.State.MaterialTransparency, controller.State.EnableAnimations);
+        controller.State.PaperSkin = PaperSkins.Mica;
+        controller.State.ColorScheme = ColorSchemes.Mica;
+        controller.State.Theme = "light";
+        controller.State.EnableAnimations = false;
+        controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
+        Theme.Invalidate();
+
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Note,
+            Content = "# MicaController\n前景必须始终保持完全不透明",
+            X = 80,
+            Y = 80,
+            Width = 420,
+            Height = 320
+        };
+        controller.State.Papers.Add(paper);
+        var window = new PaperWindow(paper, controller);
+        try
+        {
+            window.Show();
+            Pump();
+            var chrome = (Border)typeof(PaperWindow).GetField("_paperChrome", Private)!.GetValue(window)!;
+            var body = chrome.Child;
+            Assert(window.Opacity == 1 && chrome.Opacity == 1, "experiment never changes WPF foreground opacity");
+
+            (float TintDefault, float LumDefault, float TintApplied, float LumApplied) Read()
+            {
+                var native = typeof(PaperWindow).GetField("_nativeMica", Private)!.GetValue(window)
+                    ?? throw new InvalidOperationException("NativeMicaBackdrop missing.");
+                var adjustable = native.GetType().GetField("_adjustableMica", Private)!.GetValue(native)
+                    ?? throw new InvalidOperationException("MicaController experiment did not activate.");
+                bool active = (bool)(adjustable.GetType().GetProperty("IsActive")!.GetValue(adjustable) ?? false);
+                Assert(active, "MicaController is active on the real PaperWindow");
+                return (
+                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity")!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity")!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedTintOpacity")!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedLuminosityOpacity")!.GetValue(adjustable)));
+            }
+
+            void Apply(string level, string theme = "light")
+            {
+                controller.State.MaterialTransparency = level;
+                controller.State.Theme = theme;
+                Theme.Invalidate();
+                window.UpdateTheme();
+                Pump();
+                Assert(window.IsNativeMicaEffective, "native shell remains effective");
+                Assert(window.Opacity == 1 && chrome.Opacity == 1 && ReferenceEquals(chrome.Child, body),
+                    "foreground and editor tree remain fully opaque and unchanged");
+            }
+
+            Apply(MaterialTransparencyLevels.Medium);
+            var medium = Read();
+            Assert(Math.Abs(medium.TintApplied - medium.TintDefault) < .0001f &&
+                   Math.Abs(medium.LumApplied - medium.LumDefault) < .0001f,
+                "medium preserves Windows App SDK Mica defaults");
+
+            Apply(MaterialTransparencyLevels.VeryLow);
+            var lessTransparent = Read();
+            Assert(lessTransparent.TintApplied >= medium.TintApplied &&
+                   lessTransparent.LumApplied >= medium.LumApplied &&
+                   (lessTransparent.TintApplied > medium.TintApplied + .0001f ||
+                    lessTransparent.LumApplied > medium.LumApplied + .0001f),
+                "very low transparency increases Mica material cover");
+
+            Apply(MaterialTransparencyLevels.VeryHigh);
+            var moreTransparent = Read();
+            Assert(moreTransparent.TintApplied <= medium.TintApplied &&
+                   moreTransparent.LumApplied <= medium.LumApplied &&
+                   (moreTransparent.TintApplied < medium.TintApplied - .0001f ||
+                    moreTransparent.LumApplied < medium.LumApplied - .0001f),
+                "very high transparency reduces Mica material cover");
+
+            Apply(MaterialTransparencyLevels.Medium, "dark");
+            var darkMedium = Read();
+            Assert(Math.Abs(darkMedium.TintApplied - darkMedium.TintDefault) < .0001f &&
+                   Math.Abs(darkMedium.LumApplied - darkMedium.LumDefault) < .0001f,
+                "theme change recreates a fresh SDK default baseline");
+
+            Console.WriteLine(
+                $"PASS MicaController experiment: light default tint={medium.TintDefault:F3} lum={medium.LumDefault:F3}; " +
+                $"veryLow={lessTransparent.TintApplied:F3}/{lessTransparent.LumApplied:F3}; " +
+                $"veryHigh={moreTransparent.TintApplied:F3}/{moreTransparent.LumApplied:F3}; " +
+                $"dark default={darkMedium.TintDefault:F3}/{darkMedium.LumDefault:F3}.");
+        }
+        finally
+        {
+            window.CloseForReal();
+            controller.State.Papers.Remove(paper);
+            (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
+                controller.State.MaterialTransparency, controller.State.EnableAnimations) = saved;
+            Theme.Invalidate();
+        }
+    }
+
     private static void Check(string name, Action action) { action(); _passed++; Console.WriteLine("PASS " + name); }
     private static double Contrast(Color a, Color b)
     {

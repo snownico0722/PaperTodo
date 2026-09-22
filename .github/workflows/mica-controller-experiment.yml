@@ -27,16 +27,18 @@ jobs:
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
       - name: Build MicaController experiment
         run: dotnet build ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true --nologo -clp:ErrorsOnly
+      - name: Verify adjustable Mica on a real WPF paper
+        run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true -- --mica-controller-experiment
       - name: Run material regression with experimental backend available
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true
       - name: Publish experiment single-file
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'mica-controller'
-          dotnet publish ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -o $out -p:PaperTodoMicaControllerExperiment=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:PublishReadyToRun=false -p:DebugType=none -p:DebugSymbols=false --nologo -clp:ErrorsOnly
+          dotnet publish ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -o $out -p:PaperTodoMicaControllerExperiment=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:PublishReadyToRun=false -p:DebugType=none -p:DebugSymbols=false -p:EmbedAllSources=false -p:EmbedUntrackedSources=false --nologo -clp:ErrorsOnly
           $exe = Join-Path $out 'PaperTodo.exe'
           if (!(Test-Path $exe)) { throw 'Experiment executable missing' }
           $size = (Get-Item $exe).Length
-          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; windowsAppSdk='2.5.1'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true } |
+          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true } |
             ConvertTo-Json | Set-Content (Join-Path $out 'experiment-manifest.json') -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
