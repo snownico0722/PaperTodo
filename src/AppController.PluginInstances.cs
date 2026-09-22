@@ -6,6 +6,11 @@ public sealed partial class AppController
         PaperData paper,
         PaperBodyPluginDescriptor descriptor)
     {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
         var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
         if (limit == 0)
         {
@@ -24,6 +29,11 @@ public sealed partial class AppController
 
     internal bool CanCreatePluginPaper(PaperBodyPluginDescriptor descriptor)
     {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
         var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
         return limit == 0 || State.Papers.Count(candidate =>
             candidate.Type == PaperTypes.Note &&
