@@ -290,8 +290,8 @@ internal static partial class WindowNative
 
     private static void RefreshShellWindowListEntry(IntPtr handle)
     {
-        // The shell may keep Alt+Tab / Task View membership cached after WS_EX_TOOLWINDOW
-        // changes. A no-activate hide/show makes it rebuild the entry without stealing focus.
+        // The shell may keep Alt+Tab / Task View membership cached after owner/style changes.
+        // A no-activate hide/show makes it rebuild the entry without stealing focus.
         SetWindowPos(
             handle,
             IntPtr.Zero,
