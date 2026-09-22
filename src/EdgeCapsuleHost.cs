@@ -1330,6 +1330,16 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         return default;
     }
 
+    internal void UseDragBackground(DesktopBackgroundCapture.Snapshot snapshot)
+    {
+        if (!_disposed && Chrome is SkinBorder skin) skin.UseDragBackground(snapshot);
+    }
+
+    internal void EndDragBackground()
+    {
+        if (!_disposed && Chrome is SkinBorder skin) skin.EndDragBackground();
+    }
+
     internal void RefreshSkin()
     {
         if (_disposed) return;

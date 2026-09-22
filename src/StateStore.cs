@@ -520,6 +520,7 @@ public sealed class StateStore
         state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
+        state.MaterialTransparency = MaterialTransparencyLevels.Normalize(state.MaterialTransparency);
 
         state.MarkdownRenderMode = MarkdownRenderModes.Normalize(state.MarkdownRenderMode);
 

@@ -58,11 +58,12 @@ public sealed partial class AppController
             value => State.MatchAuxiliaryMaterialStrength = value,
             SettingEffects.Skin,
             title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
-        yield return DefineSetting<bool>("appearance.live_background_processing",
-            () => State.LiveBackgroundProcessing,
-            value => State.LiveBackgroundProcessing = value,
-            SettingEffects.Skin,
-            title: Strings.Get("SettingsLiveBackgroundProcessing"));
+        yield return DefineSetting<string>("appearance.material_transparency",
+            () => MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
+            value => State.MaterialTransparency = value,
+            SettingEffects.MaterialTransparency,
+            title: SettingsSidebarLocalized("材质透明度", "Material transparency", "素材の透明度", "재질 투명도"),
+            options: MaterialTransparencyLevels.All);
         yield return DefineSetting<bool>("appearance.hide_surface_outline",
             () => State.HideSurfaceOutline,
             value => State.HideSurfaceOutline = value,

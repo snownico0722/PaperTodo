@@ -102,17 +102,18 @@ public static class Theme
 
     // Neutral leaves the system recipe untouched. Color is a light wash on the shell,
     // never a transparent semantic brush passed to editors or plugins.
-    private static (string Skin, string Scheme, bool Dark, Color Paper)? _materialKey;
+    private static (string Skin, string Scheme, bool Dark, Color Paper, string Transparency)? _materialKey;
     private static MaterialPalette _materialColors;
     internal static MaterialPalette MaterialColors
     {
         get
         {
-            var key = (Skin, CurrentScheme, IsDark, Current.Paper);
+            var key = (Skin, CurrentScheme, IsDark, Current.Paper,
+                MaterialTransparencyLevels.Normalize(AppController.Current?.State.MaterialTransparency));
             if (_materialKey != key)
             {
                 _materialKey = key;
-                _materialColors = MaterialPalette.For(key.Item1, key.Item2, key.Item3, key.Item4);
+                _materialColors = MaterialPalette.For(key.Item1, key.Item2, key.Item3, key.Item4, key.Item5);
             }
             return _materialColors;
         }

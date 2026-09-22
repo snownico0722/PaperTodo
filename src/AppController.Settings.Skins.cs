@@ -6,8 +6,6 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private bool _skinRestartPromptDeferred;
-
     private void SetPaperSkin(string id)
     {
         if (!PaperSkins.IsValid(id) || PaperSkins.Resolve(State) == id) return;
@@ -16,77 +14,37 @@ public sealed partial class AppController
         var restartRequired = PaperSkins.UsesNativeBackdrop(id) &&
             NativeMicaBackdrop.IsSupported &&
             !UsesNativeMicaWindows;
-        if (!restartRequired)
-        {
-            _skinRestartPromptDeferred = false;
-            return;
-        }
-        if (_skinRestartPromptDeferred)
+        if (!restartRequired || _settingsWindow == null)
         {
             return;
         }
 
-        _skinRestartPromptDeferred = true;
-        var result = _settingsWindow != null
-            ? MessageBox.Show(
+        if (!PaperNoticeDialog.ShowChoice(
                 _settingsWindow,
-                Strings.Get("SkinRestartRequired"),
-                Strings.Get("SettingsPaperSkin"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Question,
-                MessageBoxResult.Cancel)
-            : MessageBox.Show(
-                Strings.Get("SkinRestartRequired"),
-                Strings.Get("SettingsPaperSkin"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Question,
-                MessageBoxResult.Cancel);
-        if (result != MessageBoxResult.OK)
+                SettingsSidebarLocalized(
+                    "重启 PaperTodo",
+                    "Restart PaperTodo",
+                    "PaperTodo を再起動",
+                    "PaperTodo 다시 시작"),
+                SettingsSidebarLocalized(
+                    "原生材质将在重启 PaperTodo 后生效。要现在立即重启吗？",
+                    "The native material will take effect after restarting PaperTodo. Restart now?",
+                    "ネイティブ素材は PaperTodo の再起動後に反映されます。今すぐ再起動しますか？",
+                    "네이티브 재질은 PaperTodo를 다시 시작한 후 적용됩니다. 지금 다시 시작할까요?"),
+                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
+                SettingsSidebarLocalized(
+                    "立即重启",
+                    "Restart now",
+                    "今すぐ再起動",
+                    "지금 다시 시작")))
         {
             return;
         }
 
-        // A settings-triggered restart must not discard unpersisted edits. Unlike an
-        // explicit Exit, a failed preflight leaves the running application intact.
-        CommitSettingsExternalMarkdownEditor(saveImmediately: false);
-        foreach (var window in _windows.Values.ToList())
+        if (Application.Current is App app)
         {
-            window.CommitPendingEditsForSave();
+            app.RequestRestartAfterExit();
         }
-        if (!TrySaveNow(sync: true))
-        {
-            _skinRestartPromptDeferred = false;
-            return;
-        }
-
-        if (!AppRestart.TryLaunchAfterCurrentProcessExit(out var error))
-        {
-            _skinRestartPromptDeferred = false;
-            var message = Strings.Get("SkinRestartRequired");
-            if (!string.IsNullOrWhiteSpace(error))
-            {
-                message += $"{Environment.NewLine}{Environment.NewLine}{error}";
-            }
-            if (_settingsWindow != null)
-            {
-                MessageBox.Show(
-                    _settingsWindow,
-                    message,
-                    Strings.Get("SettingsPaperSkin"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-            else
-            {
-                MessageBox.Show(
-                    message,
-                    Strings.Get("SettingsPaperSkin"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-            return;
-        }
-
         Exit();
     }
     private UIElement CreateSkinSettings()
@@ -106,18 +64,29 @@ public sealed partial class AppController
             {
                 SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
             }));
+        if (PaperSkins.UsesNativeBackdrop(skin))
+        {
+            panel.Children.Add(SettingsFieldLabel(SettingsSidebarLocalized(
+                "材质透明度", "Material transparency", "素材の透明度", "재질 투명도")));
+            panel.Children.Add(CreateSettingsSelect(
+                [
+                    (MaterialTransparencyLevels.VeryLow, SettingsSidebarLocalized("最低", "Very low", "最低", "매우 낮음")),
+                    (MaterialTransparencyLevels.Low, SettingsSidebarLocalized("较低", "Low", "低め", "낮음")),
+                    (MaterialTransparencyLevels.Medium, SettingsSidebarLocalized("中", "Medium", "中", "중간")),
+                    (MaterialTransparencyLevels.High, SettingsSidebarLocalized("较高", "High", "高め", "높음")),
+                    (MaterialTransparencyLevels.VeryHigh, SettingsSidebarLocalized("最高", "Very high", "最高", "매우 높음"))
+                ],
+                MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
+                value => SetSettingFromUi("appearance.material_transparency", value)));
+        }
         if (skin != PaperSkins.Paper)
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
                 {
                     SetSettingFromUi("appearance.match_auxiliary_material", !State.MatchAuxiliaryMaterialStrength);
                 }), "TipMatchAuxiliaryMaterial"));
-        if (PaperSkins.UsesNativeBackdrop(skin) && skin != PaperSkins.Aero)
+        if (PaperSkins.UsesSampledAuxiliary(skin))
         {
-            panel.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsLiveBackgroundProcessing"), State.LiveBackgroundProcessing, () =>
-            {
-                SetSettingFromUi("appearance.live_background_processing", !State.LiveBackgroundProcessing);
-            }), "TipLiveBackgroundProcessing"));
             panel.Children.Add(new TextBlock
             {
                 Text = Strings.Get("SkinCaptureNotice"), TextWrapping = TextWrapping.Wrap,

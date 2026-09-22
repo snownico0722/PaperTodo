@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,7 +28,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private HwndSource? _source;
     private Border? _observedChrome;
     private readonly record struct NativeRequest(bool Requested, bool Dark, bool Eligible, bool Rounded,
-        string Material, Color BorderColor, bool ShowOutline);
+        string Material, Color BorderColor, bool ShowOutline, string Transparency);
     private NativeRequest? _applied;
     private bool _requested;
     private bool _dark;
@@ -114,7 +115,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
         var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
         var showOutline = _native.HighContrast || AppController.Current?.State.HideSurfaceOutline != true;
-        var state = new NativeRequest(requested, dark, eligible, rounded, _material, edge, showOutline);
+        var transparency = MaterialTransparencyLevels.Normalize(
+            AppController.Current?.State.MaterialTransparency);
+        var state = new NativeRequest(
+            requested, dark, eligible, rounded, _material, edge, showOutline, transparency);
         if (!force && _applied == state)
         {
             if (activationChanged && (IsActive || wasForcedActive))
@@ -348,21 +352,18 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _observedChrome = null;
     }
 
-    private static readonly Brush LightAcrylicSurface = CreateAcrylicSurface(false);
-    private static readonly Brush DarkAcrylicSurface = CreateAcrylicSurface(true);
-    internal static Brush GetActiveSurfaceBrush(string? material, bool dark) =>
-        material == MicaBackdropTypes.Acrylic ? dark ? DarkAcrylicSurface : LightAcrylicSurface : Brushes.Transparent;
-
-    private static Brush CreateAcrylicSurface(bool dark)
+    private static readonly Dictionary<(bool Dark, string Level), Brush> AcrylicSurfaceCache = new();
+    internal static Brush GetActiveSurfaceBrush(string? material, bool dark)
     {
-            // Windows 11 DWM native Acrylic includes a built-in heavy noise texture (grain)
-            // and dark luminosity tint. A semi-transparent tint wash filters out the gritty
-            // noise and lifts the darkness, producing a clean, luminous frosted glass.
-            // Clear Acrylic instead sets its native tint directly, with no WPF wash.
-            // Text and controls stay fully opaque in both modes.
-            var color = dark ? Color.FromArgb(144, 32, 33, 40) : Color.FromArgb(152, 255, 255, 255);
-            var brush = new SolidColorBrush(color);
-            brush.Freeze();
-            return brush;
+        if (material != MicaBackdropTypes.Acrylic) return Brushes.Transparent;
+        var level = MaterialTransparencyLevels.Normalize(AppController.Current?.State.MaterialTransparency);
+        var key = (dark, level);
+        if (AcrylicSurfaceCache.TryGetValue(key, out var cached)) return cached;
+        var alpha = MaterialTransparencyLevels.ScaleCover((byte)(dark ? 144 : 152), level);
+        var color = dark ? Color.FromArgb(alpha, 32, 33, 40) : Color.FromArgb(alpha, 255, 255, 255);
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        AcrylicSurfaceCache[key] = brush;
+        return brush;
     }
 }

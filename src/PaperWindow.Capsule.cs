@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Interop;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -34,6 +37,81 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    private CancellationTokenSource? _capsuleDragBackgroundCapture;
+    private DesktopBackgroundCapture.Snapshot? _capsuleDragBackgroundSnapshot;
+
+    private void BeginCapsuleDragBackground(IntPtr excludeHwnd)
+    {
+        EndCapsuleDragBackground();
+        if (!PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
+            SystemParameters.HighContrast ||
+            !DwmMicaApi.Instance.EffectsEnabled)
+        {
+            return;
+        }
+
+        var capture = new CancellationTokenSource();
+        _capsuleDragBackgroundCapture = capture;
+        _ = PrepareCapsuleDragBackgroundAsync(excludeHwnd, capture);
+    }
+
+    private async Task PrepareCapsuleDragBackgroundAsync(
+        IntPtr excludeHwnd,
+        CancellationTokenSource capture)
+    {
+        try
+        {
+            var snapshot = await DesktopBackgroundCapture.PrepareDragAsync(
+                excludeHwnd,
+                capture.Token);
+            if (snapshot == null ||
+                capture.IsCancellationRequested ||
+                !ReferenceEquals(capture, _capsuleDragBackgroundCapture))
+            {
+                return;
+            }
+
+            _capsuleDragBackgroundSnapshot = snapshot;
+            ApplyCapsuleDragBackground(snapshot);
+        }
+        catch (OperationCanceledException) when (capture.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void ApplyCapsuleDragBackground(DesktopBackgroundCapture.Snapshot snapshot)
+    {
+        if (_capsulePointerState == CapsulePointerState.NativeMoving &&
+            _paperChrome is SkinBorder paperSurface)
+        {
+            paperSurface.UseDragBackground(snapshot);
+        }
+
+        if (IsDeepCapsuleReordering)
+        {
+            _edgeCapsuleHost?.UseDragBackground(snapshot);
+            _deepCapsuleFloatingDragHost?.UseDragBackground(snapshot);
+        }
+    }
+
+    private void EndCapsuleDragBackground()
+    {
+        var capture = _capsuleDragBackgroundCapture;
+        _capsuleDragBackgroundCapture = null;
+        if (capture != null)
+        {
+            capture.Cancel();
+            capture.Dispose();
+        }
+
+        _capsuleDragBackgroundSnapshot = null;
+        if (_paperChrome is SkinBorder paperSurface)
+            paperSurface.EndDragBackground();
+        _edgeCapsuleHost?.EndDragBackground();
+        if (!IsDeepCapsuleDockingHandoff && !IsDeepCapsuleDockingReveal)
+            _deepCapsuleFloatingDragHost?.EndDragBackground();
+    }
+
     private enum CapsulePointerState
     {
         Idle,
@@ -395,6 +473,7 @@ public sealed partial class PaperWindow
                 try
                 {
                     _collapsedFromMaximized = false;
+                    BeginCapsuleDragBackground(new WindowInteropHelper(this).Handle);
                     DragMove();
                 }
                 catch (InvalidOperationException)
@@ -403,6 +482,7 @@ public sealed partial class PaperWindow
                 }
                 finally
                 {
+                    EndCapsuleDragBackground();
                     TryAttachExperimentalCapsuleMagnetAfterDrag();
                     SetCapsulePointerState(CapsulePointerState.Idle);
                     leftArea.Cursor = Cursors.Hand;

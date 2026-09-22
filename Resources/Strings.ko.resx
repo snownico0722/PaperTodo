@@ -1458,19 +1458,13 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>기본 배경은 Windows 11 22H2 이상이 필요합니다.</value>
   </data>
-  <data name="SettingsLiveBackgroundProcessing" xml:space="preserve">
-    <value>실시간 배경 처리</value>
-  </data>
-  <data name="TipLiveBackgroundProcessing" xml:space="preserve">
-    <value>주변 배경을 기기 메모리에서만 처리하며 저장하거나 업로드하지 않습니다. 해당 창이 스크린샷·녹화·화면 공유에 표시되지 않을 수 있으니 공유 전에 끄세요.</value>
-  </data>
-  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
     <value>캡슐·메뉴 전체 재질 효과</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
     <value>켬: 종이와 같은 재질. 끔: 효과를 줄이고 종이 바탕을 더 불투명하게 하여 읽기 쉽게 합니다. 가장자리 미리보기는 항상 가벼운 효과를 사용합니다.</value>
   </data>
   <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>캡처와 공유에 영향을 줄 수 있습니다. 공유 전에 끄세요.</value>
+    <value>캡슐과 메뉴는 표시할 때 뒤쪽의 로컬 배경을 한 번만 캡처하며, 캡슐을 드래그할 때는 저해상도 가상 데스크톱을 한 번만 캡처합니다. 로컬 메모리에서만 사용하며 저장하거나 업로드하지 않습니다.</value>
   </data>
 </root>

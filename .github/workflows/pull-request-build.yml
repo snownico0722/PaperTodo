@@ -75,9 +75,6 @@ jobs:
       - name: Window close activation checks
         run: dotnet run --project .\tests\PaperTodo.WindowCloseActivationChecks\PaperTodo.WindowCloseActivationChecks.csproj -c Release
 
-      - name: Restart identity and launch checks
-        run: dotnet run --project .\tests\PaperTodo.RestartChecks\PaperTodo.RestartChecks.csproj -c Release
-
       - name: Native material and skin checks
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native

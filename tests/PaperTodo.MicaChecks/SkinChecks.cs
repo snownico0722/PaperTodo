@@ -30,7 +30,7 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsLiveBackgroundProcessing").Append("TipLiveBackgroundProcessing").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
@@ -165,7 +165,7 @@ internal static class SkinChecks
                     Program.Assert(quiet.AsSpan(center, 4).SequenceEqual(full.AsSpan(center, 4)) && full[center+1] == 255,
                         "foreground marker remains fully opaque and unchanged");
                     Program.Assert(surface.IsHitTestVisible && surface.Child.IsHitTestVisible &&
-                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasBackgroundWorker,
+                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasBackgroundCapture,
                         "unattached auxiliary content remains hit-testable without starting a source-less worker");
                     var edge = (40*240)*4;
                     Program.Assert(quiet.AsSpan(edge,4).SequenceEqual(full.AsSpan(edge,4)), "host stroke does not fade with material strength");
@@ -230,11 +230,11 @@ internal static class SkinChecks
             foreach (var skin in PaperSkins.All)
             foreach (var match in new[] { false, true })
             {
-                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiveBackgroundProcessing = true };
+                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, MaterialTransparency = MaterialTransparencyLevels.High };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiveBackgroundProcessing == state.LiveBackgroundProcessing && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
                 Program.Assert(restored.Papers.Single().Content == state.Papers.Single().Content, "note payload preserved");
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","papers":[]}""", ++version);

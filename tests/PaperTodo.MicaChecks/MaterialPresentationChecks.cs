@@ -14,40 +14,37 @@ internal static class MaterialPresentationChecks
     internal static void Run(AppController controller)
     {
         var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
-        var ordinary = BackgroundCaptureLayout.Create(new Int32Rect(100, 100, 560, 440),
-            new DesktopBackgroundCapture.Region(0, 0, 560, 440, 64), desktop)!;
-        Program.Assert(ordinary.PixelWidth == ordinary.Bounds.Width && ordinary.PixelHeight == ordinary.Bounds.Height,
-            "ordinary glass keeps physical 1:1 detail rather than spending most of its resolution on overscan");
+        var ordinary = BackgroundCaptureLayout.Create(
+            new Int32Rect(100, 100, 560, 440),
+            new DesktopBackgroundCapture.Region(0, 0, 560, 440, 64),
+            desktop)!;
+        Program.Assert(
+            ordinary.PixelWidth == ordinary.Bounds.Width &&
+            ordinary.PixelHeight == ordinary.Bounds.Height,
+            "ordinary one-shot snapshots keep physical 1:1 detail");
+
         foreach (var size in new[] { new Size(2400, 1200), new Size(2048, 2048), new Size(3968, 896) })
         {
-            var region = new DesktopBackgroundCapture.Region(0, 0, (int)size.Width, (int)size.Height, 64);
-            var a = BackgroundCaptureLayout.Create(new Int32Rect(-3500, 100, region.Width, region.Height), region, desktop)!;
-            for (var offset = 1; offset < 100; offset++)
-            {
-                var b = BackgroundCaptureLayout.Create(new Int32Rect(-3500 + offset, 100 + offset, region.Width, region.Height), region, desktop)!;
-                var step = a.Bounds.Width / a.PixelWidth;
-                Program.Assert(b.Bounds.Width / b.PixelWidth == step && (b.Bounds.X - a.Bounds.X) % step == 0 &&
-                    (b.Bounds.Y - a.Bounds.Y) % step == 0 && (long)b.PixelWidth * b.PixelHeight <= BackgroundCaptureLayout.PixelBudget,
-                    "dragging retains downsample density and world-space phase, including budget boundaries");
-            }
+            var region = new DesktopBackgroundCapture.Region(0, 0, (int)size.Width, (int)size.Height, 96);
+            var layout = BackgroundCaptureLayout.Create(
+                new Int32Rect(-3500, 100, region.Width, region.Height),
+                region,
+                desktop)!;
+            Program.Assert(
+                (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget &&
+                layout.PixelWidth <= 2048 &&
+                layout.PixelHeight <= 2048,
+                "large static snapshots downsample only to the bounded pixel budget");
         }
-        Program.Assert(DesktopBackgroundCapture.CaptureInterval(false, 0) == 100 && DesktopBackgroundCapture.CaptureInterval(true, 20) == 100 &&
-            DesktopBackgroundCapture.CaptureInterval(false, 20) >= 100, "readback stays at 100ms even while motion reprojects each frame");
-        var overscan = BackgroundCaptureLayout.Create(new Int32Rect(400, 400, 360, 300),
-            new DesktopBackgroundCapture.Region(0, 0, 360, 300, 256), desktop)!;
-        Program.Assert(overscan.Bounds.X <= 400-200 && overscan.Bounds.Y <= 400-200 &&
-            overscan.Bounds.X+overscan.Bounds.Width >= 400+360+200 &&
-            (long)overscan.PixelWidth*overscan.PixelHeight <= BackgroundCaptureLayout.PixelBudget,
-            "bounded wider scene covers motion between low-rate samples");
 
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing);
+        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
         try
         {
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
-            controller.State.EnableAnimations = false; controller.State.LiveBackgroundProcessing = true; Theme.Invalidate();
+            controller.State.EnableAnimations = false; Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
@@ -69,7 +66,7 @@ internal static class MaterialPresentationChecks
             Until(() => aeroMenu.IsOpen, "Aero menu opens immediately without capture preparation"); Wait(80);
             AssertNoPopupFade(aeroMenu);
             var aeroSurface = Find(aeroMenu);
-            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero } && !aeroSurface.HasBackgroundWorker &&
+            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero } && !aeroSurface.HasBackgroundCapture &&
                 aeroSurface.MenuFallbackRenderCount == 0,
                 "Aero menu uses direct transparent transmission and never starts a background sampler");
             aeroMenu.IsOpen = false; Wait(60);
@@ -86,15 +83,15 @@ internal static class MaterialPresentationChecks
             settings = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
             var shell = (SkinBorder)settings.Content;
             Wait(120);
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundWorker,
+            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture,
                 "expanded Settings uses the native Acrylic backdrop without a software background-capture worker");
             var oldContent = shell.Child;
             show.Invoke(controller, [Enum.Parse(pageType, "Visual")]);
             Program.Assert(ReferenceEquals(shell, settings.Content) && !ReferenceEquals(oldContent, shell.Child) &&
-                !shell.IsBackgroundActive && !shell.HasBackgroundWorker,
+                !shell.IsBackgroundActive && !shell.HasBackgroundCapture,
                 "page switch replaces only Settings content and keeps the native material path capture-free");
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshBackground();
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundWorker && settings.Opacity == 1,
+            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture && settings.Opacity == 1,
                 "resizing Settings keeps the native material path capture-free and fully visible");
         }
         finally
@@ -102,7 +99,7 @@ internal static class MaterialPresentationChecks
             if (menu != null) menu.IsOpen = false;
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing) = saved;
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations) = saved;
             Theme.Invalidate();
         }
     }
@@ -196,7 +193,7 @@ internal static class MaterialPresentationChecks
                     var opacityOwners = new List<string>();
                     for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
                         if (node is UIElement ui) opacityOwners.Add($"{ui.GetType().Name}:{ui.Opacity:F3}/{ui.IsVisible}");
-                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; fallback={surface.MenuFallbackRenderCount}; worker={surface.HasBackgroundWorker}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressLiveBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
+                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; fallback={surface.MenuFallbackRenderCount}; capture={surface.HasBackgroundCapture}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressStaticBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
                     Program.Assert(surface.Skin == skin && surface.FirstMenuRenderUsedBackground && surface.MenuFallbackRenderCount == 0,
                         $"master {skin}/{theme}: prepared current recipe from first render, no later plain-paper frame");
                     Program.Assert(menu.Opacity == 1, "master menu does not hide material flicker with a foreground fade");

@@ -1458,19 +1458,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>ネイティブ背景には Windows 11 22H2 以降が必要です。</value>
   </data>
-  <data name="SettingsLiveBackgroundProcessing" xml:space="preserve">
-    <value>背景のリアルタイム処理</value>
-  </data>
-  <data name="TipLiveBackgroundProcessing" xml:space="preserve">
-    <value>背景を端末のメモリ内だけで処理し、保存・送信しません。対象のウィンドウがスクリーンショット・録画・画面共有に映らない場合があります。共有前にオフにしてください。</value>
-  </data>
-  <data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
     <value>カプセル・メニューのフル質感</value>
   </data>
   <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
     <value>オン：紙と同じ質感。オフ：効果を弱め、紙の地色を濃くして読みやすくします。端のプレビューは常に軽量表示です。</value>
   </data>
   <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>撮影・共有に影響します。共有前にオフにしてください。</value>
+    <value>カプセルとメニューは表示時に背後の局所背景を一度だけ取得し、カプセルのドラッグ時は低解像度の仮想デスクトップを一度だけ取得します。ローカルメモリ内でのみ使用し、保存やアップロードはしません。</value>
   </data>
 </root>

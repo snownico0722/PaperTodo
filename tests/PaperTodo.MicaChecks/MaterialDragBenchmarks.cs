@@ -15,10 +15,10 @@ using PaperTodo;
 internal static class MaterialDragBenchmarks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
-    private sealed record Case(string Skin, bool Capsule, bool Live, bool Animations = true);
+    private sealed record Case(string Skin, bool Capsule, bool Animations = true);
     private sealed record PositionSample(double Milliseconds, int X, int Y, int CursorX, int CursorY);
     private sealed record Counters(long Draws, long Refreshes, long RegionQueries, long Layouts,
-        long Projections, long SceneDraws, long Frames, long Captures, long Pixels, long BusyFrames);
+        long Projections, long SceneDraws, long Frames);
 
     internal const string FixtureMarker = ".papertodo-drag-fixture";
     internal static int RunIsolated(string output)
@@ -70,12 +70,11 @@ internal static class MaterialDragBenchmarks
         controller.State.ExperimentalInactivePaperOpacity = false;
         controller.State.ExperimentalRestingCapsuleOpacity = false;
         var cases = new[] {
-            new Case(PaperSkins.Paper, false, false), new Case(PaperSkins.Mica, false, true),
-            new Case(PaperSkins.Acrylic, false, true), new Case(PaperSkins.ClearAcrylic, false, true),
-            new Case(PaperSkins.TracingPaper, false, true), new Case(PaperSkins.Aero, false, true),
-            new Case(PaperSkins.Paper, true, false), new Case(PaperSkins.Acrylic, true, false),
-            new Case(PaperSkins.Acrylic, true, true), new Case(PaperSkins.Aero, true, true),
-            new Case(PaperSkins.Aero, false, true, false)
+            new Case(PaperSkins.Paper, false), new Case(PaperSkins.Mica, false),
+            new Case(PaperSkins.Acrylic, false), new Case(PaperSkins.ClearAcrylic, false),
+            new Case(PaperSkins.TracingPaper, false), new Case(PaperSkins.Aero, false),
+            new Case(PaperSkins.Paper, true), new Case(PaperSkins.Acrylic, true),
+            new Case(PaperSkins.Aero, true), new Case(PaperSkins.Aero, false, false)
         };
         GetCursorPos(out var oldCursor);
         var timerChanged = timeBeginPeriod(1) == 0;
@@ -87,7 +86,6 @@ internal static class MaterialDragBenchmarks
             {
                 controller.State.PaperSkin = c.Skin;
                 controller.State.EnableAnimations = c.Animations;
-                controller.State.LiveBackgroundProcessing = c.Live;
                 Theme.Invalidate();
                 var paper = new PaperData { Type = PaperTypes.Todo, Title = "Drag measurement", X = 240,
                     Y = 180, Width = 400, Height = 300, AlwaysOnTop = true };
@@ -102,12 +100,13 @@ internal static class MaterialDragBenchmarks
                         Program.Assert(window.IsNativeMicaEffective, "native backdrop active for " + c.Skin);
                     var surfaces = Descendants(window).OfType<SkinBorder>().ToArray();
                     Program.Assert(surfaces.Length > 0, "production skin surface exists");
-                    if (c.Capsule && c.Skin == PaperSkins.Acrylic && c.Live)
-                        Program.Assert(surfaces.Any(s => s.IsBackgroundActive), "capsule background capture active before dragging");
+                    if (c.Capsule && c.Skin == PaperSkins.Acrylic)
+                        Program.Assert(surfaces.Any(s => s.IsBackgroundActive),
+                            "capsule static background is ready before dragging");
                     var target = (FrameworkElement)typeof(PaperWindow).GetField(
                         c.Capsule ? "_capsuleLeftArea" : "_topBar", Private)!.GetValue(window)!;
                     // First gesture warms the real native move path; two subsequent gestures
-                    // are measured without recreating the HWND, editor or capture session.
+                    // are measured without recreating the HWND or editor.
                     for (var round = -1; round < 2; round++)
                     {
                         window.Left = 240; window.Top = 180; Wait(180);
@@ -144,7 +143,6 @@ internal static class MaterialDragBenchmarks
         var hwnd = new WindowInteropHelper(window).Handle;
         var source = HwndSource.FromHwnd(hwnd)!;
         var content = window.Content;
-        var captures = surfaces.Select(s => s.BackgroundSessionState?.Capture).OfType<DesktopBackgroundCapture>().ToArray();
         long layouts = 0;
         EventHandler layout = (_, _) => layouts++;
         window.LayoutUpdated += layout;
@@ -216,16 +214,14 @@ internal static class MaterialDragBenchmarks
             Program.Assert(ReferenceEquals(content, window.Content) && new WindowInteropHelper(window).Handle == hwnd,
                 "drag preserves window and content identity");
             Program.Assert(surfaces.All(s => s.BackgroundFailure == null), "no background capture failure while dragging");
-            Program.Assert(captures.All(capture => !capture.IsStopped), "drag does not restart capture worker");
             var intervals = positions.Zip(positions.Skip(1), (a, b) => b.Milliseconds - a.Milliseconds).ToArray();
             var inputIntervals = times.Zip(times.Skip(1), (a, b) => b - a).ToArray();
             var changes = new Counters(after.Draws-before.Draws, after.Refreshes-before.Refreshes,
                 after.RegionQueries-before.RegionQueries, after.Layouts-before.Layouts,
                 after.Projections-before.Projections, after.SceneDraws-before.SceneDraws,
-                after.Frames-before.Frames, after.Captures-before.Captures, after.Pixels-before.Pixels,
-                after.BusyFrames-before.BusyFrames);
-            Console.WriteLine($"DRAG {c.Skin}/{(c.Capsule ? "capsule" : "paper")}/live={c.Live}/anim={c.Animations}/r={round}: moves={positions.Count}, cpu={cpuMs:F1}ms, draws={changes.Draws}, refresh={changes.Refreshes}, regions={changes.RegionQueries}, captures={changes.Captures}");
-            return new { c.Skin, c.Capsule, c.Live, c.Animations, Round = round, DurationMs = elapsed,
+                after.Frames-before.Frames);
+            Console.WriteLine($"DRAG {c.Skin}/{(c.Capsule ? "capsule" : "paper")}/anim={c.Animations}/r={round}: moves={positions.Count}, cpu={cpuMs:F1}ms, draws={changes.Draws}, refresh={changes.Refreshes}, regions={changes.RegionQueries}, frames={changes.Frames}");
+            return new { c.Skin, c.Capsule, c.Animations, Round = round, DurationMs = elapsed,
                 ProcessCpuMs = cpuMs, DwmCpuMs = dwm.HasValue && endDwm.HasValue ? endDwm-dwm : null,
                 UiAllocatedBytes = uiBytes, ProcessAllocatedBytes = bytes, NativeMoves = positions.Count,
                 NativeSizeMessages = nativeSizeMessages, EnterSizeMove = enters, ExitSizeMove = exits,
@@ -241,8 +237,7 @@ internal static class MaterialDragBenchmarks
             surfaces.Sum(s => TestCounter(s, "_dragDraws")), surfaces.Sum(s => TestCounter(s, "_dragRefreshes")),
             surfaces.Sum(s => TestCounter(s.BackgroundSessionState, "_dragRegions")), layouts,
             surfaces.Sum(s => s.BackgroundProjectionCount), surfaces.Sum(s => s.BackgroundSceneDrawCount),
-            surfaces.Sum(s => s.BackgroundFrameCount), captures.Sum(s => s.CaptureCount),
-            captures.Sum(s => s.SampledPixels), surfaces.Sum(s => s.BackgroundSessionState?.BackgroundBusyFrames ?? 0));
+            surfaces.Sum(s => s.BackgroundFrameCount));
     }
     private static long TestCounter(object? value, string name) => value == null ? 0 :
         Convert.ToInt64(value.GetType().GetField(name, Private | BindingFlags.Public)?.GetValue(value) ?? 0);

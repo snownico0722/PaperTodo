@@ -26,7 +26,6 @@ internal static class MaterialBenchmarks
         controller.State.Theme = "light";
         controller.State.ColorScheme = ColorSchemes.Warm;
         controller.State.EnableAnimations = false;
-        controller.State.LiveBackgroundProcessing = false;
         Theme.Invalidate();
         var measurements = new List<Measurement>();
         foreach (var count in new[] { 1, 10, 30 })
@@ -113,7 +112,7 @@ internal static class MaterialBenchmarks
     private static double[] MeasureMenu(AppController controller)
     {
         controller.State.PaperSkin = PaperSkins.Acrylic;
-        controller.State.LiveBackgroundProcessing = true; Theme.Invalidate();
+        Theme.Invalidate();
         var owner = new Window { Left = 60, Top = 60, Width = 200, Height = 100, ShowInTaskbar = false, Content = new Border() };
         var menu = controller.CreateTrayMenu();
         menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;

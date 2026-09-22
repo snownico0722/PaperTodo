@@ -80,8 +80,16 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public int SetBackdrop(IntPtr hwnd, int backdrop) =>
         DwmSetWindowAttribute(hwnd, SystemBackdropAttribute, ref backdrop, sizeof(int));
 
-    public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark) =>
-        SetAccent(hwnd, enabled ? 4 : 0, dark ? 0x30282120u : 0x28FFFFFFu);
+    public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
+    {
+        if (!enabled) return SetAccent(hwnd, 0, 0);
+        var baseAlpha = (byte)(dark ? 0x30 : 0x28);
+        var alpha = MaterialTransparencyLevels.ScaleCover(
+            baseAlpha,
+            AppController.Current?.State.MaterialTransparency);
+        var rgb = dark ? 0x00282120u : 0x00FFFFFFu;
+        return SetAccent(hwnd, 4, ((uint)alpha << 24) | rgb);
+    }
 
     private unsafe int SetAccent(IntPtr hwnd, int state, uint color)
     {

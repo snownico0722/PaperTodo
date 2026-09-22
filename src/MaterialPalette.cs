@@ -8,7 +8,7 @@ namespace PaperTodo;
 internal readonly record struct MaterialPalette(Color Surface, Color NativeOverlay, Color Preview,
     byte TransmissionAlpha, double Diffusion)
 {
-    internal static MaterialPalette For(string skin, string scheme, bool dark, Color paper)
+    internal static MaterialPalette For(string skin, string scheme, bool dark, Color paper, string? transparency)
     {
         var neutral = scheme == ColorSchemes.Neutral;
         var hue = scheme switch
@@ -30,6 +30,8 @@ internal readonly record struct MaterialPalette(Color Surface, Color NativeOverl
             PaperSkins.TracingPaper => (.04, dark ? 192 : 179, 0, 18d),
             _ => (0d, 255, 0, 0d)
         };
+        alpha = MaterialTransparencyLevels.ScaleCover((byte)alpha, transparency);
+        wash = MaterialTransparencyLevels.ScaleCover((byte)wash, transparency);
         var surface = skin is PaperSkins.Paper or PaperSkins.Pixel ? paper :
             Mix(baseColor, hue, neutral && skin != PaperSkins.Aero ? 0 : chroma * (dark ? .62 : 1));
         // Preserve the neutral system skin exactly; Aero's neutral remains cool clear glass.
@@ -38,7 +40,8 @@ internal readonly record struct MaterialPalette(Color Surface, Color NativeOverl
         // Preview color/alpha is stable across geometry and full/quiet modes. It does
         // not inherit the live scene's readiness or a size-dependent optical tint.
         var previewColor = skin is PaperSkins.Paper or PaperSkins.Pixel ? paper : Mix(paper, surface, .22);
-        var preview = Color.FromArgb((byte)(dark ? 248 : 244), previewColor.R, previewColor.G, previewColor.B);
+        var previewAlpha = MaterialTransparencyLevels.ScaleCover((byte)(dark ? 248 : 244), transparency);
+        var preview = Color.FromArgb(previewAlpha, previewColor.R, previewColor.G, previewColor.B);
         return new(surface, overlay, preview, (byte)alpha, blur);
     }
     private static Color Mix(Color a, Color b, double weight) => Color.FromRgb(

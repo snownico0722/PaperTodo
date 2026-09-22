@@ -395,6 +395,53 @@ public static class TextRenderingProfiles
     }
 }
 
+public static class MaterialTransparencyLevels
+{
+    public const string VeryLow = "veryLow";
+    public const string Low = "low";
+    public const string Medium = "medium";
+    public const string High = "high";
+    public const string VeryHigh = "veryHigh";
+
+    public static readonly string[] All = { VeryLow, Low, Medium, High, VeryHigh };
+
+    public static string Normalize(string? level) => level switch
+    {
+        VeryLow or Low or High or VeryHigh => level,
+        _ => Medium
+    };
+
+    // The saved value describes transparency, so lower transparency means more material cover.
+    // Medium is exactly the pre-setting appearance.
+    public static double CoverScale(string? level) => Normalize(level) switch
+    {
+        VeryLow => 1.30,
+        Low => 1.15,
+        High => 0.85,
+        VeryHigh => 0.70,
+        _ => 1.0
+    };
+
+    public static byte ScaleCover(byte alpha, string? level)
+    {
+        return Normalize(level) switch
+        {
+            Low => (byte)Math.Min(254, Math.Round(alpha * 1.15)),
+            VeryLow => ScaleVeryLow(alpha),
+            High => (byte)Math.Clamp((int)Math.Round(alpha * 0.85), 0, 255),
+            VeryHigh => (byte)Math.Clamp((int)Math.Round(alpha * 0.70), 0, 255),
+            _ => alpha
+        };
+    }
+
+    private static byte ScaleVeryLow(byte alpha)
+    {
+        var low = Math.Min(254, (int)Math.Round(alpha * 1.15));
+        var stronger = Math.Min(255, (int)Math.Round(alpha * 1.30));
+        return (byte)Math.Min(255, Math.Max(low + 1, stronger));
+    }
+}
+
 public readonly record struct TodoVisualMetrics(
     double TextFontSize,
     double TextVerticalPadding,
@@ -417,8 +464,7 @@ public sealed class AppState
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
     public string? PaperSkin { get; set; }
-    // Layered auxiliary materials can process a bounded local background in memory.
-    public bool LiveBackgroundProcessing { get; set; } = true;
+    public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
     // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
     public bool HideSurfaceOutline { get; set; } = true;
     public bool MatchAuxiliaryMaterialStrength { get; set; }

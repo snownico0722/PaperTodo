@@ -1,357 +1,497 @@
 using System;
-using System.Buffers;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace PaperTodo;
 
-/// <summary>Bounded local background sampling. Worker owns GDI, dispatcher owns WPF.
-/// One latest-frame mailbox and one coalesced presentation notification; no UI-thread capture/wait.
-/// Samples are neither saved nor uploaded. A changed exclusion lease stops capture.</summary>
+/// <summary>
+/// One-shot local desktop capture for layered material surfaces. A capture exists only long enough
+/// to publish one immutable frame; there is no polling loop, motion wake-up, or change detection.
+/// </summary>
 internal sealed class DesktopBackgroundCapture : IDisposable
 {
+    internal const uint CaptureRasterOperation = 0x00CC0020; // SRCCOPY, never CAPTUREBLT.
     internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
+
     internal sealed class Frame : IDisposable
     {
-        internal readonly BackgroundCaptureLayout.Scene Layout;
-        internal readonly byte[] Pixels;
-        private int _disposed;
-        internal bool IsDisposed => Volatile.Read(ref _disposed) != 0;
-        internal Frame(BackgroundCaptureLayout.Scene layout, byte[] pixels) => (Layout, Pixels) = (layout, pixels);
+        internal BackgroundCaptureLayout.Scene Layout { get; }
+        internal BitmapSource Bitmap { get; }
+        internal bool PreBlurred { get; }
+
+        internal Frame(BackgroundCaptureLayout.Scene layout, BitmapSource bitmap, bool preBlurred = false)
+        {
+            Layout = layout;
+            Bitmap = bitmap;
+            PreBlurred = preBlurred;
+        }
+
+        // Kept for focused raster tests; BitmapSource copies the supplied pixels immediately.
+        internal Frame(BackgroundCaptureLayout.Scene layout, byte[] pixels)
+            : this(layout, CreateBitmap(layout.PixelWidth, layout.PixelHeight, pixels), false)
+        {
+        }
+
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            ArrayPool<byte>.Shared.Return(Pixels, clearArray: true);
+            // Immutable BitmapSource owns its copied pixels; no pooled frame lifetime remains.
         }
     }
+
+    internal sealed record Snapshot(BackgroundCaptureLayout.Scene Layout, BitmapSource Bitmap, bool PreBlurred);
+
     private readonly IntPtr _hwnd;
     private readonly uint _oldAffinity;
     private readonly Dispatcher _dispatcher;
     private readonly Action<Exception> _failed;
     private readonly Action? _frameReady;
-    private int _notificationQueued;
     private readonly CancellationTokenSource _cancel = new();
-    private readonly AutoResetEvent _wake = new(false);
-    private readonly Task _worker;
-    private Region _region;
-    private readonly FrameSlot _frames = new();
+    private readonly Task _captureTask;
+    private readonly object _gate = new();
+    private Frame? _latest;
     private int _disposed;
-    private long _motionUntil, _captures, _published, _sampledPixels;
-    private static long ClockMilliseconds => (long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency));
-    // CAPTUREBLT can hide/show the hardware/software cursor during every readback.
-    // This path already requires DWM composition; copy the composed desktop without
-    // that legacy layered-window flag. Never hide, move or redraw the user's cursor.
-    internal const uint CaptureRasterOperation = 0x00CC0020; // SRCCOPY
-    internal const int ActiveInterval = 100;
-    internal const int MovingInterval = ActiveInterval;
-    internal static int CaptureInterval(bool moving, int quiet) => !moving && quiet >= 10 ? 250 : ActiveInterval;
+
     internal IntPtr WindowHandle => _hwnd;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
-    internal long CaptureCount => Interlocked.Read(ref _captures);
-    internal long PublishedCount => Interlocked.Read(ref _published);
-    internal long SampledPixels => Interlocked.Read(ref _sampledPixels);
-    internal Frame? TakeLatest() => _frames.Take();
-    internal Task Completion => _worker;
+    internal Task Completion => _captureTask;
 
-    internal sealed class FrameSlot : IDisposable
-    {
-        private readonly object _gate = new();
-        private Frame? _latest;
-        private bool _stopped;
-        internal bool Publish(Frame frame)
-        {
-            Frame? previous;
-            bool accepted;
-            lock (_gate)
-            {
-                accepted = !_stopped;
-                previous = accepted ? _latest : frame;
-                if (accepted) _latest = frame;
-            }
-            previous?.Dispose();
-            return accepted;
-        }
-        internal Frame? Take()
-        {
-            lock (_gate)
-            {
-                var frame = _latest;
-                _latest = null;
-                return frame;
-            }
-        }
-        public void Dispose()
-        {
-            Frame? last;
-            lock (_gate)
-            {
-                _stopped = true;
-                last = _latest;
-                _latest = null;
-            }
-            last?.Dispose();
-        }
-    }
-
-    internal DesktopBackgroundCapture(IntPtr hwnd, Region region, Dispatcher dispatcher, Action<Exception> failed, Action? frameReady = null)
+    internal DesktopBackgroundCapture(
+        IntPtr hwnd,
+        Region region,
+        Dispatcher dispatcher,
+        Action<Exception> failed,
+        Action? frameReady = null)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             throw new PlatformNotSupportedException("Background exclusion requires Windows 10 2004 or later.");
         if (!GetWindowDisplayAffinity(hwnd, out _oldAffinity) || !SetWindowDisplayAffinity(hwnd, 0x11))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot exclude the surface from its own background.");
-        _hwnd = hwnd; _region = region; _dispatcher = dispatcher; _failed = failed; _frameReady = frameReady;
-        try
-        {
-            _worker = Task.Factory.StartNew(CaptureLoop, CancellationToken.None,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-        catch
-        {
-            SetWindowDisplayAffinity(hwnd, _oldAffinity); _cancel.Dispose(); _wake.Dispose(); throw;
-        }
+
+        _hwnd = hwnd;
+        _dispatcher = dispatcher;
+        _failed = failed;
+        _frameReady = frameReady;
+        _captureTask = Task.Run(() => CaptureOnce(region, _cancel.Token));
     }
-    internal bool SetRegion(Region region)
+
+    internal Frame? TakeLatest()
     {
-        if (Volatile.Read(ref _region) == region || IsStopped) return false;
-        Volatile.Write(ref _region, region);
-        MarkMoving();
-        return true;
+        lock (_gate)
+        {
+            var frame = _latest;
+            _latest = null;
+            return frame;
+        }
     }
-    internal void MarkMoving()
-    {
-        if (IsStopped) return;
-        var now = ClockMilliseconds;
-        // One wake per motion burst, not one kernel wake per WM_WINDOWPOSCHANGED.
-        // The worker still reads the latest region on its independent 100ms cadence.
-        if (Interlocked.Exchange(ref _motionUntil, now + 160) <= now) _wake.Set();
-    }
-    private void CaptureLoop()
+
+    private void CaptureOnce(Region region, CancellationToken token)
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
-        CaptureSurface? surface = null;
         try
         {
-            var waits = new WaitHandle[] { _cancel.Token.WaitHandle, _wake };
-            var quiet = 0; var next = ClockMilliseconds; var driverPauseUntil = 0L; var lastSample = next - ActiveInterval;
-            BackgroundCaptureLayout.Scene? oldLayout = null;
-            Int32Rect oldDesktop = default;
-            Region? oldGeometry = null;
-            DwmFlush(); // Exclusion is established before the first background sample.
-            while (!_cancel.IsCancellationRequested)
-            {
-                var now = ClockMilliseconds;
-                var moving = now < Interlocked.Read(ref _motionUntil);
-                // Movement may wake idle detection, but NEVER turns it into high-rate readback.
-                // WPF reprojects the larger scene independently between these samples.
-                if (moving) next = Math.Max(Math.Max(driverPauseUntil, lastSample + ActiveInterval), Math.Min(next, now));
-                if (now < next)
-                {
-                    if (WaitHandle.WaitAny(waits, (int)Math.Min(int.MaxValue, next - now)) == 0) break;
-                    continue;
-                }
-                var started = Stopwatch.GetTimestamp();
-                lastSample = now;
-                var geometry = Volatile.Read(ref _region);
-                next = now + ActiveInterval;
-                if (!TryGetBounds(_hwnd, out var window) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd)) continue;
-                if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
-                    throw new InvalidOperationException("Background exclusion changed; stopping to prevent recursive feedback.");
-                var desktop = DesktopBounds;
-                var layout = BackgroundCaptureLayout.Create(window, geometry, desktop,
-                    oldGeometry?.Padding == geometry.Padding && oldDesktop == desktop ? oldLayout : null);
-                if (layout == null) continue;
-                var changed = oldLayout != layout;
-                surface ??= new CaptureSurface();
-                surface.Capture(layout);
-                Interlocked.Add(ref _sampledPixels, (long)layout.PixelWidth * layout.PixelHeight);
-                GdiFlush();
-                changed |= surface.RememberChangedPixels();
-                Interlocked.Increment(ref _captures);
-                if (_cancel.IsCancellationRequested) break;
-                if (changed)
-                {
-                    var frame = new Frame(layout, surface.Snapshot());
-                    if (!_frames.Publish(frame)) break;
-                    Interlocked.Increment(ref _published);
-                    NotifyFrameReady();
-                    quiet = 0;
-                }
-                else quiet++;
-                oldGeometry = geometry; oldLayout = layout; oldDesktop = desktop;
-                // Unchanged pixels never enter WPF. A still desktop gradually drops to
-                // low-rate change detection; motion wakes it. Expensive GDI drivers also
-                // get breathing room rather than a continuous GPU-readback loop.
-                var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                // Readback remains low-rate even during dragging. Slow drivers still get
-                // backpressure; motion uses the retained scene at render cadence.
-                var interval = CaptureInterval(moving, quiet);
-                var completed = ClockMilliseconds;
-                driverPauseUntil = completed + Math.Max(1, (long)(elapsed * .5));
-                next = Math.Max(driverPauseUntil, completed + (long)(interval - elapsed));
-            }
+            token.ThrowIfCancellationRequested();
+            DwmFlush();
+            if (!TryGetBounds(_hwnd, out var window) || IsIconic(_hwnd) || !IsWindowVisible(_hwnd))
+                return;
+            if (!GetWindowDisplayAffinity(_hwnd, out var affinity) || affinity != 0x11)
+                throw new InvalidOperationException("Background exclusion changed before the static snapshot.");
+
+            var layout = BackgroundCaptureLayout.Create(window, region, DesktopBounds);
+            if (layout == null) return;
+            using var surface = new CaptureSurface();
+            surface.Capture(layout.Bounds, layout.PixelWidth, layout.PixelHeight);
+            GdiFlush();
+            token.ThrowIfCancellationRequested();
+            Publish(new Frame(layout, surface.CreateBitmap()));
         }
-        catch (OperationCanceledException) when (_cancel.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or ExternalException or ArgumentException)
         {
-            if (!_cancel.IsCancellationRequested && !_dispatcher.HasShutdownStarted)
+            if (!IsStopped && !_dispatcher.HasShutdownStarted)
             {
-                try { _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (!IsStopped) _failed(ex); })); }
-                catch (InvalidOperationException) { /* Dispatcher shutdown won. */ }
+                try
+                {
+                    _dispatcher.BeginInvoke(
+                        DispatcherPriority.Background,
+                        new Action(() => { if (!IsStopped) _failed(ex); }));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Dispatcher shutdown won.
+                }
             }
         }
         finally
         {
-            surface?.Dispose();
-            if (IsStopped) _frames.Dispose();
             if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
+            NotifyCompleted();
         }
     }
-    private void NotifyFrameReady()
+
+    private void Publish(Frame frame)
     {
-        if (_frameReady == null || IsStopped || _dispatcher.HasShutdownStarted ||
-            Interlocked.Exchange(ref _notificationQueued, 1) != 0) return;
+        lock (_gate)
+        {
+            if (IsStopped) return;
+            _latest = frame;
+        }
+    }
+
+    private void NotifyCompleted()
+    {
+        if (_frameReady == null || IsStopped || _dispatcher.HasShutdownStarted) return;
         try
         {
-            _dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
-            {
-                Interlocked.Exchange(ref _notificationQueued, 0);
-                if (!IsStopped) _frameReady();
-            }));
+            _dispatcher.BeginInvoke(
+                DispatcherPriority.Render,
+                new Action(() => { if (!IsStopped) _frameReady(); }));
         }
-        catch (InvalidOperationException) { Interlocked.Exchange(ref _notificationQueued, 0); }
+        catch (InvalidOperationException)
+        {
+            // Dispatcher shutdown won.
+        }
     }
+
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cancel.Cancel();
-        _frames.Dispose();
+        lock (_gate) _latest = null;
         if (GetWindowDisplayAffinity(_hwnd, out var current) && current == 0x11)
             SetWindowDisplayAffinity(_hwnd, _oldAffinity);
-        _ = _worker.ContinueWith(_ => { _cancel.Dispose(); _wake.Dispose(); }, CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        _ = _captureTask.ContinueWith(
+            _ => _cancel.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
-    internal static Int32Rect DesktopBounds => new(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
 
-    internal static Task<Frame?> PreparePopupAsync(Int32Rect requested, CancellationToken token) => Task.Run(() =>
-    {
-        var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
-        try
+    internal static Task<Frame?> PreparePopupAsync(Int32Rect requested, CancellationToken token) =>
+        Task.Run(() =>
         {
-            token.ThrowIfCancellationRequested();
-            var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
-            var layout = BackgroundCaptureLayout.Create(requested, geometry, DesktopBounds);
-            if (layout == null) return null;
-            using var surface = new CaptureSurface();
-            surface.Capture(layout); GdiFlush();
-            token.ThrowIfCancellationRequested();
-            return new Frame(layout, surface.Snapshot());
+            var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var geometry = new Region(0, 0, requested.Width, requested.Height, 0);
+                var layout = BackgroundCaptureLayout.Create(requested, geometry, DesktopBounds);
+                if (layout == null) return null;
+                using var surface = new CaptureSurface();
+                surface.Capture(layout.Bounds, layout.PixelWidth, layout.PixelHeight);
+                GdiFlush();
+                token.ThrowIfCancellationRequested();
+                return new Frame(layout, surface.CreateBitmap());
+            }
+            finally
+            {
+                if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
+            }
+        }, token);
+
+    // One drag snapshot covers the entire virtual desktop at half width/height. The blur is baked
+    // into this immutable texture once; movement only changes the screen-space crop.
+    internal static Task<Snapshot?> PrepareDragAsync(IntPtr excludeHwnd, CancellationToken token) =>
+        Task.Run(() =>
+        {
+            var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
+            uint previousAffinity = 0;
+            var affinityChanged = false;
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                if (excludeHwnd != IntPtr.Zero &&
+                    OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) &&
+                    GetWindowDisplayAffinity(excludeHwnd, out previousAffinity))
+                {
+                    affinityChanged = SetWindowDisplayAffinity(excludeHwnd, 0x11);
+                    if (affinityChanged) DwmFlush();
+                }
+
+                var desktop = DesktopBounds;
+                if (desktop.Width <= 0 || desktop.Height <= 0) return null;
+                var width = Math.Max(1, (desktop.Width + 1) / 2);
+                var height = Math.Max(1, (desktop.Height + 1) / 2);
+                using var surface = new CaptureSurface();
+                surface.Capture(desktop, width, height);
+                GdiFlush();
+                token.ThrowIfCancellationRequested();
+
+                var pixels = surface.ReadPixels();
+                ApplyLightGaussianBlur(pixels, width, height);
+                token.ThrowIfCancellationRequested();
+                return new Snapshot(
+                    new BackgroundCaptureLayout.Scene(desktop, width, height),
+                    CreateBitmap(width, height, pixels),
+                    PreBlurred: true);
+            }
+            finally
+            {
+                if (affinityChanged &&
+                    GetWindowDisplayAffinity(excludeHwnd, out var current) &&
+                    current == 0x11)
+                {
+                    SetWindowDisplayAffinity(excludeHwnd, previousAffinity);
+                }
+                if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
+            }
+        }, token);
+
+    private static void ApplyLightGaussianBlur(byte[] pixels, int width, int height)
+    {
+        if (width < 3 || height < 3) return;
+        // Radius 2 / sigma 1.1 is deliberately light. Combined with 50% downsampling it removes
+        // text-level detail without turning the drag surface into a featureless color block.
+        const int radius = 2;
+        const double sigma = 1.1;
+        var kernel = new double[radius * 2 + 1];
+        var sum = 0d;
+        for (var i = -radius; i <= radius; i++)
+        {
+            var value = Math.Exp(-(i * i) / (2 * sigma * sigma));
+            kernel[i + radius] = value;
+            sum += value;
         }
-        finally { if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi); }
-    }, token);
+        for (var i = 0; i < kernel.Length; i++) kernel[i] /= sum;
+
+        var temp = new byte[pixels.Length];
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var dst = (y * width + x) * 4;
+            for (var c = 0; c < 3; c++)
+            {
+                var value = 0d;
+                for (var k = -radius; k <= radius; k++)
+                {
+                    var sx = Math.Clamp(x + k, 0, width - 1);
+                    value += pixels[(y * width + sx) * 4 + c] * kernel[k + radius];
+                }
+                temp[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
+            }
+            temp[dst + 3] = pixels[dst + 3];
+        }
+
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var dst = (y * width + x) * 4;
+            for (var c = 0; c < 3; c++)
+            {
+                var value = 0d;
+                for (var k = -radius; k <= radius; k++)
+                {
+                    var sy = Math.Clamp(y + k, 0, height - 1);
+                    value += temp[(sy * width + x) * 4 + c] * kernel[k + radius];
+                }
+                pixels[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
+            }
+        }
+    }
+
+    private static BitmapSource CreateBitmap(int width, int height, byte[] pixels)
+    {
+        var bitmap = BitmapSource.Create(
+            width, height, 96, 96, PixelFormats.Bgr32, null, pixels, checked(width * 4));
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    internal static Int32Rect DesktopBounds =>
+        new(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
 
     internal static bool TryGetBounds(IntPtr hwnd, out Int32Rect bounds)
     {
-        if (GetWindowRect(hwnd, out var r)) { bounds = new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top); return true; }
-        bounds = default; return false;
+        if (GetWindowRect(hwnd, out var r))
+        {
+            bounds = new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+            return true;
+        }
+        bounds = default;
+        return false;
     }
-    internal static bool IsVisible(IntPtr hwnd) => hwnd != IntPtr.Zero && IsWindowVisible(hwnd) && !IsIconic(hwnd);
-    internal static uint ReadAffinity(IntPtr hwnd) => GetWindowDisplayAffinity(hwnd, out var value) ? value : uint.MaxValue;
+
+    internal static bool IsVisible(IntPtr hwnd) =>
+        hwnd != IntPtr.Zero && IsWindowVisible(hwnd) && !IsIconic(hwnd);
+
+    internal static uint ReadAffinity(IntPtr hwnd) =>
+        GetWindowDisplayAffinity(hwnd, out var value) ? value : uint.MaxValue;
 
     private sealed class CaptureSurface : IDisposable
     {
-        private IntPtr _screen, _dc, _bitmap, _previous, _bits;
-        private int _width, _height;
-        private byte[] _last = [];
+        private IntPtr _screen;
+        private IntPtr _dc;
+        private IntPtr _bitmap;
+        private IntPtr _previous;
+        private IntPtr _bits;
+        private int _width;
+        private int _height;
+
         internal CaptureSurface()
         {
             _screen = GetDC(IntPtr.Zero);
             if (_screen != IntPtr.Zero) _dc = CreateCompatibleDC(_screen);
-            if (_dc == IntPtr.Zero) { Dispose(); throw new Win32Exception(Marshal.GetLastWin32Error()); }
-        }
-        internal void Capture(BackgroundCaptureLayout.Scene tile)
-        {
-            if (_width != tile.PixelWidth || _height != tile.PixelHeight)
+            if (_dc == IntPtr.Zero)
             {
-                ReleaseBitmap();
-                var info = new BitmapInfo { Size = 40, Width = tile.PixelWidth, Height = -tile.PixelHeight, Planes = 1, Bits = 32 };
-                _bitmap = CreateDIBSection(_screen, ref info, 0, out _bits, IntPtr.Zero, 0);
-                if (_bitmap == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
-                _previous = SelectObject(_dc, _bitmap);
-                if (_previous == IntPtr.Zero || _previous == new IntPtr(-1))
-                { DeleteObject(_bitmap); _bitmap = _bits = IntPtr.Zero; throw new Win32Exception(Marshal.GetLastWin32Error()); }
-                _width = tile.PixelWidth; _height = tile.PixelHeight;
-                SetStretchBltMode(_dc, 4 /* HALFTONE */);
-                SetBrushOrgEx(_dc, 0, 0, IntPtr.Zero);
+                Dispose();
+                throw new Win32Exception(Marshal.GetLastWin32Error());
             }
-            var b = tile.Bounds;
-            // The last aligned cell can extend a few pixels beyond the virtual desktop.
-            // Clear it before GDI clips the screen source; stale DIB pixels must not leak.
+        }
+
+        internal void Capture(Int32Rect source, int targetWidth, int targetHeight)
+        {
+            EnsureBitmap(targetWidth, targetHeight);
             var desktop = DesktopBounds;
-            if (b.X < desktop.X || b.Y < desktop.Y || b.X + b.Width > desktop.X + desktop.Width ||
-                b.Y + b.Height > desktop.Y + desktop.Height)
-                ClearPixels();
-            var ok = b.Width == _width && b.Height == _height
-                ? BitBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, CaptureRasterOperation)
-                : StretchBlt(_dc, 0, 0, _width, _height, _screen, b.X, b.Y, b.Width, b.Height, CaptureRasterOperation);
+            if (source.X < desktop.X || source.Y < desktop.Y ||
+                source.X + source.Width > desktop.X + desktop.Width ||
+                source.Y + source.Height > desktop.Y + desktop.Height)
+            {
+                Marshal.Copy(new byte[checked(_width * _height * 4)], 0, _bits, checked(_width * _height * 4));
+            }
+
+            var ok = source.Width == _width && source.Height == _height
+                ? BitBlt(_dc, 0, 0, _width, _height, _screen, source.X, source.Y, CaptureRasterOperation)
+                : StretchBlt(_dc, 0, 0, _width, _height, _screen,
+                    source.X, source.Y, source.Width, source.Height, CaptureRasterOperation);
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
-        private unsafe void ClearPixels() => new Span<byte>((void*)_bits, checked(_width * _height * 4)).Clear();
-        internal unsafe bool RememberChangedPixels()
+
+        internal byte[] ReadPixels()
         {
-            var pixels = new ReadOnlySpan<byte>((void*)_bits, checked(_width * _height * 4));
-            if (pixels.SequenceEqual(_last)) return false;
-            if (_last.Length != pixels.Length) _last = new byte[pixels.Length];
-            pixels.CopyTo(_last); return true;
-        }
-        internal unsafe byte[] Snapshot()
-        {
-            var length = checked(_width * _height * 4);
-            var bytes = ArrayPool<byte>.Shared.Rent(length);
-            new ReadOnlySpan<byte>((void*)_bits, length).CopyTo(bytes);
+            var bytes = new byte[checked(_width * _height * 4)];
+            Marshal.Copy(_bits, bytes, 0, bytes.Length);
             return bytes;
         }
+
+        internal BitmapSource CreateBitmap() => DesktopBackgroundCapture.CreateBitmap(_width, _height, ReadPixels());
+
+        private void EnsureBitmap(int width, int height)
+        {
+            if (_bitmap != IntPtr.Zero && _width == width && _height == height) return;
+            ReleaseBitmap();
+            var info = new BitmapInfo
+            {
+                Size = 40,
+                Width = width,
+                Height = -height,
+                Planes = 1,
+                Bits = 32
+            };
+            _bitmap = CreateDIBSection(_screen, ref info, 0, out _bits, IntPtr.Zero, 0);
+            if (_bitmap == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+            _previous = SelectObject(_dc, _bitmap);
+            if (_previous == IntPtr.Zero || _previous == new IntPtr(-1))
+            {
+                DeleteObject(_bitmap);
+                _bitmap = _bits = IntPtr.Zero;
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            _width = width;
+            _height = height;
+            SetStretchBltMode(_dc, 4 /* HALFTONE */);
+            SetBrushOrgEx(_dc, 0, 0, IntPtr.Zero);
+        }
+
         private void ReleaseBitmap()
         {
-            Array.Clear(_last); _last = [];
             if (_bitmap == IntPtr.Zero) return;
-            SelectObject(_dc, _previous); DeleteObject(_bitmap); _bitmap = _previous = _bits = IntPtr.Zero;
+            SelectObject(_dc, _previous);
+            DeleteObject(_bitmap);
+            _bitmap = _previous = _bits = IntPtr.Zero;
+            _width = _height = 0;
         }
+
         public void Dispose()
         {
             ReleaseBitmap();
-            if (_dc != IntPtr.Zero) { DeleteDC(_dc); _dc = IntPtr.Zero; }
-            if (_screen != IntPtr.Zero) { ReleaseDC(IntPtr.Zero, _screen); _screen = IntPtr.Zero; }
+            if (_dc != IntPtr.Zero)
+            {
+                DeleteDC(_dc);
+                _dc = IntPtr.Zero;
+            }
+            if (_screen != IntPtr.Zero)
+            {
+                ReleaseDC(IntPtr.Zero, _screen);
+                _screen = IntPtr.Zero;
+            }
         }
     }
-    [StructLayout(LayoutKind.Sequential)] private struct RectI { internal int Left, Top, Right, Bottom; }
-    [DllImport("gdi32.dll")] private static extern int SetStretchBltMode(IntPtr dc, int mode);
-    [DllImport("gdi32.dll")] private static extern bool SetBrushOrgEx(IntPtr dc, int x, int y, IntPtr previous);
-    [StructLayout(LayoutKind.Sequential)] private struct BitmapInfo
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RectI
     {
-        internal uint Size; internal int Width, Height; internal ushort Planes, Bits;
-        internal uint Compression, ImageSize; internal int XPels, YPels; internal uint ColorsUsed, ColorsImportant;
+        internal int Left;
+        internal int Top;
+        internal int Right;
+        internal int Bottom;
     }
-    [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
-    [DllImport("user32.dll", SetLastError = true)] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
-    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI rect);
-    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll")] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
-    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
-    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
-    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
-    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
-    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
-    [DllImport("gdi32.dll", SetLastError = true)] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
-    [DllImport("gdi32.dll", SetLastError = true)] private static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, uint operation);
-    [DllImport("gdi32.dll", SetLastError = true)] private static extern bool StretchBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, int sourceWidth, int sourceHeight, uint operation);
-    [DllImport("gdi32.dll")] private static extern bool GdiFlush();
-    [DllImport("dwmapi.dll")] private static extern int DwmFlush();
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        internal uint Size;
+        internal int Width;
+        internal int Height;
+        internal ushort Planes;
+        internal ushort Bits;
+        internal uint Compression;
+        internal uint ImageSize;
+        internal int XPels;
+        internal int YPels;
+        internal uint ColorsUsed;
+        internal uint ColorsImportant;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out RectI rect);
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr obj);
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateDIBSection(
+        IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool BitBlt(
+        IntPtr target, int x, int y, int width, int height,
+        IntPtr source, int sourceX, int sourceY, uint operation);
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool StretchBlt(
+        IntPtr target, int x, int y, int width, int height,
+        IntPtr source, int sourceX, int sourceY, int sourceWidth, int sourceHeight, uint operation);
+    [DllImport("gdi32.dll")]
+    private static extern int SetStretchBltMode(IntPtr dc, int mode);
+    [DllImport("gdi32.dll")]
+    private static extern bool SetBrushOrgEx(IntPtr dc, int x, int y, IntPtr previous);
+    [DllImport("gdi32.dll")]
+    private static extern bool GdiFlush();
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
 }

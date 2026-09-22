@@ -52,7 +52,7 @@ internal static class MaterialStudyChecks
                         "light Aero must not turn a genuine white rear window into a black underlay");
                     var response = Math.Abs(wp.R-bp.R) + Math.Abs(wp.G-bp.G) + Math.Abs(wp.B-bp.B);
                     Program.Assert(response > 50, "clear Aero responds to the real rear window without Acrylic blur");
-                    Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(new WindowInteropHelper(window).Handle) == 0,
+                    Program.Assert(!surface.HasBackgroundCapture && DesktopBackgroundCapture.ReadAffinity(new WindowInteropHelper(window).Handle) == 0,
                         "Aero stays visible to screenshot APIs and never starts a desktop sampler");
                     rear.Background = background; Wait(100);
                     var brush = (LinearGradientBrush)typeof(SkinBorder).GetField("_aeroReflection", Program.Private)!.GetValue(surface)!;
@@ -83,7 +83,7 @@ internal static class MaterialStudyChecks
                     }
                 }
                 window.Hide(); Wait(30);
-                Program.Assert(!surface.HasAeroReflectionSubscription && !surface.HasBackgroundWorker,
+                Program.Assert(!surface.HasAeroReflectionSubscription && !surface.HasBackgroundCapture,
                     "hidden study surface has no optical subscription/capture worker");
                 window.CloseForReal(); window = null;
             }

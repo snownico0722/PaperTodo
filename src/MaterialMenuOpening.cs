@@ -91,8 +91,7 @@ internal sealed class MaterialMenuOpening
         public void Dispose() { if (_disposed) return; _disposed = true; _source.Dispose(); }
     }
 
-    internal static bool NeedsBackground => AppController.Current?.State.LiveBackgroundProcessing != false &&
-        PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
+    internal static bool NeedsBackground => PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
         !SystemParameters.HighContrast && DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
 
     // Aero has no software background capture, but a system popup Fade exposes its

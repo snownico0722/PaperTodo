@@ -11,12 +11,11 @@ internal sealed partial class SkinBorder
     private MaterialSurfaceHost? _materialHost;
     private bool _menuRendered;
     internal BackgroundSession? BackgroundSessionState => _background;
-    internal bool SuppressLiveBackgroundForOpening { get; private set; }
+    internal bool SuppressStaticBackgroundForOpening { get; private set; }
     internal bool FirstMenuRenderUsedBackground { get; private set; }
     internal int MenuFallbackRenderCount { get; private set; }
-    internal bool HasBackgroundWorker => _background?.HasBackgroundWorker == true;
+    internal bool HasBackgroundCapture => _background?.HasBackgroundCapture == true;
     internal bool IsBackgroundActive => _background?.IsBackgroundActive == true;
-    internal bool HasBackgroundRenderSubscription => _background?.HasBackgroundRenderSubscription == true;
     internal int BackgroundFrameCount => _background?.BackgroundFrameCount ?? 0;
     internal string? BackgroundFailure => _background?.BackgroundFailure;
     internal int BackgroundProjectionCount => _background?.BackgroundProjectionCount ?? 0;
@@ -25,8 +24,8 @@ internal sealed partial class SkinBorder
         _materialHost?.OpacityOwners ?? Array.Empty<UIElement>();
     internal bool HasMaterialHostSubscription => _materialHost?.IsObserving == true;
     private ContainerVisual? BackgroundVisual => _background?.Visual;
-    private bool RequestsLiveBackground => !IsOutline && !UseLightweightMaterial &&
-        !SuppressLiveBackgroundForOpening && IsAuxiliary && PaperSkins.UsesSampledAuxiliary(Skin);
+    private bool RequestsSampledBackground => !IsOutline && !UseLightweightMaterial &&
+        !SuppressStaticBackgroundForOpening && IsAuxiliary && PaperSkins.UsesSampledAuxiliary(Skin);
     private bool IsMaterialHostVisible => _materialHost?.IsVisible == true;
     private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
         !_highContrast && DwmMicaApi.Instance.EffectsEnabled &&
@@ -49,7 +48,7 @@ internal sealed partial class SkinBorder
 
     internal void RefreshBackground()
     {
-        var sampled = RequestsLiveBackground && AppController.Current?.State.LiveBackgroundProcessing != false;
+        var sampled = RequestsSampledBackground;
         var observe = IsLoaded && IsVisible && !IsOutline && !UseLightweightMaterial && !_highContrast &&
             (sampled || Skin == PaperSkins.Aero && (IsAuxiliary || _animateReflection));
         if (observe)
@@ -74,16 +73,15 @@ internal sealed partial class SkinBorder
             ReleaseMaterialResources();
             return;
         }
-        if ((change & (MaterialHostChange.Geometry | MaterialHostChange.Translation)) != 0)
+        if ((change & MaterialHostChange.Geometry) != 0)
             _background?.GeometryChanged();
-        if (change == MaterialHostChange.Translation)
+        if ((change & MaterialHostChange.Translation) != 0)
         {
-            // The worker reads the actual HWND location on its unchanged low-rate cadence;
-            // the existing render callback reprojects the world-space bitmap. Do not rebuild
-            // the same local Region or invalidate the entire shell/editor just to move it.
-            // Aero's mutable brush transform updates through WPF without re-recording OnRender.
+            // Static snapshots are screen-anchored. Movement only changes the crop; a fresh local
+            // snapshot is taken after an explicit drag ends, never on WM_WINDOWPOSCHANGED.
+            _background?.TranslationChanged();
             UpdateAeroReflection();
-            return;
+            if (change == MaterialHostChange.Translation) return;
         }
         if ((change & MaterialHostChange.Environment) != 0)
         {
@@ -93,6 +91,11 @@ internal sealed partial class SkinBorder
         else RefreshBackground();
         InvalidateVisual(); // e.g. Aero becomes opaque when an ancestor starts fading.
     }
+
+    internal void UseDragBackground(DesktopBackgroundCapture.Snapshot snapshot) =>
+        (_background ??= new BackgroundSession(this)).UseDragSnapshot(snapshot);
+
+    internal void EndDragBackground() => _background?.EndDragSnapshot();
 
     private void ReleaseMaterialResources()
     {

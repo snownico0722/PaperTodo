@@ -9,9 +9,11 @@ internal static class MaterialPaletteChecks
     internal static void Run(AppController controller)
     {
         var saved = (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-            controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline);
+            controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline,
+            controller.State.MaterialTransparency);
         try
         {
+            controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
             foreach (var dark in new[] { false, true })
             foreach (var scheme in ColorSchemes.All)
             {
@@ -50,6 +52,30 @@ internal static class MaterialPaletteChecks
                 if (scheme != ColorSchemes.Neutral) Program.Assert(surfaces.Count >= 4,
                     "each color family is tuned per material rather than one shared tint");
             }
+            // Medium is the exact pre-setting appearance. The other four levels adjust only
+            // material cover and must move monotonically toward more/less transmission.
+            controller.State.Theme = "light";
+            controller.State.ColorScheme = ColorSchemes.Warm;
+            foreach (var skin in new[]
+            {
+                PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic,
+                PaperSkins.TracingPaper, PaperSkins.Aero
+            })
+            {
+                controller.State.PaperSkin = skin;
+                var alphas = new List<byte>();
+                foreach (var level in MaterialTransparencyLevels.All)
+                {
+                    controller.State.MaterialTransparency = level;
+                    Theme.Invalidate();
+                    alphas.Add(Theme.MaterialColors.TransmissionAlpha);
+                }
+                Program.Assert(alphas.Zip(alphas.Skip(1), (a, b) => a > b).All(value => value),
+                    $"{skin}: five transparency levels monotonically reduce material cover");
+            }
+            controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
+            Theme.Invalidate();
+
             if (!SystemParameters.HighContrast)
             {
                 controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = "light"; Theme.Invalidate();
@@ -71,7 +97,8 @@ internal static class MaterialPaletteChecks
         finally
         {
             (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-                controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline) = saved;
+                controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline,
+                controller.State.MaterialTransparency) = saved;
             Theme.Invalidate();
         }
     }

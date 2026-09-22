@@ -13,44 +13,101 @@ internal static class SharedMaterialChecks
 {
     internal static void Run(AppController controller)
     {
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-            controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing, controller.State.MatchAuxiliaryMaterialStrength);
-        var rear = new Window { Left = 20, Top = 20, Width = 800, Height = 600,
-            WindowStyle = WindowStyle.None, ShowInTaskbar = false, Background = Pattern() };
+        var saved = (
+            controller.State.PaperSkin,
+            controller.State.Theme,
+            controller.State.ColorScheme,
+            controller.State.EnableAnimations,
+            controller.State.MatchAuxiliaryMaterialStrength);
+
+        var rear = new Window
+        {
+            Left = 20,
+            Top = 20,
+            Width = 800,
+            Height = 600,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Background = Pattern()
+        };
         Window? window = null;
         ContextMenu? menu = null;
+
         try
         {
             controller.State.PaperSkin = PaperSkins.Acrylic;
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Neutral;
             controller.State.EnableAnimations = true;
-            controller.State.LiveBackgroundProcessing = true;
             controller.State.MatchAuxiliaryMaterialStrength = true;
             Theme.Invalidate();
 
-            var marker = new Border { Width = 12, Height = 12, Background = Brushes.Lime,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var surface = new SkinBorder { IsCapsule = true, CornerRadius = new CornerRadius(28),
-                Background = Theme.PaperBrush, BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Child = marker };
-            window = new Window { Left = 100, Top = 120, Width = 360, Height = 100, AllowsTransparency = true,
-                WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Background = Brushes.Transparent,
-                ShowInTaskbar = false, Topmost = true, Content = surface };
+            var marker = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Background = Brushes.Lime,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var surface = new SkinBorder
+            {
+                IsCapsule = true,
+                CornerRadius = new CornerRadius(28),
+                Background = Theme.PaperBrush,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Child = marker
+            };
+            window = new Window
+            {
+                Left = 100,
+                Top = 120,
+                Width = 360,
+                Height = 100,
+                AllowsTransparency = true,
+                WindowStyle = WindowStyle.None,
+                ResizeMode = ResizeMode.NoResize,
+                Background = Brushes.Transparent,
+                ShowInTaskbar = false,
+                Topmost = true,
+                Content = surface
+            };
+
             rear.Show();
             window.Show();
-            Ready(surface, 0, "layered Acrylic capsule starts bounded background diffusion");
+            Ready(surface, 0, "layered Acrylic capsule takes one local snapshot");
             var hwnd = new WindowInteropHelper(window).Handle;
-            Program.Assert(DesktopBackgroundCapture.ReadAffinity(hwnd) == 0x11 && !surface.HasAeroReflectionSubscription,
-                "auxiliary Acrylic owns its exclusion lease without pointer-light behavior");
+            Program.Assert(
+                !surface.HasBackgroundCapture &&
+                DesktopBackgroundCapture.ReadAffinity(hwnd) == 0 &&
+                !surface.HasAeroReflectionSubscription,
+                "completed static snapshot retains no capture lease or pointer-light behavior");
 
-            var full = Snapshot(surface);
+            var firstBitmap = surface.BackgroundSessionState!.Bitmap;
+            var firstFrames = surface.BackgroundFrameCount;
+            var beforeRearChange = Snapshot(surface);
+            rear.Background = Brushes.OrangeRed;
+            rear.UpdateLayout();
+            Wait(180);
+            var afterRearChange = Snapshot(surface);
+            Program.Assert(
+                ReferenceEquals(firstBitmap, surface.BackgroundSessionState!.Bitmap) &&
+                surface.BackgroundFrameCount == firstFrames &&
+                PixelDifference(beforeRearChange, afterRearChange) == 0,
+                "stationary capsule freezes its background even when the desktop behind it changes");
+
+            var full = beforeRearChange;
             controller.State.MatchAuxiliaryMaterialStrength = false;
             surface.RefreshSkin();
-            Wait(120);
-            Program.Assert(surface.HasBackgroundWorker && surface.MaterialStrength == .4,
-                "quiet capsule keeps its bounded background worker rather than becoming a static fake");
+            Wait(60);
             var quiet = Snapshot(surface);
-            Program.Assert(PixelDifference(full, quiet) > 500, "full/quiet capsule processing visibly differs");
+            Program.Assert(
+                !surface.HasBackgroundCapture &&
+                ReferenceEquals(firstBitmap, surface.BackgroundSessionState!.Bitmap) &&
+                surface.MaterialStrength == .4 &&
+                PixelDifference(full, quiet) > 500,
+                "quiet/full material changes only the finish over the same frozen background");
             CheckPaperDistance(full, quiet, surface, "Acrylic capsule");
 
             surface.UseLightweightMaterial = true;
@@ -63,103 +120,165 @@ internal static class SharedMaterialChecks
                 window.UpdateLayout();
                 Render(surface);
                 Wait(20);
-                Program.Assert(!surface.HasBackgroundWorker && !surface.HasBackgroundRenderSubscription &&
-                    !surface.HasAeroReflectionSubscription && surface.BackgroundFrameCount == previewFrames &&
+                Program.Assert(
+                    !surface.HasBackgroundCapture &&
+                    !surface.HasAeroReflectionSubscription &&
+                    surface.BackgroundFrameCount == previewFrames &&
                     !surface.HasMaterialRelief,
-                    "lightweight preview resizing has no capture, render retry, parallax or relief rebuild");
+                    "lightweight preview resizing owns no capture, parallax or relief");
             }
+
             window.Width = 360;
             window.UpdateLayout();
             surface.UseLightweightMaterial = false;
-            Ready(surface, previewFrames, "leaving preview restores the regular auxiliary material");
-            Program.Assert(new WindowInteropHelper(window).Handle == hwnd && ReferenceEquals(surface.Child, marker) &&
-                window.Opacity == 1 && marker.Opacity == 1 && VisualTreeHelper.HitTest(surface, new Point(180, 50)) != null,
-                "material strength keeps the real foreground, HWND and hit target");
+            Ready(surface, previewFrames, "leaving preview takes one fresh local snapshot");
+            Program.Assert(
+                new WindowInteropHelper(window).Handle == hwnd &&
+                ReferenceEquals(surface.Child, marker) &&
+                window.Opacity == 1 &&
+                marker.Opacity == 1 &&
+                VisualTreeHelper.HitTest(surface, new Point(180, 50)) != null,
+                "static material keeps the real foreground, HWND and hit target");
 
             window.Opacity = .8;
-            Wait(60);
-            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
-                "externally requested partial opacity releases background processing");
+            Wait(80);
+            Program.Assert(
+                !surface.IsBackgroundActive &&
+                !surface.HasBackgroundCapture &&
+                DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
+                "partial opacity releases static sampled background state");
+
             var count = surface.BackgroundFrameCount;
             window.Opacity = 1;
-            Ready(surface, count, "opacity restoration resumes without recreating the capsule");
+            Ready(surface, count, "opacity restoration takes one new snapshot");
             window.Hide();
-            Wait(60);
-            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
-                "hidden capsule releases capture");
+            Wait(80);
+            Program.Assert(!surface.IsBackgroundActive && !surface.HasBackgroundCapture,
+                "hidden capsule releases its snapshot");
             count = surface.BackgroundFrameCount;
             window.Show();
-            Ready(surface, count, "reshown capsule resumes");
+            Ready(surface, count, "reshown capsule takes one new snapshot");
 
-            var template = (ControlTemplate)typeof(PaperWindow).GetMethod("BuildContextMenuTemplate",
-                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, null)!;
-            var style = (Style)typeof(PaperWindow).GetMethod("BuildCompactMenuItemStyle",
-                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.Invoke(null, null)!;
-            menu = new MaterialContextMenu { Template = template, ItemContainerStyle = style, Background = Theme.PaperBrush,
-                Foreground = Theme.TextBrush, BorderBrush = Theme.PaperBorderBrush, Padding = new Thickness(8),
-                PlacementTarget = surface, Placement = PlacementMode.Right, MinWidth = 180 };
+            var template = (ControlTemplate)typeof(PaperWindow).GetMethod(
+                "BuildContextMenuTemplate",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(null, null)!;
+            var style = (Style)typeof(PaperWindow).GetMethod(
+                "BuildCompactMenuItemStyle",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(null, null)!;
+
+            menu = new MaterialContextMenu
+            {
+                Template = template,
+                ItemContainerStyle = style,
+                Background = Theme.PaperBrush,
+                Foreground = Theme.TextBrush,
+                BorderBrush = Theme.PaperBorderBrush,
+                Padding = new Thickness(8),
+                PlacementTarget = surface,
+                Placement = PlacementMode.Right,
+                MinWidth = 180
+            };
             var parent = new MenuItem { Header = "Material submenu", Style = style };
-            parent.Items.Add(new MenuItem { Header = "Same live background", Style = style });
+            parent.Items.Add(new MenuItem { Header = "Static background", Style = style });
             menu.Items.Add(parent);
             menu.Items.Add(new MenuItem { Header = "Still clickable", Style = style });
+
             menu.IsOpen = true;
-            Wait(100);
+            Until(() => menu.IsOpen, "root menu opens");
+            Wait(80);
             var menuSurface = Find<SkinBorder>(menu)!;
-            Program.Assert(menuSurface is { IsMenu: true }, "opened production menu instantiates the material root");
-            Ready(menuSurface, 0, "actual context menu receives bounded background diffusion");
-            Program.Assert(menuSurface.FirstMenuRenderUsedBackground, "root menu first paint already contains its prepared scene");
+            Program.Assert(
+                menuSurface is { IsMenu: true } &&
+                menuSurface.FirstMenuRenderUsedBackground &&
+                menuSurface.IsBackgroundActive &&
+                !menuSurface.HasBackgroundCapture,
+                "menu first paint uses one prepared immutable snapshot and never starts live capture");
+            var menuBitmap = menuSurface.BackgroundSessionState!.Bitmap;
+            var menuFrames = menuSurface.BackgroundFrameCount;
             var menuHwnd = ((HwndSource)PresentationSource.FromVisual(menuSurface)!).Handle;
-            Program.Assert(menuHwnd != hwnd && DesktopBackgroundCapture.ReadAffinity(menuHwnd) == 0x11,
-                "context menu excludes its own popup, not the owner");
+            Program.Assert(
+                menuHwnd != hwnd && DesktopBackgroundCapture.ReadAffinity(menuHwnd) == 0,
+                "menu capture lease is already released after pre-open snapshot");
+
+            rear.Background = Brushes.CadetBlue;
+            Wait(120);
+            Program.Assert(
+                ReferenceEquals(menuBitmap, menuSurface.BackgroundSessionState!.Bitmap) &&
+                menuSurface.BackgroundFrameCount == menuFrames,
+                "open menu keeps the same background snapshot while desktop content changes");
 
             foreach (var fullStrength in new[] { false, true })
             {
                 controller.State.MatchAuxiliaryMaterialStrength = fullStrength;
                 SkinBorder.RefreshLoadedSurfaces();
-                Wait(100);
-                Program.Assert(menuSurface.HasBackgroundWorker && surface.HasBackgroundWorker &&
-                    menuSurface.MaterialStrength == (fullStrength ? 1 : .4),
-                    "both menu strength settings retain actual background diffusion");
-                Save(Render(menuSurface), $"shared-menu-{fullStrength}");
+                Wait(60);
+                Program.Assert(
+                    !menuSurface.HasBackgroundCapture &&
+                    !surface.HasBackgroundCapture &&
+                    menuSurface.MaterialStrength == (fullStrength ? 1 : .4) &&
+                    ReferenceEquals(menuBitmap, menuSurface.BackgroundSessionState!.Bitmap),
+                    "menu strength changes reuse the exact prepared snapshot");
+                Save(Render(menuSurface), $"static-menu-{fullStrength}");
             }
 
             parent.IsSubmenuOpen = true;
-            Wait(100);
+            Until(() => parent.IsSubmenuOpen, "submenu opens");
+            Wait(80);
             var popup = (Popup)parent.Template.FindName("PART_Popup", parent)!;
             var submenuSurface = Find<SkinBorder>(popup.Child)!;
-            Program.Assert(submenuSurface is { IsMenu: true }, "production submenu carries material role");
-            Ready(submenuSurface, 0, "actual submenu has its own sampled background");
-            Program.Assert(submenuSurface.FirstMenuRenderUsedBackground, "submenu first paint already contains its prepared scene");
+            Program.Assert(
+                submenuSurface is { IsMenu: true } &&
+                submenuSurface.FirstMenuRenderUsedBackground &&
+                submenuSurface.IsBackgroundActive &&
+                !submenuSurface.HasBackgroundCapture,
+                "submenu also uses one pre-open static snapshot");
             var subHwnd = ((HwndSource)PresentationSource.FromVisual(submenuSurface)!).Handle;
-            Program.Assert(subHwnd != menuHwnd && subHwnd != hwnd && DesktopBackgroundCapture.ReadAffinity(subHwnd) == 0x11,
-                "submenu owns a distinct background lease");
-            Save(Render(submenuSurface), "shared-submenu-live");
+            Program.Assert(
+                subHwnd != menuHwnd && subHwnd != hwnd &&
+                DesktopBackgroundCapture.ReadAffinity(subHwnd) == 0,
+                "submenu releases its one-shot capture lease after opening");
 
             parent.IsSubmenuOpen = false;
             menu.IsOpen = false;
             Wait(100);
-            Program.Assert(!menuSurface.HasBackgroundWorker && !submenuSurface.HasBackgroundWorker && surface.HasBackgroundWorker,
-                "closing popup/submenu releases only their workers, not the owner");
+            Program.Assert(
+                !menuSurface.HasBackgroundCapture &&
+                !submenuSurface.HasBackgroundCapture &&
+                !surface.HasBackgroundCapture,
+                "closing popups leaves no capture task behind");
 
-            foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic, PaperSkins.TracingPaper })
+            foreach (var skin in new[]
             {
-                var worker = surface.BackgroundSessionState?.Capture;
+                PaperSkins.Mica,
+                PaperSkins.Acrylic,
+                PaperSkins.ClearAcrylic,
+                PaperSkins.TracingPaper
+            })
+            {
                 controller.State.PaperSkin = skin;
                 Theme.Invalidate();
+                var framesBefore = surface.BackgroundFrameCount;
                 surface.RefreshSkin();
-                Program.Assert(surface.IsBackgroundActive && ReferenceEquals(worker,
-                    surface.BackgroundSessionState?.Capture),
-                    $"{skin} changes its diffusion recipe without discarding the sampled scene");
+                if (!surface.IsBackgroundActive)
+                    Ready(surface, framesBefore, skin + " takes a static snapshot");
+                var bitmap = surface.BackgroundSessionState!.Bitmap;
+
                 controller.State.MatchAuxiliaryMaterialStrength = true;
                 surface.RefreshSkin();
-                Wait(80);
+                Wait(40);
                 full = Snapshot(surface);
                 controller.State.MatchAuxiliaryMaterialStrength = false;
                 surface.RefreshSkin();
-                Wait(80);
+                Wait(40);
                 quiet = Snapshot(surface);
-                Program.Assert(surface.HasBackgroundWorker && PixelDifference(full, quiet) > 500,
-                    $"{skin} weak processing retains diffusion and transmission");
+                Program.Assert(
+                    surface.IsBackgroundActive &&
+                    !surface.HasBackgroundCapture &&
+                    ReferenceEquals(bitmap, surface.BackgroundSessionState!.Bitmap) &&
+                    PixelDifference(full, quiet) > 500,
+                    $"{skin}: recipe/strength changes keep one frozen sampled scene");
                 CheckPaperDistance(full, quiet, surface, skin);
             }
 
@@ -167,26 +286,28 @@ internal static class SharedMaterialChecks
             Theme.Invalidate();
             surface.RefreshSkin();
             Wait(80);
-            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
-                "Aero uses layered transmission without desktop exclusion");
+            Program.Assert(
+                !surface.IsBackgroundActive &&
+                !surface.HasBackgroundCapture &&
+                DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
+                "Aero uses direct layered transmission without desktop sampling");
 
             controller.State.PaperSkin = PaperSkins.Acrylic;
             Theme.Invalidate();
             surface.RefreshSkin();
-            Ready(surface, surface.BackgroundFrameCount, "Acrylic background processing returns after Aero");
-            controller.State.LiveBackgroundProcessing = false;
-            SkinBorder.RefreshLoadedSurfaces();
-            Wait(60);
-            Program.Assert(!surface.HasBackgroundWorker && DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
-                "global background-processing switch restores screenshot visibility on auxiliary surfaces");
+            Ready(surface, surface.BackgroundFrameCount, "Acrylic static background returns after Aero");
         }
         finally
         {
             if (menu != null) menu.IsOpen = false;
             window?.Close();
             rear.Close();
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-                controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing, controller.State.MatchAuxiliaryMaterialStrength) = saved;
+            (
+                controller.State.PaperSkin,
+                controller.State.Theme,
+                controller.State.ColorScheme,
+                controller.State.EnableAnimations,
+                controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
     }
@@ -200,11 +321,15 @@ internal static class SharedMaterialChecks
         for (var x = 35; x < image.PixelWidth / 3; x++)
         {
             var i = (y * image.PixelWidth + x) * 4;
-            fullDistance += Math.Abs(full[i] - paper.B) + Math.Abs(full[i + 1] - paper.G) + Math.Abs(full[i + 2] - paper.R);
-            quietDistance += Math.Abs(quiet[i] - paper.B) + Math.Abs(quiet[i + 1] - paper.G) + Math.Abs(quiet[i + 2] - paper.R);
+            fullDistance += Math.Abs(full[i] - paper.B) +
+                Math.Abs(full[i + 1] - paper.G) +
+                Math.Abs(full[i + 2] - paper.R);
+            quietDistance += Math.Abs(quiet[i] - paper.B) +
+                Math.Abs(quiet[i + 1] - paper.G) +
+                Math.Abs(quiet[i + 2] - paper.R);
         }
         Program.Assert(fullDistance > 0 && quietDistance < fullDistance * .55,
-            $"{name}: weak material is closer to opaque paper, not more transparent ({quietDistance / fullDistance:F3})");
+            $"{name}: weak material stays closer to opaque paper ({quietDistance / fullDistance:F3})");
     }
 
     private static T? Find<T>(DependencyObject? node) where T : DependencyObject
@@ -226,14 +351,18 @@ internal static class SharedMaterialChecks
             dc.DrawRectangle(Brushes.Black, null, new Rect(12, 12, 12, 12));
         }
         drawing.Freeze();
-        return new DrawingBrush(drawing) { TileMode = TileMode.Tile, ViewportUnits = BrushMappingMode.Absolute,
-            Viewport = new Rect(0, 0, 24, 24) };
+        return new DrawingBrush(drawing)
+        {
+            TileMode = TileMode.Tile,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = new Rect(0, 0, 24, 24)
+        };
     }
 
     private static byte[] Snapshot(SkinBorder surface)
     {
         using var frozen = surface.FreezeBackgroundForEvidence();
-        Wait(60);
+        Wait(30);
         return Pixels(Render(surface));
     }
 
@@ -241,15 +370,24 @@ internal static class SharedMaterialChecks
     {
         var count = 0;
         for (var i = 0; i < a.Length; i += 4)
-            if (Math.Abs(a[i] - b[i]) + Math.Abs(a[i + 1] - b[i + 1]) + Math.Abs(a[i + 2] - b[i + 2]) > 8) count++;
+            if (Math.Abs(a[i] - b[i]) +
+                Math.Abs(a[i + 1] - b[i + 1]) +
+                Math.Abs(a[i + 2] - b[i + 2]) > 8)
+            {
+                count++;
+            }
         return count;
     }
 
     private static RenderTargetBitmap Render(FrameworkElement surface)
     {
         surface.UpdateLayout();
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(surface.ActualWidth),
-            (int)Math.Ceiling(surface.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(surface.ActualWidth),
+            (int)Math.Ceiling(surface.ActualHeight),
+            96,
+            96,
+            PixelFormats.Pbgra32);
         bitmap.Render(surface);
         return bitmap;
     }
@@ -275,17 +413,34 @@ internal static class SharedMaterialChecks
     private static void Ready(SkinBorder surface, int previous, string reason)
     {
         var clock = Stopwatch.StartNew();
-        while (surface.BackgroundFrameCount <= previous && surface.BackgroundFailure == null && clock.ElapsedMilliseconds < 6000)
-            Wait(30);
-        Program.Assert(surface.HasBackgroundWorker && surface.BackgroundFrameCount > previous,
+        while ((surface.BackgroundFrameCount <= previous || surface.HasBackgroundCapture) &&
+               surface.BackgroundFailure == null &&
+               clock.ElapsedMilliseconds < 6000)
+        {
+            Wait(20);
+        }
+        Program.Assert(
+            surface.BackgroundFrameCount > previous &&
+            !surface.HasBackgroundCapture,
             $"{reason}: {surface.BackgroundFailure ?? "timeout"}");
+    }
+
+    private static void Until(Func<bool> predicate, string reason)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!predicate() && clock.ElapsedMilliseconds < 5000) Wait(20);
+        Program.Assert(predicate(), reason);
     }
 
     private static void Wait(int ms)
     {
         var frame = new DispatcherFrame();
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
-        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            frame.Continue = false;
+        };
         timer.Start();
         Dispatcher.PushFrame(frame);
     }

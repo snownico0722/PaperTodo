@@ -17,19 +17,16 @@ internal static class MaterialRefactorChecks
 {
     internal static void Run(AppController controller)
     {
-        CheckFrameSlot();
         CheckPadding();
         CheckEnvironmentCache();
         CheckReliefReuse();
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-            controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing,
-            controller.State.MatchAuxiliaryMaterialStrength);
+            controller.State.EnableAnimations, controller.State.MatchAuxiliaryMaterialStrength);
         try
         {
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Neutral;
             controller.State.EnableAnimations = false;
-            controller.State.LiveBackgroundProcessing = false;
             controller.State.MatchAuxiliaryMaterialStrength = false;
             CheckPaintCaches(controller);
             CheckNativeIsolation(controller);
@@ -38,51 +35,16 @@ internal static class MaterialRefactorChecks
         finally
         {
             (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-                controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing,
-                controller.State.MatchAuxiliaryMaterialStrength) = saved;
+                controller.State.EnableAnimations, controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
     }
 
     private static DesktopBackgroundCapture.Frame Frame(byte value = 37)
     {
-        var pixels = ArrayPool<byte>.Shared.Rent(64 * 32 * 4);
-        pixels.AsSpan(0, 64 * 32 * 4).Fill(value);
+        var pixels = new byte[64 * 32 * 4];
+        pixels.AsSpan().Fill(value);
         return new(new BackgroundCaptureLayout.Scene(new Int32Rect(0, 0, 64, 32), 64, 32), pixels);
-    }
-
-    private static void CheckFrameSlot()
-    {
-        using (var slot = new DesktopBackgroundCapture.FrameSlot())
-        {
-            var first = Frame(); var latest = Frame();
-            Program.Assert(slot.Publish(first) && slot.Publish(latest) && first.IsDisposed,
-                "a replaced latest frame is released, not queued");
-            Program.Assert(ReferenceEquals(slot.Take(), latest) && slot.Take() == null && !latest.IsDisposed,
-                "taking a frame transfers sole disposal responsibility to the consumer");
-            slot.Dispose();
-            Program.Assert(!latest.IsDisposed, "stopping never returns the consumer's pixels prematurely");
-            latest.Dispose(); latest.Dispose();
-            var late = Frame();
-            Program.Assert(!slot.Publish(late) && late.IsDisposed && slot.Take() == null,
-                "a late GDI result cannot republish after Stop");
-        }
-        // Race actual Publish/Take/Stop, including stop-before-first-publication. No UI/GDI
-        // work occurs inside the slot gate; every lease has exactly one surviving owner.
-        for (var round = 0; round < 24; round++)
-        {
-            using var slot = new DesktopBackgroundCapture.FrameSlot();
-            using var barrier = new Barrier(3);
-            var produced = new ConcurrentBag<DesktopBackgroundCapture.Frame>();
-            Parallel.Invoke(
-                () => { barrier.SignalAndWait(); for (var i = 0; i < 40; i++) { var frame = Frame((byte)i); produced.Add(frame); slot.Publish(frame); } },
-                () => { barrier.SignalAndWait(); for (var i = 0; i < 80; i++) { using var frame = slot.Take(); if (frame != null) Program.Assert(!frame.IsDisposed, "consumer frame stays alive until released"); } },
-                () => { barrier.SignalAndWait(); slot.Dispose(); });
-            slot.Dispose();
-            Program.Assert(produced.All(frame => frame.IsDisposed) && slot.Take() == null,
-                "concurrent stop drains all owned frames without leaving a pooled-buffer lease");
-        }
-        Console.WriteLine("PASS latest-frame slot: replacement, transfer, stop and concurrent late publication.");
     }
 
     private static void CheckPadding()
@@ -91,27 +53,20 @@ internal static class MaterialRefactorChecks
         foreach (var scale in new[] { 1d, 1.25, 1.5, 2d })
         {
             var dpi = new DpiScale(scale, scale);
-            var padding = BackgroundCaptureLayout.Padding(true, dpi);
-            Program.Assert(padding / 2 >= Math.Ceiling(38 * scale), "menu guard fully covers the strongest Gaussian diffusion");
-            Program.Assert(BackgroundCaptureLayout.Padding(false, dpi) == (int)(256 * scale),
-                "capsules retain their established drag headroom at every DPI");
+            var padding = BackgroundCaptureLayout.Padding(dpi);
+            Program.Assert(
+                padding / 2 >= Math.Ceiling(38 * scale),
+                "static snapshot guard fully covers the strongest Gaussian diffusion");
+            Program.Assert(
+                padding == (int)Math.Ceiling(96 * scale),
+                "static menu/capsule snapshots use one compact 96-DIP guard");
+
             var window = new Int32Rect(-200, 100, (int)(240 * scale), (int)(160 * scale));
             var region = new DesktopBackgroundCapture.Region(0, 0, window.Width, window.Height, padding);
-            var menu = BackgroundCaptureLayout.Create(window, region, desktop)!;
-            var legacy = BackgroundCaptureLayout.Create(window, region with { Padding = (int)(256 * scale) }, desktop)!;
-            var menuPixels = (long)menu.PixelWidth * menu.PixelHeight;
-            var legacyPixels = (long)legacy.PixelWidth * legacy.PixelHeight;
-            var menuStep = menu.Bounds.Width / menu.PixelWidth;
-            var legacyStep = legacy.Bounds.Width / legacy.PixelWidth;
-            Program.Assert((long)menu.Bounds.Width * menu.Bounds.Height < (long)legacy.Bounds.Width * legacy.Bounds.Height &&
-                menuStep <= legacyStep && menuPixels <= BackgroundCaptureLayout.PixelBudget,
-                "smaller menu coverage retains or improves sample density within the same pixel budget");
-            if (menuStep == legacyStep)
-                Program.Assert(menuPixels < legacyPixels, "equal-density menu sampling eliminates unused pixels");
-            Console.WriteLine($"MENU COVERAGE @{scale}: {legacyPixels} -> {menuPixels} pixels; source step {legacyStep} -> {menuStep}.");
-            var moved = window; moved.X += (int)(20 * scale);
-            Program.Assert(ReferenceEquals(menu, BackgroundCaptureLayout.Create(moved, region, desktop, menu)),
-                "ordinary popup placement adjustments keep the primed scene and sampling phase");
+            var layout = BackgroundCaptureLayout.Create(window, region, desktop)!;
+            Program.Assert(
+                (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget,
+                "static snapshot stays inside its pixel budget");
         }
     }
 
@@ -158,7 +113,6 @@ internal static class MaterialRefactorChecks
     private static void CheckNativeIsolation(AppController controller)
     {
         controller.State.EnableAnimations = false;
-        controller.State.LiveBackgroundProcessing = true;
         foreach (var skin in new[] { PaperSkins.Paper, PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic, PaperSkins.TracingPaper })
         {
             controller.State.PaperSkin = skin; Theme.Invalidate();
@@ -169,7 +123,7 @@ internal static class MaterialRefactorChecks
                 window.Show(); Program.Pump();
                 window.Left += 10; window.Width += 12; Program.Pump();
                 surface.RefreshBackground();
-                Program.Assert(surface.BackgroundSessionState == null && !surface.HasMaterialHostSubscription && !surface.HasBackgroundWorker,
+                Program.Assert(surface.BackgroundSessionState == null && !surface.HasMaterialHostSubscription && !surface.HasBackgroundCapture,
                     skin + ": ordinary/native main surfaces stay completely outside software capture lifetime");
             }
             finally { window.Close(); }
@@ -202,7 +156,7 @@ internal static class MaterialRefactorChecks
     private static void CheckOpeningRequests(AppController controller)
     {
         controller.State.PaperSkin = PaperSkins.Acrylic;
-        controller.State.LiveBackgroundProcessing = true; Theme.Invalidate();
+        Theme.Invalidate();
         if (!MaterialMenuOpening.NeedsBackground) throw new InvalidOperationException("Test requires composed desktop with transparency enabled.");
         var completions = new List<TaskCompletionSource<DesktopBackgroundCapture.Frame?>>();
         var probe = new OpeningProbe((_, _) =>
@@ -218,29 +172,30 @@ internal static class MaterialRefactorChecks
         probe.Request(true); Until(() => completions.Count == 1, "first pending acquisition");
         probe.Request(false);
         probe.Request(true); Until(() => completions.Count == 2, "replacement acquisition");
-        var stale = Frame(); completions[0].SetResult(stale);
-        Until(() => stale.IsDisposed, "late cancelled frame is released");
-        Program.Assert(!probe.Open && probe.Opening.IsPending, "old result cannot publish into a newer opening");
+        var stale = Frame(); completions[0].SetResult(stale); Program.Pump();
+        Program.Assert(!probe.Open && probe.Opening.IsPending &&
+            probe.Surface.BackgroundSessionState?.Visual == null,
+            "old result cannot publish into a newer opening");
         var fresh = Frame(83); completions[1].SetResult(fresh);
         Until(() => probe.Open, "current acquisition opens with prepared material");
-        Program.Assert(fresh.IsDisposed && probe.Surface.BackgroundSessionState?.Bitmap?.IsFrozen == true &&
-            !probe.Surface.HasBackgroundWorker, "first pixels are immutable and pool released before any HWND exists");
+        Program.Assert(probe.Surface.BackgroundSessionState?.Bitmap is BitmapSource { IsFrozen: true } &&
+            !probe.Surface.HasBackgroundCapture,
+            "first pixels are immutable before any HWND exists and no ongoing capture remains");
         probe.Request(false);
 
         probe.Request(true); Until(() => completions.Count == 3, "cancel-after-completion request");
-        var ready = Frame(); completions[2].SetResult(ready); probe.Request(false);
-        Until(() => ready.IsDisposed, "cancel after capture but before UI continuation");
+        var ready = Frame(); completions[2].SetResult(ready); probe.Request(false); Program.Pump();
         Program.Assert(!probe.Open, "a queued completion cannot undo a dismissal");
 
         probe.Request(true); Until(() => completions.Count == 4, "unload pending request");
         probe.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
-        var unloaded = Frame(); completions[3].SetResult(unloaded);
-        Until(() => unloaded.IsDisposed, "unloaded owner releases late frame");
-        Program.Assert(!probe.Open && !probe.Opening.IsPending, "an unloaded owner is not reopened");
+        var unloaded = Frame(); completions[3].SetResult(unloaded); Program.Pump();
+        Program.Assert(!probe.Open && !probe.Opening.IsPending,
+            "an unloaded owner is not reopened by a late immutable frame");
 
         var timed = new OpeningProbe((_, _) => Task.FromException<DesktopBackgroundCapture.Frame?>(new TimeoutException("injected")));
         timed.Request(true); Until(() => timed.Open, "timeout produces a stable fallback");
-        Program.Assert(timed.Surface.SuppressLiveBackgroundForOpening && timed.Surface.BackgroundSessionState?.Visual == null,
+        Program.Assert(timed.Surface.SuppressStaticBackgroundForOpening && timed.Surface.BackgroundSessionState?.Visual == null,
             "failed acquisition opens once with a stable fallback, not a later material flash");
         timed.Request(false);
         probe.Surface.PrepareMenuBackground(null, false);

@@ -132,7 +132,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (IsMenu)
         {
             if (!_menuRendered) { FirstMenuRenderUsedBackground = BackgroundVisual != null; _menuRendered = true; }
-            if (RequestsLiveBackground && BackgroundVisual == null) MenuFallbackRenderCount++;
+            if (RequestsSampledBackground && BackgroundVisual == null) MenuFallbackRenderCount++;
         }
         if (IsOutline)
         {
