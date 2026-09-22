@@ -20,11 +20,6 @@ internal static class Program
         // pumping an App would start a second production controller in this test process.
         var noRaster = args.Contains("--no-raster", StringComparer.Ordinal);
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        if (args.Contains("--sampler-only", StringComparer.Ordinal))
-        {
-            try { ShaderSamplerChecks.Run(); RefractionChecks.CheckOptics(); OpticalProfileChecks.Run(); return 0; }
-            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-        }
         using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
         {
             var xaml = System.Xml.Linq.XDocument.Load(source);
@@ -38,7 +33,6 @@ internal static class Program
         Directory.CreateDirectory(temp);
         try
         {
-            Check("size-independent optical contract", RefractionChecks.CheckOptics);
             Check("skin normalization and data compatibility", () =>
             {
                 foreach (var id in new[] { "warm", "ink", "forest", "rose", "mica" })
@@ -165,24 +159,6 @@ internal static class Program
                     "Aero API failure keeps a readable solid fallback");
             });
 
-            Check("clear glass preserves alpha without enabling either blur recipe", () =>
-            {
-                using var f = new Fixture();
-                var hwnd = new WindowInteropHelper(f.Window).Handle;
-                foreach (var previous in new[] { MicaBackdropTypes.Mica, MicaBackdropTypes.Acrylic, MicaBackdropTypes.ClearAcrylic })
-                {
-                    f.Backdrop.Refresh(true, false, previous);
-                    f.Backdrop.Refresh(true, false, NativeMicaBackdrop.ClearGlassMaterial);
-                    Assert(f.Backdrop.IsActive && f.Api.Alpha && f.Api.Backdrop == 1 && !f.Api.ClearAcrylic &&
-                        f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "unblurred clear composition");
-                    f.Backdrop.Refresh(true, false, previous);
-                    Assert(!f.Api.Alpha, "switching to a native material clears glass alpha before backdrop setup");
-                }
-                f.Backdrop.Refresh(true, false, NativeMicaBackdrop.ClearGlassMaterial);
-                f.Api.TransparencyEnabled = false; f.Apply(true, false);
-                Assert(!f.Backdrop.IsActive && !Transparent(f.Chrome.Background), "disabled transparency remains opaque");
-                Assert(new WindowInteropHelper(f.Window).Handle == hwnd, "same editor HWND across recipes");
-            });
             Check("active material appearance never prevents real focus changes", () =>
             {
                 using var f = new Fixture();
@@ -327,18 +303,15 @@ internal static class Program
                 {
                     Check("experimental skins", () => SkinChecks.Run(controller));
                     Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
-                    Check("real background refraction and capture lifecycle", () => RefractionChecks.Run(controller));
-                    Check("shared live capsule and popup materials, RGB dispersion and lifecycle", () => SharedMaterialChecks.Run(controller));
+                    Check("shared live capsule and popup material diffusion and lifecycle", () => SharedMaterialChecks.Run(controller));
                     Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
                 }
-                Check("stationary resize mapping and sampling stability", () => MaterialResizeChecks.Run(controller));
-                Check("native drag crop alignment before the next frame", () => MaterialMotionChecks.Run(controller));
                 Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
                 if (!noRaster)
                 {
                     Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));
-                    Check("actual native header, frame and unblurred glass pixels", () => NativeSurfaceChecks.Run(controller));
+                    Check("actual native header, frame and material pixels", () => NativeSurfaceChecks.Run(controller));
                 }
                 else Console.WriteLine("SKIP raster/desktop-image assertions (--no-raster); no screenshot artifacts.");
                 Check("non-Mica startup keeps the original layered paper", () =>

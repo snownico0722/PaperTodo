@@ -1437,9 +1437,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>半透明トレーシングペーパー</value>
   </data>
-  <data name="SkinLiquidGlass" xml:space="preserve">
-    <value>リキッドガラス風</value>
-  </data>
   <data name="SkinAero" xml:space="preserve">
     <value>Aero ガラス</value>
   </data>
@@ -1448,9 +1445,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
-  </data>
-  <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>曲面の屈折、ハイライト、色分散を備えた透明ガラス。端のプレビューは軽量表示です。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>淡い青の透明ガラスと斜めの反射。画面の取り込みは行いません。</value>

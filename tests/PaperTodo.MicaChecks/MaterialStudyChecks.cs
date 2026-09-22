@@ -13,7 +13,7 @@ internal static class MaterialStudyChecks
     {
         CheckRelief();
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-            controller.State.EnableAnimations, controller.State.LiquidGlassRefraction);
+            controller.State.EnableAnimations);
         var output = Environment.GetEnvironmentVariable("PAPER_SKIN_CAPTURE");
         if (string.IsNullOrWhiteSpace(output)) return;
         var rear = new Window { Left = 20, Top = 20, Width = 720, Height = 550,
@@ -25,23 +25,17 @@ internal static class MaterialStudyChecks
             rear.Show(); Wait(150);
             using (NativeSurfaceChecks.Capture(rear, output, "study-rear-control")) { }
             foreach (var mode in new[] { "light", "dark" })
-            foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero, PaperSkins.Paper })
+            foreach (var skin in new[] { PaperSkins.Aero, PaperSkins.Paper })
             {
                 controller.State.PaperSkin = skin; controller.State.Theme = mode;
                 controller.State.ColorScheme = ColorSchemes.Neutral;
-                controller.State.EnableAnimations = true; controller.State.LiquidGlassRefraction = true;
+                controller.State.EnableAnimations = true;
                 Theme.Invalidate();
                 window = new PaperWindow(new PaperData { Type = PaperTypes.Note, Title = "材质 · 日常笔记",
                     Content = "# 留一点桌面空间\n\n正文与按钮保持清晰。\n\n- 整理今天的想法\n- 拖动纸片，观察光线\n- 背景只在边缘发生折射\n\n**材质不应妨碍阅读。**",
                     X = 100, Y = 90, Width = 432, Height = 370, AlwaysOnTop = true }, controller);
                 window.Show(); window.Activate(); Wait(300);
                 var surface = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(window)!;
-                if (skin == PaperSkins.LiquidGlass)
-                {
-                    var timer = Stopwatch.StartNew();
-                    while (!surface.IsRefractionActive && timer.ElapsedMilliseconds < 4000 && surface.RefractionFailure == null) Wait(30);
-                    Program.Assert(surface.IsRefractionActive, "material study uses actual live refracted desktop: " + surface.RefractionFailure);
-                }
                 using (NativeSurfaceChecks.Capture(window, output, $"study-{skin}-{mode}")) { }
                 if (skin == PaperSkins.Aero)
                 {
@@ -75,20 +69,13 @@ internal static class MaterialStudyChecks
                     controller.State.EnableAnimations = false; window.RefreshSkin(); Wait(30);
                     Program.Assert(!surface.HasLensLightSubscription, "disabling animation detaches Aero parallax");
                 }
-                if (skin is PaperSkins.LiquidGlass or PaperSkins.Aero)
+                if (skin == PaperSkins.Aero)
                 {
                     window.Left = 60; window.Top = 60;
                     foreach (var size in new[] { new Size(280,240), new Size(640,450), new Size(640,210), new Size(280,450) })
                     {
                         window.Width = size.Width; window.Height = size.Height;
-                        var count = surface.RefractionFrameCount;
                         Wait(200);
-                        if (skin == PaperSkins.LiquidGlass)
-                        {
-                            var timer = Stopwatch.StartNew();
-                            while (surface.RefractionFrameCount <= count && timer.ElapsedMilliseconds < 4000) Wait(30);
-                            Program.Assert(surface.RefractionFrameCount > count, "resized study uses its own geometry and fresh background");
-                        }
                         using (NativeSurfaceChecks.Capture(window, output, $"study-{skin}-{mode}-{size.Width}x{size.Height}")) { }
                     }
                 }
@@ -102,13 +89,13 @@ internal static class MaterialStudyChecks
         {
             window?.CloseForReal(); rear.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-                controller.State.EnableAnimations, controller.State.LiquidGlassRefraction) = saved;
+                controller.State.EnableAnimations) = saved;
             Theme.Invalidate();
         }
     }
     private static void CheckRelief()
     {
-        foreach (var skin in new[] { PaperSkins.LiquidGlass, PaperSkins.Aero })
+        foreach (var skin in new[] { PaperSkins.Aero })
         foreach (var scale in new[] { 1d, 1.25, 1.5, 2 })
         {
             var clock = Stopwatch.StartNew();
@@ -140,7 +127,7 @@ internal static class MaterialStudyChecks
             for (var x = 0; x < 720; x += 40) dc.DrawLine(pen, new Point(x, 0), new Point(x, 550));
         }
         // Oversized ellipses must not expand the relative brush viewbox into unpainted
-        // space. Otherwise the test backdrop itself has black gaps behind clear glass.
+        // space. Otherwise the test backdrop itself has black gaps behind the transparent material.
         var bounds = new Rect(0, 0, 720, 550);
         drawing.ClipGeometry = new RectangleGeometry(bounds);
         drawing.Freeze();

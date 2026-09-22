@@ -40,14 +40,14 @@ internal static class MaterialPresentationChecks
             (long)overscan.PixelWidth*overscan.PixelHeight <= LensCaptureLayout.PixelBudget,
             "bounded wider scene covers motion between low-rate samples");
 
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiquidGlassRefraction);
+        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null;
         try
         {
-            controller.State.PaperSkin = PaperSkins.LiquidGlass; controller.State.Theme = "light";
-            controller.State.EnableAnimations = false; controller.State.LiquidGlassRefraction = true; Theme.Invalidate();
+            controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
+            controller.State.EnableAnimations = false; controller.State.LiveBackgroundProcessing = true; Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
@@ -62,7 +62,7 @@ internal static class MaterialPresentationChecks
 
             CheckRealRightClicks(controller);
             CheckMasterRightClicks(controller);
-            controller.State.PaperSkin = PaperSkins.LiquidGlass; controller.State.Theme = "light";
+            controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false; Theme.Invalidate();
 
             var pageType = typeof(AppController).GetNestedType("SettingsPage", BindingFlags.NonPublic)!;
@@ -86,7 +86,7 @@ internal static class MaterialPresentationChecks
         {
             if (menu != null) menu.IsOpen = false;
             settings?.Close(); owner.Close();
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiquidGlassRefraction) = saved;
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing) = saved;
             Theme.Invalidate();
         }
     }

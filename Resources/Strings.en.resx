@@ -1437,9 +1437,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>Tracing paper</value>
   </data>
-  <data name="SkinLiquidGlass" xml:space="preserve">
-    <value>Liquid glass (approximation)</value>
-  </data>
   <data name="SkinAero" xml:space="preserve">
     <value>Aero glass</value>
   </data>
@@ -1448,9 +1445,6 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
-  </data>
-  <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>Clear glass with curved refraction, highlights and dispersion. Edge previews use a lightweight finish.</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>Pale blue transparent glass with diagonal reflections. No desktop capture.</value>

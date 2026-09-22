@@ -188,7 +188,7 @@ internal static partial class Program
         service.Set("appearance.match_auxiliary_material", Json(true));
         service.Set("appearance.live_refraction", Json(false));
         service.Set("appearance.native_material_always_active", Json(true));
-        Check(c.State.MatchAuxiliaryMaterialStrength && !c.State.LiquidGlassRefraction && c.State.MicaAlwaysActive,
+        Check(c.State.MatchAuxiliaryMaterialStrength && !c.State.LiveBackgroundProcessing && c.State.MicaAlwaysActive,
             "Material toggles mutate through the shared catalog.");
         service.Set("window.hide_from_switcher", Json(false));
         service.Set("window.hide_from_taskbar", Json(false));

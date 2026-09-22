@@ -1486,9 +1486,6 @@
   <data name="SkinTracingPaper" xml:space="preserve">
     <value>半透明描图纸</value>
   </data>
-  <data name="SkinLiquidGlass" xml:space="preserve">
-    <value>仿液态玻璃</value>
-  </data>
   <data name="SkinAero" xml:space="preserve">
     <value>Aero 玻璃</value>
   </data>
@@ -1497,9 +1494,6 @@
   </data>
   <data name="TipSkinTracingPaper" xml:space="preserve">
     <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
-  </data>
-  <data name="TipSkinLiquidGlass" xml:space="preserve">
-    <value>清透玻璃，带曲面折射、高光和色散。边缘浏览使用轻量效果。</value>
   </data>
   <data name="TipSkinAero" xml:space="preserve">
     <value>淡蓝透明玻璃与斜向反光，不采样桌面。</value>

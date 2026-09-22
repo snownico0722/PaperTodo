@@ -14,7 +14,7 @@ internal static class SkinChecks
     private static readonly string[] Decorated = PaperSkins.All.Where(PaperSkins.IsDecorated).ToArray();
     internal static void Run(AppController controller)
     {
-        Program.Assert(PaperSkins.All.Distinct().Count() == 8 && Decorated.Length == 4, "unique skin choices");
+        Program.Assert(PaperSkins.All.Distinct().Count() == 7 && Decorated.Length == 3, "unique skin choices");
         Program.Assert(PaperSkins.Resolve(null, "mica", "clearAcrylic") == PaperSkins.ClearAcrylic, "legacy clear Acrylic");
         Program.Assert(PaperSkins.Resolve(null, "mica", "micaAlt") == PaperSkins.Mica, "retired material migration");
         Program.Assert(PaperSkins.Resolve(null, "forest", "acrylic") == PaperSkins.Paper, "ordinary legacy palette");
@@ -24,8 +24,6 @@ internal static class SkinChecks
             Program.Assert(PaperSkins.IsValid(id) && PaperSkins.Normalize(id) == id && !PaperSkins.Decorate(id, true), "valid IDs / high contrast");
         foreach (var id in new[] { PaperSkins.TracingPaper })
             Program.Assert(PaperSkins.UsesNativeBackdrop(id) && PaperSkins.NativeBackdrop(id) == MicaBackdropTypes.Acrylic, "supported Acrylic recipe");
-        Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.LiquidGlass) == NativeMicaBackdrop.ClearGlassMaterial,
-            "liquid glass no longer maps to frosted Acrylic");
         Program.Assert(PaperSkins.NativeBackdrop(PaperSkins.Aero) == NativeMicaBackdrop.AeroGlassMaterial, "Aero selects its clear native glass recipe");
         CheckPersistence();
         var resources = new ResourceManager("PaperTodo.Resources.Strings", typeof(Strings).Assembly);
@@ -78,7 +76,7 @@ internal static class SkinChecks
                 }
                 Program.Assert(hashes.Count == Decorated.Length, "different surfaces, not renamed presets");
             }
-            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller); CheckGlassAndAero(controller);
+            CheckPixelGeometry(); CheckDockedOutline(controller); CheckLiveSwitch(controller);
             Console.WriteLine($"PASS skins: persistence, four locales, {samples} raster/contrast cases, original native pixels, open-edge focus borders and editor identity.");
         }
         finally
@@ -218,11 +216,11 @@ internal static class SkinChecks
             foreach (var skin in PaperSkins.All)
             foreach (var match in new[] { false, true })
             {
-                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiquidGlassRefraction = skin != PaperSkins.LiquidGlass };
+                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, LiveBackgroundProcessing = true };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiquidGlassRefraction == state.LiquidGlassRefraction && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.LiveBackgroundProcessing == state.LiveBackgroundProcessing && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
                 Program.Assert(restored.Papers.Single().Content == state.Papers.Single().Content, "note payload preserved");
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","papers":[]}""", ++version);
@@ -317,30 +315,6 @@ internal static class SkinChecks
         for (var c = 0; c < 4; c++)
             Program.Assert(Math.Abs(bytes[(row * image.PixelWidth + x) * 4 + c] - bytes[above + c]) < 18,
                 "rendered header boundary has no bright strip or restarted texture");
-    }
-    private static void CheckGlassAndAero(AppController controller)
-    {
-        foreach (var mode in new[] { "light", "dark" })
-        {
-            controller.State.Theme = mode; controller.State.PaperSkin = PaperSkins.LiquidGlass; Theme.Invalidate();
-            var lens = new SkinBorder { Width = 240, Height = 160, CornerRadius = new CornerRadius(8), Background = Brushes.Transparent };
-            var image = Render(lens, 1); var bytes = Pixels(image);
-            var i = (80 * image.PixelWidth + 120) * 4;
-            var alpha = bytes[i + 3];
-            // This is the requested clear variant, not the old opaque reading wash.
-            // Universal black/white-backdrop contrast is incompatible with clear glass;
-            // opaque/high-contrast fallback is still tested above in every palette.
-            Program.Assert(alpha >= (mode == "dark" ? 48 : 18) && alpha <= 100, "clear lens has a light visible veil, not bare alpha or a frosted sheet");
-            foreach (var rear in mode == "dark" ? new byte[] { 0, 48 } : new byte[] { 200, 255 })
-            {
-                byte Channel(int c) => (byte)Math.Min(255, bytes[i + c] + rear * (255 - alpha) / 255);
-                var background = Color.FromRgb(Channel(2), Channel(1), Channel(0));
-                Program.Assert(Contrast(((SolidColorBrush)Theme.TextBrush).Color, background) >= 4.5,
-                    "primary clear-lens text remains readable on its theme reference backdrops");
-                Program.Assert(Contrast(((SolidColorBrush)Theme.WeakTextBrush).Color, background) >= 3,
-                    "secondary clear-lens text remains readable on its theme reference backdrops");
-            }
-        }
     }
     private static RenderTargetBitmap Render(FrameworkElement element, double scale)
     {
