@@ -198,7 +198,7 @@ public sealed partial class AppController
         }
 
         var text = new StackPanel();
-        var status = PluginStatusFor(descriptor);
+        var state = PluginStateFor(descriptor);
         var titleRow = new Grid();
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition
@@ -224,11 +224,12 @@ public sealed partial class AppController
             FontWeight = FontWeights.SemiBold
         });
         var warningRun = new System.Windows.Documents.Run(
-            status == PluginPageStatus.Issue ? "  ⚠" : "")
+            state.HasIssue ? "  ⚠" : "")
         {
             Foreground = Theme.DangerBrush,
             FontSize = AppTypography.Scale(12),
-            FontWeight = FontWeights.SemiBold
+            FontWeight = FontWeights.SemiBold,
+            ToolTip = Strings.Get("PluginsStatusIssue")
         };
         titleFlow.Inlines.Add(warningRun);
         titleFlow.Inlines.Add(new System.Windows.Documents.Run(
@@ -240,9 +241,9 @@ public sealed partial class AppController
         });
         _pluginStatusRefreshers[descriptor.Id] = () =>
         {
-            var refreshed = PluginStatusFor(descriptor);
+            var refreshed = PluginStateFor(descriptor);
             ApplyPluginStateSwitch(stateSwitch, refreshed);
-            warningRun.Text = refreshed == PluginPageStatus.Issue ? "  ⚠" : "";
+            warningRun.Text = refreshed.HasIssue ? "  ⚠" : "";
         };
         Grid.SetColumn(titleFlow, 1);
         titleRow.Children.Add(titleFlow);
@@ -272,7 +273,24 @@ public sealed partial class AppController
 
         if (settings.Length > 0)
         {
-            var settingsPanel = BuildPluginSettingsPanel(descriptor, settings);
+            FrameworkElement settingsPanel;
+            try
+            {
+                settingsPanel = BuildPluginSettingsPanel(descriptor, settings);
+            }
+            catch (Exception ex)
+            {
+                settingsPanel = new TextBlock
+                {
+                    Text = Strings.Get("PluginsSettingsUnavailable"),
+                    Foreground = Theme.DangerBrush,
+                    FontSize = AppTypography.Scale(11.5),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(12, 2, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    ToolTip = ex.GetBaseException().Message
+                };
+            }
             Grid.SetColumn(settingsPanel, 1);
             content.Children.Add(settingsPanel);
         }
@@ -1247,7 +1265,7 @@ public sealed partial class AppController
                         Orientation = Orientation.Horizontal,
                         Children =
                         {
-                            CreatePluginStatusDot(PluginPageStatus.Issue),
+                            CreatePluginIssueDot(),
                             new TextBlock
                             {
                                 Text = Path.GetFileName(issue.SourcePath),
