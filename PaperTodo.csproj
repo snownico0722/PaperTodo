@@ -82,7 +82,10 @@
     <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1"
+    <!-- MicaController/SystemBackdrops live in InteractiveExperiences. Use the component
+         package instead of the WindowsAppSDK meta-package so WinUI never collides with
+         PaperTodo's existing WPF WebView2 references. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9"
                       Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
