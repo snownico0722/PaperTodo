@@ -1267,6 +1267,9 @@
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>更多设置</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>设置不可用</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>收起设置</value>
   </data>
