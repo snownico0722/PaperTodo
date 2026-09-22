@@ -32,6 +32,7 @@ public sealed partial class AppController
     }
 
     internal bool HasPluginRuntimeOwnership(string paperId, string providerId) =>
+        IsPluginEnabled(providerId) &&
         FindPluginRuntimePaper(providerId, paperId) != null &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
         DeclaresPluginRuntime(descriptor);
