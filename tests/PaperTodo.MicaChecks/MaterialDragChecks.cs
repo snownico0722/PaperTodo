@@ -65,8 +65,41 @@ internal static class MaterialDragChecks
             Theme.Invalidate();
         }
         Program.Assert(!surface.HasBackgroundWorker && !surface.HasMaterialHostSubscription, "closed drag surface releases subscriptions");
-        Console.WriteLine("PASS material translation: classification, retained projection, opacity, hide/show, resize and teardown.");
+        CheckAtomicReflection(controller);
+        Console.WriteLine("PASS material translation: classification, retained projection, opacity, hide/show, resize, atomic Aero reflection and teardown.");
     }
+    private static void CheckAtomicReflection(AppController controller)
+    {
+        var saved = (controller.State.PaperSkin, controller.State.EnableAnimations);
+        controller.State.PaperSkin = PaperSkins.Aero; controller.State.EnableAnimations = true; Theme.Invalidate();
+        var surface = new SkinBorder { IsCapsule = true, CornerRadius = new CornerRadius(8) };
+        var window = new Window { Left = 220, Top = 220, Width = 220, Height = 100, Content = surface,
+            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent,
+            ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize };
+        try
+        {
+            window.Show(); Wait(200);
+            var shift = (Transform)typeof(SkinBorder).GetField("_reflectionShift", Program.Private)!.GetValue(surface)!;
+            var changes = 0; shift.Changed += (_, _) => changes++;
+            var hwnd = new WindowInteropHelper(window).Handle;
+            GetWindowRect(hwnd, out var bounds);
+            Program.Assert(SetWindowPos(hwnd, IntPtr.Zero, bounds.Left + 12, bounds.Top + 8, 0, 0, 0x0015), "Aero translation");
+            Wait(100);
+            Program.Assert(changes == 1, "one window movement publishes one combined reflection transform");
+            Program.Assert(MaterialSurfaceHost.TryGetScreenOrigin(surface, HwndSource.FromHwnd(hwnd)!, out var origin), "Aero world origin");
+            var dpi = VisualTreeHelper.GetDpi(surface);
+            var reference = new TranslateTransform(-origin.X / dpi.DpiScaleX * .10, -origin.Y / dpi.DpiScaleY * .06).Value;
+            Program.Assert(shift.Value == reference, "combined transform preserves exact former X/Y translation");
+            controller.State.EnableAnimations = false; surface.RefreshSkin();
+            Program.Assert(shift.Value.IsIdentity, "disabling reflection restores identity without retaining motion");
+        }
+        finally
+        {
+            window.Close();
+            (controller.State.PaperSkin, controller.State.EnableAnimations) = saved; Theme.Invalidate();
+        }
+    }
+
     private static void Until(Func<bool> predicate, string context)
     {
         var started = System.Diagnostics.Stopwatch.StartNew();

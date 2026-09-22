@@ -17,11 +17,13 @@ internal sealed partial class SkinBorder
         if (!HasAeroReflectionSubscription || PresentationSource.FromVisual(this) is not HwndSource source ||
             !MaterialSurfaceHost.TryGetScreenOrigin(this, source, out var origin))
         {
-            _reflectionShift.X = _reflectionShift.Y = 0;
+            _reflectionShift.Matrix = Matrix.Identity;
             return;
         }
         var dpi = VisualTreeHelper.GetDpi(this);
-        _reflectionShift.X = -origin.X / dpi.DpiScaleX * .10;
-        _reflectionShift.Y = -origin.Y / dpi.DpiScaleY * .06;
+        // Publish both coordinates together. Two separate Freezable mutations notify
+        // every brush consumer twice, even though they describe one window movement.
+        _reflectionShift.Matrix = new Matrix(1, 0, 0, 1,
+            -origin.X / dpi.DpiScaleX * .10, -origin.Y / dpi.DpiScaleY * .06);
     }
 }

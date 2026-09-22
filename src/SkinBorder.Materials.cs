@@ -7,7 +7,7 @@ namespace PaperTodo;
 internal sealed partial class SkinBorder
 {
     private Brush _header = Brushes.Transparent;
-    private readonly TranslateTransform _reflectionShift = new();
+    private readonly MatrixTransform _reflectionShift = new();
     private readonly LinearGradientBrush _aeroReflection = new()
     {
         MappingMode = BrushMappingMode.Absolute,
