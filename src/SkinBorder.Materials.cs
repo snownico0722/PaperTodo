@@ -35,7 +35,7 @@ internal sealed partial class SkinBorder
             return;
         }
         var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
-        byte alpha = opaque ? (byte)255 : (byte)(_dark ? 226 : 211);
+        byte alpha = opaque ? (byte)255 : palette.TransmissionAlpha;
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
         _shine = _header = Brushes.Transparent;
         switch (Skin)
@@ -58,7 +58,7 @@ internal sealed partial class SkinBorder
                 var glass = opaque ? Mix(((SolidColorBrush)Theme.PaperBrush).Color, paper, .18) : paper;
                 var top = Mix(glass, Colors.White, .035);
                 var low = Mix(glass, Color.FromRgb(12, 39, 66), opaque ? .06 : .25);
-                byte a = opaque ? (byte)255 : (byte)(_dark ? 54 : 27);
+                byte a = opaque ? (byte)255 : palette.TransmissionAlpha;
                 _fill = Frozen(new LinearGradientBrush(new GradientStopCollection
                 {
                     new(WithAlpha(top, a), 0), new(WithAlpha(glass, a), .15),
@@ -67,10 +67,10 @@ internal sealed partial class SkinBorder
                 _aeroReflection.GradientStops = new GradientStopCollection
                 {
                     new(White(0), 0), new(White(0), .12),
-                    new(White(_dark ? 8 : 15), .17), new(White(_dark ? 24 : 42), .21),
-                    new(White(_dark ? 10 : 18), .29), new(White(0), .38),
-                    new(White(0), .49), new(White(_dark ? 9 : 18), .56),
-                    new(White(_dark ? 4 : 8), .63), new(White(0), .72), new(White(0), 1)
+                    new(White(_dark ? 10 : 18), .17), new(White(_dark ? 29 : 50), .21),
+                    new(White(_dark ? 12 : 21), .29), new(White(0), .38),
+                    new(White(0), .49), new(White(_dark ? 11 : 21), .56),
+                    new(White(_dark ? 5 : 10), .63), new(White(0), .72), new(White(0), 1)
                 };
                 _aeroReflection.Transform = _reflectionShift;
                 _shine = _aeroReflection;

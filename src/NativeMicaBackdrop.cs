@@ -27,7 +27,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private HwndSource? _source;
     private Border? _observedChrome;
     private readonly record struct NativeRequest(bool Requested, bool Dark, bool Eligible, bool Rounded,
-        string Material, Color BorderColor);
+        string Material, Color BorderColor, bool ShowOutline);
     private NativeRequest? _applied;
     private bool _requested;
     private bool _dark;
@@ -113,7 +113,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
         var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
-        var state = new NativeRequest(requested, dark, eligible, rounded, _material, edge);
+        var showOutline = _native.HighContrast || AppController.Current?.State.ShowSurfaceOutline != false;
+        var state = new NativeRequest(requested, dark, eligible, rounded, _material, edge, showOutline);
         if (!force && _applied == state)
         {
             if (activationChanged && (IsActive || wasForcedActive))
@@ -175,7 +176,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // COLOR_DEFAULT allows the system material to continue below the WPF header.
             var captionColor = unchecked((int)0xffffffff);
             LastFrameHResult = _native.ConfigureFrame(hwnd, IsActive && rounded,
-                IsActive && !glass && !accent ? edgeColor : unchecked((int)0xfffffffe), captionColor);
+                IsActive && showOutline && !glass && !accent ? edgeColor : unchecked((int)0xfffffffe), captionColor);
             // Let DWM draw the one outer stroke along its own rounded clip. Drawing a WPF
             // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
             // thickness for layout; restore the WPF stroke when the native frame is suspended.

@@ -43,7 +43,7 @@ internal static class MaterialPresentationChecks
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
-        ContextMenu? menu = null;
+        ContextMenu? menu = null, aeroMenu = null;
         try
         {
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
@@ -59,6 +59,21 @@ internal static class MaterialPresentationChecks
             Program.Assert(menuSurface != null && menuSurface.FirstMenuRenderUsedBackground && menu.Opacity == 1,
                 "production tray menu opens with the real material, without a foreground fade");
             menu.IsOpen = false; Wait(60);
+
+            controller.State.PaperSkin = PaperSkins.Aero; Theme.Invalidate();
+            Program.Assert(!MaterialMenuOpening.NeedsBackground && MaterialMenuOpening.SuppressPopupAnimation,
+                "Aero popup skips screen capture but suppresses the solid-to-transparent Fade");
+            aeroMenu = controller.CreateTrayMenu();
+            aeroMenu.PlacementTarget = (UIElement)owner.Content; aeroMenu.Placement = PlacementMode.Bottom;
+            aeroMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Until(() => aeroMenu.IsOpen, "Aero menu opens immediately without capture preparation"); Wait(80);
+            AssertNoPopupFade(aeroMenu);
+            var aeroSurface = Find(aeroMenu);
+            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero } && !aeroSurface.HasBackgroundWorker &&
+                aeroSurface.MenuFallbackRenderCount == 0,
+                "Aero menu uses direct transparent transmission and never starts a background sampler");
+            aeroMenu.IsOpen = false; Wait(60);
+            controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate();
 
             CheckRealRightClicks(controller);
             CheckMasterRightClicks(controller);
@@ -85,6 +100,7 @@ internal static class MaterialPresentationChecks
         finally
         {
             if (menu != null) menu.IsOpen = false;
+            if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations, controller.State.LiveBackgroundProcessing) = saved;
             Theme.Invalidate();

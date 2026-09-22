@@ -30,6 +30,9 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
     // A weaker material means more ordinary paper, not more background transmission.
     internal double PaperBackingOpacity => IsAuxiliary ? 1 - MaterialStrength * MaterialStrength : 0;
+    // High contrast keeps an explicit edge for accessibility. Otherwise the preference
+    // suppresses paint only; BorderThickness remains authoritative for layout and shape.
+    private bool ShowOuterBorder => _highContrast || AppController.Current?.State.ShowSurfaceOutline != false;
     public static readonly DependencyProperty UseLightweightMaterialProperty = DependencyProperty.Register(
         nameof(UseLightweightMaterial), typeof(bool), typeof(SkinBorder),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
@@ -86,7 +89,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
 
     private bool _applyingSkin;
     private (string Skin, bool Dark, bool HighContrast, MaterialPalette Palette, Brush Paper, Brush Active,
-        double Strength, bool Lightweight)? _appearance;
+        double Strength, bool Lightweight, bool Outline)? _appearance;
     internal int GeometryBuildCount { get; private set; }
     internal int BrushBuildCount { get; private set; }
 
@@ -105,7 +108,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         try { SetCurrentValue(SkinProperty, Theme.Skin); }
         finally { _applyingSkin = false; }
         var appearance = (Skin, _dark, _highContrast, Theme.MaterialColors, Theme.PaperBrush,
-            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial);
+            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial, ShowOuterBorder);
         if (_appearance != appearance)
         {
             _appearance = appearance;
@@ -132,7 +135,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             if (RequestsLiveBackground && BackgroundVisual == null) MenuFallbackRenderCount++;
         }
         var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
-        if (_highContrast || !PaperSkins.IsDecorated(Skin) && !(systemMaterial && IsAuxiliary))
+        var decorated = PaperSkins.IsDecorated(Skin);
+        if (_highContrast || !decorated && !(systemMaterial && IsAuxiliary) && ShowOuterBorder)
         {
             base.OnRender(dc);
             // Original neutral Mica/Acrylic pixels remain unchanged. Only a successfully
@@ -145,11 +149,21 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             }
             return;
         }
+        if (!decorated && !(systemMaterial && IsAuxiliary))
+        {
+            if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            EnsureGeometry();
+            // BorderThickness keeps its layout role, but the outer stroke itself is absent.
+            dc.DrawGeometry(Background, null, _shape);
+            if (systemMaterial && Background is SolidColorBrush { Color.A: < 255 })
+                dc.DrawGeometry(Theme.NativeMaterialTint, null, _shape);
+            return;
+        }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         EnsureGeometry();
         if (IsOutline)
         {
-            dc.DrawGeometry(BorderBrush, null, _borderRing);
+            if (ShowOuterBorder) dc.DrawGeometry(BorderBrush, null, _borderRing);
             return;
         }
         var background = Background is SolidColorBrush solid
@@ -181,7 +195,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         dc.Pop();
         // The owner's stroke wins. Transparent/zero-width borders really disappear, and
         // left/right docked open edges stay open instead of acquiring a white seam.
-        dc.DrawGeometry(BorderBrush, null, _borderRing);
+        if (ShowOuterBorder) dc.DrawGeometry(BorderBrush, null, _borderRing);
         dc.Pop();
     }
 

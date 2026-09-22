@@ -9,7 +9,7 @@ internal static class MaterialPaletteChecks
     internal static void Run(AppController controller)
     {
         var saved = (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-            controller.State.MatchAuxiliaryMaterialStrength);
+            controller.State.MatchAuxiliaryMaterialStrength, controller.State.ShowSurfaceOutline);
         try
         {
             foreach (var dark in new[] { false, true })
@@ -25,6 +25,10 @@ internal static class MaterialPaletteChecks
                     Program.Assert(palette.Surface.A == 255 && ((SolidColorBrush)Theme.TextBrush).Color.A == 255,
                         "material palettes preserve opaque semantic colors");
                     if (scheme == ColorSchemes.Neutral) Program.Assert(palette.NativeOverlay.A == 0, "neutral system wash remains unchanged");
+                    if (skin == PaperSkins.Aero)
+                        Program.Assert(palette.TransmissionAlpha == (dark ? 64 : 36), "Aero keeps the tuned Win7-like transmission density");
+                    if (skin == PaperSkins.TracingPaper)
+                        Program.Assert(palette.TransmissionAlpha == (dark ? 192 : 179), "tracing paper is exactly 15% lighter than the former 226/211 veil");
                     if (!PaperSkins.UsesNativeBackdrop(skin)) continue;
                     var surface = new SkinBorder { IsCapsule = true, UseLightweightMaterial = true,
                         Background = Theme.PaperBrush, CornerRadius = new CornerRadius(8) };
@@ -46,11 +50,28 @@ internal static class MaterialPaletteChecks
                 if (scheme != ColorSchemes.Neutral) Program.Assert(surfaces.Count >= 4,
                     "each color family is tuned per material rather than one shared tint");
             }
+            if (!SystemParameters.HighContrast)
+            {
+                controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = "light"; Theme.Invalidate();
+                var surface = new SkinBorder { Width = 48, Height = 36, Background = Brushes.White,
+                    BorderBrush = Brushes.Red, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6) };
+                Color Edge()
+                {
+                    surface.Measure(new Size(48, 36)); surface.Arrange(new Rect(0, 0, 48, 36)); surface.UpdateLayout();
+                    var image = new RenderTargetBitmap(48, 36, 96, 96, PixelFormats.Pbgra32); image.Render(surface);
+                    var pixel = new byte[4]; image.CopyPixels(new Int32Rect(0, 18, 1, 1), pixel, 4, 0);
+                    return Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
+                }
+                controller.State.ShowSurfaceOutline = true; surface.RefreshSkin(); var outlined = Edge();
+                controller.State.ShowSurfaceOutline = false; surface.RefreshSkin(); var clean = Edge();
+                Program.Assert(outlined.R > 180 && outlined.G < 100 && clean.R > 220 && clean.G > 220 && clean.B > 220,
+                    "outer-border preference removes only the visible stroke while retaining the surface fill");
+            }
         }
         finally
         {
             (controller.State.Theme, controller.State.PaperSkin, controller.State.ColorScheme,
-                controller.State.MatchAuxiliaryMaterialStrength) = saved;
+                controller.State.MatchAuxiliaryMaterialStrength, controller.State.ShowSurfaceOutline) = saved;
             Theme.Invalidate();
         }
     }

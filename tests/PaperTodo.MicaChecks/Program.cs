@@ -279,6 +279,24 @@ internal static class Program
             using (var controller = new AppController())
             {
                 typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
+                Check("surface outline preference controls native frame border", () =>
+                {
+                    var savedOutline = controller.State.ShowSurfaceOutline;
+                    try
+                    {
+                        using var f = new Fixture();
+                        controller.State.ShowSurfaceOutline = true;
+                        f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica, force: true);
+                        Assert(f.Api.BorderColor != unchecked((int)0xfffffffe), "enabled outline keeps the native Mica border");
+                        var hwnd = new WindowInteropHelper(f.Window).Handle;
+                        controller.State.ShowSurfaceOutline = false;
+                        f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica);
+                        Assert(f.Api.BorderColor == unchecked((int)0xfffffffe) &&
+                            new WindowInteropHelper(f.Window).Handle == hwnd,
+                            "disabled outline removes only the DWM border on the same HWND");
+                    }
+                    finally { controller.State.ShowSurfaceOutline = savedOutline; }
+                });
                 Check("material translation invariants", () => MaterialDragChecks.Run(controller));
                 controller.State.PaperSkin = null; // Exercise the pre-skin Mica settings format.
                 controller.State.EnableAnimations = false;

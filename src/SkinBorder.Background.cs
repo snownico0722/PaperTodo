@@ -29,7 +29,8 @@ internal sealed partial class SkinBorder
         !SuppressLiveBackgroundForOpening && IsAuxiliary && PaperSkins.UsesSampledAuxiliary(Skin);
     private bool IsMaterialHostVisible => _materialHost?.IsVisible == true;
     private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
-        IsLoaded && IsVisible && !_highContrast && IsMaterialHostVisible && DwmMicaApi.Instance.EffectsEnabled;
+        !_highContrast && DwmMicaApi.Instance.EffectsEnabled &&
+        (IsMenu || IsLoaded && IsVisible && IsMaterialHostVisible);
 
     protected override int VisualChildrenCount => base.VisualChildrenCount + (BackgroundVisual == null ? 0 : 1);
     protected override Visual GetVisualChild(int index) => BackgroundVisual is { } visual

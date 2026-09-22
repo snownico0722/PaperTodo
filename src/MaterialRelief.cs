@@ -110,10 +110,10 @@ internal static class MaterialRelief
         var specular = Math.Pow(half, 55);
         // A narrow highlight and transmitted shadow define glass thickness.
         // Neither one creates a broad opaque inner frame.
-        var shadow = .16 * rim * (1 - diffuse);
+        var shadow = .18 * rim * (1 - diffuse);
         // The specular lobe rolls across the curved shoulder without a broad white bezel.
-        var gloss = specular * .92 * rim;
-        var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .16;
+        var gloss = specular * 1.02 * rim;
+        var bounce = Math.Pow(Math.Clamp(.35 * nx + .40 * ny + .847 * nz, 0, 1), 55) * rim * .18;
         gloss = Math.Clamp(gloss + bounce, 0, .75);
         if (dark) gloss *= .72;
         var alpha = gloss + shadow * (1 - gloss);

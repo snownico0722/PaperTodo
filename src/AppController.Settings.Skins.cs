@@ -100,6 +100,12 @@ public sealed partial class AppController
         }));
         panel.Children.Add(CreateSettingsSelect(
             PaperSkins.All.Select(id => (id, Strings.Get(PaperSkins.LabelKey(id)))).ToArray(), skin, SetPaperSkin));
+        panel.Children.Add(SettingsToggle(
+            SettingsSidebarLocalized("显示外轮廓", "Show outer border", "外枠を表示", "외곽선 표시"),
+            State.ShowSurfaceOutline, () =>
+            {
+                SetSettingFromUi("appearance.surface_outline", !State.ShowSurfaceOutline);
+            }));
         if (skin != PaperSkins.Paper)
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>

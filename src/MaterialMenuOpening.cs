@@ -41,7 +41,7 @@ internal sealed class MaterialContextMenu : ContextMenu
         {
             // SetCurrentValue retains WPF's dynamic system-animation expression;
             // reparenting/resource invalidation can bring Fade back during opening.
-            if (MaterialMenuOpening.NeedsBackground) popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.None);
+            if (MaterialMenuOpening.SuppressPopupAnimation) popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.None);
             else popup.SetResourceReference(Popup.PopupAnimationProperty, SystemParameters.MenuPopupAnimationKey);
         }
     }
@@ -59,7 +59,7 @@ internal sealed class MaterialSubmenuPopup : Popup
         var popup = (MaterialSubmenuPopup)d;
         // Retain Popup's own disconnected-tree/Loaded guard.
         var requested = (bool)(BaseOpenCoercion?.Invoke(d, value) ?? value);
-        popup.SetValue(PopupAnimationProperty, MaterialMenuOpening.NeedsBackground ? PopupAnimation.None : PopupAnimation.Fade);
+        popup.SetValue(PopupAnimationProperty, MaterialMenuOpening.SuppressPopupAnimation ? PopupAnimation.None : PopupAnimation.Fade);
         popup._opening ??= new MaterialMenuOpening(popup, IsOpenProperty, () => popup.Child as FrameworkElement,
             () => popup.PlacementTarget, () => popup.Placement);
         return popup._opening.Coerce(requested);
@@ -94,6 +94,12 @@ internal sealed class MaterialMenuOpening
     internal static bool NeedsBackground => AppController.Current?.State.LiveBackgroundProcessing != false &&
         PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
         !SystemParameters.HighContrast && DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
+
+    // Aero has no software background capture, but a system popup Fade exposes its
+    // solid template fallback before the transparent shell is painted. Suppress only
+    // the popup animation; Aero still opens immediately and never waits for capture.
+    internal static bool SuppressPopupAnimation => NeedsBackground ||
+        Theme.Skin == PaperSkins.Aero && !SystemParameters.HighContrast && DwmMicaApi.Instance.EffectsEnabled;
 
     internal MaterialMenuOpening(FrameworkElement owner, DependencyProperty isOpen, Func<FrameworkElement?> content,
         Func<UIElement?> target, Func<PlacementMode> placement,
