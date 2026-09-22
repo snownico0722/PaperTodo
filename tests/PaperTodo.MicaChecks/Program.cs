@@ -34,6 +34,11 @@ internal static class Program
             try { using var controller = new AppController(); MaterialBenchmarks.Run(controller, args[1]); return 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         }
+        if (args.Length == 2 && args[0] == "--drag-benchmark")
+        {
+            try { using var controller = new AppController(); MaterialDragBenchmarks.Run(controller, args[1]); return 0; }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        }
         var temp = Path.Combine(Path.GetTempPath(), "PaperTodo.NativeMicaChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         try
@@ -270,6 +275,7 @@ internal static class Program
             using (var controller = new AppController())
             {
                 typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
+                Check("material translation invariants", () => MaterialDragChecks.Run(controller));
                 controller.State.PaperSkin = null; // Exercise the pre-skin Mica settings format.
                 controller.State.EnableAnimations = false;
                 controller.State.UseCapsuleMode = true;

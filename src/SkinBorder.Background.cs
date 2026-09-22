@@ -73,7 +73,17 @@ internal sealed partial class SkinBorder
             ReleaseMaterialResources();
             return;
         }
-        if ((change & MaterialHostChange.Geometry) != 0) _background?.GeometryChanged();
+        if ((change & (MaterialHostChange.Geometry | MaterialHostChange.Translation)) != 0)
+            _background?.GeometryChanged();
+        if (change == MaterialHostChange.Translation)
+        {
+            // The worker reads the actual HWND location on its unchanged low-rate cadence;
+            // the existing render callback reprojects the world-space bitmap. Do not rebuild
+            // the same local Region or invalidate the entire shell/editor just to move it.
+            // Aero's mutable brush transform updates through WPF without re-recording OnRender.
+            UpdateAeroReflection();
+            return;
+        }
         if ((change & MaterialHostChange.Environment) != 0)
         {
             _background?.ResetFailure();

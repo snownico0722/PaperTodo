@@ -10,7 +10,7 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 [Flags]
-internal enum MaterialHostChange { None = 0, Geometry = 1, Visibility = 2, Environment = 4, Unavailable = 8 }
+internal enum MaterialHostChange { None = 0, Geometry = 1, Visibility = 2, Environment = 4, Unavailable = 8, Translation = 16 }
 
 // Observes the surface's own HwndSource (including disconnected popup roots), never
 // Window.GetWindow's owner HWND. Does not move, resize, hide or intercept input.
@@ -56,7 +56,16 @@ internal sealed class MaterialSurfaceHost : IDisposable
             Detach();
             _changed(MaterialHostChange.Unavailable);
         }
-        else if (message is 0x0047 /* WINDOWPOSCHANGED */ or 0x0018 /* SHOWWINDOW */ or 0x02e0 /* DPICHANGED */)
+        else if (message == 0x0047 /* WM_WINDOWPOSCHANGED */)
+        {
+            // WINDOWPOS also reports Z-order-only changes. A translation does not change
+            // the local capture region, DPI, opacity or material recipe. Read the native
+            // flags; WPF Left/Top are not synchronized yet at this message boundary.
+            Queue(lParam == IntPtr.Zero ? MaterialHostChange.Geometry | MaterialHostChange.Visibility
+                : ClassifyWindowPosition(Marshal.PtrToStructure<WindowPosition>(lParam).Flags));
+        }
+        else if (message == 0x0018 /* WM_SHOWWINDOW */) Queue(MaterialHostChange.Visibility);
+        else if (message == 0x02e0 /* WM_DPICHANGED */)
             Queue(MaterialHostChange.Geometry | MaterialHostChange.Visibility);
         else if (message is 0x007e /* DISPLAYCHANGE */ or 0x031e /* DWMCOMPOSITIONCHANGED */ or
                  0x001a /* SETTINGCHANGE */ or 0x031a /* THEMECHANGED */ or 0x0320 /* DWMCOLORIZATIONCOLORCHANGED */)
@@ -67,8 +76,27 @@ internal sealed class MaterialSurfaceHost : IDisposable
         return IntPtr.Zero;
     }
 
+    internal static MaterialHostChange ClassifyWindowPosition(uint flags)
+    {
+        var change = MaterialHostChange.None;
+        if ((flags & 0x0001 /* SWP_NOSIZE */) == 0) change |= MaterialHostChange.Geometry;
+        if ((flags & 0x0002 /* SWP_NOMOVE */) == 0) change |= MaterialHostChange.Translation;
+        if ((flags & 0x00c0 /* SWP_SHOWWINDOW | SWP_HIDEWINDOW */) != 0) change |= MaterialHostChange.Visibility;
+        // Frame style changes can alter client-to-window offsets even at identical size.
+        if ((flags & 0x0020 /* SWP_FRAMECHANGED */) != 0) change |= MaterialHostChange.Geometry;
+        return change;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowPosition
+    {
+        internal IntPtr Hwnd, InsertAfter;
+        internal int X, Y, Width, Height;
+        internal uint Flags;
+    }
+
     private void Queue(MaterialHostChange change)
     {
+        if (change == MaterialHostChange.None) return;
         _pending |= change;
         if (_refresh != null || _disposed || _surface.Dispatcher.HasShutdownStarted) return;
         // SHOWWINDOW/WindowChrome/DPI changes settle before reading WPF ancestry/opacity.
