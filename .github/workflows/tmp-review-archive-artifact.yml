@@ -7,7 +7,7 @@ on:
       - ".github/workflows/tmp-review-archive-artifact.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-review-archive:
@@ -15,6 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
@@ -24,8 +26,15 @@ jobs:
         run: |
           ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
             -ProjectPath ./plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj
-      - uses: actions/upload-artifact@v4
-        with:
-          name: review-archive-built
-          path: plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll
-          if-no-files-found: error
+      - name: Commit generated output and remove temporary workflow
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll
+          git rm .github/workflows/tmp-review-archive-artifact.yml
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "同步复盘插件构建产物"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          }
