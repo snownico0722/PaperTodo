@@ -209,6 +209,7 @@ internal static partial class Program
         {
             BoundaryRuntimePlugin.Starts = 0;
             BoundaryRuntimePlugin.Fail = false;
+            var removedCallbacks = 0;
             BoundaryRuntimePlugin.Configure = context =>
             {
                 _ = context.Papers.Subscribe(value =>
@@ -216,7 +217,9 @@ internal static partial class Program
                     if (value.Kind == PaperPluginRuntimeEventKind.PaperRemoved &&
                         string.Equals(value.PaperId, removed.Id, StringComparison.Ordinal))
                     {
-                        context.Papers.SetTitle(survivor.Id, "changed after save");
+                        removedCallbacks++;
+                        survivor.Title = "changed after save";
+                        c.MarkDirty();
                     }
                 });
             };
@@ -239,8 +242,8 @@ internal static partial class Program
                 removed.Id,
                 PaperOperationContext.Plugin("tests.boundary"));
 
-            Check(survivor.Title == "changed after save",
-                "Runtime PaperRemoved callback did not mutate surviving paper.");
+            Check(removedCallbacks == 1 && survivor.Title == "changed after save",
+                "Runtime PaperRemoved callback did not run exactly once.");
             Check(ReadField<bool>(c, "_hasPendingDirty"),
                 "A Runtime mutation created after the external snapshot save lost its dirty state.");
             Check(ReadField<System.Windows.Threading.DispatcherTimer>(c, "_saveTimer").IsEnabled,
