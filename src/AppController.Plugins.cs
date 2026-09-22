@@ -227,8 +227,7 @@ public sealed partial class AppController
         {
             Foreground = Theme.DangerBrush,
             FontSize = AppTypography.Scale(12),
-            FontWeight = FontWeights.SemiBold,
-            ToolTip = Strings.Get("PluginsStatusIssue")
+            FontWeight = FontWeights.SemiBold
         };
         titleFlow.Inlines.Add(warningRun);
         titleFlow.Inlines.Add(new System.Windows.Documents.Run(
