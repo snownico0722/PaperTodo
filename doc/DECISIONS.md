@@ -1002,7 +1002,7 @@ D-026 把内置 Note 的 Markdown 语义统一到 Markdig 后，第一版为了�
 ### Decision
 
 - `MarkdownSemanticDocument` 与其 AvalonEdit `TextDocument` 由同一线程拥有；初次打开总是同步全文 parse，每次完整 `TextChanged` 也在返回 WPF 之前同步发布新的 current snapshot。
-- 正文少于 2000 字符时直接全文 parse；较大 Note 先使用 D-028 的轻量局部路径，只有该路径明确拒绝的 reference 等全局依赖才同步回退全文。
+- 正文少于 8000 字符时直接全文 parse；较大 Note 先使用 D-028 的轻量局部路径，只有该路径明确拒绝的 reference 等全局依赖才同步回退全文。
 - 不再为每个 Note 建 permanent parser worker，也不维护 semaphore、pending generation、stale/current 双语义或并发 publish 路径。
 - derived line query 使用简单的连续 buffer + per-line range compact index；`lineStarts` 只在本次 parse / rebuild 中临时使用，不作为 snapshot 常驻状态，也不恢复 segmented/rebase/lazy-cache 层。
 - 每个 live semantic session 保留一份与当前 snapshot 对应的 source string，供下一次差异定位和局部 splice 使用。AST 仍只在 parse 期间存在，不长期持有。
@@ -1053,7 +1053,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 
 ### Decision
 
-- 打开 Note 时仍全文 Markdig parse；小于 2000 字符的正文每次编辑也全文 parse。
+- 打开 Note 时仍全文 Markdig parse；小于 8000 字符的正文每次编辑也全文 parse。
 - 较大 Note 普通编辑使用单次约 1K 的行对齐目标窗口。窗口与上一份 snapshot 中已存在的 span/link 相交时，扩到这些已有 semantic container 的完整范围，再局部 Markdig parse + splice。
 - 删除 1K→16K retry、guard proof、窗口外 semantic 等价比较和“必须证明整篇 exact 才允许局部发布”的合同。大 Note 普通编辑明确是 **best-effort local**。
 - reference definition / reference use 仍保留便宜的显式 tripwire；局部窗口无法安全解析这些全局依赖时直接返回 full-parse fallback，不在局部路径内再造 reference resolver。
