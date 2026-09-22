@@ -628,6 +628,29 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         return parsed;
     }
 
+    private static string DiscoveryFingerprint(
+        string manifestPath,
+        string entryPath,
+        string? miniEntryPath = null,
+        string? runtimePath = null)
+    {
+        var manifest = new FileInfo(manifestPath);
+        var entry = new FileInfo(entryPath);
+        var value = $"discovery:{manifest.Length}:{manifest.LastWriteTimeUtc.Ticks}:" +
+            $"{entry.Length}:{entry.LastWriteTimeUtc.Ticks}";
+        if (!string.IsNullOrWhiteSpace(miniEntryPath))
+        {
+            var mini = new FileInfo(miniEntryPath);
+            value += $":{mini.Length}:{mini.LastWriteTimeUtc.Ticks}";
+        }
+        if (!string.IsNullOrWhiteSpace(runtimePath))
+        {
+            var runtime = new FileInfo(runtimePath);
+            value += $":{runtime.Length}:{runtime.LastWriteTimeUtc.Ticks}";
+        }
+        return value;
+    }
+
     public void Dispose()
     {
         if (_disposed)
