@@ -11,6 +11,7 @@ internal static partial class Program
 {
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
+        PluginEnablementStateIsHostOwned(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         CreationOwnsInitialTodoFields(c, note);
@@ -20,6 +21,22 @@ internal static partial class Program
         ReviewArchiveSavesWithoutBackup();
         ReviewArchiveUnreadableDataFailsClosed();
         await InitialRuntimeFailureDoesNotRetry(c);
+    }
+
+    private static void PluginEnablementStateIsHostOwned(AppController c)
+    {
+        const string providerId = "tests.enablement";
+        c.State.DisabledPluginIds.RemoveAll(value =>
+            string.Equals(value, providerId, StringComparison.Ordinal));
+        Check(c.IsPluginEnabled(providerId),
+            "Plugins are enabled by default when no host disable entry exists.");
+        c.State.DisabledPluginIds.Add(providerId);
+        Check(!c.IsPluginEnabled(providerId),
+            "Host disabled-plugin state prevents activation without changing plugin-owned settings.");
+        c.State.DisabledPluginIds.RemoveAll(value =>
+            string.Equals(value, providerId, StringComparison.Ordinal));
+        Check(c.IsPluginEnabled(PaperBodyProviderIds.Markdown),
+            "The built-in Markdown provider cannot be disabled by plugin state.");
     }
 
     private static void ReadsAndNotificationsDoNotCommitOrReplaceBodies(
