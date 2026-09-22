@@ -1254,6 +1254,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>その他の設定</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>設定を読み込めません</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>設定を閉じる</value>
   </data>
