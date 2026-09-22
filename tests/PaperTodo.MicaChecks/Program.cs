@@ -60,6 +60,7 @@ internal static class Program
                 Assert(MicaBackdropTypes.Normalize("micaAlt") == MicaBackdropTypes.Mica, "retired Mica Alt migrates to Mica");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 1, "clear Acrylic disables the fixed system backdrop");
+                Assert(new AppState().HideSurfaceOutline, "outer border is hidden by default");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
                 long version = 0;
                 foreach (var mode in new[] { "light", "dark", "system" })
@@ -281,21 +282,21 @@ internal static class Program
                 typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
                 Check("surface outline preference controls native frame border", () =>
                 {
-                    var savedOutline = controller.State.ShowSurfaceOutline;
+                    var savedOutline = controller.State.HideSurfaceOutline;
                     try
                     {
                         using var f = new Fixture();
-                        controller.State.ShowSurfaceOutline = true;
+                        controller.State.HideSurfaceOutline = false;
                         f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica, force: true);
-                        Assert(f.Api.BorderColor != unchecked((int)0xfffffffe), "enabled outline keeps the native Mica border");
+                        Assert(f.Api.BorderColor != unchecked((int)0xfffffffe), "visible outline keeps the native Mica border");
                         var hwnd = new WindowInteropHelper(f.Window).Handle;
-                        controller.State.ShowSurfaceOutline = false;
+                        controller.State.HideSurfaceOutline = true;
                         f.Backdrop.Refresh(true, false, MicaBackdropTypes.Mica);
                         Assert(f.Api.BorderColor == unchecked((int)0xfffffffe) &&
                             new WindowInteropHelper(f.Window).Handle == hwnd,
-                            "disabled outline removes only the DWM border on the same HWND");
+                            "hidden outline removes only the DWM border on the same HWND");
                     }
-                    finally { controller.State.ShowSurfaceOutline = savedOutline; }
+                    finally { controller.State.HideSurfaceOutline = savedOutline; }
                 });
                 Check("material translation invariants", () => MaterialDragChecks.Run(controller));
                 controller.State.PaperSkin = null; // Exercise the pre-skin Mica settings format.
