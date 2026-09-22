@@ -14,14 +14,25 @@ public sealed partial class AppController
 
     private enum PluginPageStatus
     {
+        Disabled,
         Stopped,
         Running,
         Issue
     }
 
+    private sealed record PluginStateSwitchParts(
+        Button Button,
+        Border Track,
+        Border Thumb);
+
     private PluginPageStatus PluginStatusFor(
         PaperBodyPluginDescriptor descriptor)
     {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return PluginPageStatus.Disabled;
+        }
+
         if (HasPluginRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
@@ -67,42 +78,73 @@ public sealed partial class AppController
         }
     }
 
-    private Border CreatePluginStatusDot(PluginPageStatus status)
+    private PluginStateSwitchParts CreatePluginStateSwitch(
+        PaperBodyPluginDescriptor descriptor)
     {
-        var dot = new Border
+        var thumb = new Border
         {
-            Width = 7,
-            Height = 7,
-            CornerRadius = new CornerRadius(3.5),
-            Margin = new Thickness(0, 0, 7, 0),
+            Width = 11,
+            Height = 11,
+            CornerRadius = new CornerRadius(5.5),
+            Background = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
-        ApplyPluginStatusDot(dot, status);
-        return dot;
+        var track = new Border
+        {
+            Width = 29,
+            Height = 15,
+            CornerRadius = new CornerRadius(7.5),
+            Padding = new Thickness(2),
+            Child = thumb
+        };
+        var button = new Button
+        {
+            Width = 33,
+            Height = 22,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 7, 0),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Content = track,
+            Focusable = false,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var parts = new PluginStateSwitchParts(button, track, thumb);
+        ApplyPluginStateSwitch(parts, PluginStatusFor(descriptor));
+        button.Click += (_, _) =>
+        {
+            TogglePluginEnabled(descriptor);
+            ApplyPluginStateSwitch(parts, PluginStatusFor(descriptor));
+        };
+        return parts;
     }
 
-    private void ApplyPluginStatusDot(
-        Border dot,
+    private void ApplyPluginStateSwitch(
+        PluginStateSwitchParts parts,
         PluginPageStatus status)
     {
-        dot.Background = status switch
+        var enabled = status != PluginPageStatus.Disabled;
+        var running = status == PluginPageStatus.Running;
+        parts.Thumb.HorizontalAlignment = enabled
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+        parts.Track.Background = !enabled
+            ? Theme.DangerBrush
+            : running
+                ? new SolidColorBrush(
+                    Theme.IsDark
+                        ? Color.FromRgb(93, 190, 121)
+                        : Color.FromRgb(55, 145, 82))
+                : TrayWeakTextBrush;
+        parts.Track.Opacity = enabled && !running ? 0.62 : 1;
+        parts.Button.ToolTip = Strings.Get(status switch
         {
-            PluginPageStatus.Issue => Theme.DangerBrush,
-            PluginPageStatus.Running => new SolidColorBrush(
-                Theme.IsDark
-                    ? Color.FromRgb(93, 190, 121)
-                    : Color.FromRgb(55, 145, 82)),
-            _ => TrayWeakTextBrush
-        };
-        var tipKey = status switch
-        {
-            PluginPageStatus.Issue => "PluginsStatusIssue",
+            PluginPageStatus.Disabled => "PluginsStatusDisabled",
             PluginPageStatus.Running => "PluginsStatusRunning",
             _ => "PluginsStatusStopped"
-        };
-
-        dot.Opacity = status == PluginPageStatus.Stopped ? 0.62 : 1;
-        dot.ToolTip = Strings.Get(tipKey);
+        });
     }
 
     internal void QueuePluginStatusRefresh()
