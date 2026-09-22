@@ -150,6 +150,7 @@ public sealed partial class AppController
         }
 
         var desired = PaperBodyPlugins.Descriptors
+            .Where(descriptor => IsPluginEnabled(descriptor.Id))
             .Where(DeclaresPluginRuntime)
             .Where(descriptor => HasEntityPluginPaper(descriptor.Id))
             .ToDictionary(descriptor => descriptor.Id, StringComparer.Ordinal);
@@ -592,6 +593,7 @@ public sealed partial class AppController
         _pluginRuntimeReconciliationEnabled &&
         !_pluginRuntimeDisposing &&
         !IsExiting &&
+        IsPluginEnabled(providerId) &&
         HasEntityPluginPaper(providerId) &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
         DeclaresPluginRuntime(descriptor);
