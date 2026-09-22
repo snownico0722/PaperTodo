@@ -36,7 +36,6 @@ internal static class MaterialRelief
         var drawing = new DrawingGroup();
         // Along an axis-aligned straight edge, illumination depends only on depth, not
         // on surface length. Reuse EXACT depth/normal samples; corners stay analytic.
-        var edgeColors = new Dictionary<(double Depth, double X, double Y), uint>();
         var pixels = 0; var evaluations = 0; var reused = 0;
         using (var dc = drawing.Open())
         foreach (var area in areas)
@@ -47,6 +46,11 @@ internal static class MaterialRelief
             var w = Math.Max(1, (int)Math.Ceiling(area.Width * scale));
             var h = Math.Max(1, (int)Math.Ceiling(area.Height * scale));
             var bytes = new byte[w * h * 4];
+            // Horizontal runs repeat within one row; vertical runs repeat at the same
+            // column on following rows. A tiny direct cache avoids hashing every pixel.
+            var horizontal = area.Width == size.Width;
+            var lastHorizontal = default(EdgeSample);
+            var vertical = reuseStraightEdges && !horizontal ? new EdgeSample[w] : null;
             for (var y = 0; y < h; y++) for (var x = 0; x < w; x++)
             {
                 var p = new Point(area.X + (x + .5) * area.Width / w, area.Y + (y + .5) * area.Height / h);
@@ -59,15 +63,27 @@ internal static class MaterialRelief
                 // manufacture a seam where its authoritative border is zero-width.
                 if (n.X < 0 && border.Left == 0 || n.X > 0 && border.Right == 0 ||
                     n.Y < 0 && border.Top == 0 || n.Y > 0 && border.Bottom == 0) continue;
-                var key = (distance, n.X, n.Y);
-                var straight = reuseStraightEdges && (n.X == 0 || n.Y == 0);
-                if (!straight || !edgeColors.TryGetValue(key, out var color))
+                uint color;
+                if (reuseStraightEdges && (n.X == 0 || n.Y == 0))
+                {
+                    ref var cached = ref (horizontal ? ref lastHorizontal : ref vertical![x]);
+                    if (cached.Depth == distance && cached.X == n.X && cached.Y == n.Y)
+                    {
+                        color = cached.Color;
+                        reused++;
+                    }
+                    else
+                    {
+                        color = Shade(distance, n, bevel, dark);
+                        cached = new EdgeSample(distance, n.X, n.Y, color);
+                        evaluations++;
+                    }
+                }
+                else
                 {
                     color = Shade(distance, n, bevel, dark);
                     evaluations++;
-                    if (straight) edgeColors[key] = color;
                 }
-                else reused++;
                 var i = (y * w + x) * 4;
                 bytes[i] = (byte)color;
                 bytes[i + 1] = (byte)(color >> 8);
@@ -81,6 +97,8 @@ internal static class MaterialRelief
         metrics = new(pixels, evaluations, reused);
         drawing.Freeze(); return drawing;
     }
+    private readonly record struct EdgeSample(double Depth, double X, double Y, uint Color);
+
     private static uint Shade(double distance, Vector n, double bevel, bool dark)
     {
         var rim = 1 - distance / bevel;
