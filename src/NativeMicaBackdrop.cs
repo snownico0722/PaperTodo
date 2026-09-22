@@ -113,7 +113,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
         var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
-        var showOutline = _native.HighContrast || AppController.Current?.State.ShowSurfaceOutline != false;
+        var showOutline = _native.HighContrast || AppController.Current?.State.HideSurfaceOutline != true;
         var state = new NativeRequest(requested, dark, eligible, rounded, _material, edge, showOutline);
         if (!force && _applied == state)
         {
