@@ -70,17 +70,17 @@ internal static class MaterialPresentationChecks
             show.Invoke(controller, [Enum.Parse(pageType, "General")]);
             settings = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
             var shell = (SkinBorder)settings.Content;
-            Until(() => shell.IsRefractionActive, "settings background");
-            var worker = typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(shell);
+            Wait(120);
+            Program.Assert(!shell.IsRefractionActive && !shell.HasRefractionWorker,
+                "expanded Settings uses the native Acrylic backdrop without a software background-capture worker");
             var oldContent = shell.Child;
             show.Invoke(controller, [Enum.Parse(pageType, "Visual")]);
             Program.Assert(ReferenceEquals(shell, settings.Content) && !ReferenceEquals(oldContent, shell.Child) &&
-                ReferenceEquals(worker, typeof(SkinBorder).GetField("_capture", Program.Private)!.GetValue(shell)),
-                "page switch replaces only content and preserves the existing scene and capture worker");
-            var scene = (ContainerVisual)typeof(SkinBorder).GetField("_refractionVisual", Program.Private)!.GetValue(shell)!;
+                !shell.IsRefractionActive && !shell.HasRefractionWorker,
+                "page switch replaces only Settings content and keeps the native material path capture-free");
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshRefraction();
-            Program.Assert(ReferenceEquals(scene, typeof(SkinBorder).GetField("_refractionVisual", Program.Private)!.GetValue(shell)) &&
-                scene.Opacity == 1 && settings.Opacity == 1, "resize never hides the last usable background while a new sample is pending");
+            Program.Assert(!shell.IsRefractionActive && !shell.HasRefractionWorker && settings.Opacity == 1,
+                "resizing Settings keeps the native material path capture-free and fully visible");
         }
         finally
         {
