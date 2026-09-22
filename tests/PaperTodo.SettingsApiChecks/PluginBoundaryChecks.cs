@@ -12,7 +12,7 @@ internal static partial class Program
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
-        ExternalSavePreservesRuntimeCallbackDirtyState(c);
+        await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         CreationOwnsInitialTodoFields(c, note);
         MultilinePluginTooltips();
         ReviewArchiveSavesWithoutBackup();
@@ -143,7 +143,7 @@ internal static partial class Program
         finally { Field(host, "<Current>k__BackingField", original); }
     }
 
-    private static void ExternalSavePreservesRuntimeCallbackDirtyState(AppController c)
+    private static async Task ExternalSavePreservesRuntimeCallbackDirtyState(AppController c)
     {
         // Settle pre-existing application edits before installing the temporary Runtime fixture.
         // Saving after the fixture is installed would itself reconcile and start that Runtime.
@@ -222,8 +222,18 @@ internal static partial class Program
             };
 
             c.ReconcilePluginRuntimes();
-            Check(BoundaryRuntimePlugin.Starts == 1,
-                "Post-save dirty fixture Runtime did not start.");
+            var slots = ReadField<IDictionary>(c, "_pluginRuntimeSlots");
+            var slot = slots[id]!;
+            for (var attempt = 0;
+                 attempt < 50 &&
+                 slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() != "Running";
+                 attempt++)
+            {
+                await Task.Delay(10);
+            }
+            Check(BoundaryRuntimePlugin.Starts == 1 &&
+                  slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Running",
+                "Post-save dirty fixture Runtime did not finish startup.");
 
             _ = c.PaperCommands.DeletePaper(
                 removed.Id,
