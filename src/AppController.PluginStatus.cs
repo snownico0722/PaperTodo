@@ -78,6 +78,25 @@ public sealed partial class AppController
         }
     }
 
+    private Border CreatePluginStatusDot(PluginPageStatus status)
+    {
+        var dot = new Border
+        {
+            Width = 7,
+            Height = 7,
+            CornerRadius = new CornerRadius(3.5),
+            Margin = new Thickness(0, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = status == PluginPageStatus.Issue
+                ? Theme.DangerBrush
+                : TrayWeakTextBrush
+        };
+        dot.ToolTip = Strings.Get(status == PluginPageStatus.Issue
+            ? "PluginsStatusIssue"
+            : "PluginsStatusStopped");
+        return dot;
+    }
+
     private PluginStateSwitchParts CreatePluginStateSwitch(
         PaperBodyPluginDescriptor descriptor)
     {
