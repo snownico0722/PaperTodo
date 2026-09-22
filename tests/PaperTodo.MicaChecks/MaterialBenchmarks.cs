@@ -90,7 +90,13 @@ internal static class MaterialBenchmarks
     }
     private static Measurement Measure(string name, int operations, Action<int> action)
     {
-        for (var i = 0; i < operations; i++) action(i);
+        // Short, single-iteration warmups can measure tiered-JIT transitions instead
+        // of steady work. Warm each real operation, then avoid sub-millisecond rounds.
+        var warmup = Stopwatch.StartNew();
+        var warmOperations = 0;
+        do { action(warmOperations++); } while (warmup.ElapsedMilliseconds < 500);
+        operations = Math.Max(operations, (int)Math.Min(100_000,
+            Math.Ceiling(warmOperations * 30 / warmup.Elapsed.TotalMilliseconds)));
         var rounds = new Sample[7];
         for (var round = 0; round < rounds.Length; round++)
         {
