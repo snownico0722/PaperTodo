@@ -217,8 +217,7 @@ public sealed class StateStore
                 return false;
             }
 
-            var content = MarkdownImageReferences.StripRenderMarkers(paper.Content ?? "");
-            foreach (var imageId in MarkdownImageReferences.CollectImageIds(content))
+            foreach (var imageId in MarkdownImageReferences.CollectImageIds(paper.Content))
             {
                 imageIds.Add(imageId);
             }
@@ -567,13 +566,6 @@ public sealed class StateStore
         state.ExperimentalTetherMinimizedBehavior =
             ExperimentalTetherVisibilityModes.Normalize(
                 state.ExperimentalTetherMinimizedBehavior);
-        if (state.ShowTopBarNewPaperButtons is bool showTopBarNewPaperButtons)
-        {
-            state.ShowTopBarNewTodoButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewNoteButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewPaperButtons = null;
-        }
-
         state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
         if (!state.UseCapsuleMode)
@@ -608,28 +600,11 @@ public sealed class StateStore
             }
         }
 
-        var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
-
-        // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
-        // done at layout time (monitor set can change between sessions, so we don't over-normalize
-        // here). Missing entries use the built-in layout default.
+        // Per-queue margins are user layout memory, not active collapse-all runtime state. Keep
+        // finite remembered positions while the feature is disabled so turning it back on does not
+        // silently reset the user's layout. Live work-area clamping still happens at layout time.
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
-        if (!keepDeepCapsuleStartTopMargins)
-        {
-            state.DeepCapsuleQueueStartTopMargins.Clear();
-        }
-        else
-        {
-            foreach (var key in state.DeepCapsuleQueueStartTopMargins.Keys.ToList())
-            {
-                var v = state.DeepCapsuleQueueStartTopMargins[key];
-                if (double.IsNaN(v) || double.IsInfinity(v))
-                {
-                    state.DeepCapsuleQueueStartTopMargins.Remove(key);
-                }
-            }
-        }
     }
 
     private static void NormalizePapers(AppState state)

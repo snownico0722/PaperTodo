@@ -1260,12 +1260,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>Plugin protocol {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>Plugin data could not be read. Empty data is in use; new data will be written to the recovery file.</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>The original data could not be read. The recovery data file is in use.</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>Open folder</value>
   </data>

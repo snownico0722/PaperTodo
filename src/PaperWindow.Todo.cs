@@ -1137,7 +1137,7 @@ public sealed partial class PaperWindow
 
     private void HandleTodoPaste(DataObjectPastingEventArgs e, PaperItem item, TodoTextBox box)
     {
-        if (!ClipboardHelper.TryGetText(out var raw) || string.IsNullOrEmpty(raw))
+        if (!TryGetTodoPastingText(e.DataObject, out var raw))
         {
             return;
         }

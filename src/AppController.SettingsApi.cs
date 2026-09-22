@@ -105,8 +105,6 @@ public sealed partial class AppController
         var oldTaskbar = State.HidePapersFromTaskbar;
         var oldQueues = effects == SettingEffects.CapsuleMode
             ? new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues) : null;
-        var oldMargins = effects == SettingEffects.CapsuleMode
-            ? new Dictionary<string, double>(State.DeepCapsuleQueueStartTopMargins) : null;
         var titles = id == "title.max_length"
             ? State.Papers.Select(p => (Paper: p, Title: p.Title)).ToArray() : null;
         var todoOrder = id == "todo.move_completed_to_bottom"
@@ -141,7 +139,6 @@ public sealed partial class AppController
                     if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();
-                        State.DeepCapsuleQueueStartTopMargins.Clear();
                     }
                 }
                 if (titles != null) ClampPaperTitlesToMaxLength(State.MaxTitleLength);
@@ -165,12 +162,11 @@ public sealed partial class AppController
                     State.MicaBackdropType = previousMicaBackdropType;
                 }
                 State.HidePapersFromTaskbar = oldTaskbar;
-                if (oldQueues != null && oldMargins != null)
+                if (oldQueues != null)
                 {
                     State.UseCapsuleMode = oldCapsule;
                     State.UseDeepCapsuleMode = oldDeep;
                     State.CapsuleCollapseAllActiveQueues = oldQueues;
-                    State.DeepCapsuleQueueStartTopMargins = oldMargins;
                 }
                 if (titles != null) foreach (var row in titles) row.Paper.Title = row.Title;
                 if (todoOrder != null) foreach (var row in todoOrder)
@@ -310,8 +306,11 @@ public sealed partial class AppController
                 }
                 break;
             case SettingEffects.Scripts:
-                PaperWindow.StopPersistentScriptProcesses();
-                PaperWindow.EnsurePersistentScriptProcessForSettings(State); break;
+                if (State.UsePersistentPowerShellProcess)
+                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                else
+                    PaperWindow.StopPersistentScriptProcesses();
+                break;
             case SettingEffects.VisibilitySnapshot: ClearVisibilityShortcutRestoreSnapshot(); break;
             case SettingEffects.Mcp: RefreshMcpRuntime(); break;
         }

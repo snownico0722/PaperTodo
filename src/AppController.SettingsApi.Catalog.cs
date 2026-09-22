@@ -487,12 +487,12 @@ public sealed partial class AppController
         yield return DefineSetting<bool>("scripts.prefer_powershell7",
             () => State.PreferPowerShell7,
             value => State.PreferPowerShell7 = value,
-            SettingEffects.Scripts,
+            SettingEffects.None,
             title: Strings.Get("SettingsPreferPowerShell7"));
         yield return DefineSetting<bool>("scripts.hide_run_window",
             () => State.HideScriptRunWindow,
             value => State.HideScriptRunWindow = value,
-            SettingEffects.Scripts,
+            SettingEffects.None,
             title: Strings.Get("SettingsHideScriptRunWindow"));
         yield return DefineSetting<bool>("shortcuts.preserve_linked_hidden",
             () => State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts,

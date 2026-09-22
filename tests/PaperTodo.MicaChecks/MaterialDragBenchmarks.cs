@@ -148,6 +148,7 @@ internal static class MaterialDragBenchmarks
         window.LayoutUpdated += layout;
         var positions = new List<PositionSample>(200);
         var nativeSizeMessages = 0; var enters = 0; var exits = 0;
+        var sawDragSnapshotWhilePressed = false;
         var watch = Stopwatch.StartNew();
         GetWindowRect(hwnd, out var previous);
         HwndSourceHook hook = (IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) => {
@@ -200,9 +201,27 @@ internal static class MaterialDragBenchmarks
         });
         try
         {
-            while (!driver.IsCompleted && watch.Elapsed.TotalSeconds < 15) Wait(10);
+            while (!driver.IsCompleted && watch.Elapsed.TotalSeconds < 15)
+            {
+                if (c.Capsule && PaperSkins.UsesSampledAuxiliary(c.Skin))
+                {
+                    foreach (var surface in surfaces)
+                    {
+                        var session = surface.BackgroundSessionState;
+                        if (session?.GetType().GetField("_dragSnapshotActive", Private)?.GetValue(session) is true)
+                        {
+                            sawDragSnapshotWhilePressed = true;
+                            break;
+                        }
+                    }
+                }
+                Wait(10);
+            }
             Program.Assert(driver.IsCompleted, "mouse drag ends after release");
             var times = driver.GetAwaiter().GetResult();
+            if (c.Capsule && PaperSkins.UsesSampledAuxiliary(c.Skin))
+                Program.Assert(sawDragSnapshotWhilePressed,
+                    "real capsule drag publishes the shared virtual-desktop snapshot before button release");
             Wait(40);
             var elapsed = watch.Elapsed.TotalMilliseconds;
             var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalMilliseconds;
@@ -229,7 +248,7 @@ internal static class MaterialDragBenchmarks
                 MovementIntervalP95Ms = Percentile(intervals, .95), Counters = changes,
                 SurfaceCount = surfaces.Length, ActiveBackgrounds = surfaces.Count(s => s.IsBackgroundActive),
                 NativeBackdropActive = window.IsNativeMicaEffective, Dpi = VisualTreeHelper.GetDpi(target).DpiScaleX,
-                Positions = positions };
+                SawDragSnapshotWhilePressed = sawDragSnapshotWhilePressed, Positions = positions };
         }
         finally { source.RemoveHook(hook); window.LayoutUpdated -= layout; }
 

@@ -51,7 +51,7 @@ Aero 对直边相同深度、相同法线的光照结果直接复用；圆角仍
 | `8d22d040` | Clear Acrylic 的 accent 早于真正 ContentRendered，会遇到第一张 redirected bitmap 尚未准备好的问题。 | 保留首帧延迟启用，不把一次请求重绘当成首帧已经完成。 |
 | `cabd99a` | 新像素与旧世界坐标混用会造成背景跳变；首帧可写位图也有延迟提交。 | 首帧及映射变化时先完成不可变像素，再发布对应坐标；同一区域的后续帧仍复用可写位图。 |
 | `cabd99a` | CAPTUREBLT 曾扰动指针；动态动画资源可能重新引入菜单 Fade。 | 保留 SRCCOPY 和实时菜单动画的本地值覆盖。 |
-| D-044 / D-045 | full-glass、现代 alpha、WindowChrome 的能力与启用顺序受系统限制。 | 不把零 margin 当成通用修复；保留原生背景与不透明回退的互斥及原有能力顺序。 |
+| D-046 / D-046 | full-glass、现代 alpha、WindowChrome 的能力与启用顺序受系统限制。 | 不把零 margin 当成通用修复；保留原生背景与不透明回退的互斥及原有能力顺序。 |
 | 既有窗口/编辑器约束 | 外观切换不应重建正文、撤销栈或改变点击区域。 | 保留正文、形状、输入和边缘浏览的原 owner；不改已有 DComp translation-only 路线。 |
 
 同时保留后台准备、UI 短上传、`TryLock(0)`、背景与前景分离、池缓冲清零、独立 popup 释放及截图排除提示。没有用先显示普通背景、再补材质的闪变掩盖菜单首帧延迟。
@@ -65,7 +65,7 @@ Aero 对直边相同深度、相同法线的光照结果直接复用；圆角仍
 - [WPF BlurEffect 原生实现](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/WpfGfx/core/resources/BlurEffect.cpp)：参考模糊处理边界，保留足够的背景余量，并且不模糊正文。
 - [SetWindowDisplayAffinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)：截图排除仍受本进程顶层窗口和 DWM 等限制，不作为安全或 DRM 保证。
 
-完整决策见 [DECISIONS D-052](../DECISIONS.md#d-052--材质绘制原生背景与可选采样职责收敛2026-09-22)。
+完整决策见 [DECISIONS D-053](../DECISIONS.md#d-053--材质绘制原生背景与可选采样职责收敛2026-09-22)。
 
 ## 自动验证
 

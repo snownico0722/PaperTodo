@@ -117,6 +117,17 @@ public sealed partial class PaperWindow
     internal void CommitPendingNoteContentForSave()
         => CommitPendingNoteContent();
 
+    // Core persistence and external command preparation only need PaperTodo-owned Markdown
+    // editor text. Third-party body Commit() is a best-effort lifecycle callback, not a host save hook.
+    internal void CommitPendingMarkdownContentForSave() =>
+        _markdownBodySession?.Commit();
+
+    internal bool HasPendingMarkdownContentForSave =>
+        _markdownBodySession?.ContentDirty == true;
+
+    internal string CurrentMarkdownContentForExternalRead() =>
+        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
+
     private void CommitPendingNoteContent()
     {
         if (_paper.Type == PaperTypes.Note)
