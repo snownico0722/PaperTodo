@@ -101,10 +101,10 @@ public sealed partial class AppController
         panel.Children.Add(CreateSettingsSelect(
             PaperSkins.All.Select(id => (id, Strings.Get(PaperSkins.LabelKey(id)))).ToArray(), skin, SetPaperSkin));
         panel.Children.Add(SettingsToggle(
-            SettingsSidebarLocalized("显示外轮廓", "Show outer border", "外枠を表示", "외곽선 표시"),
-            State.ShowSurfaceOutline, () =>
+            SettingsSidebarLocalized("隐藏外轮廓", "Hide outer border", "外枠を隠す", "외곽선 숨기기"),
+            State.HideSurfaceOutline, () =>
             {
-                SetSettingFromUi("appearance.surface_outline", !State.ShowSurfaceOutline);
+                SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
             }));
         if (skin != PaperSkins.Paper)
             panel.Children.Add(WrapWithHint(SettingsToggle(
