@@ -315,8 +315,6 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             _disposed = true;
             _handlers.Clear();
             _knownPaperIds.Clear();
-            _publishedHeaderPaperIds.Clear();
-            _publishedCapsulePaperIds.Clear();
             _capsulePresentations.Clear();
         }
     }
