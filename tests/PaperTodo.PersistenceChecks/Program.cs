@@ -21,6 +21,7 @@ var checks = new (string Name, Action Run)[]
     ("flush-failure-keeps-old-target", FlushFailureKeepsOldTarget),
     ("replace-retries-transient-sharing-failures", ReplaceRetriesTransientSharingFailures),
     ("markdown-modes-migrate-and-roundtrip", MarkdownModesMigrateAndRoundTrip),
+    ("obsolete-topbar-aggregate-is-ignored", ObsoleteTopBarAggregateIsIgnored),
     ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
@@ -313,6 +314,26 @@ static void MarkdownModesMigrateAndRoundTrip()
         Assert(NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().MarkdownRenderMode == expected,
             "Markdown mode changed after reload");
     }
+}
+
+static void ObsoleteTopBarAggregateIsIgnored()
+{
+    using var scope = new TempDirectory();
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    File.WriteAllText(
+        store.FilePath,
+        "{\"papers\":[],\"showTopBarNewTodoButton\":false,\"showTopBarNewNoteButton\":true,\"showTopBarNewPaperButtons\":false}");
+
+    var state = store.Load();
+    Assert(!state.ShowTopBarNewTodoButton,
+        "real todo-button setting changed while ignoring the obsolete aggregate field");
+    Assert(state.ShowTopBarNewNoteButton,
+        "obsolete aggregate field overrode the real note-button setting");
+
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
+    Assert(!saved.RootElement.TryGetProperty("showTopBarNewPaperButtons", out _),
+        "obsolete aggregate field was written back to current state");
 }
 
 static void DownwardPreviewDefaultAndRoundTrip()
