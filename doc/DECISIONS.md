@@ -341,7 +341,7 @@ V3 Lite production translation backend 明确不包含：
 
 Queue compositor、真实 docked HWND 和 floating drag HWND 是显式 visual authority。publication / successor / handoff / rollback 任一边界都必须保证至少一个可见 authority 存在。
 
-DComp root replacement 与 DWM cloak/uncloak 通过可验证 transaction boundary 协调。cover 丢失时先立即尝试恢复真实 HWND；只有即时恢复本身失败时才进入有界 completion retry。
+DComp root replacement 与 DWM cloak/uncloak 通过可验证 transaction boundary 协调。cover 丢失时先立即尝试恢复真实 HWND；只有即时恢复本身失败时才进入有界 completion retry。普通 handoff completion 同样最多只安排两次延迟重试；预算耗尽后保留当前 cover authority，不把它升级成另一套自动恢复循环。
 
 一次 visual transaction 的原子单位对应**用户看到的一次 authority swap**，而不是一个 HWND。涉及同一队列的 endpoint settle / reveal / cloak / root detach 时，优先先完成所有成员需要的 apply/layout，再跨一个共享的 render / desktop-composition boundary，最后统一验证和交接；不要让每个成员各自完成一套完整 flush/handoff。
 
@@ -355,6 +355,7 @@ V2.5 的日志还证明了 transaction 粒度本身会成为性能和正确性�
 
 - 不允许“先全部 cloak，稍后再发布 cover”。
 - 不允许 cover 丢失后什么都不做、先空等 timer 才首次恢复 real source。
+- 不在 completion retry 预算耗尽后再切入另一套持续定时恢复。
 - 不把资源 Dispose 当作 authority transfer。
 - 不为同一 visual transaction 按 HWND 重复执行 `apply → render/flush → verify → next member` 的完整交接；成员级准备可以独立，但 authority swap 应在共享边界统一完成和验证。
 

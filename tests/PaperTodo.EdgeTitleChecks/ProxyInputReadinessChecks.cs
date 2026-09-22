@@ -1,12 +1,14 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using PaperTodo;
 
 internal static partial class Program
 {
     private static void ProxyInputReadiness()
     {
+        ProxyCompletionRetryBudget();
         ProxyOutputWindowVisibility();
         ProxyPointerMessageCoordinates();
         ProxyImmediateInputChecks();
@@ -76,6 +78,50 @@ internal static partial class Program
             Check(received.Count == before, "Master collapse/release remains pointer-transparent");
         }
         Console.WriteLine("PASS proxy-native-input-publication-and-retirement");
+    }
+
+    private static void ProxyCompletionRetryBudget()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var type = typeof(EdgeCapsuleQueueCompositionProxy);
+        var proxy = (EdgeCapsuleQueueCompositionProxy)RuntimeHelpers.GetUninitializedObject(type);
+        void Set(string name, object value) => type.GetField(name, flags)!.SetValue(proxy, value);
+        T Get<T>(string name) => (T)type.GetField(name, flags)!.GetValue(proxy)!;
+
+        var frame = EdgeCapsulePresentationFrame.Hidden with
+        {
+            Surface = EdgeCapsuleSurfaceKind.DockedResting
+        };
+        Set("_plan", new EdgeCapsuleQueueProxyPlan(
+            "retry-budget",
+            new DeviceScreenRect(0, 0, 100, 40),
+            EdgeCapsuleEdge.Left,
+            0,
+            1,
+            1,
+            120,
+            false,
+            new[] { new EdgeCapsuleQueueProxyMemberPlan("test", frame, frame, frame) }));
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        Set("_completionTimer", timer);
+
+        for (var expected = 1; expected <= 2; expected++)
+        {
+            Set("_finishing", true);
+            proxy.ScheduleCompletionRetry(success: false);
+            Check(timer.IsEnabled, $"Completion retry {expected} is scheduled");
+            Check(Get<int>("_completionRetryCount") == expected, $"Completion retry count reaches {expected}");
+            Check(!Get<bool>("_coverLost"), $"Completion retry {expected} does not fabricate cover loss");
+            timer.Stop();
+        }
+
+        Set("_finishing", true);
+        proxy.ScheduleCompletionRetry(success: false);
+        Check(!timer.IsEnabled, "Completion retry budget does not schedule a third timer");
+        Check(Get<int>("_completionRetryCount") == 2, "Completion retry budget stays capped at two");
+        Check(!Get<bool>("_coverLost"), "Retry exhaustion does not enter a second recovery mode");
+        Check(!Get<bool>("_finishing"), "Retry exhaustion leaves the visible proxy available to later lifecycle work");
+        Console.WriteLine("PASS proxy-completion-retry-budget");
     }
 
     private static void ProxyOutputWindowVisibility()

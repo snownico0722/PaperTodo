@@ -387,7 +387,7 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
 
-Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后，cover 才能释放；completion timer 只负责发起完成尝试，不作为 correctness proof。
+Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后，cover 才能释放；completion timer 只负责发起完成尝试，不作为 correctness proof。自动 completion retry 最多两次；预算耗尽后保留当前可见 cover，不再切换到另一套定时恢复循环。
 
 Display/DPI、z-order、drag 结束、隐藏/关闭 Edge 模式等生命周期边界如果会让现有 surface/queue 失效，先结束或恢复当前 visual authority，再清理 preview、retraction、临时 placement/transaction 等 transient state；这些临时状态不能跨失效边界残留到下一次显示或重新启用。
 

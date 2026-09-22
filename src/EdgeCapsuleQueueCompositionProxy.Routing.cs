@@ -404,38 +404,19 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         _finishing = false;
-        _completionRetrySuccess = success;
         _completionTimer.Stop();
-
-        if (_coverLost)
-        {
-            // The normal handoff budget is already exhausted (or the DComp output was lost). Source
-            // reveal is now the only safe authority transition. Keep that emergency recovery paced
-            // at 50 ms if Windows temporarily refuses the uncloak; never turn it into a Send loop.
-            _completionRetrySuccess = false;
-            _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
-            _completionTimer.Start();
-            return;
-        }
-
         if (_completionRetryCount >= MaximumCompletionRetryCount)
         {
-            // Two delayed retries are enough for transient WPF/native settlement. After that the
-            // last proxy frame must not become a permanent authority: enter the existing cover-loss
-            // path, which reveals real sources before this broken generation can retire.
-            _coverLost = true;
-            _completionRetrySuccess = false;
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.handoff phase=retry-exhausted session={_sessionOrdinal} " +
                 $"cold={IsColdSession} queue={_plan.QueueKey} " +
-                $"attempts={_completionRetryCount} successTarget={success}");
+                $"attempts={_completionRetryCount} successTarget={success} scheduled=false");
 #endif
-            _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
-            _completionTimer.Start();
             return;
         }
 
+        _completionRetrySuccess = success;
         _completionRetryCount++;
         _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
         _completionTimer.Start();
