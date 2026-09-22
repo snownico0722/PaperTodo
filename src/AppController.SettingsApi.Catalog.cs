@@ -63,11 +63,11 @@ public sealed partial class AppController
             value => State.LiveBackgroundProcessing = value,
             SettingEffects.Skin,
             title: Strings.Get("SettingsLiveBackgroundProcessing"));
-        yield return DefineSetting<bool>("appearance.surface_outline",
-            () => State.ShowSurfaceOutline,
-            value => State.ShowSurfaceOutline = value,
+        yield return DefineSetting<bool>("appearance.hide_surface_outline",
+            () => State.HideSurfaceOutline,
+            value => State.HideSurfaceOutline = value,
             SettingEffects.SurfaceOutline,
-            title: SettingsSidebarLocalized("显示外轮廓", "Show outer border", "外枠を表示", "외곽선 표시"));
+            title: SettingsSidebarLocalized("隐藏外轮廓", "Hide outer border", "外枠を隠す", "외곽선 숨기기"));
         yield return DefineSetting<bool>("appearance.native_material_always_active",
             () => State.MicaAlwaysActive,
             value => State.MicaAlwaysActive = value,
