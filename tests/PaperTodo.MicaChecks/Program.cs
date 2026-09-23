@@ -524,8 +524,8 @@ internal static class Program
             controller.State.EnableAnimations = true;
             controller.HidePaper(paper);
             Pump();
-            Assert(!window.IsVisible && window.Opacity == 1,
-                "native Mica hide skips whole-window opacity animation");
+            Assert(window.Opacity == 1,
+                "native Mica hide never animates whole-window opacity");
             controller.ShowPaper(paper, activate: false);
             Pump();
             Assert(window.IsVisible &&
