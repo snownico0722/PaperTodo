@@ -166,7 +166,10 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         (_target as IDisposable)?.Dispose();
 
         var interop = _compositor.As<ICompositorDesktopInterop>();
-        interop.CreateDesktopWindowTarget(hwnd, false, out var target);
+        // WPF already owns the non-topmost DirectComposition target for its HWND.
+        // The Windows App SDK Win32 Mica sample uses the topmost target; use the free
+        // topmost layer here and let the desktop-pixel regression verify foreground order.
+        interop.CreateDesktopWindowTarget(hwnd, true, out var target);
         _target = target;
         _target.Root = _compositor.CreateContainerVisual();
     }
