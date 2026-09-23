@@ -241,13 +241,8 @@ public sealed partial class PaperWindow : Window
         Start
     }
 
-    private void ClearCapsuleInteractionKeyboardFocus()
-    {
-        DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe();
-        Dispatcher.BeginInvoke(
-            (Action)DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe,
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
+    private void ClearCapsuleInteractionKeyboardFocus() =>
+        WindowNative.ClearCurrentThreadKeyboardFocus();
 
     private sealed class TodoDragState
     {
