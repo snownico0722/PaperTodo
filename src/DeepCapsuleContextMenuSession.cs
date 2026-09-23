@@ -103,8 +103,8 @@ internal sealed class DeepCapsuleContextMenuSession
         if (!_dispatcher.CheckAccess())
         {
             _ = _dispatcher.BeginInvoke(
-                new Action(() => ExecuteRequestedClose(menu, version)),
-                DispatcherPriority.Input);
+                DispatcherPriority.Input,
+                new Action(() => ExecuteRequestedClose(menu, version)));
             return;
         }
 
