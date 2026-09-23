@@ -142,6 +142,48 @@ internal static class Program
                 f.Backdrop.Dispose();
                 Assert(!f.Api.ClearAcrylic, "disposal removes accent");
             });
+            Check("fresh Aero waits for the first WPF present", () =>
+            {
+                var chrome = Fixture.NewChrome();
+                var window = new Window
+                {
+                    Content = chrome,
+                    Width = 300,
+                    Height = 230,
+                    Left = 40,
+                    Top = 40,
+                    WindowStyle = WindowStyle.SingleBorderWindow,
+                    AllowsTransparency = false,
+                    ShowInTaskbar = false
+                };
+                var api = new FakeNative();
+                using var backdrop = new NativeMicaBackdrop(
+                    window,
+                    () => chrome,
+                    () => true,
+                    brush => chrome.Background = brush,
+                    api);
+                var rendered = false;
+                window.ContentRendered += (_, _) => rendered = true;
+                try
+                {
+                    // Store the requested recipe before HWND creation. SourceInitialized must not
+                    // make a fresh redirected surface transparent before WPF publishes content.
+                    backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial, force: true);
+                    window.Show();
+                    Assert(rendered || !backdrop.IsActive,
+                        "fresh Aero cannot activate before the first WPF content present");
+                    Pump();
+                    Assert(rendered && backdrop.IsActive && api.Alpha &&
+                        Transparent(chrome.Background),
+                        "fresh Aero activates after WPF has published the redirected bitmap");
+                }
+                finally
+                {
+                    window.Close();
+                }
+            });
+
             Check("Aero uses clear alpha without inheriting Acrylic blur", () =>
             {
                 using var f = new Fixture();
