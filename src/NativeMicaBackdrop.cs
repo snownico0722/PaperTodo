@@ -177,8 +177,21 @@ internal sealed class NativeMicaBackdrop : IDisposable
                             _adjustableMica ??= new AdjustableMicaControllerBackdrop();
                             var usedController = _adjustableMica.TryApply(
                                 hwnd, dark, transparency, _alwaysActive || _window.IsActive);
-                            if (!usedController)
+                            if (usedController)
+                            {
+                                // MicaController owns the backdrop composition target. Do not also
+                                // switch WPF's redirected bitmap to the 24H2 per-pixel-alpha path:
+                                // WPF does not publish that bitmap as our own premultiplied-alpha
+                                // surface, so the entire foreground can disappear and leave only
+                                // the blank Mica slab. Keep the proven full-glass WPF path instead.
+                                _ = _native.SetRedirectionAlpha(hwnd, false);
+                                UsesRedirectionAlpha = false;
+                                LastHResult = _native.ExtendFrame(hwnd, -1);
+                            }
+                            else
+                            {
                                 LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
+                            }
                         }
                     }
                     else
@@ -196,9 +209,16 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
                 if (LastHResult >= 0)
                 {
-                    // Apply after the material recipe: this is the final alpha/margin writer.
-                    UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                    if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+                    var adjustableMicaActive = _material == MicaBackdropTypes.Mica &&
+                        _adjustableMica?.IsActive == true;
+                    if (!adjustableMicaActive)
+#endif
+                    {
+                        // Apply after the DWM material recipe: this is the final alpha/margin writer.
+                        UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
+                        if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
+                    }
                 }
                 IsActive = LastHResult >= 0;
             }

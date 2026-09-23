@@ -429,6 +429,36 @@ internal static class VisualChecks
         Program.Assert((GetWindowLong(hwnd, -16) & 0x00C00000) == 0,
             "system caption buttons must not overlap PaperTodo's custom title bar");
 
+    internal static void AssertOpaqueForegroundVisible(
+        Window window,
+        FrameworkElement white,
+        FrameworkElement black,
+        string name)
+    {
+        DwmFlush();
+        var hwnd = new WindowInteropHelper(window).Handle;
+        Program.Assert(GetWindowRect(hwnd, out var bounds), name + ": desktop bounds available");
+        using var bitmap = new Drawing.Bitmap(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top);
+        using (var graphics = Drawing.Graphics.FromImage(bitmap))
+            graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bitmap.Size);
+
+        Drawing.Color Pixel(FrameworkElement element)
+        {
+            var p = element.PointToScreen(new Point(element.ActualWidth / 2, element.ActualHeight / 2));
+            return bitmap.GetPixel(
+                (int)Math.Round(p.X) - bounds.Left,
+                (int)Math.Round(p.Y) - bounds.Top);
+        }
+
+        var w = Pixel(white);
+        var b = Pixel(black);
+        Program.Assert(w.R >= 245 && w.G >= 245 && w.B >= 245,
+            $"{name}: white foreground marker was covered ({w})");
+        Program.Assert(b.R <= 12 && b.G <= 12 && b.B <= 12,
+            $"{name}: black foreground marker was covered ({b})");
+        Console.WriteLine($"FOREGROUND {name}: white={w} black={b}");
+    }
+
     private static Drawing.Color? Capture(Window window, string name, FrameworkElement? white, FrameworkElement? black, bool? dark)
     {
         if (string.IsNullOrWhiteSpace(_output))

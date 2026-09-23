@@ -445,6 +445,29 @@ internal static class Program
             var body = chrome.Child;
             Assert(window.Opacity == 1 && chrome.Opacity == 1, "experiment never changes WPF foreground opacity");
 
+            var host = (Grid)typeof(PaperWindow).GetField("_windowHost", Private)!.GetValue(window)!;
+            var whiteMarker = new Border
+            {
+                Width = 24, Height = 24, Background = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(18, 0, 0, 18),
+                IsHitTestVisible = false
+            };
+            var blackMarker = new Border
+            {
+                Width = 24, Height = 24, Background = Brushes.Black,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(50, 0, 0, 18),
+                IsHitTestVisible = false
+            };
+            Panel.SetZIndex(whiteMarker, 10000);
+            Panel.SetZIndex(blackMarker, 10000);
+            host.Children.Add(whiteMarker);
+            host.Children.Add(blackMarker);
+            PumpFor(160);
+
             object Adjustable()
             {
                 var native = typeof(PaperWindow).GetField("_nativeMica", Private)!.GetValue(window)
@@ -478,6 +501,9 @@ internal static class Program
                 Assert(window.IsNativeMicaEffective, "native shell remains effective through controller or DWM fallback");
                 Assert(window.Opacity == 1 && chrome.Opacity == 1 && ReferenceEquals(chrome.Child, body),
                     "foreground and editor tree remain fully opaque and unchanged");
+                PumpFor(120);
+                VisualChecks.AssertOpaqueForegroundVisible(
+                    window, whiteMarker, blackMarker, $"mica-controller-{level}-{theme}");
             }
 
             Apply(MaterialTransparencyLevels.Medium);
