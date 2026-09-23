@@ -414,26 +414,9 @@ internal static class Program
     }
     internal static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static bool Transparent(Brush brush) => brush is SolidColorBrush solid && solid.Color.A == 0;
+#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
     private static void RunBareWpfMicaControllerProbe()
     {
-        var grid = new Grid { Background = Brushes.Transparent };
-        var white = new Border
-        {
-            Width = 40, Height = 40, Background = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(30)
-        };
-        var black = new Border
-        {
-            Width = 40, Height = 40, Background = Brushes.Black,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(90, 30, 0, 0)
-        };
-        grid.Children.Add(white);
-        grid.Children.Add(black);
-
         var window = new Window
         {
             Width = 320,
@@ -443,7 +426,7 @@ internal static class Program
             WindowStyle = WindowStyle.None,
             AllowsTransparency = false,
             Background = Brushes.Transparent,
-            Content = grid,
+            Content = new Grid { Background = Brushes.White },
             ShowInTaskbar = false
         };
         AdjustableMicaControllerBackdrop? backdrop = null;
@@ -454,9 +437,12 @@ internal static class Program
             backdrop = new AdjustableMicaControllerBackdrop();
             var hwnd = new WindowInteropHelper(window).Handle;
             Assert(backdrop.TryApply(hwnd, false, MaterialTransparencyLevels.Medium, true),
-                $"bare WPF MicaController activates; stage={backdrop.LastStage}; error={backdrop.LastError ?? "<none>"}");
+                "standalone MicaController probe activates; stage=" + backdrop.LastStage +
+                "; error=" + (backdrop.LastError ?? "<none>"));
             PumpFor(220);
-            VisualChecks.AssertOpaqueForegroundVisible(window, white, black, "bare-wpf-mica-controller");
+            Console.WriteLine(
+                "INFO standalone MicaController probe activated. This adapter is intentionally not attached " +
+                "to PaperWindow because WPF foreground composition was observably altered during the experiment.");
         }
         finally
         {
@@ -465,24 +451,30 @@ internal static class Program
             Pump();
         }
     }
+#endif
 
     private static void RunMicaControllerExperiment(AppController controller)
     {
+#if !PAPERTODO_MICA_CONTROLLER_EXPERIMENT
+        throw new InvalidOperationException(
+            "MicaController experiment requires PaperTodoMicaControllerExperiment=true.");
+#else
         RunBareWpfMicaControllerProbe();
         typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
         var saved = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-            controller.State.MaterialTransparency, controller.State.EnableAnimations);
+            controller.State.MaterialTransparency, controller.State.EnableAnimations, controller.State.MicaBackdropType);
         controller.State.PaperSkin = PaperSkins.Mica;
         controller.State.ColorScheme = ColorSchemes.Mica;
         controller.State.Theme = "light";
         controller.State.EnableAnimations = false;
         controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
+        controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
         Theme.Invalidate();
 
         var paper = new PaperData
         {
             Type = PaperTypes.Note,
-            Content = "# MicaController\n前景必须始终保持完全不透明",
+            Content = "# DWM Mica\nPaperWindow keeps WPF foreground ownership",
             X = 80,
             Y = 80,
             Width = 420,
@@ -493,10 +485,21 @@ internal static class Program
         try
         {
             window.Show();
-            Pump();
+            PumpFor(260);
             var chrome = (Border)typeof(PaperWindow).GetField("_paperChrome", Private)!.GetValue(window)!;
             var body = chrome.Child;
-            Assert(window.Opacity == 1 && chrome.Opacity == 1, "experiment never changes WPF foreground opacity");
+            var hwnd = new WindowInteropHelper(window).Handle;
+            var adapter = (NativeMicaBackdrop)typeof(PaperWindow)
+                .GetField("_nativeMica", Private)!.GetValue(window)!;
+
+            Assert(adapter.GetType().GetField("_adjustableMica", Private) == null,
+                "production NativeMicaBackdrop contains no MicaController owner");
+            Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var backdropType, 4) >= 0 &&
+                   backdropType == MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Mica) &&
+                   window.IsNativeMicaEffective,
+                "PaperWindow stays on the proven DWM Mica path");
+            Assert(window.Opacity == 1 && chrome.Opacity == 1 && ReferenceEquals(chrome.Child, body),
+                "DWM Mica keeps the WPF foreground fully opaque and unchanged");
 
             var host = (Grid)typeof(PaperWindow).GetField("_windowHost", Private)!.GetValue(window)!;
             var whiteMarker = new Border
@@ -520,102 +523,10 @@ internal static class Program
             host.Children.Add(whiteMarker);
             host.Children.Add(blackMarker);
             PumpFor(160);
+            VisualChecks.AssertOpaqueForegroundVisible(window, whiteMarker, blackMarker, "paperwindow-dwm-mica");
 
-            object Adjustable()
-            {
-                var native = typeof(PaperWindow).GetField("_nativeMica", Private)!.GetValue(window)
-                    ?? throw new InvalidOperationException("NativeMicaBackdrop missing.");
-                return native.GetType().GetField("_adjustableMica", Private)!.GetValue(native)
-                    ?? throw new InvalidOperationException("MicaController experiment object was not created.");
-            }
-
-            (bool Active, string Stage, string? Error,
-                float TintDefault, float LumDefault, float TintApplied, float LumApplied) Read()
-            {
-                var adjustable = Adjustable();
-                var stateFlags = Private | BindingFlags.Public;
-                return (
-                    Convert.ToBoolean(adjustable.GetType().GetProperty("IsActive", stateFlags)!.GetValue(adjustable)),
-                    Convert.ToString(adjustable.GetType().GetProperty("LastStage", stateFlags)!.GetValue(adjustable)) ?? "",
-                    Convert.ToString(adjustable.GetType().GetProperty("LastError", stateFlags)!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity", stateFlags)!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity", stateFlags)!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedTintOpacity", stateFlags)!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedLuminosityOpacity", stateFlags)!.GetValue(adjustable)));
-            }
-
-            void Apply(string level, string theme = "light")
-            {
-                controller.State.MaterialTransparency = level;
-                controller.State.Theme = theme;
-                Theme.Invalidate();
-                window.UpdateTheme();
-                Pump();
-                Assert(window.IsNativeMicaEffective, "native shell remains effective through controller or DWM fallback");
-                Assert(window.Opacity == 1 && chrome.Opacity == 1 && ReferenceEquals(chrome.Child, body),
-                    "foreground and editor tree remain fully opaque and unchanged");
-                PumpFor(120);
-                VisualChecks.AssertOpaqueForegroundVisible(
-                    window, whiteMarker, blackMarker, $"mica-controller-{level}-{theme}");
-            }
-
-            Apply(MaterialTransparencyLevels.Medium);
-            var medium = Read();
-
-            // WPF already owns the DirectComposition targets of its top-level HWND.
-            // Current Windows returns DCOMPOSITION_ERROR_WINDOW_ALREADY_COMPOSED for both
-            // non-topmost and topmost CreateDesktopWindowTarget attempts. Treat that as a
-            // supported negative experiment result only when #227's DWM Mica fallback remains
-            // active and the WPF foreground stays untouched.
-            if (!medium.Active)
-            {
-                Assert(medium.Stage == "composition-target" &&
-                       medium.Error?.Contains("88980800", StringComparison.OrdinalIgnoreCase) == true,
-                    $"unexpected MicaController failure: stage={medium.Stage}; error={medium.Error ?? "<none>"}");
-                Assert(window.IsNativeMicaEffective &&
-                       window.Opacity == 1 &&
-                       chrome.Opacity == 1 &&
-                       ReferenceEquals(chrome.Child, body),
-                    "WPF composition conflict must fall back to DWM Mica without changing foreground ownership");
-                Console.WriteLine(
-                    "PASS MicaController compatibility probe: WPF owns the HWND composition target " +
-                    "(0x88980800); #227 DWM Mica fallback remains active and foreground stays opaque.");
-                return;
-            }
-
-            Assert(Math.Abs(medium.TintApplied - medium.TintDefault) < .0001f &&
-                   Math.Abs(medium.LumApplied - medium.LumDefault) < .0001f,
-                "medium preserves Windows App SDK Mica defaults");
-
-            Apply(MaterialTransparencyLevels.VeryLow);
-            var lessTransparent = Read();
-            Assert(lessTransparent.Active &&
-                   lessTransparent.TintApplied >= medium.TintApplied &&
-                   lessTransparent.LumApplied >= medium.LumApplied &&
-                   (lessTransparent.TintApplied > medium.TintApplied + .0001f ||
-                    lessTransparent.LumApplied > medium.LumApplied + .0001f),
-                "very low transparency increases Mica material cover");
-
-            Apply(MaterialTransparencyLevels.VeryHigh);
-            var moreTransparent = Read();
-            Assert(moreTransparent.Active &&
-                   moreTransparent.TintApplied <= medium.TintApplied &&
-                   moreTransparent.LumApplied <= medium.LumApplied &&
-                   (moreTransparent.TintApplied < medium.TintApplied - .0001f ||
-                    moreTransparent.LumApplied < medium.LumApplied - .0001f),
-                "very high transparency reduces Mica material cover");
-
-            Apply(MaterialTransparencyLevels.Medium, "dark");
-            var darkMedium = Read();
-            Assert(darkMedium.Active &&
-                   Math.Abs(darkMedium.TintApplied - darkMedium.TintDefault) < .0001f &&
-                   Math.Abs(darkMedium.LumApplied - darkMedium.LumDefault) < .0001f,
-                "theme change recreates a fresh SDK default baseline");
-
-            // Regression for the real controller-managed path that previously crashed after
-            // switching skins: a non-layered native PaperWindow must never receive a whole-window
-            // Opacity DoubleAnimation. Keep animation clocks running long enough for a delayed
-            // Render tick to surface the same failure as the production crash.
+            // Regression for the separate native-window opacity bug found while testing #301:
+            // non-layered material windows must never receive a whole-window Opacity animation.
             var managedPaper = new PaperData
             {
                 Type = PaperTypes.Note,
@@ -667,18 +578,18 @@ internal static class Program
                            managedChrome.Opacity == 1 &&
                            new WindowInteropHelper(managedWindow).Handle == managedHwnd &&
                            ReferenceEquals(managedChrome.Child, managedBody),
-                        $"skin switch {skin} keeps the native HWND/editor fully opaque");
+                        "skin switch " + skin + " keeps the native HWND/editor fully opaque");
                 }
 
                 Assert(managedWindow.IsNativeMicaEffective,
-                    "switching back to Mica restores the native material on the same HWND");
+                    "switching back to Mica restores DWM Mica on the same HWND");
 
                 controller.HidePaper(managedPaper);
                 PumpFor(120);
                 Assert(!managedPaper.IsVisible &&
                        !managedWindow.IsVisible &&
                        managedWindow.Opacity == 1,
-                    "native Mica hide skips whole-window opacity animation");
+                    "native material hide skips whole-window opacity animation");
 
                 controller.ShowPaper(managedPaper, activate: false);
                 PumpFor(320);
@@ -689,7 +600,7 @@ internal static class Program
                        new WindowInteropHelper(managedWindow).Handle == managedHwnd &&
                        ReferenceEquals(managedChrome.Child, managedBody) &&
                        managedWindow.IsNativeMicaEffective,
-                    "native Mica show keeps the same opaque HWND/editor and restores MicaController");
+                    "native material show keeps the same opaque HWND/editor and restores DWM Mica");
             }
             finally
             {
@@ -700,19 +611,19 @@ internal static class Program
             }
 
             Console.WriteLine(
-                $"PASS MicaController experiment: light default tint={medium.TintDefault:F3} lum={medium.LumDefault:F3}; " +
-                $"veryLow={lessTransparent.TintApplied:F3}/{lessTransparent.LumApplied:F3}; " +
-                $"veryHigh={moreTransparent.TintApplied:F3}/{moreTransparent.LumApplied:F3}; " +
-                $"dark default={darkMedium.TintDefault:F3}/{darkMedium.LumDefault:F3}.");
+                "PASS #301 final route: standalone MicaController remains an experiment only; " +
+                "PaperWindow uses DWM Mica with opaque WPF foreground.");
         }
         finally
         {
             window.CloseForReal();
             controller.State.Papers.Remove(paper);
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-                controller.State.MaterialTransparency, controller.State.EnableAnimations) = saved;
+                controller.State.MaterialTransparency, controller.State.EnableAnimations,
+                controller.State.MicaBackdropType) = saved;
             Theme.Invalidate();
         }
+#endif
     }
 
     private static void Check(string name, Action action) { action(); _passed++; Console.WriteLine("PASS " + name); }

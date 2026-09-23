@@ -23,11 +23,11 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Normal build stays identical to PR 227
+      - name: Build normal product configuration
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
       - name: Build MicaController experiment
         run: dotnet build ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true --nologo -clp:ErrorsOnly
-      - name: Probe adjustable Mica on a real WPF paper
+      - name: Probe rejected MicaController path and verify DWM PaperWindow route
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true -- --mica-controller-experiment
       - name: Run material regression with experimental backend available
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true
@@ -48,7 +48,7 @@ jobs:
           $exe = Join-Path $out 'PaperTodo.exe'
           if (!(Test-Path $exe)) { throw 'Experiment executable missing' }
           $size = (Get-Item $exe).Length
-          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true; micaController='active on the existing WPF PaperWindow HWND'; medium='SDK defaults'; veryLow='Tint 0.650 / Luminosity 1.000 on CI light baseline'; veryHigh='Tint 0.350 / Luminosity 0.700 on CI light baseline'; foregroundOpacity=1.0; portableDataDirectory='Environment.ProcessPath directory' } |
+          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; micaController='standalone compatibility probe only; rejected for PaperWindow'; paperWindowBackdrop='DWM DWMWA_SYSTEMBACKDROP_TYPE'; productionIntegration=$false; foregroundOpacity=1.0; portableDataDirectory='Environment.ProcessPath directory' } |
             ConvertTo-Json | Set-Content (Join-Path $out 'experiment-manifest.json') -Encoding utf8
           Set-Content (Join-Path $out 'data.json') '{"paperSkin":"mica","colorScheme":"mica","theme":"light","enableAnimations":true,"papers":[]}' -Encoding utf8
           $p = Start-Process $exe -WorkingDirectory $out -PassThru
