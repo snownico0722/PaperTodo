@@ -243,9 +243,9 @@ public sealed partial class PaperWindow : Window
 
     private void ClearCapsuleInteractionKeyboardFocus()
     {
-        WindowNative.ClearCurrentThreadKeyboardFocus();
+        DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe();
         Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
+            (Action)DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe,
             System.Windows.Threading.DispatcherPriority.Background);
     }
 
