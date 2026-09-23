@@ -103,8 +103,7 @@ public sealed class MasterCapsuleWindow : Window
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
         _contextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
-            $"master:{Guid.NewGuid():N}",
-            Dispatcher);
+            $"master:{Guid.NewGuid():N}");
         ConfigureWindow();
         BuildContent();
         UpdateExperimentalOpacity();
@@ -238,11 +237,15 @@ public sealed class MasterCapsuleWindow : Window
         content.Children.Add(stack);
 
         _pill.Child = content;
-        // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation,
-        // foreground fallback and stale-focus cleanup to DeepCapsuleContextMenuSession.
+        // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation
+        // and stale-focus cleanup to DeepCapsuleContextMenuSession.
         var contextMenu = _controller.CreateTrayMenu(registerForLiveRefresh: true);
         _pill.ContextMenu = contextMenu;
-        _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
+        _pill.ContextMenuOpening += (_, _) =>
+        {
+            DeepCapsuleContextMenuSession.ClearStaleApplicationActivationIfNeeded();
+            _controller.RebuildTrayMenu(contextMenu);
+        };
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);
         contextMenu.Closed += (_, _) => _contextMenuSession.HandleClosed(contextMenu);
         host.Children.Add(_pill);
