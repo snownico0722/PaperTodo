@@ -1288,11 +1288,15 @@ public sealed partial class AppController : IDisposable
             {
                 snapTileBounds = null;
             }
-            // To prevent a 1-frame DWM cache flash when a window's size changes while hidden,
-            // we show it fully transparent first, then restore opacity after layout is complete.
+            // Layered WPF papers can use whole-window opacity for the reveal. Native material
+            // windows are non-layered (AllowsTransparency=false); animating Window.Opacity on
+            // them can make WPF throw before the material adapter can suspend/recover. Keep the
+            // native HWND fully opaque and let its retained WPF content present normally.
             double originalOpacity = window.Opacity;
+            var canAnimateWholeWindowOpacity = window.AllowsTransparency;
             window.ShowActivated = activate;
-            window.Opacity = 0;
+            if (canAnimateWholeWindowOpacity)
+                window.Opacity = 0;
             window.Show();
 
             window.Dispatcher.InvokeAsync(() =>
@@ -1318,8 +1322,9 @@ public sealed partial class AppController : IDisposable
                     return;
                 }
 
-                // 显示动画：淡入
-                if (State.EnableAnimations && originalOpacity > 0)
+                // 显示动画：淡入。只允许 layered WPF 窗口动画整个 HWND；
+                // 原生 Mica/MicaController 窗口始终保持 Window.Opacity=1。
+                if (canAnimateWholeWindowOpacity && State.EnableAnimations && originalOpacity > 0)
                 {
                     var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, originalOpacity, TimeSpan.FromMilliseconds(200))
                     {
@@ -1346,6 +1351,8 @@ public sealed partial class AppController : IDisposable
                 else
                 {
                     window.Opacity = originalOpacity;
+                    if (!canAnimateWholeWindowOpacity)
+                        window.RefreshNativeMica(force: true);
                 }
             }, System.Windows.Threading.DispatcherPriority.Render);
         }
@@ -1802,8 +1809,9 @@ public sealed partial class AppController : IDisposable
             }
             window.DetachFromDeepCapsuleStack(animate: State.EnableAnimations);
 
-            // 隐藏动画：淡出
-            if (State.EnableAnimations && window.IsVisible)
+            // 隐藏动画：淡出。non-layered 原生材质窗口不能动画 Window.Opacity；
+            // 直接隐藏，避免 WPF 在 native HWND 上创建 DoubleAnimation 时抛异常。
+            if (State.EnableAnimations && window.IsVisible && window.AllowsTransparency)
             {
                 var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(window.Opacity, 0, TimeSpan.FromMilliseconds(150))
                 {

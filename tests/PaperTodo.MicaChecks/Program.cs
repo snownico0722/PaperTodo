@@ -517,6 +517,27 @@ internal static class Program
                    Math.Abs(darkMedium.LumApplied - darkMedium.LumDefault) < .0001f,
                 "theme change recreates a fresh SDK default baseline");
 
+            // Regression for native/non-layered visibility transitions. Whole-window opacity
+            // animations are legal only on the legacy layered paper path; MicaController keeps
+            // this HWND opaque and must survive hide/show with animations enabled.
+            var hwnd = new WindowInteropHelper(window).Handle;
+            controller.State.EnableAnimations = true;
+            controller.HidePaper(paper);
+            Pump();
+            Assert(!window.IsVisible && window.Opacity == 1,
+                "native Mica hide skips whole-window opacity animation");
+            controller.ShowPaper(paper, activate: false);
+            Pump();
+            Assert(window.IsVisible &&
+                   window.Opacity == 1 &&
+                   chrome.Opacity == 1 &&
+                   new WindowInteropHelper(window).Handle == hwnd &&
+                   ReferenceEquals(chrome.Child, body),
+                "native Mica show keeps the same opaque HWND and editor tree");
+            var afterShow = Read();
+            Assert(afterShow.Active && window.IsNativeMicaEffective,
+                "MicaController remains active after native hide/show");
+
             Console.WriteLine(
                 $"PASS MicaController experiment: light default tint={medium.TintDefault:F3} lum={medium.LumDefault:F3}; " +
                 $"veryLow={lessTransparent.TintApplied:F3}/{lessTransparent.LumApplied:F3}; " +
