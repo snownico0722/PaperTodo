@@ -202,8 +202,7 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         try
         {
             _dispatcherQueueController =
-                Marshal.GetObjectForIUnknown(controllerAbi) as global::Windows.System.DispatcherQueueController
-                ?? throw new InvalidCastException("DispatcherQueueController projection failed.");
+                global::Windows.System.DispatcherQueueController.FromAbi(controllerAbi);
         }
         finally
         {
