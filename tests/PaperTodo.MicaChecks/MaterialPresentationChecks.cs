@@ -235,6 +235,12 @@ internal static class MaterialPresentationChecks
                         mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
                         Until(() => !menu.IsOpen, "actual outside click closes MASTER material menu");
                     }
+                    else if (theme == "light" && skin == PaperSkins.Mica && attempt == 1)
+                    {
+                        keybd_event(0x1B, 0, 0, UIntPtr.Zero);
+                        keybd_event(0x1B, 0, 0x0002, UIntPtr.Zero);
+                        Until(() => !menu.IsOpen, "actual Escape closes MASTER material menu");
+                    }
                     else
                     {
                         menu.IsOpen = false;
@@ -273,6 +279,7 @@ internal static class MaterialPresentationChecks
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extra);
 
     private static SkinBorder? Find(DependencyObject node)
     {
