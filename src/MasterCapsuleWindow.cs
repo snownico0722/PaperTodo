@@ -828,11 +828,11 @@ public sealed class MasterCapsuleWindow : Window
         if (_isClosingForReal || _experimentalPassive || _contextMenuOpenQueued) return;
         _contextMenuOpenQueued = true;
         // WS_EX_NOACTIVATE owners do receive the native right-button release, but opening a
-        // ContextMenu during that same input turn lets the release immediately dismiss it.
-        // Wait until WPF/Win32 have both finished the current mouse transaction, then open the
-        // ordinary MaterialContextMenu. This is local to the master HWND; no global hook.
+        // ContextMenu during that same Input turn lets the release immediately dismiss it.
+        // Background runs after input unwinds without waiting for an idle queue (which can be
+        // starved by normal background work). This is local to the master HWND; no global hook.
         Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.ContextIdle,
+            System.Windows.Threading.DispatcherPriority.Background,
             new Action(() =>
             {
                 _contextMenuOpenQueued = false;
