@@ -1,0 +1,30 @@
+name: Test value inventory (temporary)
+on:
+  push:
+    branches: [refactor/tests-behavior-and-tools]
+    paths: [.github/workflows/tests-value-audit.yml]
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inventory test responsibilities
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          totals = {}
+          for p in sorted(Path('tests').rglob('*')):
+              if p.suffix not in ('.cs', '.cjs', '.ps1'): continue
+              s = p.read_text(encoding='utf-8-sig')
+              lines = s.splitlines()
+              totals[p.parts[1]] = totals.get(p.parts[1], 0) + len(lines)
+              methods = re.findall(r'(?m)^\s*(?:private|internal|public)?\s*(?:static\s+)?(?:async\s+)?(?:void|Task|int|string)\s+(\w*(?:Check|Test|Profile|Benchmark|Fixture|Smoke)\w*)\s*\(', s)
+              print(f'FILE {p} lines={len(lines)} methods={", ".join(methods)}')
+              for i, line in enumerate(lines):
+                  if re.search(r'PROFILE |BENCHMARK|LIFECYCLE_SAMPLE|GetAllocatedBytes|GC\.Collect|p50|p95|Stopwatch|baseline|--profile|--benchmark',line,re.I):
+                      print(f'  {i+1}: {line.strip()}')
+          print('TOTALS', totals, 'TOTAL_LINES', sum(totals.values()))
