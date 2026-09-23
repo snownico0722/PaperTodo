@@ -579,6 +579,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             paperId = _context.PaperId,
             providerId = _context.ProviderId,
             apiVersion = _context.ApiVersion,
+            uiLanguage = _context.UiLanguage,
             state = ParseState(_stateJson),
             stateVersion = _context.StateVersion,
             targetStateVersion = _context.TargetStateVersion,
