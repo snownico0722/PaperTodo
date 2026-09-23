@@ -30,7 +30,9 @@ public sealed partial class PaperWindow
                     return;
                 }
 
-                host.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
+                host.SetContextMenu(
+                    BuildDeepCapsuleSlotContextMenu(),
+                    DeepCapsuleContextMenuSession.ClearStaleApplicationActivationIfNeeded);
                 _deepCapsuleContextMenuInitialized = true;
             }),
             System.Windows.Threading.DispatcherPriority.SystemIdle);
@@ -45,9 +47,6 @@ public sealed partial class PaperWindow
 
         return menu;
     }
-
-    private void QueueCloseDeepCapsuleSlotContextMenu() =>
-        _deepCapsuleContextMenuSession.RequestClose();
 
     private void CloseDeepCapsuleSlotContextMenu() =>
         _deepCapsuleContextMenuSession.Close();
