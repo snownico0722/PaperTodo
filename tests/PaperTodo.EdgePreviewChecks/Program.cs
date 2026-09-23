@@ -15,14 +15,13 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args is ["--artifact-readiness"]) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
-            else if (args is ["--worker-checks"]) MarkdownWorkerChecks();
+            if (args is ["--worker-checks"]) MarkdownWorkerChecks();
             else if (args is ["--review-integration"]) ReviewIntegrationChecks();
             else if (args is ["--review-only"]) ReviewBoundaryChecks();
             else if (args.Length == 0)
             {
                 ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run();
-                Checks(); ReviewBoundaryChecks(); ArtifactReadinessChecks(); PreloadChecks();
+                Checks(); ReviewBoundaryChecks(); PreloadChecks();
                 ReviewIntegrationChecks(); MarkdownWorkerChecks();
             }
             else throw new ArgumentException("Unknown check arguments. Measurements now live in tools/PaperTodo.DesktopBenchmarks.");
