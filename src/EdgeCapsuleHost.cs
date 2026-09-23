@@ -83,7 +83,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
     private IntPtr _appliedTopmostInsertAfter;
     private bool _experimentalPassive;
     private bool _interactionLocked;
-    private Action? _contextMenuOpening;
     private bool _disposed;
     private Window Window { get; }
     private Grid Root { get; }
@@ -144,10 +143,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         CloseGlyph = closeGlyph;
         Label = label;
 
-        // Owner-side ContextMenuOpening runs before WPF enters menu mode. Keep this boundary
-        // local to the host so callers can clean stale native activation without global input hooks.
-        ContentArea.ContextMenuOpening += (_, _) => _contextMenuOpening?.Invoke();
-        CloseArea.ContextMenuOpening += (_, _) => _contextMenuOpening?.Invoke();
     }
 
     public bool IsVisible => !_disposed && Window.IsVisible;
@@ -1129,13 +1124,10 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         };
     }
 
-    public void SetContextMenu(
-        ContextMenu contextMenu,
-        Action? onOpening = null)
+    public void SetContextMenu(ContextMenu contextMenu)
     {
         if (!_disposed)
         {
-            _contextMenuOpening = onOpening;
             ContentArea.ContextMenu = contextMenu;
             CloseArea.ContextMenu = _appliedFrame.CloseSegmentActsAsContent
                 ? contextMenu
