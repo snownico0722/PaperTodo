@@ -109,10 +109,10 @@ public sealed class MasterCapsuleWindow : Window
         BuildContent();
         UpdateExperimentalOpacity();
         UpdateToolTipSetting();
-        // Clicking the pill must never pull foreground focus: activating this window would
-        // deactivate whatever app was in front, forcing it to repaint — the click "flash".
-        // WS_EX_NOACTIVATE makes the window unable to become the active/foreground window,
-        // so the click toggles collapse-all without disturbing the current foreground app.
+        // Ordinary pill interaction must never pull foreground focus: activating this window
+        // would deactivate whatever app was in front, forcing it to repaint — the click "flash".
+        // WS_EX_NOACTIVATE keeps the pill passive; an explicitly opened context-menu popup owns
+        // its own short-lived foreground/focus session instead.
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
