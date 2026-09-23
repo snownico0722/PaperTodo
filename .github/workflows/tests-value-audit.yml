@@ -1,30 +1,70 @@
-name: Test value inventory (temporary)
+name: Test pruning verification (temporary)
 on:
   push:
     branches: [refactor/tests-behavior-and-tools]
-    paths: [.github/workflows/tests-value-audit.yml]
+    paths: [.github/workflows/tests-value-audit.yml, .github/scripts/pr302_prune_tests_once.py]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inventory:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
     steps:
       - uses: actions/checkout@v7
-      - name: Inventory test responsibilities
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Validate bounded edit ranges
         shell: python
         run: |
           from pathlib import Path
-          import re
-          totals = {}
-          for p in sorted(Path('tests').rglob('*')):
-              if p.suffix not in ('.cs', '.cjs', '.ps1'): continue
-              s = p.read_text(encoding='utf-8-sig')
-              lines = s.splitlines()
-              totals[p.parts[1]] = totals.get(p.parts[1], 0) + len(lines)
-              methods = re.findall(r'(?m)^\s*(?:private|internal|public)?\s*(?:static\s+)?(?:async\s+)?(?:void|Task|int|string)\s+(\w*(?:Check|Test|Profile|Benchmark|Fixture|Smoke)\w*)\s*\(', s)
-              print(f'FILE {p} lines={len(lines)} methods={", ".join(methods)}')
-              for i, line in enumerate(lines):
-                  if re.search(r'PROFILE |BENCHMARK|LIFECYCLE_SAMPLE|GetAllocatedBytes|GC\.Collect|p50|p95|Stopwatch|baseline|--profile|--benchmark',line,re.I):
-                      print(f'  {i+1}: {line.strip()}')
-          print('TOTALS', totals, 'TOTAL_LINES', sum(totals.values()))
+          import ast
+          path = Path('.github/scripts/pr302_prune_tests_once.py')
+          source = path.read_text(encoding='utf-8')
+          old = "    if text.count(begin) != 1 or text.count(end) != 1: raise RuntimeError('Ambiguous range: ' + begin)\n    a,b = text.index(begin), text.index(end)"
+          new = "    if text.count(begin) != 1: raise RuntimeError('Ambiguous range: ' + begin)\n    a = text.index(begin)\n    b = text.index(end, a + len(begin))"
+          if source.count(old) != 1: raise RuntimeError('Editor helper changed')
+          source = source.replace(old, new, 1)
+          ast.parse(source)
+          path.write_text(source, encoding='utf-8', newline='\n')
+      - name: Apply and publish reviewed pruning
+        id: apply
+        run: |
+          python .github/scripts/pr302_prune_tests_once.py
+          if ($LASTEXITCODE -ne 0) { throw 'Edit failed; no partial changes will be committed.' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- tests tools PaperTodo.csproj .github/scripts/pr302_prune_tests_once.py
+          git diff --cached --stat
+          git commit -m 'refactor: prune low-value tests and extract desktop measurements'
+          if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
+          git push origin HEAD:refs/heads/refactor/tests-behavior-and-tools
+          if ($LASTEXITCODE -ne 0) { throw 'Branch advanced; refusing to overwrite.' }
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Release
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Build Debug
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: dotnet build PaperTodo.csproj -c Debug
+      - name: All retained behavior checks
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: ./tools/testing/Run-Checks.ps1 -Group all
+      - name: Desktop measurements smoke
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: dotnet run --project tools/PaperTodo.DesktopBenchmarks -c Release -- --smoke
+      - name: Markdown measurements smoke
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: dotnet run --project tools/PaperTodo.MarkdownBenchmarks -c Release -- --iterations 1
