@@ -35,12 +35,14 @@ internal static class SkinChecks
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-            controller.State.EnableAnimations, controller.State.HideSurfaceOutline);
+            controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+            controller.State.MatchAuxiliaryMaterialStrength);
         try
         {
             CheckOriginalNativeRendering(controller); CheckAuxiliaryMaterials(controller);
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
+            controller.State.MatchAuxiliaryMaterialStrength = true;
             var samples = 0;
             foreach (var mode in new[] { "light", "dark" })
             foreach (var capsule in new[] { false, true })
@@ -84,7 +86,8 @@ internal static class SkinChecks
         finally
         {
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-                controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
+                controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+                controller.State.MatchAuxiliaryMaterialStrength) = before;
             Theme.Invalidate();
         }
     }
