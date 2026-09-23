@@ -19,10 +19,12 @@ internal static class MaterialDragChecks
         Program.Assert((MaterialSurfaceHost.ClassifyWindowPosition(0x0037) & MaterialHostChange.Geometry) != 0,
             "frame change retains local coordinate refresh");
 
-        var saved = (controller.State.PaperSkin, controller.State.EnableAnimations);
+        var saved = (controller.State.PaperSkin, controller.State.EnableAnimations,
+            controller.State.MatchAuxiliaryMaterialStrength);
         var content = new TextBlock { Text = "Retained foreground", Margin = new Thickness(8) };
         controller.State.PaperSkin = PaperSkins.Acrylic;
         controller.State.EnableAnimations = true;
+        controller.State.MatchAuxiliaryMaterialStrength = true;
         Theme.Invalidate();
 
         var surface = new SkinBorder
@@ -116,7 +118,8 @@ internal static class MaterialDragChecks
         finally
         {
             window.Close();
-            (controller.State.PaperSkin, controller.State.EnableAnimations) = saved;
+            (controller.State.PaperSkin, controller.State.EnableAnimations,
+                controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
 
