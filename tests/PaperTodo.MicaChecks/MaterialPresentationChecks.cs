@@ -208,8 +208,18 @@ internal static class MaterialPresentationChecks
                     mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
                     Wait(80);
-                    Console.WriteLine($"MASTER INPUT skin={skin} theme={theme} attempt={attempt} target=0x{masterHwnd.ToInt64():X} hit=0x{hit.ToInt64():X} rightUp={rightButtonUps-beforeRightUps} context={contextMenuMessages-beforeContextMessages} open={menu.IsOpen}");
-                    Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
+                    var openedByRealInput = menu.IsOpen;
+                    var queued = (bool)typeof(MasterCapsuleWindow).GetField("_contextMenuOpenQueued", Program.Private)!.GetValue(master)!;
+                    var directOpen = false;
+                    if (!openedByRealInput)
+                    {
+                        typeof(MasterCapsuleWindow).GetMethod("QueueContextMenuOpenFromPointer", Program.Private)!.Invoke(master, null);
+                        Wait(80);
+                        directOpen = menu.IsOpen;
+                        if (directOpen) menu.IsOpen = false;
+                    }
+                    Console.WriteLine($"MASTER INPUT skin={skin} theme={theme} attempt={attempt} target=0x{masterHwnd.ToInt64():X} hit=0x{hit.ToInt64():X} rightUp={rightButtonUps-beforeRightUps} context={contextMenuMessages-beforeContextMessages} queued={queued} direct={directOpen} open={openedByRealInput}");
+                    Program.Assert(openedByRealInput, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
                     var fullMaterial = controller.State.MatchAuxiliaryMaterialStrength;
