@@ -37,7 +37,6 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDisplayChange = 0x007E;
     private const int WmDpiChanged = 0x02E0;
     private const int WmNcHitTest = 0x0084;
-    private const int WmRButtonUp = 0x0205;
     private static readonly IntPtr HtTransparent = new(-1);
     // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
@@ -240,6 +239,15 @@ public sealed class MasterCapsuleWindow : Window
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);
         contextMenu.Closed += (_, _) => _contextMenuSession.HandleClosed(contextMenu);
+        _pill.AddHandler(
+            Mouse.PreviewMouseUpEvent,
+            new MouseButtonEventHandler((_, e) =>
+            {
+                if (e.ChangedButton != MouseButton.Right) return;
+                e.Handled = true;
+                QueueContextMenuOpenFromPointer();
+            }),
+            handledEventsToo: true);
         host.Children.Add(_pill);
         Content = host;
 
@@ -844,17 +852,6 @@ public sealed class MasterCapsuleWindow : Window
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmRButtonUp && !_experimentalPassive)
-        {
-            // The master HWND is WS_EX_NOACTIVATE. ContextMenuService can miss a subclassed
-            // material menu on this owner, so handle only this HWND's real right-button release.
-            // Defer until the native mouse message has returned so that same release cannot
-            // immediately dismiss the popup we just opened.
-            handled = true;
-            QueueContextMenuOpenFromPointer();
-            return IntPtr.Zero;
-        }
-
         if (msg == WmNcHitTest && _experimentalPassive)
         {
             handled = true;
