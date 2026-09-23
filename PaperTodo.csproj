@@ -45,6 +45,9 @@
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\sdk-compression-$(_PaperTodoSdkCompressionEnabled)\</IntermediateOutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>PaperTodo.DesktopBenchmarks</_Parameter1>
+    </AssemblyAttribute>
     <!-- Diagnostic entry points keep their existing DEBUG guards / Release no-op behavior.
          Their implementations belong to tools, not to the product source directory. -->
     <Compile Include="tools\PaperTodo.EdgeDiagnostics\EntryPoints\*.cs" Link="Diagnostics\%(Filename)%(Extension)" />

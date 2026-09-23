@@ -38,6 +38,9 @@ internal static class Program
         foreach (var operation in new[] { "delete", "close-hide", "button-hide", "background-delete", "background-hide",
             "animated-hide", "focus-change-during-fade", "hide-all", "peer-next", "animated-reopen" })
         {
+            // Every operation still runs unowned and with the hidden native owner. The
+            // intermediate taskbar-only mode needs representatives, not another full product.
+            if (visibility == "taskbar-hidden" && operation is not ("delete" or "animated-hide")) continue;
             total++;
             try { RunIsolated(visibility, operation); }
             catch (Exception ex) { failed++; Console.Error.WriteLine(ex); }

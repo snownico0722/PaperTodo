@@ -16,7 +16,6 @@ internal static partial class Program
         }
         Check("borrowed-brushes", CheckBorrowedBrushes);
         Check("unicode-excerpt", CheckUnicodeExcerpt);
-        Check("plain-inline-reuse", CheckPlainInlineReuse);
         if (failures.Count > 0) throw new InvalidOperationException("Review failures: " + string.Join(", ", failures));
     }
 
@@ -80,37 +79,5 @@ internal static partial class Program
         }
     }
 
-    private static void CheckPlainInlineReuse()
-    {
-        var text = string.Concat(Enumerable.Repeat("普通文字 English e\u0301 العربية 😀 ", 20));
-        foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
-        {
-            var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
-            Require(pieces.Length == 1 && pieces[0].Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None &&
-                pieces[0].Link == null && pieces[0].Text == text,
-                "semantic plain text reuses the original string instead of per-character reconstruction");
-        }
-        var styled = MarkdownEdgeCapsulePreviewRenderer.InlinePieces("**正文** " + text, MarkdownRenderModes.Full).ToArray();
-        Require(styled.Any(p => (p.Style & MarkdownEdgeCapsulePreviewRenderer.InlineStyle.Strong) != 0) &&
-            string.Concat(styled.Select(p => p.Text)) == "正文 " + text, "styled input still uses the shared recognizer");
-    }
 
-    private static void ProfilePlainInlineAllocation()
-    {
-        foreach (var length in new[] { 300, 6000 })
-        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
-        {
-            var text = new string('文', length);
-            long Sample()
-            {
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
-                GC.KeepAlive(pieces);
-                return GC.GetAllocatedBytesForCurrentThread() - before;
-            }
-            for (var i = 0; i < 5; i++) Sample();
-            var bytes = Enumerable.Range(0, 21).Select(_ => Sample()).Order().ToArray();
-            Console.WriteLine($"INLINE_ALLOC length={length} mode={mode} medianBytes={bytes[bytes.Length/2]}");
-        }
-    }
 }

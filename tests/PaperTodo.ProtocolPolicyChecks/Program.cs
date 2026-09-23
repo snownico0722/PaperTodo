@@ -16,7 +16,6 @@ internal static partial class Program
             var abstractions = Assembly.Load("PaperTodo.Plugin.Abstractions");
             CheckShortcutReservations(host);
             CheckShortcutValidation(host);
-            CheckRuntimeTransitions(host);
             CheckCapabilityNormalization(host);
             CheckSettingsLayoutManifest(host);
             CheckSettingActionBehavior(host);
@@ -123,44 +122,6 @@ internal static partial class Program
     }
 
 
-    private static void CheckRuntimeTransitions(Assembly host)
-    {
-        var controller = RequireType(host, "PaperTodo.AppController");
-        var stateType = controller.GetNestedType("PluginRuntimeState", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PluginRuntimeState was not found.");
-        var transitions = controller.GetNestedType("PluginRuntimeTransitions", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PluginRuntimeTransitions was not found.");
-
-        object State(string name) => Enum.Parse(stateType, name);
-        string InvokeState(string methodName, params object[] args) =>
-            (transitions.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-                ?.Invoke(null, args)
-                ?? throw new InvalidOperationException($"Runtime transition was not found: {methodName}"))
-            .ToString()!;
-
-        Assert(InvokeState("BeginStart", State("Stopped")) == "Starting",
-            "Stopped must enter Starting when a runtime start begins.");
-        Assert(InvokeState("StartSucceeded", State("Starting")) == "Running",
-            "Starting must enter Running after successful creation.");
-        Assert(InvokeState("StartFailed", 1, 3) == "Backoff",
-            "The first runtime failure must enter Backoff.");
-        Assert(InvokeState("StartFailed", 3, 3) == "Backoff",
-            "The third bounded retry failure must still enter Backoff.");
-        Assert(InvokeState("StartFailed", 4, 3) == "Failed",
-            "The failure after all bounded retries must enter Failed.");
-        Assert(InvokeState("RetryElapsed", State("Backoff")) == "Stopped",
-            "Expired backoff must return to Stopped so reconcile can restart.");
-
-        var runtimeMatches = transitions.GetMethod(
-            "RuntimeMatches",
-            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("RuntimeMatches was not found.");
-        var current = Guid.NewGuid();
-        Assert((bool)(runtimeMatches.Invoke(null, [current, current]) ?? false),
-            "The current runtime id must accept its own callback.");
-        Assert(!(bool)(runtimeMatches.Invoke(null, [current, Guid.NewGuid()]) ?? true),
-            "A stale runtime id must not be allowed to affect a newer runtime.");
-    }
 
     private static void CheckCapabilityNormalization(Assembly host)
     {

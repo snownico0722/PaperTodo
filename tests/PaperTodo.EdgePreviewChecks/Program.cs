@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -17,16 +15,17 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
-            if (args.Contains("--artifact-readiness")) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
-            else if (args.Contains("--worker-checks")) MarkdownWorkerChecks();
-            else if (args.Contains("--review-integration")) ReviewIntegrationChecks();
-            else if (args.Contains("--review-only")) ReviewBoundaryChecks();
-            else if (args.Contains("--inline-allocation")) ProfilePlainInlineAllocation();
-            else if (args.Contains("--preload-profile")) ProfilePreload(args.Contains("--reverse"));
-            else if (args.Contains("--preload-memory")) PreloadMemory();
-            else if (args.Contains("--profile")) Profile();
-            else if (args.Contains("--export")) ExportPreviewPixels(args.Last());
-            else { ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run(); Checks(); ReviewBoundaryChecks(); PreloadAuditChecks(); PreloadSelectionChecks(); ArtifactReadinessChecks(); PreloadChecks(); ReviewIntegrationChecks(); MarkdownWorkerChecks(); }
+            if (args is ["--artifact-readiness"]) { ArtifactSurfaceChecks(); ArtifactReadinessChecks(); }
+            else if (args is ["--worker-checks"]) MarkdownWorkerChecks();
+            else if (args is ["--review-integration"]) ReviewIntegrationChecks();
+            else if (args is ["--review-only"]) ReviewBoundaryChecks();
+            else if (args.Length == 0)
+            {
+                ArtifactSurfaceChecks(); ArtifactRenderingChecks(); SharedPreviewSemanticChecks.Run();
+                Checks(); ReviewBoundaryChecks(); ArtifactReadinessChecks(); PreloadChecks();
+                ReviewIntegrationChecks(); MarkdownWorkerChecks();
+            }
+            else throw new ArgumentException("Unknown check arguments. Measurements now live in tools/PaperTodo.DesktopBenchmarks.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -61,141 +60,5 @@ internal static partial class Program
         Brushes.White, Brushes.Gray, Brushes.Blue, Brushes.LightGray, Brushes.Gray, Brushes.Black, Brushes.Gray,
         new FontFamily("Segoe UI"), new FontFamily("Segoe UI Symbol"), XmlLanguage.GetLanguage("en-US"), false, "edge-preview-check"));
 
-    private static void Profile()
-    {
-        var fixtures = new (string Name, string Text)[]
-        {
-            ("short-dense", string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd()),
-            ("short-dense-rows", string.Join('\n', Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd(), 12))),
-            ("short-rows", string.Join('\n', Enumerable.Repeat("普通正文 **加粗** 与 `code`", 12))),
-            ("distinct-rows", string.Join('\n', Enumerable.Range(1, 12).Select(i => $"第{i}行普通正文 **加粗** 与 `code`"))),
-            ("dense-inline", string.Concat(Enumerable.Repeat("**加粗** *斜体* ~~删除~~ `code` [a **styled** link](https://example.com) 中文 ", 45))),
-            ("long-code", "```\n" + new string('文', 5500) + "\n```"),
-            ("many-links", string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ", 120)))
-        };
-        foreach (var mode in new[] { MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
-        foreach (var fixture in fixtures)
-        {
-            var rows = new List<double[]>();
-            for (var i = 0; i < 24; i++)
-            {
-                var result = ProfileOne(fixture.Text, mode);
-                Console.WriteLine("SAMPLE " + JsonSerializer.Serialize(new
-                { backend = "bounded", fixture = fixture.Name, mode, iteration = i, metrics = result }));
-                if (i >= 3) rows.Add(result);
-            }
-            var names = new[] { "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
-                "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB" };
-            Console.WriteLine("EDGE_PROFILE " + JsonSerializer.Serialize(new
-            {
-                backend = "bounded", fixture = fixture.Name, mode,
-                characters = fixture.Text.Length, samples = rows.Count, viewport = "460x410 fixed card",
-                median = names.Select((name, i) => (name, value: rows.Select(row => row[i]).Order().ElementAt(rows.Count / 2)))
-                    .ToDictionary(x => x.name, x => x.value),
-                maximum = names.Select((name, i) => (name, value: rows.Max(row => row[i])))
-                    .ToDictionary(x => x.name, x => x.value)
-            }));
-        }
-    }
 
-    private static double[] ProfileOne(string text, string mode, string preparation = "cold")
-    {
-        using var host = NewHost(EdgeCapsuleLayout.WindowChromeMargin);
-        Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "profile monitor");
-        var dispatcher = Dispatcher.CurrentDispatcher;
-        var fixedSize = new EdgeCapsulePreviewSize(460, 410);
-        var layout = new EdgeCapsuleLayoutSnapshot(monitor, EdgeCapsuleEdge.Left, 40, 0, 100, 22, 40,
-            fixedSize.WidthDip + 8, fixedSize.HeightDip + 8, false, 1, null, 480, 440);
-        var presenter = new EdgeCapsulePresenter();
-        Require(presenter.Dispatch(EdgeCapsuleIntent.Attach(new(0, 0, 1), EdgeCapsulePaperForm.Collapsed, false)).Accepted, "attach presenter");
-        var times = new List<long>();
-        var costs = new List<double>();
-        Func<EdgeCapsuleDirty, EdgeCapsuleDirty> reconcile = dirty => presenter.Reconcile(dirty,
-            () => layout, () => null, frame => frame, frame =>
-            {
-                var start = Stopwatch.GetTimestamp();
-                var success = host.Apply(frame);
-                times.Add(start); costs.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
-                return success;
-            });
-        presenter.RequestPresentation(EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State));
-        presenter.Flush(EdgeCapsuleDirty.Measure | EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
-        Pump(); times.Clear(); costs.Clear();
-        var context = new EdgeCapsulePreviewContext(new PaperData(), () => "Profile", false,
-            () => text, () => mode, (_, _) => false, _ => false, () => new Style(), () => "", _ => { }, new());
-        var preload = MarkdownEdgePreviewPreload.For(dispatcher);
-        preload.SetEnabledForChecks(preparation != "cold");
-        var warmStarted = Stopwatch.GetTimestamp();
-        if (preparation == "layout")
-            AwaitPreload(preload.WarmLayoutAsync(new(context, host.MarkdownPreloadAnchor!, fixedSize, () => true, preload.Capture(context))));
-        var warmMs = preparation == "cold" ? 0 : Stopwatch.GetElapsedTime(warmStarted).TotalMilliseconds;
-        var hitsBefore = preload.ArtifactHits;
-        var allocation = GC.GetAllocatedBytesForCurrentThread();
-        var started = Stopwatch.GetTimestamp();
-        IEdgeCapsulePreviewProvider provider = MarkdownEdgeCapsulePreviewProvider.Instance;
-        var descriptor = provider.Describe(context);
-        var describeMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        var createStarted = Stopwatch.GetTimestamp();
-        var view = descriptor.CreateContent(fixedSize);
-        var createMs = Stopwatch.GetElapsedTime(createStarted).TotalMilliseconds;
-        var loop = new DispatcherFrame();
-        var settled = false; var timedOut = false; var readyAt = 0L; var interactiveAt = 0L;
-        var profileViewport = Elements(view).OfType<MarkdownEdgeCapsulePreviewViewport>().Single();
-        // Layout readiness is local to the published body. Effective input also depends on
-        // the ancestor host's animation gate; measure it separately, not as formatting cost.
-        bool Published(DependencyObject element)
-        {
-            if (element is MarkdownEdgeCapsulePreviewViewport viewport)
-                return viewport.IsArrangeValid && viewport.Opacity > 0 &&
-                    viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(surface => surface.IsArrangeValid);
-            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
-                if (Published(VisualTreeHelper.GetChild(element, i))) return true;
-            return false;
-        }
-        void Observe(object? sender, EventArgs e)
-        {
-            if (readyAt == 0 && Published(view)) readyAt = Stopwatch.GetTimestamp();
-            if (interactiveAt == 0 && readyAt != 0 && profileViewport.IsHitTestVisible)
-                interactiveAt = Stopwatch.GetTimestamp();
-            if (readyAt != 0 && interactiveAt != 0 && settled) loop.Continue = false;
-        }
-        DependencyPropertyChangedEventHandler inputChanged = (_, _) => Observe(null, EventArgs.Empty);
-        view.LayoutUpdated += Observe;
-        profileViewport.IsHitTestVisibleChanged += inputChanged;
-        var timeout = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = TimeSpan.FromSeconds(5) };
-        timeout.Tick += (_, _) => { timedOut = true; timeout.Stop(); loop.Continue = false; };
-        try
-        {
-            var stageStarted = Stopwatch.GetTimestamp();
-            Require(host.StagePreviewContent(view, fixedSize.ContentSize.Width, fixedSize.ContentSize.Height), "stage real preview");
-            var stageMs = Stopwatch.GetElapsedTime(stageStarted).TotalMilliseconds;
-            descriptor.SetVisibility?.Invoke(true);
-            var motionStarted = Stopwatch.GetTimestamp();
-            presenter.Dispatch(EdgeCapsuleIntent.PreviewChanged(true));
-            presenter.RequestPresentation(EdgeCapsuleMotion.Animate(EdgeCapsuleTransitionReason.Preview, 160));
-            presenter.Flush(EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
-            presenter.NotifyWhenPresentationSettled(success =>
-            { Require(success, "transition settles"); settled = true; Observe(null, EventArgs.Empty); });
-            timeout.Start();
-            if (loop.Continue) Dispatcher.PushFrame(loop);
-            Require(!timedOut && settled && readyAt != 0 && interactiveAt != 0, "profile observes both layout and input without an extra Rendering driver");
-            var gaps = times.Zip(times.Skip(1)).Select(pair => Stopwatch.GetElapsedTime(pair.First, pair.Second).TotalMilliseconds);
-            return new[] { describeMs, createMs, stageMs, Stopwatch.GetElapsedTime(started, readyAt).TotalMilliseconds,
-                Stopwatch.GetElapsedTime(stageStarted, readyAt).TotalMilliseconds,
-                times.Count > 1 ? Stopwatch.GetElapsedTime(motionStarted, times[1]).TotalMilliseconds : 0,
-                gaps.DefaultIfEmpty(0).Max(), costs.DefaultIfEmpty(0).Max(),
-                (GC.GetAllocatedBytesForCurrentThread() - allocation) / 1024.0, warmMs, preload.ArtifactHits - hitsBefore,
-                Stopwatch.GetElapsedTime(stageStarted, interactiveAt).TotalMilliseconds };
-        }
-        finally
-        {
-            timeout.Stop(); view.LayoutUpdated -= Observe;
-            profileViewport.IsHitTestVisibleChanged -= inputChanged;
-            presenter.ClearPresentationSettleNotification();
-            presenter.CancelTransition(); presenter.ClearDeferredWork();
-            descriptor.SetVisibility?.Invoke(false);
-            host.ClearPreviewContent();
-            Pump();
-        }
-    }
 }

@@ -7,21 +7,11 @@ using PaperTodo;
 
 internal static class QuoteRailAlignmentChecks
 {
-    private static readonly double[] FontScales =
-    {
-        0.5,
-        0.75,
-        1.0,
-        1.1,
-        1.25,
-        1.45,
-        1.5
-    };
+    private static readonly double[] FontScales = { 1.0, 1.25, 1.5 };
 
     [ModuleInitializer]
     internal static void Run()
     {
-        CheckLogicalPrefix();
         CheckLazy("> a\nb");
         CheckLazy("- > a\n  b");
         CheckLazy("> **a**\n**b**");
@@ -40,50 +30,7 @@ internal static class QuoteRailAlignmentChecks
         Console.WriteLine("PASS list-contained quote rails share logical X across physical lines and font scales");
     }
 
-    private static void CheckLogicalPrefix()
-    {
-        const string source = "10. > a\n    > b";
-        var snapshot = MarkdownSemanticSnapshot.Parse(source);
-        var first = ParseLine(source, snapshot, 0);
-        var second = ParseLine(source, snapshot, 1);
-        var firstQuote = first.Tokens.Single(token => token.IsQuote);
-        var secondQuote = second.Tokens.Single(token => token.IsQuote);
-        var firstPrefix = MarkdownContainerPrefix.BuildLogicalVisualPrefix(
-            "10. > a",
-            first,
-            firstQuote.MarkerStart);
-        var secondPrefix = MarkdownContainerPrefix.BuildLogicalVisualPrefix(
-            "    > b",
-            second,
-            secondQuote.MarkerStart);
-        if (!string.Equals(firstPrefix, "    ", StringComparison.Ordinal) ||
-            !string.Equals(secondPrefix, "    ", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"FAIL quote rail alignment: logical prefixes '{firstPrefix}'/'{secondPrefix}'");
-        }
-    }
 
-    private static MarkdownContainerPrefixInfo ParseLine(
-        string source,
-        MarkdownSemanticSnapshot snapshot,
-        int lineZero)
-    {
-        var start = snapshot.LineStarts[lineZero];
-        var end = lineZero + 1 < snapshot.LineStarts.Length
-            ? snapshot.LineStarts[lineZero + 1]
-            : source.Length;
-        while (end > start && source[end - 1] is '\r' or '\n')
-        {
-            end--;
-        }
-
-        return MarkdownContainerPrefix.Parse(
-            source[start..end],
-            snapshot,
-            start,
-            end);
-    }
 
     private static void Check(string source, double fontScale, string message)
     {

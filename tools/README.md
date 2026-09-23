@@ -5,6 +5,7 @@
 | 入口 | 用途 |
 | --- | --- |
 | `testing/Run-Checks.ps1` | 本地与 CI 共用的行为检查入口；分组、打印结果、失败返回非零 |
+| `PaperTodo.DesktopBenchmarks` | 真窗口预览、冷/热准备、内存、隔离启动/退出测量及像素导出；不依赖测试程序集 |
 | `PaperTodo.MarkdownBenchmarks` | 手动运行 Markdown 解析与编辑采样，不进入默认回归 |
 | `PaperTodo.EdgeDiagnostics` | Debug 真进程日志、输入和延迟观察，包含原有 Release 空入口 |
 
