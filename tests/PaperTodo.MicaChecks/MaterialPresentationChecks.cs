@@ -157,6 +157,8 @@ internal static class MaterialPresentationChecks
         RoutedEventHandler? opened = null;
         EventHandler? rendered = null;
         var observedFrames = 0;
+        var openedCount = 0;
+        var closedCount = 0;
         HwndSource? masterSource = null;
         HwndSourceHook? masterHook = null;
         var rightButtonUps = 0;
@@ -177,8 +179,10 @@ internal static class MaterialPresentationChecks
             menu = pill.ContextMenu!;
             opened = (_, _) =>
             {
+                openedCount++;
                 if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
             };
+            menu.Closed += (_, _) => closedCount++;
             rendered = (_, _) =>
             {
                 if (!menu.IsOpen) return;
@@ -187,6 +191,26 @@ internal static class MaterialPresentationChecks
             };
             menu.Opened += opened;
             CompositionTarget.Rendering += rendered;
+            // A/B the same NOACTIVATE master owner with a stock ContextMenu before
+            // exercising the material subclass. This isolates Popup/owner routing from the
+            // custom IsOpen coercion used by MaterialContextMenu.
+            var plainMenu = new ContextMenu
+            {
+                PlacementTarget = pill,
+                Placement = PlacementMode.MousePoint
+            };
+            plainMenu.Items.Add(new MenuItem { Header = "plain master probe" });
+            var plainOpened = 0;
+            var plainClosed = 0;
+            plainMenu.Opened += (_, _) => plainOpened++;
+            plainMenu.Closed += (_, _) => plainClosed++;
+            plainMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Wait(80);
+            Console.WriteLine($"MASTER PLAIN direct={plainMenu.IsOpen} opened={plainOpened} closed={plainClosed}");
+            Program.Assert(plainMenu.IsOpen, "plain ContextMenu opens on the same NOACTIVATE master owner");
+            plainMenu.IsOpen = false;
+            Wait(60);
+
             // The very same detached template survives Paper -> Mica -> Acrylic.
             menu.ApplyTemplate();
             foreach (var theme in new[] { "light", "dark" })
@@ -205,6 +229,8 @@ internal static class MaterialPresentationChecks
                     var hit = WindowFromPoint(actualPoint);
                     var beforeRightUps = rightButtonUps;
                     var beforeContextMessages = contextMenuMessages;
+                    var beforeOpened = openedCount;
+                    var beforeClosed = closedCount;
                     mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
                     Wait(80);
@@ -218,7 +244,7 @@ internal static class MaterialPresentationChecks
                         directOpen = menu.IsOpen;
                         if (directOpen) menu.IsOpen = false;
                     }
-                    Console.WriteLine($"MASTER INPUT skin={skin} theme={theme} attempt={attempt} target=0x{masterHwnd.ToInt64():X} hit=0x{hit.ToInt64():X} rightUp={rightButtonUps-beforeRightUps} context={contextMenuMessages-beforeContextMessages} queued={queued} direct={directOpen} open={openedByRealInput}");
+                    Console.WriteLine($"MASTER INPUT skin={skin} theme={theme} attempt={attempt} target=0x{masterHwnd.ToInt64():X} hit=0x{hit.ToInt64():X} rightUp={rightButtonUps-beforeRightUps} context={contextMenuMessages-beforeContextMessages} opened={openedCount-beforeOpened} closed={closedCount-beforeClosed} queued={queued} direct={directOpen} open={openedByRealInput}");
                     Program.Assert(openedByRealInput, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
