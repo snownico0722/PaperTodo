@@ -99,12 +99,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
 
-        // A fresh HWND can enter Clear Acrylic accent/redirection mode before WPF has
-        // produced its first redirected bitmap. On current Windows compositors that can
-        // leave a permanently blank accent surface even after later invalidation. Let WPF
-        // publish one ordinary opaque frame first; switching an already-rendered HWND is
-        // unaffected and still takes the normal path below.
-        if (_material == MicaBackdropTypes.ClearAcrylic && !_contentRendered)
+        // A fresh HWND can enter Clear Acrylic or Aero alpha/redirection mode before WPF has
+        // produced its first redirected bitmap. On current Windows compositors that can leave a
+        // permanently blank transparent surface even after later invalidation. Let WPF publish
+        // one ordinary opaque frame first; switching an already-rendered HWND is unaffected.
+        if (!_contentRendered &&
+            (_material == MicaBackdropTypes.ClearAcrylic || _material == AeroGlassMaterial))
         {
             var paper = Theme.PaperBrush;
             _source.CompositionTarget.BackgroundColor = ((SolidColorBrush)paper).Color;
@@ -264,12 +264,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     private void OnContentRendered(object? sender, EventArgs e)
     {
-        // Fresh Clear Acrylic is intentionally deferred until this first real WPF present.
-        // At this point the redirected bitmap contains the actual control tree, so enabling
-        // accent/redirection cannot freeze an empty startup surface.
+        // Fresh transparent native recipes are intentionally deferred until this first real WPF
+        // present. At this point the redirected bitmap contains the actual control tree, so
+        // enabling accent/alpha/redirection cannot freeze an empty startup surface.
         _window.ContentRendered -= OnContentRendered;
         _contentRendered = true;
-        if (!_disposed && _requested && _material == MicaBackdropTypes.ClearAcrylic)
+        if (!_disposed && _requested &&
+            (_material == MicaBackdropTypes.ClearAcrylic || _material == AeroGlassMaterial))
             Refresh(_requested, _dark, force: true);
     }
 
