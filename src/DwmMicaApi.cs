@@ -16,7 +16,6 @@ internal interface INativeMicaApi
     int SetDarkMode(IntPtr hwnd, bool dark);
     int SetBackdrop(IntPtr hwnd, int backdrop);
     int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark);
-    int SetAeroBlur(IntPtr hwnd, bool enabled);
     int EnableAlpha(IntPtr hwnd);
     int DisableAlpha(IntPtr hwnd);
     int SetRedirectionAlpha(IntPtr hwnd, bool enabled);
@@ -25,7 +24,7 @@ internal interface INativeMicaApi
     void SetNonClientActive(IntPtr hwnd, bool active);
 }
 
-/// <summary>DWM integration, with isolated legacy accent recipes for Clear Acrylic and Aero blur.</summary>
+/// <summary>DWM integration, with an isolated legacy accent policy for Clear Acrylic.</summary>
 internal sealed class DwmMicaApi : INativeMicaApi
 {
     internal static readonly DwmMicaApi Instance = new();
@@ -92,19 +91,14 @@ internal sealed class DwmMicaApi : INativeMicaApi
         return SetAccent(hwnd, 4, ((uint)alpha << 24) | rgb);
     }
 
-    public int SetAeroBlur(IntPtr hwnd, bool enabled) =>
-        // ACCENT_ENABLE_BLURBEHIND. Keep GradientColor transparent: PaperTodo owns
-        // the Aero tint/veil/reflection above the compositor blur.
-        SetAccent(hwnd, enabled ? 3 : 0, 0);
-
     private unsafe int SetAccent(IntPtr hwnd, int state, uint color)
     {
-        // WCA_ACCENT_POLICY is undocumented. Keep it isolated to the two native accent
-        // recipes and report failure so the adapter keeps an opaque surface when unsupported.
-        // GradientColor is AABBGGRR; nonzero alpha is required for Acrylic state 4.
+        // WCA_ACCENT_POLICY is undocumented. Keep it exclusive to Clear Acrylic and
+        // report failure so the adapter keeps an opaque surface on unsupported systems.
+        // GradientColor is AABBGGRR; nonzero alpha is required for Acrylic blur.
         var policy = new AccentPolicy
         {
-            State = state, // 3: BlurBehind, 4: compatible Acrylic, 0: disabled
+            State = state, // 4: compatible accent blur, 0: disabled
             Color = color
         };
         var data = new CompositionAttributeData

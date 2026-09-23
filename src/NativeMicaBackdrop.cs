@@ -139,12 +139,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
             var clear = _material == MicaBackdropTypes.ClearAcrylic;
             var glass = _material == AeroGlassMaterial;
-            var accent = clear || glass;
+            var accent = clear;
             IsActive = false;
             LastHResult = 0;
             if (_accentMaterial != null && (!enable || _accentMaterial != _material))
             {
-                LastHResult = DisableAccent(hwnd, _accentMaterial, dark);
+                LastHResult = _native.SetClearAcrylic(hwnd, false, dark);
                 if (LastHResult >= 0) _accentMaterial = null;
             }
             if (enable && LastHResult >= 0)
@@ -161,33 +161,18 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
                 if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
                 if (LastHResult >= 0) LastHResult = _native.SetBackdrop(hwnd,
-                    accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
-                if (LastHResult >= 0 && clear)
+                    glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
+                if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
+                if (LastHResult >= 0 && accent)
                 {
                     LastHResult = _native.SetClearAcrylic(hwnd, true, dark);
                     if (LastHResult >= 0) _accentMaterial = _material;
                 }
-                if (LastHResult >= 0 && glass)
-                {
-                    LastHResult = _native.SetAeroBlur(hwnd, true);
-                    if (LastHResult >= 0) _accentMaterial = _material;
-                }
                 if (LastHResult >= 0)
                 {
-                    if (glass)
-                    {
-                        // Accent BlurBehind owns Aero's transparency. REDIRECTIONBITMAP_ALPHA is
-                        // a different Win11 composition path and can turn state 3 into a dark
-                        // redirected underlay instead of sampling the real window behind us.
-                        _native.SetRedirectionAlpha(hwnd, false);
-                        UsesRedirectionAlpha = false;
-                    }
-                    else
-                    {
-                        // Apply after the material recipe: this is the final alpha/margin writer.
-                        UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                        if (UsesRedirectionAlpha && !accent) LastHResult = _native.ExtendFrame(hwnd, 0);
-                    }
+                    // Apply after the material recipe: this is the final alpha/margin writer.
+                    UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
+                    if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
                 }
                 IsActive = LastHResult >= 0;
             }
@@ -214,7 +199,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             {
                 if (_accentMaterial != null)
                 {
-                    if (DisableAccent(hwnd, _accentMaterial, dark) >= 0) _accentMaterial = null;
+                    if (_native.SetClearAcrylic(hwnd, false, dark) >= 0) _accentMaterial = null;
                 }
                 _windowChrome.GlassFrameThickness = new Thickness(-1);
                 if (_native.IsSupported) _native.SetBackdrop(hwnd, DwmMicaApi.None);
@@ -244,18 +229,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
         finally { _updating = false; }
         if (chrome is SkinBorder skin) skin.RefreshBackground();
 
-        // Switching an existing redirected HWND from a system/accent material to Aero blur
+        // Switching an existing redirected HWND from a system/accent material to clear Aero
         // can race WPF's next redirected-bitmap present. A fresh settings HWND is already fine;
         // re-apply the same native recipe once after the live transition so the existing HWND
         // reaches the same state without closing/reopening the window.
         if (materialChanged && _material == AeroGlassMaterial && _contentRendered && _window.IsVisible)
             QueueRefresh();
     }
-
-    private int DisableAccent(IntPtr hwnd, string material, bool dark) =>
-        material == AeroGlassMaterial
-            ? _native.SetAeroBlur(hwnd, false)
-            : _native.SetClearAcrylic(hwnd, false, dark);
 
     private bool _contentRepaintQueued;
     private void QueueContentRepaint()
@@ -373,7 +353,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         {
             _source.RemoveHook(WindowMessage);
             if (IsActive && _alwaysActive) _native.SetNonClientActive(_source.Handle, _window.IsActive);
-            if (_accentMaterial != null) DisableAccent(_source.Handle, _accentMaterial, _dark);
+            if (_accentMaterial != null) _native.SetClearAcrylic(_source.Handle, false, _dark);
             if (_native.IsSupported) _native.SetBackdrop(_source.Handle, DwmMicaApi.None);
             if (UsesRedirectionAlpha) _native.SetRedirectionAlpha(_source.Handle, false);
         }

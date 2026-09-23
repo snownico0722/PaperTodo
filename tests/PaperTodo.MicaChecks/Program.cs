@@ -165,35 +165,29 @@ internal static class Program
                 f.Backdrop.Dispose();
                 Assert(!f.Api.ClearAcrylic, "disposal removes accent");
             });
-            Check("Aero uses compositor BlurBehind without inheriting Acrylic", () =>
+            Check("Aero uses clear alpha without inheriting Acrylic blur", () =>
             {
                 using var f = new Fixture();
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
                 Pump();
-                Assert(f.Backdrop.IsActive && f.Api.AeroBlur && !f.Api.Alpha &&
-                    !f.Api.RedirectionAlpha && f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
-                    f.Api.FrameTop == 0 && Transparent(f.Chrome.Background),
-                    "Aero uses Accent BlurBehind without the Win11 redirection-alpha path");
+                Assert(f.Backdrop.IsActive && f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1 &&
+                    f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "Aero transmits without either Acrylic recipe");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.Acrylic);
                 Pump();
-                Assert(!f.Api.AeroBlur && !f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 3,
-                    "Aero -> system Acrylic disables the Aero accent first");
+                Assert(!f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 3, "Aero -> system Acrylic clears alpha first");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.ClearAcrylic);
                 Pump();
-                Assert(f.Api.ClearAcrylic && !f.Api.AeroBlur && f.Api.AccentState == 4,
-                    "Clear Acrylic remains the separate state-4 recipe");
+                Assert(f.Api.AccentState == 4, "existing Clear Acrylic remains recipe 4");
                 var liveSwitchCalls = f.Api.BackdropCalls;
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
                 Pump();
-                Assert(f.Api.AeroBlur && !f.Api.ClearAcrylic && !f.Api.Alpha &&
-                    !f.Api.RedirectionAlpha && f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
+                Assert(f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1 &&
                     f.Api.BackdropCalls >= liveSwitchCalls + 2,
-                    "Clear Acrylic -> Aero swaps state 4 for state 3 and re-applies after the live HWND transition");
-                f.Api.Failure = "accent";
+                    "Clear Acrylic -> Aero removes accent and re-applies once after the live HWND transition");
+                f.Api.Failure = "alpha-disable";
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial, force: true);
-                Assert(!f.Backdrop.IsActive && !f.Api.AeroBlur && f.Api.AccentState == 0 &&
-                    !Transparent(f.Chrome.Background),
-                    "Aero BlurBehind failure removes the accent and keeps a readable solid fallback");
+                Assert(!f.Backdrop.IsActive && f.Api.AccentState == 0 && !Transparent(f.Chrome.Background),
+                    "Aero API failure keeps a readable solid fallback");
             });
 
             Check("active material appearance never prevents real focus changes", () =>
@@ -438,7 +432,7 @@ internal static class Program
         public bool CompositionEnabled { get; set; } = true;
         public bool TransparencyEnabled { get; set; } = true;
         public bool HighContrast { get; set; }
-        internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, AeroBlur, Glass, RedirectionAlpha;
+        internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass, RedirectionAlpha;
         internal int ActivationCalls, AccentState;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor, FrameTop;
@@ -449,35 +443,16 @@ internal static class Program
         {
             BackdropCalls++;
             if (backdrop == 2 && Failure == "backdrop") return Error;
-            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && !AeroBlur && (Glass || RedirectionAlpha), "system backdrop needs full glass or explicit bitmap alpha, and excludes accent recipes");
+            if (backdrop is 2 or 3) Assert(!Alpha && !ClearAcrylic && (Glass || RedirectionAlpha), "system backdrop needs full glass or explicit bitmap alpha, and excludes legacy alpha/accent");
             Backdrop = backdrop; return 0;
         }
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark)
         {
             if (enabled && Failure == "accent") return Error;
-            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass && !AeroBlur,
-                "Clear Acrylic excludes system backdrop, full glass, alpha fallback and Aero blur");
-            ClearAcrylic = enabled;
-            if (!enabled) AeroBlur = false;
-            AccentState = enabled ? 4 : 0;
-            return 0;
+            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass, "accent excludes system backdrop, full glass and alpha fallback");
+            ClearAcrylic = enabled; AccentState = enabled ? 4 : 0; return 0;
         }
-        public int SetAeroBlur(IntPtr hwnd, bool enabled)
-        {
-            if (enabled && Failure == "accent") return Error;
-            if (enabled) Assert(Backdrop == 1 && !Alpha && !Glass && !ClearAcrylic,
-                "Aero blur excludes system backdrop, full glass, alpha fallback and Acrylic");
-            AeroBlur = enabled;
-            if (!enabled) ClearAcrylic = false;
-            AccentState = enabled ? 3 : 0;
-            return 0;
-        }
-        public int EnableAlpha(IntPtr hwnd)
-        {
-            Assert(!ClearAcrylic && !AeroBlur, "alpha fallback must not retain an accent recipe");
-            Alpha = true;
-            return 0;
-        }
+        public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
         public void InvalidateContent(IntPtr hwnd) { }
         public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) { if (Failure == "redirection-unsupported") return Error; RedirectionAlpha = enabled; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
