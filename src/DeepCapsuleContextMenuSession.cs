@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -10,51 +9,28 @@ namespace PaperTodo;
 
 /// <summary>
 /// Shared lifecycle for menus launched from NOACTIVATE deep-capsule surfaces
-/// (edge slot hosts and the master collapse-all pill). The owner remains NOACTIVATE; once the
-/// real WPF popup HWND exists, the menu itself receives foreground/focus so WPF can own normal
-/// menu capture and outside-click dismissal. A foreground-change hook remains only as a bounded
-/// fallback, alongside owner-set bookkeeping and stale-activation cleanup for the tray menu.
+/// (edge slot hosts and the master collapse-all pill). The owner stays passive; WPF owns normal
+/// menu capture/outside-click dismissal, while the real popup HWND is promoted and, when Windows
+/// grants it foreground, receives keyboard focus. The session also owns capsule topmost
+/// suppression and the bounded stale-activation cleanup shared with the tray path.
 /// </summary>
 internal sealed class DeepCapsuleContextMenuSession
 {
-    private const uint EventSystemForeground = 0x0003;
-    private const uint WineventOutOfContext = 0x0000;
-
     private readonly AppController _controller;
     private readonly string _ownerId;
-    private readonly Dispatcher _dispatcher;
     private readonly Action<bool>? _onOpenChanged;
 
     private ContextMenu? _activeMenu;
-    private long _openVersion;
-
-    private IntPtr _foregroundHook;
-    private WinEventDelegate? _foregroundProc;
-
-    private delegate void WinEventDelegate(
-        IntPtr hWinEventHook,
-        uint eventType,
-        IntPtr hwnd,
-        int idObject,
-        int idChild,
-        uint dwEventThread,
-        uint dwmsEventTime);
 
     public DeepCapsuleContextMenuSession(
         AppController controller,
         string ownerId,
-        Dispatcher dispatcher,
         Action<bool>? onOpenChanged = null)
     {
         _controller = controller;
         _ownerId = ownerId;
-        _dispatcher = dispatcher;
         _onOpenChanged = onOpenChanged;
     }
-
-    public ContextMenu? ActiveMenu => _activeMenu;
-
-    public bool IsOpen => _activeMenu?.IsOpen == true;
 
     public void HandleOpened(ContextMenu menu)
     {
@@ -63,14 +39,12 @@ internal sealed class DeepCapsuleContextMenuSession
             _activeMenu.IsOpen = false;
         }
 
-        System.Threading.Interlocked.Increment(ref _openVersion);
         System.Threading.Volatile.Write(ref _activeMenu, menu);
 
-        // Keep the NOACTIVATE owner below the menu, then let the real popup HWND own the active
-        // menu session. This is the same lifecycle used by the local wpf-notifyicon fork.
+        // The owner remains NOACTIVATE. Suppress capsule topmost first, then let the real WPF
+        // popup participate in the ordinary menu lifecycle rather than simulating outside clicks.
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, true);
         _onOpenChanged?.Invoke(true);
-        StartForegroundGuard();
         Promote(menu);
         QueuePopupActivation(menu, attemptsRemaining: 3);
     }
@@ -82,33 +56,12 @@ internal sealed class DeepCapsuleContextMenuSession
             System.Threading.Volatile.Write(ref _activeMenu, null);
             _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
             _onOpenChanged?.Invoke(false);
-            StopForegroundGuard();
         }
 
         // Let WPF finish leaving menu mode before checking the UI thread's native focus state.
         _ = menu.Dispatcher.BeginInvoke(
             ClearStaleActivationIfNeeded,
             DispatcherPriority.ContextIdle);
-    }
-
-    public void RequestClose()
-    {
-        var menu = System.Threading.Volatile.Read(ref _activeMenu);
-        var version = System.Threading.Interlocked.Read(ref _openVersion);
-        if (menu == null)
-        {
-            return;
-        }
-
-        if (!_dispatcher.CheckAccess())
-        {
-            _ = _dispatcher.BeginInvoke(
-                DispatcherPriority.Input,
-                new Action(() => ExecuteRequestedClose(menu, version)));
-            return;
-        }
-
-        ExecuteRequestedClose(menu, version);
     }
 
     public void Close()
@@ -119,21 +72,19 @@ internal sealed class DeepCapsuleContextMenuSession
             menu.IsOpen = false;
         }
 
-        // Closing a WPF ContextMenu normally raises Closed synchronously. Keep this fallback for
-        // already-closed/disconnected popups, but never clear a replacement opened re-entrantly.
+        // ContextMenu normally raises Closed synchronously. Keep the disconnected/already-closed
+        // fallback, but never clear a replacement menu opened re-entrantly.
         if (menu == null || ReferenceEquals(_activeMenu, menu))
         {
             System.Threading.Volatile.Write(ref _activeMenu, null);
             _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
             _onOpenChanged?.Invoke(false);
-            StopForegroundGuard();
         }
     }
 
     public void Dispose()
     {
         Close();
-        StopForegroundGuard();
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
     }
 
@@ -156,8 +107,15 @@ internal sealed class DeepCapsuleContextMenuSession
                         source.Handle,
                         topmost: true,
                         insertAfter: IntPtr.Zero);
+
+                    // SetForegroundWindow is explicitly best-effort. Only ask WPF to move keyboard
+                    // focus after the OS confirms this popup really became foreground; otherwise
+                    // keep mouse/menu capture behavior without inventing another activation fallback.
                     WindowNative.TrySetForegroundWindow(source.Handle);
-                    menu.Focus();
+                    if (WindowNative.ForegroundWindow == source.Handle)
+                    {
+                        menu.Focus();
+                    }
                     return;
                 }
 
@@ -176,16 +134,6 @@ internal sealed class DeepCapsuleContextMenuSession
                 source.Handle,
                 topmost: true,
                 insertAfter: IntPtr.Zero);
-        }
-    }
-
-    private void ExecuteRequestedClose(ContextMenu menu, long version)
-    {
-        if (ReferenceEquals(_activeMenu, menu) &&
-            _openVersion == version &&
-            menu.IsOpen)
-        {
-            Close();
         }
     }
 
@@ -222,56 +170,9 @@ internal sealed class DeepCapsuleContextMenuSession
 
         // A WPF popup or a previously active paper can leave this UI thread with an
         // application-owned active/focus HWND after foreground moved to another process.
-        // Hardcodet's next tray menu then opens and immediately closes, so clear only
-        // this stale cross-app handoff.
+        // The next tray/capsule menu can then restore focus to the stale paper.
         Keyboard.ClearFocus();
         WindowNative.ClearCurrentThreadInputActivation(foreground);
-    }
-
-    private void StartForegroundGuard()
-    {
-        if (_foregroundHook != IntPtr.Zero)
-        {
-            return;
-        }
-
-        _foregroundProc = OnForegroundChanged;
-        _foregroundHook = SetWinEventHook(
-            EventSystemForeground,
-            EventSystemForeground,
-            IntPtr.Zero,
-            _foregroundProc,
-            0,
-            0,
-            WineventOutOfContext);
-    }
-
-    private void StopForegroundGuard()
-    {
-        if (_foregroundHook != IntPtr.Zero)
-        {
-            UnhookWinEvent(_foregroundHook);
-            _foregroundHook = IntPtr.Zero;
-        }
-
-        _foregroundProc = null;
-    }
-
-    private void OnForegroundChanged(
-        IntPtr hWinEventHook,
-        uint eventType,
-        IntPtr hwnd,
-        int idObject,
-        int idChild,
-        uint dwEventThread,
-        uint dwmsEventTime)
-    {
-        if (hwnd == IntPtr.Zero || IsWindowFromCurrentProcess(hwnd))
-        {
-            return;
-        }
-
-        RequestClose();
     }
 
     private static bool IsWindowFromCurrentProcess(IntPtr hwnd)
@@ -279,19 +180,6 @@ internal sealed class DeepCapsuleContextMenuSession
         GetWindowThreadProcessId(hwnd, out var processId);
         return processId == Environment.ProcessId;
     }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetWinEventHook(
-        uint eventMin,
-        uint eventMax,
-        IntPtr hmodWinEventProc,
-        WinEventDelegate lpfnWinEventProc,
-        uint idProcess,
-        uint idThread,
-        uint dwFlags);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
