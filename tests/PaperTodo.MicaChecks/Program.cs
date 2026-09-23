@@ -171,9 +171,9 @@ internal static class Program
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
                 Pump();
                 Assert(f.Backdrop.IsActive && f.Api.AeroBlur && !f.Api.Alpha &&
-                    f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
+                    !f.Api.RedirectionAlpha && f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
                     f.Api.FrameTop == 0 && Transparent(f.Chrome.Background),
-                    "Aero uses Accent BlurBehind with PaperTodo's own transparent overlay");
+                    "Aero uses Accent BlurBehind without the Win11 redirection-alpha path");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.Acrylic);
                 Pump();
                 Assert(!f.Api.AeroBlur && !f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 3,
@@ -186,7 +186,7 @@ internal static class Program
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
                 Pump();
                 Assert(f.Api.AeroBlur && !f.Api.ClearAcrylic && !f.Api.Alpha &&
-                    f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
+                    !f.Api.RedirectionAlpha && f.Api.AccentState == 3 && f.Api.Backdrop == 1 &&
                     f.Api.BackdropCalls >= liveSwitchCalls + 2,
                     "Clear Acrylic -> Aero swaps state 4 for state 3 and re-applies after the live HWND transition");
                 f.Api.Failure = "accent";

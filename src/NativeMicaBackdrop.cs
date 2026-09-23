@@ -174,9 +174,20 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
                 if (LastHResult >= 0)
                 {
-                    // Apply after the material recipe: this is the final alpha/margin writer.
-                    UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                    if (UsesRedirectionAlpha && !accent) LastHResult = _native.ExtendFrame(hwnd, 0);
+                    if (glass)
+                    {
+                        // Accent BlurBehind owns Aero's transparency. REDIRECTIONBITMAP_ALPHA is
+                        // a different Win11 composition path and can turn state 3 into a dark
+                        // redirected underlay instead of sampling the real window behind us.
+                        _native.SetRedirectionAlpha(hwnd, false);
+                        UsesRedirectionAlpha = false;
+                    }
+                    else
+                    {
+                        // Apply after the material recipe: this is the final alpha/margin writer.
+                        UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
+                        if (UsesRedirectionAlpha && !accent) LastHResult = _native.ExtendFrame(hwnd, 0);
+                    }
                 }
                 IsActive = LastHResult >= 0;
             }
