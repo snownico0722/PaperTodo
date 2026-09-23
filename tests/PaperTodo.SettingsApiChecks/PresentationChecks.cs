@@ -264,11 +264,11 @@ internal static partial class Program
         Check(note.Title == "Link" && visibleLabels.Any(text => text.Contains("Link", StringComparison.Ordinal)) &&
             visibleLabels.All(text => !text.Contains("LinkedABC", StringComparison.Ordinal)),
             "Title truncation updates the actual linked-paper label immediately.");
-        // Verify the UI entry point uses the same post-commit title notification.
+        // Verify current text, not whether the renderer reused or rebuilt a particular TextBlock.
         Invoke(c, "SetMaxTitleLength", 2);
         Check(note.Title == "Li" && Labels(window).Any(label => label.Text.Contains("Li", StringComparison.Ordinal)) &&
-            Labels(window).All(label => !label.Text.Contains("LinkedABC", StringComparison.Ordinal)),
-            "UI title truncation refreshes the visible linked label.");
+            Labels(window).All(label => !label.Text.Contains("Link", StringComparison.Ordinal)),
+            "UI title truncation replaces the previous linked title with its current text.");
     }
 
     private static async Task PresentationPipeBehavior()
