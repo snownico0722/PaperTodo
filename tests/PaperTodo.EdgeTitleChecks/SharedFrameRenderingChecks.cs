@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -13,9 +12,6 @@ internal static partial class Program
     {
         var dispatcher = Dispatcher.CurrentDispatcher;
         var scheduler = EdgeCapsuleFrameScheduler.For(dispatcher);
-        bool Subscribed() => (bool)typeof(EdgeCapsuleFrameScheduler)
-            .GetField("_renderingSubscribed", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(scheduler)!;
         var shape = new Border { Background = Brushes.CornflowerBlue };
         var window = new Window
         {
@@ -62,8 +58,6 @@ internal static partial class Program
 
         void Finish(int index, string scenario)
         {
-            // No extra Rendering observer or recurring pump drives this test. The only timer is
-            // a test failure deadline; it does not apply frames, post work or restart the scheduler.
             var frame = new DispatcherFrame();
             var completed = false;
             var success = false;
@@ -85,6 +79,17 @@ internal static partial class Program
             Console.WriteLine($"  Rendering liveness {scenario}: {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms");
         }
 
+        void LetRenderingRun(int milliseconds)
+        {
+            var frame = new DispatcherFrame();
+            var timer = new DispatcherTimer(DispatcherPriority.Send, dispatcher)
+                { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+            timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+            timer.Start();
+            try { Dispatcher.PushFrame(frame); }
+            finally { timer.Stop(); }
+        }
+
         var pendingOwners = new List<EdgeCapsulePresenter>();
         void Hold(EdgeCapsulePresenter owner)
         {
@@ -96,73 +101,78 @@ internal static partial class Program
             scheduler.CompleteRenderReconcile(owner);
             pendingOwners.Remove(owner);
         }
+
         var handle = IntPtr.Zero;
         try
         {
             window.Show();
             DrainTransactionChecksDispatcher();
             handle = new WindowInteropHelper(window).Handle;
-            Check(!Subscribed(), "Idle presenters do not keep a frame subscription");
+
             samples.Clear();
             Start(0, true);
-            Check(Subscribed(), "First transition attaches to WPF's frame source");
             Finish(0, "first activation");
-            Check(samples.Count > 1 && !Subscribed(), "Rendering advances and unsubscribes after settlement");
+            Check(samples.Count > 1, "A real transition advances across multiple WPF frames");
 
-            // A pending registration from an idle member of another queue is not a global stop.
+            // Work owned by another queue must not stop this queue from completing.
             Hold(presenters[1]);
             Start(0, false);
-            Check(Subscribed(), "Unrelated queue work cannot suspend an active queue");
             Finish(0, "other queue pending");
             Release(presenters[1]);
 
-            // Multiple callbacks from the same owner must release exactly once each.
-            Hold(presenters[0]); Hold(presenters[0]);
+            // Nested ownership blocks publication until the final owner releases.
+            Hold(presenters[0]);
+            Hold(presenters[0]);
             Start(0, true);
             var version = presenters[0].AppliedPresentationVersion;
-            Check(!Subscribed(), "A blocked queue does not spin composition callbacks");
-            DrainTransactionChecksDispatcher();
-            Check(presenters[0].AppliedPresentationVersion == version, "Pending owner work cannot leak a frame");
+            LetRenderingRun(80);
+            Check(presenters[0].AppliedPresentationVersion == version,
+                "Pending owner work cannot leak a presentation frame");
             Release(presenters[0]);
-            Check(!Subscribed(), "One completion cannot release a nested registration");
+            LetRenderingRun(60);
+            Check(presenters[0].AppliedPresentationVersion == version,
+                "One completion cannot release a nested owner");
             Release(presenters[0]);
-            Check(Subscribed(), "The final owner release directly restores Rendering");
             Finish(0, "pending owner released");
 
-            using (var deferral = presenters[0].DeferReconcileToVisualTransaction())
+            // An explicit visual transaction blocks publication, then resumes the same transition.
+            var visualDeferral = presenters[0].DeferReconcileToVisualTransaction();
+            try
             {
                 Start(0, false);
-                Check(!Subscribed(), "An explicit Flush does not end the transaction's frame barrier");
-                deferral.Dispose();
-                Check(Subscribed(), "A consumed dirty set still resumes its active transition on owner release");
-                Finish(0, "visual transaction released");
+                version = presenters[0].AppliedPresentationVersion;
+                LetRenderingRun(80);
+                Check(presenters[0].AppliedPresentationVersion == version,
+                    "Visual transaction blocks presentation publication");
             }
+            finally { visualDeferral.Dispose(); }
+            Finish(0, "visual transaction released");
 
-            // An idle transaction member still owns a barrier for its cross-queue group.
+            // Cross-queue transactions also block until every participant releases.
             const long group = 123456;
             presenters[0].JoinNativeBatchTransactionGroup(group);
             presenters[1].JoinNativeBatchTransactionGroup(group);
-            using (var deferral = presenters[1].DeferReconcileToVisualTransaction())
+            var crossQueueDeferral = presenters[1].DeferReconcileToVisualTransaction();
+            try
             {
                 Start(0, true);
                 version = presenters[0].AppliedPresentationVersion;
-                Check(!Subscribed(), "An idle deferred member blocks the complete cross-queue transaction");
-                DrainTransactionChecksDispatcher();
+                LetRenderingRun(80);
                 Check(presenters[0].AppliedPresentationVersion == version,
-                    "Cross-queue transaction members cannot commit around an idle owner");
-                deferral.Dispose();
-                Finish(0, "cross-queue transaction released");
+                    "Cross-queue transaction cannot publish around another owner");
             }
+            finally { crossQueueDeferral.Dispose(); }
+            Finish(0, "cross-queue transaction released");
             Check(presenters.All(p => p.NativeBatchTransactionGroupId == 0),
-                "The coordinated group releases after all members settle");
+                "Coordinated transaction membership is released after settlement");
 
+            // Native apply ownership blocks real Rendering notifications without invoking a private callback.
             Start(0, false);
             presenters[0].BeginNativeBatchApply();
             version = presenters[0].AppliedPresentationVersion;
-            typeof(EdgeCapsuleFrameScheduler).GetMethod("OnRendering", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(scheduler, new object?[] { null, EventArgs.Empty });
+            LetRenderingRun(80);
             Check(presenters[0].AppliedPresentationVersion == version,
-                "Native transaction reentry keeps the existing shared-boundary protection");
+                "Native apply ownership prevents WPF frame publication");
             presenters[0].CompleteNativeBatchApplySuccess();
             Finish(0, "native transaction released");
 
@@ -174,13 +184,15 @@ internal static partial class Program
             }
             else Console.WriteLine("  Rendering liveness cloak check unavailable on this desktop");
 
+            // Cancellation is observable as a stable final frame; queued notifications cannot revive it.
             Start(0, !presenters[0].Preview.Equals(EdgeCapsulePreviewState.Open));
             presenters[0].CancelTransition();
             presenters[0].ClearDeferredWork();
             version = presenters[0].AppliedPresentationVersion;
-            DrainTransactionChecksDispatcher();
-            Check(!Subscribed() && presenters[0].AppliedPresentationVersion == version,
-                "Cancellation cannot be revived by queued Rendering work");
+            LetRenderingRun(180);
+            Check(!presenters[0].HasActiveTransition &&
+                presenters[0].AppliedPresentationVersion == version,
+                "Cancellation cannot be revived by later WPF Rendering notifications");
         }
         finally
         {
@@ -194,6 +206,75 @@ internal static partial class Program
             window.Close();
             DrainTransactionChecksDispatcher();
         }
+
+        FrameSchedulerShutdownDoesNotHang();
     }
 
+    private static void FrameSchedulerShutdownDoesNotHang()
+    {
+        foreach (var blocked in new[] { false, true })
+        {
+            Exception? failure = null;
+            var thread = new Thread(() =>
+            {
+                Dispatcher? dispatcher = null;
+                EdgeCapsuleFrameScheduler? scheduler = null;
+                EdgeCapsulePresenter? presenter = null;
+                var held = false;
+                try
+                {
+                    dispatcher = Dispatcher.CurrentDispatcher;
+                    scheduler = EdgeCapsuleFrameScheduler.For(dispatcher);
+                    presenter = new EdgeCapsulePresenter();
+                    var monitor = new MonitorGeometry("rendering-shutdown-" + blocked,
+                        new DeviceScreenRect(-100000, -100000, -97440, -98560), 1, 1);
+                    Func<EdgeCapsuleDirty, EdgeCapsuleDirty> reconcile = dirty => presenter.Reconcile(dirty,
+                        () => new EdgeCapsuleLayoutSnapshot(monitor, EdgeCapsuleEdge.Left,
+                            40, 0, 100, 28, 40, 300, 360, false, 1, null, 328, 360),
+                        () => null, frame => frame, frame => true);
+
+                    presenter.Dispatch(EdgeCapsuleIntent.Attach(new(0, 0, 1), EdgeCapsulePaperForm.Collapsed, false));
+                    presenter.RequestPresentation(EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.State));
+                    presenter.Flush(EdgeCapsuleDirty.Measure | EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
+                    presenter.Dispatch(EdgeCapsuleIntent.PreviewChanged(true));
+                    presenter.RequestPresentation(EdgeCapsuleMotion.Animate(EdgeCapsuleTransitionReason.Preview, 120));
+                    presenter.Flush(EdgeCapsuleDirty.Presentation, dispatcher, reconcile);
+                    Check(presenter.HasActiveTransition, "Shutdown fixture starts an active transition");
+
+                    if (blocked)
+                    {
+                        scheduler.RegisterRenderReconcile(presenter);
+                        held = true;
+                    }
+
+                    dispatcher.InvokeShutdown();
+                    Check(dispatcher.HasShutdownFinished,
+                        "Dispatcher shutdown completes while rendering work is active");
+                    held = false; // Scheduler owns shutdown cleanup after this point.
+                }
+                catch (Exception error) { failure = error; }
+                finally
+                {
+                    if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
+                    {
+                        try
+                        {
+                            if (held && scheduler != null && presenter != null)
+                                scheduler.CompleteRenderReconcile(presenter);
+                            dispatcher.InvokeShutdown();
+                        }
+                        catch (Exception error) { failure ??= error; }
+                    }
+                }
+            }) { IsBackground = true, Name = "PaperTodo frame-scheduler shutdown check" };
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            Check(thread.Join(TimeSpan.FromSeconds(5)),
+                "Active or blocked frame scheduling cannot hang Dispatcher shutdown");
+            if (failure != null)
+                throw new Exception("Frame scheduler shutdown scenario failed; blocked=" + blocked, failure);
+        }
+
+        Console.WriteLine("PASS frame scheduling shutdown without private scheduler-state assertions");
+    }
 }
