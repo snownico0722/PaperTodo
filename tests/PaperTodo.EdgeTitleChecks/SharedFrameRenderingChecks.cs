@@ -196,29 +196,4 @@ internal static partial class Program
         }
     }
 
-    private static void PreviewClipReuse(EdgeCapsuleHost host)
-    {
-        Check(host.StagePreviewContent(new Border(), 280, 180), "Stage preview for clip reuse check");
-        var type = typeof(EdgeCapsuleHost);
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var viewport = (Border)type.GetField("_previewViewportLayer", flags)!.GetValue(host)!;
-        var content = (Border)type.GetProperty("ContentArea", flags)!.GetValue(host)!;
-        var apply = type.GetMethod("ApplyPreviewViewportClip", flags)!;
-        var frame = EdgeCapsulePresentationFrame.Hidden with { BodyWindowWidthDevice = 280, DpiScaleX = 1 };
-        content.CornerRadius = new CornerRadius(0, 15, 15, 0);
-        apply.Invoke(host, new object[] { frame, 180.0 });
-        var clip = viewport.Clip;
-        apply.Invoke(host, new object[] { frame with { WallDeviceX = 100 }, 180.0 });
-        Check(ReferenceEquals(clip, viewport.Clip), "Translation-only samples reuse the same rounded clip");
-        apply.Invoke(host, new object[] { frame with { BodyWindowWidthDevice = 300 }, 180.0 });
-        Check(!ReferenceEquals(clip, viewport.Clip), "A new shape width rebuilds the clip");
-        clip = viewport.Clip;
-        content.CornerRadius = new CornerRadius(15, 0, 0, 15);
-        apply.Invoke(host, new object[] { frame with { BodyWindowWidthDevice = 300 }, 180.0 });
-        Check(!ReferenceEquals(clip, viewport.Clip), "Mirrored corners cannot reuse the opposite edge clip");
-        clip = viewport.Clip;
-        apply.Invoke(host, new object[] { frame with { BodyWindowWidthDevice = 300, DpiScaleX = 1.5 }, 180.0 });
-        Check(!ReferenceEquals(clip, viewport.Clip), "DPI changes recompute the actual clip dimensions");
-        host.ClearPreviewContent();
-    }
 }

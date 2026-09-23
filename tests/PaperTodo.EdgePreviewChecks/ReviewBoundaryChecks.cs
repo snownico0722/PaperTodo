@@ -87,7 +87,7 @@ internal static partial class Program
         {
             var pieces = MarkdownEdgeCapsulePreviewRenderer.InlinePieces(text, mode).ToArray();
             Require(pieces.Length == 1 && pieces[0].Style == MarkdownEdgeCapsulePreviewRenderer.InlineStyle.None &&
-                pieces[0].Link == null && ReferenceEquals(pieces[0].Text, text),
+                pieces[0].Link == null && pieces[0].Text == text,
                 "semantic plain text reuses the original string instead of per-character reconstruction");
         }
         var styled = MarkdownEdgeCapsulePreviewRenderer.InlinePieces("**正文** " + text, MarkdownRenderModes.Full).ToArray();

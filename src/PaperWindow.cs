@@ -199,7 +199,6 @@ public sealed partial class PaperWindow : Window
     private const double RadiusControl = 8;
     private const double RadiusBlock = 12;
     private const double RadiusShell = 16;
-    private static readonly object NoteRenderTraceLock = new();
 
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     internal bool IsShellBuilt => _isShellBuilt;

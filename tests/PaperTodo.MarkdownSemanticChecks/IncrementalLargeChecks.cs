@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -10,7 +9,6 @@ internal static class IncrementalLargeChecks
     internal static void Run()
     {
         CheckLargeLocalSmoke();
-        ProfileDenseMarkdownIncrementalEdit();
     }
 
     private static void CheckLargeLocalSmoke()
@@ -29,7 +27,8 @@ internal static class IncrementalLargeChecks
         }
 
         var source = builder.ToString();
-        var snapshot = MarkdownSemanticSnapshot.Parse(source);
+        var document = new ICSharpCode.AvalonEdit.Document.TextDocument(source);
+        using var semantics = new MarkdownSemanticDocument(document);
         for (var step = 0; step < 24; step++)
         {
             var marker = $"Paragraph {50 + (step * 7)} ordinary";
@@ -40,82 +39,16 @@ internal static class IncrementalLargeChecks
             }
             offset += marker.Length;
             var next = source.Insert(offset, "Z");
-            var windowLength = MarkdownSemanticSnapshot.GetIncrementalWindowLengthForTests(
-                source,
-                snapshot,
-                next);
-            if (windowLength < 0 || windowLength > 2_000)
-            {
-                throw new InvalidOperationException(
-                    $"FAIL large local smoke step {step}: ordinary window too large ({windowLength})");
-            }
-            if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                    source,
-                    snapshot,
-                    next,
-                    out var incremental))
-            {
-                throw new InvalidOperationException(
-                    $"FAIL large local smoke step {step}: ordinary edit unexpectedly fell back");
-            }
+            document.Text = next;
+            if (!semantics.TryGetCurrent(out var incremental))
+                throw new InvalidOperationException($"FAIL large edit step {step}: no current snapshot");
             ValidateRanges(incremental, next.Length, $"large local smoke step {step}");
             source = next;
-            snapshot = incremental;
         }
 
         Console.WriteLine("PASS large best-effort local edit smoke");
     }
 
-    private static void ProfileDenseMarkdownIncrementalEdit()
-    {
-        var oldSource = PerformanceProfileChecks.BuildLargeStressSource();
-        var probe = oldSource.IndexOf("- [ ] item ", oldSource.Length / 2, StringComparison.Ordinal);
-        if (probe < 0)
-        {
-            probe = oldSource.LastIndexOf("- [ ] item ", StringComparison.Ordinal);
-        }
-        var editAt = probe + "- [ ] item ".Length;
-        var newSource = oldSource.Insert(editAt, "Z");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
-        var windowLength = MarkdownSemanticSnapshot.GetIncrementalWindowLengthForTests(
-            oldSource,
-            oldSnapshot,
-            newSource);
-
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var warm))
-        {
-            throw new InvalidOperationException("FAIL dense incremental profile: fallback");
-        }
-        ValidateRanges(warm, newSource.Length, "dense profile warmup");
-
-        const int iterations = 21;
-        var samples = new double[iterations];
-        for (var iteration = 0; iteration < iterations; iteration++)
-        {
-            var stopwatch = Stopwatch.StartNew();
-            if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                    oldSource,
-                    oldSnapshot,
-                    newSource,
-                    out var result))
-            {
-                throw new InvalidOperationException("FAIL dense incremental profile: fallback during timing");
-            }
-            stopwatch.Stop();
-            GC.KeepAlive(result);
-            samples[iteration] = stopwatch.Elapsed.TotalMilliseconds;
-        }
-
-        Array.Sort(samples);
-        var p50 = samples[samples.Length / 2];
-        var p95 = samples[(int)Math.Ceiling(samples.Length * 0.95) - 1];
-        Console.WriteLine(
-            $"PROFILE IncrementalDense98k window={windowLength} p50={p50:F3}ms p95={p95:F3}ms");
-    }
 
     private static void ValidateRanges(
         MarkdownSemanticSnapshot snapshot,

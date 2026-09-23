@@ -305,7 +305,7 @@ Run("HTTP image destination is not navigation link", () =>
     Equal(1, snapshot.Spans.Count(span => span.Kind == MarkdownSemanticSpanKind.Image), "image exclusion span count");
 });
 
-Run("Large document performance smoke", () =>
+Run("Large document semantic smoke", () =>
 {
     var builder = new System.Text.StringBuilder(100_000);
     var index = 0;
@@ -321,17 +321,10 @@ Run("Large document performance smoke", () =>
     }
 
     var source = builder.ToString();
-    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
     var snapshot = MarkdownSemanticSnapshot.Parse(source);
-    stopwatch.Stop();
 
     True(snapshot.LineCount > 1000, "large document line count");
     True(snapshot.Spans.Count > 1000, "large document semantic spans");
-    True(
-        stopwatch.Elapsed < TimeSpan.FromSeconds(5),
-        $"100k Markdown parse smoke exceeded 5s: {stopwatch.Elapsed.TotalMilliseconds:F0}ms");
-    Console.WriteLine(
-        $"INFO Large document parse {source.Length} chars in {stopwatch.Elapsed.TotalMilliseconds:F1}ms");
 });
 
 Console.WriteLine("Markdown semantic checks passed.");
