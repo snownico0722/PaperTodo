@@ -100,7 +100,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
         // only the uniform material surface while the WPF bitmap never reaches the desktop
         // composite (the "blank/white paper" failure). FakeNative checks stay synchronous;
         // already-rendered windows and later skin switches still use the immediate path.
-        if (_native is DwmMicaApi && requested && !_contentRendered)
+        if (_native is DwmMicaApi && requested && !_contentRendered &&
+            _material != AeroGlassMaterial)
         {
             var paper = Theme.PaperBrush;
             _source.CompositionTarget.BackgroundColor = ((SolidColorBrush)paper).Color;
