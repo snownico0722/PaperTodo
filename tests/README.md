@@ -60,3 +60,4 @@
 生命周期默认检查不采样、不比较旧实现，只保留八种启动/退出行为。窗口层级覆盖所有操作在普通窗口与隐藏 owner 两种关键形态，任务栏隐藏采用两种代表操作，避免完整交叉排列。背景图片保留加载与损坏输入回退，不再枚举每种对齐和固定解码尺寸。
 
 桌面性能、预览内存与像素导出统一在 `tools/PaperTodo.DesktopBenchmarks`；Markdown 解析采样在 `tools/PaperTodo.MarkdownBenchmarks`。`-Group all` 不构建或执行这两个工具。
+
