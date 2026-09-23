@@ -244,15 +244,6 @@ internal sealed class DesktopBackgroundCapture : IDisposable
             }
         }, token);
 
-    private static readonly double[] LightGaussianKernel =
-    {
-        0.07076637133154648,
-        0.24446039891162386,
-        0.3695464595136593,
-        0.24446039891162386,
-        0.07076637133154648
-    };
-
     private static void ApplyLightGaussianBlur(
         byte[] pixels,
         int width,
@@ -263,7 +254,18 @@ internal sealed class DesktopBackgroundCapture : IDisposable
         // Radius 2 / sigma 1.1 is deliberately light. Combined with 50% downsampling it removes
         // text-level detail without turning the drag surface into a featureless color block.
         const int radius = 2;
-        var kernel = LightGaussianKernel;
+        const double sigma = 1.1;
+        var kernel = new double[radius * 2 + 1];
+        var sum = 0d;
+        for (var i = -radius; i <= radius; i++)
+        {
+            var value = Math.Exp(-(i * i) / (2 * sigma * sigma));
+            kernel[i + radius] = value;
+            sum += value;
+        }
+        for (var i = 0; i < kernel.Length; i++) kernel[i] /= sum;
+
+        token.ThrowIfCancellationRequested();
         var temp = new byte[pixels.Length];
 
         for (var y = 0; y < height; y++)

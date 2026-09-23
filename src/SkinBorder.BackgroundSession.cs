@@ -327,7 +327,7 @@ internal sealed partial class SkinBorder
             var diffusionRadius = scene.PreBlurred
                 ? 0
                 : Theme.MaterialColors.Diffusion * _owner.MaterialStrength;
-            if (Math.Abs(scene.Diffusion.Radius - diffusionRadius) > 0.001)
+            if (scene.Diffusion.Radius != diffusionRadius)
                 scene.Diffusion.Radius = diffusionRadius;
             var effect = diffusionRadius > 0 ? scene.Diffusion : null;
             if (!ReferenceEquals(scene.Visual.Effect, effect))

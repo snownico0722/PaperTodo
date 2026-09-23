@@ -16,15 +16,19 @@ public sealed partial class AppController
     private void QueueNativeMicaPreferenceRefresh()
     {
         var dispatcher = Application.Current.Dispatcher;
-        if (dispatcher.HasShutdownStarted || IsExiting || _nativeMicaPreferenceRefreshQueued) return;
-        _nativeMicaPreferenceRefreshQueued = true;
+        if (dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(new Action(() =>
         {
-            _nativeMicaPreferenceRefreshQueued = false;
-            if (IsExiting) return;
-            DwmMicaApi.Instance.InvalidateEnvironment();
-            // Refresh semantic foreground colors too, including fixed light/dark in HC.
-            RefreshThemeSurfaces();
-        }), DispatcherPriority.Background);
+            if (IsExiting || _nativeMicaPreferenceRefreshQueued) return;
+            _nativeMicaPreferenceRefreshQueued = true;
+            dispatcher.BeginInvoke(new Action(() =>
+            {
+                _nativeMicaPreferenceRefreshQueued = false;
+                if (IsExiting) return;
+                DwmMicaApi.Instance.InvalidateEnvironment();
+                // Refresh semantic foreground colors too, including fixed light/dark in HC.
+                RefreshThemeSurfaces();
+            }), DispatcherPriority.Background);
+        }));
     }
 }
