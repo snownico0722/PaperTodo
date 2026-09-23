@@ -31,6 +31,10 @@ jobs:
           new = "    if text.count(begin) != 1: raise RuntimeError('Ambiguous range: ' + begin)\n    a = text.index(begin)\n    b = text.index(end, a + len(begin))"
           if source.count(old) != 1: raise RuntimeError('Editor helper changed')
           source = source.replace(old, new, 1)
+          old = r"re.escape(name) + r'\('"
+          new = r"re.escape(name) + r'(?:<[^>\n]+>)?\('"
+          if source.count(old) != 1: raise RuntimeError('Method matcher changed')
+          source = source.replace(old, new, 1)
           ast.parse(source)
           path.write_text(source, encoding='utf-8', newline='\n')
       - name: Apply and publish reviewed pruning
