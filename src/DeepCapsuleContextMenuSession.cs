@@ -22,6 +22,7 @@ internal sealed class DeepCapsuleContextMenuSession
     private readonly Action<bool>? _onOpenChanged;
 
     private ContextMenu? _activeMenu;
+    private long _openVersion;
 
     public DeepCapsuleContextMenuSession(
         AppController controller,
@@ -40,6 +41,7 @@ internal sealed class DeepCapsuleContextMenuSession
             _activeMenu.IsOpen = false;
         }
 
+        var openVersion = System.Threading.Interlocked.Increment(ref _openVersion);
         System.Threading.Volatile.Write(ref _activeMenu, menu);
 
         // The owner remains NOACTIVATE. Suppress capsule topmost first, then let the real WPF
@@ -47,7 +49,7 @@ internal sealed class DeepCapsuleContextMenuSession
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, true);
         _onOpenChanged?.Invoke(true);
         Promote(menu);
-        QueuePopupActivation(menu, attemptsRemaining: 3);
+        QueuePopupActivation(menu, openVersion, attemptsRemaining: 3);
     }
 
     public void HandleClosed(ContextMenu menu)
@@ -89,14 +91,16 @@ internal sealed class DeepCapsuleContextMenuSession
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
     }
 
-    private void QueuePopupActivation(ContextMenu menu, int attemptsRemaining)
+    private void QueuePopupActivation(
+        ContextMenu menu,
+        long openVersion,
+        int attemptsRemaining)
     {
         _ = menu.Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
             {
-                if (!ReferenceEquals(System.Threading.Volatile.Read(ref _activeMenu), menu) ||
-                    !menu.IsOpen)
+                if (!IsCurrentOpen(menu, openVersion))
                 {
                     return;
                 }
@@ -109,22 +113,45 @@ internal sealed class DeepCapsuleContextMenuSession
                         topmost: true,
                         insertAfter: IntPtr.Zero);
 
-                    // SetForegroundWindow is explicitly best-effort. Only ask WPF to move keyboard
-                    // focus after the OS confirms this popup really became foreground; otherwise
-                    // keep mouse/menu capture behavior without inventing another activation fallback.
                     WindowNative.TrySetForegroundWindow(source.Handle);
                     if (WindowNative.ForegroundWindow == source.Handle)
                     {
                         menu.Focus();
+                        return;
                     }
+
+                    // A visible topmost menu without a usable foreground/input handoff is a worse
+                    // state than cancelling this open. Do not rebuild the old global-input fallback.
+                    CloseIfCurrent(menu, openVersion);
                     return;
                 }
 
                 if (attemptsRemaining > 1)
                 {
-                    QueuePopupActivation(menu, attemptsRemaining - 1);
+                    QueuePopupActivation(
+                        menu,
+                        openVersion,
+                        attemptsRemaining - 1);
+                    return;
                 }
+
+                // The popup HWND never materialized for this open. End only this generation so an
+                // old dispatcher callback cannot close a later reopen of the same ContextMenu.
+                CloseIfCurrent(menu, openVersion);
             }));
+    }
+
+    private bool IsCurrentOpen(ContextMenu menu, long openVersion) =>
+        ReferenceEquals(System.Threading.Volatile.Read(ref _activeMenu), menu) &&
+        System.Threading.Interlocked.Read(ref _openVersion) == openVersion &&
+        menu.IsOpen;
+
+    private void CloseIfCurrent(ContextMenu menu, long openVersion)
+    {
+        if (IsCurrentOpen(menu, openVersion))
+        {
+            Close();
+        }
     }
 
     private static void Promote(ContextMenu menu)
@@ -146,6 +173,14 @@ internal sealed class DeepCapsuleContextMenuSession
         }
 
         ClearStaleApplicationActivationIfNeeded();
+    }
+
+    internal static void ClearCapsuleInteractionKeyboardFocusIfSafe()
+    {
+        if (!InputManager.Current.IsInMenuMode)
+        {
+            WindowNative.ClearCurrentThreadKeyboardFocus();
+        }
     }
 
     internal static void ClearStaleApplicationActivationIfNeeded()
