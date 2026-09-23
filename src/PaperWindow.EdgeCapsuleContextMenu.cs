@@ -30,9 +30,7 @@ public sealed partial class PaperWindow
                     return;
                 }
 
-                host.SetContextMenu(
-                    BuildDeepCapsuleSlotContextMenu(),
-                    DeepCapsuleContextMenuSession.ClearStaleApplicationActivationIfNeeded);
+                host.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
                 _deepCapsuleContextMenuInitialized = true;
             }),
             System.Windows.Threading.DispatcherPriority.SystemIdle);
