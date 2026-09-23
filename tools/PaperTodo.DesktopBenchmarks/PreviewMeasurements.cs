@@ -58,6 +58,9 @@ internal static partial class Program
     }
     private static void Profile()
     {
+        var names = new[] { "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
+            "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB", "warmMs",
+            "artifactHits", "stageToInteractiveMs" };
         var fixtures = new (string Name, string Text)[]
         {
             ("short-dense", string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd()),
@@ -76,11 +79,10 @@ internal static partial class Program
             {
                 var result = ProfileOne(fixture.Text, mode);
                 Console.WriteLine("SAMPLE " + JsonSerializer.Serialize(new
-                { backend = "bounded", fixture = fixture.Name, mode, iteration = i, metrics = result }));
+                { backend = "bounded", fixture = fixture.Name, mode, iteration = i,
+                    metrics = names.Select((name, index) => (name, value: result[index])).ToDictionary(x => x.name, x => x.value) }));
                 if (i >= 3) rows.Add(result);
             }
-            var names = new[] { "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
-                "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB" };
             Console.WriteLine("EDGE_PROFILE " + JsonSerializer.Serialize(new
             {
                 backend = "bounded", fixture = fixture.Name, mode,
