@@ -396,6 +396,22 @@ internal static class Program
         Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => frame.Continue = false));
         Dispatcher.PushFrame(frame);
     }
+
+    private static void PumpFor(int milliseconds)
+    {
+        var frame = new DispatcherFrame();
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(milliseconds)
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            frame.Continue = false;
+        };
+        timer.Start();
+        Dispatcher.PushFrame(frame);
+    }
     internal static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static bool Transparent(Brush brush) => brush is SolidColorBrush solid && solid.Color.A == 0;
     private static void RunMicaControllerExperiment(AppController controller)
@@ -517,26 +533,92 @@ internal static class Program
                    Math.Abs(darkMedium.LumApplied - darkMedium.LumDefault) < .0001f,
                 "theme change recreates a fresh SDK default baseline");
 
-            // Regression for native/non-layered visibility transitions. Whole-window opacity
-            // animations are legal only on the legacy layered paper path; MicaController keeps
-            // this HWND opaque and must survive hide/show with animations enabled.
-            var hwnd = new WindowInteropHelper(window).Handle;
-            controller.State.EnableAnimations = true;
-            controller.HidePaper(paper);
-            Pump();
-            Assert(window.Opacity == 1,
-                "native Mica hide never animates whole-window opacity");
-            controller.ShowPaper(paper, activate: false);
-            Pump();
-            Assert(window.IsVisible &&
-                   window.Opacity == 1 &&
-                   chrome.Opacity == 1 &&
-                   new WindowInteropHelper(window).Handle == hwnd &&
-                   ReferenceEquals(chrome.Child, body),
-                "native Mica show keeps the same opaque HWND and editor tree");
-            var afterShow = Read();
-            Assert(afterShow.Active && window.IsNativeMicaEffective,
-                "MicaController remains active after native hide/show");
+            // Regression for the real controller-managed path that previously crashed after
+            // switching skins: a non-layered native PaperWindow must never receive a whole-window
+            // Opacity DoubleAnimation. Keep animation clocks running long enough for a delayed
+            // Render tick to surface the same failure as the production crash.
+            var managedPaper = new PaperData
+            {
+                Type = PaperTypes.Note,
+                Content = "# Native skin switch\n前景保持完全不透明",
+                X = 540,
+                Y = 80,
+                Width = 420,
+                Height = 320,
+                IsVisible = false
+            };
+            controller.State.Papers.Add(managedPaper);
+            var windows = (Dictionary<string, PaperWindow>)typeof(AppController)
+                .GetField("_windows", Private)!.GetValue(controller)!;
+            PaperWindow? managedWindow = null;
+            try
+            {
+                controller.State.PaperSkin = PaperSkins.Mica;
+                controller.State.ColorScheme = ColorSchemes.Mica;
+                controller.State.Theme = "light";
+                controller.State.EnableAnimations = true;
+                Theme.Invalidate();
+
+                controller.ShowPaper(managedPaper, activate: false);
+                PumpFor(320);
+                managedWindow = windows[managedPaper.Id];
+                var managedChrome = (Border)typeof(PaperWindow)
+                    .GetField("_paperChrome", Private)!.GetValue(managedWindow)!;
+                var managedBody = managedChrome.Child;
+                var managedHwnd = new WindowInteropHelper(managedWindow).Handle;
+                Assert(!managedWindow.AllowsTransparency &&
+                       managedWindow.Opacity == 1 &&
+                       managedChrome.Opacity == 1,
+                    "controller-managed native paper starts fully opaque without a window fade");
+
+                var setPaperSkin = typeof(AppController).GetMethod("SetPaperSkin", Private)
+                    ?? throw new InvalidOperationException("SetPaperSkin missing.");
+                foreach (var skin in new[]
+                         {
+                             PaperSkins.Acrylic,
+                             PaperSkins.ClearAcrylic,
+                             PaperSkins.Aero,
+                             PaperSkins.Pixel,
+                             PaperSkins.Mica
+                         })
+                {
+                    setPaperSkin.Invoke(controller, [skin]);
+                    PumpFor(360);
+                    Assert(managedWindow.Opacity == 1 &&
+                           managedChrome.Opacity == 1 &&
+                           new WindowInteropHelper(managedWindow).Handle == managedHwnd &&
+                           ReferenceEquals(managedChrome.Child, managedBody),
+                        $"skin switch {skin} keeps the native HWND/editor fully opaque");
+                }
+
+                Assert(managedWindow.IsNativeMicaEffective,
+                    "switching back to Mica restores the native material on the same HWND");
+
+                controller.HidePaper(managedPaper);
+                PumpFor(120);
+                Assert(!managedPaper.IsVisible &&
+                       !managedWindow.IsVisible &&
+                       managedWindow.Opacity == 1,
+                    "native Mica hide skips whole-window opacity animation");
+
+                controller.ShowPaper(managedPaper, activate: false);
+                PumpFor(320);
+                Assert(managedPaper.IsVisible &&
+                       managedWindow.IsVisible &&
+                       managedWindow.Opacity == 1 &&
+                       managedChrome.Opacity == 1 &&
+                       new WindowInteropHelper(managedWindow).Handle == managedHwnd &&
+                       ReferenceEquals(managedChrome.Child, managedBody) &&
+                       managedWindow.IsNativeMicaEffective,
+                    "native Mica show keeps the same opaque HWND/editor and restores MicaController");
+            }
+            finally
+            {
+                if (managedWindow != null && !managedWindow.IsClosed)
+                    managedWindow.CloseForReal();
+                windows.Remove(managedPaper.Id);
+                controller.State.Papers.Remove(managedPaper);
+            }
 
             Console.WriteLine(
                 $"PASS MicaController experiment: light default tint={medium.TintDefault:F3} lum={medium.LumDefault:F3}; " +
