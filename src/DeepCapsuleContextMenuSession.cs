@@ -103,11 +103,18 @@ internal sealed class DeepCapsuleContextMenuSession
                     source.Handle,
                     topmost: true,
                     insertAfter: IntPtr.Zero);
-                WindowNative.TrySetForegroundWindow(source.Handle);
-                if (WindowNative.ForegroundWindow == source.Handle)
+
+                // MaterialContextMenu already entered WPF menu mode when Opened fired. Forcing
+                // a foreground/focus handoff here can immediately close its subclassed Popup
+                // on a NOACTIVATE owner. Keep the popup above the owner and leave capture/focus
+                // to WPF; ordinary ContextMenu keeps the mainline #303 handoff unchanged.
+                if (menu is MaterialContextMenu)
                 {
-                    menu.Focus();
+                    return;
                 }
+
+                WindowNative.TrySetForegroundWindow(source.Handle);
+                menu.Focus();
             }));
     }
 
