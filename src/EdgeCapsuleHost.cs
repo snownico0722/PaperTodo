@@ -144,6 +144,8 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         CloseGlyph = closeGlyph;
         Label = label;
 
+        // Owner-side ContextMenuOpening runs before WPF enters menu mode. Keep this boundary
+        // local to the host so callers can clean stale native activation without global input hooks.
         ContentArea.ContextMenuOpening += (_, _) => _contextMenuOpening?.Invoke();
         CloseArea.ContextMenuOpening += (_, _) => _contextMenuOpening?.Invoke();
     }
