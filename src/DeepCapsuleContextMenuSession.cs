@@ -155,4 +155,3 @@ internal sealed class DeepCapsuleContextMenuSession
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
 }
-
