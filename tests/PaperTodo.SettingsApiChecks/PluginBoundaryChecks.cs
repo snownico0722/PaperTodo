@@ -12,6 +12,8 @@ internal static partial class Program
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
         PluginEnablementStateIsHostOwned(c);
+        DeferredPluginEnablementDoesNotAttachEarly(c);
+        StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         CreationOwnsInitialTodoFields(c, note);
@@ -37,6 +39,67 @@ internal static partial class Program
             string.Equals(value, providerId, StringComparison.Ordinal));
         Check(c.IsPluginEnabled(PaperBodyProviderIds.Markdown),
             "The built-in Markdown provider cannot be disabled by plugin state.");
+    }
+
+    private static void DeferredPluginEnablementDoesNotAttachEarly(AppController c)
+    {
+        const string providerId = "tests.deferred-enable";
+        var paper = new PaperData
+        {
+            Id = "deferred-enable-paper",
+            Type = PaperTypes.Note,
+            BodyProviderId = providerId,
+            IsVisible = true,
+            IsCollapsed = true
+        };
+        var window = new PaperWindow(paper, c, deferShellConstruction: true);
+        try
+        {
+            var host = ReadField<PaperBodyHost>(window, "_paperBodyHost");
+            Check(!window.IsShellBuilt && host.Current == null,
+                "Deferred plugin fixture must start without a body session.");
+
+            window.RefreshPluginEnabledState(providerId);
+            Check(!window.IsShellBuilt && host.Current == null,
+                "Changing plugin enablement must not attach a body before deferred shell construction.");
+
+            window.EnsureShellBuilt();
+            Check(window.IsShellBuilt && host.Current != null,
+                "Normal shell construction must attach exactly the first body session after a deferred enablement change.");
+        }
+        finally
+        {
+            window.CloseForReal();
+        }
+    }
+
+    private static void StartingPluginRuntimeIsDisposedOnRemoval(AppController c)
+    {
+        const string providerId = "tests.starting-runtime";
+        var slotType = typeof(AppController).GetNestedType(
+            "PluginRuntimeSlot",
+            BindingFlags.NonPublic)!;
+        var slot = Activator.CreateInstance(slotType, nonPublic: true)!;
+        slotType.GetProperty("ProviderId")!.SetValue(slot, providerId);
+        var stateProperty = slotType.GetProperty("State")!;
+        stateProperty.SetValue(
+            slot,
+            Enum.Parse(stateProperty.PropertyType, "Starting"));
+
+        var starting = new BoundaryDisposable();
+        slotType.GetProperty("StartingRuntime")!.SetValue(slot, starting);
+        var slots = ReadField<IDictionary>(c, "_pluginRuntimeSlots");
+        slots[providerId] = slot;
+        try
+        {
+            Invoke(c, "RemovePluginRuntimeSlot", providerId);
+            Check(starting.Disposals == 1 && !slots.Contains(providerId),
+                "Removing a starting plugin Runtime must immediately dispose its temporary runtime owner.");
+        }
+        finally
+        {
+            slots.Remove(providerId);
+        }
     }
 
     private static void ReadsAndNotificationsDoNotCommitOrReplaceBodies(
@@ -530,6 +593,12 @@ internal static partial class Program
             c.ReconcilePluginRuntimes();
             descriptors.Remove(id); loaded.Remove(path);
         }
+    }
+
+    private sealed class BoundaryDisposable : IDisposable
+    {
+        public int Disposals;
+        public void Dispose() => Disposals++;
     }
 
     private sealed class BoundaryBodyProbe : IPaperBodySession
