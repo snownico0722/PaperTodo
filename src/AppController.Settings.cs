@@ -1816,6 +1816,7 @@ public sealed partial class AppController
         State.MicaBackdropType = MicaBackdropTypes.Mica;
         State.MicaAlwaysActive = false;
         State.MaterialTransparency = MaterialTransparencyLevels.Medium;
+        State.HideSurfaceOutline = false;
         State.MatchAuxiliaryMaterialStrength = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;

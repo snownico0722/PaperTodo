@@ -15,6 +15,7 @@ internal static class SkinChecks
     internal static void Run(AppController controller)
     {
         Program.Assert(PaperSkins.All.Distinct().Count() == 7 && Decorated.Length == 3, "unique skin choices");
+        Program.Assert(!new AppState().HideSurfaceOutline, "ordinary outer border is visible by default");
         Program.Assert(PaperSkins.Resolve(null, "mica", "clearAcrylic") == PaperSkins.ClearAcrylic, "legacy clear Acrylic");
         Program.Assert(PaperSkins.Resolve(null, "mica", "micaAlt") == PaperSkins.Mica, "retired material migration");
         Program.Assert(PaperSkins.Resolve(null, "forest", "acrylic") == PaperSkins.Paper, "ordinary legacy palette");

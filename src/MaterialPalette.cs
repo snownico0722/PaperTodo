@@ -30,7 +30,15 @@ internal readonly record struct MaterialPalette(Color Surface, Color NativeOverl
             PaperSkins.TracingPaper => (.04, dark ? 192 : 179, 0, 18d),
             _ => (0d, 255, 0, 0d)
         };
-        alpha = MaterialTransparencyLevels.ScaleCover((byte)alpha, transparency);
+        var transparencyScale = MaterialTransparencyLevels.CoverScale(transparency);
+        alpha = skin switch
+        {
+            // Keep the same five saved levels; only shift each material's optical baseline.
+            // One transparency step is 0.15 of cover scale.
+            PaperSkins.TracingPaper => ScaleAdjustedCover((byte)alpha, transparencyScale - .15),
+            PaperSkins.Aero => ScaleAdjustedCover((byte)alpha, transparencyScale + .60),
+            _ => MaterialTransparencyLevels.ScaleCover((byte)alpha, transparency)
+        };
         wash = MaterialTransparencyLevels.ScaleCover((byte)wash, transparency);
         var surface = skin is PaperSkins.Paper or PaperSkins.Pixel ? paper :
             Mix(baseColor, hue, neutral && skin != PaperSkins.Aero ? 0 : chroma * (dark ? .62 : 1));
@@ -44,6 +52,9 @@ internal readonly record struct MaterialPalette(Color Surface, Color NativeOverl
         var preview = Color.FromArgb(previewAlpha, previewColor.R, previewColor.G, previewColor.B);
         return new(surface, overlay, preview, (byte)alpha, blur);
     }
+    private static byte ScaleAdjustedCover(byte alpha, double scale) =>
+        (byte)Math.Clamp((int)Math.Round(alpha * scale), 0, 255);
+
     private static Color Mix(Color a, Color b, double weight) => Color.FromRgb(
         (byte)Math.Round(a.R + (b.R-a.R)*weight), (byte)Math.Round(a.G + (b.G-a.G)*weight),
         (byte)Math.Round(a.B + (b.B-a.B)*weight));

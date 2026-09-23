@@ -58,17 +58,11 @@ public sealed partial class AppController
         }));
         panel.Children.Add(CreateSettingsSelect(
             PaperSkins.All.Select(id => (id, Strings.Get(PaperSkins.LabelKey(id)))).ToArray(), skin, SetPaperSkin));
-        panel.Children.Add(SettingsToggle(
-            SettingsSidebarLocalized("隐藏外轮廓", "Hide outer border", "外枠を隠す", "외곽선 숨기기"),
-            State.HideSurfaceOutline, () =>
-            {
-                SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
-            }));
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             panel.Children.Add(SettingsFieldLabel(SettingsSidebarLocalized(
                 "材质透明度", "Material transparency", "素材の透明度", "재질 투명도")));
-            panel.Children.Add(CreateSettingsSelect(
+            panel.Children.Add(CreateSegmentSelector(
                 [
                     (MaterialTransparencyLevels.VeryLow, SettingsSidebarLocalized("最低", "Very low", "最低", "매우 낮음")),
                     (MaterialTransparencyLevels.Low, SettingsSidebarLocalized("较低", "Low", "低め", "낮음")),
@@ -79,20 +73,18 @@ public sealed partial class AppController
                 MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
                 value => SetSettingFromUi("appearance.material_transparency", value)));
         }
+        panel.Children.Add(SettingsToggle(
+            SettingsSidebarLocalized("隐藏外轮廓", "Hide outer border", "外枠を隠す", "외곽선 숨기기"),
+            State.HideSurfaceOutline, () =>
+            {
+                SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
+            }));
         if (skin != PaperSkins.Paper)
             panel.Children.Add(WrapWithHint(SettingsToggle(
                 Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
                 {
                     SetSettingFromUi("appearance.match_auxiliary_material", !State.MatchAuxiliaryMaterialStrength);
                 }), "TipMatchAuxiliaryMaterial"));
-        if (PaperSkins.UsesSampledAuxiliary(skin))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("SkinCaptureNotice"), TextWrapping = TextWrapping.Wrap,
-                Foreground = TrayWeakTextBrush, FontSize = AppTypography.Scale(11), Margin = new Thickness(2, 2, 2, 5)
-            });
-        }
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             if (!NativeMicaBackdrop.IsSupported || !UsesNativeMicaWindows)
