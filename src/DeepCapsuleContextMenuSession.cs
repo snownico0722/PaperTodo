@@ -22,6 +22,7 @@ internal sealed class DeepCapsuleContextMenuSession
     private readonly Action<bool>? _onOpenChanged;
 
     private ContextMenu? _activeMenu;
+    // Only scopes queued popup activation to one open; it is not a second menu state machine.
     private long _openVersion;
 
     public DeepCapsuleContextMenuSession(
