@@ -169,7 +169,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 if (LastHResult >= 0)
                 {
 #if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
-                    if (_material == MicaBackdropTypes.Mica)
+                    if (_material == MicaBackdropTypes.Mica && _native is DwmMicaApi)
                     {
                         LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.None);
                         if (LastHResult >= 0)
