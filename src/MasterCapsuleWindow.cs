@@ -241,11 +241,7 @@ public sealed class MasterCapsuleWindow : Window
         // and stale-focus cleanup to DeepCapsuleContextMenuSession.
         var contextMenu = _controller.CreateTrayMenu(registerForLiveRefresh: true);
         _pill.ContextMenu = contextMenu;
-        _pill.ContextMenuOpening += (_, _) =>
-        {
-            DeepCapsuleContextMenuSession.ClearStaleApplicationActivationIfNeeded();
-            _controller.RebuildTrayMenu(contextMenu);
-        };
+        _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);
         contextMenu.Closed += (_, _) => _contextMenuSession.HandleClosed(contextMenu);
         host.Children.Add(_pill);
@@ -493,13 +489,8 @@ public sealed class MasterCapsuleWindow : Window
         return wasDragging;
     }
 
-    private void ClearCapsuleInteractionKeyboardFocus()
-    {
-        DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe();
-        Dispatcher.BeginInvoke(
-            (Action)DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe,
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
+    private void ClearCapsuleInteractionKeyboardFocus() =>
+        WindowNative.ClearCurrentThreadKeyboardFocus();
 
     private double MasterDockedWidth(double pixelsPerDip)
     {
