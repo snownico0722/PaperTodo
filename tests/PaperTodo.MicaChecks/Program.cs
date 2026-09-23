@@ -29,29 +29,6 @@ internal static class Program
                 xaml.Root.Element(ns + "Application.Resources")!.Nodes());
             app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
         }
-        if (args.Length == 2 && args[0] == "--benchmark")
-        {
-            try { using var controller = new AppController(); MaterialBenchmarks.Run(controller, args[1]); return 0; }
-            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-        }
-        if (args.Length == 2 && args[0] == "--drag-benchmark")
-            return MaterialDragBenchmarks.RunIsolated(args[1]);
-        if (args.Length == 2 && args[0] == "--drag-snapshot-timing")
-            return MaterialDragBenchmarks.RunSnapshotTimingIsolated(args[1]);
-        if (args.Length == 2 && args[0] == "--drag-fixture")
-        {
-            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, MaterialDragBenchmarks.FixtureMarker)))
-                throw new InvalidOperationException("Refusing to use non-fixture data for dragging.");
-            try { using var controller = new AppController(); MaterialDragBenchmarks.Run(controller, args[1]); return 0; }
-            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-        }
-        if (args.Length == 2 && args[0] == "--drag-snapshot-fixture")
-        {
-            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, MaterialDragBenchmarks.FixtureMarker)))
-                throw new InvalidOperationException("Refusing to use non-fixture data for dragging.");
-            try { using var controller = new AppController(); MaterialDragBenchmarks.RunSnapshotTiming(controller, args[1]); return 0; }
-            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-        }
         var temp = Path.Combine(Path.GetTempPath(), "PaperTodo.NativeMicaChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         try

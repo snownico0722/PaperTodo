@@ -1689,7 +1689,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 **Research / alternatives:** 阅读 [WPF UI WindowBackdrop](https://github.com/lepoco/wpfui/blob/ffebacd61058170cf63864b7d5aa730cffff848a/src/Wpf.Ui/Controls/Window/WindowBackdrop.cs) 的窄原生适配边界；阅读 [dotnet/wpf WriteableBitmap](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Imaging/WriteableBitmap.cs)、[issue 5816](https://github.com/dotnet/wpf/issues/5816) 的锁与缩放冻结讨论和 [BlurEffect 原生实现](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/WpfGfx/core/resources/BlurEffect.cpp)。这些支持不跨异步持锁、后台准备／UI 短上传、明确 native 与软件采样边界；不是把第三方库直接替换进本项目的理由。截图排除仍服从 [SetWindowDisplayAffinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity) 的本进程顶层窗口与 DWM 限制，并非安全／DRM 边界。未引入新的 capture 后端、降低应用帧率或用先开普通纸片再补材质掩饰首帧延迟。
 
-**Validation:** MaterialRefactorChecks 检查并发最新帧交接／停止、缓存失效、主窗口无采样资源、Aero 像素等价、菜单取消／替换／迟到结果／卸载／超时。既有 MicaChecks 保留真实原生窗口、生产右键与子菜单、首帧素材、前景像素、位图复用、截图排除和设置切页。MaterialBenchmarks 为可选测试入口，使用同一 harness 在两个版本独立进程测 CPU 指令记录时间、线程分配和菜单 Opened 延迟；不是屏幕 FPS、GPU/DWM 占用或 Windows 11 人工视觉验收。
+**Validation:** MaterialRefactorChecks 检查并发最新帧交接／停止、缓存失效、主窗口无采样资源、Aero 像素等价、菜单取消／替换／迟到结果／卸载／超时。既有 MicaChecks 保留真实原生窗口、生产右键与子菜单、首帧素材、前景像素、位图复用、截图排除和设置切页。`tools/PaperTodo.MaterialBenchmarks` 为可选手动测量入口，使用同一 harness 在两个版本独立进程测 CPU 指令记录时间、线程分配、菜单打开延迟和真实鼠标拖动；不进入默认回归，也不是屏幕 FPS、GPU/DWM 占用或 Windows 11 人工视觉验收。
 
 ---
 

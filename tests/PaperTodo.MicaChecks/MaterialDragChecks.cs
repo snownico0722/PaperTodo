@@ -72,6 +72,12 @@ internal static class MaterialDragChecks
                 Math.Abs(after.Y - before.Y + 8 / dpi.DpiScaleY) < .1,
                 "translation only reprojects the retained local snapshot");
 
+            using var rejectedCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var rejected = DesktopBackgroundCapture.PrepareDragAsync(new IntPtr(-12345), rejectedCts.Token)
+                .GetAwaiter().GetResult();
+            Program.Assert(rejected == null,
+                "drag capture fails closed when the requested owner cannot be excluded");
+
             using var dragCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var drag = DesktopBackgroundCapture.PrepareDragAsync(hwnd, dragCts.Token)
                 .GetAwaiter().GetResult();

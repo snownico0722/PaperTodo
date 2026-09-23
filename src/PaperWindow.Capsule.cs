@@ -75,8 +75,18 @@ public sealed partial class PaperWindow
             _capsuleDragBackgroundSnapshot = snapshot;
             ApplyCapsuleDragBackground(snapshot);
         }
-        catch (OperationCanceledException) when (capture.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or
+            InvalidOperationException or ExternalException or ArgumentException or NotSupportedException)
+        {
+            if (ReferenceEquals(capture, _capsuleDragBackgroundCapture))
+            {
+                _capsuleDragBackgroundCapture = null;
+                capture.Dispose();
+            }
+            Debug.WriteLine("Capsule drag background unavailable; keeping the live material: " + ex.Message);
         }
     }
 

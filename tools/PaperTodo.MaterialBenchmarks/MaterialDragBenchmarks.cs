@@ -43,7 +43,7 @@ internal static class MaterialDragBenchmarks
                 File.Copy(file, destination);
             }
             File.WriteAllText(Path.Combine(directory, FixtureMarker), "isolated drag checks");
-            var start = new ProcessStartInfo(Path.Combine(directory, "PaperTodo.MicaChecks.exe"))
+            var start = new ProcessStartInfo(Path.Combine(directory, "PaperTodo.MaterialBenchmarks.exe"))
             {
                 WorkingDirectory = directory, UseShellExecute = false,
                 RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true

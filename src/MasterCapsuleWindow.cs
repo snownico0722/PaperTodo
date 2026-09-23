@@ -239,6 +239,20 @@ public sealed class MasterCapsuleWindow : Window
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);
         contextMenu.Closed += (_, _) => _contextMenuSession.HandleClosed(contextMenu);
+        // ContextMenuService is not reliable when a subclassed material menu is launched
+        // from this standalone WS_EX_NOACTIVATE owner. Open the same production menu explicitly
+        // on pointer-up; WPF still owns popup placement, capture and outside-click dismissal.
+        _pill.PreviewMouseRightButtonUp += (_, e) =>
+        {
+            if (!contextMenu.IsOpen)
+            {
+                _controller.RebuildTrayMenu(contextMenu);
+                contextMenu.PlacementTarget = _pill;
+                contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                contextMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            }
+            e.Handled = true;
+        };
         host.Children.Add(_pill);
         Content = host;
 

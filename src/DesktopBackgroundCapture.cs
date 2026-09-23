@@ -207,12 +207,16 @@ internal sealed class DesktopBackgroundCapture : IDisposable
             try
             {
                 token.ThrowIfCancellationRequested();
-                if (excludeHwnd != IntPtr.Zero &&
-                    OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) &&
-                    GetWindowDisplayAffinity(excludeHwnd, out previousAffinity))
+                if (excludeHwnd != IntPtr.Zero)
                 {
-                    affinityChanged = SetWindowDisplayAffinity(excludeHwnd, 0x11);
-                    if (affinityChanged) DwmFlush();
+                    if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ||
+                        !GetWindowDisplayAffinity(excludeHwnd, out previousAffinity) ||
+                        !SetWindowDisplayAffinity(excludeHwnd, 0x11))
+                    {
+                        return null;
+                    }
+                    affinityChanged = true;
+                    DwmFlush();
                 }
 
                 var desktop = DesktopBounds;
