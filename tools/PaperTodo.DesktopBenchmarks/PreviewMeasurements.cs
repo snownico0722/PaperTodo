@@ -12,6 +12,21 @@ using PaperTodo;
 
 internal static partial class Program
 {
+    private static readonly string[] PreviewMetricNames =
+    [
+        "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
+        "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB", "warmMs",
+        "artifactHits", "stageToInteractiveMs"
+    ];
+
+    private static Dictionary<string, double> NamedPreviewMetrics(double[] values)
+    {
+        if (values.Length != PreviewMetricNames.Length)
+            throw new InvalidOperationException($"Preview metric shape changed: {values.Length} values / {PreviewMetricNames.Length} names.");
+        return PreviewMetricNames.Select((name, index) => (name, value: values[index]))
+            .ToDictionary(item => item.name, item => item.value);
+    }
+
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
@@ -58,9 +73,6 @@ internal static partial class Program
     }
     private static void Profile()
     {
-        var names = new[] { "describeMs", "createMs", "stageMs", "totalReadyMs", "stageToReadyMs",
-            "firstShapeMs", "frameGapMaxMs", "applyMaxMs", "allocationKiB", "warmMs",
-            "artifactHits", "stageToInteractiveMs" };
         var fixtures = new (string Name, string Text)[]
         {
             ("short-dense", string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd()),
@@ -80,16 +92,16 @@ internal static partial class Program
                 var result = ProfileOne(fixture.Text, mode);
                 Console.WriteLine("SAMPLE " + JsonSerializer.Serialize(new
                 { backend = "bounded", fixture = fixture.Name, mode, iteration = i,
-                    metrics = names.Select((name, index) => (name, value: result[index])).ToDictionary(x => x.name, x => x.value) }));
+                    metrics = NamedPreviewMetrics(result) }));
                 if (i >= 3) rows.Add(result);
             }
             Console.WriteLine("EDGE_PROFILE " + JsonSerializer.Serialize(new
             {
                 backend = "bounded", fixture = fixture.Name, mode,
                 characters = fixture.Text.Length, samples = rows.Count, viewport = "460x410 fixed card",
-                median = names.Select((name, i) => (name, value: rows.Select(row => row[i]).Order().ElementAt(rows.Count / 2)))
+                median = PreviewMetricNames.Select((name, i) => (name, value: rows.Select(row => row[i]).Order().ElementAt(rows.Count / 2)))
                     .ToDictionary(x => x.name, x => x.value),
-                maximum = names.Select((name, i) => (name, value: rows.Max(row => row[i])))
+                maximum = PreviewMetricNames.Select((name, i) => (name, value: rows.Max(row => row[i])))
                     .ToDictionary(x => x.name, x => x.value)
             }));
         }
@@ -236,7 +248,8 @@ internal static partial class Program
             {
                 var values = ProfileOne(fixture.Text, mode, preparation);
                 Console.WriteLine("PRELOAD_SAMPLE " + JsonSerializer.Serialize(new
-                { reverse, fixture = fixture.Name, mode, preparation, iteration = i, metrics = values }));
+                { reverse, fixture = fixture.Name, mode, preparation, iteration = i,
+                    metrics = NamedPreviewMetrics(values) }));
             }
         }
         MarkdownEdgePreviewPreload.For(Dispatcher.CurrentDispatcher).SetEnabledForChecks(true);
