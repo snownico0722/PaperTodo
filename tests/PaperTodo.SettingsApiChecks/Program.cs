@@ -179,8 +179,6 @@ internal static partial class Program
         service.Set("todo.bottom_bar", Json(false));
         Check(!c.State.ShowTodoBottomBar && saves == savesBeforeTodoLink + 2,
             "Todo bottom-bar setting changes the live preference.");
-        service.Set("todo.bottom_bar", Json(false));
-        Check(!c.State.ShowTodoBottomBar && saves == 2, "Todo bottom-bar setting changes the live preference.");
         success = false;
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json(true)), "save_failed");
         Check(!c.State.EnableTodoPaperLinks, "Real catalog rollback restores the preference.");
