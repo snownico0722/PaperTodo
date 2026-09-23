@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(PaperTodoMicaControllerExperiment)' == 'true'">
+    <DefineConstants>$(DefineConstants);PAPERTODO_MICA_CONTROLLER_EXPERIMENT</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
