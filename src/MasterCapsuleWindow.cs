@@ -37,7 +37,6 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDisplayChange = 0x007E;
     private const int WmDpiChanged = 0x02E0;
     private const int WmNcHitTest = 0x0084;
-    private const int WmRButtonUp = 0x0205;
     private static readonly IntPtr HtTransparent = new(-1);
     // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
@@ -79,7 +78,6 @@ public sealed class MasterCapsuleWindow : Window
     private double _animatedWidthDip;
     private int _moveGeneration;
     private bool _isClosingForReal;
-    private bool _contextMenuOpenQueued;
     // The master pill is dragged vertically only: it slides its queue's stack by driving the
     // shared start-top margin. It never detaches or changes edge/monitor — that is done by
     // dragging an individual side capsule to another edge / screen.
@@ -823,42 +821,8 @@ public sealed class MasterCapsuleWindow : Window
         Close();
     }
 
-    private void QueueContextMenuOpenFromPointer()
-    {
-        if (_isClosingForReal || _experimentalPassive || _contextMenuOpenQueued) return;
-        _contextMenuOpenQueued = true;
-        // WS_EX_NOACTIVATE owners do receive the native right-button release, but opening a
-        // ContextMenu during that same Input turn lets the release immediately dismiss it.
-        // Background runs after input unwinds without waiting for an idle queue (which can be
-        // starved by normal background work). This is local to the master HWND; no global hook.
-        Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() =>
-            {
-                _contextMenuOpenQueued = false;
-                if (_isClosingForReal || _experimentalPassive ||
-                    _pill.ContextMenu is not { IsOpen: false } menu)
-                {
-                    return;
-                }
-
-                _controller.RebuildTrayMenu(menu);
-                menu.PlacementTarget = _pill;
-                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-                menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
-            }));
-    }
-
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmRButtonUp && !_experimentalPassive)
-        {
-            // Observe the release but do not consume it. WPF must finish its own mouse state
-            // transition; swallowing WM_RBUTTONUP can leave the button logically pressed and
-            // make the popup close/refuse to open. The queued fallback is deduplicated below.
-            QueueContextMenuOpenFromPointer();
-        }
-
         if (msg == WmNcHitTest && _experimentalPassive)
         {
             handled = true;
