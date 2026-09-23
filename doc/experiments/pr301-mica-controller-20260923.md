@@ -1,56 +1,117 @@
 # PR #301 — MicaController 可调云母实验（2026-09-23）
 
-## 目标
+## 结论
 
-验证 PaperTodo 是否能在保留当前单 WPF HWND、正文/控件 100% 不透明的前提下，使用 Windows App SDK `MicaController.TintOpacity` / `LuminosityOpacity` 为展开窗口提供真正可调的 Mica。
+**路线成立。** PaperTodo 可以在保留现有单 WPF `PaperWindow` HWND、正文/控件 100% 不透明的前提下，使用 Windows App SDK `MicaController.TintOpacity` / `LuminosityOpacity` 调整真正的 Mica 背景强度。
 
-## 已验证
+不使用 `Window.Opacity` 模拟材质透明，也不新增第二个顶层窗口。
 
-- 正常 PaperTodo 构建不启用实验宏，继续使用 #227 的 `DWMWA_SYSTEMBACKDROP_TYPE` 路线。
-- 实验构建使用 `Microsoft.WindowsAppSDK.InteractiveExperiences 2.1.9`；相比 WindowsAppSDK 元包，它不会破坏现有 WebView2 WPF 编译资产。
-- Windows App SDK self-contained 实验构建可以编译。
-- `MicaController`、`SystemBackdropConfiguration`、DispatcherQueue 和现有 WPF `PaperWindow` 可以在同一进程中初始化到创建 Composition target 之前。
-- 前景 WPF `Window.Opacity`、纸面 `Opacity` 与编辑器树在实验中始终保持不变；不使用整体窗口透明度。
+## 实现边界
 
-## 阻塞结论
+- 仅 `PaperSkins.Mica` 使用实验 MicaController；Acrylic / Clear Acrylic / Aero 和胶囊/菜单静态快照保持 #227 原路径。
+- 只有真实 `DwmMicaApi` 窗口启用 MicaController；FakeNative 单测继续验证 #227 的 DWM recipe。
+- 初始化或运行时失败时仍可回退 `DWMWA_SYSTEMBACKDROP_TYPE` Mica。
+- 正常非实验构建不引入该后端，便于独立评估依赖和包体成本。
 
-对 PaperTodo 的现有顶层 WPF HWND 调用 `ICompositorDesktopInterop.CreateDesktopWindowTarget` 时，Windows 返回：
+## WPF 互操作关键点
+
+早期实验曾错误得到：
 
 ```
 0x88980800
 DCOMPOSITION_ERROR_WINDOW_ALREADY_COMPOSED
 ```
 
-已分别验证：
+根因不是“WPF 顶层 HWND 无法使用 MicaController”，而是 COM ABI 声明不正确。
 
-1. `isTopmost = false`：失败；
-2. `isTopmost = true`：同样失败。
+最终可行接法：
 
-这说明 WPF 已经拥有该顶层 HWND 的 DirectComposition 表面；公开 API 没有把 WPF 的 `HwndTarget/HwndSource.CompositionTarget` 转换成 Windows.UI.Composition `CompositionTarget` 或 `ICompositionSupportsSystemBackdrop` 的桥。
+- `ICompositorDesktopInterop.CreateDesktopWindowTarget` 按 ABI 使用 `[PreserveSig] int`。
+- target 通过 `out IntPtr` 返回，再用 `DesktopWindowTarget.FromAbi` 投影。
+- UI 线程 DispatcherQueue 使用当前线程模式，并按公开 WPF/Win32 interop 示例采用 `DQTAT_COM_NONE`。
+- MicaController target 连接到现有 `PaperWindow` HWND；不替换 WPF 编辑器树和窗口 ownership。
 
-因此，官方 Win32 `MicaController.SetTarget(WindowId, CompositionTarget)` 路线无法直接挂到 PaperTodo 当前单 WPF HWND 上。
+## 五档实测
 
-## 为什么不继续绕
+Windows CI 的真实 WPF PaperWindow 验证结果：
 
-- `DWMWA_SYSTEMBACKDROP_TYPE = DWMSBT_MAINWINDOW` 可以在 WPF 上正常使用，但只选择系统 Mica 类型，不暴露 `TintOpacity` / `LuminosityOpacity`。
-- `DWMWA_USE_HOSTBACKDROPBRUSH` / `ACCENT_ENABLE_HOSTBACKDROP` 只允许应用创建 HostBackdropBrush，本身不是可调 Mica；真正使用 brush 仍需要应用自己的 Composition target，因此会回到同一所有权冲突。
-- 新建第二个顶层 HWND 专门承载 MicaController，再跟随 PaperWindow 的移动、缩放、DPI、Snap、Z-order、激活和生命周期，技术上可以继续试，但会恢复 #227 刚清掉的额外窗口/同步职责，当前实验明确不采用。
-- 私有反射、Compositor VMT hook 或夺取 WPF 内部 DirectComposition 对象属于版本脆弱方案，不作为 PaperTodo 正式实现候选。
+```
+中：
+TintOpacity        0.500
+LuminosityOpacity  1.000
 
-## 当前可行边界
+最低透明度：
+TintOpacity        0.650
+LuminosityOpacity  1.000
 
-在保持单 WPF HWND 的前提下：
+最高透明度：
+TintOpacity        0.350
+LuminosityOpacity  0.700
 
-- **系统默认 Mica**：继续使用 #227 的 DWM 路线；
-- **比默认更实**：可以在 Mica 上叠加可调 WPF tint/cover，前景仍完全不透明；
-- **比系统默认 Mica 更“透”**：现有公开 DWM Mica API没有可降低系统 Mica 自身 tint/luminosity 的参数。叠加层只能增加覆盖，无法从系统 Mica 中减去覆盖。
-- 改成 Acrylic / Clear Acrylic 可以产生更透明的视觉，但语义已经不是 Mica。
+深色中档：
+重新读取 SDK 默认
+TintOpacity        0.500
+LuminosityOpacity  1.000
+```
 
-## 测试策略
+“中”不主动写 opacity，保留 Windows App SDK 当前主题默认值；切换深浅色时重建 Controller 并重新读取对应默认基准。
 
-专项测试接受两种结果：
+## 前景与窗口不变量
 
-1. 如果某个未来 Windows/WPF 组合允许 MicaController target：继续验证 Medium=SDK 默认、VeryLow 增加覆盖、VeryHigh 降低覆盖、深浅色重新读取默认基准；
-2. 当前环境返回 `0x88980800`：要求 #227 DWM Mica fallback 仍保持有效、同一 HWND/编辑器树不变、前景 opacity=1。
+真实窗口测试确认：
 
-这不是把失败改成忽略，而是把已经确认的 WPF 组合边界变成可重复验证的兼容性结论。
+- `PaperWindow.Opacity == 1`
+- paper chrome `Opacity == 1`
+- Markdown / Todo / 图标 / 输入框不跟随 Mica 透明度变化
+- HWND 不重建
+- 编辑器树不重建
+- 切换 Mica / Acrylic / Clear Acrylic / Aero / Pixel 后仍保持同一 HWND 和正文树
+
+## 切皮肤崩溃修复
+
+实机发现原生材质窗口切皮肤时可能抛：
+
+```
+Cannot animate the 'Opacity' property on a 'PaperTodo.PaperWindow'
+using a 'System.Windows.Media.Animation.DoubleAnimation'.
+```
+
+根因是 #227 原有显隐流程仍可能给 `AllowsTransparency=false` 的原生 PaperWindow 安装整窗 `Window.Opacity` 动画时钟。原生合成路径切换后，旧动画时钟在后续 Render tick 上可能变成非法状态。
+
+修复后：
+
+- 只有 `AllowsTransparency=true` 的旧 layered WPF 纸片保留整窗淡入淡出；
+- native / MicaController PaperWindow 始终保持整窗 `Opacity=1`；
+- controller-managed 真实窗口回归会连续切换 Acrylic → Clear Acrylic → Aero → Pixel → Mica，并实际运行 Dispatcher 动画 tick；
+- Hide → Show 也验证同一 HWND、同一编辑器树、MicaController 恢复。
+
+## 构建与发布
+
+实验依赖：
+
+```
+Microsoft.WindowsAppSDK.InteractiveExperiences 2.1.9
+```
+
+使用 component package 而不是 WindowsAppSDK 元包，避免破坏 PaperTodo 现有 WebView2 WPF 编译资产。
+
+当前 self-contained single-file 实验包：
+
+- `PaperTodo.exe`：94,699,973 bytes，约 90.3 MiB
+- 不要求另装 .NET Runtime
+- Windows App SDK 原生依赖按单文件自解压机制使用
+
+## 最终验证
+
+提交 `8504fd0f` 的专项验证：
+
+- 普通 #227 构建：SUCCESS
+- MicaController 实验构建：SUCCESS
+- 真实 WPF 五档 probe：SUCCESS
+- controller-managed 切皮肤 / Hide / Show 回归：SUCCESS
+- 完整材质回归：SUCCESS
+- self-contained single-file publish：SUCCESS
+- Edge diagnostics：SUCCESS
+- Plugin samples：SUCCESS
+
+普通 PR Build 另行保留完整 Markdown / Todo / WindowStack / Threading / Lifecycle / Native material 回归。
