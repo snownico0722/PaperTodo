@@ -158,7 +158,7 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
         if (!e.IsSuccess) { Fail($"Web popup navigation failed ({e.WebErrorStatus})."); return; }
         _documentToken = Guid.NewGuid().ToString("N");
         _ready = true;
-        Send(new { type = "initialize", token = _documentToken, theme = _theme, data = _data });
+        Send(new { type = "initialize", token = _documentToken, uiLanguage = PaperPluginEnvironment.UiLanguage, theme = _theme, data = _data });
     }
     private void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
