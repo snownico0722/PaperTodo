@@ -19,7 +19,7 @@ internal sealed class DesktopBackgroundCapture : IDisposable
     internal const uint CaptureRasterOperation = 0x00CC0020; // SRCCOPY, never CAPTUREBLT.
     internal sealed record Region(int OffsetX, int OffsetY, int Width, int Height, int Padding);
 
-    internal sealed class Frame : IDisposable
+    internal sealed class Frame
     {
         internal BackgroundCaptureLayout.Scene Layout { get; }
         internal BitmapSource Bitmap { get; }
@@ -38,10 +38,6 @@ internal sealed class DesktopBackgroundCapture : IDisposable
         {
         }
 
-        public void Dispose()
-        {
-            // Immutable BitmapSource owns its copied pixels; no pooled frame lifetime remains.
-        }
     }
 
     internal sealed record Snapshot(BackgroundCaptureLayout.Scene Layout, BitmapSource Bitmap, bool PreBlurred);
@@ -229,7 +225,7 @@ internal sealed class DesktopBackgroundCapture : IDisposable
                 token.ThrowIfCancellationRequested();
 
                 var pixels = surface.ReadPixels();
-                ApplyLightGaussianBlur(pixels, width, height);
+                ApplyLightGaussianBlur(pixels, width, height, token);
                 token.ThrowIfCancellationRequested();
                 return new Snapshot(
                     new BackgroundCaptureLayout.Scene(desktop, width, height),
@@ -248,54 +244,64 @@ internal sealed class DesktopBackgroundCapture : IDisposable
             }
         }, token);
 
-    private static void ApplyLightGaussianBlur(byte[] pixels, int width, int height)
+    private static readonly double[] LightGaussianKernel =
+    {
+        0.07076637133154648,
+        0.24446039891162386,
+        0.3695464595136593,
+        0.24446039891162386,
+        0.07076637133154648
+    };
+
+    private static void ApplyLightGaussianBlur(
+        byte[] pixels,
+        int width,
+        int height,
+        CancellationToken token)
     {
         if (width < 3 || height < 3) return;
         // Radius 2 / sigma 1.1 is deliberately light. Combined with 50% downsampling it removes
         // text-level detail without turning the drag surface into a featureless color block.
         const int radius = 2;
-        const double sigma = 1.1;
-        var kernel = new double[radius * 2 + 1];
-        var sum = 0d;
-        for (var i = -radius; i <= radius; i++)
-        {
-            var value = Math.Exp(-(i * i) / (2 * sigma * sigma));
-            kernel[i + radius] = value;
-            sum += value;
-        }
-        for (var i = 0; i < kernel.Length; i++) kernel[i] /= sum;
-
+        var kernel = LightGaussianKernel;
         var temp = new byte[pixels.Length];
+
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
         {
-            var dst = (y * width + x) * 4;
-            for (var c = 0; c < 3; c++)
+            if ((y & 31) == 0) token.ThrowIfCancellationRequested();
+            for (var x = 0; x < width; x++)
             {
-                var value = 0d;
-                for (var k = -radius; k <= radius; k++)
+                var dst = (y * width + x) * 4;
+                for (var c = 0; c < 3; c++)
                 {
-                    var sx = Math.Clamp(x + k, 0, width - 1);
-                    value += pixels[(y * width + sx) * 4 + c] * kernel[k + radius];
+                    var value = 0d;
+                    for (var k = -radius; k <= radius; k++)
+                    {
+                        var sx = Math.Clamp(x + k, 0, width - 1);
+                        value += pixels[(y * width + sx) * 4 + c] * kernel[k + radius];
+                    }
+                    temp[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
                 }
-                temp[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
+                temp[dst + 3] = pixels[dst + 3];
             }
-            temp[dst + 3] = pixels[dst + 3];
         }
 
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
         {
-            var dst = (y * width + x) * 4;
-            for (var c = 0; c < 3; c++)
+            if ((y & 31) == 0) token.ThrowIfCancellationRequested();
+            for (var x = 0; x < width; x++)
             {
-                var value = 0d;
-                for (var k = -radius; k <= radius; k++)
+                var dst = (y * width + x) * 4;
+                for (var c = 0; c < 3; c++)
                 {
-                    var sy = Math.Clamp(y + k, 0, height - 1);
-                    value += temp[(sy * width + x) * 4 + c] * kernel[k + radius];
+                    var value = 0d;
+                    for (var k = -radius; k <= radius; k++)
+                    {
+                        var sy = Math.Clamp(y + k, 0, height - 1);
+                        value += temp[(sy * width + x) * 4 + c] * kernel[k + radius];
+                    }
+                    pixels[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
                 }
-                pixels[dst + c] = (byte)Math.Clamp((int)Math.Round(value), 0, 255);
             }
         }
     }

@@ -162,12 +162,11 @@ internal sealed class MaterialMenuOpening
                     catch
                     {
                         request.Cancel();
-                        // A slow GDI call cannot be interrupted. Dispose any late result;
-                        // it must never reopen a dismissed menu or leak pooled screen data.
+                        // A slow GDI call cannot be interrupted. A late immutable bitmap can be
+                        // dropped; only observe a late fault so the abandoned task stays quiet.
                         _ = capture.ContinueWith(t =>
                         {
-                            if (t.Status == TaskStatus.RanToCompletion) t.Result?.Dispose();
-                            else if (t.IsFaulted) _ = t.Exception;
+                            if (t.IsFaulted) _ = t.Exception;
                         },
                             CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                         throw;
@@ -182,17 +181,14 @@ internal sealed class MaterialMenuOpening
         { failed = true; Debug.WriteLine("Menu background preparation: " + ex.Message); }
         finally
         {
-            if (!ReferenceEquals(request, _request) || _owner.Dispatcher.HasShutdownStarted)
-                frame?.Dispose();
-            else
+            if (ReferenceEquals(request, _request) && !_owner.Dispatcher.HasShutdownStarted)
             {
                 DetachPendingInput();
                 _request = null; _ready = true;
                 // Failure gets one stable fallback for this opening, not a delayed flash
                 // from fallback to glass. The next open can try again.
-                if (!NeedsBackground) { frame?.Dispose(); frame = null; failed = false; }
+                if (!NeedsBackground) { frame = null; failed = false; }
                 if (surface != null) surface.PrepareMenuBackground(frame, failed);
-                else frame?.Dispose();
                 // ContextMenuService opens with SetCurrentValue, not SetValue. Its
                 // requested true is not the base value after we coerce it to false.
                 // Re-coercing would read the default false and cancel a real right click.

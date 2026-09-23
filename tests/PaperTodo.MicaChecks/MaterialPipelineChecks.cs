@@ -105,7 +105,7 @@ internal static class MaterialPipelineChecks
         surface.Arrange(new Rect(0, 0, 240, 160));
         var layout = new BackgroundCaptureLayout.Scene(new Int32Rect(0, 0, 240, 160), 240, 160);
         var pixels = Enumerable.Repeat((byte)83, 240 * 160 * 4).ToArray();
-        using var frame = new DesktopBackgroundCapture.Frame(layout, pixels);
+        var frame = new DesktopBackgroundCapture.Frame(layout, pixels);
         surface.PrepareMenuBackground(frame, false);
         var scene = surface.BackgroundSessionState!;
         var bitmap = (BitmapSource)scene.Bitmap!;

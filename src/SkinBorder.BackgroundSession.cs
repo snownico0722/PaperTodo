@@ -52,7 +52,6 @@ internal sealed partial class SkinBorder
         internal bool HasBackgroundCapture => _capture != null;
         internal int BackgroundFrameCount { get; private set; }
         internal long BackgroundUploadedPixels { get; private set; }
-        internal int BackgroundBusyFrames => 0;
         internal string? BackgroundFailure { get; private set; }
         internal int BackgroundProjectionCount { get; private set; }
         internal int BackgroundSceneDrawCount { get; private set; }
@@ -68,12 +67,10 @@ internal sealed partial class SkinBorder
             try
             {
                 SetScene(frame.Layout, frame.Bitmap, frame.PreBlurred);
-                frame.Dispose();
             }
             catch (Exception ex) when (ex is InvalidOperationException or
                 System.Runtime.InteropServices.ExternalException or ArgumentException)
             {
-                frame.Dispose();
                 _owner.SuppressStaticBackgroundForOpening = true;
                 FailBackground(ex);
             }
@@ -218,7 +215,6 @@ internal sealed partial class SkinBorder
                 if (frame != null)
                 {
                     PresentFrame(frame);
-                    frame.Dispose();
                 }
                 if (_recaptureRequested) RefreshBackground();
             }
@@ -328,10 +324,14 @@ internal sealed partial class SkinBorder
 
             // Drag snapshots already contain one baked light Gaussian blur. Static local/menu
             // snapshots retain the material-specific diffusion used by the current recipe.
-            scene.Diffusion.Radius = scene.PreBlurred
+            var diffusionRadius = scene.PreBlurred
                 ? 0
                 : Theme.MaterialColors.Diffusion * _owner.MaterialStrength;
-            scene.Visual.Effect = scene.Diffusion.Radius > 0 ? scene.Diffusion : null;
+            if (Math.Abs(scene.Diffusion.Radius - diffusionRadius) > 0.001)
+                scene.Diffusion.Radius = diffusionRadius;
+            var effect = diffusionRadius > 0 ? scene.Diffusion : null;
+            if (!ReferenceEquals(scene.Visual.Effect, effect))
+                scene.Visual.Effect = effect;
             RefreshFinish();
             BackgroundProjectionCount++;
         }

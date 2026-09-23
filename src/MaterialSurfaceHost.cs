@@ -110,7 +110,7 @@ internal sealed class MaterialSurfaceHost : IDisposable
         }));
     }
 
-    private void OnOpacityChanged(object? sender, EventArgs e) => _changed(MaterialHostChange.Visibility);
+    private void OnOpacityChanged(object? sender, EventArgs e) => Queue(MaterialHostChange.Visibility);
     private void OnSourceDisposed(object? sender, EventArgs e)
     {
         Detach();
