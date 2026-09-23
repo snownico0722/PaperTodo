@@ -1890,7 +1890,7 @@ public sealed partial class AppController
 
         var signature = new Border
         {
-            Background = TrayPaperBrush,
+            Background = Brushes.Transparent,
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(2, 10, 0, 0),

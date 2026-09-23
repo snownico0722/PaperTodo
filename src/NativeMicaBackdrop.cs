@@ -86,7 +86,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _window.Dispatcher.VerifyAccess();
         _requested = requested;
         _dark = dark;
-        if (material != null) _material = material == AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
+        var nextMaterial = material == null
+            ? _material
+            : material == AeroGlassMaterial ? material : MicaBackdropTypes.Normalize(material);
+        var materialChanged = nextMaterial != _material;
+        _material = nextMaterial;
         var wasForcedActive = IsActive && _alwaysActive;
         var activationChanged = alwaysActive.HasValue && _alwaysActive != alwaysActive.Value;
         if (alwaysActive.HasValue) _alwaysActive = alwaysActive.Value;
@@ -224,6 +228,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
         }
         finally { _updating = false; }
         if (chrome is SkinBorder skin) skin.RefreshBackground();
+
+        // Switching an existing redirected HWND from a system/accent material to clear Aero
+        // can race WPF's next redirected-bitmap present. A fresh settings HWND is already fine;
+        // re-apply the same native recipe once after the live transition so the existing HWND
+        // reaches the same state without closing/reopening the window.
+        if (materialChanged && _material == AeroGlassMaterial && _contentRendered && _window.IsVisible)
+            QueueRefresh();
     }
 
     private bool _contentRepaintQueued;

@@ -25,6 +25,15 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
             (d, _) => ((SkinBorder)d).OnSurfaceRoleChanged()));
     public bool IsMenu { get => (bool)GetValue(IsMenuProperty); set => SetValue(IsMenuProperty, value); }
+    internal static readonly DependencyProperty IsEdgeActiveMaterialProperty = DependencyProperty.Register(
+        nameof(IsEdgeActiveMaterial), typeof(bool), typeof(SkinBorder),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, _) => ((SkinBorder)d).OnSurfaceRoleChanged()));
+    internal bool IsEdgeActiveMaterial
+    {
+        get => (bool)GetValue(IsEdgeActiveMaterialProperty);
+        set => SetValue(IsEdgeActiveMaterialProperty, value);
+    }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
     internal double MaterialStrength => IsAuxiliary &&
         AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
@@ -57,7 +66,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private int _surfaceVersion;
     private bool _dark, _highContrast, _animateReflection;
     private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Background,
-        MaterialPalette Palette, Brush Paper, Brush Active, bool Lightweight)? _brushKey;
+        MaterialPalette Palette, Brush Paper, Brush Active, bool Lightweight, bool EdgeActive)? _brushKey;
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
     private Geometry _shape = Geometry.Empty, _borderRing = Geometry.Empty;
@@ -89,7 +98,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
 
     private bool _applyingSkin;
     private (string Skin, bool Dark, bool HighContrast, MaterialPalette Palette, Brush Paper, Brush Active,
-        double Strength, bool Lightweight, bool BaseOuterBorder)? _appearance;
+        double Strength, bool Lightweight, bool BaseOuterBorder, bool EdgeActive)? _appearance;
     internal int GeometryBuildCount { get; private set; }
     internal int BrushBuildCount { get; private set; }
 
@@ -108,7 +117,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         try { SetCurrentValue(SkinProperty, Theme.Skin); }
         finally { _applyingSkin = false; }
         var appearance = (Skin, _dark, _highContrast, Theme.MaterialColors, Theme.PaperBrush,
-            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial, DrawBaseOuterBorder);
+            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial, DrawBaseOuterBorder, IsEdgeActiveMaterial);
         if (_appearance != appearance)
         {
             _appearance = appearance;
@@ -223,10 +232,9 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         }
         else
         {
-            // Opaque decorative skins retain their original paper/color blend.
-            dc.PushOpacity(MaterialStrength);
+            // Opaque decorative skins bake their quiet/full strength into the color recipe.
+            // Never turn the actual capsule/menu surface into a translucent bitmap.
             dc.DrawGeometry(_fill, null, _shape);
-            dc.Pop();
         }
     }
 

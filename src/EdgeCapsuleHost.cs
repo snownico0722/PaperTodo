@@ -215,10 +215,13 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         {
             return false;
         }
-        // The presented frame owns this choice, including the entire outgoing preview
-        // transition. Stop expensive material work BEFORE changing any surface geometry.
+        // The presented frame owns these paint roles, including the entire outgoing preview
+        // transition. They affect only SkinBorder optics; the presentation state machine stays authoritative.
         if (Chrome is SkinBorder skin)
+        {
             skin.UseLightweightMaterial = frame.Surface == EdgeCapsuleSurfaceKind.DockedPreview;
+            skin.IsEdgeActiveMaterial = frame.Surface == EdgeCapsuleSurfaceKind.DockedActive;
+        }
         var window = Window;
         var root = Root;
         var nativeHostBounds = frame.HostBounds;

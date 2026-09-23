@@ -98,6 +98,54 @@ internal static class MaterialPaletteChecks
                 controller.State.HideSurfaceOutline = true; surface.RefreshSkin(); var clean = Edge();
                 Program.Assert(outlined.R > 180 && outlined.G < 100 && clean.R > 220 && clean.G > 220 && clean.B > 220,
                     "outer-border preference removes only the visible stroke while retaining the surface fill");
+
+                Color Center(SkinBorder target)
+                {
+                    target.Measure(new Size(target.Width, target.Height));
+                    target.Arrange(new Rect(0, 0, target.Width, target.Height));
+                    target.UpdateLayout();
+                    var bitmap = new RenderTargetBitmap((int)target.Width, (int)target.Height, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(target);
+                    var pixel = new byte[4];
+                    bitmap.CopyPixels(new Int32Rect((int)target.Width / 2, (int)target.Height / 2, 1, 1), pixel, 4, 0);
+                    return Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
+                }
+
+                controller.State.PaperSkin = PaperSkins.Pixel;
+                controller.State.ColorScheme = ColorSchemes.Ink;
+                controller.State.MatchAuxiliaryMaterialStrength = false;
+                Theme.Invalidate();
+                var quietPixel = new SkinBorder
+                {
+                    IsCapsule = true, IsEdgeActiveMaterial = true,
+                    Width = 80, Height = 40, Background = Brushes.Transparent,
+                    BorderThickness = new Thickness(), CornerRadius = new CornerRadius(8)
+                };
+                Program.Assert(Center(quietPixel).A == 255,
+                    "Pixel quiet active capsule keeps an opaque surface instead of fading the bitmap alpha");
+
+                controller.State.MatchAuxiliaryMaterialStrength = true;
+                foreach (var materialSkin in new[]
+                {
+                    PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic,
+                    PaperSkins.TracingPaper, PaperSkins.Aero
+                })
+                {
+                    controller.State.PaperSkin = materialSkin;
+                    Theme.Invalidate();
+                    var activeMaterial = new SkinBorder
+                    {
+                        IsCapsule = true, Width = 80, Height = 40,
+                        Background = Brushes.Transparent, BorderThickness = new Thickness(),
+                        CornerRadius = new CornerRadius(8)
+                    };
+                    activeMaterial.IsEdgeActiveMaterial = false;
+                    var restingAlpha = Center(activeMaterial).A;
+                    activeMaterial.IsEdgeActiveMaterial = true;
+                    var activeAlpha = Center(activeMaterial).A;
+                    Program.Assert(activeAlpha > restingAlpha,
+                        $"{materialSkin}: full-material DockedActive receives only its contextual alpha compensation");
+                }
             }
         }
         finally

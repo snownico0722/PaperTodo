@@ -169,14 +169,21 @@ internal static class Program
             {
                 using var f = new Fixture();
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
+                Pump();
                 Assert(f.Backdrop.IsActive && f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1 &&
                     f.Api.FrameTop == 0 && Transparent(f.Chrome.Background), "Aero transmits without either Acrylic recipe");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.Acrylic);
+                Pump();
                 Assert(!f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 3, "Aero -> system Acrylic clears alpha first");
                 f.Backdrop.Refresh(true, false, MicaBackdropTypes.ClearAcrylic);
+                Pump();
                 Assert(f.Api.AccentState == 4, "existing Clear Acrylic remains recipe 4");
+                var liveSwitchCalls = f.Api.BackdropCalls;
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
-                Assert(f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1, "Clear Acrylic -> Aero removes accent");
+                Pump();
+                Assert(f.Api.Alpha && f.Api.AccentState == 0 && f.Api.Backdrop == 1 &&
+                    f.Api.BackdropCalls >= liveSwitchCalls + 2,
+                    "Clear Acrylic -> Aero removes accent and re-applies once after the live HWND transition");
                 f.Api.Failure = "alpha-disable";
                 f.Backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial, force: true);
                 Assert(!f.Backdrop.IsActive && f.Api.AccentState == 0 && !Transparent(f.Chrome.Background),
