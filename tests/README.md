@@ -1,10 +1,10 @@
 # 行为检查
 
-本目录保护结果和可观察行为，不保护某一版内部写法。独立可执行检查项目继续使用 `dotnet run`，不是 `dotnet test` 项目；本轮不切换框架或强行合并项目。
+本目录保护结果和可观察行为，不保护某一版内部写法。独立可执行检查项目继续使用 `dotnet run`，不是 `dotnet test` 项目；不切换框架或强行合并项目。
 
 ## 运行
 
-需要 Windows、.NET 10 SDK、PowerShell 7。涉及窗口、输入、裁切和渲染的检查还需要可用的 Windows/WPF 桌面；插件组需要 Node.js。先按仓库要求初始化固定的 `vendor/wpf-notifyicon` 子模块。测试使用项目自身的隔离目录，不应对用户数据执行测试。
+需要 Windows、.NET 10 SDK、PowerShell 7。涉及窗口、输入、裁切和渲染的检查还需要可用的 Windows/WPF 桌面；插件组需要 Node.js。先按仓库要求初始化固定的 `vendor/wpf-notifyicon` 子模块。涉及数据的故障注入应使用测试隔离目录，不能指向日常数据目录。
 
 ```powershell
 # 仅列出项目和配置，不执行，也不要求 Windows。
@@ -39,7 +39,9 @@
 | diagnostics | EdgeDiagnosticJournalChecks，Debug + Release | 采集与退出；Release 不启用产品采集 |
 | diagnostics | EdgeLatencyObservationChecks、EdgeTitleChecks，Debug | 实际观察器与 Debug 路径 |
 
-现有四个相关 CI 工作流调用同一入口，触发条件不扩大。`fixtures/` 保存样本；性能采样独立放在 `tools/PaperTodo.MarkdownBenchmarks`，真进程诊断放在 `tools/PaperTodo.EdgeDiagnostics`。
+四个相关 CI 工作流调用同一入口，保留原有触发方式和配置差异。`fixtures/` 保存样本；性能采样独立放在 `tools/PaperTodo.MarkdownBenchmarks`，真进程诊断放在 `tools/PaperTodo.EdgeDiagnostics`。
+
+插件组会重建仓库内的原生示例并检查 `plugins/` 分发副本差异，这是原有产物一致性检查，不是只读命令；不安装到日常使用的 PaperTodo 数据目录。
 
 ## 用例边界
 
