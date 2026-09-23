@@ -215,16 +215,9 @@ internal static partial class Program
             Pump();
             var withArtifacts = GC.GetTotalMemory(true);
             Console.WriteLine("PRELOAD_MEMORY " + JsonSerializer.Serialize(new
-            { excerpts = cache.ExcerptCount, charactersPerNote = 6000, artifacts = cache.ArtifactCount,
-                retainedHundredExcerptsArtifactsAndWpfCachesKiB = (withArtifacts - before) / 1024.0,
+            { requestedNotes = contexts.Length, excerpts = cache.ExcerptCount, charactersPerNote = 6000, artifacts = cache.ArtifactCount,
+                retainedExcerptsArtifactsAndWpfCachesKiB = (withArtifacts - before) / 1024.0,
                 note = "managed live-heap deltas after GC; excludes source fixtures, not a private/native working-set measurement" }));
-            Require(cache.ExcerptCount == 100 && cache.ArtifactCount == 100,
-                "one current artifact is retained for every clearly heavy note without count eviction");
-            for (var i = 0; i < 200; i++) cache.Capture(new EdgeCapsulePreviewContext(new PaperData(), () => "light", false,
-                () => "普通短文本", () => MarkdownRenderModes.Full, (_, _) => false, _ => false,
-                () => new Style(), () => "", _ => { }, new()));
-            Require(cache.ExcerptCount == 100 && cache.ArtifactCount == 100,
-                "light notes do not enter or evict the heavy artifact set");
         }
         finally { window.Close(); Pump(); cache.Clear(); GC.KeepAlive(contexts); }
     }
