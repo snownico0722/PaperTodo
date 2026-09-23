@@ -86,6 +86,8 @@ internal sealed class DeepCapsuleContextMenuSession
 
     private static void QueuePopupActivation(ContextMenu menu)
     {
+        // ContextMenu.Opened runs after WPF entered menu mode. One Input turn is only to resolve
+        // the real popup HWND; if it is still unavailable, leave the lifecycle to WPF.
         _ = menu.Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
