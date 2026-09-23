@@ -1,33 +1,86 @@
-name: Tests refactor audit (temporary)
+name: Tests refactor verification (temporary)
 on:
   push:
     branches: [refactor/tests-behavior-and-tools]
-    paths: [.github/workflows/tests-refactor-audit.yml]
+    paths: [.github/scripts/refactor_tests_once.py, .github/workflows/tests-refactor-audit.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inventory:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
     steps:
       - uses: actions/checkout@v7
-      - name: Inventory implementation assertions and diagnostic references
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate one-off editor
         shell: python
         run: |
+          import ast
           from pathlib import Path
-          import re
-          patterns = re.compile(r'ReadAllText|ReadAllLines|GetMethodBody|GetILAsByteArray|OpCodes|GetFields\(|GetMethods\(|GetProperties\(|GetNestedTypes\(|GetCustomAttributes|GetField\(|GetProperty\(|GetMethod\(|GetNestedType\(|ReferenceEquals|AssertSame|SourceContains|ContainsSource|must.*(?:field|method|cache|type)|CallsMethod|AssertCall|source\.(?:Contains|IndexOf)|Regex\.(?:IsMatch|Matches)', re.I)
-          for path in sorted(Path('tests').rglob('*')):
-              if path.suffix not in ('.cs', '.cjs', '.ps1'): continue
-              lines = path.read_text(encoding='utf-8-sig').splitlines()
-              hits = [(i+1, line.strip()) for i,line in enumerate(lines) if patterns.search(line)]
-              if hits:
-                  print(f'\nFILE {path} ({len(lines)} lines)')
-                  for n,line in hits: print(f'{n}: {line}')
-          print('\nDIAGNOSTIC REFERENCES')
-          for root in ['src', 'tests', 'doc']:
-              for path in sorted(Path(root).rglob('*')):
-                  if path.suffix not in ('.cs', '.csproj', '.md'): continue
-                  for n,line in enumerate(path.read_text(encoding='utf-8-sig').splitlines(), 1):
-                      if re.search(r'src[/\\].*(?:Diagnostics|DiagnosticJournal|PreviewTrace)|TraceNoteRender|#if DEBUG|tools/PaperTodo.EdgeDiagnostics',line):
-                          if root != 'src' or 'TraceNoteRender' in line or '#if DEBUG' in line: print(f'{path}:{n}: {line.strip()}')
+          path = Path('.github/scripts/refactor_tests_once.py')
+          source = path.read_text(encoding='utf-8')
+          old = 'def cut(text, start, end):\n'
+          new = '''def cut(text, start, end):
+              if end == '    }':
+                  if text.count(start) != 1:
+                      raise RuntimeError('Ambiguous method tail: ' + start)
+                  a, b = text.index(start), text.rfind('\n    }') + 1
+                  if b <= a: raise RuntimeError('Method tail not found')
+                  return text[:a] + text[b:]
+          '''
+          # Preserve the literal newline escape inside the generated Python helper.
+          new = new.replace("text.rfind('\n    }')", "text.rfind('\\n    }')")
+          if source.count(old) != 1: raise RuntimeError('One-off helper not unique')
+          source = source.replace(old, new, 1)
+          ast.parse(source)
+          path.write_text(source, encoding='utf-8', newline='\n')
+      - name: Apply reviewed one-off edits
+        id: apply
+        run: |
+          python .github/scripts/refactor_tests_once.py
+          if ($LASTEXITCODE -ne 0) { throw 'One-off edit failed; nothing will be pushed.' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Patch whitespace check failed.' }
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests tools src .github
+          git commit -m 'refactor: keep behavior checks and separate test tooling'
+          if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
+          git push origin HEAD:refs/heads/refactor/tests-behavior-and-tools
+          if ($LASTEXITCODE -ne 0) { throw 'Branch advanced or push failed; stop without overwriting.' }
+      - name: Build Release
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Build Debug
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: dotnet build PaperTodo.csproj -c Debug
+      - name: List check groups
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: ./tools/testing/Run-Checks.ps1 -Group all -List
+      - name: Execute behavior checks
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: |
+          try {
+            ./tools/testing/Run-Checks.ps1 -Group all *> "$env:RUNNER_TEMP/behavior-checks.log"
+            Get-Content "$env:RUNNER_TEMP/behavior-checks.log" -Tail 26
+          } catch {
+            Get-Content "$env:RUNNER_TEMP/behavior-checks.log" | Select-String -Pattern 'FAIL|error |Exception|checks passed|True|False|PASS ' | Select-Object -Last 90
+            throw
+          }
+      - name: Benchmark entry point smoke
+        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+        run: dotnet run --project tools/PaperTodo.MarkdownBenchmarks -c Release -- --iterations 1
