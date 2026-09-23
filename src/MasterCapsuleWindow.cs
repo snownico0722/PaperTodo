@@ -853,9 +853,10 @@ public sealed class MasterCapsuleWindow : Window
     {
         if (msg == WmRButtonUp && !_experimentalPassive)
         {
-            handled = true;
+            // Observe the release but do not consume it. WPF must finish its own mouse state
+            // transition; swallowing WM_RBUTTONUP can leave the button logically pressed and
+            // make the popup close/refuse to open. The queued fallback is deduplicated below.
             QueueContextMenuOpenFromPointer();
-            return IntPtr.Zero;
         }
 
         if (msg == WmNcHitTest && _experimentalPassive)
