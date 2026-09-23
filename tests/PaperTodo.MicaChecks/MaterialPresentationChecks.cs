@@ -162,11 +162,15 @@ internal static class MaterialPresentationChecks
             master.ShowPlaced(1, false, false); Wait(120);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
-            opened = (_, _) => AssertNoPopupFade(menu);
+            opened = (_, _) =>
+            {
+                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
+            };
             rendered = (_, _) =>
             {
                 if (!menu.IsOpen) return;
-                AssertNoPopupFade(menu); observedFrames++;
+                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
+                observedFrames++;
             };
             menu.Opened += opened;
             CompositionTarget.Rendering += rendered;
@@ -189,18 +193,25 @@ internal static class MaterialPresentationChecks
                     Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
-                    // Resource reevaluation must not restore system Fade on reused popups.
+                    var fullMaterial = controller.State.MatchAuxiliaryMaterialStrength;
+                    // Only transparent material popups need a forced local None. Opaque quiet
+                    // menus may use the normal system animation without exposing a plain frame.
                     menu.Resources[SystemParameters.MenuPopupAnimationKey] = PopupAnimation.Fade;
-                    AssertNoPopupFade(menu);
+                    if (fullMaterial) AssertNoPopupFade(menu);
                     menu.Resources.Remove(SystemParameters.MenuPopupAnimationKey);
                     var surface = Find(menu)!;
                     var opacityOwners = new List<string>();
                     for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
                         if (node is UIElement ui) opacityOwners.Add($"{ui.GetType().Name}:{ui.Opacity:F3}/{ui.IsVisible}");
-                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; fallback={surface.MenuFallbackRenderCount}; capture={surface.HasBackgroundCapture}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressStaticBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
-                    Program.Assert(surface.Skin == skin && surface.FirstMenuRenderUsedBackground && surface.MenuFallbackRenderCount == 0,
-                        $"master {skin}/{theme}: prepared current recipe from first render, no later plain-paper frame");
-                    Program.Assert(menu.Opacity == 1, "master menu does not hide material flicker with a foreground fade");
+                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; active={surface.IsBackgroundActive}; fallback={surface.MenuFallbackRenderCount}; capture={surface.HasBackgroundCapture}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressStaticBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
+                    Program.Assert(surface.Skin == skin && !surface.HasBackgroundCapture,
+                        $"master {skin}/{theme}: current recipe stays capture-free after opening");
+                    Program.Assert(fullMaterial ? surface.IsBackgroundActive : !surface.IsBackgroundActive,
+                        $"master {skin}/{theme}: background transmission follows the full-material switch");
+                    if (fullMaterial)
+                        Program.Assert(surface.MenuFallbackRenderCount == 0,
+                            $"master {skin}/{theme}: transparent material has no plain-paper fallback frame");
+                    Program.Assert(menu.Opacity == 1, "master menu never hides content with a foreground opacity fade");
                     menu.IsOpen = false; Wait(80);
                 }
             }
