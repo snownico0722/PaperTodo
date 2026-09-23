@@ -95,6 +95,12 @@ internal static class NativeSurfaceChecks
         for (var attempt = 0; attempt < 12; attempt++)
         {
             paper.UpdateLayout();
+            // Both the calibration rear window and the paper are topmost so desktop pixels cannot
+            // be contaminated by the runner shell. Do not rely on Activate() to order two windows
+            // in the same topmost band: GitHub runners occasionally leave the rear window above
+            // the paper. Reassert the paper at the top of that band before every evidence frame.
+            WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
+            DwmFlush();
             using var image = Capture(paper, output, "ready-" + name);
             var point = pin.TransformToAncestor(paper).Transform(new Point());
             var dpi = VisualTreeHelper.GetDpi(paper);
