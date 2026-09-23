@@ -307,7 +307,7 @@ public sealed partial class AppController
 
     private bool TryPlayCustomTodoReminderSound()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "papertodo.wav");
+        var path = Path.Combine(AppPaths.ExecutableDirectory, "papertodo.wav");
         try
         {
             var info = new FileInfo(path);

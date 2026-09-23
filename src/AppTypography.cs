@@ -243,8 +243,8 @@ public static class AppTypography
 
     private static IEnumerable<string> CustomRegularFontCandidates()
     {
-        yield return Path.Combine(AppContext.BaseDirectory, "papertodo.ttf");
-        yield return Path.Combine(AppContext.BaseDirectory, "papertodo.otf");
+        yield return Path.Combine(AppPaths.ExecutableDirectory, "papertodo.ttf");
+        yield return Path.Combine(AppPaths.ExecutableDirectory, "papertodo.otf");
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public static class AppTypography
     /// </summary>
     private static IEnumerable<string> CustomBoldFontCandidates()
     {
-        var dir = AppContext.BaseDirectory;
+        var dir = AppPaths.ExecutableDirectory;
         foreach (var name in new[]
                  {
                      "papertodo_bold",

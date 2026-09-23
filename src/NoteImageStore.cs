@@ -40,7 +40,7 @@ public sealed class NoteImageStore : IDisposable
     private bool _writeDisabled;
     private bool _disposed;
 
-    public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
+    public string FilePath { get; } = Path.Combine(AppPaths.ExecutableDirectory, "note-assets.lmdb");
 
     public NoteImageStore() { }
     internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);

@@ -68,7 +68,7 @@ public sealed partial class AppController
 
     private ImageSource LoadTrayIconSource()
     {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "PaperTodo.ico");
+        var iconPath = Path.Combine(AppPaths.ExecutableDirectory, "PaperTodo.ico");
         try
         {
             if (File.Exists(iconPath))

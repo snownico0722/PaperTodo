@@ -50,7 +50,7 @@ public static class UiLanguages
     {
         foreach (var fileName in new[] { "data.json", "data.backup.json" })
         {
-            var path = Path.Combine(AppContext.BaseDirectory, fileName);
+            var path = Path.Combine(AppPaths.ExecutableDirectory, fileName);
             if (!File.Exists(path))
             {
                 continue;

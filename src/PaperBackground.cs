@@ -407,7 +407,7 @@ internal static class PaperBackground
     {
         foreach (var name in CandidateNames)
         {
-            var path = Path.Combine(AppContext.BaseDirectory, name);
+            var path = Path.Combine(AppPaths.ExecutableDirectory, name);
             if (File.Exists(path))
             {
                 return path;

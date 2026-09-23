@@ -115,9 +115,11 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            WriteCrashLog(ex);
+            var startupCrashLog = WriteCrashLog(ex);
             MessageBox.Show(
-                Strings.Format("AppStartupFailureMessage", ex.Message),
+                AppendCrashLogLocation(
+                    Strings.Format("AppStartupFailureMessage", ex.Message),
+                    startupCrashLog),
                 Strings.Get("AppStartupFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -260,7 +262,7 @@ public partial class App : Application
 
         // Do not serialize in-memory state here: auto-save + data.backup.json already cover
         // normal durability, and crash-time memory may already be inconsistent.
-        WriteCrashLog(ex);
+        var crashLog = WriteCrashLog(ex);
 
         try
         {
@@ -272,7 +274,7 @@ public partial class App : Application
                 : "AppUnhandledExceptionTitle";
 
             MessageBox.Show(
-                Strings.Format(messageKey, ex.Message),
+                AppendCrashLogLocation(Strings.Format(messageKey, ex.Message), crashLog),
                 Strings.Get(titleKey),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -346,21 +348,42 @@ public partial class App : Application
         return simpleName != null && SharedDesktopRuntimeAssemblies.Contains(simpleName);
     }
 
-    private static void WriteCrashLog(Exception ex)
+    private static string WriteCrashLog(Exception ex)
     {
+        var text =
+            $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}]{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}";
+        var primary = AppPaths.File("PaperTodo.crash.log");
         try
         {
-            var logPath = Path.Combine(AppContext.BaseDirectory, "PaperTodo.crash.log");
-            TrimCrashLog(logPath);
-            File.AppendAllText(
-                logPath,
-                $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}]{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+            TrimCrashLog(primary);
+            File.AppendAllText(primary, text);
+            return primary;
         }
-        catch
+        catch (Exception primaryError)
         {
-            // Ignore logging failures during crash handling.
+            try
+            {
+                var fallbackDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "PaperTodo");
+                Directory.CreateDirectory(fallbackDirectory);
+                var fallback = Path.Combine(fallbackDirectory, "PaperTodo.crash.log");
+                TrimCrashLog(fallback);
+                File.AppendAllText(
+                    fallback,
+                    text +
+                    $"[Primary crash-log path failed: {primary}{Environment.NewLine}{primaryError.Message}]{Environment.NewLine}");
+                return fallback;
+            }
+            catch
+            {
+                return $"<write failed; intended path: {primary}>";
+            }
         }
     }
+
+    private static string AppendCrashLogLocation(string message, string path) =>
+        $"{message}{Environment.NewLine}{Environment.NewLine}Crash log: {path}";
 
     private static void TrimCrashLog(string logPath)
     {

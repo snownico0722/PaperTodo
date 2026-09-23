@@ -23,7 +23,7 @@ public sealed class StateStore
     private readonly IDurableAtomicFileWriter _atomicWriter;
 
     public StateStore()
-        : this(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared)
+        : this(AppPaths.ExecutableDirectory, DurableAtomicFileWriter.Shared)
     {
     }
 

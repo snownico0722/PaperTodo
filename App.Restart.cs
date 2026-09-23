@@ -39,7 +39,7 @@ public partial class App
             Process.Start(new ProcessStartInfo
             {
                 FileName = executable,
-                WorkingDirectory = AppContext.BaseDirectory,
+                WorkingDirectory = AppPaths.ExecutableDirectory,
                 UseShellExecute = true
             });
         }

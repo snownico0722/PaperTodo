@@ -31,6 +31,16 @@ jobs:
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true -- --mica-controller-experiment
       - name: Run material regression with experimental backend available
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true
+      - name: Publish and smoke-test self-contained folder
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'mica-controller-folder'
+          dotnet publish ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -o $out -p:PaperTodoMicaControllerExperiment=true -p:PublishSingleFile=false -p:PublishTrimmed=false -p:PublishReadyToRun=false -p:DebugType=none -p:DebugSymbols=false --nologo -clp:ErrorsOnly
+          Set-Content (Join-Path $out 'data.json') '{"paperSkin":"mica","colorScheme":"mica","theme":"light","enableAnimations":true,"papers":[]}' -Encoding utf8
+          $p = Start-Process (Join-Path $out 'PaperTodo.exe') -WorkingDirectory $out -PassThru
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) { throw "Folder-published PaperTodo exited early: $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Remove-Item (Join-Path $out 'data.json') -Force -ErrorAction SilentlyContinue
       - name: Publish experiment single-file
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'mica-controller'
@@ -38,13 +48,20 @@ jobs:
           $exe = Join-Path $out 'PaperTodo.exe'
           if (!(Test-Path $exe)) { throw 'Experiment executable missing' }
           $size = (Get-Item $exe).Length
-          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true; micaController='active on the existing WPF PaperWindow HWND'; medium='SDK defaults'; veryLow='Tint 0.650 / Luminosity 1.000 on CI light baseline'; veryHigh='Tint 0.350 / Luminosity 0.700 on CI light baseline'; foregroundOpacity=1.0 } |
+          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true; micaController='active on the existing WPF PaperWindow HWND'; medium='SDK defaults'; veryLow='Tint 0.650 / Luminosity 1.000 on CI light baseline'; veryHigh='Tint 0.350 / Luminosity 0.700 on CI light baseline'; foregroundOpacity=1.0; portableDataDirectory='Environment.ProcessPath directory' } |
             ConvertTo-Json | Set-Content (Join-Path $out 'experiment-manifest.json') -Encoding utf8
+          Set-Content (Join-Path $out 'data.json') '{"paperSkin":"mica","colorScheme":"mica","theme":"light","enableAnimations":true,"papers":[]}' -Encoding utf8
+          $p = Start-Process $exe -WorkingDirectory $out -PassThru
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) { throw "Single-file PaperTodo exited early: $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Remove-Item (Join-Path $out 'data.json') -Force -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         with:
           name: mica-controller-experiment-${{ github.sha }}
           path: |
             ${{ runner.temp }}/mica-controller/PaperTodo.exe
             ${{ runner.temp }}/mica-controller/experiment-manifest.json
+            ${{ runner.temp }}/mica-controller-folder/**
           if-no-files-found: error
           retention-days: 7

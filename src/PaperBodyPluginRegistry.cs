@@ -114,7 +114,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     public PaperBodyPluginRegistry()
     {
-        PluginRoot = Path.Combine(AppContext.BaseDirectory, "plugins");
+        PluginRoot = Path.Combine(AppPaths.ExecutableDirectory, "plugins");
         LoadInitial();
     }
 
@@ -188,7 +188,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             PaperBodyPluginKind.BuiltIn,
             PaperBodyCapabilities.TextZoom | PaperBodyCapabilities.NoteLinks,
             PaperTodoPermissionNames.None,
-            AppContext.BaseDirectory,
+            AppPaths.ExecutableDirectory,
             typeof(PaperWindow).Assembly.Location,
             "builtin");
 

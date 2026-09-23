@@ -12,7 +12,7 @@ internal sealed partial class PaperBodyPluginRegistry
         RegexOptions.CultureInvariant);
 
     private readonly PaperBodyPluginDataStore _dataStore =
-        new(Path.Combine(AppContext.BaseDirectory, "plugins"));
+        new(Path.Combine(AppPaths.ExecutableDirectory, "plugins"));
 
     internal PaperBodyPluginDataStore DataStore => _dataStore;
 
