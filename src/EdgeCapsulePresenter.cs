@@ -164,6 +164,7 @@ internal sealed class EdgeCapsulePresenter
     public EdgeCapsulePresentationFrame AppliedPresentation { get; private set; } =
         EdgeCapsulePresentationFrame.Hidden;
     public int AppliedPresentationVersion { get; private set; }
+    internal bool IsApplyRetryExhausted => _applyRetryExhausted;
     public DeviceScreenPoint? LastPointerSample { get; private set; }
     internal bool HasActiveTransition => Transition.HasValue;
 
@@ -1115,7 +1116,6 @@ internal sealed class EdgeCapsulePresenter
         }
 
         _nativeBatchRetryPending = true;
-        _nativeBatchApplyRejectedCallback?.Invoke();
         // A presenter-level apply failure has already registered itself. If this presenter queued a
         // healthy HWND operation but the queue's EndDeferWindowPos failed, account for it here.
         if (logicalApplySucceeded &&
@@ -1128,12 +1128,22 @@ internal sealed class EdgeCapsulePresenter
         {
             _forceApplyVersion++;
         }
-        if (ApplyRetryExpired(nowTimestamp))
+
+        var retryExpired = ApplyRetryExpired(nowTimestamp);
+        if (retryExpired)
         {
             _dirty &= ~EdgeCapsuleDirty.ApplyRetry;
             _nativeBatchRetryPending = false;
             Transition = null;
             ExhaustApplyRetryWindow();
+        }
+
+        // The callback resets the rejected host. On terminal exhaustion it may synchronously
+        // restore only this presenter's last confirmed frame; no second timer/retry owner exists.
+        _nativeBatchApplyRejectedCallback?.Invoke();
+
+        if (retryExpired)
+        {
             if (_nativeBatchTransactionGroupId == 0)
             {
                 StopFrameScheduler();
@@ -1141,6 +1151,7 @@ internal sealed class EdgeCapsulePresenter
             }
             return;
         }
+
         _dirty |= EdgeCapsuleDirty.ApplyRetry;
         StartFrameScheduler();
     }

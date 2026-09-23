@@ -1,38 +1,6 @@
-# 边缘预览预热检查
+# 预览性能历史记录
 
-当前架构与 ownership 见 [ARCHITECTURE](../../doc/ARCHITECTURE.md)「内置笔记的边缘预览」，历史取舍见 D-033～D-035。本文只记录检查入口、实测口径与可追溯证据，不是另一份架构或发布批准。
-
-## 预热规则
-
-仅为存活、可见、实际属于边缘队列的内置 Markdown Note 排队；要求胶囊模式、边缘胶囊和悬停预览开启。有界摘要最多 16 块 / 6000 字符，满足任意一条才预热：
-
-- 总源字符数 >400；
-- 总源字符数 >200 且样式/链接覆盖字符 >100；
-- 总源字符数 >200 且样式/链接片段 >3。
-
-全部严格大于；总字符数按摘要各行长度之和、不另加换行，覆盖与片段按去掉语法标记后的语义内容计数。嵌套样式不重复累计，链接目标不冒充样式正文，围栏内非空行按代码样式计数。Off 只使用总字符数条件。
-
-启动恢复结束、入队、形态或内容变化只提交最新延后读取请求；分类与准备在共享 500ms 一次性合并延迟后执行。每来源一份当前 artifact，无固定数量/LRU 淘汰、鼠标邻居预测、产品预解析队列或 idle 轮询。需求优先，中断的有效请求保留；旧完成回调不能删掉新请求或绕过新的合并延迟。
-
-冷 miss 与预热共用唯一 artifact builder；预热准备到当前卡片上限，冷 miss 按实际可见区域生成。缓存不保留隐藏卡片/正文树，挂载使用绘制面与原生链接，较矮区域裁剪并禁用完全不可见链接。版本、实际摘要、宽度、字体、缩放、DPI 和资源失配拒绝复用。关闭、离队或清空后的迟到结果不得重入缓存；活动需求的源版本独立于缓存资格，清空缓存不妨碍当前正文生成。
-
-## 当前检查
-
-`ArtifactRenderingChecks` 覆盖严格摘要预算、Unicode、代码块、空行、截断、有限 block 词汇、冻结资源和装饰作用域；其中 44 组手写 WPF 期望图是独立内容参考，不调用 artifact builder 生成期望值，也不复制旧 Markdown renderer。
-
-`PreloadChecks` 的 80 组像素矩阵覆盖四种渲染模式、两种字体/显示配置、两档缩放和五类正文，逐个确认真实命中并在截图前完成布局。冷/热现在共用 builder，因此这组检查证明的是缓存与现场生成一致，不能再称作“旧 WPF renderer 对新 artifact”。
-
-`CompletionChecks`、原生链接和 worker/Host 检查覆盖：首次发布前不开放输入、普通冷短行也使用 worker、重排不生成 WPF 正文块、收起/恢复、编辑、卸载重挂、主题/宽度/DPI/源版本失效、清空缓存不阻塞需求、取消及迟到结果、链接独立命中/背景穿透/裁剪/键盘/焦点，以及 worker 被阻塞时真实 Host 外壳仍能完成动画。`PreloadAuditChecks` 保留严格 OR 边界、延后读取、启动式排队、取消续做、新请求合并延迟、异常隔离和来源撤销。四个 DPI 参数检查不冒充多显示器硬件手测。
-
-```powershell
-dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release
-dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Debug
-dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-profile
-dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-profile --reverse
-dotnet run --project tests/PaperTodo.EdgePreviewChecks -c Release -- --preload-memory
-```
-
-性能探针仅比较 `cold` / `layout`，不再保留已被否定的 `text` 预解析对照。每个样本输出真实命中数；`--preload-memory` 是托管存活堆增量，不是工作集或原生/GPU 内存。
+以下为历史提交的测量结果，不是当前性能承诺或当前测试矩阵。当前命令与测量限制见 [README](README.md)。产品架构见 [ARCHITECTURE](../../doc/ARCHITECTURE.md)。
 
 ## 统一 renderer 的收口验证
 

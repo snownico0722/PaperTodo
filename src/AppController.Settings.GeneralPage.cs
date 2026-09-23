@@ -255,4 +255,16 @@ public sealed partial class AppController
         }
         RefreshSettingsWindowContent();
     }
+
+
+    private UIElement CreateAnonymousUsageStatisticsSettingsRow() =>
+        WrapWithHint(
+            SettingsToggle(
+                TelemetryStrings.Get("HelpImprove"),
+                State.TelemetryEnabled,
+                ToggleAnonymousUsageStatistics),
+            BuildSettingsHintTooltip(TelemetryStrings.Get("Description")));
+
+    private void ToggleAnonymousUsageStatistics() =>
+        SetSettingFromUi("privacy.anonymous_usage", !State.TelemetryEnabled);
 }

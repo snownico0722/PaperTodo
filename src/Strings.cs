@@ -55,6 +55,8 @@ public static class Strings
             ["LabsRestingCapsuleOpacityIncludeMaster"] = ["覆盖主胶囊", "Include master capsule", "マスターカプセルにも適用", "마스터 캡슐에도 적용"],
             ["LabsRestingCapsuleOpacityAlways"] = ["无论是否激活都透明", "Keep transparent while active", "操作中も透明を維持", "활성 상태에서도 투명 유지"],
             ["LabsMcpCopyAiSkill"] = ["复制 AI Skill", "Copy AI skill", "AI Skill をコピー", "AI Skill 복사"],
+            ["SettingsShowTodoBottomBar"] = ["显示待办底栏", "Show todo bottom bar", "ToDo の下部バーを表示", "할 일 하단 바 표시"],
+            ["TipShowTodoBottomBar"] = ["显示底部快速新建区域；拖动待办时这里会变成删除区。关闭后同时隐藏底栏并禁用拖入删除。", "Show the quick-add bar at the bottom of todo papers. While dragging todos it becomes the delete target; turning this off hides the bar and disables drag-to-delete.", "ToDo の下部にクイック追加バーを表示します。ドラッグ中は削除領域に変わります。オフにするとバーを隠し、ドラッグによる削除も無効になります。", "할 일 하단에 빠른 추가 바를 표시합니다. 드래그 중에는 삭제 영역으로 바뀝니다. 끄면 하단 바가 숨겨지고 드래그 삭제도 비활성화됩니다."],
             ["SettingsAutoMoveCompletedTodosToBottom"] = ["已完成待办自动置底", "Move completed todos to bottom", "完了したToDoを下へ移動", "완료된 할 일을 아래로 이동"],
             ["TipAutoMoveCompletedTodosToBottom"] = ["完成待办时移到已完成区域末尾；取消完成时移到未完成区域末尾。开启“自动清除已完成待办”时暂时禁用，但会保留此设置。", "Move a completed todo to the end of the completed group; restoring it moves it to the end of the active group. This is temporarily disabled while auto-clear is on, without forgetting the setting.", "完了時は完了グループの末尾へ、未完了に戻すと未完了グループの末尾へ移動します。完了項目の自動削除中は無効になりますが、設定値は保持されます。", "완료하면 완료 그룹의 끝으로, 완료를 취소하면 미완료 그룹의 끝으로 이동합니다. 완료 항목 자동 삭제가 켜져 있으면 잠시 비활성화되지만 설정은 유지됩니다."],
             ["LabsTodoReminderSoundEnabled"] = ["允许提醒声音", "Play reminder sound", "リマインダー音を鳴らす", "미리 알림 소리 허용"],

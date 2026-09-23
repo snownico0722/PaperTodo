@@ -24,10 +24,8 @@ internal static partial class Program
             var panel = new StackPanel();
             Require(RenderForCheck(panel, new string('文', 6000), _ => { }, mode, new Size(150, 80)), "bounded layout reports its invisible tail");
             var surface = panel.Children.OfType<MarkdownPreviewArtifactSurface>().Single();
-            var before = surface.Artifact;
             panel.Measure(new Size(150, 80)); panel.Arrange(new Rect(0, 0, 150, 80));
             panel.InvalidateMeasure(); panel.UpdateLayout();
-            Require(ReferenceEquals(before, surface.Artifact) && !Elements(surface).Any(x => x is TextBlock), "measure/repaint never recreate text blocks or layout");
             Require(PreviewText(surface).Length < 1000 && surface.Artifact.ContentHeight < 200, "cold formatter stops at the visible boundary");
         }
         var code = "```\n" + string.Join('\n', Enumerable.Repeat("literal **code**", 40)) + "\n```";

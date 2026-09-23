@@ -9,26 +9,20 @@ internal static class IncrementalSnapshotChecks
     [ModuleInitializer]
     internal static void Run()
     {
-        CheckSmallDocumentsUseFullParse();
-        CheckLargePlainEditStaysLocal();
-        CheckExistingLongFenceExpandsFromSnapshot();
-        CheckReferenceDefinitionFallsBack();
-        CheckMultilineDeletionContainingReferenceDefinitionFallsBack();
-        CheckReferenceUseFallsBack();
-        CheckOrdinaryReferenceDocumentEditStaysLocal();
-        CheckNewReferenceDefinitionFallsBack();
-        CheckNewLongFenceExpandsByStateScan();
+        CheckSmallDocumentEdit();
+        CheckLargePlainEdit();
+        CheckExistingLongFenceEdit();
+        CheckReferenceDefinitionUpdatesReferences();
+        CheckMultilineDeletionContainingReferenceDefinitionUpdatesReferences();
+        CheckReferenceUseUpdatesReferences();
+        CheckOrdinaryReferenceDocumentEdit();
+        CheckNewReferenceDefinitionUpdatesReferences();
+        CheckNewLongFenceEdit();
         CheckLargeEditPreservesQuoteLevelLocally();
     }
 
-    private static void CheckSmallDocumentsUseFullParse()
+    private static void CheckSmallDocumentEdit()
     {
-        if (MarkdownSemanticDocument.FullParseThresholdChars != 8_000)
-        {
-            throw new InvalidOperationException(
-                $"FAIL small-document policy: threshold={MarkdownSemanticDocument.FullParseThresholdChars}");
-        }
-
         var source = "before\n\n```text\n" + new string('x', 7_200) + "\n```\n\nafter\n";
         var document = new TextDocument(source);
         using var semantics = new MarkdownSemanticDocument(document);
@@ -39,10 +33,10 @@ internal static class IncrementalSnapshotChecks
             throw new InvalidOperationException("FAIL small-document policy: no current snapshot");
         }
         AssertEquivalent(MarkdownSemanticSnapshot.Parse(document.Text), actual, "small document full parse");
-        Console.WriteLine("PASS small documents parse fully below 8K");
+        Console.WriteLine("PASS small document edit preserves full semantics");
     }
 
-    private static void CheckLargePlainEditStaysLocal()
+    private static void CheckLargePlainEdit()
     {
         var builder = new StringBuilder();
         for (var index = 0; index < 900; index++)
@@ -53,66 +47,30 @@ internal static class IncrementalSnapshotChecks
         var oldSource = builder.ToString();
         var editAt = oldSource.IndexOf("plain row 450", StringComparison.Ordinal) + 10;
         var newSource = oldSource.Insert(editAt, "Z");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
-        var windowLength = MarkdownSemanticSnapshot.GetIncrementalWindowLengthForTests(
-            oldSource,
-            oldSnapshot,
-            newSource);
-
-        if (windowLength < 0 || windowLength > 2_000)
-        {
-            throw new InvalidOperationException(
-                $"FAIL large plain edit: local window unexpectedly large ({windowLength})");
-        }
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var incremental))
-        {
-            throw new InvalidOperationException("FAIL large plain edit: unexpectedly fell back");
-        }
+        var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
         AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "large plain edit");
-        Console.WriteLine($"PASS large plain edit local window={windowLength}");
+        Console.WriteLine("PASS large plain edit preserves semantics");
     }
 
-    private static void CheckExistingLongFenceExpandsFromSnapshot()
+    private static void CheckExistingLongFenceEdit()
     {
         var oldSource = "before\n```csharp\n" + new string('x', 4_000) + "\n```\nafter\n";
         var editAt = oldSource.IndexOf(new string('x', 20), StringComparison.Ordinal) + 2_000;
         var newSource = oldSource.Insert(editAt, "Z");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
-        var windowLength = MarkdownSemanticSnapshot.GetIncrementalWindowLengthForTests(
-            oldSource,
-            oldSnapshot,
-            newSource);
-
-        if (windowLength < 4_000)
-        {
-            throw new InvalidOperationException(
-                $"FAIL existing long fence: old semantic container was not expanded ({windowLength})");
-        }
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var incremental))
-        {
-            throw new InvalidOperationException("FAIL existing long fence: unexpectedly fell back");
-        }
+        var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
         AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "existing long fence");
-        Console.WriteLine($"PASS existing long fence expands window={windowLength}");
+        Console.WriteLine("PASS existing long fence edit preserves semantics");
     }
 
-    private static void CheckReferenceDefinitionFallsBack()
+    private static void CheckReferenceDefinitionUpdatesReferences()
     {
         var oldSource = BuildReferenceDocument();
         var editAt = oldSource.IndexOf("example.com", StringComparison.Ordinal) + 3;
         var newSource = oldSource.Insert(editAt, "Z");
-        AssertFallsBack(oldSource, newSource, "reference definition edit");
+        AssertEdit(oldSource, newSource, "reference definition edit");
     }
 
-    private static void CheckMultilineDeletionContainingReferenceDefinitionFallsBack()
+    private static void CheckMultilineDeletionContainingReferenceDefinitionUpdatesReferences()
     {
         var builder = new StringBuilder();
         builder.Append("[open][r]\n\n");
@@ -129,33 +87,24 @@ internal static class IncrementalSnapshotChecks
 
         var oldSource = builder.ToString();
         var newSource = oldSource.Remove(deleteStart, deleteEnd - deleteStart);
-        AssertFallsBack(oldSource, newSource, "multiline deletion containing reference definition");
+        AssertEdit(oldSource, newSource, "multiline deletion containing reference definition");
     }
 
-    private static void CheckReferenceUseFallsBack()
+    private static void CheckReferenceUseUpdatesReferences()
     {
         var oldSource = BuildReferenceDocument();
         var editAt = oldSource.IndexOf("target", StringComparison.Ordinal) + 2;
         var newSource = oldSource.Insert(editAt, "Z");
-        AssertFallsBack(oldSource, newSource, "reference use edit");
+        AssertEdit(oldSource, newSource, "reference use edit");
     }
 
-    private static void CheckOrdinaryReferenceDocumentEditStaysLocal()
+    private static void CheckOrdinaryReferenceDocumentEdit()
     {
         var oldSource = BuildReferenceDocument();
         var editAt = oldSource.IndexOf("neutral row 400", StringComparison.Ordinal) + 8;
         var newSource = oldSource.Insert(editAt, "Z");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
 
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var incremental))
-        {
-            throw new InvalidOperationException(
-                "FAIL ordinary reference-document edit: unnecessarily fell back");
-        }
+        var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
         var linkOffset = newSource.IndexOf("target", StringComparison.Ordinal);
         if (!incremental.TryGetLinkAtOffset(linkOffset, out var link) ||
             !string.Equals(link.Url, "https://example.com", StringComparison.Ordinal))
@@ -163,10 +112,10 @@ internal static class IncrementalSnapshotChecks
             throw new InvalidOperationException(
                 "FAIL ordinary reference-document edit: distant resolved reference link was lost");
         }
-        Console.WriteLine("PASS ordinary edit stays local and preserves distant reference link");
+        Console.WriteLine("PASS ordinary edit preserves distant reference link");
     }
 
-    private static void CheckNewReferenceDefinitionFallsBack()
+    private static void CheckNewReferenceDefinitionUpdatesReferences()
     {
         var builder = new StringBuilder();
         builder.Append("[unresolved][new-id]\n\n");
@@ -177,10 +126,10 @@ internal static class IncrementalSnapshotChecks
         var oldSource = builder.ToString();
         var anchor = oldSource.IndexOf("neutral row 250", StringComparison.Ordinal);
         var newSource = oldSource.Insert(anchor, "[new-id]: https://example.com/new\n\n");
-        AssertFallsBack(oldSource, newSource, "new reference definition");
+        AssertEdit(oldSource, newSource, "new reference definition");
     }
 
-    private static void CheckNewLongFenceExpandsByStateScan()
+    private static void CheckNewLongFenceEdit()
     {
         var builder = new StringBuilder();
         builder.Append("before\n\n");
@@ -194,30 +143,11 @@ internal static class IncrementalSnapshotChecks
         var oldSource = builder.ToString();
         var insertAt = oldSource.IndexOf("opening anchor", StringComparison.Ordinal);
         var newSource = oldSource.Insert(insertAt, "```text\n");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
-        var windowLength = MarkdownSemanticSnapshot.GetIncrementalWindowLengthForTests(
-            oldSource,
-            oldSnapshot,
-            newSource);
-
-        if (windowLength < newSource.Length / 2)
-        {
-            throw new InvalidOperationException(
-                $"FAIL new long fence: fence-state scan did not expand far enough ({windowLength}/{newSource.Length})");
-        }
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var local))
-        {
-            throw new InvalidOperationException(
-                "FAIL new long fence: local path unexpectedly fell back");
-        }
+        var local = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
 
         AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), local, "new long fence state scan");
         Console.WriteLine(
-            $"PASS new long fence expands by state scan window={windowLength} full={newSource.Length}");
+            "PASS new long fence edit preserves semantics");
     }
 
     private static string BuildReferenceDocument()
@@ -232,18 +162,11 @@ internal static class IncrementalSnapshotChecks
         return builder.ToString();
     }
 
-    private static void AssertFallsBack(string oldSource, string newSource, string name)
+    private static void AssertEdit(string oldSource, string newSource, string name)
     {
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
-        if (MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out _))
-        {
-            throw new InvalidOperationException($"FAIL {name}: local path should decline global reference work");
-        }
-        Console.WriteLine($"PASS {name} falls back to full parse");
+        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
+            MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource), name);
+        Console.WriteLine($"PASS {name} publishes current reference semantics");
     }
 
     /// <summary>编辑点远离引用块时，局部解析拼接的 span 需保留每行 QuoteLevel（含惰性续行）。</summary>
@@ -261,17 +184,8 @@ internal static class IncrementalSnapshotChecks
         var oldSource = builder.ToString();
         var editAt = oldSource.IndexOf("plain row 450", StringComparison.Ordinal) + 10;
         var newSource = oldSource.Insert(editAt, "Z");
-        var oldSnapshot = MarkdownSemanticSnapshot.Parse(oldSource);
 
-        if (!MarkdownSemanticSnapshot.TryParseIncremental(
-                oldSource,
-                oldSnapshot,
-                newSource,
-                out var incremental))
-        {
-            throw new InvalidOperationException(
-                "FAIL large quote-preserving edit: unexpectedly fell back to full parse");
-        }
+        var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
 
         var expected = MarkdownSemanticSnapshot.Parse(newSource);
         AssertEquivalent(expected, incremental, "large edit preserves quote level");

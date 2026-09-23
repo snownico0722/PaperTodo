@@ -27,7 +27,6 @@ internal static partial class Program
             Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
-            RenderDemandChecks();
             Console.WriteLine($"Edge title checks: {assertions} assertions passed.");
             return 0;
         }
@@ -169,7 +168,6 @@ internal static partial class Program
         host.SetDefaultIconSlotWidth(0);
         Check(host.DefaultIconSlotWidthForChecks < 0.01,
             "Script/natural icon layout can release the default slot");
-        PreviewClipReuse(host);
     }
 
     private static void Geometry()

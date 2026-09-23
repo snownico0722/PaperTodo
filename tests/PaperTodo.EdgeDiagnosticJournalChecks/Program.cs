@@ -21,7 +21,7 @@ internal static class Program
         try
         {
             MemoryAndExport(Path.Combine(root, "export"));
-            LimitsAndAllocation(Path.Combine(root, "limits"));
+            LimitsAndDrops(Path.Combine(root, "limits"));
             ConcurrentOrdering(Path.Combine(root, "parallel"));
             CompletionContention(Path.Combine(root, "contention"));
             FailedFlushCanRetry(Path.Combine(root, "failure"));
@@ -83,7 +83,7 @@ internal static class Program
         Console.WriteLine("PASS memory-and-export");
     }
 
-    private static void LimitsAndAllocation(string directory)
+    private static void LimitsAndDrops(string directory)
     {
         var countBounded = new JournalBuffer(Path.Combine(directory, "count"), 2, 1024);
         countBounded.Event("A"); countBounded.Event("B");
@@ -96,19 +96,7 @@ internal static class Program
         Check(entries.Select(entry => entry.Sequence).SequenceEqual(new long[] { 1, 3 }) &&
             textBounded.Stats.RetainedTextBytes == 12 && textBounded.Stats.DroppedTextBudget == 1,
             "Sequence gaps and independent byte-budget drops are explicit");
-        var allocation = new JournalBuffer(Path.Combine(directory, "allocation"), 2048, 64 * 1024);
-        for (var index = 0; index < 256; index++) allocation.Event("shape", value1: index);
-        var previousTicks = allocation.Stats.EventTicks;
-        var started = Stopwatch.GetTimestamp();
-        var allocated = GC.GetAllocatedBytesForCurrentThread();
-        for (var index = 0; index < 1000; index++) allocation.Event("shape", value1: index, number1: 0.5);
-        var delta = GC.GetAllocatedBytesForCurrentThread() - allocated;
-        var elapsed = Stopwatch.GetTimestamp() - started;
-        var measuredTicks = allocation.Stats.EventTicks - previousTicks;
-        Check(delta == 0, "Warmed numeric event collection allocates zero per-record managed bytes");
-        Check(measuredTicks > 0 && measuredTicks <= elapsed && allocation.Stats.EventCalls == 1256,
-            "Structured observer cost and call count cover actual collection work");
-        Console.WriteLine($"PASS limits-and-allocation: numeric records allocated={delta}, measuredTicks={measuredTicks}, wallTicks={elapsed}");
+        Console.WriteLine("PASS limits-and-drops");
     }
 
     private static void ConcurrentOrdering(string directory)

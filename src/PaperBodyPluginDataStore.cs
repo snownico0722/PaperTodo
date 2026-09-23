@@ -21,6 +21,8 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     internal const int MaximumPluginRuntimeStateBytes = 20 * 1024 * 1024;
     private const int StorageVersion = 1;
     private const int SaveDebounceMilliseconds = 750;
+    // A failed fast flush gets one delayed retry. A second failure remains dirty until the next
+    // real mutation or normal disposal instead of creating a background retry loop.
     private const int ForceSaveMilliseconds = 10_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -52,9 +54,12 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     private readonly Dictionary<string, PluginDataDocument> _cache =
         new(StringComparer.Ordinal);
     private readonly HashSet<string> _dirtyProviderIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _saveFailureAttempts = new(StringComparer.Ordinal);
     private readonly Timer _saveTimer;
     private readonly Timer _forceSaveTimer;
     private readonly IDurableAtomicFileWriter _atomicWriter;
+    private readonly int _saveDebounceMilliseconds;
+    private readonly int _forceSaveMilliseconds;
     private bool _suppressFinalFlushOnDispose;
     private bool _disposed;
 
@@ -66,12 +71,29 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     internal PaperBodyPluginDataStore(
         string pluginRoot,
         IDurableAtomicFileWriter atomicWriter)
+        : this(
+            pluginRoot,
+            atomicWriter,
+            SaveDebounceMilliseconds,
+            ForceSaveMilliseconds)
+    {
+    }
+
+    internal PaperBodyPluginDataStore(
+        string pluginRoot,
+        IDurableAtomicFileWriter atomicWriter,
+        int saveDebounceMilliseconds,
+        int forceSaveMilliseconds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginRoot);
         ArgumentNullException.ThrowIfNull(atomicWriter);
+        ArgumentOutOfRangeException.ThrowIfNegative(saveDebounceMilliseconds);
+        ArgumentOutOfRangeException.ThrowIfNegative(forceSaveMilliseconds);
 
         DataRoot = Path.Combine(pluginRoot, "data");
         _atomicWriter = atomicWriter;
+        _saveDebounceMilliseconds = saveDebounceMilliseconds;
+        _forceSaveMilliseconds = forceSaveMilliseconds;
         _saveTimer = new Timer(
             _ => FlushDirty(),
             null,
@@ -309,11 +331,14 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                     {
                         SaveNow(providerId, document);
                         _dirtyProviderIds.Remove(providerId);
+                        _saveFailureAttempts.Remove(providerId);
                     }
                     catch
                     {
-                        // Keep the in-memory deletion dirty so the normal retry path can finish it.
+                        // One direct cleanup write already failed. Keep it dirty and allow one
+                        // delayed retry; another real mutation will reset the retry budget.
                         _dirtyProviderIds.Add(providerId);
+                        _saveFailureAttempts[providerId] = 1;
                     }
                 }
                 catch
@@ -427,15 +452,16 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     {
         var startForceTimer = _dirtyProviderIds.Count == 0;
         _dirtyProviderIds.Add(providerId);
+        _saveFailureAttempts[providerId] = 0;
         if (_suppressFinalFlushOnDispose)
         {
             return;
         }
 
-        _saveTimer.Change(SaveDebounceMilliseconds, Timeout.Infinite);
+        _saveTimer.Change(_saveDebounceMilliseconds, Timeout.Infinite);
         if (startForceTimer)
         {
-            _forceSaveTimer.Change(ForceSaveMilliseconds, Timeout.Infinite);
+            _forceSaveTimer.Change(_forceSaveMilliseconds, Timeout.Infinite);
         }
     }
 
@@ -452,15 +478,23 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
             foreach (var providerId in _dirtyProviderIds.ToArray())
             {
+                var failures = _saveFailureAttempts.GetValueOrDefault(providerId);
+                if (failures >= 2)
+                {
+                    continue;
+                }
+
                 try
                 {
                     SaveNow(providerId, Load(providerId));
                     _dirtyProviderIds.Remove(providerId);
+                    _saveFailureAttempts.Remove(providerId);
                 }
                 catch
                 {
-                    // Keep the provider dirty. The timers below retry without requiring another
-                    // plugin mutation.
+                    // Keep the provider dirty, but spend only one delayed retry without requiring
+                    // another mutation. A second failure waits for the next real mutation or exit.
+                    _saveFailureAttempts[providerId] = failures + 1;
                 }
             }
 
@@ -470,15 +504,17 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     private void UpdateSaveTimersAfterFlush()
     {
-        if (_suppressFinalFlushOnDispose || _dirtyProviderIds.Count == 0)
+        _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        if (_suppressFinalFlushOnDispose ||
+            _dirtyProviderIds.Count == 0 ||
+            !_dirtyProviderIds.Any(providerId =>
+                _saveFailureAttempts.GetValueOrDefault(providerId) < 2))
         {
-            _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
             _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
             return;
         }
 
-        _saveTimer.Change(SaveDebounceMilliseconds, Timeout.Infinite);
-        _forceSaveTimer.Change(ForceSaveMilliseconds, Timeout.Infinite);
+        _forceSaveTimer.Change(_forceSaveMilliseconds, Timeout.Infinite);
     }
 
     private void SaveNow(string providerId, PluginDataDocument document)

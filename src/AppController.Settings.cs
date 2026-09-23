@@ -1874,7 +1874,6 @@ public sealed partial class AppController
 
         ArrangeDeepCapsules(animate: false);
         RebuildTrayMenu();
-        RefreshToolTipSetting();
     }
 
     private UIElement BuildSettingsSignature()
@@ -2545,6 +2544,9 @@ public sealed partial class AppController
             SetResizeGripMode);
     }
 
+    private void ToggleTodoBottomBar() =>
+        SetSettingFromUi("todo.bottom_bar", !State.ShowTodoBottomBar);
+
     private void ToggleAutoClearCompletedTodos() =>
         SetSettingFromUi("todo.auto_clear_completed", !State.AutoClearCompletedTodos);
 
@@ -2595,26 +2597,6 @@ public sealed partial class AppController
 
     private void ToggleToolTips() =>
         SetSettingFromUi("general.tooltips", !State.EnableToolTips);
-
-    private void RefreshToolTipSetting()
-    {
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateToolTipSetting();
-        }
-
-        foreach (var m in _masterCapsules.Values) m.UpdateToolTipSetting();
-
-        if (_settingsWindow != null)
-        {
-            ApplyToolTipSetting(_settingsWindow);
-        }
-    }
-
-    private void ApplyToolTipSetting(Window window)
-    {
-        ToolTipPreferences.Apply(window, State.EnableToolTips);
-    }
 
     private void ToggleCapsuleMode() =>
         SetSettingFromUi("capsule.enabled", !State.UseCapsuleMode);

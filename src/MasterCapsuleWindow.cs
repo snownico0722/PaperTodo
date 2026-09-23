@@ -103,17 +103,14 @@ public sealed class MasterCapsuleWindow : Window
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
         _contextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
-            $"master:{Guid.NewGuid():N}",
-            Dispatcher,
-            IsPointInsideMasterOwnerSurface);
+            $"master:{Guid.NewGuid():N}");
         ConfigureWindow();
         BuildContent();
         UpdateExperimentalOpacity();
-        UpdateToolTipSetting();
-        // Clicking the pill must never pull foreground focus: activating this window would
-        // deactivate whatever app was in front, forcing it to repaint — the click "flash".
-        // WS_EX_NOACTIVATE makes the window unable to become the active/foreground window,
-        // so the click toggles collapse-all without disturbing the current foreground app.
+        // Ordinary pill interaction must never pull foreground focus: activating this window
+        // would deactivate whatever app was in front, forcing it to repaint — the click "flash".
+        // WS_EX_NOACTIVATE keeps the pill passive; an explicitly opened context-menu popup owns
+        // its own short-lived foreground/focus session instead.
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
@@ -235,8 +232,8 @@ public sealed class MasterCapsuleWindow : Window
         content.Children.Add(stack);
 
         _pill.Child = content;
-        // Same chrome as the tray menu. The NOACTIVATE host delegates promotion,
-        // guards and stale-focus cleanup to DeepCapsuleContextMenuSession.
+        // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation
+        // and stale-focus cleanup to DeepCapsuleContextMenuSession.
         var contextMenu = _controller.CreateTrayMenu(registerForLiveRefresh: true);
         _pill.ContextMenu = contextMenu;
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
@@ -357,11 +354,6 @@ public sealed class MasterCapsuleWindow : Window
         _label.FontWeight = MasterLabelFontWeight;
         AppTypography.ApplyTextRendering(_label);
         MoveToTarget(animate: false);
-    }
-
-    public void UpdateToolTipSetting()
-    {
-        ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
     }
 
     public void UpdateExperimentalOpacity()
@@ -489,13 +481,8 @@ public sealed class MasterCapsuleWindow : Window
         return wasDragging;
     }
 
-    private void ClearCapsuleInteractionKeyboardFocus()
-    {
+    private void ClearCapsuleInteractionKeyboardFocus() =>
         WindowNative.ClearCurrentThreadKeyboardFocus();
-        Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
 
     private double MasterDockedWidth(double pixelsPerDip)
     {
@@ -833,9 +820,6 @@ public sealed class MasterCapsuleWindow : Window
         BeginAnimation(AnimatedTopProperty, null);
         Close();
     }
-
-    private bool IsPointInsideMasterOwnerSurface(System.Windows.Point screenPoint) =>
-        DeepCapsuleContextMenuSession.IsPointInsideElement(_pill, screenPoint);
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

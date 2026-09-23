@@ -91,10 +91,11 @@ internal static partial class Program
                     link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Require(opened == "https://example.com/", "link invokes the existing callback");
                 }
+                var textBeforeResume = PreviewText(viewport);
                 descriptor.SetVisibility?.Invoke(false);
                 Require(!viewport.IsHitTestVisible, "retract immediately disables links");
                 descriptor.SetVisibility?.Invoke(true); Pump();
-                Require(ReferenceEquals(body, PublishedBody(viewport)), "unchanged resume reuses its own surface");
+                Require(viewport.IsHitTestVisible && PreviewText(viewport) == textBeforeResume, "resume restores current visible content and input");
                 source = "更新后的正文"; paper.TextZoom = 0.8;
                 invalidation.Invalidate();
                 UntilReview(() => PreviewText(viewport).Contains(source) && viewport.IsHitTestVisible, "live edit replaces content");
@@ -112,40 +113,45 @@ internal static partial class Program
             }
             finally { window.Close(); Pump(); }
         }
-        CheckReuseAndInvalidation();
+        CheckVisibilityAndInvalidation();
         CheckThemeInvalidation();
         CheckHostPublication();
         CheckPendingBoundaries();
         CheckSourceGenerationBeforeRefresh();
     }
 
-    private static void CheckReuseAndInvalidation()
+    private static void CheckVisibilityAndInvalidation()
     {
         var viewport = new MarkdownEdgeCapsulePreviewViewport();
-        var content = MarkdownEdgeCapsulePreviewRenderer.CaptureContent("**当前内容**", MarkdownRenderModes.Full);
-        viewport.SetContent(content, _ => { });
+        void Set(string text) => viewport.SetContent(
+            MarkdownEdgeCapsulePreviewRenderer.CaptureContent(text, MarkdownRenderModes.Full), _ => { });
+        void Ready(string text) => UntilReview(() => viewport.IsHitTestVisible &&
+            PreviewText(viewport).Contains(text), "current preview content is readable and interactive");
+        Set("当前内容");
         var window = new Window { Content = viewport, Width = 320, Height = 180, ShowInTaskbar = false, ShowActivated = false };
-        void WaitForNew(MarkdownPreviewArtifactSurface old) => UntilReview(() => viewport.IsHitTestVisible &&
-            viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(p => !ReferenceEquals(old, p)), "invalidated result is replaced");
         try
         {
-            window.Show(); var body = PublishedBody(viewport);
-            for (var i = 0; i < 5; i++) { viewport.SetPreviewActive(false); Pump(); viewport.SetPreviewActive(true); Pump(); }
-            Require(ReferenceEquals(body, PublishedBody(viewport)), "five unchanged resumes do not rebuild");
-            viewport.Visibility = Visibility.Hidden; Pump(); viewport.Visibility = Visibility.Visible; Pump();
-            Require(ReferenceEquals(body, PublishedBody(viewport)), "visibility-only cycle reuses completed result");
-            viewport.SetPreviewActive(false); viewport.SetContent(content, _ => { }); Pump();
-            Require(ReferenceEquals(body, viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Single()) && !viewport.IsHitTestVisible,
-                "inactive invalidation does not run preparation or enable stale input");
-            viewport.SetPreviewActive(true); WaitForNew(body); body = PublishedBody(viewport);
-            window.Width += 70; WaitForNew(body); body = PublishedBody(viewport);
+            window.Show(); Ready("当前内容");
+            for (var i = 0; i < 5; i++)
+            {
+                viewport.SetPreviewActive(false); Pump();
+                Require(!viewport.IsHitTestVisible, "inactive preview cannot accept input");
+                viewport.SetPreviewActive(true); Ready("当前内容");
+            }
+            viewport.Visibility = Visibility.Hidden; Pump();
+            viewport.Visibility = Visibility.Visible; Ready("当前内容");
+            viewport.SetPreviewActive(false); Set("更新内容"); Pump();
+            Require(!viewport.IsHitTestVisible, "inactive invalidation cannot enable stale input");
+            viewport.SetPreviewActive(true); Ready("更新内容");
+            window.Width += 70; Pump(); Ready("更新内容");
             typeof(MarkdownEdgeCapsulePreviewViewport).GetMethod("OnDpiChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .Invoke(viewport, new object[] { new DpiScale(1, 1), new DpiScale(1.5, 1.5) });
-            WaitForNew(body); body = PublishedBody(viewport);
+            Pump(); Ready("更新内容");
+            var body = PublishedBody(viewport);
             window.Content = null; Pump();
             Require(body.Parent == null && !viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(), "unload releases the mounted surface");
-            window.Content = viewport; WaitForNew(body);
-            Console.WriteLine("PASS same-view reuse; content/width/DPI/unload revoke it");
+            window.Content = viewport; Ready("更新内容");
+            Console.WriteLine("PASS preview visibility, content/width/DPI invalidation and unload");
         }
         finally { window.Close(); Pump(); }
     }
@@ -164,7 +170,7 @@ internal static partial class Program
                 {
                     Set("obsolete " + new string('文', 1000));
                     UntilReview(() => MarkdownLayoutWorker.OutstandingRequests > 0, "cold demand awaits the real STA");
-                    Require(ReferenceEquals(old, viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Single()) && !viewport.IsHitTestVisible,
+                    Require(!viewport.IsHitTestVisible && !PreviewText(viewport).Contains("obsolete"),
                         "pending result has no partial UI or stale interactive links");
                     if (boundary == "replace") Set("replacement");
                     if (boundary == "retract") viewport.SetPreviewActive(false);
@@ -256,53 +262,4 @@ internal static partial class Program
         Require(!viewport.Children.OfType<MarkdownPreviewArtifactSurface>().Any(), "clearing unready host leaves no result");
     }
 
-    private static void ExportPreviewPixels(string folder)
-    {
-        Directory.CreateDirectory(folder);
-        var fixtures = new[] {
-            "ordinary 中文 e\u0301 العربية 😀 **粗体** *italic* ~~strike~~ `code`",
-            "**a *nested* b** <u>under ~~strike~~</u> **`code`**",
-            "[a **bold** *italic*](https://example.com)[second](https://example.com)",
-            "## Heading\n> 引用 **strong**\n12. list *item*\n- [x] task\n---",
-            "```\n\n**literal**\n\n[not-link](https://example.com)\n```",
-            string.Concat(Enumerable.Repeat("**加粗** *斜体* ~~删除~~ `code` [a **styled** link](https://example.com) 中文 ", 45)),
-            string.Join('\n', Enumerable.Range(1, 16).Select(i => $"第{i}行 **加粗** *italic* `code`")),
-            string.Concat(Enumerable.Repeat("[**a** *b*](https://example.com) ", 120)),
-            string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd(),
-            string.Join('\n', Enumerable.Repeat(string.Concat(Enumerable.Repeat("**a** *b* `c` ~~d~~ ", 10)).TrimEnd(), 12))
-        };
-        try
-        {
-            foreach (var sharp in new[] { false, true })
-            foreach (var zoom in new[] { 0.7, 1.3 })
-            foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic, MarkdownRenderModes.Full })
-            for (var i = 0; i < fixtures.Length; i++)
-            {
-                AppTypography.Configure(sharp ? UiFontPresets.YaHei : UiFontPresets.Default,
-                    textRenderingProfile: sharp ? TextRenderingProfiles.Sharp : TextRenderingProfiles.Standard);
-                var panel = new StackPanel { Width = 420, Height = 320, Background = Brushes.White, ClipToBounds = true };
-                panel.Resources["TextBrushKey"] = Brushes.Black;
-                panel.Resources["WeakTextBrushKey"] = Brushes.Gray;
-                panel.Resources["LinkBrushKey"] = Brushes.Blue;
-                panel.Resources["HoverBrushKey"] = Brushes.LightGray;
-                panel.Resources["PaperBorderBrushKey"] = Brushes.Gray;
-                var window = new Window { Content = panel, Width = 500, Height = 420, ShowActivated = false, ShowInTaskbar = false };
-                try
-                {
-                    window.Show(); Pump();
-                    RenderForCheck(panel, fixtures[i], _ => { }, mode, new Size(420, 320), zoom);
-                    Pump(); window.UpdateLayout();
-                    var dpi = VisualTreeHelper.GetDpi(panel);
-                    var width = (int)Math.Ceiling(420 * dpi.DpiScaleX);
-                    var height = (int)Math.Ceiling(320 * dpi.DpiScaleY);
-                    var bitmap = new RenderTargetBitmap(width, height, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
-                    bitmap.Render(panel);
-                    var bytes = new byte[width * height * 4]; bitmap.CopyPixels(bytes, width * 4, 0);
-                    File.WriteAllBytes(Path.Combine(folder, $"{sharp}-{zoom}-{mode}-{i}.rgba"), bytes);
-                }
-                finally { window.Close(); Pump(); }
-            }
-        }
-        finally { AppTypography.Configure(UiFontPresets.Default); }
-    }
 }

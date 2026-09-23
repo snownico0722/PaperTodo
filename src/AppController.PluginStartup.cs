@@ -18,6 +18,11 @@ public sealed partial class AppController
         var changed = false;
         foreach (var descriptor in PaperBodyPlugins.Descriptors)
         {
+            if (!IsPluginEnabled(descriptor.Id))
+            {
+                continue;
+            }
+
             var startup = descriptor.Manifest?.StartupPaper;
             if (startup?.Presentation != "hidden" ||
                 !StartupSettingEnabled(descriptor, startup))
@@ -66,7 +71,9 @@ public sealed partial class AppController
             return;
         }
         var candidates = PaperBodyPlugins.Descriptors.Where(descriptor =>
-            descriptor.Manifest?.StartupPaper is { } startup && StartupSettingEnabled(descriptor, startup)).ToArray();
+            IsPluginEnabled(descriptor.Id) &&
+            descriptor.Manifest?.StartupPaper is { } startup &&
+            StartupSettingEnabled(descriptor, startup)).ToArray();
         if (candidates.Length == 0)
         {
             EnablePluginRuntimeReconciliation();
@@ -101,6 +108,11 @@ public sealed partial class AppController
         var changed = false;
         foreach (var descriptor in descriptors)
         {
+            if (!IsPluginEnabled(descriptor.Id))
+            {
+                continue;
+            }
+
             var startup = descriptor.Manifest?.StartupPaper;
             if (startup == null || !StartupSettingEnabled(descriptor, startup))
             {

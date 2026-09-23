@@ -206,6 +206,18 @@ internal static partial class Program
             Require(ForegroundAlphaAtOffset(editor.Box, quote) > 0, "list-contained quote marker reveals on its active line");
         });
 
+        Check("List-contained quote rails align across continuation lines", () =>
+        {
+            const string source = "10. > a\n    > b";
+            using var editor = new Editor(source);
+            editor.Box.SetPreviewMode(true);
+            Pump();
+
+            var railXs = BackgroundVerticalLineXs(editor.Box);
+            Require(railXs.Length == 2, $"expected two rendered quote rails, got {railXs.Length}");
+            Near(railXs[0], railXs[1], "quote rail X stays aligned across ordered-list continuation");
+        });
+
         Check("Link escapes have nonoverlapping collapse runs in both caret directions", () =>
         {
             foreach (var syntax in new[] {
@@ -308,6 +320,36 @@ internal static partial class Program
             MarkdownTaskCheckBoxGeometry.TryGetRect(view, line, task, out var rect),
             "task checkbox geometry resolves");
         return new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
+    }
+
+    private static double[] BackgroundVerticalLineXs(MarkdownTextBox box)
+    {
+        box.ApplyTemplate();
+        box.Measure(new Size(800, 600));
+        box.Arrange(new Rect(0, 0, 800, 600));
+        box.UpdateLayout();
+        var view = box.TextArea.TextView;
+        view.Measure(new Size(800, 600));
+        view.Arrange(new Rect(0, 0, 800, 600));
+        view.EnsureVisualLines();
+
+        var drawing = new DrawingGroup();
+        using (var context = drawing.Open())
+        {
+            foreach (var renderer in view.BackgroundRenderers)
+            {
+                renderer.Draw(view, context);
+            }
+        }
+
+        return drawing.Children
+            .OfType<GeometryDrawing>()
+            .Select(item => item.Geometry)
+            .OfType<LineGeometry>()
+            .Where(line => Math.Abs(line.StartPoint.X - line.EndPoint.X) < 0.01)
+            .Select(line => line.StartPoint.X)
+            .OrderBy(x => x)
+            .ToArray();
     }
 
     private static byte ForegroundAlphaAtOffset(MarkdownTextBox box, int offset)

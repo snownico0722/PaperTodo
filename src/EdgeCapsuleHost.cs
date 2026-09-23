@@ -1178,14 +1178,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         }
     }
 
-    public void ApplyToolTipSetting(bool enabled)
-    {
-        if (!_disposed)
-        {
-            ToolTipPreferences.Apply(Window, enabled);
-        }
-    }
-
     public void UpdateTypography(
         FontFamily uiFontFamily,
         FontFamily symbolFontFamily,
@@ -1586,5 +1578,26 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
 #endif
         _callbacks = null;
         _appliedEdge = null;
+    }
+
+
+    public void PulseReminder()
+    {
+        if (_disposed || !Window.IsVisible)
+        {
+            return;
+        }
+
+        AnimationHelper.QuickBounce(
+            VisualSurface,
+            scale: 1.055,
+            duration: 95);
+        if (Theme.DangerBrush is SolidColorBrush danger)
+        {
+            AnimationHelper.FlashHighlight(
+                Chrome,
+                danger.Color,
+                duration: 130);
+        }
     }
 }

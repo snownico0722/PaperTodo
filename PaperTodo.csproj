@@ -44,6 +44,14 @@
          Keep both modes separate so switching publish options never reuses a woven assembly/cache. -->
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\sdk-compression-$(_PaperTodoSdkCompressionEnabled)\</IntermediateOutputPath>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>PaperTodo.DesktopBenchmarks</_Parameter1>
+    </AssemblyAttribute>
+    <!-- Diagnostic entry points keep their existing DEBUG guards / Release no-op behavior.
+         Their implementations belong to tools, not to the product source directory. -->
+    <Compile Include="tools\PaperTodo.EdgeDiagnostics\EntryPoints\*.cs" Link="Diagnostics\%(Filename)%(Extension)" />
+  </ItemGroup>
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <!-- Real-process diagnostics are tooling, never a dependency on a test assembly. -->
     <Compile Include="tools\PaperTodo.EdgeDiagnostics\*.cs" Link="Diagnostics\%(Filename)%(Extension)" />

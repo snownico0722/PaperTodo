@@ -12,31 +12,32 @@ public sealed partial class AppController
     private readonly Dictionary<string, Action> _pluginStatusRefreshers =
         new(StringComparer.Ordinal);
 
-    private enum PluginPageStatus
-    {
-        Stopped,
-        Running,
-        Issue
-    }
+    private sealed record PluginPageState(
+        bool Enabled,
+        bool Running,
+        bool HasIssue);
 
-    private PluginPageStatus PluginStatusFor(
+    private sealed record PluginStateSwitchParts(
+        Button Button,
+        Border Track,
+        Border Thumb);
+
+    private PluginPageState PluginStateFor(
         PaperBodyPluginDescriptor descriptor)
     {
-        if (HasPluginRuntimeFailure(descriptor.Id) ||
+        var enabled = IsPluginEnabled(descriptor.Id);
+        var running = enabled &&
+            (IsPluginRuntimeRunning(descriptor.Id) ||
+             _windows.Values.Any(window =>
+                 window.HasRunningPluginBody(descriptor.Id)));
+        var hasIssue =
+            HasPluginRuntimeFailure(descriptor.Id) ||
             (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
              _paperBodyPlugins.Issues.Any(issue =>
                  PluginIssueMatchesDescriptor(issue, descriptor))) ||
             _windows.Values.Any(window =>
-                window.HasFailedPluginBody(descriptor.Id)))
-        {
-            return PluginPageStatus.Issue;
-        }
-
-        return IsPluginRuntimeRunning(descriptor.Id) ||
-               _windows.Values.Any(window =>
-                   window.HasRunningPluginBody(descriptor.Id))
-            ? PluginPageStatus.Running
-            : PluginPageStatus.Stopped;
+                window.HasFailedPluginBody(descriptor.Id));
+        return new PluginPageState(enabled, running, hasIssue);
     }
 
     private static bool PluginIssueMatchesDescriptor(
@@ -67,54 +68,88 @@ public sealed partial class AppController
         }
     }
 
-    private Border CreatePluginStatusDot(PluginPageStatus status)
+    private Border CreatePluginIssueDot()
     {
-        var dot = new Border
+        return new Border
         {
             Width = 7,
             Height = 7,
             CornerRadius = new CornerRadius(3.5),
             Margin = new Thickness(0, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Theme.DangerBrush,
+            ToolTip = Strings.Get("PluginsStatusIssue")
+        };
+    }
+
+    private PluginStateSwitchParts CreatePluginStateSwitch(
+        PaperBodyPluginDescriptor descriptor)
+    {
+        var thumb = new Border
+        {
+            Width = 11,
+            Height = 11,
+            CornerRadius = new CornerRadius(5.5),
+            Background = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
-        ApplyPluginStatusDot(dot, status);
-        return dot;
-    }
-
-    private void ApplyPluginStatusDot(
-        Border dot,
-        PluginPageStatus status)
-    {
-        dot.Background = status switch
+        var track = new Border
         {
-            PluginPageStatus.Issue => Theme.DangerBrush,
-            PluginPageStatus.Running => new SolidColorBrush(
-                Theme.IsDark
-                    ? Color.FromRgb(93, 190, 121)
-                    : Color.FromRgb(55, 145, 82)),
-            _ => TrayWeakTextBrush
+            Width = 29,
+            Height = 15,
+            CornerRadius = new CornerRadius(7.5),
+            Padding = new Thickness(2),
+            Child = thumb
         };
-        var tipKey = status switch
+        var button = new Button
         {
-            PluginPageStatus.Issue => "PluginsStatusIssue",
-            PluginPageStatus.Running => "PluginsStatusRunning",
-            _ => "PluginsStatusStopped"
+            Width = 33,
+            Height = 22,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 7, 0),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Content = track,
+            Style = BuildSettingsCloseButtonStyle(),
+            Focusable = false,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center
         };
-
-        dot.Opacity = status == PluginPageStatus.Stopped ? 0.62 : 1;
-        dot.ToolTip = Strings.Get(tipKey);
+        var parts = new PluginStateSwitchParts(button, track, thumb);
+        ApplyPluginStateSwitch(parts, PluginStateFor(descriptor));
+        button.Click += (_, _) =>
+        {
+            TogglePluginEnabled(descriptor);
+            ApplyPluginStateSwitch(parts, PluginStateFor(descriptor));
+        };
+        return parts;
     }
 
-    internal void QueuePluginStatusRefresh()
+    private void ApplyPluginStateSwitch(
+        PluginStateSwitchParts parts,
+        PluginPageState state)
     {
-        // Body attach/remove/provider switch is also the existing low-frequency signal that an
-        // entity plugin paper may have appeared or disappeared. Reconciliation itself is gated
-        // until startupPaper handling has completed.
-        ReconcilePluginRuntimes();
-        QueuePluginStatusUiRefresh();
+        parts.Thumb.HorizontalAlignment = state.Enabled
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+        parts.Track.Background = !state.Enabled
+            ? Theme.DangerBrush
+            : state.Running
+                ? new SolidColorBrush(
+                    Theme.IsDark
+                        ? Color.FromRgb(93, 190, 121)
+                        : Color.FromRgb(55, 145, 82))
+                : TrayWeakTextBrush;
+        parts.Track.Opacity = state.Enabled && !state.Running ? 0.62 : 1;
+        parts.Button.ToolTip = Strings.Get(!state.Enabled
+            ? "PluginsStatusDisabled"
+            : state.Running
+                ? "PluginsStatusRunning"
+                : "PluginsStatusStopped");
     }
 
-    private void QueuePluginStatusUiRefresh()
+    internal void QueuePluginStatusUiRefresh()
     {
         if (_pluginStatusRefreshQueued ||
             _settingsWindow is not { IsVisible: true } ||

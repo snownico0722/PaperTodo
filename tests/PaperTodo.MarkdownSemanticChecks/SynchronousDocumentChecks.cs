@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using ICSharpCode.AvalonEdit.Document;
@@ -13,8 +12,6 @@ internal static class SynchronousDocumentChecks
         CheckPublicationIsSynchronous();
         CheckBatchedChangePublishesFinalSemantics();
         CheckSynchronousFullFallback();
-        ProfileActualDocumentEdit("ordinary", BuildOrdinary98k());
-        ProfileActualDocumentEdit("dense", PerformanceProfileChecks.BuildLargeStressSource());
     }
 
     private static void CheckPublicationIsSynchronous()
@@ -86,13 +83,7 @@ internal static class SynchronousDocumentChecks
         var publications = 0;
         semantics.SnapshotChanged += _ => publications++;
 
-        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
-        var started = Stopwatch.GetTimestamp();
         document.Insert(editAt, "z");
-        var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        var allocated = Math.Max(
-            0,
-            GC.GetAllocatedBytesForCurrentThread() - allocationBefore);
 
         if (publications != 1 || !semantics.TryGetCurrent(out var snapshot))
         {
@@ -104,67 +95,9 @@ internal static class SynchronousDocumentChecks
             document.Text,
             snapshot,
             "synchronous full fallback");
-        Console.WriteLine(
-            $"PROFILE SyncDocument98k-full-fallback {elapsed:F3}ms alloc={allocated / 1024d:F1}KiB");
         Console.WriteLine("PASS synchronous full fallback publishes exact semantics before return");
     }
 
-    private static void ProfileActualDocumentEdit(string label, string source)
-    {
-        var probe = label == "dense"
-            ? source.IndexOf("item ", source.Length / 2, StringComparison.Ordinal)
-            : source.IndexOf("editable", source.Length / 2, StringComparison.Ordinal);
-        if (probe < 0)
-        {
-            throw new InvalidOperationException($"FAIL sync document {label} profile probe missing.");
-        }
-
-        var editAt = probe + 2;
-        var document = new TextDocument(source);
-        using var semantics = new MarkdownSemanticDocument(document);
-
-        // Warm the exact TextDocument -> semantic publication path once in each direction.
-        document.Insert(editAt, "Z");
-        document.Remove(editAt, 1);
-
-        const int iterations = 31;
-        var elapsed = new double[iterations];
-        var allocated = new long[iterations];
-        var inserted = false;
-        for (var index = 0; index < iterations; index++)
-        {
-            var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
-            var start = Stopwatch.GetTimestamp();
-            if (!inserted)
-            {
-                document.Insert(editAt, "Z");
-                inserted = true;
-            }
-            else
-            {
-                document.Remove(editAt, 1);
-                inserted = false;
-            }
-            elapsed[index] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            allocated[index] = Math.Max(
-                0,
-                GC.GetAllocatedBytesForCurrentThread() - allocationBefore);
-
-            if (!semantics.TryGetCurrent(out var current))
-            {
-                throw new InvalidOperationException(
-                    $"FAIL sync document {label} profile lost current semantics.");
-            }
-            GC.KeepAlive(current);
-        }
-
-        Array.Sort(elapsed);
-        Array.Sort(allocated);
-        Console.WriteLine(
-            $"PROFILE SyncDocument98k-{label} p50={elapsed[elapsed.Length / 2]:F3}ms " +
-            $"p95={elapsed[(int)Math.Ceiling(elapsed.Length * 0.95) - 1]:F3}ms " +
-            $"alloc-p50={allocated[allocated.Length / 2] / 1024d:F1}KiB");
-    }
 
     private static void AssertEquivalentToFullParse(
         string source,

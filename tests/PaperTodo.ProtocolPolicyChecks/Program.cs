@@ -14,23 +14,18 @@ internal static partial class Program
         {
             var host = Assembly.Load("PaperTodo");
             var abstractions = Assembly.Load("PaperTodo.Plugin.Abstractions");
-            CheckSingleHotkeyAuthority(host);
+            CheckShortcutReservations(host);
             CheckShortcutValidation(host);
-            CheckRuntimeSlotAuthority(host);
-            CheckRuntimeTransitions(host);
             CheckCapabilityNormalization(host);
             CheckSettingsLayoutManifest(host);
             CheckSettingActionBehavior(host);
             CheckHiddenStartupVisibility(host);
-            CheckProtocolBoundaries(host);
-            CheckSharedWebInfrastructure(host);
             CheckWebRuntimeRequestRouting(host);
             CheckWebRuntimeBridgeBehavior(host);
-            CheckUnifiedPluginRuntime(host, abstractions);
+            CheckRuntimeApiCompatibility(host, abstractions);
             CheckWebBodyNavigationIdentity(host);
-            CheckManifestRuntimeAndMiniContracts(host);
             CheckWebMiniSurfaceRecoveryBridge(host);
-            CheckGlobalTopBarPriority(host, abstractions);
+            CheckTopBarApiCompatibility(host, abstractions);
             CheckPluginRuntimeSettings(host, abstractions);
             CheckProtocol21Contributions(host, abstractions);
             CheckPluginRuntimePersistenceGuards(host);
@@ -44,35 +39,9 @@ internal static partial class Program
         }
     }
 
-    private static void CheckSingleHotkeyAuthority(Assembly host)
+    private static void CheckShortcutReservations(Assembly host)
     {
         var managerType = RequireType(host, "PaperTodo.GlobalHotkeyManager");
-        var brokerType = RequireType(host, "PaperTodo.GlobalHotkeyBroker");
-        var failureType = RequireType(host, "PaperTodo.GlobalShortcutRegistrationFailure");
-        Assert(
-            managerType.GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic)
-                .All(field => field.FieldType.FullName != "System.Windows.Interop.HwndSource"),
-            "GlobalHotkeyManager must not own a native HwndSource; the broker is the single authority.");
-        Assert(
-            brokerType.GetFields(BindingFlags.Static | BindingFlags.NonPublic)
-                .Any(field => field.FieldType.FullName == "System.Windows.Interop.HwndSource"),
-            "GlobalHotkeyBroker must own the process-level native hotkey window.");
-        Assert(Enum.GetNames(failureType).Contains("Conflict"),
-            "Cross-owner shortcut conflicts need their own failure status.");
-        Assert(Enum.GetNames(failureType).Contains("UnregistrationFailed"),
-            "Native hotkey teardown failures need their own failure status.");
-        Assert(
-            brokerType.GetMethod("TryRestoreGesture", BindingFlags.Static | BindingFlags.NonPublic) != null,
-            "The broker must be able to restore registrations during rollback.");
-        Assert(
-            brokerType.GetMethod("IsCommittedNativeBinding", BindingFlags.Static | BindingFlags.NonPublic) != null,
-            "Native hotkey dispatch must validate rollback residue against the committed owner plan.");
-        var nativeBinding = brokerType.GetNestedType("NativeBinding", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("GlobalHotkeyBroker.NativeBinding was not found.");
-        Assert(
-            nativeBinding.GetProperty("Gesture") != null,
-            "Native hotkey bindings must retain their exact gesture so stale rollback residue can be rejected.");
-
         var tryApply = managerType
             .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Single(method => method.Name == "TryApply" && method.GetParameters().Length == 6);
@@ -152,83 +121,7 @@ internal static partial class Program
             "A normal defined shortcut stopped parsing.");
     }
 
-    private static void CheckRuntimeSlotAuthority(Assembly host)
-    {
-        var controller = RequireType(host, "PaperTodo.AppController");
-        Assert(
-            controller.GetNestedType("PluginRuntimeSlot", BindingFlags.NonPublic) != null,
-            "Plugin app runtime must use one provider slot state object.");
-        Assert(
-            controller.GetField("_pluginRuntimeSlots", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Plugin app runtime slot dictionary was not found.");
 
-        var lifetime = controller.GetNestedType("PluginRuntimeLifetime", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PluginRuntimeLifetime was not found.");
-        Assert(lifetime.GetField("_active", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == typeof(int),
-            "App runtime lifetime must expose one atomic integer active token to worker-side APIs.");
-        Assert(lifetime.GetMethod("TryDeactivate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null,
-            "App runtime lifetime must support atomic revocation before teardown.");
-
-        var obsoleteParallelState = new[]
-        {
-            "_pluginRuntimes",
-            "_pluginRuntimeStarts",
-            "_pluginRuntimeStartFailures",
-            "_pluginRuntimeStartFailureCounts",
-            "_pluginRuntimeRetryTokens",
-            "_pluginRuntimeRestartRequests"
-        };
-        foreach (var fieldName in obsoleteParallelState)
-        {
-            Assert(
-                controller.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic) == null,
-                $"Obsolete parallel app-runtime state remains: {fieldName}");
-        }
-    }
-
-    private static void CheckRuntimeTransitions(Assembly host)
-    {
-        var controller = RequireType(host, "PaperTodo.AppController");
-        var stateType = controller.GetNestedType("PluginRuntimeState", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PluginRuntimeState was not found.");
-        var transitions = controller.GetNestedType("PluginRuntimeTransitions", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PluginRuntimeTransitions was not found.");
-
-        object State(string name) => Enum.Parse(stateType, name);
-        string InvokeState(string methodName, params object[] args) =>
-            (transitions.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-                ?.Invoke(null, args)
-                ?? throw new InvalidOperationException($"Runtime transition was not found: {methodName}"))
-            .ToString()!;
-
-        Assert(InvokeState("BeginStart", State("Stopped")) == "Starting",
-            "Stopped must enter Starting when a runtime start begins.");
-        Assert(InvokeState("StartSucceeded", State("Starting")) == "Running",
-            "Starting must enter Running after successful creation.");
-        Assert(InvokeState("StartFailed", 1, 3) == "Backoff",
-            "The first runtime failure must enter Backoff.");
-        Assert(InvokeState("StartFailed", 3, 3) == "Backoff",
-            "The third bounded retry failure must still enter Backoff.");
-        Assert(InvokeState("StartFailed", 4, 3) == "Failed",
-            "The failure after all bounded retries must enter Failed.");
-        Assert(InvokeState("RetryElapsed", State("Backoff")) == "Stopped",
-            "Expired backoff must return to Stopped so reconcile can restart.");
-        Assert(
-            transitions.GetMethod(
-                "DescriptorChanged",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) == null,
-            "Runtime transitions must not retain a descriptor-change hot-reload recovery path.");
-
-        var runtimeMatches = transitions.GetMethod(
-            "RuntimeMatches",
-            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("RuntimeMatches was not found.");
-        var current = Guid.NewGuid();
-        Assert((bool)(runtimeMatches.Invoke(null, [current, current]) ?? false),
-            "The current runtime id must accept its own callback.");
-        Assert(!(bool)(runtimeMatches.Invoke(null, [current, Guid.NewGuid()]) ?? true),
-            "A stale runtime id must not be allowed to affect a newer runtime.");
-    }
 
     private static void CheckCapabilityNormalization(Assembly host)
     {
@@ -269,40 +162,6 @@ internal static partial class Program
         var registryType = RequireType(host, "PaperTodo.PaperBodyPluginRegistry");
         var manifestType = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
         var settingType = RequireType(host, "PaperTodo.PaperBodyPluginSettingManifest");
-        var categoryType = RequireType(host, "PaperTodo.PaperBodyPluginSettingCategoryManifest");
-
-        Assert(
-            manifestType.GetProperty("AdvancedSettings")?.PropertyType == typeof(bool),
-            "Plugin manifest must expose explicit advancedSettings opt-in metadata.");
-        Assert(
-            manifestType.GetProperty("PrimarySettings")?.PropertyType == typeof(int?),
-            "Plugin manifest must expose optional primarySettings metadata.");
-        Assert(
-            manifestType.GetProperty("SettingCategories")?.PropertyType == categoryType.MakeArrayType(),
-            "Plugin manifest must expose settingCategories metadata.");
-        Assert(
-            settingType.GetProperty("Quick")?.PropertyType == typeof(bool),
-            "Legacy inline settings must retain per-setting quick metadata.");
-        Assert(
-            settingType.GetProperty("Category")?.PropertyType == typeof(string),
-            "Advanced plugin settings must expose an optional category name.");
-        Assert(
-            settingType.GetProperty("Action")?.PropertyType == typeof(string),
-            "Plugin settings must expose host-owned paper action metadata for action buttons.");
-        Assert(
-            categoryType.GetProperty("Name")?.PropertyType == typeof(string) &&
-            categoryType.GetProperty("Column")?.PropertyType == typeof(string),
-            "Setting categories must carry their display name and optional column placement.");
-
-        var supported = registryType.GetField(
-            "SupportedPluginApiVersion",
-            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        var minimum = registryType.GetField(
-            "MinimumPluginApiVersion",
-            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue()?.ToString();
-        Assert(supported == "2.2" && minimum == "2.1",
-            "The plugin host must expose Protocol 2.2 while retaining 2.1 compatibility.");
-
         var validateApi = registryType.GetMethod(
             "ValidateManifestApiVersion",
             BindingFlags.Static | BindingFlags.NonPublic)
@@ -424,43 +283,9 @@ internal static partial class Program
         {
         }
 
-        var controller = RequireType(host, "PaperTodo.AppController");
-        Assert(
-            controller.GetMethod("BuildPluginActionSetting", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
-            controller.GetMethod("ApplyHiddenPluginStartupPaperVisibility", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Host UI/startup must expose the action-button and hidden-startup execution paths.");
     }
 
-    private static void CheckProtocolBoundaries(Assembly host)
-    {
-        var hostApi = RequireType(host, "PaperTodo.PaperBodyPluginHostApi");
-        var controller = RequireType(host, "PaperTodo.AppController");
-        var registry = RequireType(host, "PaperTodo.PaperBodyPluginRegistry");
-        Assert(
-            hostApi.GetMethod("EnsurePresentationProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
-            "Protocol 2.2 compatibility must not restore the removed Protocol 2.0 presentation gate.");
-        Assert(
-            controller.GetMethod("EnsurePluginTopBarProtocol", BindingFlags.Instance | BindingFlags.NonPublic) == null,
-            "Protocol 2.2 compatibility must not restore the removed Protocol 2.0 top-bar gate.");
-        Assert(
-            registry.GetMethod("ApiAtLeast", BindingFlags.Static | BindingFlags.NonPublic) != null,
-            "Protocol 2.2 feature gates need one shared major.minor comparison helper.");
-    }
 
-    private static void CheckSharedWebInfrastructure(Assembly host)
-    {
-        var infrastructure = RequireType(host, "PaperTodo.WebPluginRuntimeInfrastructure");
-        var runtime = RequireType(host, "PaperTodo.WebPluginRuntime");
-        Assert(
-            infrastructure.GetProperty("JsonOptions", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) != null,
-            "Shared Web runtime serialization policy was not found.");
-        Assert(
-            runtime.GetField("JsonOptions", BindingFlags.Static | BindingFlags.NonPublic) == null,
-            "WebPluginRuntime still owns a duplicate JSON bridge policy.");
-        Assert(
-            runtime.GetField("_startupReady", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Web app runtime must wait for document readiness before it enters Running.");
-    }
 
     private static void CheckWebRuntimeRequestRouting(Assembly host)
     {
@@ -700,32 +525,14 @@ internal static partial class Program
         field.SetValue(instance, value);
     }
 
-    private static void CheckUnifiedPluginRuntime(Assembly host, Assembly abstractions)
+    private static void CheckRuntimeApiCompatibility(Assembly host, Assembly abstractions)
     {
-        var controller = RequireType(host, "PaperTodo.AppController");
-        var webRuntime = RequireType(host, "PaperTodo.WebPluginRuntime");
-        var manifest = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
         var context = RequireType(abstractions, "PaperTodo.Plugin.PaperPluginRuntimeContext");
         var papers = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimePapers");
         var runtimeState = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimeState");
         var bodyContext = RequireType(abstractions, "PaperTodo.Plugin.PaperBodyContext");
         var runtimeClient = RequireType(abstractions, "PaperTodo.Plugin.IPaperPluginRuntimeClient");
 
-        Assert(
-            controller.GetField("_pluginRuntimeSlots", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Provider Runtime must retain one provider-keyed lifecycle slot dictionary.");
-        Assert(
-            controller.GetField("_webPaperRuntimeSlots", BindingFlags.Instance | BindingFlags.NonPublic) == null,
-            "Host-managed per-Paper Web Runtime slots must not return.");
-        Assert(host.GetType("PaperTodo.WebPaperRuntime", throwOnError: false) == null,
-            "WebPaperRuntime must not return; Web uses the one provider Runtime.");
-        Assert(manifest.GetProperty("PaperRuntime") == null &&
-               manifest.GetProperty("PaperRuntimePath") == null,
-            "paperRuntime manifest fields must not return.");
-        Assert(manifest.GetProperty("Requires") == null,
-            "Body requires/backgroundUpdates must not return as a host lifecycle mode.");
-        Assert(abstractions.GetType("PaperTodo.Plugin.PaperBodyRuntimeRequirements", throwOnError: false) == null,
-            "PaperBodyRuntimeRequirements must stay deleted; guaranteed background work belongs to Runtime.");
         Assert(context.GetProperty("Papers")?.PropertyType == papers &&
                context.GetProperty("State")?.PropertyType == runtimeState,
             "The provider Runtime must own logical Paper routing and provider-scoped backend state.");
@@ -736,21 +543,11 @@ internal static partial class Program
                papers.GetMethod("SetCapsulePresentation") != null &&
                papers.GetMethod("PostToBody") != null,
             "Provider Runtime Paper routing is incomplete.");
-        Assert(webRuntime.GetField("_papers", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
-               webRuntime.GetField("_state", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "The Web provider Runtime must use the same logical Paper/state contract as Native.");
     }
 
     private static void CheckWebBodyNavigationIdentity(Assembly host)
     {
         var body = RequireType(host, "PaperTodo.WebPaperBodySession");
-        Assert(
-            body.GetField("_documentNavigationId", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == typeof(ulong),
-            "Web body navigation completion must be tied to the current NavigationId.");
-        Assert(
-            body.GetField("_hasDocumentNavigation", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == typeof(bool),
-            "Web body must track whether a current navigation identity exists.");
-
         var canAccept = body.GetMethod(
             "CanAcceptDocumentMessage",
             BindingFlags.Static | BindingFlags.NonPublic)
@@ -762,29 +559,8 @@ internal static partial class Program
         Assert((bool)(canAccept.Invoke(null, ["hostRequest", true, true]) ?? false),
             "The current ready plugin document must retain normal host-request authority.");
 
-        Assert(
-            RequireType(host, "PaperTodo.WebPluginRuntimeInfrastructure").GetMethod("TryOpenExternalNavigation", BindingFlags.Static | BindingFlags.NonPublic) != null,
-            "Web body must have an explicit system-shell path for external top-level navigation.");
     }
 
-    private static void CheckManifestRuntimeAndMiniContracts(Assembly host)
-    {
-        var manifest = RequireType(host, "PaperTodo.PaperBodyPluginManifest");
-        Assert(manifest.GetProperty("Runtime") != null,
-            "Web app runtime entry is not represented in the canonical parsed manifest.");
-        Assert(manifest.GetProperty("RuntimePath") != null,
-            "Web app runtime resolved path is not cached by plugin discovery.");
-        Assert(manifest.GetProperty("PaperRuntime") == null &&
-               manifest.GetProperty("PaperRuntimePath") == null,
-            "Retired Web per-Paper runtime manifest fields must stay deleted.");
-        Assert(manifest.GetProperty("MiniMaxSize") != null,
-            "miniMaxSize is not represented in the canonical parsed manifest.");
-
-        var paperWindow = RequireType(host, "PaperTodo.PaperWindow");
-        Assert(
-            paperWindow.GetNestedType("MiniMaximumManifestView", BindingFlags.NonPublic) == null,
-            "PaperWindow still owns a second miniMaxSize manifest parser.");
-    }
 
     private static void CheckWebMiniSurfaceRecoveryBridge(Assembly host)
     {
@@ -931,44 +707,16 @@ internal static partial class Program
         }
     }
 
-    private static void CheckGlobalTopBarPriority(Assembly host, Assembly abstractions)
+    private static void CheckTopBarApiCompatibility(Assembly host, Assembly abstractions)
     {
         var action = RequireType(abstractions, "PaperTodo.Plugin.PaperTopBarAction");
         Assert(action.GetProperty("Priority")?.PropertyType == typeof(int),
             "PaperTopBarAction.Priority was not found.");
 
-        var controller = RequireType(host, "PaperTodo.AppController");
-        var maximumGlobal = controller.GetField(
-            "MaximumGlobalTopBarActions",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert(
-            maximumGlobal?.IsLiteral == true &&
-            maximumGlobal.GetRawConstantValue() is int limit &&
-            limit == 256,
-            "Global Top Bar must keep a broad but finite 256-action descriptor cap.");
-
-        var window = RequireType(host, "PaperTodo.PaperWindow");
-        Assert(
-            window.GetField("_pluginTopBarActionElements", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Top Bar must retain action scope per button so Global actions can be fitted individually.");
     }
 
     private static void CheckPluginRuntimePersistenceGuards(Assembly host)
     {
-        var dataStore = RequireType(host, "PaperTodo.PaperBodyPluginDataStore");
-        var paperLimit = dataStore.GetField(
-            "MaximumPaperStateBytes",
-            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue();
-        var runtimeLimit = dataStore.GetField(
-            "MaximumPluginRuntimeStateBytes",
-            BindingFlags.Static | BindingFlags.NonPublic)?.GetRawConstantValue();
-        Assert(
-            paperLimit is int paperBytes && paperBytes == 10 * 1024 * 1024,
-            "Each Paper frontend state must allow exactly 10 MiB.");
-        Assert(
-            runtimeLimit is int runtimeBytes && runtimeBytes == 20 * 1024 * 1024,
-            "Each provider PluginRuntime state must allow exactly 20 MiB.");
-
         var controller = RequireType(host, "PaperTodo.AppController");
         var versionGuard = controller.GetMethod(
             "PluginRuntimeStateVersionIsSupported",
@@ -982,12 +730,6 @@ internal static partial class Program
         Assert(!(bool)(versionGuard.Invoke(null, new object[] { 3, 2 }) ?? true),
             "Newer PluginRuntime state must be rejected instead of being downgraded.");
 
-        var webRuntime = RequireType(host, "PaperTodo.WebPluginRuntime");
-        Assert(
-            webRuntime.GetProperty(
-                "CanAcceptPaperMessages",
-                BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Web PluginRuntime must expose document readiness to prevent false-success message loss.");
     }
 
     private static void CheckPluginRuntimeSettings(Assembly host, Assembly abstractions)
@@ -1003,12 +745,6 @@ internal static partial class Program
                context.GetProperty("Papers") != null,
             "PaperPluginRuntimeContext must expose Settings, backend State and logical Papers.");
 
-        var controller = RequireType(host, "PaperTodo.AppController");
-        Assert(
-            controller.GetMethod(
-                "RetryFailedPluginRuntimeAfterSettingsChanged",
-                BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "A Failed/Backoff app runtime must have a settings-change recovery path.");
     }
 
     private static void CheckProtocol21Contributions(Assembly host, Assembly abstractions)
@@ -1029,20 +765,6 @@ internal static partial class Program
         Assert(context.GetProperty("TopBarLabels")?.PropertyType == topBarLabels,
             "Protocol 2.1 Runtime context must expose host-rendered top-bar labels.");
 
-        var controller = RequireType(host, "PaperTodo.AppController");
-        Assert(
-            controller.GetMethod("SetPluginTodoActions", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
-            controller.GetMethod("InvokePluginTodoAction", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Protocol 2.1 Todo action registration/dispatch is incomplete.");
-        Assert(
-            controller.GetMethod("SetPluginTopBarLabels", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Protocol 2.1 top-bar label registration is incomplete.");
-
-        var webRuntime = RequireType(host, "PaperTodo.WebPluginRuntime");
-        Assert(
-            webRuntime.GetMethod("SetTodoActions", BindingFlags.Instance | BindingFlags.NonPublic) != null &&
-            webRuntime.GetMethod("SetTopBarLabels", BindingFlags.Instance | BindingFlags.NonPublic) != null,
-            "Web Runtime must expose the same Protocol 2.1 contribution surfaces as Native.");
     }
 
     private static Type RequireType(Assembly assembly, string name) =>

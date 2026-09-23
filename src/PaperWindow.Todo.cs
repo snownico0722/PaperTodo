@@ -98,7 +98,7 @@ public sealed partial class PaperWindow
             _todoPanel.Children.Add(row);
         }
 
-        _todoPanel.Children.Add(BuildTodoAppendArea());
+        SyncTodoAppendArea();
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -242,7 +242,39 @@ public sealed partial class PaperWindow
         }), System.Windows.Threading.DispatcherPriority.Input);
     }
 
-    private UIElement BuildTodoAppendArea()
+    private void SyncTodoAppendArea()
+    {
+        if (_todoPanel == null)
+        {
+            _appendArea = null;
+            return;
+        }
+
+        if (!_controller.State.ShowTodoBottomBar)
+        {
+            if (_appendArea != null)
+            {
+                _todoPanel.Children.Remove(_appendArea);
+            }
+            _appendArea = null;
+            return;
+        }
+
+        if (_appendArea == null || !_todoPanel.Children.Contains(_appendArea))
+        {
+            _todoPanel.Children.Add(BuildTodoAppendArea());
+            return;
+        }
+
+        var appendIndex = _todoPanel.Children.IndexOf(_appendArea);
+        if (appendIndex != _todoPanel.Children.Count - 1)
+        {
+            _todoPanel.Children.RemoveAt(appendIndex);
+            _todoPanel.Children.Add(_appendArea);
+        }
+    }
+
+    private Border BuildTodoAppendArea()
     {
         var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
         var area = new Border
@@ -1142,33 +1174,50 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var lines = raw
+        var cleanedLines = raw
             .Replace("\r\n", "\n")
             .Replace('\r', '\n')
             .Split('\n')
             .Select(CleanPastedTodoLine)
             .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        var tooManyItems = cleanedLines.Count > MaxPastedTodoLines;
+        var textTruncated = cleanedLines.Any(line => line.Length > TodoTextMaxLength);
+        var lines = cleanedLines
+            .Take(MaxPastedTodoLines)
             .Select(LimitTodoText)
             .ToList();
 
-        if (lines.Count > MaxPastedTodoLines)
-        {
-            lines = lines.Take(MaxPastedTodoLines).ToList();
-        }
-
         if (lines.Count <= 1)
         {
+            var originalText = box.Text ?? "";
+            var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
+            var selectionLength = Math.Clamp(
+                box.SelectionLength,
+                0,
+                originalText.Length - selectionStart);
+            textTruncated |=
+                (long)originalText.Length - selectionLength + raw.Length >
+                TodoTextMaxLength;
+            ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
             return;
         }
 
         e.CancelCommand();
 
-        var originalText = box.Text ?? "";
-        var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
-        var selectionLength = Math.Clamp(box.SelectionLength, 0, originalText.Length - selectionStart);
-        var selectionEnd = selectionStart + selectionLength;
-        var prefix = originalText[..selectionStart];
-        var suffix = originalText[selectionEnd..];
+        var currentText = box.Text ?? "";
+        var currentSelectionStart = Math.Clamp(box.SelectionStart, 0, currentText.Length);
+        var currentSelectionLength = Math.Clamp(
+            box.SelectionLength,
+            0,
+            currentText.Length - currentSelectionStart);
+        var selectionEnd = currentSelectionStart + currentSelectionLength;
+        var prefix = currentText[..currentSelectionStart];
+        var suffix = currentText[selectionEnd..];
+        textTruncated |=
+            (long)prefix.Length + lines[0].Length > TodoTextMaxLength ||
+            (long)lines[^1].Length + suffix.Length > TodoTextMaxLength;
+
         var pastedItemTexts = lines.ToList();
         pastedItemTexts[0] = LimitTodoText(prefix + pastedItemTexts[0]);
         pastedItemTexts[^1] = LimitTodoText(pastedItemTexts[^1] + suffix);
@@ -1246,7 +1295,40 @@ public sealed partial class PaperWindow
             }
         }
 
+        ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
         _controller.MarkDirty();
+    }
+
+    private void ShowTodoPasteLimitNotice(bool tooManyItems, bool textTruncated)
+    {
+        if (!tooManyItems && !textTruncated)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                var messages = new List<string>(2);
+                if (tooManyItems)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteItemLimitMessage",
+                        MaxPastedTodoLines));
+                }
+                if (textTruncated)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteTextLimitMessage",
+                        TodoTextMaxLength));
+                }
+
+                PaperNoticeDialog.Show(
+                    this,
+                    Strings.Get("TodoPasteTruncatedTitle"),
+                    string.Join(Environment.NewLine, messages));
+            }),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private static string CleanPastedTodoLine(string line)
@@ -1827,13 +1909,10 @@ public sealed partial class PaperWindow
 
         ShowAppendAreaAsTrashBin(active: true, hovered: false);
 
-        if (RestrictTodoGroupDragToTrash())
-        {
-            return;
-        }
-
         var candidates = _todoRows
-            .Where(row => row.Tag is string id && id != _todoDrag.ItemId)
+            .Where(row =>
+                row.Tag is string id &&
+                !_todoGroupDragItemIds.Contains(id))
             .ToList();
 
         if (candidates.Count == 0)
@@ -2028,7 +2107,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (state.DropAtEnd)
+        if (state.DropAtEnd && _controller.State.ShowTodoBottomBar)
         {
             if (DeleteTodoGroupDragItems())
             {
@@ -2046,8 +2125,15 @@ public sealed partial class PaperWindow
 
         if (!string.IsNullOrWhiteSpace(state.TargetId))
         {
+            var draggedIds = _todoGroupDragItemIds.Count > 0
+                ? _todoGroupDragItemIds.ToArray()
+                : new[] { state.ItemId };
             ClearTodoDragGroupState();
-            MoveItem(state.ItemId, state.TargetId, state.TargetPlacement, focusDragged: true);
+            MoveItems(
+                draggedIds,
+                state.TargetId,
+                state.TargetPlacement,
+                focusItemId: state.ItemId);
             return;
         }
 
@@ -2055,52 +2141,29 @@ public sealed partial class PaperWindow
         ReconcileTodoRows(focusItemId: state.ItemId);
     }
 
-    private void MoveItem(string draggedId, string targetId, DropPlacement placement, bool focusDragged)
+    private void MoveItems(
+        IReadOnlyCollection<string> draggedIds,
+        string targetId,
+        DropPlacement placement,
+        string focusItemId)
     {
-        if (draggedId == targetId)
-        {
-            return;
-        }
-
-        var ordered = OrderedItems().ToList();
-        var originalOrder = ordered.Select(i => i.Id).ToList();
-
-        var dragged = ordered.FirstOrDefault(i => i.Id == draggedId);
-        var target = ordered.FirstOrDefault(i => i.Id == targetId);
-
-        if (dragged == null || target == null)
-        {
-            return;
-        }
-
-        ordered.Remove(dragged);
-
-        var targetIndex = ordered.IndexOf(target);
-        if (targetIndex < 0)
-        {
-            return;
-        }
-
-        if (placement == DropPlacement.After)
-        {
-            targetIndex++;
-        }
-
-        targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
-        ordered.Insert(targetIndex, dragged);
-
-        if (originalOrder.SequenceEqual(ordered.Select(i => i.Id)))
+        if (!TodoRules.TryCreateMovedOrder(
+                _paper.Items,
+                draggedIds,
+                targetId,
+                placement == DropPlacement.After,
+                out var reordered))
         {
             return;
         }
 
         PushUndoSnapshot();
-        _paper.Items = ordered;
+        _paper.Items = reordered;
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();
 
-        ReconcileTodoRows(focusItemId: focusDragged ? dragged.Id : null);
+        ReconcileTodoRows(focusItemId: focusItemId);
     }
 
     private IEnumerable<PaperItem> OrderedItems()
@@ -2417,5 +2480,25 @@ public sealed partial class PaperWindow
         }
     }
 
+private static bool TryGetTodoPastingText(
+        IDataObject dataObject,
+        out string raw)
+    {
+        raw = "";
+        try
+        {
+            raw = dataObject.GetDataPresent(DataFormats.UnicodeText)
+                ? dataObject.GetData(DataFormats.UnicodeText) as string ?? ""
+                : dataObject.GetDataPresent(DataFormats.Text)
+                    ? dataObject.GetData(DataFormats.Text) as string ?? ""
+                    : "";
+        }
+        catch
+        {
+            raw = "";
+            return false;
+        }
 
+        return raw.Length > 0;
+    }
 }

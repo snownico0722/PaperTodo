@@ -1254,6 +1254,9 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>More settings</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>Settings unavailable</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>Hide settings</value>
   </data>
@@ -1263,8 +1266,20 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>Open folder</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>Restart PaperTodo and rescan plugins</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>Restart PaperTodo</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>Restart PaperTodo to rescan and load body plugins?</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>{0} body plugins found</value>
+    <value>{0}</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>Load problems</value>
@@ -1290,6 +1305,9 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>Body plugin not found: {0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0} (disabled)</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>Body type</value>
   </data>
@@ -1298,6 +1316,12 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo built-in Markdown editing, preview, and image body.</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>Body plugin is disabled</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>{0} is disabled. Re-enable it in Settings → Plugins.</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>The body plugin could not run</value>
@@ -1359,7 +1383,10 @@ When off, open at the docked edge or remembered position.</value>
     <value>Plugin has an issue</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>Not in use</value>
+    <value>Plugin enabled, currently idle</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>Plugin disabled</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>Plugin is running</value>

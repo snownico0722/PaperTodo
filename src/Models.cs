@@ -473,6 +473,7 @@ public sealed class AppState
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public bool ShowTodoBottomBar { get; set; } = true;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
@@ -575,6 +576,9 @@ public sealed class AppState
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
+    // Host-owned plugin enablement. Disabled plugins are still discovered from plugin.json, but
+    // PaperTodo does not activate their Body, Runtime, shortcuts, or startupPaper.
+    public List<string> DisabledPluginIds { get; set; } = new();
     public bool DistinguishNumpadShortcutDigits { get; set; }
     public bool PreserveLinkedPaperHiddenStateInVisibilityShortcuts { get; set; } = true;
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer

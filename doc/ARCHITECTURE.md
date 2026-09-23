@@ -90,7 +90,7 @@ PaperTodo.exe
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
 
-启动恢复先建立已知显示器上的 Edge Host 和可见纸片。只有显示器归属尚不确定的普通纸片延后恢复，等待期间不改写其坐标；显示器稳定或限时到达后仍由既有离屏救援处理。显式显示、隐藏、删除和退出优先于迟到的恢复结果。`AppController.StartupPrewarm` 先等待既有 Markdown 预热队列的首轮完成，再在 UI Dispatcher 的低优先级短批次补建折叠纸片的完整 Shell；提前展开仍由 `EnsureShellBuilt` 当场完成所选纸片，不另建备用路径。Shell 完成 Task 供插件 startupPaper 等待，不使用 Shell-ready 轮询；插件初始化本身仍在 idle 阶段，不同步阻挡 StartAsync 返回。DComp 与拖拽的一次性可选预热保留，但不排在启动主流程返回之前。
+启动恢复以 Windows 当前报告的显示器拓扑为准。普通纸片如果坐标本身有效、但启动瞬间不属于任何已报告显示器，只做一次很短的一次性宽限：其他纸片先正常恢复，宽限后刷新一次显示器事实，再决定保留原坐标还是执行既有离屏救援；不恢复 150ms 轮询、5 秒等待或第二套拓扑状态机。Edge Host 和其余可见纸片按当前拓扑恢复。`AppController.StartupPrewarm` 先等待既有 Markdown 预热队列的首轮完成，再在 UI Dispatcher 的低优先级短批次补建折叠纸片的完整 Shell；提前展开仍由 `EnsureShellBuilt` 当场完成所选纸片，不另建备用路径。Shell 完成 Task 供插件 startupPaper 等待，不使用 Shell-ready 轮询；插件初始化本身仍在 idle 阶段，不同步阻挡 StartAsync 返回。DComp 与拖拽的一次性可选预热保留，但不排在启动主流程返回之前。
 
 正常退出先提交当前编辑并完成既有同步保存，再撤下可见 surface；撤下界面不改变持久化 IsVisible。WPF/插件 UI 仍由原 Dispatcher 释放，脚本进程的停止请求和限时等待在非 UI 任务中并发执行，与界面清理重叠，最终统一等待完成。退出不为即将销毁的图片缓存执行额外回收，也不重复提交已由 controller 保存的编辑内容。普通主实例退出在已停止 owned work 后调用 `Application.Shutdown` 并让 Dispatcher 完成 `App.OnExit`、单实例监听和应用资源清理，不再紧接着调用 `Environment.Exit` 截断 WPF 生命周期；崩溃边界和次实例转发退出保持独立。
 
@@ -137,8 +137,8 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 - 每张 Paper 的 frontend/body state 写入上限是 **10 MiB**；整个 provider 的 PluginRuntime state 写入上限是 **20 MiB**。二者是独立额度。既有超限数据仍可读取，宿主不会截断；只有新的写入会按所属层级拒绝。
 - Runtime state 若来自高于当前插件 `stateVersion` 的版本，宿主拒绝启动该 Runtime，保留原数据并把插件标记为 Issue；旧版本 state 可以由插件读取后自行迁移。
 - Body/Mini -> Runtime 消息不跨 Runtime interruption 排队。Web renderer 暂不可接收时 `runtime.post(...)` 明确失败为 `runtime_unavailable`，绝不返回成功后静默丢消息。业务重试、去重和时效判断属于插件。
-- 首次 Runtime 启动失败直接进入 `Failed`，不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后发生的 Web 后台故障仍使用既有有界恢复；恢复 Backoff 期间保留最后一次 Runtime presentation，进入最终 `Failed` 后清除动态展示。
-- `Papers.List()` 是 Runtime 启动时的全量快照；`Papers.Subscribe(...)` 只报告订阅后的增量，不为启动前已存在的 Paper 重放 `PaperAdded`。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`；启动失败、Backoff/Failed 或 Web document 不可投递期间不承诺该事件必达。
+- 首次 Runtime 启动失败直接进入 `Failed`，不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后的 Web renderer 最多先就地 reload 一次；需要宿主重建整个 Runtime 时，每个进程生命周期也只给一次立即重建机会，不使用 Backoff、失败计数或定时重试。重建期间保留最后一次 Runtime presentation，再失败则进入 `Failed` 并清除动态展示。
+- `Papers.List()` 是 Runtime 启动时的全量快照；`Papers.Subscribe(...)` 只报告订阅后的增量，不为启动前已存在的 Paper 重放 `PaperAdded`。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`；启动/重建中、`Failed` 或 Web document 不可投递期间不承诺该事件必达。
 - Todo actions 与 Top Bar labels 是 2.1 的 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。
 
 ## 4. 状态与持久化架构
