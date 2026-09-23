@@ -15,6 +15,7 @@ internal static partial class Program
         ("menu-caches-two-sta-threads", CheckSeparateUiThreads),
         ("shared-easings-worker-first", CheckFrozenEasings),
         ("menu-scale-refresh", CheckMenuScaleRefresh),
+        ("capsule-menu-focus-cleanup-boundary", CheckCapsuleMenuFocusCleanupBoundary),
         ("runtime-expired-queued-calls", CheckExpiredRuntimeCalls),
         ("runtime-list-no-presentation-side-effects", CheckRuntimeListHasNoPresentationSideEffects),
         ("runtime-capsule-publish-order", CheckCapsulePublication),
