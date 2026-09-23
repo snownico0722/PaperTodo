@@ -271,7 +271,14 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _contentRendered = true;
         if (!_disposed && _requested &&
             (_material == MicaBackdropTypes.ClearAcrylic || _material == AeroGlassMaterial))
+        {
+            var freshAero = _material == AeroGlassMaterial;
             Refresh(_requested, _dark, force: true);
+            // Existing live switches to Aero already re-apply once after changing the
+            // redirected alpha recipe. Fresh Aero reaches that same transition here, after
+            // the first opaque WPF present, so give it the same one-shot settle pass.
+            if (freshAero) QueueRefresh();
+        }
     }
 
     private void ObserveChrome(Border? chrome)
