@@ -59,9 +59,19 @@ internal static partial class Program
             Check(!window.IsShellBuilt && host.Current == null,
                 "Deferred plugin fixture must start without a body session.");
 
+            c.State.DisabledPluginIds.Add(providerId);
             window.RefreshPluginEnabledState(providerId);
-            Check(!window.IsShellBuilt && host.Current == null,
-                "Changing plugin enablement must not attach a body before deferred shell construction.");
+            Check(!window.IsShellBuilt &&
+                  host.Current == null &&
+                  ReadField<bool>(window, "_bodyDisabled"),
+                "Disabling a deferred plugin must update capsule state without attaching a body.");
+
+            c.State.DisabledPluginIds.Remove(providerId);
+            window.RefreshPluginEnabledState(providerId);
+            Check(!window.IsShellBuilt &&
+                  host.Current == null &&
+                  !ReadField<bool>(window, "_bodyDisabled"),
+                "Re-enabling a deferred plugin must restore capsule state without attaching a body.");
 
             window.EnsureShellBuilt();
             Check(window.IsShellBuilt && host.Current != null,
@@ -69,6 +79,7 @@ internal static partial class Program
         }
         finally
         {
+            c.State.DisabledPluginIds.Remove(providerId);
             window.CloseForReal();
         }
     }
