@@ -159,13 +159,19 @@ internal static class VisualChecks
             controller.State.MicaAlwaysActive = false;
             Theme.Invalidate(); window.UpdateTheme();
             window.Activate(); Wait();
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 &&
-                type == MicaBackdropTypes.ToDwmBackdrop(material) && window.IsNativeMicaEffective,
-                "selected material is active with the matching system backdrop policy");
+            var readBackdrop = DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0;
+            var adapter = (NativeMicaBackdrop)typeof(PaperWindow)
+                .GetField("_nativeMica", Program.Private)!.GetValue(window)!;
+            var adjustableMica = material == MicaBackdropTypes.Mica &&
+                adapter.GetType()
+                    .GetProperty("UsesAdjustableMicaController", Program.Private | BindingFlags.Public)?
+                    .GetValue(adapter) as bool? == true;
+            Program.Assert(readBackdrop && window.IsNativeMicaEffective &&
+                (adjustableMica || type == MicaBackdropTypes.ToDwmBackdrop(material)),
+                "selected material is active through its matching DWM policy or the active MicaController");
             AssertNoWindowRegion(hwnd);
             // Border/caption colors are documented for DwmSetWindowAttribute only; querying
             // them is not a supported readback. Check the setter result and desktop image.
-            var adapter = (NativeMicaBackdrop)typeof(PaperWindow).GetField("_nativeMica", Program.Private)!.GetValue(window)!;
             Program.Assert(adapter.LastFrameHResult >= 0,
                 $"native corner and palette settings succeed: 0x{adapter.LastFrameHResult:X8}");
             var active = Capture(window, name + "-active", white, black, dark: null);
