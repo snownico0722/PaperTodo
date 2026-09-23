@@ -142,7 +142,7 @@ internal static class Program
                 f.Backdrop.Dispose();
                 Assert(!f.Api.ClearAcrylic, "disposal removes accent");
             });
-            Check("fresh Aero waits for the first WPF present", () =>
+            Check("fresh Aero republishes after the first WPF present", () =>
             {
                 var chrome = Fixture.NewChrome();
                 var window = new Window
@@ -157,26 +157,31 @@ internal static class Program
                     ShowInTaskbar = false
                 };
                 var api = new FakeNative();
+                var rendered = false;
+                var invalidationsAtRendered = -1;
+                // Register before the adapter so this observes the boundary immediately before
+                // NativeMicaBackdrop handles the same first ContentRendered event.
+                window.ContentRendered += (_, _) =>
+                {
+                    rendered = true;
+                    invalidationsAtRendered = api.ContentInvalidations;
+                };
                 using var backdrop = new NativeMicaBackdrop(
                     window,
                     () => chrome,
                     () => true,
                     brush => chrome.Background = brush,
                     api);
-                var rendered = false;
-                window.ContentRendered += (_, _) => rendered = true;
                 try
                 {
-                    // Store the requested recipe before HWND creation. SourceInitialized must not
-                    // make a fresh redirected surface transparent before WPF publishes content.
                     backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial, force: true);
                     window.Show();
-                    Assert(rendered || !backdrop.IsActive,
-                        "fresh Aero cannot activate before the first WPF content present");
                     Pump();
                     Assert(rendered && backdrop.IsActive && api.Alpha &&
                         Transparent(chrome.Background),
-                        "fresh Aero activates after WPF has published the redirected bitmap");
+                        "fresh Aero is transparent on its first real WPF presentation");
+                    Assert(api.ContentInvalidations > invalidationsAtRendered,
+                        "fresh Aero republishes the complete redirected bitmap after ContentRendered");
                 }
                 finally
                 {
@@ -452,7 +457,7 @@ internal static class Program
         public bool TransparencyEnabled { get; set; } = true;
         public bool HighContrast { get; set; }
         internal bool Layered, Dark, Alpha, Rounded, NonClientActive, ClearAcrylic, Glass, RedirectionAlpha;
-        internal int ActivationCalls, AccentState;
+        internal int ActivationCalls, AccentState, ContentInvalidations;
         internal string? Failure;
         internal int Backdrop = 1, BackdropCalls, BorderColor, CaptionColor, FrameTop;
         public bool IsLayered(IntPtr hwnd) => Layered;
@@ -472,7 +477,7 @@ internal static class Program
             ClearAcrylic = enabled; AccentState = enabled ? 4 : 0; return 0;
         }
         public int EnableAlpha(IntPtr hwnd) { Assert(!ClearAcrylic, "alpha fallback must not retain accent Acrylic"); Alpha = true; return 0; }
-        public void InvalidateContent(IntPtr hwnd) { }
+        public void InvalidateContent(IntPtr hwnd) => ContentInvalidations++;
         public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) { if (Failure == "redirection-unsupported") return Error; RedirectionAlpha = enabled; return 0; }
         public int DisableAlpha(IntPtr hwnd) { if (Failure == "alpha-disable") return Error; Alpha = false; return 0; }
         public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor)
