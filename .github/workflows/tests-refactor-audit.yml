@@ -20,12 +20,6 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Validate one-off editor
         shell: python
         run: |
@@ -42,10 +36,10 @@ jobs:
                   if b <= a: raise RuntimeError('Method tail not found')
                   return text[:a] + text[b:]
           '''
-          # Preserve the literal newline escape inside the generated Python helper.
           new = new.replace("text.rfind('\n    }')", "text.rfind('\\n    }')")
           if source.count(old) != 1: raise RuntimeError('One-off helper not unique')
           source = source.replace(old, new, 1)
+          source = source.replace('if text.count(start) != 1 or text.count(end) != 1:', 'if start not in text or text.count(end) != 1:')
           ast.parse(source)
           path.write_text(source, encoding='utf-8', newline='\n')
       - name: Apply reviewed one-off edits
@@ -63,6 +57,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
           git push origin HEAD:refs/heads/refactor/tests-behavior-and-tools
           if ($LASTEXITCODE -ne 0) { throw 'Branch advanced or push failed; stop without overwriting.' }
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Build Release
         run: dotnet build PaperTodo.csproj -c Release
       - name: Build Debug
