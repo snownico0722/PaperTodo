@@ -47,12 +47,14 @@ jobs:
         run: |
           python .github/scripts/refactor_tests_once.py
           if ($LASTEXITCODE -ne 0) { throw 'One-off edit failed; nothing will be pushed.' }
+          # Workflow writes use the authorized GitHub connector, not this job's limited token.
+          git restore --source=HEAD -- .github/workflows/edge-diagnostics-checks.yml .github/workflows/persistence-checks.yml .github/workflows/plugin-samples.yml .github/workflows/pull-request-build.yml
+          if ($LASTEXITCODE -ne 0) { throw 'Could not leave workflow files untouched.' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Patch whitespace check failed.' }
-          git diff --stat
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add tests tools src .github
+          git add tests tools src .github/scripts/refactor_tests_once.py
           git commit -m 'refactor: keep behavior checks and separate test tooling'
           if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
           git push origin HEAD:refs/heads/refactor/tests-behavior-and-tools
