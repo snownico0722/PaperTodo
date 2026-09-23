@@ -154,12 +154,25 @@ internal static class MaterialPresentationChecks
         var master = new MasterCapsuleWindow(controller, EdgeCapsuleEdge.Left, "");
         GetCursorPos(out var cursor);
         ContextMenu? menu = null;
+        Window? outside = null;
         RoutedEventHandler? opened = null;
         EventHandler? rendered = null;
         var observedFrames = 0;
         try
         {
             master.ShowPlaced(1, false, false); Wait(120);
+            outside = new Window
+            {
+                Width = 120,
+                Height = 80,
+                Left = master.Left + master.Width + 180,
+                Top = master.Top + 100,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                Topmost = true,
+                Content = new Border { Background = Brushes.DimGray }
+            };
+            outside.Show(); Wait(60);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
             opened = (_, _) =>
@@ -212,7 +225,21 @@ internal static class MaterialPresentationChecks
                         Program.Assert(surface.MenuFallbackRenderCount == 0,
                             $"master {skin}/{theme}: transparent material has no plain-paper fallback frame");
                     Program.Assert(menu.Opacity == 1, "master menu never hides content with a foreground opacity fade");
-                    menu.IsOpen = false; Wait(80);
+                    if (theme == "light" && skin == PaperSkins.Mica && attempt == 0)
+                    {
+                        var outsidePoint = outside!.PointToScreen(new Point(
+                            outside.ActualWidth / 2,
+                            outside.ActualHeight / 2));
+                        SetCursorPos((int)outsidePoint.X, (int)outsidePoint.Y); Wait(30);
+                        mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                        Until(() => !menu.IsOpen, "actual outside click closes MASTER material menu");
+                    }
+                    else
+                    {
+                        menu.IsOpen = false;
+                    }
+                    Wait(80);
                 }
             }
         }
@@ -224,6 +251,7 @@ internal static class MaterialPresentationChecks
                 if (opened != null) menu.Opened -= opened;
                 menu.IsOpen = false;
             }
+            outside?.Close();
             master.CloseForReal(); SetCursorPos(cursor.X, cursor.Y);
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
                 controller.State.MatchAuxiliaryMaterialStrength) = original;
