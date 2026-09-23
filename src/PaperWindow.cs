@@ -683,7 +683,6 @@ public sealed partial class PaperWindow : Window
         _deepCapsuleContextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
             paper.Id,
-            Dispatcher,
             OnDeepCapsuleContextMenuOpenChanged);
         InitializePaperPresentationState();
 
