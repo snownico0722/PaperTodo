@@ -79,9 +79,20 @@ internal sealed partial class SkinBorder
                 };
                 _aeroReflection.Transform = _reflectionShift;
                 _shine = _aeroReflection;
+                // Low-transparency Aero is intentionally denser, but complex desktop content
+                // can still fight the foreground. Add only a tiny readability underlay there;
+                // Medium/High/VeryHigh retain the existing baseline so the glass does not drift
+                // toward Acrylic as transparency increases.
+                var readabilityAlpha = MaterialTransparencyLevels.Normalize(
+                    AppController.Current?.State.MaterialTransparency) switch
+                {
+                    MaterialTransparencyLevels.VeryLow => _dark ? (byte)22 : (byte)30,
+                    MaterialTransparencyLevels.Low => _dark ? (byte)17 : (byte)24,
+                    _ => _dark ? (byte)12 : (byte)18
+                };
                 _aeroReadabilityVeil = Frozen(new SolidColorBrush(_dark
-                    ? Color.FromArgb(12, 0, 0, 0)
-                    : Color.FromArgb(18, 255, 255, 255)));
+                    ? Color.FromArgb(readabilityAlpha, 0, 0, 0)
+                    : Color.FromArgb(readabilityAlpha, 255, 255, 255)));
                 break;
             case PaperSkins.Pixel:
                 // Pixel identity comes from geometry/icons. Keep only a light retro bias so

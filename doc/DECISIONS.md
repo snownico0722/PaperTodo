@@ -63,6 +63,7 @@
 | D-052 | 实际辅助窗口背景处理与材质清理 | Partially superseded by D-053 | 主题 / Rendering |
 | D-053 | 材质绘制、原生背景与可选采样职责收敛 | Partially superseded by D-054 | 主题 / Rendering |
 | D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
+| D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 
 ## 维护规则
 
@@ -1703,3 +1704,32 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 **Ownership / settings:** 删除 `LiveBackgroundProcessing`、`appearance.live_background_processing` 与对应 UI 开关；静态快照是需要软件背景材质的实现细节，不再作为用户可切换的实时处理模式。截图只存在于本进程内存，不保存或上传。材质透明度是独立设置，只改变材质覆盖/染色强度，不使用 `Window.Opacity`，不让正文、控件、Aero 反光、relief 或描图纸纤维一起消失。
 
 **Validation:** `DesktopBackgroundCapture` 必须是 one-shot capture，不存在 polling loop、motion wake-up 或 change detection；`MaterialDragChecks` 验证静止快照移动时只重投影、拖动纹理为 50% 虚拟桌面且已预模糊、拖动结束只补一次最终局部快照。真实鼠标拖动基准额外验证按键尚未释放时 sampled capsule 已进入 drag snapshot 状态，防止异步截图直到 `DragMove` 返回后才发布的假实现。
+
+
+---
+
+## D-055 — Aero 不采用 `ACCENT_ENABLE_BLURBEHIND` 原生模糊（2026-09-23）
+
+**Status:** Rejected
+
+**Context / Why:** Aero 清透路线在高背景复杂度下可读性有限，因此尝试避免重新引入截图 worker，优先让 Windows compositor 直接完成实时背景模糊。现有 `DwmMicaApi` 已经通过 `SetWindowCompositionAttribute` 使用 AccentPolicy state 4 实现 Clear Acrylic，因此实验复用同一封装，将 Aero 改为 `ACCENT_ENABLE_BLURBEHIND`（state 3），并保留 PaperTodo 自己的 tint、readability veil、reflection 与 relief。
+
+**Experiment:** state 3 在接口层能够成功安装，Aero / Acrylic / Clear Acrylic 的切换、失败回退和同 HWND 热切换测试也能通过。随后又单独试过把 Aero 从 Windows 11 的 `DWMWA_REDIRECTIONBITMAP_ALPHA` 路径隔离，避免两种合成机制互相干扰。
+
+**Result / Pitfall:** HRESULT 成功不代表真实桌面像素已经进入模糊背景。真实窗口像素验证中，Aero 后方分别放置白色与蓝色窗口时，state 3 路线得到的前景仍是近似相同的深灰底（实验记录中两种后景均约为 `Color [61,64,68]`），说明当前 **WPF + WindowChrome + 自定义透明内容** 组合没有可靠采样真实后方窗口。去掉 redirection alpha 后仍未通过真实像素验证，因此不能把“AccentPolicy 调用成功”当作可用材质证据。
+
+**Decision:** 当前 PaperTodo 不采用 state 3 作为 Aero 背景模糊实现，恢复既有 clear-alpha Aero。若未来重新需要实时模糊，必须先在与 PaperTodo 相同的 HWND / WindowChrome / WPF 内容结构上通过“不同真实后景产生不同最终像素”的验收；否则优先使用 PaperTodo 自己显式拥有的静态/低频背景采样，而不是继续叠加未验证的 compositor recipe。
+
+**Rejected / Do not reintroduce:**
+
+- 不因为 `SetWindowCompositionAttribute` 返回成功就认定 BlurBehind 工作正常。
+- 不在没有真实后景像素对照的情况下重新接入 state 3。
+- 不把 state 3 与 `DWMWA_REDIRECTIONBITMAP_ALPHA` 的组合继续扩展成另一套恢复/自愈体系。
+- 若重新实验，失败实现仍应撤回，只保留结论与最小证据。
+
+**Evidence:**
+
+- `c1e92b6413578971d4af690b435d215f907a9583` — 首次将 Aero 切到 AccentPolicy state 3。
+- `903d3a4ec2a34656b8e4b9954455c2203bd203e7` / `21e09d4b30c6f72347597dc6582725eb98d87bf5` — 隔离 redirection alpha 并做真实材质验证。
+- `b93efc3b369e231070198146a44468962427d5f0` — 撤回失败的 BlurBehind 产品实现。
+- `tests/PaperTodo.MicaChecks/MaterialStudyChecks.cs` — 真实后景像素对照边界。
