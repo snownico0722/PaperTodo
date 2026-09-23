@@ -173,7 +173,9 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         // Match the published WPF/Win32 Windows App SDK interop sample exactly at the ABI:
         // preserve HRESULT, receive the raw IInspectable pointer, then project with FromAbi.
         // This avoids relying on COM marshalling a WinRT class through an out parameter.
-        var hr = interop.CreateDesktopWindowTarget(hwnd, true, out var targetAbi);
+        // The backdrop must sit behind WPF's redirected content. A topmost target covers
+        // the retained WPF scene and turns the whole paper into an opaque Mica slab.
+        var hr = interop.CreateDesktopWindowTarget(hwnd, false, out var targetAbi);
         if (hr < 0) Marshal.ThrowExceptionForHR(hr);
         if (targetAbi == IntPtr.Zero)
             throw new COMException("CreateDesktopWindowTarget returned a null target.", hr);
