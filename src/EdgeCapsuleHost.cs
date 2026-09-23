@@ -142,7 +142,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         CloseArea = closeArea;
         CloseGlyph = closeGlyph;
         Label = label;
-
     }
 
     public bool IsVisible => !_disposed && Window.IsVisible;
