@@ -392,7 +392,14 @@ internal static class VisualChecks
         Program.Assert(chrome.Margin == new Thickness(0) && chrome.Effect == null, "no inset or WPF outer shadow");
         Program.Assert(chrome.BorderBrush is SolidColorBrush { Color.A: 0 }, "no second WPF outline inside the native corners");
         Program.Assert(hwnd == new WindowInteropHelper(window).Handle && ReferenceEquals(body, chrome.Child), "stable HWND and editor tree");
-        Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 2, "actual Mica, not Acrylic or a painted imitation");
+        var dwmMica = DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 2;
+        var adapter = (NativeMicaBackdrop?)typeof(PaperWindow)
+            .GetField("_nativeMica", Program.Private)!.GetValue(window);
+        var adjustableMica = adapter?.GetType()
+            .GetProperty("UsesAdjustableMicaController", Program.Private | BindingFlags.Public)?
+            .GetValue(adapter) as bool? == true;
+        Program.Assert(dwmMica || adjustableMica,
+            "actual Mica must come from DWM type 2 or the active MicaController, never Acrylic or a painted imitation");
         Program.Assert(GetWindowRect(hwnd, out var bounds), "window bounds");
         var clientOrigin = window.PointToScreen(new Point(0, 0));
         Program.Assert(Math.Abs(clientOrigin.X - bounds.Left) <= 1 && Math.Abs(clientOrigin.Y - bounds.Top) <= 1,
