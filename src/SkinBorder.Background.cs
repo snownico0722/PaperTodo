@@ -24,11 +24,14 @@ internal sealed partial class SkinBorder
         _materialHost?.OpacityOwners ?? Array.Empty<UIElement>();
     internal bool HasMaterialHostSubscription => _materialHost?.IsObserving == true;
     private ContainerVisual? BackgroundVisual => _background?.Visual;
+    private bool FullAuxiliaryMaterial =>
+        AppController.Current?.State.MatchAuxiliaryMaterialStrength == true;
     private bool RequestsSampledBackground => !IsOutline && !UseLightweightMaterial &&
-        !SuppressStaticBackgroundForOpening && IsAuxiliary && PaperSkins.UsesSampledAuxiliary(Skin);
+        !SuppressStaticBackgroundForOpening && IsAuxiliary && FullAuxiliaryMaterial &&
+        PaperSkins.UsesSampledAuxiliary(Skin);
     private bool IsMaterialHostVisible => _materialHost?.IsVisible == true;
-    private bool HasAuxiliaryTransmission => IsAuxiliary && Skin == PaperSkins.Aero &&
-        !_highContrast && DwmMicaApi.Instance.EffectsEnabled &&
+    private bool HasAuxiliaryTransmission => IsAuxiliary && FullAuxiliaryMaterial &&
+        Skin == PaperSkins.Aero && !_highContrast && DwmMicaApi.Instance.EffectsEnabled &&
         (IsMenu || IsLoaded && IsVisible && IsMaterialHostVisible);
 
     protected override int VisualChildrenCount => base.VisualChildrenCount + (BackgroundVisual == null ? 0 : 1);

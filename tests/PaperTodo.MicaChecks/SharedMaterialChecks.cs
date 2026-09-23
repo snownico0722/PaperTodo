@@ -103,11 +103,11 @@ internal static class SharedMaterialChecks
             Wait(60);
             var quiet = Snapshot(surface);
             Program.Assert(
+                !surface.IsBackgroundActive &&
                 !surface.HasBackgroundCapture &&
-                ReferenceEquals(firstBitmap, surface.BackgroundSessionState!.Bitmap) &&
                 surface.MaterialStrength == .4 &&
                 PixelDifference(full, quiet) > 500,
-                "quiet/full material changes only the finish over the same frozen background");
+                "full-material OFF removes sampled transmission and keeps an opaque quiet surface");
             CheckPaperDistance(full, quiet, surface, "Acrylic capsule");
 
             surface.UseLightweightMaterial = true;
@@ -131,7 +131,12 @@ internal static class SharedMaterialChecks
             window.Width = 360;
             window.UpdateLayout();
             surface.UseLightweightMaterial = false;
-            Ready(surface, previewFrames, "leaving preview takes one fresh local snapshot");
+            Wait(60);
+            Program.Assert(!surface.IsBackgroundActive && !surface.HasBackgroundCapture,
+                "leaving preview while full material is off stays opaque and capture-free");
+            controller.State.MatchAuxiliaryMaterialStrength = true;
+            surface.RefreshSkin();
+            Ready(surface, previewFrames, "enabling full material takes one fresh local snapshot");
             Program.Assert(
                 new WindowInteropHelper(window).Handle == hwnd &&
                 ReferenceEquals(surface.Child, marker) &&
@@ -209,19 +214,26 @@ internal static class SharedMaterialChecks
                 menuSurface.BackgroundFrameCount == menuFrames,
                 "open menu keeps the same background snapshot while desktop content changes");
 
-            foreach (var fullStrength in new[] { false, true })
-            {
-                controller.State.MatchAuxiliaryMaterialStrength = fullStrength;
-                SkinBorder.RefreshLoadedSurfaces();
-                Wait(60);
-                Program.Assert(
-                    !menuSurface.HasBackgroundCapture &&
-                    !surface.HasBackgroundCapture &&
-                    menuSurface.MaterialStrength == (fullStrength ? 1 : .4) &&
-                    ReferenceEquals(menuBitmap, menuSurface.BackgroundSessionState!.Bitmap),
-                    "menu strength changes reuse the exact prepared snapshot");
-                Save(Render(menuSurface), $"static-menu-{fullStrength}");
-            }
+            controller.State.MatchAuxiliaryMaterialStrength = false;
+            SkinBorder.RefreshLoadedSurfaces();
+            Wait(60);
+            Program.Assert(
+                !menuSurface.IsBackgroundActive &&
+                !menuSurface.HasBackgroundCapture &&
+                menuSurface.MaterialStrength == .4,
+                "full-material OFF makes the open menu opaque and releases its snapshot");
+            Save(Render(menuSurface), "static-menu-false");
+
+            menu.IsOpen = false;
+            Wait(80);
+            controller.State.MatchAuxiliaryMaterialStrength = true;
+            menu.IsOpen = true;
+            Until(() => menu.IsOpen, "root menu reopens with full material");
+            Wait(80);
+            menuSurface = Find<SkinBorder>(menu)!;
+            Program.Assert(menuSurface.FirstMenuRenderUsedBackground && menuSurface.IsBackgroundActive,
+                "full material restores the prepared menu snapshot path");
+            menuHwnd = ((HwndSource)PresentationSource.FromVisual(menuSurface)!).Handle;
 
             parent.IsSubmenuOpen = true;
             Until(() => parent.IsSubmenuOpen, "submenu opens");
@@ -257,31 +269,28 @@ internal static class SharedMaterialChecks
                 PaperSkins.TracingPaper
             })
             {
+                controller.State.MatchAuxiliaryMaterialStrength = true;
                 controller.State.PaperSkin = skin;
                 Theme.Invalidate();
                 var framesBefore = surface.BackgroundFrameCount;
                 surface.RefreshSkin();
                 if (!surface.IsBackgroundActive)
                     Ready(surface, framesBefore, skin + " takes a static snapshot");
-                var bitmap = surface.BackgroundSessionState!.Bitmap;
 
-                controller.State.MatchAuxiliaryMaterialStrength = true;
-                surface.RefreshSkin();
-                Wait(40);
                 full = Snapshot(surface);
                 controller.State.MatchAuxiliaryMaterialStrength = false;
                 surface.RefreshSkin();
                 Wait(40);
                 quiet = Snapshot(surface);
                 Program.Assert(
-                    surface.IsBackgroundActive &&
+                    !surface.IsBackgroundActive &&
                     !surface.HasBackgroundCapture &&
-                    ReferenceEquals(bitmap, surface.BackgroundSessionState!.Bitmap) &&
                     PixelDifference(full, quiet) > 500,
-                    $"{skin}: recipe/strength changes keep one frozen sampled scene");
+                    $"{skin}: full-material OFF drops sampled transmission");
                 CheckPaperDistance(full, quiet, surface, skin);
             }
 
+            controller.State.MatchAuxiliaryMaterialStrength = true;
             controller.State.PaperSkin = PaperSkins.Aero;
             Theme.Invalidate();
             surface.RefreshSkin();

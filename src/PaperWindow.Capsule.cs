@@ -43,7 +43,8 @@ public sealed partial class PaperWindow
     private void BeginCapsuleDragBackground(IntPtr excludeHwnd)
     {
         EndCapsuleDragBackground();
-        if (!PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
+        if (!_controller.State.MatchAuxiliaryMaterialStrength ||
+            !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
             SystemParameters.HighContrast ||
             !DwmMicaApi.Instance.EffectsEnabled)
         {

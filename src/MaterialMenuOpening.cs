@@ -91,13 +91,16 @@ internal sealed class MaterialMenuOpening
         public void Dispose() { if (_disposed) return; _disposed = true; _source.Dispose(); }
     }
 
-    internal static bool NeedsBackground => PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
+    internal static bool NeedsBackground =>
+        AppController.Current?.State.MatchAuxiliaryMaterialStrength == true &&
+        PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
         !SystemParameters.HighContrast && DwmMicaApi.Instance.CompositionEnabled && DwmMicaApi.Instance.TransparencyEnabled;
 
     // Aero has no software background capture, but a system popup Fade exposes its
     // solid template fallback before the transparent shell is painted. Suppress only
     // the popup animation; Aero still opens immediately and never waits for capture.
     internal static bool SuppressPopupAnimation => NeedsBackground ||
+        AppController.Current?.State.MatchAuxiliaryMaterialStrength == true &&
         Theme.Skin == PaperSkins.Aero && !SystemParameters.HighContrast && DwmMicaApi.Instance.EffectsEnabled;
 
     internal MaterialMenuOpening(FrameworkElement owner, DependencyProperty isOpen, Func<FrameworkElement?> content,

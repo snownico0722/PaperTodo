@@ -34,7 +34,7 @@ internal static class MaterialPaletteChecks
                     if (!PaperSkins.UsesNativeBackdrop(skin)) continue;
                     var surface = new SkinBorder { IsCapsule = true, UseLightweightMaterial = true,
                         Background = Theme.PaperBrush, CornerRadius = new CornerRadius(8) };
-                    Color? first = null;
+                    Color? firstFull = null;
                     foreach (var size in new[] { new Size(200, 80), new Size(450, 300), new Size(620, 480) })
                     foreach (var full in new[] { false, true })
                     {
@@ -44,9 +44,17 @@ internal static class MaterialPaletteChecks
                         image.Render(surface);
                         var pixel = new byte[4]; image.CopyPixels(new Int32Rect((int)size.Width/2, (int)size.Height/2, 1, 1), pixel, 4, 0);
                         var color = Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
-                        first ??= color;
-                        Program.Assert(color == first && color.A == (dark ? 248 : 244),
-                            $"{skin}/{scheme}: preview hue and alpha fixed across size and full/quiet modes");
+                        if (full)
+                        {
+                            firstFull ??= color;
+                            Program.Assert(color == firstFull && color.A == (dark ? 248 : 244),
+                                $"{skin}/{scheme}: full preview hue and alpha stay stable across size");
+                        }
+                        else
+                        {
+                            Program.Assert(color.A == 255,
+                                $"{skin}/{scheme}: full-material OFF makes the preview opaque");
+                        }
                     }
                 }
                 if (scheme != ColorSchemes.Neutral) Program.Assert(surfaces.Count >= 4,
@@ -76,8 +84,8 @@ internal static class MaterialPaletteChecks
                     Program.Assert(alphas.SequenceEqual(new byte[] { 206, 179, 152, 125, 98 }),
                         "tracing paper shifts every level one transparency step lighter");
                 if (skin == PaperSkins.Aero)
-                    Program.Assert(alphas.SequenceEqual(new byte[] { 68, 63, 58, 52, 47 }),
-                        "Aero shifts every level four transparency steps heavier");
+                    Program.Assert(alphas.SequenceEqual(new byte[] { 90, 74, 58, 42, 26 }),
+                        "Aero keeps Medium and spreads the five transparency levels farther apart");
             }
             controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
             Theme.Invalidate();
@@ -124,7 +132,6 @@ internal static class MaterialPaletteChecks
                 Program.Assert(Center(quietPixel).A == 255,
                     "Pixel quiet active capsule keeps an opaque surface instead of fading the bitmap alpha");
 
-                controller.State.MatchAuxiliaryMaterialStrength = true;
                 foreach (var materialSkin in new[]
                 {
                     PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic,
@@ -132,6 +139,7 @@ internal static class MaterialPaletteChecks
                 })
                 {
                     controller.State.PaperSkin = materialSkin;
+                    controller.State.MatchAuxiliaryMaterialStrength = false;
                     Theme.Invalidate();
                     var activeMaterial = new SkinBorder
                     {
@@ -139,6 +147,15 @@ internal static class MaterialPaletteChecks
                         Background = Brushes.Transparent, BorderThickness = new Thickness(),
                         CornerRadius = new CornerRadius(8)
                     };
+                    activeMaterial.IsEdgeActiveMaterial = false;
+                    var opaqueResting = Center(activeMaterial).A;
+                    activeMaterial.IsEdgeActiveMaterial = true;
+                    var opaqueActive = Center(activeMaterial).A;
+                    Program.Assert(opaqueResting == 255 && opaqueActive == 255,
+                        $"{materialSkin}: full-material OFF has no transmission or active alpha compensation");
+
+                    controller.State.MatchAuxiliaryMaterialStrength = true;
+                    activeMaterial.RefreshSkin();
                     activeMaterial.IsEdgeActiveMaterial = false;
                     var restingAlpha = Center(activeMaterial).A;
                     activeMaterial.IsEdgeActiveMaterial = true;

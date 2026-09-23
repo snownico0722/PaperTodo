@@ -32,7 +32,10 @@ internal sealed partial class SkinBorder
         _aeroReadabilityVeil = Brushes.Transparent;
         if (UseLightweightMaterial && PaperSkins.UsesNativeBackdrop(Skin))
         {
-            _fill = Frozen(new SolidColorBrush(palette.Preview));
+            var preview = palette.Preview;
+            if (IsAuxiliary && AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
+                preview = Color.FromArgb(255, preview.R, preview.G, preview.B);
+            _fill = Frozen(new SolidColorBrush(preview));
             _shine = _header = Brushes.Transparent;
             return;
         }
@@ -135,8 +138,13 @@ internal sealed partial class SkinBorder
     }
     private byte EffectiveTransmissionAlpha(bool opaque, byte alpha)
     {
-        if (opaque || !IsEdgeActiveMaterial || MaterialStrength < .999)
-            return opaque ? (byte)255 : alpha;
+        if (opaque) return 255;
+        // Full material OFF means no transmission at all for capsule/menu surfaces.
+        // In particular DockedActive must not receive any separate alpha compensation.
+        if (IsAuxiliary && AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
+            return 255;
+        if (!IsEdgeActiveMaterial)
+            return alpha;
 
         // DockedActive is a layered simulation rather than the expanded DWM surface.
         // A small per-material density lift keeps "full material" visually coherent without

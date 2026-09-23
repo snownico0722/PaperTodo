@@ -37,14 +37,17 @@ internal static class MaterialPresentationChecks
                 "large static snapshots downsample only to the bounded pixel budget");
         }
 
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations);
+        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
+            controller.State.MatchAuxiliaryMaterialStrength);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
         try
         {
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
-            controller.State.EnableAnimations = false; Theme.Invalidate();
+            controller.State.EnableAnimations = false;
+            controller.State.MatchAuxiliaryMaterialStrength = true;
+            Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
@@ -99,7 +102,8 @@ internal static class MaterialPresentationChecks
             if (menu != null) menu.IsOpen = false;
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations) = saved;
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
+                controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
     }
