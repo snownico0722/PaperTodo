@@ -30,6 +30,7 @@ internal static class MaterialRefactorChecks
             controller.State.MatchAuxiliaryMaterialStrength = false;
             CheckPaintCaches(controller);
             CheckNativeIsolation(controller);
+            controller.State.MatchAuxiliaryMaterialStrength = true;
             CheckOpeningRequests(controller);
         }
         finally
