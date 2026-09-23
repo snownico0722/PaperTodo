@@ -65,7 +65,9 @@ var uiLanguage = context.UiLanguage;
 
 ## Web 插件读取当前语言
 
-Body、Mini、provider Runtime 和 Web Popup 的 `initialize` 消息都会包含 `uiLanguage`，值与 Native 的 `context.UiLanguage` 一致：
+Body、Mini、provider Runtime 和 Web Popup 的 `initialize` 消息都会包含 `uiLanguage`，值与 Native 的 `context.UiLanguage` 一致。
+
+Body、Mini 和 provider Runtime 可以从宿主事件读取：
 
 ```js
 window.addEventListener('papertodo', event => {
@@ -73,6 +75,13 @@ window.addEventListener('papertodo', event => {
   if (message.type !== 'initialize') return;
   const uiLanguage = message.uiLanguage || 'en-US';
 });
+```
+
+Web Popup 通过自己的 ready bridge 读取同一字段：
+
+```js
+const message = await window.papertodo.ready;
+const uiLanguage = message.uiLanguage || 'en-US';
 ```
 
 插件应优先使用宿主提供的 `uiLanguage`，不要依赖 WebView 或系统浏览器语言来判断 PaperTodo 当前界面语言。
