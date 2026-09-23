@@ -930,12 +930,25 @@ public sealed partial class PaperWindow
     {
         if (_paper.Type != PaperTypes.Note ||
             IsClosed ||
-            !IsShellBuilt ||
             !string.Equals(
                 NormalizeBodyProviderId(_paper.BodyProviderId),
                 providerId,
                 StringComparison.Ordinal))
         {
+            return;
+        }
+
+        if (!IsShellBuilt)
+        {
+            _bodyDisabled = !_controller.IsPluginEnabled(providerId);
+            if (_bodyDisabled)
+            {
+                _pluginDisplayTitle = string.Empty;
+                _pluginCapsulePresentation = null;
+                ResetPluginCapsuleCustomViews();
+                ResetPluginMiniViewCache();
+            }
+            RefreshDeepCapsuleSlotLabel();
             return;
         }
 
