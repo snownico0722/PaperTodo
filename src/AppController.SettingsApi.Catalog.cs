@@ -27,7 +27,6 @@ public sealed partial class AppController
         yield return DefineSetting<bool>("general.tooltips",
             () => State.EnableToolTips,
             value => State.EnableToolTips = value,
-            SettingEffects.ToolTips,
             title: Strings.Get("SettingsEnableToolTips"));
         yield return DefineSetting<bool>("appearance.animations",
             () => State.EnableAnimations,

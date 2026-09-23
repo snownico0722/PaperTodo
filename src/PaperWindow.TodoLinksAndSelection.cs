@@ -1334,4 +1334,31 @@ public sealed partial class PaperWindow
                 MessageBoxImage.Warning);
         }
     }
+
+
+    public void RefreshLinkedPaperRows(string? paperId)
+    {
+        if (_paper.Type != PaperTypes.Todo ||
+            _todoPanel == null ||
+            string.IsNullOrWhiteSpace(paperId))
+        {
+            return;
+        }
+
+        var affectedItemIds = _paper.Items
+            .Where(item => string.Equals(
+                item.LinkedPaperId,
+                paperId,
+                StringComparison.Ordinal))
+            .Select(item => item.Id)
+            .ToArray();
+        if (affectedItemIds.Length == 0)
+        {
+            return;
+        }
+
+        ReconcileTodoRows(
+            affectedItemIds,
+            CurrentFocusedTodoItemId());
+    }
 }

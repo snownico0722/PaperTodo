@@ -13,7 +13,7 @@ public sealed partial class AppController
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, ToolTips, Animations, Theme, Typography, Markdown,
+        None, Advanced, Telemetry, Animations, Theme, Typography, Markdown,
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen, Resize,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
@@ -211,7 +211,6 @@ public sealed partial class AppController
             case SettingEffects.Telemetry: TelemetryService.SetEnabled(State.TelemetryEnabled); break;
             case SettingEffects.Theme: RefreshThemeSurfaces(); break;
             case SettingEffects.Typography: RefreshPublicSettingsTypography(); break;
-            case SettingEffects.ToolTips: RefreshToolTipSetting(); break;
             case SettingEffects.Animations:
                 if (!State.EnableAnimations)
                 {

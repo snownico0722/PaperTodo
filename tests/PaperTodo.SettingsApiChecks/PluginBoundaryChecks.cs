@@ -589,14 +589,23 @@ internal static partial class Program
             Invoke(c, "RetryFailedPluginRuntimeAfterSettingsChanged", id);
             Check(slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Running",
                 "An explicit settings change can start a previously failed runtime.");
+
             var runtimeId = (Guid)slot.GetType().GetProperty("RuntimeId")!.GetValue(slot)!;
-            BoundaryRuntimePlugin.Fail = true;
             var before = BoundaryRuntimePlugin.Starts;
             Invoke(c, "RequestPluginRuntimeRestart", runtimeId, id);
-            await Task.Delay(1300);
+            await Task.Delay(250);
             Check(BoundaryRuntimePlugin.Starts == before + 1 &&
-                  slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Backoff",
-                "Recovery requested after successful running still uses the existing bounded retries.");
+                  slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Running",
+                "A running runtime failure gets one immediate automatic rebuild.");
+
+            var recoveredRuntimeId =
+                (Guid)slot.GetType().GetProperty("RuntimeId")!.GetValue(slot)!;
+            before = BoundaryRuntimePlugin.Starts;
+            Invoke(c, "RequestPluginRuntimeRestart", recoveredRuntimeId, id);
+            await Task.Delay(250);
+            Check(BoundaryRuntimePlugin.Starts == before &&
+                  slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Failed",
+                "A second running failure stops instead of entering another retry cycle.");
         }
         finally
         {

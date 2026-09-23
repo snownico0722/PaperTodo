@@ -681,11 +681,7 @@ public sealed partial class PaperWindow : Window
         InitializePaperPresentationState();
 
         ConfigureWindow();
-        if (deferShellConstruction)
-        {
-            UpdateToolTipSetting();
-        }
-        else
+        if (!deferShellConstruction)
         {
             EnsureShellBuilt();
         }
@@ -782,7 +778,6 @@ public sealed partial class PaperWindow : Window
         Dispatcher.VerifyAccess();
         BuildShell();
         _isShellBuilt = true;
-        UpdateToolTipSetting();
         RefreshExperimentalOpacity(animate: false);
         UpdateExperimentalFocusPresentationSettings();
         UpdateAdvancedInteractionLockVisuals();
@@ -810,12 +805,6 @@ public sealed partial class PaperWindow : Window
         CloseExpandedDeepCapsuleSlotHostForReal();
 
         Close();
-    }
-
-    public void UpdateToolTipSetting()
-    {
-        ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
-        _edgeCapsuleHost?.ApplyToolTipSetting(_controller.State.EnableToolTips);
     }
 
     public void UpdateWindowSwitcherVisibility()
@@ -3631,6 +3620,29 @@ public sealed partial class PaperWindow : Window
         finally
         {
             _suppressGeometrySave = wasSuppressing;
+        }
+    }
+
+    // Register before any PaperWindow instance is constructed so the interaction lock consumes
+    // tunneled keyboard input before child controls or window shortcuts can act on it.
+    private static readonly bool TodoInteractionLockGuardRegistered =
+        RegisterTodoInteractionLockGuard();
+
+    private static bool RegisterTodoInteractionLockGuard()
+    {
+        EventManager.RegisterClassHandler(
+            typeof(PaperWindow),
+            UIElement.PreviewKeyDownEvent,
+            new KeyEventHandler(OnInteractionLockPreviewKeyDown),
+            handledEventsToo: true);
+        return true;
+    }
+
+    private static void OnInteractionLockPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is PaperWindow { _advancedInteractionLocked: true })
+        {
+            e.Handled = true;
         }
     }
 

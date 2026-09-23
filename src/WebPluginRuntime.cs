@@ -58,6 +58,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private ulong _documentNavigationId;
     private bool _hasDocumentNavigation;
     private bool _reloadRecoveryPending;
+    private bool _rendererRecoveryAttempted;
     private bool _restartRequested;
     private bool _startupCompleted;
     private bool _disposed;
@@ -445,12 +446,14 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
             case WebPluginProcessFailurePolicy.Recovery.Reload:
-                if (!CanRecoverRendererByReload(_startupCompleted))
+                if (!CanRecoverRendererByReload(_startupCompleted) ||
+                    _rendererRecoveryAttempted)
                 {
                     FailStartupOrRestart(
-                        "The Web Runtime renderer failed while completing startup.");
+                        "The Web Runtime renderer could not be recovered by its one allowed reload.");
                     return;
                 }
+                _rendererRecoveryAttempted = true;
                 RecoverRendererByReload();
                 return;
             default:

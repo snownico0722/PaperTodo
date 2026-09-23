@@ -17,6 +17,7 @@ var checks = new (string Name, Action Run)[]
     ("legacy-plugin-recovery-file-is-not-selected", LegacyPluginRecoveryFileIsNotSelected),
     ("plugin-system-shutdown-skips-final-flush", PluginSystemShutdownSkipsFinalFlush),
     ("plugin-normal-dispose-still-final-flushes", PluginNormalDisposeStillFinalFlushes),
+    ("plugin-save-failure-retry-is-bounded", PluginSaveFailureRetryIsBounded),
     ("shutdown-skips-deferred-plugin-cleanup", ShutdownSkipsDeferredPluginCleanup),
     ("temp-validator-failure-keeps-old-target", TempValidatorFailureKeepsOldTarget),
     ("flush-failure-keeps-old-target", FlushFailureKeepsOldTarget),
@@ -258,6 +259,33 @@ static void PluginNormalDisposeStillFinalFlushes()
     Assert(writer.WriteCount == 1, "normal plugin disposal did not flush dirty state exactly once");
 }
 
+static void PluginSaveFailureRetryIsBounded()
+{
+    using var scope = new TempDirectory();
+    var writer = new FailingRecordingWriter(failuresRemaining: 2);
+    using var store = new PaperBodyPluginDataStore(
+        scope.Path,
+        writer,
+        saveDebounceMilliseconds: 10,
+        forceSaveMilliseconds: 30);
+
+    store.SavePaperState("sample.plugin", "paper-1", 1, "{\"value\":1}");
+    Assert(
+        SpinWait.SpinUntil(() => writer.WriteCount >= 2, 1_000),
+        "plugin save did not perform its one delayed retry after the first failure");
+    Thread.Sleep(120);
+    Assert(writer.WriteCount == 2,
+        $"plugin save kept retrying after the bounded second failure: {writer.WriteCount} writes");
+
+    store.SavePaperState("sample.plugin", "paper-1", 1, "{\"value\":2}");
+    Assert(
+        SpinWait.SpinUntil(() => writer.WriteCount >= 3, 1_000),
+        "a real plugin-state mutation did not reset the save retry budget");
+    Thread.Sleep(80);
+    Assert(writer.WriteCount == 3,
+        $"successful post-mutation save scheduled unexpected extra retries: {writer.WriteCount} writes");
+}
+
 static void ShutdownSkipsDeferredPluginCleanup()
 {
     var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
@@ -438,6 +466,45 @@ static void AssertThrows<TException>(Action action, string message)
     }
 
     throw new InvalidOperationException(message);
+}
+
+internal sealed class FailingRecordingWriter : IDurableAtomicFileWriter
+{
+    private readonly object _gate = new();
+    private int _failuresRemaining;
+    private int _writeCount;
+
+    public FailingRecordingWriter(int failuresRemaining)
+    {
+        _failuresRemaining = failuresRemaining;
+    }
+
+    public int WriteCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _writeCount;
+            }
+        }
+    }
+
+    public void Write(
+        string targetPath,
+        byte[] bytes,
+        Func<string, bool>? validateTemp = null)
+    {
+        lock (_gate)
+        {
+            _writeCount++;
+            if (_failuresRemaining > 0)
+            {
+                _failuresRemaining--;
+                throw new IOException("Injected plugin data save failure.");
+            }
+        }
+    }
 }
 
 internal sealed class RecordingWriter : IDurableAtomicFileWriter

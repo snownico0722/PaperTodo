@@ -886,9 +886,9 @@ Runtime 使用 provider-scoped state；Body/Mini 继续使用 per-paper frontend
 
 - manifest 统一使用 capability `runtime`，公开类型统一使用 `PluginRuntime` / `PaperPluginRuntime*`，不再保留 `AppRuntime` 或 `PaperRuntime` 第二套名字。
 - 每张 Paper frontend/body state 最大 10 MiB，整个 provider Runtime state 最大 20 MiB，独立计额；新版 Runtime 不用低 `stateVersion` 覆盖已存在的高版本状态。
-- Runtime 启动时通过 `Papers.List()` 读取全量快照，之后 `Subscribe()` 只接收增量。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`。启动失败、Backoff/Failed 或 Web document 不可投递期间不承诺该事件必达。
+- Runtime 启动时通过 `Papers.List()` 读取全量快照，之后 `Subscribe()` 只接收增量。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`。启动/重建中、`Failed` 或 Web document 不可投递期间不承诺该事件必达。
 - Web Runtime renderer 恢复期间不缓存业务消息；不能真实投递时返回 `runtime_unavailable`，宿主不提供 exactly-once 或延迟业务命令队列。
-- Backoff 保留最后展示；最终 Failed 清除 Runtime 动态 Header/Capsule 并回退静态 Paper 展示。
+- 宿主级恢复不维护 Backoff 队列：成功运行后的 Runtime 需要整体重建时只立即尝试一次，重建期间保留最后展示；再次失败后清除 Runtime 动态 Header/Capsule 并回退静态 Paper 展示。
 
 ### Why
 
@@ -1480,7 +1480,7 @@ Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果�
 - 插件自己的长期业务数据、备份与恢复由插件负责。复盘示例移除自己的 `.bak` 回退和复制，使用原来的临时文件替换；只有明确不存在的记录文件才初始化为空，已有文件损坏、不可读或版本不受支持时直接失败，不用空记录覆盖原文件。
 - Paper/Todo/Note/图片查询不触发正文提交或强制同步，接受模型相对实时编辑的短暂延迟；外部 mutation 只有写同一内置 Markdown 时才先提交该目标的用户文字。为提交一次外部 mutation 做的同步落盘只序列化当前模型，不顺带结算其他 Markdown 编辑器；其他 Markdown 已有的 dirty 状态和正常保存计时继续保留。普通应用保存仍按正常规则同步全部内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子；回滚和事件来源处理保持不变。
 - 普通正文通知异常不升级成正文销毁；新建待办的初始属性属于创建/追加权限；轻弹窗外链复用正文已有系统打开，不新增权限或桥接接口。
-- 首次后台启动失败不重试；Web 后台在首次成功前遇到 renderer 故障同样按启动失败处理，不先做内部 reload。实际成功运行后的故障保留原有有界恢复，不创建新的错误分类或恢复状态。
+- 首次后台启动失败不重试；Web 后台在首次成功前遇到 renderer 故障同样按启动失败处理，不先做内部 reload。实际成功运行后，renderer 最多沿 WebView2 当前页面直接 reload 一次；若必须重建整个 Runtime，宿主每个进程生命周期也只立即重建一次，再失败进入 `Failed`。不维护 1/3/10 秒 Backoff、失败次数或稳定期重置。
 
 ### Why
 

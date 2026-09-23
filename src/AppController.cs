@@ -32,6 +32,8 @@ public sealed partial class AppController : IDisposable
         DeferredForCapsuleDrag
     }
 
+    private const int StartupMissingMonitorGraceMilliseconds = 1500;
+
     public static AppController Current { get; private set; } = null!;
 
     private readonly StateStore _store = new();
@@ -253,8 +255,8 @@ public sealed partial class AppController : IDisposable
 
         ApplyHiddenPluginStartupPaperVisibility(initialVisibilityCommand);
         ApplyInitialStartupVisibility(initialVisibilityCommand);
-        DeferStartupPapersWithoutMonitor();
-        var rescuedPapers = EnsurePapersOnScreen();
+        var startupDeferredPaperIds = StartupPaperIdsAwaitingMonitor();
+        var rescuedPapers = EnsurePapersOnScreen(startupDeferredPaperIds);
 
         // Establish entity-paper background ownership before any visible Body/Mini frontend can
         // initialize and emit commands toward the provider Runtime during restore.
@@ -263,9 +265,14 @@ public sealed partial class AppController : IDisposable
         // Respect persisted IsVisible: hide closes the paper surface, delete removes it.
         // Tray/show-all (and second-instance show) still restore everything intentionally.
         var papersToRestore = State.Papers.Where(paper =>
-            paper.IsVisible && !_startupDisplayDeferredPapers.Contains(paper)).ToList();
+            paper.IsVisible && !startupDeferredPaperIds.Contains(paper.Id)).ToList();
         await RestorePaperSurfacesAsync(papersToRestore);
-        CompleteDeferredStartupDisplayRestore();
+        if (startupDeferredPaperIds.Count > 0)
+        {
+            _ = CompleteStartupMissingMonitorGraceAsync(
+                startupDeferredPaperIds.ToArray(),
+                _paperSurfaceRestoreGeneration);
+        }
 
         if (rescuedPapers)
         {
@@ -1228,8 +1235,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // An explicit show is a user decision, not a late startup callback.
-        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         if (!_suppressDirty)
         {
@@ -1765,7 +1770,6 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
-        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _windows.TryGetValue(paper.Id, out var window);
         if (window != null)
@@ -1837,8 +1841,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // Explicit show-all supersedes delayed monitor recovery as well as staged surfaces.
-        CancelStartupDisplayRestore();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _isPreparingStartupEdgeCapsules = false;
@@ -1887,7 +1889,6 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
-        CancelStartupDisplayRestore();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _paperSurfaceRestoreGeneration++;
         _isPreparingStartupEdgeCapsules = false;
@@ -3164,13 +3165,128 @@ public sealed partial class AppController : IDisposable
         return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) && window.HasVisibleSurface;
     }
 
-    private bool EnsurePapersOnScreen()
+    private HashSet<string> StartupPaperIdsAwaitingMonitor()
+    {
+        var workAreas = new List<Rect>();
+        foreach (var monitor in WindowWorkAreaHelper.ConnectedMonitorGeometries())
+        {
+            var area = WindowWorkAreaHelper.WorkAreaForDevice(monitor.DeviceName);
+            if (area.HasValue &&
+                !area.Value.IsEmpty &&
+                area.Value.Width > 0 &&
+                area.Value.Height > 0)
+            {
+                workAreas.Add(area.Value);
+            }
+        }
+
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var paper in State.Papers)
+        {
+            if (PaperAwaitsStartupMonitor(paper, workAreas))
+            {
+                result.Add(paper.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private bool PaperAwaitsStartupMonitor(PaperData paper, IReadOnlyList<Rect> workAreas)
+    {
+        // Deep capsules restore from their persisted queue identity rather than Paper X/Y.
+        if (paper.IsCollapsed &&
+            State.UseCapsuleMode &&
+            State.UseDeepCapsuleMode &&
+            CanPaperDisplayAsCapsule(paper))
+        {
+            return false;
+        }
+
+        if (!IsFinite(paper.X) ||
+            !IsFinite(paper.Y) ||
+            !IsFinite(paper.Width) ||
+            !IsFinite(paper.Height) ||
+            paper.Width <= 0 ||
+            paper.Height <= 0)
+        {
+            return false;
+        }
+
+        var center = new Point(
+            paper.X + paper.Width / 2,
+            paper.Y + paper.Height / 2);
+        return !workAreas.Any(area => area.Contains(center));
+    }
+
+    private async Task CompleteStartupMissingMonitorGraceAsync(
+        IReadOnlyList<string> paperIds,
+        int restoreGeneration)
+    {
+        try
+        {
+            await Task.Delay(StartupMissingMonitorGraceMilliseconds);
+            if (IsExiting || restoreGeneration != _paperSurfaceRestoreGeneration)
+            {
+                return;
+            }
+
+            // One refresh after the grace period is enough: this is not a second topology watcher.
+            WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+            var rescued = false;
+            var shown = false;
+            foreach (var paperId in paperIds)
+            {
+                var paper = State.Papers.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Id, paperId, StringComparison.Ordinal));
+                if (paper == null)
+                {
+                    continue;
+                }
+
+                var index = State.Papers.IndexOf(paper);
+                rescued |= RescuePaperIfOffScreen(paper, Math.Max(0, index));
+                if (!paper.IsVisible ||
+                    (_windows.TryGetValue(paper.Id, out var existing) && !existing.IsClosed))
+                {
+                    continue;
+                }
+
+                ShowPaper(paper, activate: false);
+                shown = true;
+            }
+
+            if (rescued)
+            {
+                SaveNow();
+            }
+            if (shown)
+            {
+                RefreshTrayMenu();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsExiting)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "One-shot startup monitor recovery failed: {0}",
+                    ex);
+            }
+        }
+    }
+
+    private bool EnsurePapersOnScreen(IReadOnlySet<string>? excludedPaperIds = null)
     {
         var changed = false;
         for (var i = 0; i < State.Papers.Count; i++)
         {
-            if (!_startupDisplayDeferredPapers.Contains(State.Papers[i]))
-                changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            if (excludedPaperIds?.Contains(State.Papers[i].Id) == true)
+            {
+                continue;
+            }
+
+            changed |= RescuePaperIfOffScreen(State.Papers[i], i);
         }
 
         return changed;
@@ -3575,7 +3691,6 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
-        CancelStartupDisplayRestore();
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();
         MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();

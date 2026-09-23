@@ -1162,33 +1162,50 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var lines = raw
+        var cleanedLines = raw
             .Replace("\r\n", "\n")
             .Replace('\r', '\n')
             .Split('\n')
             .Select(CleanPastedTodoLine)
             .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        var tooManyItems = cleanedLines.Count > MaxPastedTodoLines;
+        var textTruncated = cleanedLines.Any(line => line.Length > TodoTextMaxLength);
+        var lines = cleanedLines
+            .Take(MaxPastedTodoLines)
             .Select(LimitTodoText)
             .ToList();
 
-        if (lines.Count > MaxPastedTodoLines)
-        {
-            lines = lines.Take(MaxPastedTodoLines).ToList();
-        }
-
         if (lines.Count <= 1)
         {
+            var originalText = box.Text ?? "";
+            var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
+            var selectionLength = Math.Clamp(
+                box.SelectionLength,
+                0,
+                originalText.Length - selectionStart);
+            textTruncated |=
+                (long)originalText.Length - selectionLength + raw.Length >
+                TodoTextMaxLength;
+            ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
             return;
         }
 
         e.CancelCommand();
 
-        var originalText = box.Text ?? "";
-        var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
-        var selectionLength = Math.Clamp(box.SelectionLength, 0, originalText.Length - selectionStart);
-        var selectionEnd = selectionStart + selectionLength;
-        var prefix = originalText[..selectionStart];
-        var suffix = originalText[selectionEnd..];
+        var currentText = box.Text ?? "";
+        var currentSelectionStart = Math.Clamp(box.SelectionStart, 0, currentText.Length);
+        var currentSelectionLength = Math.Clamp(
+            box.SelectionLength,
+            0,
+            currentText.Length - currentSelectionStart);
+        var selectionEnd = currentSelectionStart + currentSelectionLength;
+        var prefix = currentText[..currentSelectionStart];
+        var suffix = currentText[selectionEnd..];
+        textTruncated |=
+            (long)prefix.Length + lines[0].Length > TodoTextMaxLength ||
+            (long)lines[^1].Length + suffix.Length > TodoTextMaxLength;
+
         var pastedItemTexts = lines.ToList();
         pastedItemTexts[0] = LimitTodoText(prefix + pastedItemTexts[0]);
         pastedItemTexts[^1] = LimitTodoText(pastedItemTexts[^1] + suffix);
@@ -1266,7 +1283,40 @@ public sealed partial class PaperWindow
             }
         }
 
+        ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
         _controller.MarkDirty();
+    }
+
+    private void ShowTodoPasteLimitNotice(bool tooManyItems, bool textTruncated)
+    {
+        if (!tooManyItems && !textTruncated)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                var messages = new List<string>(2);
+                if (tooManyItems)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteItemLimitMessage",
+                        MaxPastedTodoLines));
+                }
+                if (textTruncated)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteTextLimitMessage",
+                        TodoTextMaxLength));
+                }
+
+                PaperNoticeDialog.Show(
+                    this,
+                    Strings.Get("TodoPasteTruncatedTitle"),
+                    string.Join(Environment.NewLine, messages));
+            }),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private static string CleanPastedTodoLine(string line)
@@ -2418,5 +2468,25 @@ public sealed partial class PaperWindow
         }
     }
 
+private static bool TryGetTodoPastingText(
+        IDataObject dataObject,
+        out string raw)
+    {
+        raw = "";
+        try
+        {
+            raw = dataObject.GetDataPresent(DataFormats.UnicodeText)
+                ? dataObject.GetData(DataFormats.UnicodeText) as string ?? ""
+                : dataObject.GetDataPresent(DataFormats.Text)
+                    ? dataObject.GetData(DataFormats.Text) as string ?? ""
+                    : "";
+        }
+        catch
+        {
+            raw = "";
+            return false;
+        }
 
+        return raw.Length > 0;
+    }
 }

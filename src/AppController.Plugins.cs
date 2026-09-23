@@ -486,7 +486,6 @@ public sealed partial class AppController
             }
         };
         window.Content = BuildPluginSettingsWindowContent(window, descriptor, settings);
-        ApplyToolTipSetting(window);
         window.ShowDialog();
         if (!IsExiting)
         {
@@ -1336,5 +1335,50 @@ public sealed partial class AppController
         DisposePluginShortcuts();
         DisposePaperPluginHostRuntime();
         _paperBodyPlugins.Dispose();
+    }
+
+
+    internal event Action? PluginPopupThemeChanged;
+
+
+    internal bool CanAssignPluginProvider(
+        PaperData paper,
+        PaperBodyPluginDescriptor descriptor)
+    {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
+        var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
+        if (limit == 0)
+        {
+            return true;
+        }
+
+        var otherInstances = State.Papers.Count(candidate =>
+            !ReferenceEquals(candidate, paper) &&
+            candidate.Type == PaperTypes.Note &&
+            string.Equals(
+                candidate.BodyProviderId,
+                descriptor.Id,
+                StringComparison.Ordinal));
+        return otherInstances < limit;
+    }
+
+    internal bool CanCreatePluginPaper(PaperBodyPluginDescriptor descriptor)
+    {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
+        var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
+        return limit == 0 || State.Papers.Count(candidate =>
+            candidate.Type == PaperTypes.Note &&
+            string.Equals(
+                candidate.BodyProviderId,
+                descriptor.Id,
+                StringComparison.Ordinal)) < limit;
     }
 }

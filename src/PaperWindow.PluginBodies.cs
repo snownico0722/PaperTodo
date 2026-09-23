@@ -924,6 +924,7 @@ public sealed partial class PaperWindow
         RefreshPaperBodyChrome();
         RefreshPaperTitle();
         _controller.MarkDirty();
+        _controller.ReconcilePluginRuntimes();
     }
 
     internal void RefreshPluginEnabledState(string providerId)
@@ -981,7 +982,7 @@ public sealed partial class PaperWindow
         _shell.Children.Add(body);
         NotifyCurrentPaperBodyVisibility(
             _paper.IsVisible && !_paper.IsCollapsed && WindowState != WindowState.Minimized);
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void RemoveCurrentPaperBody()
@@ -998,7 +999,7 @@ public sealed partial class PaperWindow
         _bodyDisabled = false;
         _bodyRuntimeVisible = false;
         RemoveTextZoomOverlay();
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void RefreshPaperBodyChrome()
@@ -1065,7 +1066,7 @@ public sealed partial class PaperWindow
         Panel.SetZIndex(_bodyElement, 1);
         _shell.Children.Add(_bodyElement);
         RefreshPaperBodyChrome();
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void ClearPluginPresentationOnFailure()
@@ -1116,7 +1117,7 @@ public sealed partial class PaperWindow
             InvokeBodySession(item => item.OnVisibilityChanged(visible));
             if (statusChanged)
             {
-                _controller.QueuePluginStatusRefresh();
+                _controller.QueuePluginStatusUiRefresh();
             }
             return;
         }
@@ -1137,7 +1138,7 @@ public sealed partial class PaperWindow
         });
         if (runtimeStatusChanged)
         {
-            _controller.QueuePluginStatusRefresh();
+            _controller.QueuePluginStatusUiRefresh();
         }
     }
 
@@ -1434,5 +1435,29 @@ public sealed partial class PaperWindow
         }
 
         public void Dispose() { }
+    }
+
+
+    internal bool HasFailedPluginBody(string providerId)
+    {
+        return _paper.Type == PaperTypes.Note &&
+            _bodyFailed &&
+            string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal);
+    }
+
+    internal bool HasRunningPluginBody(string providerId)
+    {
+        return _paper.Type == PaperTypes.Note &&
+            !_bodyFailed &&
+            !_bodyDisabled &&
+            _controller.IsPluginEnabled(providerId) &&
+            _paperBodyHost.HasCurrent &&
+            string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal);
     }
 }

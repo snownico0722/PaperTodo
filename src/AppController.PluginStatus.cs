@@ -149,16 +149,7 @@ public sealed partial class AppController
                 : "PluginsStatusStopped");
     }
 
-    internal void QueuePluginStatusRefresh()
-    {
-        // Body attach/remove/provider switch is also the existing low-frequency signal that an
-        // entity plugin paper may have appeared or disappeared. Reconciliation itself is gated
-        // until startupPaper handling has completed.
-        ReconcilePluginRuntimes();
-        QueuePluginStatusUiRefresh();
-    }
-
-    private void QueuePluginStatusUiRefresh()
+    internal void QueuePluginStatusUiRefresh()
     {
         if (_pluginStatusRefreshQueued ||
             _settingsWindow is not { IsVisible: true } ||

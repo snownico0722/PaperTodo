@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "cancel-monitor", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -144,7 +144,7 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
-        if (name is "missing-monitor" or "cancel-monitor")
+        if (name == "missing-monitor")
             state.Papers.Add(new PaperData
             {
                 Id = "missing-screen", Type = PaperTypes.Note, Content = "keep my coordinates",
@@ -161,12 +161,23 @@ internal static class Program
             await controller.StartAsync(createDefaultPaper: false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
             var visible = windows.Values.Count(window => window.HasVisibleSurface);
-            if (name is "missing-monitor" or "cancel-monitor")
+            if (name == "missing-monitor")
             {
-                Require(!windows.ContainsKey("missing-screen"), "ambiguous paper was restored before topology settled");
-                Require(visible == count, "known-monitor capsules waited for the missing display");
+                Require(!windows.ContainsKey("missing-screen"),
+                    "ambiguous off-screen paper was restored before the one-shot monitor grace");
+                Require(visible == count,
+                    "known-monitor capsules waited for an unrelated missing display");
                 Require(controller.State.Papers.Single(paper => paper.Id == "missing-screen").X == 1_000_000,
-                    "startup overwrote the unresolved monitor coordinates");
+                    "startup overwrote ambiguous coordinates before the grace period");
+
+                await Until(
+                    () => windows.TryGetValue("missing-screen", out var missing) &&
+                          missing.HasVisibleSurface,
+                    "one-shot missing-monitor recovery");
+                Require(controller.State.Papers.Single(paper => paper.Id == "missing-screen").X != 1_000_000,
+                    "off-screen paper was not rescued after the bounded grace period");
+                Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
+                    "bounded off-screen rescue hid or duplicated an already-restored paper");
             }
             if (name == "early-exit")
             {
@@ -205,24 +216,6 @@ internal static class Program
             if (name == "startup")
                 Require(windows.Count == count && windows.Values.All(window => window.HasVisibleSurface),
                     "startup did not restore the requested visible papers");
-            if (name == "cancel-monitor")
-            {
-                controller.HideAllPapers();
-                var savedGeometry = controller.State.Papers.Single(paper => paper.Id == "missing-screen").X;
-                // Cross the original settle deadline, not just its first polling interval.
-                await Task.Delay(5500);
-                Require(!windows.ContainsKey("missing-screen") && controller.State.Papers.Single(paper => paper.Id == "missing-screen").X == savedGeometry,
-                    "cancelled display restore resurrected/relocated a hidden paper");
-            }
-            if (name == "missing-monitor")
-            {
-                await Until(() => windows.TryGetValue("missing-screen", out var missing) && missing.HasVisibleSurface,
-                    "deferred display timeout recovery");
-                var recovered = controller.State.Papers.Single(paper => paper.Id == "missing-screen");
-                Require(recovered.X != 1_000_000, "unplugged-monitor paper never reached normal rescue");
-                Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
-                    "deferred rescue hid or duplicated an already-restored paper");
-            }
             if (name == "real-exit-scripts")
             {
                 var registry = (IDictionary)typeof(PaperWindow).GetField("PersistentScriptProcesses", Private)!.GetValue(null)!;

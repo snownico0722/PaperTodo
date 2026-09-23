@@ -107,7 +107,6 @@ public sealed class MasterCapsuleWindow : Window
         ConfigureWindow();
         BuildContent();
         UpdateExperimentalOpacity();
-        UpdateToolTipSetting();
         // Ordinary pill interaction must never pull foreground focus: activating this window
         // would deactivate whatever app was in front, forcing it to repaint — the click "flash".
         // WS_EX_NOACTIVATE keeps the pill passive; an explicitly opened context-menu popup owns
@@ -357,11 +356,6 @@ public sealed class MasterCapsuleWindow : Window
         _label.FontWeight = MasterLabelFontWeight;
         AppTypography.ApplyTextRendering(_label);
         MoveToTarget(animate: false);
-    }
-
-    public void UpdateToolTipSetting()
-    {
-        ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
     }
 
     public void UpdateExperimentalOpacity()
