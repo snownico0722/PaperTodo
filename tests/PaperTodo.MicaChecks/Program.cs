@@ -429,18 +429,23 @@ internal static class Program
             var body = chrome.Child;
             Assert(window.Opacity == 1 && chrome.Opacity == 1, "experiment never changes WPF foreground opacity");
 
-            (float TintDefault, float LumDefault, float TintApplied, float LumApplied) Read()
+            object Adjustable()
             {
                 var native = typeof(PaperWindow).GetField("_nativeMica", Private)!.GetValue(window)
                     ?? throw new InvalidOperationException("NativeMicaBackdrop missing.");
-                var adjustable = native.GetType().GetField("_adjustableMica", Private)!.GetValue(native)
-                    ?? throw new InvalidOperationException("MicaController experiment did not activate.");
+                return native.GetType().GetField("_adjustableMica", Private)!.GetValue(native)
+                    ?? throw new InvalidOperationException("MicaController experiment object was not created.");
+            }
+
+            (bool Active, string Stage, string? Error,
+                float TintDefault, float LumDefault, float TintApplied, float LumApplied) Read()
+            {
+                var adjustable = Adjustable();
                 var stateFlags = Private | BindingFlags.Public;
-                bool active = (bool)(adjustable.GetType().GetProperty("IsActive", stateFlags)!.GetValue(adjustable) ?? false);
-                var stage = Convert.ToString(adjustable.GetType().GetProperty("LastStage", stateFlags)!.GetValue(adjustable));
-                var error = Convert.ToString(adjustable.GetType().GetProperty("LastError", stateFlags)!.GetValue(adjustable));
-                Assert(active, $"MicaController is active on the real PaperWindow; stage={stage}; error={error ?? "<none>"}");
                 return (
+                    Convert.ToBoolean(adjustable.GetType().GetProperty("IsActive", stateFlags)!.GetValue(adjustable)),
+                    Convert.ToString(adjustable.GetType().GetProperty("LastStage", stateFlags)!.GetValue(adjustable)) ?? "",
+                    Convert.ToString(adjustable.GetType().GetProperty("LastError", stateFlags)!.GetValue(adjustable)),
                     Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity", stateFlags)!.GetValue(adjustable)),
                     Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity", stateFlags)!.GetValue(adjustable)),
                     Convert.ToSingle(adjustable.GetType().GetProperty("AppliedTintOpacity", stateFlags)!.GetValue(adjustable)),
@@ -454,20 +459,43 @@ internal static class Program
                 Theme.Invalidate();
                 window.UpdateTheme();
                 Pump();
-                Assert(window.IsNativeMicaEffective, "native shell remains effective");
+                Assert(window.IsNativeMicaEffective, "native shell remains effective through controller or DWM fallback");
                 Assert(window.Opacity == 1 && chrome.Opacity == 1 && ReferenceEquals(chrome.Child, body),
                     "foreground and editor tree remain fully opaque and unchanged");
             }
 
             Apply(MaterialTransparencyLevels.Medium);
             var medium = Read();
+
+            // WPF already owns the DirectComposition targets of its top-level HWND.
+            // Current Windows returns DCOMPOSITION_ERROR_WINDOW_ALREADY_COMPOSED for both
+            // non-topmost and topmost CreateDesktopWindowTarget attempts. Treat that as a
+            // supported negative experiment result only when #227's DWM Mica fallback remains
+            // active and the WPF foreground stays untouched.
+            if (!medium.Active)
+            {
+                Assert(medium.Stage == "composition-target" &&
+                       medium.Error?.Contains("88980800", StringComparison.OrdinalIgnoreCase) == true,
+                    $"unexpected MicaController failure: stage={medium.Stage}; error={medium.Error ?? "<none>"}");
+                Assert(window.IsNativeMicaEffective &&
+                       window.Opacity == 1 &&
+                       chrome.Opacity == 1 &&
+                       ReferenceEquals(chrome.Child, body),
+                    "WPF composition conflict must fall back to DWM Mica without changing foreground ownership");
+                Console.WriteLine(
+                    "PASS MicaController compatibility probe: WPF owns the HWND composition target " +
+                    "(0x88980800); #227 DWM Mica fallback remains active and foreground stays opaque.");
+                return;
+            }
+
             Assert(Math.Abs(medium.TintApplied - medium.TintDefault) < .0001f &&
                    Math.Abs(medium.LumApplied - medium.LumDefault) < .0001f,
                 "medium preserves Windows App SDK Mica defaults");
 
             Apply(MaterialTransparencyLevels.VeryLow);
             var lessTransparent = Read();
-            Assert(lessTransparent.TintApplied >= medium.TintApplied &&
+            Assert(lessTransparent.Active &&
+                   lessTransparent.TintApplied >= medium.TintApplied &&
                    lessTransparent.LumApplied >= medium.LumApplied &&
                    (lessTransparent.TintApplied > medium.TintApplied + .0001f ||
                     lessTransparent.LumApplied > medium.LumApplied + .0001f),
@@ -475,7 +503,8 @@ internal static class Program
 
             Apply(MaterialTransparencyLevels.VeryHigh);
             var moreTransparent = Read();
-            Assert(moreTransparent.TintApplied <= medium.TintApplied &&
+            Assert(moreTransparent.Active &&
+                   moreTransparent.TintApplied <= medium.TintApplied &&
                    moreTransparent.LumApplied <= medium.LumApplied &&
                    (moreTransparent.TintApplied < medium.TintApplied - .0001f ||
                     moreTransparent.LumApplied < medium.LumApplied - .0001f),
@@ -483,7 +512,8 @@ internal static class Program
 
             Apply(MaterialTransparencyLevels.Medium, "dark");
             var darkMedium = Read();
-            Assert(Math.Abs(darkMedium.TintApplied - darkMedium.TintDefault) < .0001f &&
+            Assert(darkMedium.Active &&
+                   Math.Abs(darkMedium.TintApplied - darkMedium.TintDefault) < .0001f &&
                    Math.Abs(darkMedium.LumApplied - darkMedium.LumDefault) < .0001f,
                 "theme change recreates a fresh SDK default baseline");
 

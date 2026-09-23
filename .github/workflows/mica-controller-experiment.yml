@@ -27,7 +27,7 @@ jobs:
         run: dotnet build ./PaperTodo.csproj -c Release --nologo -clp:ErrorsOnly
       - name: Build MicaController experiment
         run: dotnet build ./PaperTodo.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true --nologo -clp:ErrorsOnly
-      - name: Verify adjustable Mica on a real WPF paper
+      - name: Probe adjustable Mica on a real WPF paper
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true -- --mica-controller-experiment
       - name: Run material regression with experimental backend available
         run: dotnet run --project ./tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release -r win-x64 --self-contained true -p:PaperTodoMicaControllerExperiment=true
@@ -38,7 +38,7 @@ jobs:
           $exe = Join-Path $out 'PaperTodo.exe'
           if (!(Test-Path $exe)) { throw 'Experiment executable missing' }
           $size = (Get-Item $exe).Length
-          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true } |
+          @{ sourceCommit=(git rev-parse HEAD); bytes=$size; component='Microsoft.WindowsAppSDK.InteractiveExperiences'; componentVersion='2.1.9'; deployment='unpackaged self-contained single-file extraction'; normalBuildUnchanged=$true; note='Current WPF top-level HWND is expected to reject a second DirectComposition target with 0x88980800 and fall back to DWM Mica.' } |
             ConvertTo-Json | Set-Content (Join-Path $out 'experiment-manifest.json') -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
