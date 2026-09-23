@@ -143,8 +143,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
             var glass = _material == AeroGlassMaterial;
             var accent = clear;
 #if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
-            if (!enable || _material != MicaBackdropTypes.Mica)
-                _adjustableMica?.Disable();
+            // Direct MicaController targeting of the top-level WPF HWND owns the final
+            // composition surface and covers WPF foreground pixels. Keep the adapter as an
+            // experiment, but never let it own a production PaperWindow.
+            _adjustableMica?.Disable();
 #endif
             IsActive = false;
             LastHResult = 0;
@@ -167,40 +169,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
                 if (LastHResult >= 0) LastHResult = _native.SetDarkMode(hwnd, dark);
                 if (LastHResult >= 0)
-                {
-#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
-                    if (_material == MicaBackdropTypes.Mica && _native is DwmMicaApi)
-                    {
-                        LastHResult = _native.SetBackdrop(hwnd, DwmMicaApi.None);
-                        if (LastHResult >= 0)
-                        {
-                            _adjustableMica ??= new AdjustableMicaControllerBackdrop();
-                            var usedController = _adjustableMica.TryApply(
-                                hwnd, dark, transparency, _alwaysActive || _window.IsActive);
-                            if (usedController)
-                            {
-                                // MicaController owns the backdrop composition target. Do not also
-                                // switch WPF's redirected bitmap to the 24H2 per-pixel-alpha path:
-                                // WPF does not publish that bitmap as our own premultiplied-alpha
-                                // surface, so the entire foreground can disappear and leave only
-                                // the blank Mica slab. Keep the proven full-glass WPF path instead.
-                                _ = _native.SetRedirectionAlpha(hwnd, false);
-                                UsesRedirectionAlpha = false;
-                                LastHResult = _native.ExtendFrame(hwnd, -1);
-                            }
-                            else
-                            {
-                                LastHResult = _native.SetBackdrop(hwnd, MicaBackdropTypes.ToDwmBackdrop(_material));
-                            }
-                        }
-                    }
-                    else
-#endif
-                    {
-                        LastHResult = _native.SetBackdrop(hwnd,
-                            glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
-                    }
-                }
+                    LastHResult = _native.SetBackdrop(hwnd,
+                        glass || accent ? DwmMicaApi.None : MicaBackdropTypes.ToDwmBackdrop(_material));
                 if (LastHResult >= 0 && glass) LastHResult = _native.EnableAlpha(hwnd);
                 if (LastHResult >= 0 && accent)
                 {
@@ -209,16 +179,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
                 if (LastHResult >= 0)
                 {
-#if PAPERTODO_MICA_CONTROLLER_EXPERIMENT
-                    var adjustableMicaActive = _material == MicaBackdropTypes.Mica &&
-                        _adjustableMica?.IsActive == true;
-                    if (!adjustableMicaActive)
-#endif
-                    {
-                        // Apply after the DWM material recipe: this is the final alpha/margin writer.
-                        UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                        if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
-                    }
+                    // Apply after the DWM material recipe: this is the final alpha/margin writer.
+                    UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
+                    if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
                 }
                 IsActive = LastHResult >= 0;
             }
