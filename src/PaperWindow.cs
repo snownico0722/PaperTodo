@@ -698,8 +698,6 @@ public sealed partial class PaperWindow : Window
         _deepCapsuleContextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
             paper.Id,
-            Dispatcher,
-            IsPointInsideDeepCapsuleOwnerSurface,
             OnDeepCapsuleContextMenuOpenChanged);
         InitializePaperPresentationState();
 
@@ -711,11 +709,7 @@ public sealed partial class PaperWindow : Window
                 brush => Resources["PaperSurfaceBrushKey"] = brush);
             RefreshNativeMica();
         }
-        if (deferShellConstruction)
-        {
-            UpdateToolTipSetting();
-        }
-        else
+        if (!deferShellConstruction)
         {
             EnsureShellBuilt();
         }

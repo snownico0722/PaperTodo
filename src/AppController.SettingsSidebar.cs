@@ -70,7 +70,6 @@ public sealed partial class AppController
         window.Language = AppTypography.Language;
         AppTypography.ApplyTextRendering(window);
         window.Content = BuildSettingsSidebarWindowContent(window);
-        ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
         _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: _settingsNativePalette != State.ColorScheme);
         _settingsNativePalette = State.ColorScheme;

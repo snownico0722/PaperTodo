@@ -149,6 +149,8 @@ internal static partial class Program
             Check(paperSkin.Validate(Json(token)).GetString() == token, "All visible paper-skin tokens remain valid.");
         var extension = definitions.Single(d => d.Metadata.Id == "note.external_extension");
         Check(extension.Validate(Json("*.MD")).GetString() == ".md", "Filename extension uses UI normalization.");
+        var bottomBar = definitions.Single(d => d.Metadata.Id == "todo.bottom_bar");
+        Check(bottomBar.Read().GetBoolean(), "Todo bottom bar is enabled by default.");
         Check(extension.Validate(Json("笔记")).GetString() == ".笔记", "Valid Unicode extensions are not needlessly rejected.");
         var saves = 0;
         var success = true;
@@ -173,6 +175,9 @@ internal static partial class Program
         service.Set("todo.paper_links", Json(false));
         Check(!c.State.EnableTodoPaperLinks && saves == savesBeforeTodoLink + 1,
             "Catalog setter changes the exact backing feature and commits once.");
+        service.Set("todo.bottom_bar", Json(false));
+        Check(!c.State.ShowTodoBottomBar && saves == savesBeforeTodoLink + 2,
+            "Todo bottom-bar setting changes the live preference.");
         success = false;
         Throws<PaperSettingsException>(() => service.Set("todo.paper_links", Json(true)), "save_failed");
         Check(!c.State.EnableTodoPaperLinks, "Real catalog rollback restores the preference.");

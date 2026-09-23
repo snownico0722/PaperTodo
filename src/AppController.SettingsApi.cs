@@ -13,7 +13,7 @@ public sealed partial class AppController
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, ToolTips, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, NativeMaterial, Typography, Markdown,
+        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, NativeMaterial, Typography, Markdown,
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen, Resize,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
@@ -232,7 +232,6 @@ public sealed partial class AppController
                 break;
             case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
             case SettingEffects.Typography: RefreshPublicSettingsTypography(); break;
-            case SettingEffects.ToolTips: RefreshToolTipSetting(); break;
             case SettingEffects.Animations:
                 if (!State.EnableAnimations)
                 {

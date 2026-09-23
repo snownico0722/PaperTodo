@@ -48,32 +48,8 @@ jobs:
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
-      - name: Real paper and cross-process window stacking checks
-        run: dotnet run --project .\tests\PaperTodo.WindowStackChecks\PaperTodo.WindowStackChecks.csproj -c Release
-
-      - name: Markdown semantic checks
-        run: dotnet run --project .\tests\PaperTodo.MarkdownSemanticChecks\PaperTodo.MarkdownSemanticChecks.csproj -c Release
-
-      - name: Markdown editing checks
-        run: dotnet run --project .\tests\PaperTodo.MarkdownEditingChecks\PaperTodo.MarkdownEditingChecks.csproj -c Release
-
-      - name: Todo navigation checks
-        run: dotnet run --project .\tests\PaperTodo.TodoNavigationChecks\PaperTodo.TodoNavigationChecks.csproj -c Release
-
-      - name: Edge title checks
-        run: dotnet run --project .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
-
-      - name: Edge preview rendering and lifecycle checks
-        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
-
-      - name: Threading regression checks
-        run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
-
-      - name: Startup, shutdown and small-workset checks
-        run: dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release
-
-      - name: Window close activation checks
-        run: dotnet run --project .\tests\PaperTodo.WindowCloseActivationChecks\PaperTodo.WindowCloseActivationChecks.csproj -c Release
+      - name: Run regression checks
+        run: ./tools/testing/Run-Checks.ps1 -Group regression
 
       - name: Native material and skin checks
         env:
