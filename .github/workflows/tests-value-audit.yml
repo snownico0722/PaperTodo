@@ -1,14 +1,14 @@
-name: Test pruning verification (temporary)
+name: Standalone measurement verification (temporary)
 on:
   push:
     branches: [refactor/tests-behavior-and-tools]
-    paths: [.github/workflows/tests-value-audit.yml, .github/scripts/pr302_prune_tests_once.py]
+    paths: [.github/workflows/tests-value-audit.yml]
 permissions:
   contents: write
 jobs:
   verify:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     defaults:
       run:
         shell: pwsh
@@ -20,55 +20,51 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - name: Validate bounded edit ranges
+      - name: Remove non-measurement policy assertions
         shell: python
         run: |
           from pathlib import Path
-          import ast
-          path = Path('.github/scripts/pr302_prune_tests_once.py')
-          source = path.read_text(encoding='utf-8')
-          old = "    if text.count(begin) != 1 or text.count(end) != 1: raise RuntimeError('Ambiguous range: ' + begin)\n    a,b = text.index(begin), text.index(end)"
-          new = "    if text.count(begin) != 1: raise RuntimeError('Ambiguous range: ' + begin)\n    a = text.index(begin)\n    b = text.index(end, a + len(begin))"
-          if source.count(old) != 1: raise RuntimeError('Editor helper changed')
-          source = source.replace(old, new, 1)
-          old = r"re.escape(name) + r'\('"
-          new = r"re.escape(name) + r'(?:<[^>\n]+>)?\('"
-          if source.count(old) != 1: raise RuntimeError('Method matcher changed')
-          source = source.replace(old, new, 1)
-          ast.parse(source)
-          path.write_text(source, encoding='utf-8', newline='\n')
-      - name: Apply and publish reviewed pruning
-        id: apply
+          import subprocess
+          p = Path('tools/PaperTodo.DesktopBenchmarks/PreviewMeasurements.cs')
+          expected = subprocess.check_output(['git', 'show', 'b86a8d7c42fbb10899beea2c371b0033946453cd:' + p.as_posix()]).decode('utf-8').replace('\r\n','\n')
+          s = p.read_text(encoding='utf-8-sig')
+          if s != expected: raise RuntimeError('Measurement source changed since review')
+          start = s.index('            Require(cache.ExcerptCount == 100 && cache.ArtifactCount == 100,')
+          end = s.index('        }\n        finally { window.Close(); Pump(); cache.Clear(); GC.KeepAlive(contexts); }', start)
+          s = s[:start] + s[end:]
+          s = s.replace('{ excerpts = cache.ExcerptCount, charactersPerNote = 6000, artifacts = cache.ArtifactCount,', '{ requestedNotes = contexts.Length, excerpts = cache.ExcerptCount, charactersPerNote = 6000, artifacts = cache.ArtifactCount,')
+          s = s.replace('retainedHundredExcerptsArtifactsAndWpfCachesKiB', 'retainedExcerptsArtifactsAndWpfCachesKiB')
+          p.write_text(s, encoding='utf-8', newline='\n')
+          for root in ['tests', 'tools']:
+              paths = [p for p in Path(root).rglob('*') if p.suffix in ('.cs','.cjs','.ps1')]
+              print('SOURCE_TOTAL', root, 'files', len(paths), 'lines', sum(len(p.read_text(encoding='utf-8-sig').splitlines()) for p in paths))
+          print('REMAINING MEASUREMENT TOKENS IN TESTS')
+          for p in sorted(Path('tests').rglob('*.cs')):
+              for n,line in enumerate(p.read_text(encoding='utf-8-sig').splitlines(),1):
+                  if any(token in line for token in ['GetAllocatedBytes', 'GC.Collect', 'PROFILE ', 'LIFECYCLE_SAMPLE', 'PRELOAD_SAMPLE', 'INLINE_ALLOC']):
+                      print(f'{p}:{n}: {line.strip()}')
+      - name: Publish measurement cleanup
         run: |
-          python .github/scripts/pr302_prune_tests_once.py
-          if ($LASTEXITCODE -ne 0) { throw 'Edit failed; no partial changes will be committed.' }
           git diff --check
-          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Patch check failed.' }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A -- tests tools PaperTodo.csproj .github/scripts/pr302_prune_tests_once.py
-          git diff --cached --stat
-          git commit -m 'refactor: prune low-value tests and extract desktop measurements'
+          git add tools/PaperTodo.DesktopBenchmarks/PreviewMeasurements.cs
+          git commit -m 'chore: remove retired cache policies from memory measurement'
           if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
           git push origin HEAD:refs/heads/refactor/tests-behavior-and-tools
           if ($LASTEXITCODE -ne 0) { throw 'Branch advanced; refusing to overwrite.' }
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Build Release
-        run: dotnet build PaperTodo.csproj -c Release
-      - name: Build Debug
-        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
-        run: dotnet build PaperTodo.csproj -c Debug
-      - name: All retained behavior checks
-        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
-        run: ./tools/testing/Run-Checks.ps1 -Group all
-      - name: Desktop measurements smoke
-        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+      - name: Desktop measurement entry point
         run: dotnet run --project tools/PaperTodo.DesktopBenchmarks -c Release -- --smoke
-      - name: Markdown measurements smoke
-        if: ${{ !cancelled() && steps.apply.outcome == 'success' }}
+      - name: Memory measurement
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tools/PaperTodo.DesktopBenchmarks -c Release -- --memory
+      - name: Inline allocation measurement
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tools/PaperTodo.DesktopBenchmarks -c Release -- --inline
+      - name: Markdown measurement entry point
+        if: ${{ !cancelled() }}
         run: dotnet run --project tools/PaperTodo.MarkdownBenchmarks -c Release -- --iterations 1
