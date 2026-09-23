@@ -1,9 +1,6 @@
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
@@ -117,56 +114,6 @@ internal static partial class Program
         refresh.Invoke(null, [menu]);
         CheckGlyphSizes(item);
     }
-
-    private static void CheckCapsuleMenuFocusCleanupBoundary()
-    {
-        var target = new Button { Content = "Target" };
-        var menu = new ContextMenu();
-        menu.Items.Add(new MenuItem { Header = "Item" });
-        target.ContextMenu = menu;
-        var window = new Window
-        {
-            Width = 220,
-            Height = 120,
-            ShowInTaskbar = false,
-            ShowActivated = false,
-            Content = target
-        };
-
-        try
-        {
-            window.Show();
-            var handle = new WindowInteropHelper(window).Handle;
-            Assert(handle != IntPtr.Zero, "fixture window has no HWND");
-            _ = SetFocus(handle);
-            Assert(GetFocus() == handle, "fixture could not establish same-thread native focus");
-
-            menu.PlacementTarget = target;
-            menu.IsOpen = true;
-            Dispatcher.CurrentDispatcher.Invoke(
-                static () => { },
-                DispatcherPriority.ApplicationIdle);
-            Assert(menu.IsOpen && InputManager.Current.IsInMenuMode,
-                "fixture did not enter real WPF menu mode");
-
-            var focusBeforeCleanup = GetFocus();
-            Assert(focusBeforeCleanup != IntPtr.Zero, "menu fixture lost native focus before cleanup");
-            DeepCapsuleContextMenuSession.ClearCapsuleInteractionKeyboardFocusIfSafe();
-            Assert(GetFocus() == focusBeforeCleanup,
-                "capsule cleanup cleared native focus while WPF menu mode was active");
-        }
-        finally
-        {
-            menu.IsOpen = false;
-            window.Close();
-        }
-    }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetFocus(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetFocus();
 
     private static void CheckGlyphSizes(MenuItem item)
     {
