@@ -11,9 +11,8 @@ namespace PaperTodo;
 /// <summary>
 /// Shared lifecycle for menus launched from NOACTIVATE deep-capsule surfaces
 /// (edge slot hosts and the master collapse-all pill). The owner stays passive; WPF owns normal
-/// menu capture/outside-click dismissal, while the real popup HWND is promoted and, when Windows
-/// grants it foreground, receives keyboard focus. The session also owns capsule topmost
-/// suppression and the bounded stale-activation cleanup shared with the tray path.
+/// menu capture/outside-click dismissal, while the real popup HWND is promoted and receives the
+/// same foreground/focus handoff used by the tray popup path.
 /// </summary>
 internal sealed class DeepCapsuleContextMenuSession
 {
@@ -22,8 +21,6 @@ internal sealed class DeepCapsuleContextMenuSession
     private readonly Action<bool>? _onOpenChanged;
 
     private ContextMenu? _activeMenu;
-    // Only scopes queued popup activation to one open; it is not a second menu state machine.
-    private long _openVersion;
 
     public DeepCapsuleContextMenuSession(
         AppController controller,
@@ -42,15 +39,10 @@ internal sealed class DeepCapsuleContextMenuSession
             _activeMenu.IsOpen = false;
         }
 
-        var openVersion = ++_openVersion;
         _activeMenu = menu;
-
-        // The owner remains NOACTIVATE. Suppress capsule topmost first, then let the real WPF
-        // popup participate in the ordinary menu lifecycle rather than simulating outside clicks.
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, true);
         _onOpenChanged?.Invoke(true);
-        Promote(menu);
-        QueuePopupActivation(menu, openVersion, attemptsRemaining: 3);
+        QueuePopupActivation(menu);
     }
 
     public void HandleClosed(ContextMenu menu)
@@ -92,78 +84,26 @@ internal sealed class DeepCapsuleContextMenuSession
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
     }
 
-    private void QueuePopupActivation(
-        ContextMenu menu,
-        long openVersion,
-        int attemptsRemaining)
+    private static void QueuePopupActivation(ContextMenu menu)
     {
         _ = menu.Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
             {
-                if (!IsCurrentOpen(menu, openVersion))
+                if (!menu.IsOpen ||
+                    PresentationSource.FromVisual(menu) is not HwndSource source ||
+                    source.Handle == IntPtr.Zero)
                 {
                     return;
                 }
 
-                if (PresentationSource.FromVisual(menu) is HwndSource source &&
-                    source.Handle != IntPtr.Zero)
-                {
-                    WindowNative.ApplyTopmostZOrder(
-                        source.Handle,
-                        topmost: true,
-                        insertAfter: IntPtr.Zero);
-
-                    WindowNative.TrySetForegroundWindow(source.Handle);
-                    if (WindowNative.ForegroundWindow == source.Handle)
-                    {
-                        menu.Focus();
-                        return;
-                    }
-
-                    // A visible topmost menu without a usable foreground/input handoff is a worse
-                    // state than cancelling this open. Do not rebuild the old global-input fallback.
-                    CloseIfCurrent(menu, openVersion);
-                    return;
-                }
-
-                if (attemptsRemaining > 1)
-                {
-                    QueuePopupActivation(
-                        menu,
-                        openVersion,
-                        attemptsRemaining - 1);
-                    return;
-                }
-
-                // The popup HWND never materialized for this open. End only this generation so an
-                // old dispatcher callback cannot close a later reopen of the same ContextMenu.
-                CloseIfCurrent(menu, openVersion);
+                WindowNative.ApplyTopmostZOrder(
+                    source.Handle,
+                    topmost: true,
+                    insertAfter: IntPtr.Zero);
+                WindowNative.TrySetForegroundWindow(source.Handle);
+                menu.Focus();
             }));
-    }
-
-    private bool IsCurrentOpen(ContextMenu menu, long openVersion) =>
-        ReferenceEquals(_activeMenu, menu) &&
-        _openVersion == openVersion &&
-        menu.IsOpen;
-
-    private void CloseIfCurrent(ContextMenu menu, long openVersion)
-    {
-        if (IsCurrentOpen(menu, openVersion))
-        {
-            Close();
-        }
-    }
-
-    private static void Promote(ContextMenu menu)
-    {
-        if (menu.IsOpen && PresentationSource.FromVisual(menu) is HwndSource source)
-        {
-            WindowNative.ApplyTopmostZOrder(
-                source.Handle,
-                topmost: true,
-                insertAfter: IntPtr.Zero);
-        }
     }
 
     private void ClearStaleActivationIfNeeded()
@@ -174,14 +114,6 @@ internal sealed class DeepCapsuleContextMenuSession
         }
 
         ClearStaleApplicationActivationIfNeeded();
-    }
-
-    internal static void ClearCapsuleInteractionKeyboardFocusIfSafe()
-    {
-        if (!InputManager.Current.IsInMenuMode)
-        {
-            WindowNative.ClearCurrentThreadKeyboardFocus();
-        }
     }
 
     internal static void ClearStaleApplicationActivationIfNeeded()
@@ -207,7 +139,7 @@ internal sealed class DeepCapsuleContextMenuSession
 
         // A WPF popup or a previously active paper can leave this UI thread with an
         // application-owned active/focus HWND after foreground moved to another process.
-        // The next tray/capsule menu can then restore focus to the stale paper.
+        // Hardcodet's next tray menu can then restore focus to the stale paper.
         Keyboard.ClearFocus();
         WindowNative.ClearCurrentThreadInputActivation(foreground);
     }
