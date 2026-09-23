@@ -99,12 +99,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
 
-        // A fresh HWND can enter Clear Acrylic or Aero alpha/redirection mode before WPF has
-        // produced its first redirected bitmap. On current Windows compositors that can leave a
-        // permanently blank transparent surface even after later invalidation. Let WPF publish
-        // one ordinary opaque frame first; switching an already-rendered HWND is unaffected.
-        if (!_contentRendered &&
-            (_material == MicaBackdropTypes.ClearAcrylic || _material == AeroGlassMaterial))
+        // A fresh HWND can enter Clear Acrylic accent/redirection mode before WPF has
+        // produced its first redirected bitmap. On current Windows compositors that can
+        // leave a permanently blank accent surface even after later invalidation. Let WPF
+        // publish one ordinary opaque frame first; Aero uses a different post-present repair
+        // below because staging Aero through an opaque frame leaves a dark redirected underlay.
+        if (_material == MicaBackdropTypes.ClearAcrylic && !_contentRendered)
         {
             var paper = Theme.PaperBrush;
             _source.CompositionTarget.BackgroundColor = ((SolidColorBrush)paper).Color;
@@ -264,20 +264,22 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     private void OnContentRendered(object? sender, EventArgs e)
     {
-        // Fresh transparent native recipes are intentionally deferred until this first real WPF
-        // present. At this point the redirected bitmap contains the actual control tree, so
-        // enabling accent/alpha/redirection cannot freeze an empty startup surface.
         _window.ContentRendered -= OnContentRendered;
         _contentRendered = true;
-        if (!_disposed && _requested &&
-            (_material == MicaBackdropTypes.ClearAcrylic || _material == AeroGlassMaterial))
+        if (_disposed || !_requested) return;
+
+        if (_material == MicaBackdropTypes.ClearAcrylic)
         {
-            var freshAero = _material == AeroGlassMaterial;
+            // Clear Acrylic is intentionally activated only after this first ordinary WPF
+            // present so accent/redirection never captures an empty startup bitmap.
             Refresh(_requested, _dark, force: true);
-            // Existing live switches to Aero already re-apply once after changing the
-            // redirected alpha recipe. Fresh Aero reaches that same transition here, after
-            // the first opaque WPF present, so give it the same one-shot settle pass.
-            if (freshAero) QueueRefresh();
+        }
+        else if (_material == AeroGlassMaterial)
+        {
+            // Aero must be transparent from its first WPF render; staging it through an opaque
+            // paper frame leaves a dark redirected underlay. Re-apply once *after* WPF has
+            // produced that first alpha-aware content so DWM receives the complete bitmap.
+            Refresh(_requested, _dark, force: true);
         }
     }
 
