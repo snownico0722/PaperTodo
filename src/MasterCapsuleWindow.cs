@@ -37,6 +37,7 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDisplayChange = 0x007E;
     private const int WmDpiChanged = 0x02E0;
     private const int WmNcHitTest = 0x0084;
+    private const int WmRButtonUp = 0x0205;
     private static readonly IntPtr HtTransparent = new(-1);
     // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
@@ -239,20 +240,6 @@ public sealed class MasterCapsuleWindow : Window
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);
         contextMenu.Closed += (_, _) => _contextMenuSession.HandleClosed(contextMenu);
-        // ContextMenuService is not reliable when a subclassed material menu is launched
-        // from this standalone WS_EX_NOACTIVATE owner. Open the same production menu explicitly
-        // on pointer-up; WPF still owns popup placement, capture and outside-click dismissal.
-        _pill.PreviewMouseRightButtonUp += (_, e) =>
-        {
-            if (!contextMenu.IsOpen)
-            {
-                _controller.RebuildTrayMenu(contextMenu);
-                contextMenu.PlacementTarget = _pill;
-                contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-                contextMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
-            }
-            e.Handled = true;
-        };
         host.Children.Add(_pill);
         Content = host;
 
@@ -835,8 +822,39 @@ public sealed class MasterCapsuleWindow : Window
         Close();
     }
 
+    private void QueueContextMenuOpenFromPointer()
+    {
+        if (_isClosingForReal || _experimentalPassive) return;
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            new Action(() =>
+            {
+                if (_isClosingForReal || _experimentalPassive ||
+                    _pill.ContextMenu is not { IsOpen: false } menu)
+                {
+                    return;
+                }
+
+                _controller.RebuildTrayMenu(menu);
+                menu.PlacementTarget = _pill;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            }));
+    }
+
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WmRButtonUp && !_experimentalPassive)
+        {
+            // The master HWND is WS_EX_NOACTIVATE. ContextMenuService can miss a subclassed
+            // material menu on this owner, so handle only this HWND's real right-button release.
+            // Defer until the native mouse message has returned so that same release cannot
+            // immediately dismiss the popup we just opened.
+            handled = true;
+            QueueContextMenuOpenFromPointer();
+            return IntPtr.Zero;
+        }
+
         if (msg == WmNcHitTest && _experimentalPassive)
         {
             handled = true;
