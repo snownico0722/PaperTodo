@@ -684,7 +684,6 @@ public sealed partial class PaperWindow : Window
             controller,
             paper.Id,
             Dispatcher,
-            IsPointInsideDeepCapsuleOwnerSurface,
             OnDeepCapsuleContextMenuOpenChanged);
         InitializePaperPresentationState();
 
