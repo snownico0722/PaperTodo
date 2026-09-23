@@ -157,9 +157,22 @@ internal static class MaterialPresentationChecks
         RoutedEventHandler? opened = null;
         EventHandler? rendered = null;
         var observedFrames = 0;
+        HwndSource? masterSource = null;
+        HwndSourceHook? masterHook = null;
+        var rightButtonUps = 0;
+        var contextMenuMessages = 0;
         try
         {
             master.ShowPlaced(1, false, false); Wait(120);
+            var masterHwnd = new WindowInteropHelper(master).Handle;
+            masterSource = HwndSource.FromHwnd(masterHwnd);
+            masterHook = (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+            {
+                if (msg == 0x0205) rightButtonUps++;
+                if (msg == 0x007B) contextMenuMessages++;
+                return IntPtr.Zero;
+            };
+            masterSource?.AddHook(masterHook);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
             opened = (_, _) =>
@@ -188,8 +201,14 @@ internal static class MaterialPresentationChecks
                     var beforeFrames = observedFrames;
                     var point = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
                     SetCursorPos((int)point.X, (int)point.Y); Wait(25);
+                    GetCursorPos(out var actualPoint);
+                    var hit = WindowFromPoint(actualPoint);
+                    var beforeRightUps = rightButtonUps;
+                    var beforeContextMessages = contextMenuMessages;
                     mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
+                    Wait(80);
+                    Console.WriteLine($"MASTER INPUT skin={skin} theme={theme} attempt={attempt} target=0x{masterHwnd.ToInt64():X} hit=0x{hit.ToInt64():X} rightUp={rightButtonUps-beforeRightUps} context={contextMenuMessages-beforeContextMessages} open={menu.IsOpen}");
                     Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
@@ -218,6 +237,7 @@ internal static class MaterialPresentationChecks
         }
         finally
         {
+            if (masterSource != null && masterHook != null) masterSource.RemoveHook(masterHook);
             if (rendered != null) CompositionTarget.Rendering -= rendered;
             if (menu != null)
             {
@@ -243,6 +263,7 @@ internal static class MaterialPresentationChecks
     }
     [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(CursorPoint point);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 
