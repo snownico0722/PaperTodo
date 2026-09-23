@@ -104,7 +104,10 @@ internal sealed class DeepCapsuleContextMenuSession
                     topmost: true,
                     insertAfter: IntPtr.Zero);
                 WindowNative.TrySetForegroundWindow(source.Handle);
-                menu.Focus();
+                if (WindowNative.ForegroundWindow == source.Handle)
+                {
+                    menu.Focus();
+                }
             }));
     }
 
