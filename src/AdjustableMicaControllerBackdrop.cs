@@ -28,19 +28,23 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface ICompositorDesktopInterop
     {
-        void CreateDesktopWindowTarget(
+        [PreserveSig]
+        int CreateDesktopWindowTarget(
             IntPtr hwndTarget,
             [MarshalAs(UnmanagedType.Bool)] bool isTopmost,
-            out DesktopWindowTarget target);
+            out IntPtr result);
+
+        [PreserveSig]
+        int EnsureOnThread(int threadId);
     }
 
     [DllImport("CoreMessaging.dll", EntryPoint = "CreateDispatcherQueueController",
         CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern int CreateDispatcherQueueController(
+    private static extern uint CreateDispatcherQueueController(
         DispatcherQueueOptions options,
-        [MarshalAs(UnmanagedType.IUnknown)] out object dispatcherQueueController);
+        out IntPtr dispatcherQueueController);
 
-    private object? _dispatcherQueueController;
+    private global::Windows.System.DispatcherQueueController? _dispatcherQueueController;
     private Compositor? _compositor;
     private DesktopWindowTarget? _target;
     private MicaController? _controller;
@@ -166,11 +170,14 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         (_target as IDisposable)?.Dispose();
 
         var interop = _compositor.As<ICompositorDesktopInterop>();
-        // WPF already owns the non-topmost DirectComposition target for its HWND.
-        // The Windows App SDK Win32 Mica sample uses the topmost target; use the free
-        // topmost layer here and let the desktop-pixel regression verify foreground order.
-        interop.CreateDesktopWindowTarget(hwnd, true, out var target);
-        _target = target;
+        // Match the published WPF/Win32 Windows App SDK interop sample exactly at the ABI:
+        // preserve HRESULT, receive the raw IInspectable pointer, then project with FromAbi.
+        // This avoids relying on COM marshalling a WinRT class through an out parameter.
+        var hr = interop.CreateDesktopWindowTarget(hwnd, true, out var targetAbi);
+        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
+        if (targetAbi == IntPtr.Zero)
+            throw new COMException("CreateDesktopWindowTarget returned a null target.", hr);
+        _target = DesktopWindowTarget.FromAbi(targetAbi);
         _target.Root = _compositor.CreateContainerVisual();
     }
 
@@ -182,13 +189,24 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         var options = new DispatcherQueueOptions
         {
             Size = Marshal.SizeOf<DispatcherQueueOptions>(),
-            ThreadType = 2,
-            ApartmentType = 2
+            ThreadType = 2,    // DQTYPE_THREAD_CURRENT
+            ApartmentType = 0  // DQTAT_COM_NONE; matches the published WPF interop sample
         };
         LastStage = "dispatcher-queue";
-        var hr = CreateDispatcherQueueController(options, out var controller);
-        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-        _dispatcherQueueController = controller;
+        var hr = CreateDispatcherQueueController(options, out var controllerAbi);
+        if (hr != 0) Marshal.ThrowExceptionForHR(unchecked((int)hr));
+        if (controllerAbi == IntPtr.Zero)
+            throw new COMException("CreateDispatcherQueueController returned null.", unchecked((int)hr));
+        try
+        {
+            _dispatcherQueueController =
+                Marshal.GetObjectForIUnknown(controllerAbi) as global::Windows.System.DispatcherQueueController
+                ?? throw new InvalidCastException("DispatcherQueueController projection failed.");
+        }
+        finally
+        {
+            Marshal.Release(controllerAbi);
+        }
     }
 
     public void Dispose()
@@ -198,8 +216,7 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         _target = null;
         (_compositor as IDisposable)?.Dispose();
         _compositor = null;
-        if (_dispatcherQueueController is IDisposable disposable)
-            disposable.Dispose();
+        _dispatcherQueueController?.ShutdownQueueAsync();
         _dispatcherQueueController = null;
     }
 }
