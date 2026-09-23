@@ -41,8 +41,8 @@ internal static partial class Program
                     case "--export": ExportPreviewPixels(args[1]); break;
                     case "--smoke":
                         var text = string.Concat(Enumerable.Repeat("**sample** `code` [link](https://example.com) ", 30));
-                        Console.WriteLine("SMOKE_COLD " + JsonSerializer.Serialize(ProfileOne(text, MarkdownRenderModes.Full)));
-                        Console.WriteLine("SMOKE_WARM " + JsonSerializer.Serialize(ProfileOne(text, MarkdownRenderModes.Full, "layout")));
+                        Console.WriteLine("SMOKE_COLD " + JsonSerializer.Serialize(NamedPreviewMetrics(ProfileOne(text, MarkdownRenderModes.Full))));
+                        Console.WriteLine("SMOKE_WARM " + JsonSerializer.Serialize(NamedPreviewMetrics(ProfileOne(text, MarkdownRenderModes.Full, "layout"))));
                         MeasureLifecycle(smoke: true);
                         break;
                 }
