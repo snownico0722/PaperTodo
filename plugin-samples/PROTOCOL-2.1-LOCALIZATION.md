@@ -65,7 +65,7 @@ var uiLanguage = context.UiLanguage;
 
 ## Web 插件读取当前语言
 
-Body、Mini 和 provider Runtime 的 `initialize` 消息都会包含 `uiLanguage`，值与 Native 的 `context.UiLanguage` 一致：
+Body、Mini、provider Runtime 和 Web Popup 的 `initialize` 消息都会包含 `uiLanguage`，值与 Native 的 `context.UiLanguage` 一致：
 
 ```js
 window.addEventListener('papertodo', event => {
