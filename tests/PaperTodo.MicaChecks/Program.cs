@@ -69,7 +69,7 @@ internal static class Program
                 Assert(MicaBackdropTypes.Normalize("micaAlt") == MicaBackdropTypes.Mica, "retired Mica Alt migrates to Mica");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
                 Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 1, "clear Acrylic disables the fixed system backdrop");
-                Assert(new AppState().HideSurfaceOutline, "outer border is hidden by default");
+                Assert(!new AppState().HideSurfaceOutline, "outer border is visible by default");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
                 long version = 0;
                 foreach (var mode in new[] { "light", "dark", "system" })
