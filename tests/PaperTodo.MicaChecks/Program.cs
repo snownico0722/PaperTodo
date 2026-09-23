@@ -435,13 +435,14 @@ internal static class Program
                     ?? throw new InvalidOperationException("NativeMicaBackdrop missing.");
                 var adjustable = native.GetType().GetField("_adjustableMica", Private)!.GetValue(native)
                     ?? throw new InvalidOperationException("MicaController experiment did not activate.");
-                bool active = (bool)(adjustable.GetType().GetProperty("IsActive")!.GetValue(adjustable) ?? false);
+                var stateFlags = Private | BindingFlags.Public;
+                bool active = (bool)(adjustable.GetType().GetProperty("IsActive", stateFlags)!.GetValue(adjustable) ?? false);
                 Assert(active, "MicaController is active on the real PaperWindow");
                 return (
-                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity")!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity")!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedTintOpacity")!.GetValue(adjustable)),
-                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedLuminosityOpacity")!.GetValue(adjustable)));
+                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity", stateFlags)!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity", stateFlags)!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedTintOpacity", stateFlags)!.GetValue(adjustable)),
+                    Convert.ToSingle(adjustable.GetType().GetProperty("AppliedLuminosityOpacity", stateFlags)!.GetValue(adjustable)));
             }
 
             void Apply(string level, string theme = "light")
