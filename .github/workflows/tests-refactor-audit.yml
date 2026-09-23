@@ -1,0 +1,33 @@
+name: Tests refactor audit (temporary)
+on:
+  push:
+    branches: [refactor/tests-behavior-and-tools]
+    paths: [.github/workflows/tests-refactor-audit.yml]
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inventory implementation assertions and diagnostic references
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          patterns = re.compile(r'ReadAllText|ReadAllLines|GetMethodBody|GetILAsByteArray|OpCodes|GetFields\(|GetMethods\(|GetProperties\(|GetNestedTypes\(|GetCustomAttributes|GetField\(|GetProperty\(|GetMethod\(|GetNestedType\(|ReferenceEquals|AssertSame|SourceContains|ContainsSource|must.*(?:field|method|cache|type)|CallsMethod|AssertCall|source\.(?:Contains|IndexOf)|Regex\.(?:IsMatch|Matches)', re.I)
+          for path in sorted(Path('tests').rglob('*')):
+              if path.suffix not in ('.cs', '.cjs', '.ps1'): continue
+              lines = path.read_text(encoding='utf-8-sig').splitlines()
+              hits = [(i+1, line.strip()) for i,line in enumerate(lines) if patterns.search(line)]
+              if hits:
+                  print(f'\nFILE {path} ({len(lines)} lines)')
+                  for n,line in hits: print(f'{n}: {line}')
+          print('\nDIAGNOSTIC REFERENCES')
+          for root in ['src', 'tests', 'doc']:
+              for path in sorted(Path(root).rglob('*')):
+                  if path.suffix not in ('.cs', '.csproj', '.md'): continue
+                  for n,line in enumerate(path.read_text(encoding='utf-8-sig').splitlines(), 1):
+                      if re.search(r'src[/\\].*(?:Diagnostics|DiagnosticJournal|PreviewTrace)|TraceNoteRender|#if DEBUG|tools/PaperTodo.EdgeDiagnostics',line):
+                          if root != 'src' or 'TraceNoteRender' in line or '#if DEBUG' in line: print(f'{path}:{n}: {line.strip()}')
