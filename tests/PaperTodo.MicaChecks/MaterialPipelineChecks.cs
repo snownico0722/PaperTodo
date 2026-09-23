@@ -19,9 +19,11 @@ internal static class MaterialPipelineChecks
 
     private static void CheckStaticCapsuleProjection(AppController controller)
     {
-        var saved = (controller.State.PaperSkin, controller.State.Theme);
+        var saved = (controller.State.PaperSkin, controller.State.Theme,
+            controller.State.MatchAuxiliaryMaterialStrength);
         controller.State.PaperSkin = PaperSkins.Acrylic;
         controller.State.Theme = "light";
+        controller.State.MatchAuxiliaryMaterialStrength = true;
         Theme.Invalidate();
 
         var content = new TextBlock { Text = "Unchanged foreground" };
@@ -84,7 +86,8 @@ internal static class MaterialPipelineChecks
         finally
         {
             window.Close();
-            (controller.State.PaperSkin, controller.State.Theme) = saved;
+            (controller.State.PaperSkin, controller.State.Theme,
+                controller.State.MatchAuxiliaryMaterialStrength) = saved;
             Theme.Invalidate();
         }
 
