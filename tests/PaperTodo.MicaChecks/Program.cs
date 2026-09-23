@@ -414,8 +414,61 @@ internal static class Program
     }
     internal static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static bool Transparent(Brush brush) => brush is SolidColorBrush solid && solid.Color.A == 0;
+    private static void RunBareWpfMicaControllerProbe()
+    {
+        var grid = new Grid { Background = Brushes.Transparent };
+        var white = new Border
+        {
+            Width = 40, Height = 40, Background = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(30)
+        };
+        var black = new Border
+        {
+            Width = 40, Height = 40, Background = Brushes.Black,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(90, 30, 0, 0)
+        };
+        grid.Children.Add(white);
+        grid.Children.Add(black);
+
+        var window = new Window
+        {
+            Width = 320,
+            Height = 220,
+            Left = 40,
+            Top = 420,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = false,
+            Background = Brushes.Transparent,
+            Content = grid,
+            ShowInTaskbar = false
+        };
+        AdjustableMicaControllerBackdrop? backdrop = null;
+        try
+        {
+            window.Show();
+            PumpFor(220);
+            backdrop = new AdjustableMicaControllerBackdrop();
+            var hwnd = new WindowInteropHelper(window).Handle;
+            Assert(backdrop.TryApply(hwnd, false, MaterialTransparencyLevels.Medium, true),
+                $"bare WPF MicaController activates; stage={backdrop.LastStage}; error={backdrop.LastError ?? "<none>"}");
+            PumpFor(220);
+            VisualChecks.AssertOpaqueForegroundVisible(window, white, black, "bare-wpf-mica-controller");
+        }
+        finally
+        {
+            backdrop?.Dispose();
+            window.Close();
+            Pump();
+        }
+    }
+
     private static void RunMicaControllerExperiment(AppController controller)
     {
+        RunBareWpfMicaControllerProbe();
         typeof(AppController).GetProperty("UsesNativeMicaWindows", Private)!.SetValue(controller, true);
         var saved = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
             controller.State.MaterialTransparency, controller.State.EnableAnimations);
