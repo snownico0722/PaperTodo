@@ -105,9 +105,7 @@ public sealed partial class PaperWindow
 
         if (_edgeCapsuleHost != null)
         {
-            _edgeCapsuleHost.SetContextMenu(
-                BuildDeepCapsuleSlotContextMenu(),
-                DeepCapsuleContextMenuSession.ClearStaleApplicationActivationIfNeeded);
+            _edgeCapsuleHost.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
         }
 
         if (_noteBox != null)
