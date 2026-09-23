@@ -28,9 +28,10 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface ICompositorDesktopInterop
     {
-        DesktopWindowTarget CreateDesktopWindowTarget(
+        void CreateDesktopWindowTarget(
             IntPtr hwndTarget,
-            [MarshalAs(UnmanagedType.Bool)] bool isTopmost);
+            [MarshalAs(UnmanagedType.Bool)] bool isTopmost,
+            out DesktopWindowTarget target);
     }
 
     [DllImport("CoreMessaging.dll", EntryPoint = "CreateDispatcherQueueController",
@@ -49,6 +50,8 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
     private string _level = MaterialTransparencyLevels.Medium;
 
     internal bool IsActive { get; private set; }
+    internal string LastStage { get; private set; } = "not-started";
+    internal string? LastError { get; private set; }
     internal float DefaultTintOpacity { get; private set; }
     internal float DefaultLuminosityOpacity { get; private set; }
     internal float AppliedTintOpacity { get; private set; }
@@ -57,10 +60,13 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
     internal bool TryApply(IntPtr hwnd, bool dark, string? level, bool inputActive)
     {
         level = MaterialTransparencyLevels.Normalize(level);
+        LastError = null;
+        LastStage = "support-check";
         try
         {
             if (!MicaController.IsSupported())
             {
+                LastError = "MicaController.IsSupported returned false.";
                 Disable();
                 return false;
             }
@@ -76,12 +82,14 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
             }
 
             IsActive = _controller != null;
+            if (IsActive) LastStage = "active";
             return IsActive;
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or TypeLoadException or
                                    DllNotFoundException or EntryPointNotFoundException or NotSupportedException)
         {
-            Debug.WriteLine("MicaController experiment unavailable; using DWM Mica: " + ex.Message);
+            LastError = $"{ex.GetType().Name} HRESULT=0x{Marshal.GetHRForException(ex):X8}: {ex.Message}";
+            Debug.WriteLine($"MicaController experiment unavailable at {LastStage}; using DWM Mica: {LastError}");
             Disable();
             return false;
         }
@@ -104,19 +112,24 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
     private bool CreateController(IntPtr hwnd, bool dark, string level, bool inputActive)
     {
         Disable();
+        LastStage = "composition-target";
         EnsureCompositionTarget(hwnd);
 
+        LastStage = "configuration";
         var configuration = new SystemBackdropConfiguration
         {
             IsInputActive = inputActive,
             IsHighContrast = false,
             Theme = dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light
         };
+        LastStage = "controller-create";
         var controller = new MicaController { Kind = MicaKind.Base };
         controller.SetSystemBackdropConfiguration(configuration);
 
+        LastStage = "set-target";
         if (!controller.SetTarget(Win32Interop.GetWindowIdFromWindow(hwnd), _target!))
         {
+            LastError = "MicaController.SetTarget returned false.";
             controller.Dispose();
             return false;
         }
@@ -133,6 +146,7 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
             controller.LuminosityOpacity = AppliedLuminosityOpacity;
         }
 
+        LastStage = "apply-opacity";
         _configuration = configuration;
         _controller = controller;
         _hwnd = hwnd;
@@ -152,7 +166,8 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
         (_target as IDisposable)?.Dispose();
 
         var interop = _compositor.As<ICompositorDesktopInterop>();
-        _target = interop.CreateDesktopWindowTarget(hwnd, false);
+        interop.CreateDesktopWindowTarget(hwnd, false, out var target);
+        _target = target;
         _target.Root = _compositor.CreateContainerVisual();
     }
 
@@ -167,6 +182,7 @@ internal sealed class AdjustableMicaControllerBackdrop : IDisposable
             ThreadType = 2,
             ApartmentType = 2
         };
+        LastStage = "dispatcher-queue";
         var hr = CreateDispatcherQueueController(options, out var controller);
         if (hr < 0) Marshal.ThrowExceptionForHR(hr);
         _dispatcherQueueController = controller;

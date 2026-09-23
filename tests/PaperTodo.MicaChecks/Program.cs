@@ -437,7 +437,9 @@ internal static class Program
                     ?? throw new InvalidOperationException("MicaController experiment did not activate.");
                 var stateFlags = Private | BindingFlags.Public;
                 bool active = (bool)(adjustable.GetType().GetProperty("IsActive", stateFlags)!.GetValue(adjustable) ?? false);
-                Assert(active, "MicaController is active on the real PaperWindow");
+                var stage = Convert.ToString(adjustable.GetType().GetProperty("LastStage", stateFlags)!.GetValue(adjustable));
+                var error = Convert.ToString(adjustable.GetType().GetProperty("LastError", stateFlags)!.GetValue(adjustable));
+                Assert(active, $"MicaController is active on the real PaperWindow; stage={stage}; error={error ?? "<none>"}");
                 return (
                     Convert.ToSingle(adjustable.GetType().GetProperty("DefaultTintOpacity", stateFlags)!.GetValue(adjustable)),
                     Convert.ToSingle(adjustable.GetType().GetProperty("DefaultLuminosityOpacity", stateFlags)!.GetValue(adjustable)),
