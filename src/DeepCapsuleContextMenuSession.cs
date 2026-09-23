@@ -42,8 +42,8 @@ internal sealed class DeepCapsuleContextMenuSession
             _activeMenu.IsOpen = false;
         }
 
-        var openVersion = System.Threading.Interlocked.Increment(ref _openVersion);
-        System.Threading.Volatile.Write(ref _activeMenu, menu);
+        var openVersion = ++_openVersion;
+        _activeMenu = menu;
 
         // The owner remains NOACTIVATE. Suppress capsule topmost first, then let the real WPF
         // popup participate in the ordinary menu lifecycle rather than simulating outside clicks.
@@ -57,7 +57,7 @@ internal sealed class DeepCapsuleContextMenuSession
     {
         if (ReferenceEquals(_activeMenu, menu))
         {
-            System.Threading.Volatile.Write(ref _activeMenu, null);
+            _activeMenu = null;
             _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
             _onOpenChanged?.Invoke(false);
         }
@@ -80,7 +80,7 @@ internal sealed class DeepCapsuleContextMenuSession
         // fallback, but never clear a replacement menu opened re-entrantly.
         if (menu == null || ReferenceEquals(_activeMenu, menu))
         {
-            System.Threading.Volatile.Write(ref _activeMenu, null);
+            _activeMenu = null;
             _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
             _onOpenChanged?.Invoke(false);
         }
@@ -143,8 +143,8 @@ internal sealed class DeepCapsuleContextMenuSession
     }
 
     private bool IsCurrentOpen(ContextMenu menu, long openVersion) =>
-        ReferenceEquals(System.Threading.Volatile.Read(ref _activeMenu), menu) &&
-        System.Threading.Interlocked.Read(ref _openVersion) == openVersion &&
+        ReferenceEquals(_activeMenu, menu) &&
+        _openVersion == openVersion &&
         menu.IsOpen;
 
     private void CloseIfCurrent(ContextMenu menu, long openVersion)
