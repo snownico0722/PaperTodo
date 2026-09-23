@@ -62,3 +62,17 @@ var uiLanguage = context.UiLanguage;
 `PaperPluginEnvironment.UiLanguage` 也提供相同的进程级值。PaperTodo 的界面语言在重启后生效，因此这些值在一次进程生命周期内保持稳定。
 
 `locales` 只覆盖宿主绘制的 manifest/settings 文案；Native/Web 插件自己绘制的内容仍由插件自行组织翻译资源。
+
+## Web 插件读取当前语言
+
+Body、Mini 和 provider Runtime 的 `initialize` 消息都会包含 `uiLanguage`，值与 Native 的 `context.UiLanguage` 一致：
+
+```js
+window.addEventListener('papertodo', event => {
+  const message = event.detail || {};
+  if (message.type !== 'initialize') return;
+  const uiLanguage = message.uiLanguage || 'en-US';
+});
+```
+
+插件应优先使用宿主提供的 `uiLanguage`，不要依赖 WebView 或系统浏览器语言来判断 PaperTodo 当前界面语言。
