@@ -187,6 +187,20 @@ internal static class MaterialPresentationChecks
             AssertLightweightShadowRamp(window);
             controller.State.HideSurfaceOutline = savedOutline;
             window.RefreshSkin();
+
+            controller.State.PaperSkin = PaperSkins.Acrylic;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                !chrome.HasLightweightShadow && chrome.Effect is System.Windows.Media.Effects.DropShadowEffect,
+                "switching away from paper clears the lightweight shadow before restoring the legacy skin effect");
+
+            controller.State.PaperSkin = PaperSkins.Paper;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.HasLightweightShadow && chrome.Effect == null,
+                "switching back to paper restores only the lightweight shadow");
         }
         finally
         {
