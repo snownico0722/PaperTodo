@@ -43,4 +43,4 @@ dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --resize-s
 ```
 
 
-`--resize-shadow-benchmark` 专门验证 #36：固定使用默认纸片真实的透明窗口路径，在同一个空纸片窗口上交替保留/移除现有 `DropShadowEffect`，使用相同的 160 步原生窗口尺寸轨迹采集进程 CPU、DWM CPU、缩放消息间隔、布局次数和几何重建次数。只做诊断，不作为 CI 性能门槛。
+`--resize-shadow-benchmark` 专门验证 #36：固定使用默认纸片真实的透明窗口路径，在同一个空纸片窗口上依次对比旧整块 `DropShadowEffect`、当前轻量阴影和完全无阴影，使用相同的 160 步原生窗口尺寸轨迹采集进程 CPU、DWM CPU、缩放消息间隔、布局次数和几何重建次数，并验证轻量阴影确实绘制到透明外边距。只做诊断，不作为 CI 性能门槛。
