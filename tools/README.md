@@ -39,4 +39,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Markdown benchmark failed' }
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --benchmark .\material-benchmark.json
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-benchmark .\material-drag.json
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-snapshot-timing .\material-drag-snapshot.json
+dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --resize-shadow-benchmark .\\material-resize-shadow.json
 ```
+
+
+`--resize-shadow-benchmark` 专门验证 #36：固定使用默认纸片真实的透明窗口路径，在同一个空纸片窗口上交替保留/移除现有 `DropShadowEffect`，使用相同的右下角真实鼠标缩放轨迹采集进程 CPU、DWM CPU、缩放消息间隔、布局次数和几何重建次数。只做诊断，不作为 CI 性能门槛。
