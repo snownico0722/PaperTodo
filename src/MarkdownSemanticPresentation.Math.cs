@@ -175,7 +175,7 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         MarkdownSemanticSpan? next = null;
-        if (FullRevealEnabled && TryGetMathSpanAtOffset(CaretReveal.CaretOffset, out var found))
+        if (RevealEnabled && TryGetMathSpanAtOffset(CaretReveal.CaretOffset, out var found))
         {
             next = found;
         }
@@ -206,7 +206,7 @@ internal sealed partial class MarkdownSemanticPresentation
     }
 
     private bool IsMathSpanCurrentlyRevealed(MarkdownSemanticSpan span) =>
-        FullRevealEnabled &&
+        RevealEnabled &&
         MarkdownSemanticReveal.RevealRange(CaretReveal, span.Start, span.End);
 
     private static bool SameMathRange(

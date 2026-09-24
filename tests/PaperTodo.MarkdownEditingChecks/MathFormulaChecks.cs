@@ -178,12 +178,12 @@ internal static partial class Program
                     generator.GetType().Name.Contains("MathElementGenerator", StringComparison.Ordinal)),
                 "plain notes do not install the math element generator");
 
-            using var formula = new Editor("$x^2$");
-            formula.Box.SetPreviewMode(true);
+            plain.Box.Text = "$x^2$";
+            plain.Box.SetPreviewMode(true);
             Pump();
-            LayoutMathEditor(formula.Box);
+            LayoutMathEditor(plain.Box);
             Require(
-                formula.Box.TextArea.TextView.ElementGenerators.Any(generator =>
+                plain.Box.TextArea.TextView.ElementGenerators.Any(generator =>
                     generator.GetType().Name.Contains("MathElementGenerator", StringComparison.Ordinal)),
                 "first recognized formula installs the math presentation once");
         });
