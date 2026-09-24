@@ -166,6 +166,8 @@ internal static class MaterialPresentationChecks
             // Theme/skin refresh may change only the shadow recipe here. During a real form
             // transition Margin/CornerRadius are frame-owned, so refreshing paint must not
             // snap those geometry values to an endpoint.
+            var normalMargin = chrome.Margin;
+            var normalCorner = chrome.CornerRadius;
             var transitionMargin = new Thickness(3.25);
             var transitionCorner = new CornerRadius(11.5);
             chrome.Margin = transitionMargin;
@@ -177,6 +179,9 @@ internal static class MaterialPresentationChecks
                 chrome.Effect == null &&
                 chrome.HasLightweightShadow,
                 "skin refresh changes paper shadow without rewriting transition geometry");
+            chrome.Margin = normalMargin;
+            chrome.CornerRadius = normalCorner;
+            window.UpdateLayout();
 
             var savedOutline = controller.State.HideSurfaceOutline;
             controller.State.HideSurfaceOutline = true;
