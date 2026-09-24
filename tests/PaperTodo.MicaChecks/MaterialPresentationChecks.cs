@@ -149,6 +149,7 @@ internal static class MaterialPresentationChecks
                 chrome.Effect == null &&
                 chrome.HasLightweightShadow,
                 "default floating paper uses lightweight shadow instead of DropShadowEffect");
+            AssertLightweightShadowRamp(window);
 
             window.SetCollapsedState(true, animate: false, saveGeometry: false);
             Wait(80);
@@ -187,6 +188,65 @@ internal static class MaterialPresentationChecks
             nativeProperty.SetValue(controller, savedNative);
             Theme.Invalidate();
         }
+    }
+
+    private static void AssertLightweightShadowRamp(PaperWindow window)
+    {
+        window.UpdateLayout();
+        if (window.Content is not FrameworkElement host ||
+            host.ActualWidth <= 24 ||
+            host.ActualHeight <= 24)
+        {
+            throw new InvalidOperationException("default paper host is not renderable");
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(host);
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(host.ActualWidth * dpi.DpiScaleX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(host.ActualHeight * dpi.DpiScaleY));
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            pixelWidth,
+            pixelHeight,
+            96 * dpi.DpiScaleX,
+            96 * dpi.DpiScaleY,
+            PixelFormats.Pbgra32);
+        bitmap.Render(host);
+
+        byte Alpha(double xDip, double yDip)
+        {
+            var x = Math.Clamp((int)Math.Round(xDip * dpi.DpiScaleX), 0, pixelWidth - 1);
+            var y = Math.Clamp((int)Math.Round(yDip * dpi.DpiScaleY), 0, pixelHeight - 1);
+            var pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+            return pixel[3];
+        }
+
+        var midX = host.ActualWidth / 2;
+        var midY = host.ActualHeight / 2;
+        var left = new[] { Alpha(0, midY), Alpha(4, midY), Alpha(7, midY) };
+        var right = new[]
+        {
+            Alpha(host.ActualWidth - 1, midY),
+            Alpha(host.ActualWidth - 4, midY),
+            Alpha(host.ActualWidth - 7, midY)
+        };
+        var top = new[] { Alpha(midX, 0), Alpha(midX, 4), Alpha(midX, 7) };
+        var bottom = new[]
+        {
+            Alpha(midX, host.ActualHeight - 1),
+            Alpha(midX, host.ActualHeight - 4),
+            Alpha(midX, host.ActualHeight - 7)
+        };
+
+        static bool FadesIn(byte[] samples) =>
+            samples[0] < samples[1] &&
+            samples[1] < samples[2] &&
+            samples[1] >= 2;
+
+        Program.Assert(
+            FadesIn(left) && FadesIn(right) && FadesIn(top) && FadesIn(bottom),
+            $"lightweight shadow fades through every gutter edge: " +
+            $"L={string.Join(',', left)} R={string.Join(',', right)} " +
+            $"T={string.Join(',', top)} B={string.Join(',', bottom)}");
     }
 
     private static void CheckRealRightClicks(AppController controller)
