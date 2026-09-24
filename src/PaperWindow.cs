@@ -1130,12 +1130,9 @@ public sealed partial class PaperWindow : Window
         ApplyPaperChromePresentation();
     }
 
-    // Central authority for the paper chrome's snap/form presentation: Effect, Margin and
+    // Central authority for the paper chrome's snap/form presentation: shadow, Margin and
     // CornerRadius. Any code that changes these based on paper form (expanded vs capsule)
     // or snap state should go through here so the inputs can't disagree with each other.
-    // Historical bug: two call sites (SetCollapsedState) mutated an existing DropShadowEffect
-    // in-place via `if (Effect is DropShadowEffect s)`. Once snap can set Effect=null,
-    // that check silently no-ops and the capsule ends up with expanded-shape shadow (or none).
     private void ApplyPaperChromePresentation()
     {
         if (_paperChrome == null)
@@ -1156,6 +1153,7 @@ public sealed partial class PaperWindow : Window
         if (snappedExpanded)
         {
             _paperChrome.Effect = null;
+            _paperChrome.ClearLightweightShadow();
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
@@ -1171,11 +1169,29 @@ public sealed partial class PaperWindow : Window
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        // Native expanded papers use the system frame, even during solid fallback.
-        // Applying an Effect to a transparent content ancestor also shadows its glyphs.
-        _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
-            ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
-            : CreatePaperChromeShadow();
+        // Default paper uses size-independent soft rings in the existing transparent gutter.
+        // DropShadowEffect re-rasterizes/blurs the whole changing surface on every resize frame.
+        // Other experimental skins keep their existing Effect until they have separate visual
+        // parity coverage; native expanded papers continue to use the system frame.
+        var useLightweightPaperShadow =
+            !UsesNativePaperChrome &&
+            Theme.Skin == PaperSkins.Paper &&
+            !SystemParameters.HighContrast;
+        if (useLightweightPaperShadow)
+        {
+            _paperChrome.Effect = null;
+            if (isCapsule)
+                _paperChrome.SetLightweightShadow(blurRadius: 8, depth: 1, opacity: 0.12);
+            else
+                _paperChrome.SetLightweightShadow(blurRadius: 14, depth: 2, opacity: 0.22);
+        }
+        else
+        {
+            _paperChrome.ClearLightweightShadow();
+            _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
+                ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
+                : CreatePaperChromeShadow();
+        }
         RefreshPluginBodyClip();
         RefreshNativeMica();
         RefreshExperimentalFocusPresentation(animate: false);
@@ -1847,8 +1863,7 @@ public sealed partial class PaperWindow : Window
             Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
             BorderThickness = new Thickness(1),
-            SnapsToDevicePixels = true,
-            Effect = CreatePaperChromeShadow()
+            SnapsToDevicePixels = true
         };
         _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
