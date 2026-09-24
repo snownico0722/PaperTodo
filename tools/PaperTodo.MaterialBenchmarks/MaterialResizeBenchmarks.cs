@@ -87,6 +87,7 @@ internal static class MaterialResizeBenchmarks
                 .GetField("_paperChrome", Private)!.GetValue(window)!;
             Program.Assert(chrome.Effect == null && chrome.HasLightweightShadow,
                 "default paper uses the production lightweight shadow");
+            AssertLightweightShadowPixels(window);
 
             var surfaces = Descendants(window).OfType<SkinBorder>().ToArray();
             Program.Assert(surfaces.Length > 0, "production skin surface exists");
@@ -317,6 +318,46 @@ internal static class MaterialResizeBenchmarks
             source.RemoveHook(hook);
             window.LayoutUpdated -= layout;
         }
+    }
+
+    private static void AssertLightweightShadowPixels(PaperWindow window)
+    {
+        window.UpdateLayout();
+        if (window.Content is not FrameworkElement host ||
+            host.ActualWidth <= 20 ||
+            host.ActualHeight <= 20)
+        {
+            throw new InvalidOperationException("default paper host is not renderable");
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(host);
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(host.ActualWidth * dpi.DpiScaleX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(host.ActualHeight * dpi.DpiScaleY));
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            pixelWidth,
+            pixelHeight,
+            96 * dpi.DpiScaleX,
+            96 * dpi.DpiScaleY,
+            PixelFormats.Pbgra32);
+        bitmap.Render(host);
+
+        var y = Math.Clamp((int)Math.Round(pixelHeight / 2d), 0, pixelHeight - 1);
+        byte AlphaAtDip(double xDip)
+        {
+            var x = Math.Clamp((int)Math.Round(xDip * dpi.DpiScaleX), 0, pixelWidth - 1);
+            var pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+            return pixel[3];
+        }
+
+        var farOutside = AlphaAtDip(0);
+        var softGutter = AlphaAtDip(4);
+        var nearPaper = AlphaAtDip(7);
+        Program.Assert(
+            farOutside <= 2 &&
+            softGutter >= 3 &&
+            nearPaper > softGutter,
+            $"lightweight shadow paints a real outside alpha ramp: alpha[0,4,7]={farOutside},{softGutter},{nearPaper}");
     }
 
     private static void ResetWindow(PaperWindow window)
