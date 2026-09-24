@@ -6,10 +6,15 @@ JSON DisplayList plus logical dimensions and baseline. It does not rasterize for
 content, or create a second Markdown document.
 
 RaTeX is pinned in Cargo.toml to commit c902516816cdc84519827d8b46d1cd40270d0451.
-The matching unmodified KaTeX TTF files are checked in under assets/math-fonts/. Before serializing
-a DisplayList, the bridge normalizes mathematical alphanumeric Unicode scalars to the exact cmap
-slot RaTeX uses for those TTFs. Managed WPF code can therefore map font + char_code + position +
-scale directly to GlyphRun without duplicating RaTeX's font-remapping rules.
+The matching unmodified KaTeX TTF source files are retained under assets/math-fonts/. The build
+embeds both those fonts and papertodo_math.dll into the PaperTodo assembly, so the existing
+single-file release packages do not require formula sidecars. At runtime PaperTodo extracts a
+content-hashed temporary copy only for APIs that require a filesystem font/DLL path.
+
+Before serializing a DisplayList, the bridge normalizes mathematical alphanumeric Unicode scalars
+to the exact cmap slot RaTeX uses for those TTFs. Managed WPF code can therefore map
+font + char_code + position + scale directly to GlyphRun without duplicating RaTeX's font-remapping
+rules.
 
 ## Wire protocol
 
