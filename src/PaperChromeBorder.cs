@@ -95,9 +95,10 @@ internal class PaperChromeBorder : Border
             return;
         }
 
-        // WPF DropShadowEffect's default direction is visually down/right. A small diagonal
-        // shift retains that weight without making the lightweight rings depend on window size.
-        var diagonalDepth = depth / Math.Sqrt(2);
+        // WPF DropShadowEffect's default direction is visually down/right. Outside-only
+        // rings cannot carry the full offset without opening a transparent seam between the
+        // paper and the right/bottom shadow, so retain only a sub-DIP directional bias.
+        var diagonalDepth = Math.Min(depth / Math.Sqrt(2), 0.5);
 
         // The existing paper HWND reserves an 8-DIP gutter. Account for directional depth
         // before choosing the soft-ring extent so the down/right edge is not clipped by the
