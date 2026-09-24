@@ -13,6 +13,7 @@ internal static class Program
             ("multiline display math", MultilineDisplayMath),
             ("code regions exclude math", CodeRegionsExcludeMath),
             ("escaped and currency dollars stay text", DollarTextBoundaries),
+            ("backslash aliases preserve Markdown escapes", BackslashAliasBoundaries),
             ("Markdown links exclude math", MarkdownLinksExcludeMath),
             ("CRLF display math", CrLfDisplayMath),
             ("unclosed display math stays source", UnclosedDisplayMath),
@@ -103,6 +104,22 @@ $$
         Assert(!snapshot.Spans.Any(IsMath), "Escaped/currency dollars were misread as math.");
     }
 
+    private static void BackslashAliasBoundaries()
+    {
+        Assert(
+            !MarkdownSemanticSnapshot.Parse(@"\[not link\]").Spans.Any(IsMath),
+            "Ordinary escaped brackets were claimed as display math.");
+        Assert(
+            !MarkdownSemanticSnapshot.Parse(@"\(literal\)").Spans.Any(IsMath),
+            "Plain escaped parentheses were claimed as inline math.");
+        Assert(
+            MarkdownSemanticSnapshot.Parse(@"\(x+y\)").Spans.Count(IsMath) == 1,
+            "Math-shaped parenthesis alias was not recognized.");
+        Assert(
+            MarkdownSemanticSnapshot.Parse("\\[\n\\frac{a}{b}\n\\]").Spans.Count(IsMath) == 1,
+            "Multiline bracket display alias was not recognized.");
+    }
+
     private static void MarkdownLinksExcludeMath()
     {
         const string source = "[$x$](https://example.com)";
@@ -132,16 +149,27 @@ $$
 
     private static void BlockDelimiterEditForcesExactParse()
     {
+        var delimiterOld = "prefix\n$\nbody";
+        var delimiterNew = "prefix\n$\nbody";
         Assert(
-            MarkdownMathIncremental.ChangeMayAffectDelimiterState(
-                "prefix\n$\nbody",
-                "prefix\n$$\nbody"),
+            !MarkdownSemanticSnapshot.TryParseIncrementalLocal(
+                delimiterOld,
+                MarkdownSemanticSnapshot.Parse(delimiterOld),
+                delimiterNew,
+                out _,
+                out _),
             "Adding the second block delimiter dollar must force a full parse.");
+
+        var ordinaryOld = "prefix\nordinary text";
+        var ordinaryNew = "prefix\nordinary texts";
         Assert(
-            !MarkdownMathIncremental.ChangeMayAffectDelimiterState(
-                "prefix\nordinary text",
-                "prefix\nordinary texts"),
-            "Ordinary long-note edits must retain the incremental path.");
+            MarkdownSemanticSnapshot.TryParseIncrementalLocal(
+                ordinaryOld,
+                MarkdownSemanticSnapshot.Parse(ordinaryOld),
+                ordinaryNew,
+                out _,
+                out _),
+            "Ordinary edits must retain the incremental path.");
 
         var prefix = new string('a', MarkdownSemanticDocument.FullParseThresholdChars + 200);
         var document = new TextDocument(prefix + "\nplain");
