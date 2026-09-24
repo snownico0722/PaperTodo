@@ -10,8 +10,8 @@ using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using PaperTodo;
 
-// Issue #36 diagnostic only. The production default-paper path is left unchanged;
-// each measured run only toggles the existing chrome Effect between its real value and null.
+// Issue #36 benchmark: compare the retired full-surface blur, the production lightweight
+// paper shadow, and no shadow under the exact same native resize trajectory.
 internal static class MaterialResizeBenchmarks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -22,7 +22,7 @@ internal static class MaterialResizeBenchmarks
     private sealed record SizeSample(double Milliseconds, int Width, int Height);
 
     private sealed record Measurement(
-        bool ShadowEnabled,
+        string ShadowMode,
         int Round,
         double DurationMs,
         double ProcessCpuMs,
@@ -83,30 +83,32 @@ internal static class MaterialResizeBenchmarks
             Program.Assert(!window.IsNativeMicaEffective,
                 "default paper benchmark must not activate a native backdrop");
 
-            var chrome = (UIElement)typeof(PaperWindow)
+            var chrome = (PaperChromeBorder)typeof(PaperWindow)
                 .GetField("_paperChrome", Private)!.GetValue(window)!;
-            var productionShadow = chrome.Effect;
-            Program.Assert(productionShadow is DropShadowEffect,
-                "default paper chrome has the production DropShadowEffect");
+            Program.Assert(chrome.Effect == null && chrome.HasLightweightShadow,
+                "default paper uses the production lightweight shadow");
 
             var surfaces = Descendants(window).OfType<SkinBorder>().ToArray();
             Program.Assert(surfaces.Length > 0, "production skin surface exists");
 
-            // Warm both variants once. Measured rounds alternate order so later/hotter samples
-            // do not consistently favor either side.
-            Measure(window, chrome, productionShadow, surfaces, true, -1);
-            Measure(window, chrome, productionShadow, surfaces, false, -1);
+            const string legacy = "legacy-effect";
+            const string lightweight = "lightweight";
+            const string none = "none";
+
+            // Warm all variants once. Measured rounds reverse order so the later/hotter pass
+            // does not consistently favor either implementation.
+            Measure(window, chrome, surfaces, legacy, -1);
+            Measure(window, chrome, surfaces, lightweight, -1);
+            Measure(window, chrome, surfaces, none, -1);
 
             var orders = new[]
             {
-                new[] { true, false },
-                new[] { false, true },
-                new[] { true, false }
+                new[] { legacy, lightweight, none },
+                new[] { none, lightweight, legacy }
             };
             for (var round = 0; round < orders.Length; round++)
-                foreach (var shadowEnabled in orders[round])
-                    results.Add(Measure(
-                        window, chrome, productionShadow, surfaces, shadowEnabled, round));
+                foreach (var shadowMode in orders[round])
+                    results.Add(Measure(window, chrome, surfaces, shadowMode, round));
 
             WriteResults();
         }
@@ -119,12 +121,15 @@ internal static class MaterialResizeBenchmarks
 
         void WriteResults()
         {
-            var withShadow = results.Where(x => x.ShadowEnabled).ToArray();
-            var withoutShadow = results.Where(x => !x.ShadowEnabled).ToArray();
-            var shadowCpu = Median(withShadow.Select(x => x.ProcessCpuMs));
-            var noShadowCpu = Median(withoutShadow.Select(x => x.ProcessCpuMs));
-            var shadowP95 = Median(withShadow.Select(x => x.ResizeIntervalP95Ms));
-            var noShadowP95 = Median(withoutShadow.Select(x => x.ResizeIntervalP95Ms));
+            var legacy = results.Where(x => x.ShadowMode == "legacy-effect").ToArray();
+            var lightweight = results.Where(x => x.ShadowMode == "lightweight").ToArray();
+            var none = results.Where(x => x.ShadowMode == "none").ToArray();
+            var legacyCpu = Median(legacy.Select(x => x.ProcessCpuMs));
+            var lightweightCpu = Median(lightweight.Select(x => x.ProcessCpuMs));
+            var noShadowCpu = Median(none.Select(x => x.ProcessCpuMs));
+            var legacyP95 = Median(legacy.Select(x => x.ResizeIntervalP95Ms));
+            var lightweightP95 = Median(lightweight.Select(x => x.ResizeIntervalP95Ms));
+            var noShadowP95 = Median(none.Select(x => x.ResizeIntervalP95Ms));
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
             File.WriteAllText(output, JsonSerializer.Serialize(new
@@ -135,17 +140,21 @@ internal static class MaterialResizeBenchmarks
                 Processors = Environment.ProcessorCount,
                 RenderTier = RenderCapability.Tier >> 16,
                 DragFullWindows = SystemParameters.DragFullWindows,
-                Scope = "Issue #36. One empty production default-paper HWND receives the same 160-step native SetWindowPos size trajectory. Same HWND/content/timing; only _paperChrome.Effect alternates between the production DropShadowEffect and null. This bypasses hosted Windows' outline-only interactive resize while retaining real HWND resize, WPF layout/render and DWM work. Diagnostic only, not a performance gate.",
+                Scope = "Issue #36. One empty production default-paper HWND receives the same 160-step native SetWindowPos size trajectory. The three variants are the retired whole-surface DropShadowEffect, the production lightweight ring shadow, and no shadow. This bypasses hosted Windows' outline-only interactive resize while retaining real HWND resize, WPF layout/render and DWM work. Diagnostic only, not a performance gate.",
                 Summary = new
                 {
-                    ShadowProcessCpuMedianMs = shadowCpu,
+                    LegacyProcessCpuMedianMs = legacyCpu,
+                    LightweightProcessCpuMedianMs = lightweightCpu,
                     NoShadowProcessCpuMedianMs = noShadowCpu,
-                    ProcessCpuSavedPercentWhenShadowDisabled = PercentSaved(shadowCpu, noShadowCpu),
-                    ShadowDwmCpuMedianMs = NullableMedian(withShadow.Select(x => x.DwmCpuMs)),
-                    NoShadowDwmCpuMedianMs = NullableMedian(withoutShadow.Select(x => x.DwmCpuMs)),
-                    ShadowResizeIntervalP95MedianMs = shadowP95,
+                    ProcessCpuSavedPercentLightweightVsLegacy = PercentSaved(legacyCpu, lightweightCpu),
+                    LightweightOverNoShadowProcessCpuPercent = noShadowCpu <= 0 ? 0 : (lightweightCpu - noShadowCpu) / noShadowCpu * 100,
+                    LegacyDwmCpuMedianMs = NullableMedian(legacy.Select(x => x.DwmCpuMs)),
+                    LightweightDwmCpuMedianMs = NullableMedian(lightweight.Select(x => x.DwmCpuMs)),
+                    NoShadowDwmCpuMedianMs = NullableMedian(none.Select(x => x.DwmCpuMs)),
+                    LegacyResizeIntervalP95MedianMs = legacyP95,
+                    LightweightResizeIntervalP95MedianMs = lightweightP95,
                     NoShadowResizeIntervalP95MedianMs = noShadowP95,
-                    ResizeP95SavedPercentWhenShadowDisabled = PercentSaved(shadowP95, noShadowP95)
+                    ResizeP95SavedPercentLightweightVsLegacy = PercentSaved(legacyP95, lightweightP95)
                 },
                 Results = results
             }, new JsonSerializerOptions { WriteIndented = true }));
@@ -154,14 +163,27 @@ internal static class MaterialResizeBenchmarks
 
     private static Measurement Measure(
         PaperWindow window,
-        UIElement chrome,
-        Effect productionShadow,
+        PaperChromeBorder chrome,
         SkinBorder[] surfaces,
-        bool shadowEnabled,
+        string shadowMode,
         int round)
     {
         ResetWindow(window);
-        chrome.Effect = shadowEnabled ? productionShadow : null;
+        chrome.Effect = null;
+        chrome.ClearLightweightShadow();
+        switch (shadowMode)
+        {
+            case "legacy-effect":
+                chrome.Effect = SkinBorder.CreateShadow(14, 2, 0.22);
+                break;
+            case "lightweight":
+                chrome.SetLightweightShadow(14, 2, 0.22);
+                break;
+            case "none":
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown shadow mode: {shadowMode}");
+        }
         Wait(160);
 
         var hwnd = new WindowInteropHelper(window).Handle;
@@ -250,11 +272,11 @@ internal static class MaterialResizeBenchmarks
             var finalWidth = final.Right - final.Left;
             var finalHeight = final.Bottom - final.Top;
             Program.Assert(samples.Count >= 120,
-                $"native resize changed HWND repeatedly: shadow={shadowEnabled}, samples={samples.Count}");
+                $"native resize changed HWND repeatedly: shadow={shadowMode}, samples={samples.Count}");
             Program.Assert(
                 finalWidth >= initialWidth + 210 &&
                 finalHeight >= initialHeight + 130,
-                $"native resize reached target extent: shadow={shadowEnabled}, final={finalWidth}x{finalHeight}");
+                $"native resize reached target extent: shadow={shadowMode}, final={finalWidth}x{finalHeight}");
             Program.Assert(
                 ReferenceEquals(content, window.Content) &&
                 new WindowInteropHelper(window).Handle == hwnd,
@@ -266,7 +288,7 @@ internal static class MaterialResizeBenchmarks
                 driverTimes.Skip(1), (a, b) => b - a).ToArray();
 
             var measurement = new Measurement(
-                shadowEnabled,
+                shadowMode,
                 round,
                 elapsed,
                 cpuMs,
@@ -285,7 +307,7 @@ internal static class MaterialResizeBenchmarks
                 samples);
 
             Console.WriteLine(
-                $"RESIZE shadow={shadowEnabled}/r={round}: sizes={samples.Count}, " +
+                $"RESIZE shadow={shadowMode}/r={round}: sizes={samples.Count}, " +
                 $"cpu={cpuMs:F1}ms, p95={measurement.ResizeIntervalP95Ms:F2}ms, " +
                 $"layouts={layouts}, geometry={geometryBuilds}");
             return measurement;
