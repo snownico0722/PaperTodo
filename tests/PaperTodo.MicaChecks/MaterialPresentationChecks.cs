@@ -161,6 +161,21 @@ internal static class MaterialPresentationChecks
             Program.Assert(
                 chrome.Effect == null && chrome.HasLightweightShadow,
                 "expanded default paper restores the lightweight shadow path");
+
+            // Theme/skin refresh may change only the shadow recipe here. During a real form
+            // transition Margin/CornerRadius are frame-owned, so refreshing paint must not
+            // snap those geometry values to an endpoint.
+            var transitionMargin = new Thickness(3.25);
+            var transitionCorner = new CornerRadius(11.5);
+            chrome.Margin = transitionMargin;
+            chrome.CornerRadius = transitionCorner;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Margin == transitionMargin &&
+                chrome.CornerRadius == transitionCorner &&
+                chrome.Effect == null &&
+                chrome.HasLightweightShadow,
+                "skin refresh changes paper shadow without rewriting transition geometry");
         }
         finally
         {
