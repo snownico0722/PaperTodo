@@ -13,9 +13,16 @@ internal static class MarkdownMathSource
         if (span.Kind is not (
                 MarkdownSemanticSpanKind.InlineMath or
                 MarkdownSemanticSpanKind.BlockMath) ||
-            span.Length <= 0 ||
+            span.MarkerLength is < 1 or > 2 ||
+            span.Length <= span.MarkerLength * 2 ||
             span.Start < 0 ||
             span.End > source.Length)
+        {
+            return false;
+        }
+
+        var contentLength = span.Length - span.MarkerLength * 2;
+        if (contentLength > MarkdownMathScanner.MaximumFormulaContentLength)
         {
             return false;
         }
