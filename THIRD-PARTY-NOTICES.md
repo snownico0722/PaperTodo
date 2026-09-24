@@ -18,10 +18,12 @@ PaperTodo's native Markdown formula bridge uses
 `c902516816cdc84519827d8b46d1cd40270d0451`. RaTeX is distributed under the
 MIT License.
 
-The resulting native library embeds the unmodified KaTeX mathematical fonts
-used by RaTeX. Those fonts are distributed under the SIL Open Font License,
-Version 1.1. The upstream RaTeX license, third-party notice, KaTeX attribution,
-and complete OFL text are retained under `native/math/upstream/`.
+PaperTodo ships the unmodified KaTeX mathematical TTFs from that same RaTeX
+revision under `assets/math-fonts/`. RaTeX computes formula layout; WPF renders
+those exact fonts through `GlyphRun`, so native and managed metrics cannot drift.
+The fonts are distributed under the SIL Open Font License, Version 1.1. The
+upstream RaTeX license, third-party notice, KaTeX attribution, and complete OFL
+text are retained under `native/math/upstream/`.
 
 ## AvalonEdit
 

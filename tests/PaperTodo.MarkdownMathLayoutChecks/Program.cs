@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Rendering;
 using PaperTodo;
@@ -12,15 +13,54 @@ internal static class Program
 
         try
         {
+            VectorRendererUsesGlyphRuns();
             PreviewingMultilineFormulaDoesNotSkipUncollapsedLines();
             FullModeRevealRestoresAndRecollapsesSource();
-            Console.WriteLine("Markdown math layout checks passed: 2");
+            Console.WriteLine("Markdown math layout checks passed: 3");
             return 0;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ex);
             return 1;
+        }
+    }
+
+    private static void VectorRendererUsesGlyphRuns()
+    {
+        Require(
+            MarkdownMathRenderer.TryRender(
+                @"\frac{a+b}{c}",
+                false,
+                18,
+                Colors.Black,
+                1.0,
+                out var drawing),
+            "RaTeX vector renderer should produce a WPF drawing");
+
+        var flattened = FlattenDrawings(drawing.Drawing).ToArray();
+        Require(
+            flattened.Any(candidate => candidate is GlyphRunDrawing),
+            "ordinary formula characters must render through WPF GlyphRun");
+        Require(
+            flattened.All(candidate => candidate is not ImageDrawing),
+            "210 v2 must not fall back to bitmap formula drawings");
+    }
+
+    private static IEnumerable<Drawing> FlattenDrawings(Drawing drawing)
+    {
+        yield return drawing;
+        if (drawing is not DrawingGroup group)
+        {
+            yield break;
+        }
+
+        foreach (var child in group.Children)
+        {
+            foreach (var descendant in FlattenDrawings(child))
+            {
+                yield return descendant;
+            }
         }
     }
 

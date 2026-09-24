@@ -338,10 +338,11 @@ dependencies = [
 name = "papertodo-math"
 version = "0.1.0"
 dependencies = [
+ "ratex-font",
  "ratex-layout",
  "ratex-parser",
- "ratex-render",
  "ratex-types",
+ "serde_json",
 ]
 
 [[package]]

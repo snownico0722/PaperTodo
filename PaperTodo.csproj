@@ -52,6 +52,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <!-- RaTeX lays out against this exact KaTeX font revision; WPF GlyphRun must use the same TTFs. -->
+    <Content Include="assets\math-fonts\*.ttf">
+      <TargetPath>math-fonts\%(Filename)%(Extension)</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />

@@ -3,13 +3,16 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Rendering;
 
 namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
-    private readonly Dictionary<MathCollapseKey, CollapsedLineSection> _mathCollapsedSections = new();
+    private readonly Dictionary<MathCollapseKey, FoldingSection> _mathFoldings = new();
+    private FoldingManager? _mathFoldingManager;
+    private FoldingMargin? _mathFoldingMargin;
     private MathElementGenerator? _mathElementGenerator;
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
     private bool _syncingMathCollapsedLines;
@@ -18,14 +21,26 @@ internal sealed partial class MarkdownSemanticPresentation
     private readonly record struct MathCollapseKey(int Start, int End);
 
     private readonly record struct MathCollapseTarget(
-        DocumentLine StartLine,
-        DocumentLine EndLine);
+        int Start,
+        int End,
+        bool ShouldFold);
 
     private bool RenderMath =>
         ApplyMarkdownStyle && (_editor.IsPreviewMode || IsFullMode);
 
     private void AttachMathPresentation()
     {
+        // Let AvalonEdit own physical-line folding and height-tree bookkeeping. Formula folding is
+        // presentation-only, so hide the gutter and put PaperTodo's replacement generator first.
+        _mathFoldingManager = FoldingManager.Install(_editor.TextArea);
+        _mathFoldingMargin = _editor.TextArea.LeftMargins
+            .OfType<FoldingMargin>()
+            .FirstOrDefault(margin => ReferenceEquals(margin.FoldingManager, _mathFoldingManager));
+        if (_mathFoldingMargin != null)
+        {
+            _editor.TextArea.LeftMargins.Remove(_mathFoldingMargin);
+        }
+
         _mathElementGenerator = new MathElementGenerator(this);
         _semanticDocument.SnapshotChanged += OnMathSnapshotChanged;
         _editor.TextArea.Caret.PositionChanged += OnMathCaretPositionChanged;
@@ -49,13 +64,19 @@ internal sealed partial class MarkdownSemanticPresentation
         _editor.CaretRevealGestureEnded -= OnMathCaretRevealGestureEnded;
         _editor.SizeChanged -= OnMathHostSizeChanged;
         _editor.TextArea.TextView.VisualLinesChanged -= OnMathVisualLinesChanged;
-        ClearMathCollapsedLines();
-
         if (_mathElementGenerator != null)
         {
             _editor.TextArea.TextView.ElementGenerators.Remove(_mathElementGenerator);
             _mathElementGenerator = null;
         }
+
+        ClearMathCollapsedLines();
+        if (_mathFoldingManager != null)
+        {
+            FoldingManager.Uninstall(_mathFoldingManager);
+            _mathFoldingManager = null;
+        }
+        _mathFoldingMargin = null;
 
         _lastRevealedMathSpan = null;
         _mathCollapseSyncQueued = false;
@@ -252,7 +273,7 @@ internal sealed partial class MarkdownSemanticPresentation
     /// </summary>
     private bool SyncMathCollapsedLines()
     {
-        if (_disposed || _syncingMathCollapsedLines)
+        if (_disposed || _syncingMathCollapsedLines || _mathFoldingManager == null)
         {
             return false;
         }
@@ -262,41 +283,47 @@ internal sealed partial class MarkdownSemanticPresentation
         try
         {
             var desired = BuildMathCollapseTargets();
-            foreach (var existing in _mathCollapsedSections.ToArray())
+            foreach (var existing in _mathFoldings.ToArray())
             {
                 if (desired.TryGetValue(existing.Key, out var target) &&
-                    existing.Value.IsCollapsed &&
-                    ReferenceEquals(existing.Value.Start, target.StartLine) &&
-                    ReferenceEquals(existing.Value.End, target.EndLine))
+                    existing.Value.StartOffset == target.Start &&
+                    existing.Value.EndOffset == target.End)
                 {
+                    if (existing.Value.IsFolded != target.ShouldFold)
+                    {
+                        existing.Value.IsFolded = target.ShouldFold;
+                        changed = true;
+                    }
+
                     desired.Remove(existing.Key);
                     continue;
                 }
 
-                existing.Value.Uncollapse();
-                _mathCollapsedSections.Remove(existing.Key);
+                _mathFoldingManager.RemoveFolding(existing.Value);
+                _mathFoldings.Remove(existing.Key);
                 changed = true;
             }
 
-            var textView = _editor.TextArea.TextView;
             foreach (var target in desired)
             {
                 try
                 {
-                    _mathCollapsedSections[target.Key] = textView.CollapseLines(
-                        target.Value.StartLine,
-                        target.Value.EndLine);
+                    var section = _mathFoldingManager.CreateFolding(
+                        target.Value.Start,
+                        target.Value.End);
+                    section.Title = string.Empty;
+                    section.IsFolded = target.Value.ShouldFold;
+                    _mathFoldings[target.Key] = section;
                     changed = true;
                 }
                 catch (ArgumentException)
                 {
-                    // A concurrent document replacement/deletion can invalidate a line object. The
-                    // generator checks the section table and leaves exact source visible instead.
+                    // A document replacement can invalidate a just-computed semantic range. Exact
+                    // Markdown remains visible and the next snapshot refresh rebuilds the fold.
                 }
                 catch (InvalidOperationException)
                 {
-                    // A detached/disposed TextView likewise falls back to source without affecting
-                    // note data or the undo stack.
+                    // Detached/disposed editor: fail open to source rather than touching note data.
                 }
             }
         }
@@ -326,53 +353,25 @@ internal sealed partial class MarkdownSemanticPresentation
                 span.Length <= 0 ||
                 span.Start < 0 ||
                 span.End > document.TextLength ||
-                IsMathSpanCurrentlyRevealed(span))
+                !SpansMultipleDocumentLines(span))
             {
                 continue;
             }
 
-            var firstLine = document.GetLineByOffset(span.Start);
-            var lastLine = document.GetLineByOffset(Math.Max(span.Start, span.End - 1));
-            if (lastLine.LineNumber <= firstLine.LineNumber || firstLine.NextLine == null)
-            {
-                continue;
-            }
-
-            // CollapseLines hides complete physical lines. If the closing delimiter shares its
-            // line with real text after the formula, rendering the formula would hide that text.
-            // Keep exact Markdown source in that uncommon shape instead.
-            if (!HasOnlyWhitespaceAfterSpanOnLastLine(document, span, lastLine))
-            {
-                continue;
-            }
-
-            // Do not hide continuation lines until RaTeX has produced a valid replacement at the
-            // current font/theme. Unsupported or invalid TeX stays exact source.
+            // Keep one stable FoldingSection while the caret reveals source. Toggling IsFolded lets
+            // AvalonEdit rebase offsets and height-tree state without destroy/recreate churn.
             if (!TryCreateMathElement(span, out _))
             {
                 continue;
             }
 
             targets[new MathCollapseKey(span.Start, span.End)] = new MathCollapseTarget(
-                firstLine.NextLine,
-                lastLine);
+                span.Start,
+                span.End,
+                !IsMathSpanCurrentlyRevealed(span));
         }
 
         return targets;
-    }
-
-    private static bool HasOnlyWhitespaceAfterSpanOnLastLine(
-        ICSharpCode.AvalonEdit.Document.TextDocument document,
-        MarkdownSemanticSpan span,
-        DocumentLine lastLine)
-    {
-        if (span.End >= lastLine.EndOffset)
-        {
-            return true;
-        }
-
-        var suffix = document.GetText(span.End, lastLine.EndOffset - span.End);
-        return string.IsNullOrWhiteSpace(suffix);
     }
 
     private bool IsMathSpanReadyForLayout(MarkdownSemanticSpan span)
@@ -384,8 +383,7 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         var key = new MathCollapseKey(span.Start, span.End);
-        return _mathCollapsedSections.TryGetValue(key, out var section) &&
-            section.IsCollapsed;
+        return _mathFoldings.TryGetValue(key, out var section) && section.IsFolded;
     }
 
     private bool SpansMultipleDocumentLines(MarkdownSemanticSpan span)
@@ -400,12 +398,15 @@ internal sealed partial class MarkdownSemanticPresentation
 
     private void ClearMathCollapsedLines()
     {
-        foreach (var section in _mathCollapsedSections.Values)
+        if (_mathFoldingManager != null)
         {
-            section.Uncollapse();
+            foreach (var section in _mathFoldings.Values.ToArray())
+            {
+                _mathFoldingManager.RemoveFolding(section);
+            }
         }
 
-        _mathCollapsedSections.Clear();
+        _mathFoldings.Clear();
     }
 
     private bool TryCreateMathElement(
@@ -423,64 +424,102 @@ internal sealed partial class MarkdownSemanticPresentation
             _editor.FontSize * (display ? 1.05 : 1.0),
             4,
             256);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(_editor).PixelsPerDip;
         if (!MarkdownMathRenderer.TryRender(
                 formula,
                 display,
                 fontSize,
                 MathColor(),
-                out var rendered))
+                pixelsPerDip,
+                out var drawing))
         {
             return false;
         }
 
-        element = CreateMathElement(rendered, display);
-        return true;
-    }
-
-    private FrameworkElement CreateMathElement(
-        MarkdownMathBitmap rendered,
-        bool display)
-    {
         var textView = _editor.TextArea.TextView;
-        var zoom = ZoomFactor();
-        var availableWidth = Math.Max(32, textView.ActualWidth - 16 * zoom);
-        var scale = Math.Min(1.0, availableWidth / Math.Max(1, rendered.Width));
-        var width = Math.Max(1, rendered.Width * scale);
-        var height = Math.Max(1, rendered.Height * scale);
-        var image = new Image
+        var viewWidth = textView.ActualWidth;
+        if (!double.IsFinite(viewWidth) || viewWidth <= 0)
         {
-            Source = rendered.Source,
-            Width = width,
-            Height = height,
-            Stretch = Stretch.Fill,
-            SnapsToDevicePixels = true,
-            UseLayoutRounding = true,
-            IsHitTestVisible = false
-        };
-        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-
-        if (!display)
+            viewWidth = _editor.ActualWidth;
+        }
+        if (!double.IsFinite(viewWidth) || viewWidth <= 0)
         {
-            TextBlock.SetBaselineOffset(
-                image,
-                Math.Clamp(rendered.Baseline * scale, 0, height));
-            return image;
+            viewWidth = 600;
         }
 
-        var verticalPadding = 4 * zoom;
+        var availableWidth = Math.Max(48, viewWidth - 8);
+        var scale = drawing.Width <= availableWidth
+            ? 1.0
+            : availableWidth / drawing.Width;
+        if (!double.IsFinite(scale) || scale < 0.2)
+        {
+            return false;
+        }
+
+        var visual = new MarkdownMathVisual(drawing, scale);
+        if (!display || !IsDisplayFormulaOnOwnLine(source, span))
+        {
+            element = visual;
+            return true;
+        }
+
+        var height = drawing.Height * scale + 8;
         var host = new Grid
         {
             Width = availableWidth,
-            Height = height + verticalPadding * 2,
-            SnapsToDevicePixels = true,
+            Height = height,
+            Background = Brushes.Transparent,
+            IsHitTestVisible = false,
+            Focusable = false,
             UseLayoutRounding = true,
-            IsHitTestVisible = false
+            SnapsToDevicePixels = true
         };
-        image.HorizontalAlignment = HorizontalAlignment.Center;
-        image.VerticalAlignment = VerticalAlignment.Center;
-        host.Children.Add(image);
-        TextBlock.SetBaselineOffset(host, host.Height);
-        return host;
+        visual.HorizontalAlignment = HorizontalAlignment.Center;
+        visual.VerticalAlignment = VerticalAlignment.Center;
+        host.Children.Add(visual);
+        TextBlock.SetBaselineOffset(host, height);
+        element = host;
+        return true;
+    }
+
+    private static bool IsDisplayFormulaOnOwnLine(
+        string source,
+        MarkdownSemanticSpan span)
+    {
+        if (span.Kind != MarkdownSemanticSpanKind.BlockMath ||
+            span.Start < 0 ||
+            span.End > source.Length)
+        {
+            return false;
+        }
+
+        var lineStart = span.Start;
+        while (lineStart > 0 && source[lineStart - 1] is not ('\r' or '\n'))
+        {
+            lineStart--;
+        }
+
+        var lineEnd = span.End;
+        while (lineEnd < source.Length && source[lineEnd] is not ('\r' or '\n'))
+        {
+            lineEnd++;
+        }
+
+        return IsWhitespace(source.AsSpan(lineStart, span.Start - lineStart)) &&
+            IsWhitespace(source.AsSpan(span.End, lineEnd - span.End));
+    }
+
+    private static bool IsWhitespace(ReadOnlySpan<char> text)
+    {
+        foreach (var character in text)
+        {
+            if (!char.IsWhiteSpace(character))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Color MathColor()
