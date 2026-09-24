@@ -71,6 +71,38 @@ jobs:
       - name: Run regression checks
         run: ./tools/testing/Run-Checks.ps1 -Group regression
 
+      - name: Single-file math publish smoke
+        run: |
+          $publishOut = Join-Path $env:RUNNER_TEMP "math-single-file-smoke"
+          Remove-Item -LiteralPath $publishOut -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $publishOut | Out-Null
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o $publishOut `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=false `
+            /p:PublishTrimmed=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false
+
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath (Join-Path $publishOut "PaperTodo.exe") -PathType Leaf)) {
+            throw "Single-file smoke did not produce PaperTodo.exe."
+          }
+          if (Test-Path -LiteralPath (Join-Path $publishOut "papertodo_math.dll")) {
+            throw "Native math bridge escaped the single-file package as a sidecar."
+          }
+          if (Test-Path -LiteralPath (Join-Path $publishOut "math-fonts")) {
+            throw "KaTeX fonts escaped the single-file package as sidecars."
+          }
+
       - name: Native material and skin checks
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
