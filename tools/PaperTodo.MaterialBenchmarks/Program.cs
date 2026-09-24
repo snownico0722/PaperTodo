@@ -13,7 +13,8 @@ internal static class Program
             Console.WriteLine("  --benchmark <json>");
             Console.WriteLine("  --drag-benchmark <json>");
             Console.WriteLine("  --drag-snapshot-timing <json>");
-            Console.WriteLine("Run in Release on Windows. Drag modes use real mouse input and an isolated fixture.");
+            Console.WriteLine("  --resize-shadow-benchmark <json>");
+            Console.WriteLine("Run in Release on Windows. Drag/resize modes use real mouse input and an isolated fixture.");
             return 0;
         }
 
@@ -30,6 +31,8 @@ internal static class Program
                 return MaterialDragBenchmarks.RunIsolated(dragOutput);
             if (args is ["--drag-snapshot-timing", var timingOutput])
                 return MaterialDragBenchmarks.RunSnapshotTimingIsolated(timingOutput);
+            if (args is ["--resize-shadow-benchmark", var resizeOutput])
+                return MaterialResizeBenchmarks.RunIsolated(resizeOutput);
             if (args is ["--drag-fixture", var fixtureOutput])
             {
                 RequireFixture();
@@ -42,6 +45,13 @@ internal static class Program
                 RequireFixture();
                 using var controller = new AppController();
                 MaterialDragBenchmarks.RunSnapshotTiming(controller, snapshotOutput);
+                return 0;
+            }
+            if (args is ["--resize-shadow-fixture", var resizeFixtureOutput])
+            {
+                RequireFixture();
+                using var controller = new AppController();
+                MaterialResizeBenchmarks.Run(controller, resizeFixtureOutput);
                 return 0;
             }
 
