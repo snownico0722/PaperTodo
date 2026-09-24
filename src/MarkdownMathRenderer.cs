@@ -1,5 +1,7 @@
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -22,6 +24,8 @@ internal sealed record MarkdownMathDrawing(
 internal static class MarkdownMathRenderer
 {
     private const string NativeLibraryName = "papertodo_math.dll";
+    private const string NativeResourceName = "PaperTodo.Native.papertodo_math.dll";
+    private const string FontResourcePrefix = "PaperTodo.MathFonts.";
     private const int NativeSuccess = 0;
     private const int WireProtocolVersion = 1;
     private const int MaximumFormulaBytes = 64 * 1024;
@@ -65,15 +69,25 @@ internal static class MarkdownMathRenderer
             ["Typewriter-Regular"] = "KaTeX_Typewriter-Regular.ttf"
         };
 
+    private static readonly Assembly ResourceAssembly = typeof(MarkdownMathRenderer).Assembly;
     private static readonly object Gate = new();
     private static readonly Dictionary<CacheKey, LinkedListNode<CacheEntry>> Cache = new();
     private static readonly LinkedList<CacheEntry> Lru = new();
     private static readonly object FontGate = new();
+    private static readonly object EmbeddedResourceGate = new();
+    private static readonly Dictionary<string, string> ExtractedResourcePaths =
+        new(StringComparer.Ordinal);
     private static readonly Dictionary<string, GlyphTypeface?> PackagedFonts =
         new(StringComparer.Ordinal);
     private static readonly Dictionary<string, GlyphTypeface?> SystemFontsCache =
         new(StringComparer.OrdinalIgnoreCase);
+    private static IntPtr _nativeHandle;
     private static bool _nativeUnavailable;
+
+    static MarkdownMathRenderer()
+    {
+        NativeLibrary.SetDllImportResolver(ResourceAssembly, ResolveNativeLibrary);
+    }
 
     public static bool TryRender(
         string formula,
@@ -836,8 +850,16 @@ internal static class MarkdownMathRenderer
             GlyphTypeface? loaded = null;
             try
             {
-                var path = Path.Combine(AppContext.BaseDirectory, "math-fonts", fileName);
-                if (File.Exists(path))
+                var path = TryExtractEmbeddedResource(FontResourcePrefix + fileName, fileName);
+                if (string.IsNullOrEmpty(path))
+                {
+                    // Development/backward-compatible fallback. Official packages use the embedded
+                    // resource path so single-file releases do not need 19 loose TTF sidecars.
+                    var loosePath = Path.Combine(AppContext.BaseDirectory, "math-fonts", fileName);
+                    path = File.Exists(loosePath) ? loosePath : null;
+                }
+
+                if (!string.IsNullOrEmpty(path))
                 {
                     loaded = new GlyphTypeface(new Uri(Path.GetFullPath(path), UriKind.Absolute));
                 }
@@ -899,6 +921,144 @@ internal static class MarkdownMathRenderer
             SystemFontsCache[familyName] = loaded;
             typeface = loaded!;
             return loaded != null;
+        }
+    }
+
+    private static IntPtr ResolveNativeLibrary(
+        string libraryName,
+        Assembly assembly,
+        DllImportSearchPath? searchPath)
+    {
+        if (!ReferenceEquals(assembly, ResourceAssembly) ||
+            !string.Equals(libraryName, NativeLibraryName, StringComparison.OrdinalIgnoreCase))
+        {
+            return IntPtr.Zero;
+        }
+
+        lock (EmbeddedResourceGate)
+        {
+            if (_nativeHandle != IntPtr.Zero)
+            {
+                return _nativeHandle;
+            }
+
+            var path = TryExtractEmbeddedResource(NativeResourceName, NativeLibraryName);
+            if (string.IsNullOrEmpty(path))
+            {
+                // Returning zero lets the runtime try its normal probing path, which preserves
+                // compatibility with developer builds that intentionally provide a loose DLL.
+                return IntPtr.Zero;
+            }
+
+            _nativeHandle = NativeLibrary.Load(path);
+            return _nativeHandle;
+        }
+    }
+
+    private static string? TryExtractEmbeddedResource(string resourceName, string fileName)
+    {
+        lock (EmbeddedResourceGate)
+        {
+            if (ExtractedResourcePaths.TryGetValue(resourceName, out var cached) &&
+                File.Exists(cached))
+            {
+                return cached;
+            }
+
+            try
+            {
+                using var stream = ResourceAssembly.GetManifestResourceStream(resourceName);
+                if (stream == null)
+                {
+                    return null;
+                }
+
+                using var buffer = new MemoryStream();
+                stream.CopyTo(buffer);
+                var bytes = buffer.ToArray();
+                if (bytes.Length == 0)
+                {
+                    return null;
+                }
+
+                var hash = SHA256.HashData(bytes);
+                var hashText = Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
+                var directory = Path.Combine(
+                    Path.GetTempPath(),
+                    "PaperTodo",
+                    "math-v2",
+                    hashText);
+                Directory.CreateDirectory(directory);
+
+                var target = Path.Combine(directory, fileName);
+                if (!FileMatchesHash(target, hash))
+                {
+                    var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    try
+                    {
+                        File.WriteAllBytes(temporary, bytes);
+                        File.Move(temporary, target, overwrite: true);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            if (File.Exists(temporary))
+                            {
+                                File.Delete(temporary);
+                            }
+                        }
+                        catch (IOException)
+                        {
+                        }
+                        catch (UnauthorizedAccessException)
+                        {
+                        }
+                    }
+                }
+
+                ExtractedResourcePaths[resourceName] = target;
+                return target;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+            catch (NotSupportedException)
+            {
+                return null;
+            }
+        }
+    }
+
+    private static bool FileMatchesHash(string path, ReadOnlySpan<byte> expectedHash)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var actual = SHA256.HashData(stream);
+            return actual.AsSpan().SequenceEqual(expectedHash);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
