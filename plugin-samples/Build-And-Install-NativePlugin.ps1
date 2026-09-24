@@ -90,7 +90,8 @@ try {
 
     & dotnet restore $ProjectPath `
         -r $RuntimeIdentifier `
-        --configfile $nugetConfig
+        --configfile $nugetConfig `
+        --artifacts-path $artifactsDirectory
     if ($LASTEXITCODE -ne 0) {
         throw "Native plugin restore failed with exit code $LASTEXITCODE."
     }
