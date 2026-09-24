@@ -150,7 +150,7 @@ $$
     private static void BlockDelimiterEditForcesExactParse()
     {
         var delimiterOld = "prefix\n$\nbody";
-        var delimiterNew = "prefix\n$\nbody";
+        var delimiterNew = "prefix\n$$\nbody";
         Assert(
             !MarkdownSemanticSnapshot.TryParseIncrementalLocal(
                 delimiterOld,
