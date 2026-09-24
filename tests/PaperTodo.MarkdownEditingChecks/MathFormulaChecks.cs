@@ -35,6 +35,13 @@ internal static partial class Program
             var source = "`$x$`\n\n```text\n$$\nx+y\n$$\n```\n\n\\$x$ and $100 and $200";
             var snapshot = MarkdownSemanticSnapshot.Parse(source);
             Equal(0, MathSpans(snapshot).Length, "protected Markdown and currency stay source");
+
+            Equal(0, MathSpans(MarkdownSemanticSnapshot.Parse(@"\[not link\]")).Length,
+                "ordinary escaped brackets keep existing Markdown meaning");
+            Equal(0, MathSpans(MarkdownSemanticSnapshot.Parse(@"\(literal\)")).Length,
+                "plain escaped parentheses are not claimed as math");
+            Equal(1, MathSpans(MarkdownSemanticSnapshot.Parse(@"\(x+y\)")).Length,
+                "math-shaped backslash delimiters remain supported");
         });
 
         check("Math owns TeX-shaped Markdown but not an outer Markdown link", () =>
@@ -160,6 +167,25 @@ internal static partial class Program
                     drawing.Baseline >= 0 && drawing.Baseline <= drawing.Height,
                     "formula baseline stays inside the element");
             }
+        });
+
+        check("Math presentation stays detached until math is recognized", () =>
+        {
+            using var plain = new Editor("plain note");
+            Pump();
+            Require(
+                !plain.Box.TextArea.TextView.ElementGenerators.Any(generator =>
+                    generator.GetType().Name.Contains("MathElementGenerator", StringComparison.Ordinal)),
+                "plain notes do not install the math element generator");
+
+            using var formula = new Editor("$x^2$");
+            formula.Box.SetPreviewMode(true);
+            Pump();
+            LayoutMathEditor(formula.Box);
+            Require(
+                formula.Box.TextArea.TextView.ElementGenerators.Any(generator =>
+                    generator.GetType().Name.Contains("MathElementGenerator", StringComparison.Ordinal)),
+                "first recognized formula installs the math presentation once");
         });
 
         check("Invalid math falls back to source instead of throwing", () =>

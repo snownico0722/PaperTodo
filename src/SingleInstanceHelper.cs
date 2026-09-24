@@ -60,48 +60,47 @@ public sealed class SingleInstanceHelper : IDisposable
         }
     }
 
-    public void SignalPrimaryInstance(IReadOnlyList<string> args)
+    // 0: handled successfully; 1: host rejected/failed; 2: no confirmed response/delivery.
+    // Only acknowledged commands wait for execution. Ordinary activation remains fire-and-forget.
+    public int SignalPrimaryInstance(IReadOnlyList<string> args, bool waitForResult = false)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SingleInstanceHelper));
-
-        var encodedArgs = EncodeArgs(args);
+        var message = (waitForResult ? "RESULT " : "") + EncodeArgs(args);
         for (var attempt = 0; attempt < SignalRetryCount; attempt++)
         {
+            using var client = new NamedPipeClientStream(
+                ".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            try { client.Connect(SignalConnectTimeoutMs); }
+            catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                if (attempt == SignalRetryCount - 1) return 2;
+                Thread.Sleep(SignalRetryDelayMs);
+                continue;
+            }
+
+            // Once connected, never replay a command whose result might simply have been lost.
             try
             {
-                using var client = new NamedPipeClientStream(
-                    ".",
-                    _pipeName,
-                    PipeDirection.Out,
-                    PipeOptions.Asynchronous);
-
-                client.Connect(SignalConnectTimeoutMs);
-
-                using var writer = new StreamWriter(client);
-                writer.WriteLine(encodedArgs);
-                writer.Flush();
-                return;
+                using (var writer = new StreamWriter(client, Encoding.UTF8, leaveOpen: true))
+                {
+                    writer.WriteLine(message);
+                    writer.Flush();
+                }
+                if (!waitForResult) return 0;
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using var reader = new StreamReader(client);
+                var reply = reader.ReadLineAsync(timeout.Token).AsTask().GetAwaiter().GetResult();
+                return bool.TryParse(reply, out var succeeded) ? (succeeded ? 0 : 1) : 2;
             }
-            catch
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
             {
-                if (attempt == SignalRetryCount - 1)
-                {
-                    return;
-                }
-
-                try
-                {
-                    Thread.Sleep(SignalRetryDelayMs);
-                }
-                catch
-                {
-                    return;
-                }
+                return 2;
             }
         }
+        return 2;
     }
 
-    public void StartListener(Action<IReadOnlyList<string>> onCommandSignal)
+    public void StartListener(Func<IReadOnlyList<string>, bool> onCommandSignal)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SingleInstanceHelper));
 
@@ -116,7 +115,7 @@ public sealed class SingleInstanceHelper : IDisposable
                 {
                     await using var server = new NamedPipeServerStream(
                         _pipeName,
-                        PipeDirection.In,
+                        PipeDirection.InOut,
                         1,
                         PipeTransmissionMode.Byte,
                         PipeOptions.Asynchronous);
@@ -139,7 +138,21 @@ public sealed class SingleInstanceHelper : IDisposable
                         continue;
                     }
                     token.ThrowIfCancellationRequested();
-                    onCommandSignal?.Invoke(DecodeArgs(message));
+                    var wantsResult = message?.StartsWith("RESULT ", StringComparison.Ordinal) == true;
+                    var args = DecodeArgs(wantsResult ? message![7..] : message);
+                    bool succeeded;
+                    try { succeeded = onCommandSignal(args); }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Trace.WriteLine($"PaperTodo command failed: {ex}");
+                        succeeded = false;
+                    }
+                    if (wantsResult)
+                    {
+                        using var writer = new StreamWriter(server, Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(succeeded.ToString());
+                        await writer.FlushAsync(token);
+                    }
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {

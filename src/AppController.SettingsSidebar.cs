@@ -12,6 +12,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private readonly Dictionary<SettingsPage, double> _settingsPageScrollOffsets = new();
+    private string? _settingsNativePalette;
 
     private void RefreshSettingsWindowContent()
     {
@@ -69,20 +70,68 @@ public sealed partial class AppController
         window.Language = AppTypography.Language;
         AppTypography.ApplyTextRendering(window);
         window.Content = BuildSettingsSidebarWindowContent(window);
-        ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: _settingsNativePalette != State.ColorScheme);
+        _settingsNativePalette = State.ColorScheme;
+    }
+
+    private void RefreshSettingsForChange(string id)
+    {
+        if (id is "window.hide_from_taskbar" or "window.hide_from_switcher")
+        {
+            RefreshSettingsSystemVisibilityToggleStates();
+            return;
+        }
+        if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
+            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+        {
+            RefreshSettingsCapsuleToggleStates();
+            return;
+        }
+        if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
+        var region = id switch
+        {
+            "appearance.animations" or "window.fullscreen_mode" => "general.options",
+            "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" => "general.capsuleAppearance",
+            "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
+            "edge.non_topmost" => "general.edgeTopmost",
+            "scripts.run_linked_on_click" => "general.todos",
+            "note.markdown_mode" or "note.edit_animations" => "note.markdown",
+            "note.compress_large_images" => "note.images",
+            _ when id.StartsWith("todo.reminder", StringComparison.Ordinal) => "labs.reminders",
+            _ => id.Split('.')[0] switch
+            {
+                "general" or "topbar" => "general.options",
+                "privacy" => "general.telemetry",
+                "appearance" => "visual.options",
+                "todo" => "general.todos",
+                "edge" => "general.edgeBrowsing",
+                "focus" => "labs.focus",
+                "interaction" => "labs.passive",
+                "window" => "labs.window",
+                "scripts" => "note.scripts",
+                "shortcuts" => "shortcuts.bindings",
+                "mcp" => "labs.mcp",
+                _ => ""
+            }
+        };
+        RefreshSettingsRegions(region);
+        if (region == "shortcuts.bindings") RefreshSettingsRegions("labs.passive");
     }
 
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
-        var frame = new Border
+        // Navigation replaces page content, not the HWND's material owner. Keep its
+        // current scene, exclusion lease and DWM state alive across a page switch.
+        var frame = window.Content as SkinBorder ?? new SkinBorder
         {
-            Background = TrayPaperBrush,
-            BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
             SnapsToDevicePixels = true
         };
+        if (_settingsMica?.IsActive != true)
+        { frame.Background = TrayPaperBrush; frame.BorderBrush = TrayBorderBrush; }
+        frame.CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 10);
+        frame.RefreshSkin();
 
         var root = new Grid();
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(158) });
@@ -376,7 +425,7 @@ public sealed partial class AppController
         var root = new DockPanel
         {
             LastChildFill = true,
-            Margin = new Thickness(16, 0, 4, 14)
+            Margin = new Thickness(16, 0, 2, 14)
         };
 
         // Keep the page width static. Use the already-empty host edge as clipping room
@@ -415,8 +464,8 @@ public sealed partial class AppController
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
         SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
         SettingsPage.Note => BuildSettingsSidebarNotePage(),
-        SettingsPage.Visual => BuildVisualSettingsPage(),
-        SettingsPage.Shortcuts => BuildShortcutSettingsPage(),
+        SettingsPage.Visual => BuildSettingsLiveRegion("visual.options", BuildVisualSettingsPage),
+        SettingsPage.Shortcuts => BuildSettingsLiveRegion("shortcuts.bindings", BuildShortcutSettingsPage),
         SettingsPage.Plugins => BuildPluginsSettingsPage(),
         SettingsPage.Labs => BuildLabsSettingsPage(),
         _ => BuildSettingsSidebarGeneralPage()
@@ -478,5 +527,33 @@ public sealed partial class AppController
             oldTop,
             workArea.Top + 16,
             workArea.Bottom - targetHeight - 16);
+    }
+
+
+    // Keep this helper separate from the page builder so conflict-resolution fixes stay localized.
+    // Theme/font changes eventually rebuild the settings surface; notify open plugin popups even
+    // when the settings window itself is closed (for example, a system theme change).
+    private void RefreshPluginPopupThemeForSettingsRefresh()
+    {
+        PluginPopupThemeChanged?.Invoke();
+    }
+
+    private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
+    {
+        var targetWidth = Math.Min(840, Math.Max(360, workArea.Width - 48));
+        var targetHeight = Math.Min(620, Math.Max(320, workArea.Height - 48));
+
+        // Preserve the normal minimum size when possible, but never let that minimum push the
+        // window outside a tiny/high-DPI work area. Keep 16 DIPs of margin on each side.
+        targetWidth = Math.Min(targetWidth, Math.Max(1, workArea.Width - 32));
+        targetHeight = Math.Min(targetHeight, Math.Max(1, workArea.Height - 32));
+        return (targetWidth, targetHeight);
+    }
+
+    private void RefreshSettingsSidebarAfterMonitorChange(Window window)
+    {
+        _ = window.Dispatcher.BeginInvoke(
+            (Action)RefreshSettingsWindowContent,
+            DispatcherPriority.Background);
     }
 }

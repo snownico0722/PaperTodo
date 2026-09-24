@@ -21,6 +21,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private int _redrawEnd;
     private bool _disposed;
     private MarkdownCaretReveal _caretReveal = MarkdownCaretReveal.None;
+    private MarkdownCaretReveal _transientFindReveal = MarkdownCaretReveal.None;
     private bool _revealGestureFrozen;
     private MarkdownCaretReveal _frozenGestureReveal = MarkdownCaretReveal.None;
 
@@ -46,7 +47,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _editor.CaretRevealGestureEnded += OnCaretRevealGestureEnded;
         SyncCaretReveal();
         SyncRevealFade();
-        AttachMathPresentation();
+        EnsureMathPresentationAttachedIfNeeded();
+        AttachMarkerSlots();
         AttachCollapseGenerator();
         RedrawAll();
     }
@@ -60,7 +62,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     private bool FadeSyntax =>
         string.Equals(
             _editor.MarkdownRenderMode,
-            MarkdownRenderModes.Enhanced,
+            MarkdownRenderModes.Basic,
             StringComparison.Ordinal) &&
         _editor.IsPreviewMode;
 
@@ -71,8 +73,17 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             MarkdownRenderModes.Full,
             StringComparison.Ordinal);
 
-    /// <summary>Full 且可编辑（非只读预览）时，控制符随活动块显灵；否则不参与 reveal。</summary>
+    /// <summary>Full 且可编辑（非只读预览）时，控制符随活动块显灵。</summary>
     private bool FullRevealEnabled => IsFullMode && !_editor.IsPreviewMode;
+
+    /// <summary>
+    /// 内置查找可以在 Full 预览态临时借用同一套 reveal 语义，让命中隐藏源码时可见；
+    /// 它不建立第二套 element/layout authority，关闭查找后立即回到普通预览。
+    /// </summary>
+    private bool TransientFindRevealEnabled =>
+        IsFullMode && _editor.IsPreviewMode && _transientFindReveal.Active;
+
+    private bool RevealEnabled => FullRevealEnabled || TransientFindRevealEnabled;
 
     private bool RenderBlocks => ApplyMarkdownStyle;
 
@@ -90,11 +101,46 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             : MarkdownSemanticSnapshot.Empty;
 
     internal MarkdownCaretReveal CaretReveal =>
-        !FullRevealEnabled
-            ? MarkdownCaretReveal.None // 预览态绝不显灵：优先级高于冻结快照，覆盖手势中途退回预览
-            : _revealGestureFrozen ? _frozenGestureReveal : _caretReveal;
+        TransientFindRevealEnabled
+            ? _transientFindReveal
+            : !FullRevealEnabled
+                ? MarkdownCaretReveal.None
+                : _revealGestureFrozen ? _frozenGestureReveal : _caretReveal;
 
-    /// <summary>该控制符单元（行边界或行内成对范围）在 Full 编辑态是否显灵。</summary>
+    internal void SetTransientFindReveal(int? absoluteOffset)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var next = MarkdownCaretReveal.None;
+        var document = _editor.Document;
+        if (absoluteOffset is int requested &&
+            IsFullMode &&
+            document != null)
+        {
+            var offset = Math.Clamp(requested, 0, document.TextLength);
+            var line = document.GetLineByOffset(offset);
+            next = new MarkdownCaretReveal(offset, line.LineNumber - 1);
+        }
+
+        if (_transientFindReveal == next)
+        {
+            return;
+        }
+
+        _transientFindReveal = next;
+        if (IsFullMode)
+        {
+            // Collapse table and colorizer both read CaretReveal, so one transient value updates
+            // hidden syntax, list/task marker presentation and wrapping through the existing path.
+            AlignCollapseTableToReveal(scheduleRedraw: false);
+            ScheduleRedraw();
+        }
+    }
+
+    /// <summary>该控制符单元（行边界或行内成对范围）在 Full 编辑态或临时查找显灵时是否显灵。</summary>
     internal bool IsRevealed(
         int markerLineOneBased,
         int markerStart,
@@ -102,7 +148,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         MarkdownSemanticSpanKind kind,
         int rangeStart = -1,
         int rangeEnd = -1) =>
-        FullRevealEnabled &&
+        RevealEnabled &&
         MarkdownSemanticReveal.RevealMarker(
             CaretReveal,
             markerLineOneBased - 1,
@@ -113,7 +159,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             rangeEnd);
 
     internal bool IsRangeRevealed(int rangeStart, int rangeEnd) =>
-        FullRevealEnabled &&
+        RevealEnabled &&
         MarkdownSemanticReveal.RevealRange(CaretReveal, rangeStart, rangeEnd);
 
     /// <summary>控制符取色：Full 档按显灵取 Active/透明，其余档保留原有淡化/激活语义。</summary>
@@ -127,7 +173,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         return FadeSyntax ? Theme.SyntaxFadeBrush : Theme.ActiveBrush;
     }
 
-    /// <summary>引用 &gt; 标记取色：Enhanced 预览沿用「完全透明保留宽度」，与一般语法淡化不同。</summary>
+    /// <summary>引用 &gt; 标记取色：Basic 预览沿用「完全透明保留宽度」，与一般语法淡化不同。</summary>
     internal Brush QuoteControlBrush(bool revealed)
     {
         if (IsFullMode)
@@ -271,7 +317,6 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             SyncCaretReveal();
             SyncRevealFade();
             AlignCollapseTableToReveal(scheduleRedraw: true);
-            SyncMathRevealRedraw();
         }
     }
 
@@ -279,6 +324,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     {
         // 文本编辑会使标记位移：中止进行中的淡入，避免把旧 alpha 施加到新布局的标记上。
         AbortRevealFade();
+        EnsureMathPresentationAttachedIfNeeded();
         ResetMathPresentationState();
 
         // 静态候选随 snapshot 重建：优先按语义层增量窗口局部 rebase（逐键、不整篇扫）；
@@ -368,6 +414,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         DetachCaretTracking();
         _editor.CaretRevealGestureStarted -= OnCaretRevealGestureStarted;
         _editor.CaretRevealGestureEnded -= OnCaretRevealGestureEnded;
+        DetachMarkerSlots();
         DetachCollapseGenerator();
         DetachMathPresentation();
         AbortRevealFade();

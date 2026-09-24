@@ -218,6 +218,15 @@ internal static class MarkdownMathScanner
                 return false;
             }
 
+            // Backslash delimiters overlap ordinary Markdown escape syntax (for example
+            // "\\[not link\\]" historically renders as "[not link]"). Claim that syntax only
+            // when the body is clearly math-shaped, or when display math spans physical lines.
+            if (!delimiter.IsDollar &&
+                !LooksLikeBackslashMath(source, contentStart, offset, delimiter.IsDisplay))
+            {
+                return false;
+            }
+
             closeStart = offset;
             return true;
         }
@@ -248,6 +257,33 @@ internal static class MarkdownMathScanner
         for (var index = start; index < end; index++)
         {
             if (!char.IsWhiteSpace(source[index]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeBackslashMath(
+        string source,
+        int start,
+        int end,
+        bool display)
+    {
+        for (var index = start; index < end; index++)
+        {
+            var current = source[index];
+            if (display && current is '\r' or '\n')
+            {
+                return true;
+            }
+
+            if (current == '\\' ||
+                current is '^' or '_' or '=' or '+' or '-' or '*' or '/' or
+                    '{' or '}' or '<' or '>' or '|' or '&' or
+                    '±' or '×' or '÷' or '∑' or '∫' or '√' or '∞' or
+                    '≤' or '≥' or '≠' or '≈')
             {
                 return true;
             }

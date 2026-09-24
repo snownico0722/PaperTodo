@@ -68,7 +68,9 @@ internal readonly record struct EdgeCapsuleLayoutSnapshot(
     double RestingContentOpacity,
     double? ForcedContentOpacity,
     double HostCapacityWidthDip = 0,
-    double HostCapacityHeightDip = 0)
+    double HostCapacityHeightDip = 0,
+    double ExpandedWidthDip = 0,
+    bool HideRestingTitle = false)
 {
     public bool IsUsable =>
         !Monitor.WorkArea.IsEmpty &&
@@ -118,7 +120,8 @@ internal readonly record struct EdgeCapsuleTargetPresentation(
     double ContentOpacity,
     bool OutlineVisible,
     bool IsHitTestVisible,
-    bool CloseSegmentActsAsContent)
+    bool CloseSegmentActsAsContent,
+    bool TitleVisible = true)
 {
     public static EdgeCapsuleTargetPresentation Hidden => new(
         false,
@@ -154,7 +157,8 @@ internal readonly record struct EdgeCapsuleTargetPresentation(
         ContentOpacity,
         OutlineVisible,
         IsHitTestVisible,
-        CloseSegmentActsAsContent);
+        CloseSegmentActsAsContent,
+        TitleVisible);
 }
 
 internal readonly record struct EdgeCapsulePresentationPlan(
@@ -188,7 +192,8 @@ internal readonly record struct EdgeCapsulePresentationFrame(
     double ContentOpacity,
     bool OutlineVisible,
     bool IsHitTestVisible,
-    bool CloseSegmentActsAsContent)
+    bool CloseSegmentActsAsContent,
+    bool TitleVisible = true)
 {
     public static EdgeCapsulePresentationFrame Hidden =>
         EdgeCapsuleTargetPresentation.Hidden.ToFrame();

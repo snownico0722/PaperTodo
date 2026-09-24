@@ -278,11 +278,8 @@ public sealed partial class AppController
                 RebaseEdgeCapsuleQueueProxyAnimationClock(
                     entries,
                     timestamp),
-            interactionRequested: (point, message) =>
-                CompleteAndRouteEdgeCapsuleQueueProxyInput(
-                    plan.QueueKey,
-                    point,
-                    message),
+            interactionRequested: input =>
+                CompleteAndRouteEdgeCapsuleQueueProxyInput(plan.QueueKey, input),
             environmentChanged: () =>
                 CompleteEdgeCapsuleQueueCompositionProxy(
                     plan.QueueKey,
@@ -313,6 +310,7 @@ public sealed partial class AppController
             return false;
         }
 
+        TraceEdgeCapsuleQueueVisibility(proxy, "before-start");
         if (!proxy.TryStart(out realHostMayHaveChanged))
         {
 #if DEBUG
@@ -335,8 +333,47 @@ public sealed partial class AppController
             }
             return false;
         }
+        TraceEdgeCapsuleQueueVisibility(proxy, "started");
         return true;
     }
+
+    [Conditional("DEBUG")]
+    private void TraceEdgeCapsuleQueueVisibility(
+        EdgeCapsuleQueueCompositionProxy proxy,
+        string phase)
+    {
+#if DEBUG
+        // Include stationary peers: the transparent output can overlap windows it does not wrap.
+        // These are lifecycle observations, not proof that a desktop frame has been presented.
+        try
+        {
+            var startedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
+            var members = proxy.Members.Select(member => member.Window).ToHashSet();
+            var context = $"phase={phase} session={proxy.SessionOrdinal}";
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"proxy.visibility {context} role=output queue={proxy.QueueKey} " +
+                WindowNative.DescribeCompositionVisibility(proxy.OutputHandle));
+            foreach (var window in _windows.Values)
+            {
+                if (!window.IsClosed && string.Equals(
+                    QueueKey(window.EdgeCapsulePreviewPaper), proxy.QueueKey,
+                    StringComparison.Ordinal))
+                {
+                    window.TraceEdgeCapsuleCompositionVisibility(
+                        $"{context} wrapped={members.Contains(window)}");
+                }
+            }
+            EdgeCapsulePerformanceDiagnostics.Trace(
+                $"proxy.visibility {context} role=diagnostic " +
+                $"elapsedMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(startedAt):F3}");
+        }
+        catch
+        {
+            // Diagnostics must not interrupt an authority handoff.
+        }
+#endif
+    }
+
     private bool PublishEdgeCapsuleQueueCompositionProxy(
         string queueKey,
         EdgeCapsuleQueueCompositionProxy successor,
@@ -472,6 +509,7 @@ public sealed partial class AppController
                         .Remove(window);
                 }
             }
+            current.CompleteDeferredPointerInput();
             try
             {
                 current.Dispose();
@@ -596,6 +634,7 @@ public sealed partial class AppController
             return false;
         }
 
+        TraceEdgeCapsuleQueueVisibility(current, "before-release");
         if (!current.TryReleaseForHandoff())
         {
             current.ScheduleCompletionRetry(
@@ -614,6 +653,8 @@ public sealed partial class AppController
                     .Remove(window);
             }
         }
+        TraceEdgeCapsuleQueueVisibility(current, "released");
+        current.CompleteDeferredPointerInput();
         try
         {
             current.Dispose();
@@ -648,34 +689,27 @@ public sealed partial class AppController
     }
 
     private void CompleteAndRouteEdgeCapsuleQueueProxyInput(
-        string queueKey,
-        DeviceScreenPoint point,
-        int message)
+        string queueKey, EdgeCapsulePointerDown input)
     {
-        if (!_edgeCapsuleQueueCompositionProxies.TryGetValue(
-                queueKey,
-                out var proxy))
+        if (!_edgeCapsuleQueueCompositionProxies.TryGetValue(queueKey, out var proxy)) return;
+        if (proxy.TryResolveInputTarget(input.ScreenPoint, out var handle, out var endpoint))
         {
-            return;
+            var target = proxy.Members.FirstOrDefault(member => member.SourceHandle == handle)?.Window;
+            if (target != null)
+            {
+                var paperId = target.EdgeCapsulePreviewPaperId;
+                var valid = target.CaptureEdgeCapsulePointerInputValidity();
+                proxy.DeferPointerDown(
+                    () => !IsExiting && _windows.TryGetValue(paperId, out var current) &&
+                        ReferenceEquals(current, target) && valid(),
+                    () =>
+                    {
+                        if (!WindowNative.TryPostMouseButtonDown(handle, input, endpoint))
+                            Trace.TraceWarning("Edge input could not be posted after handoff: {0}", paperId);
+                    });
+            }
         }
-
-        var hasTarget = proxy.TryResolveInputTarget(
-            point,
-            out var targetHandle,
-            out var endpointPoint);
         proxy.CompleteNow(success: true);
-        var handoffCompleted =
-            !_edgeCapsuleQueueCompositionProxies.TryGetValue(
-                queueKey,
-                out var remaining) ||
-            !ReferenceEquals(remaining, proxy);
-        if (hasTarget && handoffCompleted)
-        {
-            _ = WindowNative.TryPostMouseButtonDown(
-                targetHandle,
-                message,
-                endpointPoint);
-        }
     }
 
 

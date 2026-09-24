@@ -70,7 +70,7 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             ApplyTaskMarkerSemantics(line, snapshot);
 
-            // Enhanced 预览维持旧行为；Full 档则逐个处理所有层级的列表 marker。
+            // 有序编号始终使用原生文字；仅无序列表 marker 需要在源码和圆点之间切换。
             if (!_owner.IsFullMode &&
                 (!_owner.RenderListBullets || HasTaskMarkerOnLine(snapshot, line)))
             {
@@ -79,9 +79,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
             foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
             {
-                if (marker.Kind is not (
-                        MarkdownSemanticSpanKind.UnorderedListMarker or
-                        MarkdownSemanticSpanKind.OrderedListMarker) ||
+                if (marker.Kind != MarkdownSemanticSpanKind.UnorderedListMarker ||
                     marker.End <= line.Offset ||
                     marker.Start >= line.EndOffset)
                 {
@@ -145,35 +143,6 @@ internal sealed partial class MarkdownSemanticPresentation
     private sealed class SemanticListRenderer : IBackgroundRenderer
     {
         private readonly MarkdownSemanticPresentation _owner;
-        private Typeface? _listMarkerTypeface;
-        private string? _listMarkerFontFamily;
-        private FontStyle _listMarkerFontStyle;
-        private FontWeight _listMarkerFontWeight;
-        private FontStretch _listMarkerFontStretch;
-
-        private Typeface ListMarkerTypeface
-        {
-            get
-            {
-                var family = NoteTypography.FontFamily;
-                var style = NoteTypography.FontStyle;
-                var weight = NoteTypography.FontWeight;
-                var stretch = NoteTypography.FontStretch;
-                if (_listMarkerTypeface == null ||
-                    !string.Equals(_listMarkerFontFamily, family.Source, StringComparison.Ordinal) ||
-                    _listMarkerFontStyle != style ||
-                    _listMarkerFontWeight != weight ||
-                    _listMarkerFontStretch != stretch)
-                {
-                    _listMarkerTypeface = new Typeface(family, style, weight, stretch);
-                    _listMarkerFontFamily = family.Source;
-                    _listMarkerFontStyle = style;
-                    _listMarkerFontWeight = weight;
-                    _listMarkerFontStretch = stretch;
-                }
-                return _listMarkerTypeface;
-            }
-        }
 
         public SemanticListRenderer(MarkdownSemanticPresentation owner)
         {
@@ -218,9 +187,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
                     foreach (var marker in snapshot.SpansForLine(Math.Max(0, line.LineNumber - 1)))
                     {
-                        if (marker.Kind is not (
-                                MarkdownSemanticSpanKind.UnorderedListMarker or
-                                MarkdownSemanticSpanKind.OrderedListMarker) ||
+                        if (marker.Kind != MarkdownSemanticSpanKind.UnorderedListMarker ||
                             marker.End <= line.Offset ||
                             marker.Start >= line.EndOffset)
                         {
@@ -246,7 +213,7 @@ internal sealed partial class MarkdownSemanticPresentation
                             continue;
                         }
 
-                        DrawMarker(textView, drawingContext, document, line, marker);
+                        DrawMarker(textView, drawingContext, line, marker);
                     }
                 }
             }
@@ -304,7 +271,6 @@ internal sealed partial class MarkdownSemanticPresentation
         private void DrawMarker(
             TextView textView,
             DrawingContext drawingContext,
-            IDocument document,
             DocumentLine line,
             MarkdownSemanticSpan marker)
         {
@@ -344,34 +310,15 @@ internal sealed partial class MarkdownSemanticPresentation
                 null,
                 new Rect(markerLeft - 1, markerTop.Y - 1, markerWidth + 2, markerHeight + 2));
 
-            if (marker.Kind == MarkdownSemanticSpanKind.UnorderedListMarker)
-            {
-                var radius = Math.Max(
-                    0.5,
-                    _owner.ScaledFontSize(NoteTypography.FontSize) * 0.16);
-                drawingContext.DrawEllipse(
-                    Theme.TextBrush,
-                    null,
-                    new Point(markerLeft + markerWidth / 2, markerMiddle.Y),
-                    radius,
-                    radius);
-                return;
-            }
-
-            var markerText = document.GetText(marker.Start, marker.Length);
-            var formatted = new FormattedText(
-                markerText,
-                UiLanguages.EffectiveUiCulture,
-                FlowDirection.LeftToRight,
-                ListMarkerTypeface,
-                _owner.ScaledFontSize(NoteTypography.FontSize),
+            var radius = Math.Max(
+                0.5,
+                _owner.ScaledFontSize(NoteTypography.FontSize) * 0.16);
+            drawingContext.DrawEllipse(
                 Theme.TextBrush,
                 null,
-                AppTypography.TextFormattingMode,
-                VisualTreeHelper.GetDpi(textView).PixelsPerDip);
-            drawingContext.DrawText(
-                formatted,
-                new Point(markerLeft, markerMiddle.Y - formatted.Height / 2));
+                new Point(markerLeft + markerWidth / 2, markerMiddle.Y),
+                radius,
+                radius);
         }
     }
 }

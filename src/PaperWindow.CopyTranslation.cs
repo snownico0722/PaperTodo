@@ -31,6 +31,14 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // Search is a transient PaperWindow-owned interaction. When focus has returned to the
+        // paper while its popup is still open, Esc must dismiss find before the ordinary
+        // window-level Esc handler gets a chance to collapse the entire paper.
+        if (window.TryHandleBuiltInFindPreviewKeyDown(e))
+        {
+            return;
+        }
+
         // The Todo window also owns list-level undo/redo. While the title TextBox has focus,
         // keep Ctrl+Z/Ctrl+Y inside that editor so an empty title undo stack cannot fall through
         // and unexpectedly replay Todo-list history.

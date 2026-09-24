@@ -49,9 +49,8 @@ public sealed partial class MarkdownTextBox : TextEditor
     public event Action? ImageContextMenuClosed;
 
     /// <summary>
-    /// Raised after Markdown presentation settings/theme/typography have changed but before the
-    /// TextView is synchronously refreshed. Presentation layers use this boundary to update native
-    /// line-collapse state before AvalonEdit constructs visual lines.
+    /// Raised before a synchronous Markdown visual refresh so optional presentation layers can
+    /// update native layout state before AvalonEdit constructs replacement visual lines.
     /// </summary>
     internal event Action? MarkdownPresentationRefreshing;
 
@@ -167,7 +166,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     public bool RenderModeIsFull =>
         string.Equals(_markdownRenderMode, MarkdownRenderModes.Full, StringComparison.Ordinal);
 
-    private string _markdownRenderMode = MarkdownRenderModes.Enhanced;
+    private string _markdownRenderMode = MarkdownRenderModes.Basic;
 
     public void SetPreviewMode(bool isPreviewMode)
     {
@@ -183,7 +182,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     {
         _markdownRenderMode = MarkdownRenderModes.IsValid(mode)
             ? mode
-            : MarkdownRenderModes.Enhanced;
+            : MarkdownRenderModes.Basic;
         RefreshVisualStyle();
     }
 

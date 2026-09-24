@@ -7,116 +7,98 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private static readonly TimeSpan PluginStartupPaperPollInterval =
-        TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan PluginStartupPaperMaximumWait =
-        TimeSpan.FromSeconds(5);
-    private DispatcherTimer? _pluginStartupPaperTimer;
     private int _pluginStartupPaperGeneration;
 
-    private void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)
+    private void ApplyHiddenPluginStartupPaperVisibility(StartupCommandKind visibilityCommand)
     {
-        _pluginStartupPaperTimer?.Stop();
-        _pluginStartupPaperTimer = null;
-        var generation = ++_pluginStartupPaperGeneration;
-        if (IsExiting)
+        if (visibilityCommand is StartupCommandKind.Show or StartupCommandKind.Toggle)
         {
             return;
         }
+        var changed = false;
+        foreach (var descriptor in PaperBodyPlugins.Descriptors)
+        {
+            if (!IsPluginEnabled(descriptor.Id))
+            {
+                continue;
+            }
 
-        // Existing entity plugin papers, including papers that start hidden, can establish their
-        // provider-level Runtime without waiting for visible shell construction.
+            var startup = descriptor.Manifest?.StartupPaper;
+            if (startup?.Presentation != "hidden" ||
+                !StartupSettingEnabled(descriptor, startup))
+            {
+                continue;
+            }
 
-        // Explicit --hide keeps the existing startup-paper behavior (do not create/show one), but
-        // entity plugin papers already persisted in State still own their provider-level runtime.
+            foreach (var paper in State.Papers.Where(candidate =>
+                         string.Equals(
+                             candidate.StartupOwnerPluginId,
+                             descriptor.Id,
+                             StringComparison.Ordinal) &&
+                         string.Equals(
+                             candidate.StartupInstanceKey,
+                             startup.InstanceKey,
+                             StringComparison.Ordinal) &&
+                         candidate.Type == PaperTypes.Note &&
+                         string.Equals(
+                             candidate.BodyProviderId,
+                             descriptor.Id,
+                             StringComparison.Ordinal)))
+            {
+                if (!paper.IsVisible)
+                {
+                    continue;
+                }
+
+                paper.IsVisible = false;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            MarkDirty();
+        }
+    }
+
+    private async void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)
+    {
+        var generation = ++_pluginStartupPaperGeneration;
+        if (IsExiting) return;
         if (visibilityCommand == StartupCommandKind.Hide)
         {
             EnablePluginRuntimeReconciliation();
             return;
         }
-
-        // Resolve the startup setting before deciding whether we need the deferred shell-ready
-        // creation pass. If no startup paper is enabled, existing entity papers can own runtimes
-        // immediately without waiting on the startup-paper timer.
-        var candidates = PaperBodyPlugins.Descriptors
-            .Where(descriptor =>
-            {
-                var startup = descriptor.Manifest?.StartupPaper;
-                return startup != null && StartupSettingEnabled(descriptor, startup);
-            })
-            .ToArray();
+        var candidates = PaperBodyPlugins.Descriptors.Where(descriptor =>
+            IsPluginEnabled(descriptor.Id) &&
+            descriptor.Manifest?.StartupPaper is { } startup &&
+            StartupSettingEnabled(descriptor, startup)).ToArray();
         if (candidates.Length == 0)
         {
             EnablePluginRuntimeReconciliation();
             return;
         }
-
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null)
+        try
         {
-            EnablePluginRuntimeReconciliation();
-            return;
-        }
-
-        var startedAt = Stopwatch.GetTimestamp();
-        var timer = new DispatcherTimer(
-            DispatcherPriority.ApplicationIdle)
-        {
-            Interval = PluginStartupPaperPollInterval
-        };
-        timer.Tick += (_, _) =>
-        {
-            if (generation != _pluginStartupPaperGeneration ||
-                IsExiting)
+            // Even an already-complete shell queue must not initialize a plugin inline in
+            // StartAsync. Let the existing surfaces present and return startup command control.
+            await Application.Current.Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
+            // The shell queue knows when it finished. Do not poll every 50ms (or wait on hidden
+            // papers belonging to a monitor which has not appeared). A replacement queue wins.
+            Task shells;
+            do
             {
-                StopPluginStartupPaperTimer(timer);
-                return;
-            }
-
-            var elapsed = TimeSpan.FromSeconds(
-                Math.Max(0, Stopwatch.GetTimestamp() - startedAt) /
-                (double)Stopwatch.Frequency);
-            if (!StartupPaperCreationReady() &&
-                elapsed < PluginStartupPaperMaximumWait)
-            {
-                return;
-            }
-
-            StopPluginStartupPaperTimer(timer);
+                shells = _startupShellPrewarmTask;
+                await shells;
+                if (IsExiting || generation != _pluginStartupPaperGeneration) return;
+            } while (!ReferenceEquals(shells, _startupShellPrewarmTask));
             EnsurePluginStartupPapers(candidates);
-            // startupPaper has now had first chance to create/restore its real plugin paper. Only
-            // after that do we derive process-level plugin runtime ownership from final State.Papers.
             EnablePluginRuntimeReconciliation();
-        };
-        _pluginStartupPaperTimer = timer;
-        timer.Start();
-    }
-
-    private bool StartupPaperCreationReady()
-    {
-        if (_isRestoringStartupPapers || _isPreparingStartupEdgeCapsules)
-        {
-            return false;
         }
-
-        foreach (var paper in State.Papers.Where(item => item.IsVisible))
+        catch (Exception ex)
         {
-            if (!_windows.TryGetValue(paper.Id, out var window) ||
-                window.IsClosed ||
-                !window.IsShellBuilt)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void StopPluginStartupPaperTimer(DispatcherTimer timer)
-    {
-        timer.Stop();
-        if (ReferenceEquals(_pluginStartupPaperTimer, timer))
-        {
-            _pluginStartupPaperTimer = null;
+            Trace.TraceWarning("Plugin startup paper creation failed: {0}", ex);
         }
     }
 
@@ -126,6 +108,11 @@ public sealed partial class AppController
         var changed = false;
         foreach (var descriptor in descriptors)
         {
+            if (!IsPluginEnabled(descriptor.Id))
+            {
+                continue;
+            }
+
             var startup = descriptor.Manifest?.StartupPaper;
             if (startup == null || !StartupSettingEnabled(descriptor, startup))
             {
@@ -176,6 +163,15 @@ public sealed partial class AppController
                 changed = true;
             }
 
+            if (startup.Presentation == "hidden")
+            {
+                // Existing papers were normalized before surface restoration. Do not hide again:
+                // the user may have opened the editor while startup was waiting for shell prewarm.
+                // Newly created papers are already hidden because CreatePaper used show: false.
+                EnablePluginRuntimeReconciliation();
+                continue;
+            }
+
             var collapsed = startup.Presentation == "capsule";
             if (!paper.IsVisible || paper.IsCollapsed != collapsed)
             {
@@ -183,7 +179,6 @@ public sealed partial class AppController
                 paper.IsCollapsed = collapsed;
                 changed = true;
             }
-            // A startup Paper becomes a Runtime owner before its visible Body is attached.
             EnablePluginRuntimeReconciliation();
             ShowPaper(paper, activate: false);
         }

@@ -7,7 +7,6 @@ internal sealed partial class PaperCommandService
     internal PaperNoteImage ReadNoteImage(string paperId, string imageId)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(RequiredId(paperId, "paperId"), PaperTypes.Note);
         if (!_controller.CaptureNoteSnapshot(paper).ContentAvailable)
             throw Error("note_content_unavailable", "Only built-in Markdown assets are available.");

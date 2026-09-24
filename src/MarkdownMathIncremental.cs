@@ -10,13 +10,21 @@ internal static class MarkdownMathIncremental
     public static bool ChangeMayAffectDelimiterState(
         string oldSource,
         MarkdownSemanticSnapshot oldSnapshot,
-        string newSource)
+        string newSource,
+        int start,
+        int oldEnd,
+        int newEnd)
     {
         ArgumentNullException.ThrowIfNull(oldSource);
         ArgumentNullException.ThrowIfNull(oldSnapshot);
         ArgumentNullException.ThrowIfNull(newSource);
 
-        FindDifference(oldSource, newSource, out var start, out var oldEnd, out var newEnd);
+        if (start < 0 || oldEnd < start || oldEnd > oldSource.Length ||
+            newEnd < start || newEnd > newSource.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start));
+        }
+
         if (start == oldSource.Length && start == newSource.Length)
         {
             return false;
@@ -97,31 +105,6 @@ internal static class MarkdownMathIncremental
         // changing "$x$2" to "$x$a").
         return HasNearbyDelimiter(oldSource, start, oldEnd) ||
             HasNearbyDelimiter(newSource, start, newEnd);
-    }
-
-    private static void FindDifference(
-        string oldSource,
-        string newSource,
-        out int start,
-        out int oldEnd,
-        out int newEnd)
-    {
-        var sharedLength = Math.Min(oldSource.Length, newSource.Length);
-        start = 0;
-        while (start < sharedLength && oldSource[start] == newSource[start])
-        {
-            start++;
-        }
-
-        oldEnd = oldSource.Length;
-        newEnd = newSource.Length;
-        while (oldEnd > start &&
-               newEnd > start &&
-               oldSource[oldEnd - 1] == newSource[newEnd - 1])
-        {
-            oldEnd--;
-            newEnd--;
-        }
     }
 
     private static bool DifferenceTouchesDelimiterToken(string source, int start, int end)

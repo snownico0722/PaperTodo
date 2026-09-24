@@ -50,14 +50,6 @@ internal sealed partial class MarkdownSemanticSnapshot
             return true;
         }
 
-        if (MarkdownMathIncremental.ChangeMayAffectDelimiterState(
-                oldSource,
-                oldSnapshot,
-                newSource))
-        {
-            return false;
-        }
-
         FindContiguousDifference(
             oldSource,
             newSource,
@@ -70,6 +62,17 @@ internal sealed partial class MarkdownSemanticSnapshot
         {
             snapshot = oldSnapshot;
             return true;
+        }
+
+        if (MarkdownMathIncremental.ChangeMayAffectDelimiterState(
+                oldSource,
+                oldSnapshot,
+                newSource,
+                changedStart,
+                oldChangedEnd,
+                newChangedEnd))
+        {
+            return false;
         }
 
         if (RangeContainsReferenceDependency(

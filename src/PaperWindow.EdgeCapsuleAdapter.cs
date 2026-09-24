@@ -50,7 +50,9 @@ public sealed partial class PaperWindow
             CloseDeepCapsuleSlotContextMenu();
         }
 
-        return DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.Attach(placement, paperForm, retracted));
+        var accepted = DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.Attach(placement, paperForm, retracted));
+        if (accepted) RequestMarkdownPreviewLayoutPreload();
+        return accepted;
     }
 
     private bool UpdateEdgeCapsuleQueuePlacement(EdgeCapsulePlacement placement) =>
@@ -61,13 +63,22 @@ public sealed partial class PaperWindow
         bool reserveWhileExpanded)
     {
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        var markOpenedFromEdge = EdgeCapsuleOpenOriginPolicy.ShouldMarkOpenedFromEdge(
+            EdgeCapsuleSlot,
+            paperForm);
         if (paperForm == EdgeCapsulePaperForm.Expanded && !reserveWhileExpanded)
         {
             CloseDeepCapsuleSlotContextMenu();
         }
 
-        return DispatchEdgeCapsuleIntent(
+        var accepted = DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PaperFormChanged(paperForm, reserveWhileExpanded));
+        if (accepted && markOpenedFromEdge)
+        {
+            MarkEdgeCapsuleOpenedFromEdge();
+        }
+        if (accepted) RequestMarkdownPreviewLayoutPreload();
+        return accepted;
     }
 
     private bool BeginEdgeCapsuleRetraction()
@@ -80,7 +91,9 @@ public sealed partial class PaperWindow
     {
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         CloseDeepCapsuleSlotContextMenu();
-        return DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.Detached());
+        var accepted = DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.Detached());
+        if (accepted) MarkdownEdgePreviewPreload.For(Dispatcher).Forget(_edgeCapsulePreviewInvalidationSource);
+        return accepted;
     }
 
     private bool SetEdgeCapsuleContextMenuOpen(bool open) =>

@@ -47,16 +47,6 @@ public static class ToolTipPreferences
         _isRegistered = true;
     }
 
-    public static void Apply(DependencyObject? root, bool enabled)
-    {
-        if (root == null)
-        {
-            return;
-        }
-
-        ApplyCore(root, enabled, forceEnabled: false, new HashSet<DependencyObject>());
-    }
-
     private static void OnToolTipOpening(object sender, ToolTipEventArgs e)
     {
         if (_isEnabledProvider?.Invoke() == false &&
@@ -72,38 +62,6 @@ public static class ToolTipPreferences
         if (sender is DependencyObject toolTip)
         {
             AppTypography.ApplyTextRendering(toolTip);
-        }
-    }
-
-    private static void ApplyCore(DependencyObject root, bool enabled, bool forceEnabled, HashSet<DependencyObject> visited)
-    {
-        if (!visited.Add(root))
-        {
-            return;
-        }
-
-        var childForceEnabled = forceEnabled || GetAlwaysEnabled(root);
-        ToolTipService.SetIsEnabled(root, enabled || childForceEnabled);
-
-        foreach (var child in LogicalTreeHelper.GetChildren(root))
-        {
-            if (child is DependencyObject logicalChild)
-            {
-                ApplyCore(logicalChild, enabled, childForceEnabled, visited);
-            }
-        }
-
-        try
-        {
-            var visualChildCount = VisualTreeHelper.GetChildrenCount(root);
-            for (var i = 0; i < visualChildCount; i++)
-            {
-                ApplyCore(VisualTreeHelper.GetChild(root, i), enabled, childForceEnabled, visited);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Some DependencyObjects are logical-only and have no visual children.
         }
     }
 

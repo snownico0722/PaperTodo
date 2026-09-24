@@ -23,6 +23,15 @@ public sealed partial class PaperWindow
         {
             RefreshPluginTopBarLabels();
         }
+
+        if (e.Property == FontFamilyProperty ||
+            e.Property == FontSizeProperty ||
+            e.Property == TextOptions.TextFormattingModeProperty ||
+            e.Property == TextOptions.TextRenderingModeProperty ||
+            e.Property == TextOptions.TextHintingModeProperty)
+        {
+            RefreshBuiltInFindTypographyFromOwner();
+        }
     }
 
     internal void RefreshPluginTopBarLabels()

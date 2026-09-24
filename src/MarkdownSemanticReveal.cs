@@ -53,7 +53,7 @@ internal static class MarkdownSemanticReveal
             caret.CaretOffset >= markerStart;
     }
 
-    /// <summary>两端带分隔符、需整段显隐的行内或块级 span 种类。</summary>
+    /// <summary>两端带分隔符、需整段显隐的行内 span 种类。</summary>
     public static bool IsRangeKind(MarkdownSemanticSpanKind kind)
     {
         return kind is MarkdownSemanticSpanKind.Emphasis or
@@ -103,7 +103,6 @@ internal static class MarkdownSemanticReveal
                     MarkdownSemanticSpanKind.SetextMarker or
                     MarkdownSemanticSpanKind.HorizontalRule or
                     MarkdownSemanticSpanKind.UnorderedListMarker or
-                    MarkdownSemanticSpanKind.OrderedListMarker or
                     MarkdownSemanticSpanKind.TaskListMarker or
                     MarkdownSemanticSpanKind.EscapeMarker) &&
                 RevealMarker(caret, lineZeroBased, span.Start, span.Length, span.Kind))

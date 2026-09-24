@@ -34,6 +34,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
             new KeyEventHandler(OnPreviewKeyDown),
             handledEventsToo: true);
         owner.AttachMarkdownBodySession(this);
+        owner.AttachPaperBackgroundHost(_root);
         try
         {
             var presenter = owner.CreateMarkdownBodyView();
@@ -41,6 +42,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         }
         catch
         {
+            owner.DetachPaperBackgroundHost(_root);
             owner.DetachMarkdownBodySession(this);
             throw;
         }
@@ -88,6 +90,9 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
 
     internal IReadOnlyList<UIElement> PresenterElements =>
         _root.Children.Cast<UIElement>().ToArray();
+
+    internal void SetTransientFindReveal(int? absoluteOffset, int length) =>
+        _semanticPresentation?.SetTransientFindReveal(absoluteOffset, length);
 
     internal void AddPresenter(UIElement presenter)
     {
@@ -142,8 +147,11 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         CancelPresenterInteractions?.Invoke();
     }
 
-    public void OnThemeChanged(PaperBodyTheme theme) =>
+    public void OnThemeChanged(PaperBodyTheme theme)
+    {
+        _owner.RefreshPaperBackground();
         NoteBox?.RefreshVisualStyle();
+    }
 
     public void OnTypographyChanged(PaperBodyTheme theme) =>
         NoteBox?.RefreshTypography();
@@ -190,6 +198,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         CancelInteractions();
         OnVisibilityChanged(false);
         ResetPresenterState();
+        _owner.DetachPaperBackgroundHost(_root);
         _owner.DetachMarkdownBodySession(this);
     }
 }

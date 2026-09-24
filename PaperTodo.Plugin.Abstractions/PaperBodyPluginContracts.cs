@@ -327,6 +327,8 @@ public sealed class PaperBodyContext
 {
     public required string ProviderId { get; init; }
     public required string ApiVersion { get; init; }
+    /// <summary>PaperTodo UI culture name for this process, for example zh-CN or en-US.</summary>
+    public string UiLanguage { get; init; } = PaperPluginEnvironment.UiLanguage;
     public required string StateJson { get; init; }
     public required int StateVersion { get; init; }
     public required int TargetStateVersion { get; init; }
@@ -338,6 +340,11 @@ public sealed class PaperBodyContext
     public required PaperBodySurfaceContext Body { get; init; }
     public required IPaperTodoHostApi Workspace { get; init; }
     public required IPaperPluginRuntimeClient Runtime { get; init; }
+    public IPaperWorkspacePresentationApi WorkspacePresentation => Workspace as IPaperWorkspacePresentationApi
+        ?? throw new InvalidOperationException("This host does not expose cross-paper presentation controls.");
+    public IPaperSettingsApi SettingsApi => Workspace as IPaperSettingsApi
+        ?? throw new InvalidOperationException("This host does not expose application settings.");
+
     public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
         ?? throw new InvalidOperationException("This host does not expose note image reads.");
     public IPaperPluginPopups Popups => Workspace as IPaperPluginPopups

@@ -5,10 +5,10 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    // Volatile presentation fallback that outlives one Runtime lease. A Web Runtime can enter
-    // Backoff and dispose its lease while the owning Papers still exist; keeping the last rich
-    // capsule snapshot here lets a rebuilt PaperWindow replay the previous presentation until the
-    // Runtime recovers. Final Failed clears this cache together with the persisted fallback text.
+    // Volatile presentation fallback that outlives one Runtime lease. During the single automatic
+    // rebuild, keep the last rich capsule snapshot so a PaperWindow rebuild does not temporarily
+    // collapse to BodyCapsuleText-only presentation. Final Failed clears this cache together with
+    // the persisted fallback text.
     private readonly Dictionary<string, Dictionary<string, PaperCapsulePresentation>>
         _pluginRuntimePresentationCache = new(StringComparer.Ordinal);
 
@@ -32,6 +32,7 @@ public sealed partial class AppController
     }
 
     internal bool HasPluginRuntimeOwnership(string paperId, string providerId) =>
+        IsPluginEnabled(providerId) &&
         FindPluginRuntimePaper(providerId, paperId) != null &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
         DeclaresPluginRuntime(descriptor);
@@ -94,11 +95,9 @@ public sealed partial class AppController
             return;
         }
 
-        // A failed Web Runtime disposes its lease before entering Backoff. Keep replaying the last
-        // published rich capsule while the replacement Runtime starts so a PaperWindow rebuild does
-        // not temporarily collapse to BodyCapsuleText-only presentation.
+        // Keep replaying the last published rich capsule while the one allowed replacement Runtime
+        // starts so a PaperWindow rebuild does not temporarily collapse to static fallback text.
         if (slot.State is PluginRuntimeState.Starting or
-            PluginRuntimeState.Backoff or
             PluginRuntimeState.Running &&
             TryGetPluginRuntimePresentationCache(
                 providerId,
@@ -147,53 +146,6 @@ public sealed partial class AppController
         if (_windows.TryGetValue(paperId, out var window) && !window.IsClosed)
         {
             window.ApplyPluginRuntimeCapsule(providerId, normalized);
-        }
-    }
-
-    internal void CompletePluginRuntimeStartupPresentation(
-        string providerId,
-        IReadOnlySet<string> publishedHeaderPaperIds,
-        IReadOnlySet<string> publishedCapsulePaperIds)
-    {
-        var changed = false;
-        foreach (var paper in State.Papers.Where(paper =>
-                     paper.Type == PaperTypes.Note &&
-                     string.Equals(
-                         PluginRuntimeProviderId(paper.BodyProviderId),
-                         providerId,
-                         StringComparison.Ordinal)))
-        {
-            if (!publishedHeaderPaperIds.Contains(paper.Id))
-            {
-                var hadHeader = !string.IsNullOrEmpty(paper.BodyHeaderText);
-                paper.BodyHeaderText = string.Empty;
-                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
-                {
-                    window.ApplyPluginRuntimeHeader(providerId, string.Empty);
-                }
-                if (hadHeader)
-                {
-                    changed = true;
-                    NotifyPaperDisplayTitleChanged(paper.Id);
-                }
-            }
-
-            if (!publishedCapsulePaperIds.Contains(paper.Id))
-            {
-                var hadCapsule = !string.IsNullOrEmpty(paper.BodyCapsuleText);
-                RemovePluginRuntimePresentationCache(providerId, paper.Id);
-                paper.BodyCapsuleText = string.Empty;
-                if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
-                {
-                    window.ApplyPluginRuntimeCapsule(providerId, null);
-                }
-                changed |= hadCapsule;
-            }
-        }
-
-        if (changed)
-        {
-            MarkDirty();
         }
     }
 

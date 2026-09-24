@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
@@ -16,6 +17,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     internal const int NoteTextMaxLength = 100000;
+    private const int WindowsErrorNoAssociation = 1155;
     private static readonly object PersistentScriptProcessLock = new();
     private static readonly Dictionary<string, Process> PersistentScriptProcesses = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object ActiveScriptProcessLock = new();
@@ -70,6 +72,7 @@ public sealed partial class PaperWindow
             TraceNoteRender($"UpdateMarkdownRenderMode mode={mode}");
             _noteBox.SetMarkdownRenderMode(mode);
         }
+        InvalidateEdgeCapsulePreviewContent();
     }
 
     public void UpdateImageReferenceTextMode()
@@ -89,24 +92,6 @@ public sealed partial class PaperWindow
         }
     }
 
-    private void TraceNoteRender(string message)
-    {
-#if DEBUG
-        try
-        {
-            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "md-render-trace.log");
-            var line = $"{DateTime.Now:HH:mm:ss.fff} paper={_paper.Id[..Math.Min(6, _paper.Id.Length)]} {message}{Environment.NewLine}";
-            lock (NoteRenderTraceLock)
-            {
-                System.IO.File.AppendAllText(path, line);
-            }
-        }
-        catch
-        {
-            // Test-only diagnostics must never affect note interaction.
-        }
-#endif
-    }
 
     private void ExitNoteEditor()
     {
@@ -265,8 +250,9 @@ public sealed partial class PaperWindow
                 isPreviewing = true;
                 // Focus can be cleared by the caller before preview mode is entered. Defer the
                 // decision until WPF has finished the current focus transition, then park focus
-                // on the active window only when no child control has claimed it. This keeps the
-                // window-level ESC handler available without stealing focus from title editing.
+                // on the active window only when no child control has claimed it. The standalone
+                // find Popup does not contribute to the owner's IsKeyboardFocusWithin, so check
+                // it separately to keep the window-level ESC fallback from stealing search input.
                 var deferredWorkGeneration = _noteDeferredWorkGeneration;
                 Dispatcher.BeginInvoke(
                     (Action)(() =>
@@ -282,6 +268,7 @@ public sealed partial class PaperWindow
                         if (isPreviewing &&
                             IsActive &&
                             !IsKeyboardFocusWithin &&
+                            _findHost?.IsKeyboardFocusWithin != true &&
                             !IsPaperContextMenuInteractionActive)
                         {
                             Focus();
@@ -995,10 +982,7 @@ public sealed partial class PaperWindow
         try
         {
             var path = WriteExternalMarkdownFile();
-            Process.Start(new ProcessStartInfo(path)
-            {
-                UseShellExecute = true
-            });
+            OpenExternalNoteFile(path);
         }
         catch (Exception ex)
         {
@@ -1007,6 +991,27 @@ public sealed partial class PaperWindow
                 Strings.Get("OpenMarkdownFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    private static void OpenExternalNoteFile(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == WindowsErrorNoAssociation)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "notepad.exe",
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(path);
+            Process.Start(startInfo);
         }
     }
 
@@ -1634,76 +1639,54 @@ public sealed partial class PaperWindow
     }
 
 
-    internal static void StopPersistentScriptProcesses()
+    internal static void StopPersistentScriptProcesses() =>
+        StopPersistentScriptProcessesAsync().GetAwaiter().GetResult();
+
+    private static Task StopPersistentScriptProcessesAsync()
     {
-        List<Process> processes;
+        Process[] processes;
         lock (PersistentScriptProcessLock)
         {
-            processes = PersistentScriptProcesses.Values.ToList();
+            processes = PersistentScriptProcesses.Values.Distinct().ToArray();
             PersistentScriptProcesses.Clear();
         }
-
-        foreach (var process in processes)
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    try
-                    {
-                        if (process.StartInfo.RedirectStandardInput)
-                        {
-                            process.StandardInput.Close();
-                        }
-                    }
-                    catch
-                    {
-                        // The process may already be exiting or the pipe may be broken.
-                    }
-
-                    if (!process.WaitForExit(250))
-                    {
-                        process.Kill(entireProcessTree: true);
-                        process.WaitForExit(1000);
-                    }
-                }
-            }
-            catch
-            {
-                // Persistent script sessions are optional and disposable.
-            }
-            finally
-            {
-                process.Dispose();
-            }
-        }
+        return Task.WhenAll(processes.Select(process => StopScriptProcessAsync(process, persistent: true)));
     }
 
-    internal static void StopAllScriptProcesses()
+    internal static Task StopAllScriptProcessesAsync()
     {
-        StopPersistentScriptProcesses();
-
-        List<Process> activeProcesses;
+        var persistent = StopPersistentScriptProcessesAsync();
+        Process[] active;
         lock (ActiveScriptProcessLock)
         {
-            activeProcesses = ActiveScriptProcesses.Values.Distinct().ToList();
+            active = ActiveScriptProcesses.Values.Distinct().ToArray();
             ActiveScriptProcesses.Clear();
         }
-
-        foreach (var process in activeProcesses)
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(1000);
-                }
-            }
-            catch
-            {
-                // The execution task owns disposal and temporary-file cleanup in its finally.
-            }
-        }
+        return Task.WhenAll(active.Select(process => StopScriptProcessAsync(process, persistent: false)).Append(persistent));
     }
+
+    private static Task StopScriptProcessAsync(Process process, bool persistent) => Task.Run(async () =>
+    {
+        try
+        {
+            if (process.HasExited) return;
+            if (persistent)
+            {
+                try { if (process.StartInfo.RedirectStandardInput) process.StandardInput.Close(); }
+                catch { /* A broken pipe/already-exiting process needs no graceful request. */ }
+                using var grace = new System.Threading.CancellationTokenSource(250);
+                try { await process.WaitForExitAsync(grace.Token).ConfigureAwait(false); return; }
+                catch (OperationCanceledException) when (grace.IsCancellationRequested) { }
+            }
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            using var deadline = new System.Threading.CancellationTokenSource(1000);
+            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch { /* Process exit/disposal can race the execution task. Other processes still stop. */ }
+        finally
+        {
+            // Active execution owns its process disposal and temporary-file cleanup.
+            if (persistent) process.Dispose();
+        }
+    });
 }

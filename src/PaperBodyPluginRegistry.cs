@@ -1,8 +1,6 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using PaperTodo.Plugin;
@@ -67,6 +65,8 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
     public PaperBodyPluginSettingManifest[] Settings { get; set; } = [];
     public PaperBodyPluginStartupManifest? StartupPaper { get; set; }
+    public Dictionary<string, PaperBodyPluginLocaleManifest> Locales { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public string DirectoryPath { get; internal set; } = "";
     public string EntryPath { get; internal set; } = "";
@@ -82,13 +82,14 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 
 /// <summary>
 /// Discovers one fully trusted, unsandboxed native or local Web plugin from each self-contained
-/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.1 has no plugin hot-reload contract: code,
+/// plugins/&lt;plugin-id&gt;/plugin.json folder. Protocol 2.x has no plugin hot-reload contract: code,
 /// manifest and Web file changes are discovered on the next app start. Loaded native assemblies
 /// remain loaded for the process lifetime.
 /// </summary>
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
-    internal const string SupportedPluginApiVersion = "2.1";
+    internal const string MinimumPluginApiVersion = "2.1";
+    internal const string SupportedPluginApiVersion = "2.2";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -101,7 +102,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private sealed record LoadedNativePlugin(
         string DirectoryPath,
-        string Fingerprint,
         PaperBodyPluginDescriptor Descriptor,
         NativePluginLoadContext LoadContext);
 
@@ -258,6 +258,9 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
         ValidateSettings(manifest);
         ValidateStartupPaper(manifest);
         ValidateProtocolFeatures(manifest);
+        PaperBodyPluginLocalization.ValidateAndApply(
+            manifest,
+            UiLanguages.EffectiveUiCulture);
 
         var kind = NormalizeKind(manifest.Kind);
         manifest.DirectoryPath = Path.GetFullPath(directory);
@@ -457,7 +460,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             ?? throw new InvalidOperationException(
                 "The native plugin manifest is unavailable.");
         var directory = manifest.DirectoryPath;
-        var fingerprint = PluginFolderFingerprint(directory);
         var loadContext = new NativePluginLoadContext(manifest.EntryPath);
         IPaperBodyPlugin? plugin = null;
         try
@@ -476,12 +478,10 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             // plugin.json is the sole metadata authority; the CLR type contributes behavior only.
             var descriptor = discoveredDescriptor with
             {
-                Fingerprint = fingerprint,
                 NativePluginType = pluginType
             };
             _loadedNativeByDirectory[directory] = new LoadedNativePlugin(
                 directory,
-                fingerprint,
                 descriptor,
                 loadContext);
             if (_descriptors.TryGetValue(descriptor.Id, out var current) &&
@@ -605,17 +605,18 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 
     private static void ValidateManifestApiVersion(string pluginApiVersion)
     {
-        if (string.Equals(
-                pluginApiVersion,
-                SupportedPluginApiVersion,
-                StringComparison.Ordinal))
+        if (ApiAtLeast(pluginApiVersion, MinimumPluginApiVersion) &&
+            ApiAtLeast(SupportedPluginApiVersion, pluginApiVersion))
         {
             return;
         }
 
         throw new InvalidDataException(
-            $"Unsupported plugin API version {pluginApiVersion}; host requires {SupportedPluginApiVersion}.");
+            $"Unsupported plugin API version {pluginApiVersion}; host supports {MinimumPluginApiVersion} through {SupportedPluginApiVersion}.");
     }
+
+    private static bool ApiAtLeast(string actual, string required) =>
+        Version.Parse(actual).CompareTo(Version.Parse(required)) >= 0;
 
     private static Version ParseVersion(string? value)
     {
@@ -625,28 +626,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
                 $"Plugin version '{value}' is not a valid version.");
         }
         return parsed;
-    }
-
-    private static string PluginFolderFingerprint(string directory)
-    {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                     .Where(path => !IsRuntimePath(directory, path))
-                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
-        {
-            var relative = Path.GetRelativePath(directory, path).Replace('\\', '/');
-            hash.AppendData(Encoding.UTF8.GetBytes(relative));
-            hash.AppendData(new byte[] { 0 });
-            using var stream = File.OpenRead(path);
-            var buffer = new byte[64 * 1024];
-            int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                hash.AppendData(buffer.AsSpan(0, read));
-            }
-            hash.AppendData(new byte[] { 0 });
-        }
-        return Convert.ToHexString(hash.GetHashAndReset());
     }
 
     private static string DiscoveryFingerprint(
@@ -670,15 +649,6 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             value += $":{runtime.Length}:{runtime.LastWriteTimeUtc.Ticks}";
         }
         return value;
-    }
-
-    private static bool IsRuntimePath(string directory, string path)
-    {
-        var relative = Path.GetRelativePath(directory, path);
-        return relative.Split(
-                new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-                StringSplitOptions.RemoveEmptyEntries)
-            .Any(part => string.Equals(part, ".runtime", StringComparison.OrdinalIgnoreCase));
     }
 
     public void Dispose()

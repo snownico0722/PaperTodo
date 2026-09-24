@@ -16,23 +16,49 @@
     <!-- .NET 9+ marks Windows apphost/single-file hosts CET-compatible by default. Disable that
          opt-in for PaperTodo to avoid User Shadow Stack startup failures on affected legacy Windows builds. -->
     <CETCompat>false</CETCompat>
-    <Version>4.0.0-preview</Version>
+    <Version>4.0.0-beta1</Version>
     <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <FileVersion>4.0.0.0</FileVersion>
-    <InformationalVersion>4.0Preview</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v4.0Preview" free of +commit suffixes from SourceLink. -->
+    <InformationalVersion>4.0.0-beta1</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v4.0.0-beta1" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
     <OutputPath>$(MSBuildProjectDirectory)\输出\PaperTodo-v$(Version)\</OutputPath>
     <SatelliteResourceLanguages>en;ja;ko</SatelliteResourceLanguages>
-    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;tests\**;vendor\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;tests\**;tools\**;vendor\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
     <DefineConstants>$(DefineConstants);PAPERTODO_DEFAULT_ENGLISH</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Compress the WinRT projection in ordinary builds and no-runtime packages.
+         Self-contained packages use the SDK's built-in bundle compression instead. -->
+    <PaperTodoCompressWindowsSdk Condition="'$(PaperTodoCompressWindowsSdk)' == ''">true</PaperTodoCompressWindowsSdk>
+    <_PaperTodoSdkCompressionEnabled>false</_PaperTodoSdkCompressionEnabled>
+    <_PaperTodoSdkCompressionEnabled Condition="'$(PaperTodoCompressWindowsSdk)' == 'true' And '$(SelfContained)' != 'true' And '$(DisableFody)' != 'true'">true</_PaperTodoSdkCompressionEnabled>
+    <DisableFody Condition="'$(_PaperTodoSdkCompressionEnabled)' != 'true'">true</DisableFody>
+    <!-- Fody rewrites the intermediate assembly and caches which references it removed.
+         Keep both modes separate so switching publish options never reuses a woven assembly/cache. -->
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\sdk-compression-$(_PaperTodoSdkCompressionEnabled)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>PaperTodo.DesktopBenchmarks</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>PaperTodo.MaterialBenchmarks</_Parameter1>
+    </AssemblyAttribute>
+    <!-- Diagnostic entry points keep their existing DEBUG guards / Release no-op behavior.
+         Their implementations belong to tools, not to the product source directory. -->
+    <Compile Include="tools\PaperTodo.EdgeDiagnostics\EntryPoints\*.cs" Link="Diagnostics\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Real-process diagnostics are tooling, never a dependency on a test assembly. -->
+    <Compile Include="tools\PaperTodo.EdgeDiagnostics\*.cs" Link="Diagnostics\%(Filename)%(Extension)" />
+  </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets\PaperTodo.ico" />
     <!-- Repository plugin outputs are available to normal development builds, but plugins are
@@ -50,14 +76,17 @@
   <ItemGroup>
     <ProjectReference Include="PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />
     <ProjectReference Include="vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj" />
-    <!-- XAML-Math latest master source, pinned to a fixed commit. -->
+    <!-- Pinned XAML-Math source; loaded by the editor only after math is recognized. -->
     <ProjectReference Include="vendor\xaml-math\src\WpfMath\WpfMath.csproj" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <!-- Markdig is the semantic parser only; AvalonEdit remains the source document and renderer. -->
     <PackageReference Include="Markdig" Version="1.3.2" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-    <PackageReference Include="ModelContextProtocol" Version="2.0.0" />
+    <!-- Keep restore inputs independent of publish options, including publishing without restoring. -->
+    <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
+    <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
     <!-- DirectComposition wraps live layered WPF capsule HWNDs without per-frame pixel copies or
          the Windows App SDK runtime. Opening captures one compact shell; the queue proxy is
          transient and falls back to the normal HWND path when a surface cannot be created. -->

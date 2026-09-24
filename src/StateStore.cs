@@ -217,8 +217,7 @@ public sealed class StateStore
                 return false;
             }
 
-            var content = MarkdownImageReferences.StripRenderMarkers(paper.Content ?? "");
-            foreach (var imageId in MarkdownImageReferences.CollectImageIds(content))
+            foreach (var imageId in MarkdownImageReferences.CollectImageIds(paper.Content))
             {
                 imageIds.Add(imageId);
             }
@@ -416,6 +415,8 @@ public sealed class StateStore
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.GlobalHotkeys ??= new Dictionary<string, string>();
         state.GlobalHotkeyEnabled ??= new Dictionary<string, bool>();
+        state.DisabledPluginIds ??= new List<string>();
+        state.DisabledPluginIds = NormalizeDisabledPluginIds(state.DisabledPluginIds);
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
 
@@ -460,12 +461,29 @@ public sealed class StateStore
                 ClearDeepCapsuleExpandedGeometry(paper);
             }
 
+            if (paper.DeepCapsuleExpandedDpiScale is double scale && (!IsFinite(scale) || scale <= 0))
+            {
+                paper.DeepCapsuleExpandedDpiScale = null;
+            }
+
             foreach (var item in paper.Items)
             {
                 item.Text ??= "";
             }
         }
     }
+
+    private static List<string> NormalizeDisabledPluginIds(IEnumerable<string?> values) =>
+        values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Where(value => !string.Equals(
+                value,
+                PaperBodyProviderIds.Markdown,
+                StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
 
     private static void RemoveNonFiniteValues(Dictionary<string, double> values)
     {
@@ -512,12 +530,12 @@ public sealed class StateStore
         }
 
         state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
+        state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
+        state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
+        state.MaterialTransparency = MaterialTransparencyLevels.Normalize(state.MaterialTransparency);
 
-        if (!MarkdownRenderModes.IsValid(state.MarkdownRenderMode))
-        {
-            state.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
-        }
+        state.MarkdownRenderMode = MarkdownRenderModes.Normalize(state.MarkdownRenderMode);
 
         state.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Normalize(state.ExternalMarkdownExtension);
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);
@@ -562,13 +580,6 @@ public sealed class StateStore
         state.ExperimentalTetherMinimizedBehavior =
             ExperimentalTetherVisibilityModes.Normalize(
                 state.ExperimentalTetherMinimizedBehavior);
-        if (state.ShowTopBarNewPaperButtons is bool showTopBarNewPaperButtons)
-        {
-            state.ShowTopBarNewTodoButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewNoteButton = showTopBarNewPaperButtons;
-            state.ShowTopBarNewPaperButtons = null;
-        }
-
         state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
         if (!state.UseCapsuleMode)
@@ -577,9 +588,11 @@ public sealed class StateStore
         }
 
         state.MaxTitleLength = PaperTitles.NormalizeMaxTitleLength(state.MaxTitleLength);
-        state.DeepCapsuleTitleMeasureCharacterLimit = Math.Clamp(state.DeepCapsuleTitleMeasureCharacterLimit, 0, PaperTitles.MaxConfigurableTitleLength);
+        state.DeepCapsuleTitleMeasureCharacterLimit = EdgeCapsuleTitleLimit.Normalize(state.DeepCapsuleTitleMeasureCharacterLimit);
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
         state.GlobalHotkeyEnabled = GlobalShortcutCatalog.NormalizeEnabled(state.GlobalHotkeyEnabled);
+        state.DisabledPluginIds ??= new List<string>();
+        state.DisabledPluginIds = NormalizeDisabledPluginIds(state.DisabledPluginIds);
 
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
@@ -603,28 +616,11 @@ public sealed class StateStore
             }
         }
 
-        var keepDeepCapsuleStartTopMargins = state.UseCapsuleMode && state.UseDeepCapsuleMode && state.UseCapsuleCollapseAll;
-
-        // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
-        // done at layout time (monitor set can change between sessions, so we don't over-normalize
-        // here). Missing entries use the built-in layout default.
+        // Per-queue margins are user layout memory, not active collapse-all runtime state. Keep
+        // finite remembered positions while the feature is disabled so turning it back on does not
+        // silently reset the user's layout. Live work-area clamping still happens at layout time.
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
-        if (!keepDeepCapsuleStartTopMargins)
-        {
-            state.DeepCapsuleQueueStartTopMargins.Clear();
-        }
-        else
-        {
-            foreach (var key in state.DeepCapsuleQueueStartTopMargins.Keys.ToList())
-            {
-                var v = state.DeepCapsuleQueueStartTopMargins[key];
-                if (double.IsNaN(v) || double.IsInfinity(v))
-                {
-                    state.DeepCapsuleQueueStartTopMargins.Remove(key);
-                }
-            }
-        }
     }
 
     private static void NormalizePapers(AppState state)
@@ -827,6 +823,10 @@ public sealed class StateStore
 
     private static void NormalizeDeepCapsuleExpandedGeometry(PaperData paper)
     {
+        if (paper.DeepCapsuleExpandedDpiScale is double scale && (!IsFinite(scale) || scale <= 0))
+        {
+            paper.DeepCapsuleExpandedDpiScale = null;
+        }
         if (!paper.DeepCapsuleExpandedX.HasValue ||
             !paper.DeepCapsuleExpandedY.HasValue ||
             !paper.DeepCapsuleExpandedWidth.HasValue ||
@@ -867,6 +867,7 @@ public sealed class StateStore
         paper.DeepCapsuleExpandedY = null;
         paper.DeepCapsuleExpandedWidth = null;
         paper.DeepCapsuleExpandedHeight = null;
+        paper.DeepCapsuleExpandedDpiScale = null;
         paper.DeepCapsuleExpandedSide = "";
         paper.DeepCapsuleExpandedMonitorDeviceName = "";
     }

@@ -101,9 +101,6 @@
   <data name="MarkdownRenderBasic" xml:space="preserve">
     <value>基础</value>
   </data>
-  <data name="MarkdownRenderEnhanced" xml:space="preserve">
-    <value>增强</value>
-  </data>
   <data name="MarkdownRenderFull" xml:space="preserve">
     <value>完全渲染</value>
   </data>
@@ -330,7 +327,7 @@
     <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
-    <value>纸片已达到 100 张上限。
+    <value>纸片已达到 200 张上限。
 请删除不再需要的纸片后再新建。</value>
   </data>
   <data name="PaperLimitTitle" xml:space="preserve">
@@ -582,9 +579,8 @@
 需同时放置 papertodo 与 PaperTodo_Bold（.ttf/.otf）。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>基础：为md渲染轻量高亮。
-增强：标题、列表和强调更美观。
-完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记（不占宽度、内容紧凑重排）；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
+    <value>基础：保留 Markdown 标记，淡化语法标记，并显示列表圆点、分割线等轻量排版。
+完全渲染：编辑时也按标题、列表、引用、代码块等最终排版显示，隐藏多数 Markdown 标记；光标所在块显示其标记以便编辑。失焦后进入整篇只读渲染。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown 渲染动画</value>
@@ -1126,11 +1122,10 @@
     <value>边缘标题最大长度</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>仅用标题前 N 个字符计算边缘胶囊宽度；标题本身不截断，普通胶囊不受影响。
-「全部」保持原有宽度。</value>
+    <value>限制静止时边缘胶囊显示的标题长度，0 隐藏标题文字但保留图标，不修改真实标题。加减可在「无限制、0、1…20」之间循环。关闭悬停预览时，鼠标移入会展开被截短的标题，移出后收回。</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
-    <value>全部</value>
+    <value>无限制</value>
   </data>
   <data name="ShortcutEnabledHeader" xml:space="preserve">
     <value>启用</value>
@@ -1272,23 +1267,32 @@
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>更多设置</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>设置不可用</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>收起设置</value>
   </data>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>插件协议 {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>数据读取失败，当前使用空数据；新数据将写入恢复文件。</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>原数据读取失败，当前使用恢复数据文件。</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>打开目录</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>重启 PaperTodo 并重新扫描插件</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>重启 PaperTodo</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>重启后将重新扫描并加载正文插件。是否立即重启？</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>立即重启</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>发现 {0} 个正文插件</value>
+    <value>{0}个</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>加载问题</value>
@@ -1314,6 +1318,9 @@
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>找不到正文插件：{0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0}（已禁用）</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>正文类型</value>
   </data>
@@ -1322,6 +1329,12 @@
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo 内置 Markdown 编辑、预览与图片正文。</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>正文插件已关闭</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>“{0}”已禁用。可在设置 → 插件中重新启用。</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>正文插件无法运行</value>
@@ -1419,7 +1432,10 @@
     <value>插件有问题</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>当前未使用</value>
+    <value>插件已启用，当前未运行</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>插件已禁用</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>插件运行中</value>
@@ -1438,5 +1454,87 @@
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
+  </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>云母</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>使用 Windows 11 22H2 及以上的原生 DWM Mica，背景由系统合成，不读取或模拟壁纸。用于展开的纸片和设置窗口；胶囊、折叠动画和半透明状态保留实色绘制。关闭系统透明效果、开启高对比度或原生接口不可用时回退实色。首次从其他皮肤切换后需退出并重新打开 PaperTodo。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>已保存云母选择。请从托盘退出并重新打开 PaperTodo，以启用原生 Mica；当前窗口先使用实色，编辑内容和撤销记录不会因换肤被重建。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>原生 Mica 需要 Windows 11 22H2（22621）及以上。当前系统使用云母配色的实色背景。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>原生 Mica 用于展开的纸片和设置窗口。胶囊、折叠动画及半透明状态使用实色背景；系统也可能按透明效果和节能策略回退。</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>材质效果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>选择标准云母、标准亚克力或透色亚克力。标准亚克力保留柔和磨砂效果；透色亚克力使用更轻的底色，让背后的颜色更明显。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>标准云母</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>标准亚克力</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色亚克力</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>材质始终显示激活效果</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>勾选后，展开纸片和设置窗口失去焦点时仍保持激活时的材质外观。</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>素灰</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>皮肤（实验）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>皮肤控制材质，配色控制颜色。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>默认纸片</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明描图纸</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero 玻璃</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>像素风</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>淡蓝透明玻璃与斜向反光，不采样桌面。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>重启 PaperTodo 后启用原生背景。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
+  </data>
+<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>胶囊与菜单完整材质</value>
+  </data>
+  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
+    <value>开启：与纸片一致。关闭：材质更轻、底色更实，更易阅读。边缘浏览始终使用轻量效果。</value>
+  </data>
+  <data name="SkinCaptureNotice" xml:space="preserve">
+    <value>胶囊和菜单显示时会临时读取其后方的局部背景；拖动胶囊时只读取一次低分辨率虚拟桌面。仅在本机内存中使用，不保存或上传。</value>
   </data>
 </root>

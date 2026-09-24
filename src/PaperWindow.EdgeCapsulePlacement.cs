@@ -1,3 +1,5 @@
+using System.Windows;
+
 namespace PaperTodo;
 
 public sealed partial class PaperWindow
@@ -12,7 +14,7 @@ public sealed partial class PaperWindow
         return DeepCapsuleVisibleWidth(DeepCapsuleSlotDpi().PixelsPerDip);
     }
 
-    private double DeepCapsuleVisibleWidth(double pixelsPerDip)
+    private double DeepCapsuleVisibleWidth(double pixelsPerDip, bool limitTitle = true)
     {
         var pluginContentWidth = PluginCapsuleRequestedContentWidth(pixelsPerDip);
         if (pluginContentWidth.HasValue)
@@ -21,13 +23,14 @@ public sealed partial class PaperWindow
         }
 
         // A resting edge tag owns exactly the pixels it renders: one interior shadow margin plus
-        // icon/title content and its padding. There is no hidden full-width pill behind it.
+        // icon/title content and its padding. Todo/Note use one shared icon slot so the different
+        // `✓` / `✎` glyph advances cannot change the pill width for otherwise equal titles.
         var bodyWidth = Math.Ceiling(
             CapsuleLeftPadding +
-            MeasureCapsuleIconWidth(pixelsPerDip) +
+            MeasureDeepCapsuleIconSlotWidth(pixelsPerDip) +
             CapsuleIconGap +
             MeasureCapsuleTitleWidth(
-                limitForDeepCapsule: true,
+                limitForDeepCapsule: limitTitle,
                 pixelsPerDip: pixelsPerDip) +
             CapsuleRightPadding);
         return Math.Max(34, bodyWidth + WindowChromeMargin);
@@ -35,7 +38,22 @@ public sealed partial class PaperWindow
 
     private double ExpandedDeepCapsuleVisibleWidth()
     {
-        return DeepCapsuleVisibleWidth() + CapsuleCloseWidth;
+        return DeepCapsuleExpandedBodyWidth(DeepCapsuleMonitorGeometry()) + CapsuleCloseWidth;
+    }
+
+    private double DeepCapsuleExpandedBodyWidth(MonitorGeometry monitor, double? restingWidth = null)
+    {
+        var resting = restingWidth ?? DeepCapsuleVisibleWidth(monitor.DpiScaleY);
+        if (_controller.State.ExperimentalEdgeCapsuleHoverPreview ||
+            _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Unlimited)
+        {
+            return resting;
+        }
+
+        // Only the ordinary text capsule grows. Plugin-requested content retains its own width.
+        var full = DeepCapsuleVisibleWidth(monitor.DpiScaleY, limitTitle: false);
+        return Math.Clamp(full, resting,
+            Math.Max(resting, monitor.LocalWorkAreaDip.Width - CapsuleCloseWidth));
     }
 
     // Slide this capsule up to the master's slot and fade it out. The window stays shown
@@ -95,10 +113,12 @@ public sealed partial class PaperWindow
         {
             return;
         }
-        RefreshCapsuleLabel();
+        // Rearranging a queue changes placement, not the title/body generation. Invalidating here
+        // would discard every preloaded artifact immediately after staging the next preview.
+        RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         if (!TryStageEdgeCapsuleVisualTransaction(
                 animate,
@@ -173,10 +193,10 @@ public sealed partial class PaperWindow
             return;
         }
         MarkEdgeCapsuleOpenedFromEdge();
-        RefreshCapsuleLabel();
+        RefreshCapsuleLabel(invalidatePreview: false);
         ReserveEdgeCapsulePreviewCapacityBeforeFirstShow();
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             requireActiveInteraction: false);
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -206,7 +226,6 @@ public sealed partial class PaperWindow
                 refreshLayout: true);
         }
         RefreshEffectiveTopmost();
-        UpdateToolTipSetting();
         if (!IsPaperFormTransitioning && shouldSaveExpandedGeometry)
         {
             _controller.UpdateGeometry(_paper, this);
@@ -359,5 +378,37 @@ public sealed partial class PaperWindow
         {
             ClearDeepCapsulePlacement(animate: _controller.State.EnableAnimations);
         }
+    }
+
+
+    /// <summary>
+    /// Ordinary Todo/Note edge capsules share one icon slot. Their symbols are different glyphs
+    /// (`✓` / `✎`) with different advances, but that must not make otherwise identical one-character
+    /// titles produce different pill widths or different title start positions. Script capsules keep
+    /// their own natural icon metrics.
+    /// </summary>
+    private double MeasureDeepCapsuleIconSlotWidth(double pixelsPerDip)
+    {
+        if (IsScriptCapsule())
+        {
+            _edgeCapsuleHost?.SetDefaultIconSlotWidth(0);
+            return MeasureCapsuleIconWidth(pixelsPerDip);
+        }
+
+        var todoWidth = MeasureCapsuleTextWidth(
+            "✓",
+            CapsuleIconFontSize,
+            FontWeights.SemiBold,
+            AppTypography.SymbolFontFamily,
+            pixelsPerDip);
+        var noteWidth = MeasureCapsuleTextWidth(
+            "✎",
+            CapsuleIconFontSize,
+            FontWeights.SemiBold,
+            AppTypography.SymbolFontFamily,
+            pixelsPerDip);
+        var slotWidth = Math.Max(todoWidth, noteWidth);
+        _edgeCapsuleHost?.SetDefaultIconSlotWidth(slotWidth);
+        return slotWidth;
     }
 }

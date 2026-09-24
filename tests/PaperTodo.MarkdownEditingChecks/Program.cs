@@ -10,6 +10,7 @@ internal static partial class Program
     {
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
+        Check("Paper background image loading and layout", CheckPaperBackgroundToggle);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })
@@ -20,7 +21,7 @@ internal static partial class Program
                     Pump();
                     Equal(source, editor.Box.Text, "loading Full keeps source");
                     editor.Box.SetPreviewMode(true);
-                    editor.Box.SetMarkdownRenderMode(MarkdownRenderModes.Enhanced);
+                    editor.Box.SetMarkdownRenderMode(MarkdownRenderModes.Basic);
                     editor.Box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
                     editor.Box.SetPreviewMode(false);
                     Pump();
@@ -94,10 +95,10 @@ internal static partial class Program
             Pump();
             var point = TaskCheckBoxCenter(box);
 
-            box.SetMarkdownRenderMode(MarkdownRenderModes.Enhanced);
+            box.SetMarkdownRenderMode(MarkdownRenderModes.Basic);
             Pump();
-            Require(!box.TryToggleRenderedTaskCheckBoxAtPoint(point), "Enhanced mode has no rendered task interaction");
-            Equal(source, box.Text, "Enhanced mode leaves source untouched");
+            Require(!box.TryToggleRenderedTaskCheckBoxAtPoint(point), "Basic mode has no rendered task interaction");
+            Equal(source, box.Text, "Basic mode leaves source untouched");
 
             box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
             box.SetPreviewMode(false);
@@ -138,9 +139,9 @@ internal static partial class Program
                 box.CaretOffset = source.Length;
                 Pump();
                 Near(initialWidth, FirstLineWidth(box), "leaving restores initial width");
-                box.SetMarkdownRenderMode(MarkdownRenderModes.Enhanced);
+                box.SetMarkdownRenderMode(MarkdownRenderModes.Basic);
                 Pump();
-                Require(FirstLineWidth(box) > initialWidth, "Enhanced shows source syntax");
+                Require(FirstLineWidth(box) > initialWidth, "Basic shows source syntax");
                 box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
                 Pump();
                 Near(initialWidth, FirstLineWidth(box), "returning to Full restores width");
@@ -160,6 +161,37 @@ internal static partial class Program
                 "destination backslash is visible when any part of the link is being edited");
         });
 
+        Check("Ordered markers stay native through preview and animated editing", () =>
+        {
+            foreach (var source in new[] { "1. item", "10) item" })
+            {
+                using var editor = new Editor(source);
+                var box = editor.Box;
+                box.SetMarkdownEditAnimationEnabled(true);
+                var snapshot = MarkdownSemanticSnapshot.Parse(source);
+                Require(!MarkdownSemanticReveal.HasRevealOnLine(
+                    snapshot, source, 0, 0, new MarkdownCaretReveal(source.Length, 0)),
+                    "plain ordered item does not start a syntax fade");
+                foreach (var mode in new[] { MarkdownRenderModes.Full, MarkdownRenderModes.Basic })
+                {
+                    box.SetMarkdownRenderMode(mode);
+                    foreach (var preview in new[] { true, false, true })
+                    {
+                        box.SetPreviewMode(preview);
+                        box.CaretOffset = source.Length;
+                        Pump();
+                        Equal(byte.MaxValue, ForegroundAlphaAtOffset(box, 0), "source number stays visible");
+                        var view = box.TextArea.TextView;
+                        var drawing = new DrawingGroup();
+                        using (var context = drawing.Open())
+                            foreach (var renderer in view.BackgroundRenderers)
+                                renderer.Draw(view, context);
+                        Require(drawing.Bounds.IsEmpty, "ordered item needs no painted replacement");
+                    }
+                }
+            }
+        });
+
         Check("Quote marker after a list marker hides and reveals with the quote", () =>
         {
             const string source = "- > item";
@@ -172,6 +204,18 @@ internal static partial class Program
             editor.Box.CaretOffset = source.Length;
             Pump();
             Require(ForegroundAlphaAtOffset(editor.Box, quote) > 0, "list-contained quote marker reveals on its active line");
+        });
+
+        Check("List-contained quote rails align across continuation lines", () =>
+        {
+            const string source = "10. > a\n    > b";
+            using var editor = new Editor(source);
+            editor.Box.SetPreviewMode(true);
+            Pump();
+
+            var railXs = BackgroundVerticalLineXs(editor.Box);
+            Require(railXs.Length == 2, $"expected two rendered quote rails, got {railXs.Length}");
+            Near(railXs[0], railXs[1], "quote rail X stays aligned across ordered-list continuation");
         });
 
         Check("Link escapes have nonoverlapping collapse runs in both caret directions", () =>
@@ -277,6 +321,36 @@ internal static partial class Program
             MarkdownTaskCheckBoxGeometry.TryGetRect(view, line, task, out var rect),
             "task checkbox geometry resolves");
         return new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
+    }
+
+    private static double[] BackgroundVerticalLineXs(MarkdownTextBox box)
+    {
+        box.ApplyTemplate();
+        box.Measure(new Size(800, 600));
+        box.Arrange(new Rect(0, 0, 800, 600));
+        box.UpdateLayout();
+        var view = box.TextArea.TextView;
+        view.Measure(new Size(800, 600));
+        view.Arrange(new Rect(0, 0, 800, 600));
+        view.EnsureVisualLines();
+
+        var drawing = new DrawingGroup();
+        using (var context = drawing.Open())
+        {
+            foreach (var renderer in view.BackgroundRenderers)
+            {
+                renderer.Draw(view, context);
+            }
+        }
+
+        return drawing.Children
+            .OfType<GeometryDrawing>()
+            .Select(item => item.Geometry)
+            .OfType<LineGeometry>()
+            .Where(line => Math.Abs(line.StartPoint.X - line.EndPoint.X) < 0.01)
+            .Select(line => line.StartPoint.X)
+            .OrderBy(x => x)
+            .ToArray();
     }
 
     private static byte ForegroundAlphaAtOffset(MarkdownTextBox box, int offset)

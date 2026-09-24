@@ -529,7 +529,7 @@ internal sealed partial class WebPaperBodySession
                       interactiveResizeObserver.observe(element);
                     }
                   };
-                  const publishInteractiveRegions = () => {
+                  const publishInteractiveRegions = (force = false) => {
                     const viewportWidth = Math.max(1, window.innerWidth || document.documentElement?.clientWidth || 1);
                     const viewportHeight = Math.max(1, window.innerHeight || document.documentElement?.clientHeight || 1);
                     const elements = [...document.querySelectorAll(interactiveSelector)];
@@ -552,7 +552,7 @@ internal sealed partial class WebPaperBodySession
                       });
                     }
                     const signature = JSON.stringify(regions);
-                    if (signature === interactiveRegionSignature) return;
+                    if (!force && signature === interactiveRegionSignature) return;
                     interactiveRegionSignature = signature;
                     post('miniInteractiveRegions', { regions });
                   };
@@ -621,6 +621,11 @@ internal sealed partial class WebPaperBodySession
                     }
                   });
                   window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                     surface: 'mini', paper, body, mini, runtime,
                     workspace: Object.freeze({ request }),
                     post, request, saveState, flushState,
@@ -643,6 +648,9 @@ internal sealed partial class WebPaperBodySession
                       const token = String(message.token ?? '');
                       requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
+                          // Surface recovery clears the host-side hit regions. Re-publish the
+                          // current snapshot even when the DOM geometry itself did not change.
+                          publishInteractiveRegions(true);
                           post('miniSurfacePresentProbeResult', { token });
                         });
                       });
@@ -1029,6 +1037,7 @@ internal sealed partial class WebPaperBodySession
             paperId = _owner._context.PaperId,
             providerId = _owner._context.ProviderId,
             apiVersion = _owner._context.ApiVersion,
+            uiLanguage = _owner._context.UiLanguage,
             state = ParseState(_owner._stateJson),
             stateVersion = _owner._context.StateVersion,
             targetStateVersion = _owner._context.TargetStateVersion,

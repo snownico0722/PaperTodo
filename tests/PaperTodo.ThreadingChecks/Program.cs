@@ -16,10 +16,16 @@ internal static partial class Program
         ("shared-easings-worker-first", CheckFrozenEasings),
         ("menu-scale-refresh", CheckMenuScaleRefresh),
         ("runtime-expired-queued-calls", CheckExpiredRuntimeCalls),
+        ("runtime-list-no-presentation-side-effects", CheckRuntimeListHasNoPresentationSideEffects),
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),
-        ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation)
+        ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation),
+        ("single-instance-real-results", CheckSingleInstanceResults),
+        ("single-instance-lost-result", CheckSingleInstanceLostResult),
+        ("inactive-titlebar-chrome-layout", CheckInactiveTitleBarChrome),
+        ("remembered-paper-dpi-restore", CheckRememberedPaperRestore),
+        ("native-batch-return-to-origin", CheckNativeWindowBatchReturnToOrigin)
     ];
 
     private static void CheckPaperResources() =>

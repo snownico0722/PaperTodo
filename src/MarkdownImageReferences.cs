@@ -25,10 +25,6 @@ public readonly record struct MarkdownImageWidthAttribute(double Value, bool IsP
 public static class MarkdownImageReferences
 {
     public const string UriPrefix = "i:";
-    // Legacy v2.2 render marker. New editors never create it; keep this only for migration cleanup.
-    public const char RenderMarker = '\u2060';
-    public const string RenderMarkerText = "\u2060";
-
     public static string CreateReference(string imageId)
         => $"![image|100%]({UriPrefix}{imageId})";
 
@@ -100,54 +96,6 @@ public static class MarkdownImageReferences
         }
 
         return ids;
-    }
-
-    public static bool IsRenderMarkerLine(string line)
-        => string.Equals(line.Trim(), RenderMarkerText, StringComparison.Ordinal);
-
-    public static string StripRenderMarkers(string text)
-    {
-        if (text.IndexOf(RenderMarker) < 0)
-        {
-            return text;
-        }
-
-        var builder = new StringBuilder(text.Length);
-        var lineStart = 0;
-        while (lineStart <= text.Length)
-        {
-            var lineEnd = lineStart;
-            while (lineEnd < text.Length && text[lineEnd] is not '\r' and not '\n')
-            {
-                lineEnd++;
-            }
-
-            var line = text[lineStart..lineEnd];
-            var delimiterEnd = lineEnd;
-            if (delimiterEnd < text.Length)
-            {
-                delimiterEnd++;
-                if (text[lineEnd] == '\r' && delimiterEnd < text.Length && text[delimiterEnd] == '\n')
-                {
-                    delimiterEnd++;
-                }
-            }
-
-            if (!IsRenderMarkerLine(line))
-            {
-                builder.Append(line.Replace(RenderMarkerText, ""));
-                builder.Append(text, lineEnd, delimiterEnd - lineEnd);
-            }
-
-            if (delimiterEnd >= text.Length)
-            {
-                break;
-            }
-
-            lineStart = delimiterEnd;
-        }
-
-        return builder.ToString();
     }
 
     public static IEnumerable<MarkdownImageReference> Enumerate(string? markdown)
@@ -232,7 +180,7 @@ public static class MarkdownImageReferences
         return builder.ToString();
     }
 
-    private static bool TrySplitMarkdownImage(
+    internal static bool TrySplitMarkdownImage(
         string text,
         out string label,
         out string url,

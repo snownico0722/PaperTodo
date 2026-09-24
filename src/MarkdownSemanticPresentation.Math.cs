@@ -16,6 +16,7 @@ internal sealed partial class MarkdownSemanticPresentation
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
     private bool _syncingMathCollapsedLines;
     private bool _mathCollapseSyncQueued;
+    private bool _mathPresentationAttached;
 
     private readonly record struct MathCollapseKey(int Start, int End);
 
@@ -25,10 +26,28 @@ internal sealed partial class MarkdownSemanticPresentation
         bool ShouldFold);
 
     private bool RenderMath =>
-        ApplyMarkdownStyle && (_editor.IsPreviewMode || IsFullMode);
+        _mathPresentationAttached &&
+        ApplyMarkdownStyle &&
+        (_editor.IsPreviewMode || IsFullMode);
+
+    private void EnsureMathPresentationAttachedIfNeeded()
+    {
+        if (_disposed || _mathPresentationAttached ||
+            !TryCurrentSnapshot(out var snapshot) ||
+            !snapshot.Spans.Any(IsMathSpan))
+        {
+            return;
+        }
+
+        AttachMathPresentation();
+    }
 
     private void AttachMathPresentation()
     {
+        if (_mathPresentationAttached)
+        {
+            return;
+        }
         // Use AvalonEdit's own folding subsystem for physical continuation lines instead of
         // manipulating TextView.CollapseLines directly. FoldingManager owns height-tree updates,
         // visual-line invalidation and document-offset rebasing as one coherent transaction.
@@ -51,11 +70,17 @@ internal sealed partial class MarkdownSemanticPresentation
         // at the same source offset, while the stock folding generator remains as a safety net for
         // any folded span our generator cannot construct in a transient layout frame.
         _editor.TextArea.TextView.ElementGenerators.Insert(0, _mathElementGenerator);
+        _mathPresentationAttached = true;
         SyncMathCollapsedLines();
     }
 
     private void DetachMathPresentation()
     {
+        if (!_mathPresentationAttached)
+        {
+            return;
+        }
+
         _editor.MarkdownPresentationRefreshing -= OnMarkdownPresentationRefreshing;
         _editor.SizeChanged -= OnMathHostSizeChanged;
         _mathCollapseSyncQueued = false;
@@ -75,6 +100,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
         _mathFoldingMargin = null;
         _lastRevealedMathSpan = null;
+        _mathPresentationAttached = false;
     }
 
     private void OnMarkdownPresentationRefreshing()
@@ -127,6 +153,11 @@ internal sealed partial class MarkdownSemanticPresentation
 
     private void ResetMathPresentationState()
     {
+        if (!_mathPresentationAttached)
+        {
+            return;
+        }
+
         _lastRevealedMathSpan = null;
         SyncMathCollapsedLines();
     }
@@ -138,6 +169,11 @@ internal sealed partial class MarkdownSemanticPresentation
     /// </summary>
     private void SyncMathRevealRedraw()
     {
+        if (!_mathPresentationAttached)
+        {
+            return;
+        }
+
         MarkdownSemanticSpan? next = null;
         if (FullRevealEnabled && TryGetMathSpanAtOffset(CaretReveal.CaretOffset, out var found))
         {
