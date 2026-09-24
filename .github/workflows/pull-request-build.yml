@@ -48,6 +48,18 @@ jobs:
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
+      - name: Issue 36 resize shadow benchmark
+        run: dotnet run --project .\tools\PaperTodo.MaterialBenchmarks\PaperTodo.MaterialBenchmarks.csproj -c Release -- --resize-shadow-benchmark "${{ runner.temp }}\material-resize-shadow.json"
+
+      - name: Upload Issue 36 resize benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue36-resize-shadow-${{ github.sha }}
+          path: ${{ runner.temp }}\material-resize-shadow.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Run regression checks
         run: ./tools/testing/Run-Checks.ps1 -Group regression
 
