@@ -136,6 +136,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             // Collapse table and colorizer both read CaretReveal, so one transient value updates
             // hidden syntax, list/task marker presentation and wrapping through the existing path.
             AlignCollapseTableToReveal(scheduleRedraw: false);
+            SyncMathRevealRedraw();
             ScheduleRedraw();
         }
     }
