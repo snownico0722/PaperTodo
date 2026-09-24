@@ -205,155 +205,32 @@ public sealed partial class AppController
         _experimentalFollowStableSamples = 0;
     }
 
-    private void ToggleExperimentalCapsuleMagnetism()
-    {
-        State.ExperimentalCapsuleMagnetism =
-            !State.ExperimentalCapsuleMagnetism;
-        if (!State.ExperimentalCapsuleMagnetism)
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.DisableExperimentalCapsuleMagnet();
-            }
-        }
+    private void ToggleExperimentalCapsuleMagnetism() =>
+        SetSettingFromUi("window.magnet_enabled", !State.ExperimentalCapsuleMagnetism);
 
-        SaveNow();
-        RefreshExperimentalWindowRuntime();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void ToggleExperimentalCapsuleMagnetScreenEdges() =>
+        SetSettingFromUi("window.magnet_screen_edges", !State.ExperimentalCapsuleMagnetScreenEdges);
 
-    private void ToggleExperimentalCapsuleMagnetScreenEdges()
-    {
-        State.ExperimentalCapsuleMagnetScreenEdges =
-            !State.ExperimentalCapsuleMagnetScreenEdges;
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.DisableExperimentalCapsuleMagnet();
-        }
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void ToggleExperimentalCapsuleMagnetWindowEdges() =>
+        SetSettingFromUi("window.magnet_window_edges", !State.ExperimentalCapsuleMagnetWindowEdges);
 
-    private void ToggleExperimentalCapsuleMagnetWindowEdges()
-    {
-        State.ExperimentalCapsuleMagnetWindowEdges =
-            !State.ExperimentalCapsuleMagnetWindowEdges;
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.DisableExperimentalCapsuleMagnet();
-        }
-        SaveNow();
-        RefreshExperimentalWindowRuntime();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void SetExperimentalCapsuleMagnetDistance(int distance) =>
+        SetSettingFromUi("window.magnet_distance", ExperimentalWindowAttachmentOptions.NormalizeSnapDistance( distance));
 
-    private void SetExperimentalCapsuleMagnetDistance(int distance)
-    {
-        var normalized =
-            ExperimentalWindowAttachmentOptions.NormalizeSnapDistance(
-                distance);
-        if (State.ExperimentalCapsuleMagnetDistance == normalized)
-        {
-            return;
-        }
+    private void ToggleExperimentalWindowTethering() =>
+        SetSettingFromUi("window.tether_enabled", !State.ExperimentalWindowTethering);
 
-        State.ExperimentalCapsuleMagnetDistance = normalized;
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void SetExperimentalWindowTetherPreferredEdge(string edge) =>
+        SetSettingFromUi("window.tether_edge", ExperimentalWindowTetherOptions.NormalizeEdge(edge));
 
-    private void ToggleExperimentalWindowTethering()
-    {
-        State.ExperimentalWindowTethering =
-            !State.ExperimentalWindowTethering;
-        if (!State.ExperimentalWindowTethering)
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.DisableExperimentalWindowTether();
-            }
-        }
+    private void SetExperimentalWindowTetherGap(int gap) =>
+        SetSettingFromUi("window.tether_gap", ExperimentalWindowTetherOptions.NormalizeGap(gap));
 
-        SaveNow();
-        RefreshExperimentalWindowRuntime();
-        RefreshExperimentalAttachmentMenus();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void ToggleExperimentalTetherVisibilityLink() =>
+        SetSettingFromUi("window.tether_visibility_link", !State.ExperimentalTetherVisibilityLink);
 
-    private void SetExperimentalWindowTetherPreferredEdge(string edge)
-    {
-        var normalized = ExperimentalWindowTetherOptions.NormalizeEdge(edge);
-        if (State.ExperimentalWindowTetherPreferredEdge == normalized)
-        {
-            return;
-        }
-
-        State.ExperimentalWindowTetherPreferredEdge = normalized;
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.RefreshExperimentalWindowTetherOptions();
-        }
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
-
-    private void SetExperimentalWindowTetherGap(int gap)
-    {
-        var normalized = ExperimentalWindowTetherOptions.NormalizeGap(gap);
-        if (State.ExperimentalWindowTetherGap == normalized)
-        {
-            return;
-        }
-
-        State.ExperimentalWindowTetherGap = normalized;
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.RefreshExperimentalWindowTetherOptions();
-        }
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
-
-    private void ToggleExperimentalTetherVisibilityLink()
-    {
-        State.ExperimentalTetherVisibilityLink =
-            !State.ExperimentalTetherVisibilityLink;
-        if (!State.ExperimentalTetherVisibilityLink)
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.DisableExperimentalTetherVisibilityLink();
-            }
-        }
-        else
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.RefreshExperimentalTetherVisibilityOptions();
-            }
-        }
-
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
-
-    private void SetExperimentalTetherMinimizedBehavior(string behavior)
-    {
-        var normalized =
-            ExperimentalTetherVisibilityModes.Normalize(behavior);
-        if (State.ExperimentalTetherMinimizedBehavior == normalized)
-        {
-            return;
-        }
-
-        State.ExperimentalTetherMinimizedBehavior = normalized;
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.RefreshExperimentalTetherVisibilityOptions();
-        }
-        SaveNow();
-        RefreshSettingsRegions("labs.window");
-    }
+    private void SetExperimentalTetherMinimizedBehavior(string behavior) =>
+        SetSettingFromUi("window.tether_minimized", ExperimentalTetherVisibilityModes.Normalize(behavior));
 
     private void RefreshExperimentalAttachmentMenus()
     {

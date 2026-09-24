@@ -15,6 +15,10 @@ public sealed partial class AppController
         content.Children.Add(BuildSettingsLiveRegion(
             "general.todos",
             BuildSettingsSidebarTodoOptions));
+        content.Children.Add(SettingsSectionLabel(Strings.Get("LabsTodoReminders")));
+        content.Children.Add(BuildSettingsLiveRegion(
+            "labs.reminders",
+            BuildLabsTodoReminderSettings));
 
         return WithSettingsPageRestoreFooter(
             content,
@@ -24,6 +28,12 @@ public sealed partial class AppController
     private UIElement BuildSettingsSidebarTodoOptions()
     {
         var content = new StackPanel();
+        content.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsShowTodoBottomBar"),
+                State.ShowTodoBottomBar,
+                ToggleTodoBottomBar),
+            "TipShowTodoBottomBar"));
         content.Children.Add(WrapWithHint(
             SettingsToggle(
                 Strings.Get("SettingsAutoClearCompletedTodos"),
@@ -113,6 +123,7 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarTodoDefaults()
     {
+        State.ShowTodoBottomBar = true;
         State.AutoClearCompletedTodos = false;
         State.AutoMoveCompletedTodosToBottom = false;
         State.EnableTodoPaperLinks = true;
@@ -121,6 +132,13 @@ public sealed partial class AppController
         State.ShowLinkedPathExtensionOnly = false;
         State.HideLinkedPapersFromCapsules = false;
         State.RunLinkedScriptCapsulesOnClick = false;
+        State.ExperimentalTodoReminders = false;
+        State.ExperimentalTodoReminderShowButton = true;
+        State.ExperimentalTodoReminderQuickMinutes =
+            ExperimentalTodoReminderOptions.DefaultQuickMinutes;
+        State.ExperimentalTodoReminderSoundEnabled = false;
+        State.ExperimentalTodoReminderSound =
+            TodoReminderSoundOptions.Asterisk;
 
         foreach (var window in _windows.Values)
         {
@@ -129,6 +147,7 @@ public sealed partial class AppController
         RefreshCapsuleEligibilityForLinkedPapers();
         ArrangeDeepCapsules(animate: false);
         SaveNow();
+        RefreshTodoReminderFeature();
         RefreshSettingsWindowContent();
     }
 }

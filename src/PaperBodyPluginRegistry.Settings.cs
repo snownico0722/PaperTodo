@@ -35,6 +35,7 @@ internal sealed partial class PaperBodyPluginRegistry
         foreach (var category in manifest.SettingCategories)
         {
             category.Name = category.Name?.Trim() ?? "";
+            category.Key = category.Name;
             category.Column = category.Column?.Trim().ToLowerInvariant() ?? "";
             if (category.Name.Length == 0 || !categoryNames.Add(category.Name))
             {
@@ -63,11 +64,13 @@ internal sealed partial class PaperBodyPluginRegistry
                 : setting.Name.Trim();
             setting.Description = setting.Description?.Trim() ?? "";
             setting.Category = setting.Category?.Trim() ?? "";
+            setting.CategoryKey = setting.Category;
             setting.Suffix = setting.Suffix?.Trim() ?? "";
             setting.Placeholder = setting.Placeholder?.Trim() ?? "";
             setting.ShortcutAction = string.IsNullOrWhiteSpace(setting.ShortcutAction)
                 ? PluginShortcutActions.Default
                 : PluginShortcutActions.Normalize(setting.ShortcutAction);
+            setting.Action = PluginShortcutActions.Normalize(setting.Action);
             setting.Options ??= [];
 
             if (setting.Category.Length > 0 && !manifest.AdvancedSettings)
@@ -81,10 +84,33 @@ internal sealed partial class PaperBodyPluginRegistry
                 throw new InvalidDataException(
                     $"Plugin setting id '{setting.Id}' is invalid or duplicated.");
             }
-            if (setting.Type is not ("boolean" or "string" or "number" or "select" or "shortcut"))
+            if (setting.Type is not ("boolean" or "string" or "number" or "select" or "shortcut" or "action"))
             {
                 throw new InvalidDataException(
                     $"Plugin setting '{setting.Id}' has unsupported type '{setting.Type}'.");
+            }
+            if (setting.Type == "action")
+            {
+                if (!ApiAtLeast(manifest.ApiVersion, "2.2"))
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' requires apiVersion 2.2 or later.");
+                }
+                if (setting.Action.Length == 0)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' has an invalid action.");
+                }
+                if (PluginShortcutActions.IsCustomAction(setting.Action) && !hasPluginRuntime)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' uses a custom action but the plugin does not declare runtime.");
+                }
+                if (setting.Default.ValueKind != JsonValueKind.Undefined)
+                {
+                    throw new InvalidDataException(
+                        $"Plugin action setting '{setting.Id}' is a command and cannot declare a default value.");
+                }
             }
             if (setting.Type == "shortcut" && setting.ShortcutAction.Length == 0)
             {
@@ -265,6 +291,7 @@ internal sealed class PaperBodyPluginSettingManifest
     public JsonElement Default { get; set; }
     public bool Quick { get; set; }
     public string Category { get; set; } = "";
+    internal string CategoryKey { get; set; } = "";
     public double? Min { get; set; }
     public double? Max { get; set; }
     public double? Step { get; set; }
@@ -272,12 +299,14 @@ internal sealed class PaperBodyPluginSettingManifest
     public string Suffix { get; set; } = "";
     public string Placeholder { get; set; } = "";
     public string ShortcutAction { get; set; } = PluginShortcutActions.Default;
+    public string Action { get; set; } = "";
     public PaperBodyPluginSettingOptionManifest[] Options { get; set; } = [];
 }
 
 internal sealed class PaperBodyPluginSettingCategoryManifest
 {
     public string Name { get; set; } = "";
+    internal string Key { get; set; } = "";
     public string Column { get; set; } = "";
 }
 

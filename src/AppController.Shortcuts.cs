@@ -587,50 +587,11 @@ public sealed partial class AppController
         return card;
     }
 
-    private void ToggleOpenEdgeCapsuleShortcutAtCursor()
-    {
-        State.OpenEdgeCapsuleShortcutAtCursor = !State.OpenEdgeCapsuleShortcutAtCursor;
-        MarkDirty();
-    }
+    private void ToggleOpenEdgeCapsuleShortcutAtCursor() =>
+        SetSettingFromUi("shortcuts.open_edge_at_cursor", !State.OpenEdgeCapsuleShortcutAtCursor);
 
-    private void ToggleDistinguishNumpadShortcutDigits()
-    {
-        var desiredMode = !State.DistinguishNumpadShortcutDigits;
-        var desiredBindings = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
-        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
-        if (!desiredMode &&
-            NumpadEquivalentConflictIds(desiredBindings, desiredEnabled).Count > 0)
-        {
-            ShowNumpadShortcutModeConflict();
-            RefreshSettingsWindowContent();
-            return;
-        }
-
-        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
-            .Where(id => desiredEnabled.GetValueOrDefault(id))
-            .ToArray();
-        var manager = EnsureGlobalHotkeyManager();
-
-        SuspendPluginShortcutRegistrations();
-        if (!manager.TryApply(
-                desiredBindings,
-                enabledCommandIds,
-                desiredMode,
-                out _,
-                out _))
-        {
-            RefreshPluginShortcuts();
-            ShowNumpadShortcutModeConflict();
-            RefreshSettingsWindowContent();
-            return;
-        }
-
-        State.DistinguishNumpadShortcutDigits = desiredMode;
-        RefreshPluginShortcuts();
-        ClearShortcutApplyFailure();
-        SaveNow();
-        RefreshSettingsWindowContent();
-    }
+    private void ToggleDistinguishNumpadShortcutDigits() =>
+        SetSettingFromUi("shortcuts.distinguish_numpad", !State.DistinguishNumpadShortcutDigits);
 
     private void ShowNumpadShortcutModeConflict()
     {
@@ -1461,102 +1422,22 @@ public sealed partial class AppController
         return ordered;
     }
 
-    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper()
-    {
-        var container = new Border
-        {
-            BorderBrush = TrayBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Background = Brushes.Transparent,
-            Margin = new Thickness(0, 4, 0, 10),
-            Height = 28,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var valueText = new TextBlock
-        {
-            Text = DeepCapsuleTitleMeasureLimitText(),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = TrayTextBrush
-        };
-        Grid.SetColumn(valueText, 1);
-
-        Border StepButton(string glyph, int column, Action onClick)
-        {
-            var glyphText = new TextBlock
-            {
-                Text = glyph,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontSize = AppTypography.Scale(15),
-                Foreground = TrayTextBrush
-            };
-            var button = new Border
-            {
-                Width = 34,
-                Background = Brushes.Transparent,
-                Cursor = Cursors.Hand,
-                Child = glyphText
-            };
-            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonDown += (_, e) =>
-            {
-                onClick();
-                valueText.Text = DeepCapsuleTitleMeasureLimitText();
-                e.Handled = true;
-            };
-            Grid.SetColumn(button, column);
-            return button;
-        }
-
-        grid.Children.Add(StepButton("−", 0, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? PaperTitles.MaxConfigurableTitleLength : current - 1);
-        }));
-        grid.Children.Add(valueText);
-        grid.Children.Add(StepButton("＋", 2, () =>
-        {
-            var current = State.DeepCapsuleTitleMeasureCharacterLimit;
-            SetDeepCapsuleTitleMeasureCharacterLimit(current == 0 ? 0 : current >= PaperTitles.MaxConfigurableTitleLength ? 0 : current + 1);
-        }));
-
-        container.Child = grid;
-        return container;
-    }
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
 
     private string DeepCapsuleTitleMeasureLimitText()
     {
-        return State.DeepCapsuleTitleMeasureCharacterLimit == 0
+        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
+        return limit == EdgeCapsuleTitleLimit.Unlimited
             ? Strings.Get("SettingsAllCharacters")
-            : State.DeepCapsuleTitleMeasureCharacterLimit.ToString(CultureInfo.InvariantCulture);
+            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
     }
 
-    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value)
-    {
-        var normalized = Math.Clamp(value, 0, PaperTitles.MaxConfigurableTitleLength);
-        if (State.DeepCapsuleTitleMeasureCharacterLimit == normalized)
-        {
-            return;
-        }
-
-        State.DeepCapsuleTitleMeasureCharacterLimit = normalized;
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshPaperTitle();
-        }
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-    }
+    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
+        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
 }

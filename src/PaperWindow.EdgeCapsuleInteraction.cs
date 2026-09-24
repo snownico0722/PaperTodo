@@ -256,6 +256,8 @@ public sealed partial class PaperWindow
                 animate: false,
                 DeepCapsuleCrossQueueDragScaleFrom,
                 DeepCapsuleCrossQueueDragMorphMilliseconds);
+            if (_capsuleDragBackgroundSnapshot is { } dragBackground)
+                host.UseDragBackground(dragBackground);
             RefreshDeepCapsuleSlotTopmost();
             return host;
         }
@@ -401,6 +403,7 @@ public sealed partial class PaperWindow
         _previewOriginReorderBaseline = previewOriginBaseline;
 
         _controller.BeginDeepCapsuleReorderDrag(_paper);
+        BeginCapsuleDragBackground(_edgeCapsuleHost.Handle);
         CloseDeepCapsuleFloatingDragHost();
         // The shared Drag HWND/tree was prewarmed once at idle, with pointer-down as the only
         // fallback. Reorder no longer queues paper-specific work on the interaction path.
@@ -771,6 +774,7 @@ public sealed partial class PaperWindow
                 }
                 FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
             }
+            EndCapsuleDragBackground();
         }
     }
 
@@ -810,6 +814,7 @@ public sealed partial class PaperWindow
             }
 
             FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.FloatingTransfer);
+            EndCapsuleDragBackground();
         }
     }
 

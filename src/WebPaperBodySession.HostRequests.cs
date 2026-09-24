@@ -1,23 +1,24 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
 internal static class WebPluginWorkspaceRequests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
     public static object? Execute(
         IPaperTodoHostApi host,
         string method,
         JsonElement parameters) => method switch
     {
+        "appSettings.list" or "appSettings.get" or "appSettings.set" =>
+            WebPluginSettingsRequests.Execute(host, method, parameters),
+        "papers.show" => WorkspacePresentation(host).ShowPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.hide" => WorkspacePresentation(host).HidePaper(RequiredString(parameters, "paperId")),
+        "papers.toggle" => WorkspacePresentation(host).TogglePaperVisibility(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.expand" => WorkspacePresentation(host).ExpandPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.collapse" => WorkspacePresentation(host).CollapsePaper(RequiredString(parameters, "paperId")),
+        "papers.toggleCollapsed" => WorkspacePresentation(host).TogglePaperCollapsed(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.activate" => WorkspacePresentation(host).ActivatePaper(RequiredString(parameters, "paperId")),
         "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
         "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
         "todos.list" => host.ListTodos(
@@ -40,11 +41,15 @@ internal static class WebPluginWorkspaceRequests
             $"Unknown PaperTodo workspace method: {method}")
     };
 
+    private static IPaperWorkspacePresentationApi WorkspacePresentation(IPaperTodoHostApi host) =>
+        host as IPaperWorkspacePresentationApi
+        ?? throw new PaperTodoPluginException("presentation_unavailable", "Cross-paper presentation is unavailable.");
+
     private static T Deserialize<T>(JsonElement payload)
     {
         try
         {
-            return payload.Deserialize<T>(JsonOptions)
+            return payload.Deserialize<T>(WebPluginRuntimeInfrastructure.JsonOptions)
                 ?? throw new JsonException("Payload deserialized to null.");
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)

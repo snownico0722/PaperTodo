@@ -6,54 +6,45 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private bool _experimentalFocusPresentationInitialized;
-    private bool _experimentalInactiveTitleBarCollapsed;
-    private double _experimentalInactiveTitleBarExtent;
-    private double _experimentalInactiveTitleBarExpandedMinHeight;
+    private bool _inactiveTitleBarPresentationAttached;
 
     internal void UpdateExperimentalFocusPresentationSettings()
     {
         InitializeExperimentalFocusPresentation();
-        RefreshExperimentalFocusPresentation(animate: true);
+        RefreshExperimentalFocusPresentation();
     }
 
-    internal void RestoreExperimentalInactiveTitleBarGeometry()
+    internal void RestoreExperimentalInactiveTitleBarPresentation()
     {
-        ExpandExperimentalInactiveTitleBar();
-    }
-
-    private bool BeginExperimentalInactiveTitleBarLayoutChange()
-    {
-        if (!_experimentalInactiveTitleBarCollapsed)
-        {
-            return false;
-        }
-
-        ExpandExperimentalInactiveTitleBar();
-        return true;
-    }
-
-    private void EndExperimentalInactiveTitleBarLayoutChange(bool reapply)
-    {
-        if (!reapply)
+        if (!_inactiveTitleBarPresentationAttached)
         {
             return;
         }
 
-        _shell.UpdateLayout();
-        RefreshExperimentalFocusPresentation(animate: false);
+        _paperChrome.SetHeaderOpacity(1, 0);
+        _paperChrome.SetHeaderExtent(0);
+        _windowHost.LayoutUpdated -= OnInactiveTitleBarLayoutUpdated;
+        _inactiveTitleBarPresentationAttached = false;
+        _topBarHost!.IsHitTestVisible = true;
     }
 
     private void InitializeExperimentalFocusPresentation()
     {
-        if (_experimentalFocusPresentationInitialized)
+        if (_experimentalFocusPresentationInitialized || !_isShellBuilt)
         {
             return;
         }
 
         _experimentalFocusPresentationInitialized = true;
-        // Hover still reveals optional action buttons, but title-bar geometry follows focus.
+        _topBarHost!.SetBinding(OpacityProperty, new System.Windows.Data.Binding
+        {
+            Source = _paperChrome,
+            Path = new PropertyPath(PaperChromeBorder.HeaderOpacityProperty)
+        });
+        // Hover reveals optional action buttons; the whole title bar follows focus.
         MouseEnter += (_, _) => RefreshExperimentalFocusPresentation();
         MouseLeave += (_, _) => RefreshExperimentalFocusPresentation();
+        IsVisibleChanged += (_, _) => RefreshExperimentalFocusPresentation(animate: false);
     }
 
     private void RefreshExperimentalFocusPresentation(bool animate = true)
@@ -65,23 +56,16 @@ public sealed partial class PaperWindow
 
         var interactionReveal =
             IsActive ||
+            IsBuiltInFindOpen ||
             HasOpenOwnedContextMenu() ||
             _titleBarDragSession != null ||
             _todoDrag?.IsDragging == true ||
             _topBarDrag?.IsDragging == true;
 
-        var hideTitleBar =
-            StateHidesInactiveTitleBar() &&
-            !interactionReveal &&
-            CanUseExperimentalInactiveTitleBarGeometry();
-        if (hideTitleBar)
-        {
-            CollapseExperimentalInactiveTitleBar();
-        }
-        else
-        {
-            ExpandExperimentalInactiveTitleBar();
-        }
+        var eligible = CanFadeInactiveTitleBar();
+        SetInactiveTitleBarHidden(
+            _controller.State.ExperimentalHideInactiveTitleBar && !interactionReveal && eligible,
+            animate && eligible);
 
         if (_topBarActionButtonsHost != null)
         {
@@ -96,157 +80,68 @@ public sealed partial class PaperWindow
         }
     }
 
-    private bool StateHidesInactiveTitleBar() =>
-        _controller.State.ExperimentalHideInactiveTitleBar &&
-        !_paper.IsCollapsed;
+    private bool CanFadeInactiveTitleBar() =>
+        AllowsTransparency &&
+        (_paperChrome is not SkinBorder skin || !PaperSkins.IsDecorated(skin.Skin)) &&
+        IsVisible &&
+        !_paper.IsCollapsed &&
+        WindowState == WindowState.Normal &&
+        !_isSnappedPresentation &&
+        !IsPaperFormTransitioning;
 
-    private bool CanUseExperimentalInactiveTitleBarGeometry()
+    private void SetInactiveTitleBarHidden(bool hidden, bool animate)
     {
-        // An expanded edge reservation is rendered by its own EdgeCapsuleHost. It no longer
-        // shares PaperWindow geometry, so retaining that slot must not disable title-bar collapse.
-        return IsVisible &&
-            !_paper.IsCollapsed &&
-            WindowState == WindowState.Normal &&
-            !_isSnappedPresentation &&
-            !IsPaperFormTransitioning;
+        if (_topBarHost == null)
+        {
+            return;
+        }
+
+        _topBarHost.IsHitTestVisible = !hidden;
+        if (!hidden && !_inactiveTitleBarPresentationAttached)
+        {
+            return;
+        }
+
+        if (!hidden && (!animate || !_controller.State.EnableAnimations))
+        {
+            RestoreExperimentalInactiveTitleBarPresentation();
+            return;
+        }
+
+        if (!_inactiveTitleBarPresentationAttached)
+        {
+            _inactiveTitleBarPresentationAttached = true;
+            _windowHost.LayoutUpdated += OnInactiveTitleBarLayoutUpdated;
+        }
+
+        UpdateInactiveTitleBarExtent();
+        _paperChrome.SetHeaderOpacity(
+            hidden ? 0 : 1,
+            animate && _controller.State.EnableAnimations
+                ? ExperimentalOpacityTransitionMilliseconds : 0,
+            hidden ? null : RestoreExperimentalInactiveTitleBarPresentation);
     }
 
-    private double ExperimentalTitleBarExtent()
+    private void OnInactiveTitleBarLayoutUpdated(object? sender, EventArgs e)
     {
-        if (_shell.RowDefinitions.Count > 0 &&
-            _shell.RowDefinitions[0].ActualHeight > 0.5)
+        // Typography and DPI changes can change the title row's extent. The shell
+        // retains its original layout; only the background surface gets shorter.
+        if (!CanFadeInactiveTitleBar())
         {
-            return _shell.RowDefinitions[0].ActualHeight;
+            RestoreExperimentalInactiveTitleBarPresentation();
+            return;
         }
-
-        if (_topBarHost != null)
-        {
-            var measured =
-                _topBarHost.ActualHeight +
-                _topBarHost.Margin.Top +
-                _topBarHost.Margin.Bottom;
-            if (measured > 0.5)
-            {
-                return measured;
-            }
-
-            return Math.Max(
-                1,
-                TitleBarHeight +
-                _topBarHost.BorderThickness.Top +
-                _topBarHost.BorderThickness.Bottom +
-                _topBarHost.Margin.Top +
-                _topBarHost.Margin.Bottom);
-        }
-
-        return Math.Max(1, TitleBarHeight);
+        UpdateInactiveTitleBarExtent();
     }
 
-    private void CollapseExperimentalInactiveTitleBar()
+    private void UpdateInactiveTitleBarExtent()
     {
-        if (_experimentalInactiveTitleBarCollapsed ||
-            _topBarHost == null ||
-            _shell.RowDefinitions.Count == 0)
+        if (!_inactiveTitleBarPresentationAttached || _topBarHost == null ||
+            _shell.RowDefinitions.Count == 0 || _shell.RowDefinitions[0].ActualHeight <= 0)
         {
             return;
         }
 
-        var currentHeight =
-            double.IsFinite(Height) && Height > 0
-                ? Height
-                : ActualHeight;
-        if (!double.IsFinite(Top) ||
-            !double.IsFinite(currentHeight) ||
-            currentHeight <= 1)
-        {
-            return;
-        }
-
-        var extent = Math.Min(
-            ExperimentalTitleBarExtent(),
-            Math.Max(1, currentHeight - 1));
-        var bottom = Top + currentHeight;
-        var targetHeight = Math.Max(1, currentHeight - extent);
-        var targetTop = bottom - targetHeight;
-
-        _experimentalInactiveTitleBarExtent = extent;
-        _experimentalInactiveTitleBarExpandedMinHeight = MinHeight;
-        _experimentalInactiveTitleBarCollapsed = true;
-
-        _topBarHost.BeginAnimation(OpacityProperty, null);
-        _topBarHost.Opacity = 0;
-        _topBarHost.IsHitTestVisible = false;
-        _topBarHost.Visibility = Visibility.Collapsed;
-        _shell.RowDefinitions[0].Height = new GridLength(0);
-        _shell.UpdateLayout();
-
-        MoveWindowWithoutGeometrySave(() =>
-        {
-            MinHeight = Math.Max(
-                1,
-                _experimentalInactiveTitleBarExpandedMinHeight - extent);
-            Top = RoundToDevicePixelY(targetTop);
-            Height = RoundToDevicePixelY(targetHeight);
-        });
-    }
-
-    private void ExpandExperimentalInactiveTitleBar()
-    {
-        if (!_experimentalInactiveTitleBarCollapsed)
-        {
-            if (_topBarHost != null)
-            {
-                _topBarHost.BeginAnimation(OpacityProperty, null);
-                _topBarHost.Opacity = 1;
-                _topBarHost.Visibility = Visibility.Visible;
-                _topBarHost.IsHitTestVisible = true;
-            }
-            return;
-        }
-
-        var extent = Math.Max(1, _experimentalInactiveTitleBarExtent);
-        var currentHeight =
-            double.IsFinite(Height) && Height > 0
-                ? Height
-                : ActualHeight;
-        if (!double.IsFinite(Top) ||
-            !double.IsFinite(currentHeight) ||
-            currentHeight <= 0)
-        {
-            return;
-        }
-
-        if (_topBarHost != null)
-        {
-            _topBarHost.Visibility = Visibility.Visible;
-            _topBarHost.IsHitTestVisible = true;
-        }
-        if (_shell.RowDefinitions.Count > 0)
-        {
-            _shell.RowDefinitions[0].Height = GridLength.Auto;
-        }
-        _shell.UpdateLayout();
-
-        var bottom = Top + currentHeight;
-        var targetHeight = currentHeight + extent;
-        var targetTop = bottom - targetHeight;
-        MoveWindowWithoutGeometrySave(() =>
-        {
-            Top = RoundToDevicePixelY(targetTop);
-            Height = RoundToDevicePixelY(targetHeight);
-            MinHeight = Math.Max(
-                1,
-                _experimentalInactiveTitleBarExpandedMinHeight);
-        });
-
-        if (_topBarHost != null)
-        {
-            _topBarHost.BeginAnimation(OpacityProperty, null);
-            _topBarHost.Opacity = 1;
-        }
-
-        _experimentalInactiveTitleBarCollapsed = false;
-        _experimentalInactiveTitleBarExtent = 0;
-        _experimentalInactiveTitleBarExpandedMinHeight = 0;
+        _paperChrome.SetHeaderExtent(_shell.RowDefinitions[0].ActualHeight);
     }
 }

@@ -188,7 +188,8 @@ public sealed partial class AppController
 
     private static ControlTemplate BuildTrayMenuTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border));
+        var border = new FrameworkElementFactory(typeof(SkinBorder));
+        border.SetValue(SkinBorder.IsMenuProperty, true);
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
@@ -261,7 +262,7 @@ public sealed partial class AppController
         border.AppendChild(contentPanel);
         root.AppendChild(border);
 
-        var popup = new FrameworkElementFactory(typeof(Popup));
+        var popup = new FrameworkElementFactory(typeof(MaterialSubmenuPopup));
         popup.Name = "PART_Popup";
         popup.SetValue(Popup.AllowsTransparencyProperty, true);
         popup.SetValue(Popup.FocusableProperty, false);
@@ -270,7 +271,8 @@ public sealed partial class AppController
         popup.SetBinding(Popup.IsOpenProperty, new Binding("IsSubmenuOpen") { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
         popup.SetBinding(Popup.PlacementTargetProperty, new Binding { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
 
-        var popupBorder = new FrameworkElementFactory(typeof(Border));
+        var popupBorder = new FrameworkElementFactory(typeof(SkinBorder));
+        popupBorder.SetValue(SkinBorder.IsMenuProperty, true);
         popupBorder.SetValue(Border.BackgroundProperty, new DynamicResourceExtension("TrayPaperBrushKey"));
         popupBorder.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("TrayBorderBrushKey"));
         popupBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));
@@ -391,7 +393,7 @@ public sealed partial class AppController
 
     internal ContextMenu CreateTrayMenu(bool registerForLiveRefresh = false)
     {
-        var menu = new ContextMenu
+        var menu = new MaterialContextMenu
         {
             BorderThickness = new Thickness(1),
             Padding = new Thickness(4, 4, 4, 4),

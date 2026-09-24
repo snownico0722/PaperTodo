@@ -6,7 +6,9 @@ public sealed partial class AppController
         PaperData paper,
         double previewHeightDip)
     {
-        if (!double.IsFinite(previewHeightDip) ||
+        // Returning false uses the existing pre-#199 upper-space placement branch.
+        if (!State.EdgeCapsulePreviewPreferDownward ||
+            !double.IsFinite(previewHeightDip) ||
             previewHeightDip <= 0 ||
             !_windows.TryGetValue(paper.Id, out var window) ||
             !window.TryGetEdgeCapsuleAppliedGeometry(out var geometry) ||

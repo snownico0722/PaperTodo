@@ -11,6 +11,37 @@ internal static class PaperNoticeDialog
 {
     public static void Show(Window owner, string titleText, string messageText)
     {
+        _ = ShowCore(
+            owner,
+            titleText,
+            messageText,
+            secondaryText: null,
+            primaryText: Strings.Get("CommonOk"));
+    }
+
+    public static bool ShowChoice(
+        Window owner,
+        string titleText,
+        string messageText,
+        string secondaryText,
+        string primaryText)
+    {
+        return ShowCore(
+            owner,
+            titleText,
+            messageText,
+            secondaryText,
+            primaryText);
+    }
+
+    private static bool ShowCore(
+        Window owner,
+        string titleText,
+        string messageText,
+        string? secondaryText,
+        string primaryText)
+    {
+        var accepted = false;
         var dialog = new Window
         {
             Owner = owner,
@@ -80,10 +111,28 @@ internal static class PaperNoticeDialog
             Margin = new Thickness(0, 16, 0, 0)
         };
 
-        var ok = CreateButton(Strings.Get("CommonOk"));
-        ok.IsDefault = true;
-        ok.Click += (_, _) => dialog.Close();
-        buttonRow.Children.Add(ok);
+        if (!string.IsNullOrWhiteSpace(secondaryText))
+        {
+            var secondary = CreateButton(secondaryText, primary: false);
+            secondary.IsCancel = true;
+            secondary.Click += (_, _) => dialog.Close();
+            buttonRow.Children.Add(secondary);
+        }
+
+        var primary = CreateButton(
+            primaryText,
+            primary: !string.IsNullOrWhiteSpace(secondaryText));
+        primary.IsDefault = true;
+        if (buttonRow.Children.Count > 0)
+        {
+            primary.Margin = new Thickness(8, 0, 0, 0);
+        }
+        primary.Click += (_, _) =>
+        {
+            accepted = true;
+            dialog.Close();
+        };
+        buttonRow.Children.Add(primary);
 
         dialog.PreviewKeyDown += (_, e) =>
         {
@@ -106,14 +155,17 @@ internal static class PaperNoticeDialog
         root.Child = layout;
         dialog.Content = root;
         dialog.ShowDialog();
+        return accepted;
     }
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool primary)
     {
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 7, 16, 7)));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Setters.Add(new Setter(Control.BackgroundProperty, Theme.Tint(28)));
+        style.Setters.Add(new Setter(
+            Control.BackgroundProperty,
+            primary ? Theme.Tint(44) : Theme.Tint(28)));
         style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
         style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));

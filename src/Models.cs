@@ -29,13 +29,20 @@ public static class MarkdownRenderModes
 {
     public const string Off = "off";
     public const string Basic = "basic";
-    public const string Enhanced = "enhanced";
     public const string Full = "full";
 
     public static bool IsValid(string? mode)
     {
-        return mode is Off or Basic or Enhanced or Full;
+        return mode is Off or Basic or Full;
     }
+
+    public static string Normalize(string? mode) => mode switch
+    {
+        Off => Off,
+        Basic => Basic,
+        Full => Full,
+        _ => Basic
+    };
 }
 
 public static class ImageReferenceTextModes
@@ -385,6 +392,53 @@ public static class TextRenderingProfiles
     }
 }
 
+public static class MaterialTransparencyLevels
+{
+    public const string VeryLow = "veryLow";
+    public const string Low = "low";
+    public const string Medium = "medium";
+    public const string High = "high";
+    public const string VeryHigh = "veryHigh";
+
+    public static readonly string[] All = { VeryLow, Low, Medium, High, VeryHigh };
+
+    public static string Normalize(string? level) => level switch
+    {
+        VeryLow or Low or High or VeryHigh => level,
+        _ => Medium
+    };
+
+    // The saved value describes transparency, so lower transparency means more material cover.
+    // Medium is exactly the pre-setting appearance.
+    public static double CoverScale(string? level) => Normalize(level) switch
+    {
+        VeryLow => 1.30,
+        Low => 1.15,
+        High => 0.85,
+        VeryHigh => 0.70,
+        _ => 1.0
+    };
+
+    public static byte ScaleCover(byte alpha, string? level)
+    {
+        return Normalize(level) switch
+        {
+            Low => (byte)Math.Min(254, Math.Round(alpha * 1.15)),
+            VeryLow => ScaleVeryLow(alpha),
+            High => (byte)Math.Clamp((int)Math.Round(alpha * 0.85), 0, 255),
+            VeryHigh => (byte)Math.Clamp((int)Math.Round(alpha * 0.70), 0, 255),
+            _ => alpha
+        };
+    }
+
+    private static byte ScaleVeryLow(byte alpha)
+    {
+        var low = Math.Min(254, (int)Math.Round(alpha * 1.15));
+        var stronger = Math.Min(255, (int)Math.Round(alpha * 1.30));
+        return (byte)Math.Min(255, Math.Max(low + 1, stronger));
+    }
+}
+
 public readonly record struct TodoVisualMetrics(
     double TextFontSize,
     double TextVerticalPadding,
@@ -405,11 +459,21 @@ public sealed class AppState
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
-    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Enhanced;
+    // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
+    public string? PaperSkin { get; set; }
+    public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
+    // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
+    public bool HideSurfaceOutline { get; set; } = false;
+    public bool MatchAuxiliaryMaterialStrength { get; set; }
+    public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
+    public bool MicaAlwaysActive { get; set; }
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Basic;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public bool ShowTodoBottomBar { get; set; } = true;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
@@ -469,6 +533,7 @@ public sealed class AppState
     public bool ExperimentalHideInactiveTitleBar { get; set; }
     public bool ExperimentalDockedCapsulesNonTopmost { get; set; }
     public bool ExperimentalEdgeCapsuleHoverPreview { get; set; } = true;
+    public bool EdgeCapsulePreviewPreferDownward { get; set; }
     public bool ExperimentalEdgeCapsuleHoverIntent { get; set; } = true;
     public string ExperimentalEdgeCapsuleHoverIntentSensitivity { get; set; } =
         EdgeCapsuleHoverIntentSensitivities.Medium;
@@ -507,9 +572,13 @@ public sealed class AppState
     public bool UsePersistentPowerShellProcess { get; set; }
     public bool PreferPowerShell7 { get; set; } = true;
     public bool HideScriptRunWindow { get; set; } = true;
+    // Wire values: 0 = unlimited (legacy/default), -1 = show zero title characters.
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
+    // Host-owned plugin enablement. Disabled plugins are still discovered from plugin.json, but
+    // PaperTodo does not activate their Body, Runtime, shortcuts, or startupPaper.
+    public List<string> DisabledPluginIds { get; set; } = new();
     public bool DistinguishNumpadShortcutDigits { get; set; }
     public bool PreserveLinkedPaperHiddenStateInVisibilityShortcuts { get; set; } = true;
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
@@ -528,8 +597,6 @@ public sealed class AppState
     // so unplugging the anchored monitor gracefully lands the stack on a surviving screen.
     public string DeepCapsuleMonitorDeviceName { get; set; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ShowTopBarNewPaperButtons { get; set; }
 }
 
 public sealed class PaperData
@@ -584,6 +651,11 @@ public sealed class PaperData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? DeepCapsuleExpandedHeight { get; set; }
+
+    // The four legacy values remain window DIPs. The captured HWND scale makes their
+    // physical screen rectangle unambiguous without reinterpreting old data.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DeepCapsuleExpandedDpiScale { get; set; }
 
     public string DeepCapsuleExpandedSide { get; set; } = "";
     public string DeepCapsuleExpandedMonitorDeviceName { get; set; } = "";

@@ -38,13 +38,14 @@ public sealed class MasterCapsuleWindow : Window
     private const int WmDpiChanged = 0x02E0;
     private const int WmNcHitTest = 0x0084;
     private static readonly IntPtr HtTransparent = new(-1);
-    // Compact internal metrics controlling how tightly the glyph + label sit inside the pill.
+    // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
     private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
-    private const double MasterLeftPadding = 5;
-    private const double MasterGlyphGap = 4;
+    private const double MasterLeftPadding = 4;
+    private const double MasterGlyphGap = 3;
     private const double MasterRightPadding = 3;
     private const double MasterInteriorBorderThickness = 1;
+    private const string MasterTwoDigitCountSample = "88";
 
     private readonly AppController _controller;
     private readonly DeepCapsuleContextMenuSession _contextMenuSession;
@@ -102,17 +103,14 @@ public sealed class MasterCapsuleWindow : Window
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
         _contextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
-            $"master:{Guid.NewGuid():N}",
-            Dispatcher,
-            IsPointInsideMasterOwnerSurface);
+            $"master:{Guid.NewGuid():N}");
         ConfigureWindow();
         BuildContent();
         UpdateExperimentalOpacity();
-        UpdateToolTipSetting();
-        // Clicking the pill must never pull foreground focus: activating this window would
-        // deactivate whatever app was in front, forcing it to repaint — the click "flash".
-        // WS_EX_NOACTIVATE makes the window unable to become the active/foreground window,
-        // so the click toggles collapse-all without disturbing the current foreground app.
+        // Ordinary pill interaction must never pull foreground focus: activating this window
+        // would deactivate whatever app was in front, forcing it to repaint — the click "flash".
+        // WS_EX_NOACTIVATE keeps the pill passive; an explicitly opened context-menu popup owns
+        // its own short-lived foreground/focus session instead.
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
@@ -171,8 +169,9 @@ public sealed class MasterCapsuleWindow : Window
             ClipToBounds = false
         };
 
-        _pill = new Border
+        _pill = new SkinBorder
         {
+            IsCapsule = true,
             Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
             CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
             BorderThickness = new Thickness(1),
@@ -180,12 +179,7 @@ public sealed class MasterCapsuleWindow : Window
             BorderBrush = Theme.PaperBorderBrush,
             SnapsToDevicePixels = true,
             Cursor = System.Windows.Input.Cursors.Hand,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 4,
-                ShadowDepth = 0,
-                Opacity = 0.10
-            }
+            Effect = SkinBorder.CreateShadow(4, 0, 0.1)
         };
 
         // The pill background stays opaque (PaperBrush) at all times. Hover tint is a separate
@@ -224,12 +218,13 @@ public sealed class MasterCapsuleWindow : Window
 
         _label = new TextBlock
         {
-            Text = Strings.Get("CapsuleCollapseAllLabel"),
+            Text = "0",
             Foreground = Theme.WeakTextBrush,
             FontFamily = MasterLabelFontFamily,
             FontSize = MasterLabelFontSize,
             FontWeight = MasterLabelFontWeight,
             Margin = new Thickness(MasterGlyphGap, 0, 0, 0),
+            TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         AppTypography.ApplyTextRendering(_label);
@@ -237,8 +232,8 @@ public sealed class MasterCapsuleWindow : Window
         content.Children.Add(stack);
 
         _pill.Child = content;
-        // Same chrome as the tray menu. The NOACTIVATE host delegates promotion,
-        // guards and stale-focus cleanup to DeepCapsuleContextMenuSession.
+        // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation
+        // and stale-focus cleanup to DeepCapsuleContextMenuSession.
         var contextMenu = _controller.CreateTrayMenu(registerForLiveRefresh: true);
         _pill.ContextMenu = contextMenu;
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
@@ -337,6 +332,8 @@ public sealed class MasterCapsuleWindow : Window
     public void UpdateTheme()
     {
         // The pill background stays opaque; hover is rendered by the overlay.
+        SkinBorder.Refresh(_pill);
+        _pill.Effect = SkinBorder.CreateShadow(4, 0, 0.1);
         _pill.Background = Theme.PaperBrush;
         _pill.BorderBrush = Theme.PaperBorderBrush;
         _hoverOverlay.Background = _isHovering ? Theme.HoverBrush : Brushes.Transparent;
@@ -357,11 +354,6 @@ public sealed class MasterCapsuleWindow : Window
         _label.FontWeight = MasterLabelFontWeight;
         AppTypography.ApplyTextRendering(_label);
         MoveToTarget(animate: false);
-    }
-
-    public void UpdateToolTipSetting()
-    {
-        ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
     }
 
     public void UpdateExperimentalOpacity()
@@ -440,9 +432,7 @@ public sealed class MasterCapsuleWindow : Window
     private void ApplyStateVisuals()
     {
         _glyph.Text = _active ? "▸" : "▾";
-        _label.Text = _active
-            ? string.Format(UiLanguages.EffectiveCulture, Strings.Get("CapsuleCollapseAllCountFormat"), _count)
-            : Strings.Get("CapsuleCollapseAllLabel");
+        _label.Text = _count.ToString(UiLanguages.EffectiveCulture);
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
             : Strings.Get("CapsuleCollapseAllExpandedTip");
@@ -491,37 +481,28 @@ public sealed class MasterCapsuleWindow : Window
         return wasDragging;
     }
 
-    private void ClearCapsuleInteractionKeyboardFocus()
-    {
+    private void ClearCapsuleInteractionKeyboardFocus() =>
         WindowNative.ClearCurrentThreadKeyboardFocus();
-        Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
 
     private double MasterDockedWidth(double pixelsPerDip)
     {
+        // Keep both the arrow slot and the two-digit count slot stable. The master capsule width
+        // never changes with collapse state or count.
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
             MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
-        var expandedLabelWidth = MeasureText(
-            Strings.Get("CapsuleCollapseAllLabel"),
+        var twoDigitCountWidth = MeasureText(
+            MasterTwoDigitCountSample,
             MasterLabelFontSize,
             MasterLabelFontWeight,
             MasterLabelFontFamily,
             pixelsPerDip);
-        var currentLabelWidth = MeasureText(
-            _label.Text,
-            MasterLabelFontSize,
-            MasterLabelFontWeight,
-            MasterLabelFontFamily,
-            pixelsPerDip);
-        var textWidth = Math.Max(expandedLabelWidth, currentLabelWidth);
+        _label.Width = twoDigitCountWidth;
         var bodyWidth = Math.Ceiling(
             MasterLeftPadding +
             glyphWidth +
             MasterGlyphGap +
-            textWidth +
+            twoDigitCountWidth +
             MasterRightPadding +
             MasterInteriorBorderThickness);
         return Math.Max(1, bodyWidth + WindowChromeMargin);
@@ -839,9 +820,6 @@ public sealed class MasterCapsuleWindow : Window
         BeginAnimation(AnimatedTopProperty, null);
         Close();
     }
-
-    private bool IsPointInsideMasterOwnerSurface(System.Windows.Point screenPoint) =>
-        DeepCapsuleContextMenuSession.IsPointInsideElement(_pill, screenPoint);
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

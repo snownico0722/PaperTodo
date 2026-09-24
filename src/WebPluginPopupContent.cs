@@ -145,6 +145,8 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
         if (!WebPluginRuntimeInfrastructure.IsSameOrigin(e.Uri, _origin))
         {
             e.Cancel = true;
+            if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
+                _ = WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri);
             return;
         }
         _ready = false; _documentToken = null; _navigationId = e.NavigationId; _navigating = true;
@@ -156,7 +158,7 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
         if (!e.IsSuccess) { Fail($"Web popup navigation failed ({e.WebErrorStatus})."); return; }
         _documentToken = Guid.NewGuid().ToString("N");
         _ready = true;
-        Send(new { type = "initialize", token = _documentToken, theme = _theme, data = _data });
+        Send(new { type = "initialize", token = _documentToken, uiLanguage = PaperPluginEnvironment.UiLanguage, theme = _theme, data = _data });
     }
     private void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -202,8 +204,13 @@ internal sealed class WebPluginPopupContent : IPaperPluginPopupContent
         _theme = theme;
         Send(new { type = "themeChanged", theme });
     }
-    private static void OnNewWindow(object? sender, CoreWebView2NewWindowRequestedEventArgs e) =>
+    private void OnNewWindow(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+    {
         e.Handled = true;
+        if (!_disposed && !WebPluginRuntimeInfrastructure.IsSameOrigin(e.Uri, _origin) &&
+            Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
+            _ = WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri);
+    }
     private static void OnDownload(object? sender, CoreWebView2DownloadStartingEventArgs e) => e.Cancel = true;
     private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {

@@ -69,15 +69,34 @@ public sealed partial class AppController
             contentAvailable ? paper.Content ?? "" : "");
     }
 
-    internal void PrepareExternalPaperOperation()
+    internal void PrepareExternalPaperOperation(PaperData? targetPaper = null)
     {
-        // Markdown edits live in the editor until CommitPendingNoteContentsForSave() copies them
-        // into PaperData. A prior mutation-stamp scan may already have observed the revision before
-        // that copy happened, so the external-operation boundary must diff unconditionally here.
-        // Otherwise the newly committed user edit can be misattributed to the following MCP/plugin
-        // operation.
-        CommitPendingNoteContentsForSave();
+        // Only a command that targets the same built-in Markdown paper needs to order pending user
+        // text before the external mutation. Do not Commit unrelated notes or third-party bodies.
+        if (targetPaper != null &&
+            targetPaper.Type == PaperTypes.Note &&
+            string.Equals(targetPaper.BodyProviderId, PaperBodyProviderIds.Markdown, StringComparison.Ordinal) &&
+            _windows.TryGetValue(targetPaper.Id, out var window))
+        {
+            window.CommitPendingMarkdownContentForSave();
+        }
+
         _paperBodyPluginEvents?.ScanNow(PaperOperationContext.User());
+    }
+
+    internal string CurrentMarkdownContentForExternalRead(PaperData paper)
+    {
+        if (paper.Type == PaperTypes.Note &&
+            string.Equals(
+                paper.BodyProviderId,
+                PaperBodyProviderIds.Markdown,
+                StringComparison.Ordinal) &&
+            _windows.TryGetValue(paper.Id, out var window))
+        {
+            return window.CurrentMarkdownContentForExternalRead();
+        }
+
+        return paper.Content ?? "";
     }
 
     internal IDisposable SuppressPaperPluginEventScans() =>
@@ -91,8 +110,56 @@ public sealed partial class AppController
 
     internal bool TryCommitExternalMutation()
     {
+        // Persist this external mutation without settling unrelated Markdown editors. If an
+        // unrelated Markdown edit is already pending, its existing dirty state and save timers
+        // remain responsible for the later full application save.
+        var hasPendingMarkdown = _windows.Values.Any(
+            window => window.HasPendingMarkdownContentForSave);
+
         MarkDirty();
-        return TrySaveNow(sync: true);
+        var committedStateRevision = Interlocked.Read(ref _stateRevision);
+        long? attemptedVersion = null;
+        try
+        {
+            var version = Interlocked.Increment(ref _saveVersion);
+            NotifyPluginEventMutationStampChanged();
+            attemptedVersion = version;
+            var json = _store.SerializeState(State);
+            _store.SaveJsonSync(json, version);
+            if (!hasPendingMarkdown && !IsExiting)
+            {
+                TryReleaseUnreferencedImageCache();
+            }
+            TryFlushPendingPluginPaperStateDeletes();
+            _hasShownSaveFailure = false;
+
+            // Post-save cleanup can synchronously invoke Runtime Paper callbacks. If one of those
+            // callbacks mutates application state, its new dirty state belongs to a later save and
+            // must not be cleared as though it were part of the snapshot written above.
+            if (!hasPendingMarkdown &&
+                committedStateRevision == Interlocked.Read(ref _stateRevision))
+            {
+                _saveTimer.Stop();
+                _forceSaveTimer.Stop();
+                _hasPendingDirty = false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            HandleSaveFailure(ex, attemptedVersion);
+            return false;
+        }
+    }
+
+    internal void RecordExternalTodoMutationUndoStep(
+        PaperData paper,
+        IReadOnlyList<PaperItem> before)
+    {
+        if (_windows.TryGetValue(paper.Id, out var window))
+        {
+            window.RecordExternalTodoMutationAsUndoStep(before);
+        }
     }
 
     internal void RunExternalPostCommitUi(Action update) =>
@@ -127,7 +194,7 @@ public sealed partial class AppController
         string title,
         string providerId)
     {
-        PrepareExternalPaperOperation();
+        PrepareExternalPaperOperation(paper);
         using (SuppressPaperPluginEventScans())
         {
             UpdatePaperTitle(paper, title);
@@ -137,10 +204,20 @@ public sealed partial class AppController
 
     internal void QueuePluginPaperStateDeletion(string paperId)
     {
-        if (!string.IsNullOrWhiteSpace(paperId))
+        if (string.IsNullOrWhiteSpace(paperId))
         {
-            _pendingPluginPaperStateDeletes.Add(paperId);
+            return;
         }
+
+        // Both user and external deletion reach this point only after the Paper has left the
+        // authoritative state (and external deletion has already saved successfully). A deleted
+        // Paper id must not survive only inside a live Todo window's undo/redo snapshots.
+        foreach (var window in _windows.Values)
+        {
+            window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
+        }
+
+        _pendingPluginPaperStateDeletes.Add(paperId);
     }
 
     internal void TryFlushPendingPluginPaperStateDeletes()
@@ -163,7 +240,7 @@ public sealed partial class AppController
             RemovePluginTodoActionsForPaper(paperId);
             RemovePluginTopBarLabelsForPaper(paperId);
 
-            // Runtime Backoff has no live lease to reconcile. Remove any retained rich
+            // A Runtime rebuild has no live lease to reconcile. Remove any retained rich
             // presentation for the now-deleted Paper here as part of the independent post-commit
             // plugin cleanup, so a provider with zero Papers cannot keep stale volatile snapshots.
             foreach (var providerId in _pluginRuntimePresentationCache.Keys.ToArray())

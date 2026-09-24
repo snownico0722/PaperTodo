@@ -12,6 +12,8 @@ public sealed partial class PaperWindow
         Button owner,
         bool active)
     {
+        if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
+            "....#....", "..#####..", ".##.#.##.", ".#..#..#.", "#########", ".#..#..#.", ".##.#.##.", "..#####..", "....#....");
         var scale = TopBarIconScale();
         var icon = new VectorPrimitiveIconElement(
             active
@@ -31,6 +33,8 @@ public sealed partial class PaperWindow
 
     private static FrameworkElement CreateTopBarNewTodoIcon(Button owner)
     {
+        if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
+            ".........", "#######..", "#.....#.#", "#....#..#", "#.#.#...#", "#..#....#", "#.......#", "#########", ".........");
         return CreateTopBarNewPaperIcon(
             owner,
             "✓",
@@ -39,6 +43,8 @@ public sealed partial class PaperWindow
 
     private static FrameworkElement CreateTopBarNewNoteIcon(Button owner)
     {
+        if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
+            "......##.", ".....####", "....####.", "...####..", "..####...", ".####....", ".###.....", ".#.......", ".........");
         return CreateTopBarNewPaperIcon(
             owner,
             "✎",
@@ -93,6 +99,9 @@ public sealed partial class PaperWindow
         Button owner,
         bool collapse)
     {
+        if (Theme.IsPixelSkin) return collapse
+            ? CreatePixelIcon(owner, "########")
+            : CreatePixelIcon(owner, "##....##", ".##..##.", "..####..", "...##...", "..####..", ".##..##.", "##....##");
         if (collapse)
         {
             var scale = TopBarIconScale();

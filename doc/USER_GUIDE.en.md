@@ -1,6 +1,6 @@
 # PaperTodo User Manual
 
-> **Related Links**: [Back to Home](../README.en.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](CHANGELOG.en.md)
+> **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](../CHANGELOG.md)
 
 This document is for everyday users of PaperTodo. If this is your first time using PaperTodo, please start with [1. Quick Start](#1-quick-start); other sections can be referenced as needed.
 
@@ -374,7 +374,7 @@ Right-click the tray icon and choose "Settings" to enter the configuration panel
 - **Todo Logic**: Auto-clear / auto-sink completed items, file drop linking, long title truncation.
 - **Full-Screen Yield** (Advanced): Automatically lowers window tier when full-screen games, video players, or presentations are active.
 - **Clean Desktop Mode** (Advanced): Hides expanded papers from the Windows taskbar and Alt+Tab switcher.
-- **Markdown Rendering**: Four levels (Plain text / Basic / Enhanced / Full Render). With **Full Render**, headings, lists, blockquotes, code fences, images, and inline styles are shown in their final layout directly inside the editor — **while editing too**: most Markdown markers (`#`, `>`, list bullets, code fences) are hidden, and among them heading, bold, and link markers no longer occupy width so the text is compactly reflowed to its final layout; the block under the caret reveals its markers so you can adjust heading levels, lists, or blockquotes directly. Blurring the paper returns to read-only whole-note rendering.
+- **Markdown Rendering**: Three levels (Plain text / Basic / Full Render). **Basic** uses the former Enhanced presentation, keeping Markdown markers while fading syntax and showing bullets and dividers. With **Full Render**, headings, lists, blockquotes, code fences, images, and inline styles are shown in their final layout directly inside the editor — **while editing too**: most Markdown markers (`#`, `>`, list bullets, code fences) are hidden, and among them heading, bold, and link markers no longer occupy width so the text is compactly reflowed to its final layout; the block under the caret reveals its markers so you can adjust heading levels, lists, or blockquotes directly. Blurring the paper returns to read-only whole-note rendering.
 
 ### 8.2 Visual Styling (Custom Fonts)
 

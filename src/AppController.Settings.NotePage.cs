@@ -13,6 +13,56 @@ public sealed partial class AppController
             Margin = new Thickness(2, 4, 6, 0)
         };
 
+        content.Children.Add(BuildSettingsLiveRegion("note.markdown", BuildSettingsNoteMarkdownOptions));
+
+        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsExternalOpen")));
+        content.Children.Add(WrapWithHint(
+            SettingsFieldLabel(Strings.Get("SettingsExternalMarkdownExtension")),
+            "TipExternalExtension"));
+        content.Children.Add(CreateExternalMarkdownExtensionEditor());
+
+        if (State.AdvancedSettingsMode)
+        {
+            content.Children.Add(BuildSettingsLiveRegion("note.images", () => AdvancedSettingsBlock(
+                SettingsSectionLabel(
+                    SettingsSidebarLocalized("图片", "Images", "画像", "이미지")),
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsAutoCompressLargeImages"),
+                        State.AutoCompressLargeImages,
+                        ToggleAutoCompressLargeImages),
+                    "TipAutoCompressLargeImages"))));
+
+            content.Children.Add(BuildSettingsLiveRegion("note.scripts", () => AdvancedSettingsBlock(
+                SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsPersistentPowerShellProcess"),
+                        State.UsePersistentPowerShellProcess,
+                        TogglePersistentPowerShellProcess),
+                    "TipPersistentPowerShellProcess"),
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsPreferPowerShell7"),
+                        State.PreferPowerShell7,
+                        TogglePreferPowerShell7),
+                    "TipPreferPowerShell7"),
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsHideScriptRunWindow"),
+                        State.HideScriptRunWindow,
+                        ToggleHideScriptRunWindow),
+                    "TipHideScriptRunWindow"))));
+        }
+
+        return WithSettingsPageRestoreFooter(
+            content,
+            RestoreSettingsSidebarNoteDefaults);
+    }
+
+    private UIElement BuildSettingsNoteMarkdownOptions()
+    {
+        var content = new StackPanel();
         content.Children.Add(SettingsSectionLabel(
             SettingsSidebarLocalized("Markdown", "Markdown", "Markdown", "Markdown")));
         content.Children.Add(WrapWithHint(
@@ -42,49 +92,7 @@ public sealed partial class AppController
                 : Visibility.Collapsed;
         content.Children.Add(markdownAnimationRow);
 
-        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsExternalOpen")));
-        content.Children.Add(WrapWithHint(
-            SettingsFieldLabel(Strings.Get("SettingsExternalMarkdownExtension")),
-            "TipExternalExtension"));
-        content.Children.Add(CreateExternalMarkdownExtensionEditor());
-
-        if (State.AdvancedSettingsMode)
-        {
-            content.Children.Add(AdvancedSettingsBlock(
-                SettingsSectionLabel(
-                    SettingsSidebarLocalized("图片", "Images", "画像", "이미지")),
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsAutoCompressLargeImages"),
-                        State.AutoCompressLargeImages,
-                        ToggleAutoCompressLargeImages)),
-                    "TipAutoCompressLargeImages")));
-
-            content.Children.Add(AdvancedSettingsBlock(
-                SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsPersistentPowerShellProcess"),
-                        State.UsePersistentPowerShellProcess,
-                        TogglePersistentPowerShellProcess)),
-                    "TipPersistentPowerShellProcess"),
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsPreferPowerShell7"),
-                        State.PreferPowerShell7,
-                        TogglePreferPowerShell7)),
-                    "TipPreferPowerShell7"),
-                WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
-                        Strings.Get("SettingsHideScriptRunWindow"),
-                        State.HideScriptRunWindow,
-                        ToggleHideScriptRunWindow)),
-                    "TipHideScriptRunWindow")));
-        }
-
-        return WithSettingsPageRestoreFooter(
-            content,
-            RestoreSettingsSidebarNoteDefaults);
+        return content;
     }
 
     private UIElement CreateSettingsSidebarMarkdownRenderSelector(
@@ -94,7 +102,6 @@ public sealed partial class AppController
         {
             (MarkdownRenderModes.Off, Strings.Get("MarkdownRenderOff")),
             (MarkdownRenderModes.Basic, Strings.Get("MarkdownRenderBasic")),
-            (MarkdownRenderModes.Enhanced, Strings.Get("MarkdownRenderEnhanced")),
             (MarkdownRenderModes.Full, Strings.Get("MarkdownRenderFull"))
         };
 
@@ -109,20 +116,12 @@ public sealed partial class AppController
             });
     }
 
-    private void ToggleMarkdownEditAnimation()
-    {
-        State.MarkdownEditAnimationEnabled = !State.MarkdownEditAnimationEnabled;
-        SaveNow();
-
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateMarkdownEditAnimation();
-        }
-    }
+    private void ToggleMarkdownEditAnimation() =>
+        SetSettingFromUi("note.edit_animations", !State.MarkdownEditAnimationEnabled);
 
     private void RestoreSettingsSidebarNoteDefaults()
     {
-        State.MarkdownRenderMode = MarkdownRenderModes.Enhanced;
+        State.MarkdownRenderMode = MarkdownRenderModes.Basic;
         State.MarkdownEditAnimationEnabled = true;
         State.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Default;
         State.AutoCompressLargeImages = true;

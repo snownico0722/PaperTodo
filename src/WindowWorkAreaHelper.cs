@@ -412,6 +412,28 @@ internal static class WindowWorkAreaHelper
             Y = (int)Math.Round(screenPoint.Y)
         };
         var handle = MonitorFromPoint(nativePoint, MonitorDefaultToNearest);
+        return TryGetMonitorGeometryForHandle(handle, dpiWindow, out geometry);
+    }
+
+    internal static bool TryGetMonitorGeometryForDeviceBounds(DeviceScreenRect bounds, out MonitorGeometry geometry)
+    {
+        geometry = default;
+        if (bounds.IsEmpty)
+        {
+            return false;
+        }
+
+        var nativeRect = new NativeRect
+        {
+            Left = bounds.Left, Top = bounds.Top, Right = bounds.Right, Bottom = bounds.Bottom
+        };
+        return TryGetMonitorGeometryForHandle(
+            MonitorFromRect(ref nativeRect, MonitorDefaultToNearest), dpiWindow: null, out geometry);
+    }
+
+    private static bool TryGetMonitorGeometryForHandle(IntPtr handle, Window? dpiWindow, out MonitorGeometry geometry)
+    {
+        geometry = default;
         if (handle == IntPtr.Zero)
         {
             return false;
@@ -618,7 +640,7 @@ internal static class WindowWorkAreaHelper
             (rect.Bottom - rect.Top) / scaleY);
     }
 
-    private static (double ScaleX, double ScaleY) SystemDpiScale()
+    internal static (double ScaleX, double ScaleY) SystemDpiScale()
     {
         var primaryProbe = new NativeRect
         {

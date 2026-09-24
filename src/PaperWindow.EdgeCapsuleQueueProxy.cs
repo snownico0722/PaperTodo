@@ -2,6 +2,16 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    [System.Diagnostics.Conditional("DEBUG")]
+    internal void TraceEdgeCapsuleCompositionVisibility(string context)
+    {
+#if DEBUG
+        _edgeCapsuleHost?.TraceCompositionVisibility(
+            $"{context} paper={_paper.Id} " +
+            $"authority={CurrentEdgeCapsuleVisualAuthority}");
+#endif
+    }
+
     internal EdgeCapsuleVisualAuthority CurrentEdgeCapsuleVisualAuthority
     {
         get
@@ -129,6 +139,16 @@ public sealed partial class PaperWindow
                 preview.Bounds.Height -
                 compact.Bounds.Height),
             layout.Monitor.WorkArea.Bottom);
+    }
+
+    internal Func<bool> CaptureEdgeCapsulePointerInputValidity()
+    {
+        var source = EdgeCapsuleQueueProxySourceHandle;
+        var body = _bodySessionGeneration;
+        var preview = _edgeCapsulePreviewRequest;
+        return () => CanRouteEdgeCapsuleQueueProxyInput && !IsClosed &&
+            source != IntPtr.Zero && EdgeCapsuleQueueProxySourceHandle == source &&
+            _bodySessionGeneration == body && ReferenceEquals(_edgeCapsulePreviewRequest, preview);
     }
 
     internal IntPtr EdgeCapsuleQueueProxySourceHandle =>

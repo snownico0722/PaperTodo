@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 
@@ -55,6 +56,8 @@ public sealed partial class PaperWindow
                 _paper.CapsuleMonitorDeviceName) == IntPtr.Zero,
             EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)));
         var host = _edgeCapsuleHost;
+        ObserveMarkdownPreloadHost(host.MarkdownPreloadLifecycleAnchor);
+        _ = MeasureDeepCapsuleIconSlotWidth(DeepCapsuleSlotDpi().PixelsPerDip);
         _edgeCapsule.SetNativeBatchApplyRejectedCallback(
             RejectEdgeCapsuleNativeBatchApply);
         _edgeCapsule.SetNativeBatchApplyDeferredCallback(
@@ -71,8 +74,52 @@ public sealed partial class PaperWindow
 
     private void RejectEdgeCapsuleNativeBatchApply()
     {
-        _edgeCapsuleHost?.RejectNativeBatchApply();
-        ScheduleEdgeCapsuleApplyFailureRecovery();
+        if (_edgeCapsuleHost is not { } host)
+        {
+            return;
+        }
+
+        host.RejectNativeBatchApply();
+        if (!_edgeCapsule.IsApplyRetryExhausted ||
+            CurrentEdgeCapsuleVisualAuthority !=
+                EdgeCapsuleVisualAuthority.RealDocked)
+        {
+            return;
+        }
+
+        var confirmed = _edgeCapsule.AppliedPresentation;
+        if (!confirmed.Visible ||
+            confirmed.Surface is not (
+                EdgeCapsuleSurfaceKind.DockedResting or
+                EdgeCapsuleSurfaceKind.DockedHovered or
+                EdgeCapsuleSurfaceKind.DockedActive or
+                EdgeCapsuleSurfaceKind.DockedPreview))
+        {
+            return;
+        }
+
+        if (host.Apply(confirmed))
+        {
+            // Re-arm the presenter's budget for a future real invalidation. This synchronous
+            // terminal restore does not create another scheduler or reinterpret desired state.
+            _edgeCapsule.ForceApplyCurrentPresentation();
+            return;
+        }
+
+        // Host.Apply can synchronously dispatch native messages. Respect any visual authority that
+        // appeared during the failed terminal restore instead of tearing down its handoff.
+        if (CurrentEdgeCapsuleVisualAuthority !=
+            EdgeCapsuleVisualAuthority.RealDocked)
+        {
+            return;
+        }
+
+        Trace.TraceWarning(
+            "Edge capsule terminal apply recovery failed. Paper={0}; Surface={1}. " +
+            "Restoring the expanded paper surface.",
+            _paper.Id,
+            confirmed.Surface);
+        RestoreFromCapsuleAfterEligibilityLoss();
     }
 
     private void RecoverDeferredEdgeCapsuleNativeBatchApply()
@@ -153,7 +200,7 @@ public sealed partial class PaperWindow
             OnEdgeCapsulePointerReleased,
             OnEdgeCapsuleCaptureLost,
             OnEdgeCapsuleCloseInvoked));
-        _edgeCapsuleHost.SetContextMenu(BuildDeepCapsuleSlotContextMenu());
+        ScheduleDeepCapsuleSlotContextMenuInitialization();
         RefreshDeepCapsuleSlotLabel();
     }
 
@@ -273,6 +320,7 @@ public sealed partial class PaperWindow
             _edgeCapsuleHostCapacityDpiY = monitor.DpiScaleY;
             _edgeCapsuleHostCapacityWidthDip = requiredWidthDip;
             _edgeCapsuleHostCapacityHeightDip = requiredHeightDip;
+            ResumeMarkdownPreviewPreload();
             return true;
         }
 
@@ -294,6 +342,7 @@ public sealed partial class PaperWindow
 
         _edgeCapsuleHostCapacityWidthDip = width;
         _edgeCapsuleHostCapacityHeightDip = height;
+        ResumeMarkdownPreviewPreload();
         return true;
     }
 
@@ -411,6 +460,7 @@ public sealed partial class PaperWindow
         var edge = MyDeepCapsuleEdge;
         var restingWidth =
             DeepCapsuleVisibleWidth(monitor.DpiScaleY);
+        var expandedWidth = DeepCapsuleExpandedBodyWidth(monitor, restingWidth);
         var previewSize = CurrentEdgeCapsulePreviewSize;
         var previewWidth = previewSize?.WidthDip ??
             restingWidth + CapsuleCloseWidth;
@@ -426,7 +476,7 @@ public sealed partial class PaperWindow
                 monitor,
                 edge,
                 Math.Max(
-                    restingWidth + CapsuleCloseWidth,
+                    expandedWidth + CapsuleCloseWidth,
                     previewWidth),
                 Math.Max(
                     PaperLayoutDefaults.CapsuleHeight,
@@ -467,7 +517,9 @@ public sealed partial class PaperWindow
                 restingOpacity,
                 forcedOpacity,
                 _edgeCapsuleHostCapacityWidthDip,
-                _edgeCapsuleHostCapacityHeightDip));
+                _edgeCapsuleHostCapacityHeightDip,
+                expandedWidth,
+                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden));
     }
 
     private bool ApplyEdgeCapsulePresentationFrame(
@@ -634,6 +686,7 @@ public sealed partial class PaperWindow
         _edgeCapsule.Reset();
         _edgeCapsuleHost?.Dispose();
         _edgeCapsuleHost = null;
+        ObserveMarkdownPreloadHost(null);
         _edgeCapsuleHostCapacityMonitor = null;
         _edgeCapsuleHostCapacityWidthDip = 0;
         _edgeCapsuleHostCapacityHeightDip = 0;

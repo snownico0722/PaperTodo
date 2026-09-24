@@ -23,6 +23,7 @@ public sealed partial class PaperWindow
     private MarkdownPaperBodySession? _markdownBodySession;
     private int _bodySessionGeneration;
     private bool _bodyFailed;
+    private bool _bodyDisabled;
     private readonly object _pendingPluginStateGate = new();
     private readonly Dictionary<(int Generation, string ProviderId), PendingPluginState>
         _pendingPluginStates = new();
@@ -126,7 +127,7 @@ public sealed partial class PaperWindow
     {
         get
         {
-            if (_paper.Type != PaperTypes.Note || _bodyFailed)
+            if (_paper.Type != PaperTypes.Note || _bodyFailed || _bodyDisabled)
             {
                 return PaperBodyCapabilities.None;
             }
@@ -150,7 +151,8 @@ public sealed partial class PaperWindow
         title = !string.IsNullOrWhiteSpace(_pluginDisplayTitle)
             ? _pluginDisplayTitle
             : _paper.BodyHeaderText;
-        return !IsCurrentBodyProviderMarkdown &&
+        return !_bodyDisabled &&
+            !IsCurrentBodyProviderMarkdown &&
             (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
@@ -158,7 +160,8 @@ public sealed partial class PaperWindow
     internal bool TryGetPluginCapsuleTitle(out string title)
     {
         title = _paper.BodyCapsuleText;
-        return !IsCurrentBodyProviderMarkdown &&
+        return !_bodyDisabled &&
+            !IsCurrentBodyProviderMarkdown &&
             (!_bodyFailed || HasPluginRuntimePresentationOwner) &&
             !string.IsNullOrWhiteSpace(title);
     }
@@ -187,6 +190,7 @@ public sealed partial class PaperWindow
 
     private IPaperBodySession CreatePaperBodySession(int generation)
     {
+        _bodyDisabled = false;
         var providerId = NormalizeBodyProviderId(_paper.BodyProviderId);
         _paper.BodyProviderId = providerId;
         if (string.Equals(providerId, PaperBodyProviderIds.Markdown, StringComparison.Ordinal))
@@ -207,6 +211,13 @@ public sealed partial class PaperWindow
                 this,
                 providerId,
                 Strings.Format("PluginsMissingProviderFormat", providerId));
+        }
+
+        if (!_controller.IsPluginEnabled(providerId))
+        {
+            _bodyDescriptor = descriptor;
+            _bodyDisabled = true;
+            return new DisabledPaperBodySession(descriptor.DisplayName);
         }
 
         _bodyDescriptor = descriptor;
@@ -622,10 +633,10 @@ public sealed partial class PaperWindow
             }
             catch (Exception ex)
             {
-                if (_windowLifecycle == PaperWindowLifecycleState.Alive)
-                {
-                    ReplaceBodyWithFailure(ex.GetBaseException().Message);
-                }
+                Trace.TraceWarning(
+                    "Plugin body context callback failed. Provider={0}; Exception={1}",
+                    providerId,
+                    ex.GetBaseException());
             }
         }), priority);
     }
@@ -882,10 +893,15 @@ public sealed partial class PaperWindow
             return;
         }
         if (_controller.PaperBodyPlugins.TryGet(normalized, out var targetDescriptor) &&
-            targetDescriptor.Kind != PaperBodyPluginKind.BuiltIn &&
-            !_controller.CanAssignPluginProvider(_paper, targetDescriptor))
+            targetDescriptor.Kind != PaperBodyPluginKind.BuiltIn)
         {
-            MessageBox.Show(
+            if (!_controller.IsPluginEnabled(normalized))
+            {
+                return;
+            }
+            if (!_controller.CanAssignPluginProvider(_paper, targetDescriptor))
+            {
+                MessageBox.Show(
                 this,
                 Strings.Format(
                     "PluginInstanceLimitMessage",
@@ -893,8 +909,9 @@ public sealed partial class PaperWindow
                     targetDescriptor.Manifest?.MaxPaperInstances ?? 1),
                 Strings.Get("PluginInstanceLimitTitle"),
                 MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
+                    MessageBoxImage.Information);
+                return;
+            }
         }
 
         CommitPendingEditsForSave();
@@ -907,6 +924,36 @@ public sealed partial class PaperWindow
         RefreshPaperBodyChrome();
         RefreshPaperTitle();
         _controller.MarkDirty();
+        _controller.ReconcilePluginRuntimes();
+    }
+
+    internal void RefreshPluginEnabledState(string providerId)
+    {
+        if (_paper.Type != PaperTypes.Note ||
+            IsClosed ||
+            !string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!IsShellBuilt)
+        {
+            _bodyDisabled = !_controller.IsPluginEnabled(providerId);
+            if (_bodyDisabled)
+            {
+                _pluginDisplayTitle = string.Empty;
+                _pluginCapsulePresentation = null;
+                ResetPluginCapsuleCustomViews();
+                ResetPluginMiniViewCache();
+            }
+            RefreshDeepCapsuleSlotLabel();
+            return;
+        }
+
+        ReloadCurrentPaperBody();
     }
 
     private void ReloadCurrentPaperBody()
@@ -935,7 +982,7 @@ public sealed partial class PaperWindow
         _shell.Children.Add(body);
         NotifyCurrentPaperBodyVisibility(
             _paper.IsVisible && !_paper.IsCollapsed && WindowState != WindowState.Minimized);
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void RemoveCurrentPaperBody()
@@ -949,9 +996,10 @@ public sealed partial class PaperWindow
         _bodyElement = null;
         _pluginBodyClipHost = null;
         _bodyFailed = false;
+        _bodyDisabled = false;
         _bodyRuntimeVisible = false;
         RemoveTextZoomOverlay();
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void RefreshPaperBodyChrome()
@@ -985,11 +1033,12 @@ public sealed partial class PaperWindow
 
     private void InvokeBodySession(
         Action<IPaperBodySession> callback,
-        bool disableOnFailure = true)
+        bool disableOnFailure = false)
     {
         var failure = _paperBodyHost.Invoke(callback);
         if (failure != null)
         {
+            Trace.TraceWarning("Plugin body callback failed: {0}: {1}", _paper.BodyProviderId, failure);
             if (!disableOnFailure ||
                 _windowLifecycle != PaperWindowLifecycleState.Alive)
             {
@@ -1017,7 +1066,7 @@ public sealed partial class PaperWindow
         Panel.SetZIndex(_bodyElement, 1);
         _shell.Children.Add(_bodyElement);
         RefreshPaperBodyChrome();
-        _controller.QueuePluginStatusRefresh();
+        _controller.QueuePluginStatusUiRefresh();
     }
 
     private void ClearPluginPresentationOnFailure()
@@ -1045,7 +1094,7 @@ public sealed partial class PaperWindow
 
     internal void CommitCurrentPaperBody()
     {
-        InvokeBodySession(item => item.Commit());
+        InvokeBodySession(item => item.Commit(), disableOnFailure: true);
     }
 
     internal void CancelCurrentPaperBodyInteractions()
@@ -1055,6 +1104,12 @@ public sealed partial class PaperWindow
 
     internal void NotifyCurrentPaperBodyVisibility(bool visible)
     {
+        if (_bodyDisabled)
+        {
+            _bodyRuntimeVisible = false;
+            return;
+        }
+
         if (IsCurrentBodyProviderMarkdown)
         {
             var statusChanged = _bodyRuntimeVisible != visible;
@@ -1062,7 +1117,7 @@ public sealed partial class PaperWindow
             InvokeBodySession(item => item.OnVisibilityChanged(visible));
             if (statusChanged)
             {
-                _controller.QueuePluginStatusRefresh();
+                _controller.QueuePluginStatusUiRefresh();
             }
             return;
         }
@@ -1083,7 +1138,7 @@ public sealed partial class PaperWindow
         });
         if (runtimeStatusChanged)
         {
-            _controller.QueuePluginStatusRefresh();
+            _controller.QueuePluginStatusUiRefresh();
         }
     }
 
@@ -1187,11 +1242,21 @@ public sealed partial class PaperWindow
         var currentId = NormalizeBodyProviderId(_paper.BodyProviderId);
         foreach (var descriptor in _controller.PaperBodyPlugins.Descriptors)
         {
+            var isCurrent = string.Equals(currentId, descriptor.Id, StringComparison.Ordinal);
+            var isEnabled = _controller.IsPluginEnabled(descriptor.Id);
+            if (!isEnabled && !isCurrent)
+            {
+                continue;
+            }
+
             var item = new MenuItem
             {
-                Header = descriptor.DisplayName,
+                Header = !isEnabled && isCurrent
+                    ? Strings.Format("PluginsDisabledProviderFormat", descriptor.DisplayName)
+                    : descriptor.DisplayName,
                 IsCheckable = true,
-                IsChecked = string.Equals(currentId, descriptor.Id, StringComparison.Ordinal),
+                IsChecked = isCurrent,
+                IsEnabled = isEnabled,
                 StaysOpenOnClick = false,
                 ToolTip = string.IsNullOrWhiteSpace(descriptor.Description)
                     ? null
@@ -1252,6 +1317,47 @@ public sealed partial class PaperWindow
     private void ClearPluginRuntimeStateOnFailure()
     {
         ResetPluginRuntimeState(refreshTitle: true);
+    }
+
+    private sealed class DisabledPaperBodySession : IPaperBodySession
+    {
+        public DisabledPaperBodySession(string pluginName)
+        {
+            var layout = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 420
+            };
+            layout.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("PluginBodyDisabledTitle"),
+                Foreground = Theme.TextBrush,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(14),
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            layout.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("PluginBodyDisabledMessageFormat", pluginName),
+                Foreground = Theme.WeakTextBrush,
+                FontFamily = AppTypography.UiFontFamily,
+                FontSize = AppTypography.Scale(12),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 8, 0, 0)
+            });
+            View = new Border
+            {
+                Padding = new Thickness(20),
+                Background = Brushes.Transparent,
+                Child = layout
+            };
+        }
+
+        public FrameworkElement View { get; }
+        public void Dispose() { }
     }
 
     private sealed class FailedPaperBodySession : IPaperBodySession
@@ -1329,5 +1435,29 @@ public sealed partial class PaperWindow
         }
 
         public void Dispose() { }
+    }
+
+
+    internal bool HasFailedPluginBody(string providerId)
+    {
+        return _paper.Type == PaperTypes.Note &&
+            _bodyFailed &&
+            string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal);
+    }
+
+    internal bool HasRunningPluginBody(string providerId)
+    {
+        return _paper.Type == PaperTypes.Note &&
+            !_bodyFailed &&
+            !_bodyDisabled &&
+            _controller.IsPluginEnabled(providerId) &&
+            _paperBodyHost.HasCurrent &&
+            string.Equals(
+                NormalizeBodyProviderId(_paper.BodyProviderId),
+                providerId,
+                StringComparison.Ordinal);
     }
 }

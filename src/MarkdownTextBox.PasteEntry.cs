@@ -1,14 +1,16 @@
 using System.Windows;
-using System.Windows.Input;
 
 namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox
 {
-    private static readonly bool PreviewTextDropEffectHandlerRegistered =
-        RegisterPreviewTextDropEffectHandler();
+    // AvalonEdit can consume preview drag events before ordinary instance handlers. Keep this
+    // class-level interception for preview-mode text drops, but route all policy/validation through
+    // the same helpers used by the PaperWindow host instead of maintaining a second implementation.
+    private static readonly bool PreviewTextDropHandlersRegistered =
+        RegisterPreviewTextDropHandlers();
 
-    private static bool RegisterPreviewTextDropEffectHandler()
+    private static bool RegisterPreviewTextDropHandlers()
     {
         EventManager.RegisterClassHandler(
             typeof(MarkdownTextBox),
@@ -33,13 +35,7 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        var controlPressed =
-            (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
-        e.Effects = (e.AllowedEffects & DragDropEffects.Move) != 0 && !controlPressed
-            ? DragDropEffects.Move
-            : (e.AllowedEffects & DragDropEffects.Copy) != 0
-                ? DragDropEffects.Copy
-                : DragDropEffects.None;
+        e.Effects = ResolveTextDropEffect(e);
         e.Handled = e.Effects != DragDropEffects.None;
     }
 
@@ -48,43 +44,17 @@ public sealed partial class MarkdownTextBox
         if (sender is not MarkdownTextBox editor ||
             !editor.IsPreviewMode ||
             editor.CanInsertImagesFromDataObject(e.Data) ||
-            !HasTextDropData(e.Data))
+            !HasTextDropData(e.Data) ||
+            editor.ValidateTextDrop(e.Data))
         {
             return;
         }
 
-        string? text;
-        try
-        {
-            text = e.Data.GetDataPresent(DataFormats.UnicodeText)
-                ? e.Data.GetData(DataFormats.UnicodeText) as string
-                : e.Data.GetDataPresent(DataFormats.Text)
-                    ? e.Data.GetData(DataFormats.Text) as string
-                    : null;
-        }
-        catch
-        {
-            editor.PasteRejected?.Invoke();
-            e.Effects = DragDropEffects.None;
-            e.Handled = true;
-            return;
-        }
-
-        // Preview mode is intentionally read-only until PaperWindow places the caret and enters
-        // edit mode. Validate the payload here, before that state change, so the native Drop path
-        // cannot bypass the same length/line-length guard used by normal paste.
-        if (string.IsNullOrEmpty(text) ||
-            editor.TryBuildSafePasteText(text, selectedLength: 0, out _))
-        {
-            return;
-        }
-
-        editor.PasteRejected?.Invoke();
         e.Effects = DragDropEffects.None;
         e.Handled = true;
     }
 
-    private static bool HasTextDropData(IDataObject data)
+    internal static bool HasTextDropData(IDataObject data)
     {
         try
         {
@@ -95,6 +65,17 @@ public sealed partial class MarkdownTextBox
         {
             return false;
         }
+    }
+
+    internal static DragDropEffects ResolveTextDropEffect(DragEventArgs e)
+    {
+        var controlPressed =
+            (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
+        return (e.AllowedEffects & DragDropEffects.Move) != 0 && !controlPressed
+            ? DragDropEffects.Move
+            : (e.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
     }
 
     /// <summary>

@@ -165,6 +165,7 @@ public sealed partial class PaperWindow
         var ownMenuOpen = HasOpenOwnedContextMenu();
         var expandedPaperInteractive =
             IsActive ||
+            IsBuiltInFindOpen ||
             ownMenuOpen ||
             _titleBarDragSession != null ||
             _todoDrag?.IsDragging == true ||
@@ -212,7 +213,7 @@ public sealed partial class PaperWindow
         {
             if (_themedContextMenus[i].TryGetTarget(out var menu))
             {
-                if (menu.IsOpen)
+                if (menu.IsOpen || menu is MaterialContextMenu { IsOpening: true })
                 {
                     return true;
                 }
@@ -284,6 +285,7 @@ public sealed partial class PaperWindow
     private bool HasExperimentalAutoCollapseBlocker() =>
         IsExperimentalPassive ||
         _advancedInteractionLocked ||
+        IsBuiltInFindOpen ||
         _isEditingTitle ||
         _titleBarDragSession != null ||
         _todoDrag?.IsDragging == true ||

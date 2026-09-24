@@ -153,10 +153,8 @@ internal sealed partial class MarkdownSemanticPresentation
     private sealed class SyntaxCollapseElementGenerator : VisualLineElementGenerator
     {
         private readonly MarkdownSemanticPresentation _owner;
-        private int _containerPrefixOffset = -1;
-        private int _containerPrefixLength;
         private int _quotePrefixOffset = -1;
-        private string? _quotePrefixText;
+        private int _quoteLevels;
 
         public SyntaxCollapseElementGenerator(MarkdownSemanticPresentation owner)
         {
@@ -166,10 +164,8 @@ internal sealed partial class MarkdownSemanticPresentation
         public override void StartGeneration(ITextRunConstructionContext context)
         {
             base.StartGeneration(context);
-            _containerPrefixOffset = -1;
-            _containerPrefixLength = 0;
             _quotePrefixOffset = -1;
-            _quotePrefixText = null;
+            _quoteLevels = 0;
             if (!_owner.IsFullMode ||
                 !_owner.TryCurrentSnapshot(out var snapshot))
             {
@@ -184,29 +180,19 @@ internal sealed partial class MarkdownSemanticPresentation
                 line.Offset,
                 line.EndOffset);
 
-            // 真实列表/引用/任务前缀仍显示原源码并保持一一映射，但向 AvalonEdit 声明为视觉缩进，
-            // 使软折行从正文列继续，而不是掉回圆点/引用竖线下方。
-            if (container.VisualIndentEnd > 0 &&
-                ContainsNonWhitespace(text, container.VisualIndentEnd))
-            {
-                _containerPrefixOffset = line.Offset;
-                _containerPrefixLength = container.VisualIndentEnd;
-            }
-
+            // 真实列表/引用/任务前缀统一由 MarkerSlotElementGenerator 持有；这里仅保留没有
+            // 实际 `>` 源码字符的惰性引用续行占位，以及一般 Markdown 控制符的塌缩。
             if (container.MissingQuoteLevels > 0)
             {
                 _quotePrefixOffset = line.Offset + container.ContentStart;
-                _quotePrefixText = MarkdownQuoteMarkers.RepeatMarkerPrefix(
-                    container.MissingQuoteLevels);
+                _quoteLevels = container.MissingQuoteLevels;
             }
         }
 
         public override void FinishGeneration()
         {
-            _containerPrefixOffset = -1;
-            _containerPrefixLength = 0;
             _quotePrefixOffset = -1;
-            _quotePrefixText = null;
+            _quoteLevels = 0;
             base.FinishGeneration();
         }
 
@@ -218,10 +204,6 @@ internal sealed partial class MarkdownSemanticPresentation
             }
 
             var interested = int.MaxValue;
-            if (_containerPrefixLength > 0 && _containerPrefixOffset >= startOffset)
-            {
-                interested = _containerPrefixOffset;
-            }
             if (_quotePrefixOffset >= startOffset)
             {
                 interested = Math.Min(interested, _quotePrefixOffset);
@@ -239,16 +221,9 @@ internal sealed partial class MarkdownSemanticPresentation
 
         public override VisualLineElement ConstructElement(int offset)
         {
-            if (offset == _containerPrefixOffset && _containerPrefixLength > 0)
-            {
-                return new ContainerPrefixTextElement(
-                    CurrentContext.VisualLine,
-                    _containerPrefixLength);
-            }
-
             var hasQuotePrefix =
                 offset == _quotePrefixOffset &&
-                !string.IsNullOrEmpty(_quotePrefixText);
+                _quoteLevels > 0;
             var runs = _owner.CollapseRuns;
             var index = LowerBoundStart(runs, offset);
             if (index < runs.Count && runs[index].Start == offset)
@@ -256,7 +231,8 @@ internal sealed partial class MarkdownSemanticPresentation
                 var run = runs[index];
                 return hasQuotePrefix
                     ? new QuoteIndentElement(
-                        _quotePrefixText!,
+                        _owner,
+                        _quoteLevels,
                         run.Length,
                         run.IsClosingEdge)
                     : new CollapsedSyntaxElement(
@@ -266,41 +242,12 @@ internal sealed partial class MarkdownSemanticPresentation
 
             return hasQuotePrefix
                 ? new QuoteIndentElement(
-                    _quotePrefixText!,
+                    _owner,
+                    _quoteLevels,
                     documentLength: 0,
                     isClosingEdge: false)
                 : null!;
         }
-
-        private static bool ContainsNonWhitespace(string text, int end)
-        {
-            for (var index = 0; index < Math.Min(text.Length, end); index++)
-            {
-                if (!char.IsWhiteSpace(text[index]))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 消费真实源码前缀，但保持源码字符与视觉列一一对应。唯一变化是把整个前缀声明为视觉空白，
-    /// 让 AvalonEdit 的自动折行继承到正文起点。拆分后仍保持该语义，便于着色器分别隐藏 marker。
-    /// </summary>
-    private sealed class ContainerPrefixTextElement : VisualLineText
-    {
-        public ContainerPrefixTextElement(VisualLine parentVisualLine, int length)
-            : base(parentVisualLine, length)
-        {
-        }
-
-        protected override VisualLineText CreateInstance(int length) =>
-            new ContainerPrefixTextElement(ParentVisualLine, length);
-
-        public override bool IsWhitespace(int visualColumn) => true;
     }
 
     /// <summary>
@@ -308,28 +255,32 @@ internal sealed partial class MarkdownSemanticPresentation
     /// TextView 排版；若同一偏移恰有待塌缩控制符，则同一元素同时消费该源码区间，避免两个
     /// ElementGenerator 在同一 offset 竞争。任何情况下都不修改 TextDocument 或 undo。
     /// </summary>
-    private sealed class QuoteIndentElement : FormattedTextElement
+    private sealed class QuoteIndentElement : VisualLineElement
     {
+        private readonly MarkdownSemanticPresentation _owner;
         private readonly bool _isClosingEdge;
 
         public QuoteIndentElement(
-            string text,
+            MarkdownSemanticPresentation owner,
+            int levels,
             int documentLength,
             bool isClosingEdge)
-            : base(text, documentLength)
+            : base(visualLength: 1, documentLength: documentLength)
         {
+            _owner = owner;
+            Levels = levels;
             _isClosingEdge = isClosingEdge;
-            BreakBefore = LineBreakCondition.BreakRestrained;
-            BreakAfter = LineBreakCondition.BreakRestrained;
         }
+
+        public int Levels { get; }
+        public double UnitWidth { get; private set; }
 
         public override TextRun CreateTextRun(
             int startVisualColumn,
             ITextRunConstructionContext context)
         {
-            // The element may also consume a collapsed `**`, link opener, or heading marker at the
-            // same offset. Reset metrics to the editor's base text so that hidden syntax styling
-            // cannot make the synthetic quote gutter wider or narrower than a real `> ` prefix.
+            // A lazy continuation reserves the same fixed quote cell + native space as a real
+            // prefix. Ignore styling from a collapsed opener consumed at the same source offset.
             var global = context.GlobalTextRunProperties;
             TextRunProperties.SetTypeface(global.Typeface);
             TextRunProperties.SetFontRenderingEmSize(global.FontRenderingEmSize);
@@ -339,7 +290,18 @@ internal sealed partial class MarkdownSemanticPresentation
             TextRunProperties.SetTypographyProperties(global.TypographyProperties);
             TextRunProperties.SetNumberSubstitution(global.NumberSubstitution);
             TextRunProperties.SetForegroundBrush(Brushes.Transparent);
-            return base.CreateTextRun(startVisualColumn, context);
+            UnitWidth = _owner.GetQuoteUnitWidth(context.TextView, global);
+            var metrics = new FormattedText(
+                " ",
+                global.CultureInfo ?? UiLanguages.EffectiveUiCulture,
+                FlowDirection.LeftToRight,
+                global.Typeface,
+                global.FontRenderingEmSize,
+                Brushes.Transparent,
+                null,
+                AppTypography.TextFormattingMode,
+                VisualTreeHelper.GetDpi(context.TextView).PixelsPerDip);
+            return new FixedMarkerCellRun(TextRunProperties, UnitWidth * Levels, metrics);
         }
 
         public override int GetVisualColumn(int relativeTextOffset)
@@ -439,7 +401,10 @@ internal sealed partial class MarkdownSemanticPresentation
                 : RelativeTextOffset + DocumentLength;
         }
 
-        public override int GetNextCaretPosition(int visualColumn, LogicalDirection direction, CaretPositioningMode mode)
+        public override int GetNextCaretPosition(
+            int visualColumn,
+            LogicalDirection direction,
+            CaretPositioningMode mode)
         {
             if (mode != CaretPositioningMode.Normal)
             {

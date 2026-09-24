@@ -36,7 +36,7 @@ public sealed partial class MarkdownTextBox
         }
 
         var insertion = NewLineTextFor(line) + prefix;
-        if (MaxLength > 0 && Text.Length + insertion.Length > MaxLength)
+        if (!CanApplyTextReplacement(insertion))
         {
             return false;
         }

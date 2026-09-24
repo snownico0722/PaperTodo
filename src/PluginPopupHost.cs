@@ -222,9 +222,10 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
     internal void RefreshTheme() => OnUi(() =>
     {
         if (_current is not { Frame: { } frame } popup) return;
+        PaperBodyTheme current;
         try
         {
-            var current = _theme();
+            current = _theme();
             static Brush Brush(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
             frame.Background = Brush(current.PaperColor);
             frame.BorderBrush = Brush(current.BorderColor);
@@ -232,11 +233,10 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
             TextElement.SetFontFamily(frame, new FontFamily(current.FontFamily));
             TextElement.SetFontSize(frame, 12 * current.FontScale);
             popup.Window!.Background = frame.Background;
-            popup.Content?.OnThemeChanged(current);
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning("Plugin popup theme failed: {0}", ex.GetBaseException());
+            Trace.TraceWarning("Plugin popup host theme failed: {0}", ex.GetBaseException());
             if (popup.Window?.IsVisible == true)
             {
                 ClosePopup(popup);
@@ -245,6 +245,18 @@ internal sealed class PluginPopupHost(Func<bool> isActive, Func<PaperBodyTheme>?
             {
                 popup.FailOpen(ex);
             }
+            return;
+        }
+
+        try
+        {
+            popup.Content?.OnThemeChanged(current);
+        }
+        catch (Exception ex)
+        {
+            // A plugin-owned theme callback is auxiliary presentation work. Its failure does not
+            // revoke an otherwise usable popup.
+            Trace.TraceWarning("Plugin popup content theme callback failed: {0}", ex.GetBaseException());
         }
     });
 

@@ -15,83 +15,11 @@ public sealed partial class AppController
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var leftColumn = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 14, 0)
-        };
+        var leftColumn = BuildSettingsLiveRegion("general.options", BuildSettingsGeneralOptions);
         var rightColumn = new StackPanel
         {
             Margin = new Thickness(14, 0, 0, 0)
         };
-
-        leftColumn.Children.Add(CreateUiLanguageSettingsRow());
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("TrayStartup"),
-                SystemSettingsHelper.IsStartupEnabled(),
-                ToggleStartup),
-            "TipStartup"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableToolTips"),
-                State.EnableToolTips,
-                ToggleToolTips),
-            "TipEnableToolTips"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableAnimations"),
-                State.EnableAnimations,
-                ToggleAnimations),
-            "TipEnableAnimations"));
-
-        leftColumn.Children.Add(CreateAnonymousUsageStatisticsSettingsRow());
-
-        if (State.AdvancedSettingsMode)
-        {
-            leftColumn.Children.Add(SettingsSectionLabel(
-                SettingsSidebarLocalized("窗口", "Windows", "ウィンドウ", "창")));
-            _settingsHidePapersFromTaskbarCheckBox = MarkAdvancedSetting(SettingsToggle(
-                Strings.Get("SettingsHidePapersFromTaskbar"),
-                State.HidePapersFromTaskbar,
-                ToggleHidePapersFromTaskbar));
-            _settingsHidePapersFromWindowSwitcherCheckBox = MarkAdvancedSetting(SettingsToggle(
-                Strings.Get("SettingsHidePapersFromWindowSwitcher"),
-                State.HidePapersFromWindowSwitcher,
-                ToggleHidePapersFromWindowSwitcher));
-            leftColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    _settingsHidePapersFromTaskbarCheckBox,
-                    "TipHidePapersFromTaskbar"),
-                WrapWithHint(
-                    _settingsHidePapersFromWindowSwitcherCheckBox,
-                    "TipHidePapersFromWindowSwitcher"),
-                CompactSettingsField(
-                    Strings.Get("SettingsFullscreenTopmostMode"),
-                    CreateFullscreenTopmostModeSegmentSelector(),
-                    editorWidth: 156,
-                    tipKey: "TipFullscreenTopmostMode",
-                    topMargin: 8)));
-        }
-
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarNewTodoButton"),
-                State.ShowTopBarNewTodoButton,
-                ToggleTopBarNewTodoButton),
-            "TipNewTodoButton"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarNewNoteButton"),
-                State.ShowTopBarNewNoteButton,
-                ToggleTopBarNewNoteButton),
-            "TipNewNoteButton"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarExternalOpenButton"),
-                State.ShowTopBarExternalOpenButton,
-                ToggleTopBarExternalOpenButton),
-            "TipExternalOpenButton"));
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
         _settingsCapsuleModeCheckBox = SettingsToggle(
@@ -134,15 +62,31 @@ public sealed partial class AppController
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
 
+        rightColumn.Children.Add(SettingsSectionLabel(
+            SettingsSidebarLocalized(
+                "边缘浏览",
+                "Edge browsing",
+                "エッジ閲覧",
+                "가장자리 탐색")));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.edgeBrowsing",
+            BuildLabsEdgeCapsuleHoverIntentSettings));
+        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () => WrapWithHint(
+            SettingsToggle(
+                Strings.Get("LabsDockedCapsulesNonTopmost"),
+                State.ExperimentalDockedCapsulesNonTopmost,
+                ToggleExperimentalDockedCapsulesNonTopmost),
+            "TipLabsDockedCapsulesNonTopmost")));
+
         if (State.AdvancedSettingsMode)
         {
-            rightColumn.Children.Add(AdvancedSettingsBlock(
+            rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsuleAppearance", () => AdvancedSettingsBlock(
                 WrapWithHint(
-                    MarkAdvancedSetting(SettingsToggle(
+                    SettingsToggle(
                         Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
                         State.HideEdgeCapsuleCloseButtonOnHover,
-                        ToggleHideEdgeCapsuleCloseButtonOnHover)),
-                    "TipHideEdgeCapsuleCloseButtonOnHover"),
+                        ToggleHideEdgeCapsuleCloseButtonOnHover),
+                    BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())),
                 CompactSettingsField(
                     Strings.Get("SettingsMaxTitleLength"),
                     CreateMaxTitleLengthStepper(),
@@ -154,7 +98,7 @@ public sealed partial class AppController
                     CreateDeepCapsuleTitleMeasureLimitStepper(),
                     editorWidth: 132,
                     tipKey: "TipDeepCapsuleTitleMeasureLimit",
-                    topMargin: 8)));
+                    topMargin: 8))));
         }
 
         RefreshSettingsCapsuleToggleStates();
@@ -178,6 +122,97 @@ public sealed partial class AppController
             RestoreSettingsSidebarGeneralDefaults);
     }
 
+    private UIElement BuildSettingsGeneralOptions()
+    {
+        var leftColumn = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 14, 0)
+        };
+        leftColumn.Children.Add(CreateUiLanguageSettingsRow());
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("TrayStartup"),
+                SystemSettingsHelper.IsStartupEnabled(),
+                ToggleStartup),
+            "TipStartup"));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsEnableToolTips"),
+                State.EnableToolTips,
+                ToggleToolTips),
+            "TipEnableToolTips"));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsEnableAnimations"),
+                State.EnableAnimations,
+                ToggleAnimations),
+            "TipEnableAnimations"));
+
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.telemetry",
+            CreateAnonymousUsageStatisticsSettingsRow));
+
+        if (State.AdvancedSettingsMode)
+        {
+            leftColumn.Children.Add(SettingsSectionLabel(
+                SettingsSidebarLocalized("窗口", "Windows", "ウィンドウ", "창")));
+            _settingsHidePapersFromTaskbarCheckBox = SettingsToggle(
+                Strings.Get("SettingsHidePapersFromTaskbar"),
+                State.HidePapersFromTaskbar,
+                ToggleHidePapersFromTaskbar);
+            _settingsHidePapersFromWindowSwitcherCheckBox = SettingsToggle(
+                Strings.Get("SettingsHidePapersFromWindowSwitcher"),
+                State.HidePapersFromWindowSwitcher,
+                ToggleHidePapersFromWindowSwitcher);
+            leftColumn.Children.Add(AdvancedSettingsBlock(
+                WrapWithHint(
+                    _settingsHidePapersFromTaskbarCheckBox,
+                    "TipHidePapersFromTaskbar"),
+                WrapWithHint(
+                    _settingsHidePapersFromWindowSwitcherCheckBox,
+                    "TipHidePapersFromWindowSwitcher"),
+                CompactSettingsField(
+                    Strings.Get("SettingsFullscreenTopmostMode"),
+                    CreateFullscreenTopmostModeSegmentSelector(),
+                    editorWidth: 156,
+                    tipKey: "TipFullscreenTopmostMode",
+                    topMargin: 8)));
+        }
+
+        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsShowTopBarNewTodoButton"),
+                State.ShowTopBarNewTodoButton,
+                ToggleTopBarNewTodoButton),
+            "TipNewTodoButton"));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsShowTopBarNewNoteButton"),
+                State.ShowTopBarNewNoteButton,
+                ToggleTopBarNewNoteButton),
+            "TipNewNoteButton"));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsShowTopBarExternalOpenButton"),
+                State.ShowTopBarExternalOpenButton,
+                ToggleTopBarExternalOpenButton),
+            "TipExternalOpenButton"));
+
+        RefreshSettingsSystemVisibilityToggleStates();
+        return leftColumn;
+    }
+
+    private void ToggleEdgeCapsulePreviewPreferDownward() =>
+        SetSettingFromUi("edge.preview_prefer_downward", !State.EdgeCapsulePreviewPreferDownward);
+
+    private string HideEdgeCapsuleCloseButtonOnHoverTip() =>
+        SettingsSidebarLocalized(
+            "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要关闭时可在右键菜单中选择「隐藏」。",
+            "When enabled, ordinary edge capsules remove both the close button and its reserved strip while hovered or active. Use Hide in the context menu to close one.",
+            "有効にすると、通常のエッジカプセルはホバー／アクティブ時に閉じるボタンとその予約領域を表示しません。閉じる場合は右クリックメニューの「隠す」を使います。",
+            "켜면 일반 가장자리 캡슐은 호버/활성 상태에서 닫기 버튼과 그 예약 영역을 함께 제거합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.");
+
     private void RestoreSettingsSidebarGeneralDefaults()
     {
         State.EnableToolTips = true;
@@ -196,6 +231,12 @@ public sealed partial class AppController
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CollapseExpandedDeepCapsuleOnClick = false;
+        State.EdgeCapsulePreviewPreferDownward = false;
+        State.ExperimentalEdgeCapsuleHoverPreview = true;
+        State.ExperimentalEdgeCapsuleHoverIntent = true;
+        State.ExperimentalEdgeCapsuleHoverIntentSensitivity =
+            EdgeCapsuleHoverIntentSensitivities.Medium;
+        State.ExperimentalDockedCapsulesNonTopmost = false;
         State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
 
@@ -203,6 +244,27 @@ public sealed partial class AppController
         ClampPaperTitlesToMaxLength(State.MaxTitleLength);
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
+        RefreshEdgeCapsuleHoverIntentRuntime();
+        foreach (var window in _windows.Values)
+        {
+            window.RefreshDeepCapsuleSlotTopmost();
+        }
+        foreach (var master in _masterCapsules.Values)
+        {
+            master.RefreshEffectiveTopmost();
+        }
         RefreshSettingsWindowContent();
     }
+
+
+    private UIElement CreateAnonymousUsageStatisticsSettingsRow() =>
+        WrapWithHint(
+            SettingsToggle(
+                TelemetryStrings.Get("HelpImprove"),
+                State.TelemetryEnabled,
+                ToggleAnonymousUsageStatistics),
+            BuildSettingsHintTooltip(TelemetryStrings.Get("Description")));
+
+    private void ToggleAnonymousUsageStatistics() =>
+        SetSettingFromUi("privacy.anonymous_usage", !State.TelemetryEnabled);
 }

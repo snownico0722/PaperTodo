@@ -305,6 +305,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 close() { return request('popups.close'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                 noteAssets,
                 popups,
                 surface: 'body',
@@ -409,7 +414,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             e.Cancel = true;
             if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var external))
             {
-                TryOpenExternalNavigation(external);
+                WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(external);
             }
             return;
         }
@@ -474,7 +479,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         e.Handled = true;
         if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
         {
-            _ = TryOpenExternalNavigation(uri);
+            _ = WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri);
         }
     }
 
@@ -490,7 +495,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
-        if (TryOpenExternalNavigation(uri))
+        if (WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri))
         {
             e.Cancel = true;
         }
@@ -500,27 +505,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
             string.Equals(uri.GetLeftPart(UriPartial.Authority), _expectedOrigin, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryOpenExternalNavigation(Uri uri)
-    {
-        if (uri.Scheme is not ("http" or "https" or "mailto"))
-        {
-            return false;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true
-            });
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private void ShowWebView()
@@ -595,6 +579,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             paperId = _context.PaperId,
             providerId = _context.ProviderId,
             apiVersion = _context.ApiVersion,
+            uiLanguage = _context.UiLanguage,
             state = ParseState(_stateJson),
             stateVersion = _context.StateVersion,
             targetStateVersion = _context.TargetStateVersion,
@@ -791,6 +776,18 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
         return method switch
         {
+        "appSettings.list" or
+        "appSettings.get" or
+        "appSettings.set" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+        "papers.show" or
+        "papers.hide" or
+        "papers.toggle" or
+        "papers.expand" or
+        "papers.collapse" or
+        "papers.toggleCollapsed" or
+        "papers.activate" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
         "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
         "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
         "todos.list" => _context.Host.ListTodos(

@@ -358,7 +358,8 @@ internal static class EdgeCapsuleQueueProxyPolicy
                 target.ContentOpacity,
                 target.OutlineVisible,
                 target.IsHitTestVisible,
-                target.CloseSegmentActsAsContent),
+                target.CloseSegmentActsAsContent,
+                target.TitleVisible),
             startedAtTimestamp,
             durationTicks,
             EdgeCapsuleTransitionReason.Placement);

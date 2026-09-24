@@ -58,6 +58,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private ulong _documentNavigationId;
     private bool _hasDocumentNavigation;
     private bool _reloadRecoveryPending;
+    private bool _rendererRecoveryAttempted;
     private bool _restartRequested;
     private bool _startupCompleted;
     private bool _disposed;
@@ -292,6 +293,11 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 clearAll() { return request('paperActions.clearAll'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return workspace.request('appSettings.list', {category}); },
+                    get(id) { return workspace.request('appSettings.get', {id}); },
+                    set(id, value) { return workspace.request('appSettings.set', {id, value}); }
+                }),
                 paperActions,
                 noteAssets,
                 popups,
@@ -372,7 +378,9 @@ internal sealed partial class WebPluginRuntime : IDisposable
         object? sender,
         CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (!ReferenceEquals(sender, _webView.CoreWebView2) ||
+        if (_disposed ||
+            !_isActive() ||
+            !ReferenceEquals(sender, _webView.CoreWebView2) ||
             !_hasDocumentNavigation ||
             e.NavigationId != _documentNavigationId)
         {
@@ -394,9 +402,15 @@ internal sealed partial class WebPluginRuntime : IDisposable
         }
 
         _reloadRecoveryPending = false;
+        IReadOnlyList<PaperPluginRuntimePaper> startupPapers;
         if (_papers is PaperPluginRuntimePapersApi runtimePapers)
         {
             runtimePapers.ResetWebDocumentPresentation();
+            startupPapers = runtimePapers.CaptureStartupSnapshot();
+        }
+        else
+        {
+            startupPapers = _papers.List();
         }
         _documentReady = true;
         _extensionDocumentToken = Guid.NewGuid().ToString("N");
@@ -409,12 +423,13 @@ internal sealed partial class WebPluginRuntime : IDisposable
             surface = "runtime",
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
+            uiLanguage = PaperPluginEnvironment.UiLanguage,
             permissions = _workspace.GrantedPermissions.OrderBy(value => value).ToArray(),
             settings = ReadSettings(),
             state = runtimeState.State,
             stateVersion = runtimeState.Version,
             targetStateVersion = _state.TargetStateVersion,
-            papers = _papers.List()
+            papers = startupPapers
         });
         _startupReady.TrySetResult(true);
     }
@@ -432,12 +447,23 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
             case WebPluginProcessFailurePolicy.Recovery.Reload:
+                if (!CanRecoverRendererByReload(_startupCompleted) ||
+                    _rendererRecoveryAttempted)
+                {
+                    FailStartupOrRestart(
+                        "The Web Runtime renderer could not be recovered by its one allowed reload.");
+                    return;
+                }
+                _rendererRecoveryAttempted = true;
                 RecoverRendererByReload();
                 return;
             default:
                 return;
         }
     }
+
+    internal static bool CanRecoverRendererByReload(bool startupCompleted) =>
+        startupCompleted;
 
     private void RecoverRendererByReload()
     {

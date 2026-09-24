@@ -879,21 +879,6 @@ public sealed partial class PaperWindow
         _todoGroupDragRestingOpacities.Clear();
     }
 
-    private bool RestrictTodoGroupDragToTrash()
-    {
-        if (!IsTodoGroupDrag)
-        {
-            return false;
-        }
-
-        if (_todoDrag != null)
-        {
-            _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
-        }
-        return true;
-    }
-
     private string TodoDragGhostText(string fallback)
     {
         return IsTodoGroupDrag
@@ -1348,5 +1333,32 @@ public sealed partial class PaperWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
+    }
+
+
+    public void RefreshLinkedPaperRows(string? paperId)
+    {
+        if (_paper.Type != PaperTypes.Todo ||
+            _todoPanel == null ||
+            string.IsNullOrWhiteSpace(paperId))
+        {
+            return;
+        }
+
+        var affectedItemIds = _paper.Items
+            .Where(item => string.Equals(
+                item.LinkedPaperId,
+                paperId,
+                StringComparison.Ordinal))
+            .Select(item => item.Id)
+            .ToArray();
+        if (affectedItemIds.Length == 0)
+        {
+            return;
+        }
+
+        ReconcileTodoRows(
+            affectedItemIds,
+            CurrentFocusedTodoItemId());
     }
 }

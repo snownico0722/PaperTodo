@@ -74,17 +74,37 @@ public partial class App : Application
         _singleInstance = new SingleInstanceHelper("PaperTodo-SingleInstance-Mutex", "PaperTodo-SingleInstance-Activate");
         if (!_singleInstance.TryAcquire())
         {
-            _singleInstance.SignalPrimaryInstance(e.Args);
+            var exitCode = _singleInstance.SignalPrimaryInstance(e.Args,
+                waitForResult: startupCommand.Kind == StartupCommandKind.EnableMcpForCodex);
+            if (exitCode != 0 && startupCommand.Kind == StartupCommandKind.EnableMcpForCodex)
+                Console.Error.WriteLine(exitCode == 1
+                    ? "PaperTodo did not enable MCP. Check the Codex plugin and its Allow MCP setting."
+                    : "PaperTodo did not return an MCP enable result.");
             _singleInstance.Dispose();
             _singleInstance = null;
-            Shutdown();
-            Environment.Exit(0);
+            Shutdown(exitCode);
+            Environment.Exit(exitCode);
+            return;
+        }
+
+        // This command belongs to a live Codex plugin session. It must never start
+        // a new GUI, restore papers or enable MCP after the original host has exited.
+        if (startupCommand.Kind == StartupCommandKind.EnableMcpForCodex)
+        {
+            _singleInstance.Dispose();
+            _singleInstance = null;
+            Console.Error.WriteLine("PaperTodo is not running; MCP was not enabled.");
+            Shutdown(2);
+            Environment.Exit(2);
             return;
         }
 
         // Listen as soon as this process owns the mutex. Commands received while
         // the controller is loading stay queued until startup is fully complete.
         _singleInstance.StartListener(HandleSingleInstanceCommand);
+#if DEBUG
+        EdgeDiagnosticObservation.InstallInput(); // edgeJournal: no Rendering observer
+#endif
 
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -135,18 +155,20 @@ public partial class App : Application
         CompleteSingleInstanceStartup();
     }
 
-    private void HandleSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool HandleSingleInstanceCommand(IReadOnlyList<string> args)
     {
         lock (_singleInstanceCommandGate)
         {
             if (!_singleInstanceCommandsReady)
             {
+                // This command belongs to an already-running plugin, not the startup queue.
+                if (StartupCommand.Parse(args).Kind == StartupCommandKind.EnableMcpForCodex) return false;
                 _pendingSingleInstanceCommands.Enqueue(new List<string>(args));
-                return;
+                return true;
             }
         }
 
-        DispatchSingleInstanceCommand(args);
+        return DispatchSingleInstanceCommand(args);
     }
 
     private void CompleteSingleInstanceStartup()
@@ -169,22 +191,23 @@ public partial class App : Application
         }
     }
 
-    private void DispatchSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool DispatchSingleInstanceCommand(IReadOnlyList<string> args)
     {
         try
         {
-            Dispatcher.Invoke(() => ExecuteSingleInstanceCommand(args));
+            return Dispatcher.Invoke(() => ExecuteSingleInstanceCommand(args));
         }
         catch (InvalidOperationException)
         {
             // The application is already shutting down.
+            return false;
         }
     }
 
-    private void ExecuteSingleInstanceCommand(IReadOnlyList<string> args)
+    private bool ExecuteSingleInstanceCommand(IReadOnlyList<string> args)
     {
         var command = StartupCommand.Parse(args, StartupCommandKind.Show);
-        _controller?.ExecuteStartupCommand(command);
+        return _controller?.ExecuteStartupCommand(command) == true;
     }
 
     private static void ApplyStartupCulturePreference(string preference)
@@ -370,5 +393,9 @@ public partial class App : Application
         _singleInstance?.Dispose();
         _controller?.Dispose();
         base.OnExit(e);
+#if DEBUG
+        EdgeDiagnosticObservation.RemoveInput();
+        EdgeDiagnosticJournal.Complete("normal-exit");
+#endif
     }
 }
