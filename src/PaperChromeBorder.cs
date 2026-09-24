@@ -53,7 +53,7 @@ internal class PaperChromeBorder : Border
     // non-overlapping rings is size-independent work: resize changes only their rectangles,
     // never a bitmap/effect surface. The paper itself paints afterwards and hides the inner
     // half of every ring, naturally producing the same outside-only silhouette.
-    private void DrawLightweightShadow(DrawingContext drawingContext)
+    protected void DrawLightweightShadow(DrawingContext drawingContext)
     {
         if (_lightweightShadowPens.Length == 0 ||
             RenderSize.Width <= 0 ||
