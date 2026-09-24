@@ -218,6 +218,31 @@ internal sealed partial class MarkdownSemanticPresentation
           left.Value.End == right.Value.End &&
           left.Value.Kind == right.Value.Kind));
 
+    private bool TryGetMathSpanIntersectingRange(
+        int start,
+        int end,
+        out MarkdownSemanticSpan span)
+    {
+        span = default;
+        if (end <= start || !TryCurrentSnapshot(out var snapshot))
+        {
+            return false;
+        }
+
+        foreach (var candidate in snapshot.Spans)
+        {
+            if (IsMathSpan(candidate) &&
+                candidate.Start < end &&
+                candidate.End > start)
+            {
+                span = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private bool TryGetMathSpanAtOffset(int offset, out MarkdownSemanticSpan span)
     {
         span = default;

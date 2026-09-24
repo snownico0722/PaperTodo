@@ -42,8 +42,7 @@ internal static class MarkdownMathScanner
         IReadOnlyList<MarkdownMathBlockedRange>? blockedRanges = null)
     {
         var text = source ?? string.Empty;
-        if (text.Length < 3 ||
-            (text.IndexOf('$') < 0 && text.IndexOf('\\') < 0))
+        if (text.Length < 3 || !MayContainDelimiter(text))
         {
             return Array.Empty<MarkdownMathRange>();
         }
@@ -95,6 +94,28 @@ internal static class MarkdownMathScanner
         }
 
         return results.Count == 0 ? Array.Empty<MarkdownMathRange>() : results.ToArray();
+    }
+
+    internal static bool MayContainDelimiter(string? source)
+    {
+        var text = source ?? string.Empty;
+        if (text.IndexOf('$') >= 0)
+        {
+            return true;
+        }
+
+        var slash = text.IndexOf('\\');
+        while (slash >= 0 && slash + 1 < text.Length)
+        {
+            if (text[slash + 1] is '(' or '[')
+            {
+                return true;
+            }
+
+            slash = text.IndexOf('\\', slash + 1);
+        }
+
+        return false;
     }
 
     private static bool TryReadOpeningDelimiter(
@@ -435,8 +456,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         List<MarkdownSemanticSpan> spans,
         List<MarkdownSemanticLink> links)
     {
-        if (string.IsNullOrEmpty(source) ||
-            (source.IndexOf('$') < 0 && source.IndexOf('\\') < 0))
+        if (!MarkdownMathScanner.MayContainDelimiter(source))
         {
             return;
         }
