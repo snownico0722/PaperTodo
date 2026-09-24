@@ -42,6 +42,13 @@ internal static partial class Program
                 "plain escaped parentheses are not claimed as math");
             Equal(1, MathSpans(MarkdownSemanticSnapshot.Parse(@"\(x+y\)")).Length,
                 "math-shaped backslash delimiters remain supported");
+
+            Require(
+                !MarkdownMathScanner.MayContainDelimiter(@"C:\Users\name\file.txt and \*literal\*"),
+                "ordinary backslashes do not enter the math scanner");
+            Require(
+                MarkdownMathScanner.MayContainDelimiter(@"before \(x+y\) after"),
+                "backslash math opener remains a scan candidate");
         });
 
         check("Math owns TeX-shaped Markdown but not an outer Markdown link", () =>
@@ -188,6 +195,30 @@ internal static partial class Program
                 "first recognized formula installs the math presentation once");
         });
 
+        check("Find hits inside rendered math reveal source and restore rendering", () =>
+        {
+            const string source = "before\n$$\n\\frac{needle}{2}\n$$\nafter";
+            using var editor = new Editor(source);
+            var box = editor.Box;
+            box.SetPreviewMode(true);
+            Pump();
+            LayoutMathEditor(box);
+
+            var span = MathSpans(MarkdownSemanticSnapshot.Parse(source)).Single();
+            Require(HasMathElement(box, span), "Full preview initially renders the formula");
+
+            var match = source.IndexOf("needle", StringComparison.Ordinal);
+            editor.Presentation.SetTransientFindReveal(match, "needle".Length);
+            Pump();
+            LayoutMathEditor(box);
+            Require(!HasMathElement(box, span), "find hit reveals the formula source");
+
+            editor.Presentation.SetTransientFindReveal(null, 0);
+            Pump();
+            LayoutMathEditor(box);
+            Require(HasMathElement(box, span), "clearing find restores formula rendering");
+        });
+
         check("Invalid math falls back to source instead of throwing", () =>
         {
             Require(
@@ -212,7 +243,7 @@ internal static partial class Program
             box.SetPreviewMode(false);
             Pump();
             LayoutMathEditor(box);
-            Require(!HasMathElement(box, span), "ordinary Enhanced editing keeps formula source");
+            Require(!HasMathElement(box, span), "ordinary Basic editing keeps formula source");
 
             box.SetPreviewMode(true);
             Pump();
