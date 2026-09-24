@@ -1140,7 +1140,8 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = isCapsule;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
         if (_controller.UsesNativeMicaWindows && _topBarHost != null)
         {
@@ -1152,8 +1153,7 @@ public sealed partial class PaperWindow : Window
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
         if (snappedExpanded)
         {
-            _paperChrome.Effect = null;
-            _paperChrome.ClearLightweightShadow();
+            ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: true);
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
@@ -1164,11 +1164,30 @@ public sealed partial class PaperWindow : Window
         }
 
         // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
-        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
+        ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: false);
+        RefreshPluginBodyClip();
+        RefreshNativeMica();
+        RefreshExperimentalFocusPresentation(animate: false);
+    }
+
+    private void ApplyPaperChromeShadowPresentation(bool isCapsule, bool suppressShadow)
+    {
+        if (_paperChrome == null)
+        {
+            return;
+        }
+
+        if (suppressShadow)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.ClearLightweightShadow();
+            return;
+        }
+
         // Default paper uses size-independent soft rings in the existing transparent gutter.
         // DropShadowEffect re-rasterizes/blurs the whole changing surface on every resize frame.
         // Other experimental skins keep their existing Effect until they have separate visual
@@ -1184,17 +1203,13 @@ public sealed partial class PaperWindow : Window
                 _paperChrome.SetLightweightShadow(blurRadius: 8, depth: 1, opacity: 0.12);
             else
                 _paperChrome.SetLightweightShadow(blurRadius: 14, depth: 2, opacity: 0.22);
+            return;
         }
-        else
-        {
-            _paperChrome.ClearLightweightShadow();
-            _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
-                ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
-                : CreatePaperChromeShadow();
-        }
-        RefreshPluginBodyClip();
-        RefreshNativeMica();
-        RefreshExperimentalFocusPresentation(animate: false);
+
+        _paperChrome.ClearLightweightShadow();
+        _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
+            ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
+            : CreatePaperChromeShadow();
     }
 
     private bool LooksSnappedNow()
