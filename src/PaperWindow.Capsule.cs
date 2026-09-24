@@ -915,9 +915,8 @@ var expandedHeight = collapsed
             }
         }
 
-        // Shadow/margin/corner selection is form-aware and snap-aware; centralize it so a
-        // null Effect (snap suppression) can't make the local `is DropShadowEffect` update
-        // silently no-op and leave the wrong shadow parameters on the capsule/expanded form.
+        // Shadow/margin/corner selection is form-aware and snap-aware; keep it centralized
+        // so capsule/expanded transitions always publish one coherent chrome presentation.
         ApplyPaperChromePresentation();
         // ApplyPaperChromePresentation selects the target form's margin. During an animated
         // form change the current frame still owns geometry, so immediately re-apply the
