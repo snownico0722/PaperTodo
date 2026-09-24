@@ -134,7 +134,7 @@ internal static class Program
 
     private static void TransientFindRevealRestoresAndRecollapsesSource()
     {
-        const string source = "before\n$\nx^2+y^2\n$\nafter";
+        const string source = "before\n$$\nx^2+y^2\n$$\nafter";
         using var editor = new Editor(source);
         var box = editor.Box;
         var span = MathSpan(source);
