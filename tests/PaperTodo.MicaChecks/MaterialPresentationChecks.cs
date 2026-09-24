@@ -177,6 +177,16 @@ internal static class MaterialPresentationChecks
                 chrome.Effect == null &&
                 chrome.HasLightweightShadow,
                 "skin refresh changes paper shadow without rewriting transition geometry");
+
+            var savedOutline = controller.State.HideSurfaceOutline;
+            controller.State.HideSurfaceOutline = true;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "hiding the outer border does not disable the lightweight paper shadow");
+            AssertLightweightShadowRamp(window);
+            controller.State.HideSurfaceOutline = savedOutline;
+            window.RefreshSkin();
         }
         finally
         {
