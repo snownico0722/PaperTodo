@@ -95,16 +95,17 @@ internal class PaperChromeBorder : Border
             return;
         }
 
-        // The existing paper HWND reserves an 8-DIP gutter. Keep every ring within it:
-        // expanded paper uses almost the full gutter, while the tighter capsule shadow
-        // intentionally occupies less.
-        var extent = Math.Clamp(blurRadius * 0.55, 2.0, 7.75);
-        var ringCount = Math.Clamp((int)Math.Ceiling(extent), 4, 5);
-        var step = extent / ringCount;
-
         // WPF DropShadowEffect's default direction is visually down/right. A small diagonal
         // shift retains that weight without making the lightweight rings depend on window size.
         var diagonalDepth = depth / Math.Sqrt(2);
+
+        // The existing paper HWND reserves an 8-DIP gutter. Account for directional depth
+        // before choosing the soft-ring extent so the down/right edge is not clipped by the
+        // HWND while the opposite edge still retains a visible fade.
+        var maxExtent = Math.Max(1.0, 7.75 - Math.Abs(diagonalDepth));
+        var extent = Math.Min(Math.Max(blurRadius * 0.55, 1.0), maxExtent);
+        var ringCount = Math.Clamp((int)Math.Ceiling(extent), 4, 5);
+        var step = extent / ringCount;
         var pens = new Pen[ringCount];
         for (var i = 0; i < ringCount; i++)
         {
