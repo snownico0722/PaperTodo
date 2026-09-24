@@ -1194,8 +1194,7 @@ public sealed partial class PaperWindow : Window
         // parity coverage; native expanded papers continue to use the system frame.
         var useLightweightPaperShadow =
             !UsesNativePaperChrome &&
-            Theme.Skin == PaperSkins.Paper &&
-            !SystemParameters.HighContrast;
+            Theme.Skin == PaperSkins.Paper;
         if (useLightweightPaperShadow)
         {
             _paperChrome.Effect = null;
