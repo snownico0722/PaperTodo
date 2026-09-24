@@ -18,12 +18,14 @@ internal readonly record struct MarkdownMathRange(
 internal readonly record struct MarkdownMathBlockedRange(int Start, int End);
 
 /// <summary>
-/// Bounded PaperTodo math-delimiter scanner. Markdig still owns ordinary Markdown grammar; this
-/// scanner only adds the four explicit math delimiter pairs and is given Markdig-owned exclusion
-/// ranges so code, links, images and raw HTML never become formulas by accident.
+/// Bounded PaperTodo math-delimiter scanner. Markdig remains the owner of ordinary Markdown
+/// grammar; this scanner only adds four explicit math delimiter pairs and receives Markdig-owned
+/// exclusion ranges so code, images and raw HTML never become formulas by accident.
 /// </summary>
 internal static class MarkdownMathScanner
 {
+    internal const int MaximumFormulaContentLength = 16_000;
+
     private readonly record struct Delimiter(
         string Open,
         string Close,
@@ -40,13 +42,12 @@ internal static class MarkdownMathScanner
         IReadOnlyList<MarkdownMathBlockedRange>? blockedRanges = null)
     {
         var text = source ?? string.Empty;
-        if (text.Length < 3 ||
-            (text.IndexOf('$') < 0 && text.IndexOf('\\') < 0))
+        if (text.Length < 3 || !MayContainDelimiter(text))
         {
             return Array.Empty<MarkdownMathRange>();
         }
 
-        var blocked = NormalizeBlockedRanges(blockedRanges);
+        var blocked = NormalizeBlockedRanges(blockedRanges, text.Length);
         var results = new List<MarkdownMathRange>();
         var blockedIndex = 0;
         var offset = 0;
@@ -87,12 +88,34 @@ internal static class MarkdownMathScanner
                 continue;
             }
 
-            // An unmatched opener remains ordinary Markdown source. Move by one character rather
-            // than the whole delimiter so a later valid opener in the same run can still be found.
+            // Keep an unmatched opener as ordinary source. Advancing by one still allows a later
+            // valid delimiter in the same punctuation run to be discovered.
             offset++;
         }
 
         return results.Count == 0 ? Array.Empty<MarkdownMathRange>() : results.ToArray();
+    }
+
+    internal static bool MayContainDelimiter(string? source)
+    {
+        var text = source ?? string.Empty;
+        if (text.IndexOf('$') >= 0)
+        {
+            return true;
+        }
+
+        var slash = text.IndexOf('\\');
+        while (slash >= 0 && slash + 1 < text.Length)
+        {
+            if (text[slash + 1] is '(' or '[')
+            {
+                return true;
+            }
+
+            slash = text.IndexOf('\\', slash + 1);
+        }
+
+        return false;
     }
 
     private static bool TryReadOpeningDelimiter(
@@ -108,11 +131,17 @@ internal static class MarkdownMathScanner
 
         if (source[offset] == '$')
         {
+            // Do not start in the middle of a larger dollar run.
+            if (offset > 0 && source[offset - 1] == '$')
+            {
+                return false;
+            }
+
             var run = CountRun(source, offset, '$');
             if (run == 2)
             {
                 delimiter = DisplayDollar;
-                return offset + 2 < source.Length;
+                return offset + delimiter.Open.Length < source.Length;
             }
 
             if (run != 1 || offset + 1 >= source.Length)
@@ -135,13 +164,19 @@ internal static class MarkdownMathScanner
             return false;
         }
 
-        delimiter = source[offset + 1] switch
+        if (source[offset + 1] == '(')
         {
-            '(' => InlineParentheses,
-            '[' => DisplayBrackets,
-            _ => default
-        };
-        return delimiter.Open != null && offset + delimiter.Open.Length < source.Length;
+            delimiter = InlineParentheses;
+            return offset + delimiter.Open.Length < source.Length;
+        }
+
+        if (source[offset + 1] == '[')
+        {
+            delimiter = DisplayBrackets;
+            return offset + delimiter.Open.Length < source.Length;
+        }
+
+        return false;
     }
 
     private static bool TryFindClosingDelimiter(
@@ -158,16 +193,21 @@ internal static class MarkdownMathScanner
 
         while (offset < source.Length)
         {
+            if (offset - contentStart > MaximumFormulaContentLength)
+            {
+                return false;
+            }
+
             AdvanceBlockedIndex(blocked, ref currentBlocked, offset);
             if (currentBlocked < blocked.Length && blocked[currentBlocked].Start <= offset)
             {
-                // Do not allow a formula to jump across a Markdown-owned protected range. A
-                // delimiter after code/link/HTML starts a separate candidate instead.
+                // A formula cannot jump across a Markdown-owned protected domain. Any delimiter
+                // after that range will be considered independently by the outer scan.
                 return false;
             }
 
             var current = source[offset];
-            if (!delimiter.IsDisplay && (current == '\r' || current == '\n'))
+            if (!delimiter.IsDisplay && current is '\r' or '\n')
             {
                 return false;
             }
@@ -199,6 +239,15 @@ internal static class MarkdownMathScanner
                 return false;
             }
 
+            // Backslash delimiters overlap ordinary Markdown escape syntax (for example
+            // "\\[not link\\]" historically renders as "[not link]"). Claim that syntax only
+            // when the body is clearly math-shaped, or when display math spans physical lines.
+            if (!delimiter.IsDollar &&
+                !LooksLikeBackslashMath(source, contentStart, offset, delimiter.IsDisplay))
+            {
+                return false;
+            }
+
             closeStart = offset;
             return true;
         }
@@ -219,8 +268,8 @@ internal static class MarkdownMathScanner
         }
 
         var next = source[closeStart + 1];
-        // This prevents common currency prose such as "$100 and $200" from pairing the two
-        // currency signs, while still allowing CJK or Latin prose immediately after $x$.
+        // Avoid pairing the two currency signs in "$100 and $200" while allowing ordinary Latin
+        // or CJK prose immediately after a formula such as "$x$公式".
         return next != '$' && !char.IsDigit(next);
     }
 
@@ -237,12 +286,37 @@ internal static class MarkdownMathScanner
         return false;
     }
 
-    private static bool MatchesAt(string source, int offset, string value)
+    private static bool LooksLikeBackslashMath(
+        string source,
+        int start,
+        int end,
+        bool display)
     {
-        return offset >= 0 &&
-            offset + value.Length <= source.Length &&
-            source.AsSpan(offset, value.Length).SequenceEqual(value.AsSpan());
+        for (var index = start; index < end; index++)
+        {
+            var current = source[index];
+            if (display && current is '\r' or '\n')
+            {
+                return true;
+            }
+
+            if (current == '\\' ||
+                current is '^' or '_' or '=' or '+' or '-' or '*' or '/' or
+                    '{' or '}' or '<' or '>' or '|' or '&' or
+                    '±' or '×' or '÷' or '∑' or '∫' or '√' or '∞' or
+                    '≤' or '≥' or '≠' or '≈')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    private static bool MatchesAt(string source, int offset, string value) =>
+        offset >= 0 &&
+        offset + value.Length <= source.Length &&
+        source.AsSpan(offset, value.Length).SequenceEqual(value.AsSpan());
 
     private static int CountRun(string source, int offset, char value)
     {
@@ -278,14 +352,18 @@ internal static class MarkdownMathScanner
     }
 
     private static MarkdownMathBlockedRange[] NormalizeBlockedRanges(
-        IReadOnlyList<MarkdownMathBlockedRange>? ranges)
+        IReadOnlyList<MarkdownMathBlockedRange>? ranges,
+        int sourceLength)
     {
-        if (ranges == null || ranges.Count == 0)
+        if (ranges == null || ranges.Count == 0 || sourceLength <= 0)
         {
             return Array.Empty<MarkdownMathBlockedRange>();
         }
 
         var ordered = ranges
+            .Select(range => new MarkdownMathBlockedRange(
+                Math.Clamp(range.Start, 0, sourceLength),
+                Math.Clamp(range.End, 0, sourceLength)))
             .Where(range => range.End > range.Start)
             .OrderBy(range => range.Start)
             .ThenBy(range => range.End)
@@ -324,8 +402,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         List<MarkdownSemanticSpan> spans,
         List<MarkdownSemanticLink> links)
     {
-        if (string.IsNullOrEmpty(source) ||
-            (source.IndexOf('$') < 0 && source.IndexOf('\\') < 0))
+        if (!MarkdownMathScanner.MayContainDelimiter(source))
         {
             return;
         }
@@ -348,28 +425,32 @@ internal sealed partial class MarkdownSemanticSnapshot
             blocked.Add(new MarkdownMathBlockedRange(span.Start, span.End));
         }
 
-        foreach (var link in links)
+        var scanned = MarkdownMathScanner.Scan(source, blocked);
+        if (scanned.Length == 0)
         {
-            if (link.End > link.Start)
-            {
-                blocked.Add(new MarkdownMathBlockedRange(link.Start, link.End));
-            }
+            return;
         }
 
-        var math = MarkdownMathScanner.Scan(source, blocked);
+        var math = scanned
+            .Where(range => !links.Any(link =>
+                RangesOverlap(range.Start, range.End, link.Start, link.End) &&
+                !(link.Start >= range.Start && link.End <= range.End)))
+            .ToArray();
         if (math.Length == 0)
         {
             return;
         }
 
-        // Ordinary Markdown parsers do not know that the formula body is an opaque TeX domain.
-        // Remove only inline presentation semantics that landed completely inside a recognized
-        // formula; block/list/quote/heading containers remain valid around the formula.
-        spans.RemoveAll(span =>
-            IsMathOwnedInlineSemantic(span.Kind) &&
-            math.Any(range => span.Start >= range.Start && span.End <= range.End));
-        links.RemoveAll(link =>
-            math.Any(range => link.Start < range.End && range.Start < link.End));
+        // A URL or explicit Markdown link wholly inside TeX is formula source, not a clickable
+        // Markdown link. A formula candidate that starts inside an outer link was rejected above.
+        links.RemoveAll(link => math.Any(range =>
+            link.Start >= range.Start && link.End <= range.End));
+
+        // Markdig does not know that a recognized formula body is opaque TeX. Remove semantics
+        // completely owned by the formula, including accidental emphasis/list/rule interpretations;
+        // outer list, quote and heading containers start before the formula and remain intact.
+        spans.RemoveAll(span => math.Any(range =>
+            span.Start >= range.Start && span.End <= range.End));
 
         foreach (var range in math)
         {
@@ -383,18 +464,6 @@ internal sealed partial class MarkdownSemanticSnapshot
         }
     }
 
-    private static bool IsMathOwnedInlineSemantic(MarkdownSemanticSpanKind kind) =>
-        kind is MarkdownSemanticSpanKind.Emphasis or
-            MarkdownSemanticSpanKind.Strong or
-            MarkdownSemanticSpanKind.Strikethrough or
-            MarkdownSemanticSpanKind.InlineCode or
-            MarkdownSemanticSpanKind.Image or
-            MarkdownSemanticSpanKind.HtmlContainer or
-            MarkdownSemanticSpanKind.HtmlMarker or
-            MarkdownSemanticSpanKind.HtmlStrong or
-            MarkdownSemanticSpanKind.HtmlEmphasis or
-            MarkdownSemanticSpanKind.HtmlStrikethrough or
-            MarkdownSemanticSpanKind.HtmlUnderline or
-            MarkdownSemanticSpanKind.HtmlCode or
-            MarkdownSemanticSpanKind.EscapeMarker;
+    private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd) =>
+        firstStart < secondEnd && secondStart < firstEnd;
 }
