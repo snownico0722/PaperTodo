@@ -12,6 +12,7 @@ public sealed partial class PaperWindow
     internal void RefreshSkin()
     {
         SkinBorder.Refresh(_paperChrome);
+        ApplyPaperChromePresentation();
         _edgeCapsuleHost?.RefreshSkin();
         _experimentalTetherCapsule?.UpdateTheme();
         _todoCheckBoxStyle = null;
