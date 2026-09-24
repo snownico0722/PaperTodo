@@ -33,14 +33,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Markdown benchmark failed' }
 
 ## 材质性能与拖动测量
 
-这些入口只用于手动对比，不作为正确性或性能门槛。拖动模式会真实移动鼠标，请不要在正常使用桌面时运行；缩放阴影对照直接驱动真实 HWND 尺寸，不移动鼠标。
+这些入口只用于手动对比，不作为正确性或性能门槛。拖动模式会真实移动鼠标，请不要在正常使用桌面时运行。
 
 ```powershell
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --benchmark .\material-benchmark.json
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-benchmark .\material-drag.json
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-snapshot-timing .\material-drag-snapshot.json
-dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --resize-shadow-benchmark .\\material-resize-shadow.json
 ```
-
-
-`--resize-shadow-benchmark` 专门验证 #36：固定使用默认纸片真实的透明窗口路径，在同一个空纸片窗口上依次对比旧整块 `DropShadowEffect`、当前轻量阴影和完全无阴影，使用相同的 160 步原生窗口尺寸轨迹采集进程 CPU、DWM CPU、缩放消息间隔、布局次数和几何重建次数，并验证轻量阴影确实绘制到透明外边距。只做诊断，不作为 CI 性能门槛。
