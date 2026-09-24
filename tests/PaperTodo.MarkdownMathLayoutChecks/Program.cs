@@ -29,6 +29,21 @@ internal static class Program
 
     private static void VectorRendererUsesGlyphRuns()
     {
+        var assembly = typeof(MarkdownMathRenderer).Assembly;
+        var resources = assembly.GetManifestResourceNames();
+        Require(
+            resources.Contains("PaperTodo.Native.papertodo_math.dll", StringComparer.Ordinal),
+            "native math bridge must be embedded in the PaperTodo assembly");
+        Require(
+            resources.Count(name => name.StartsWith("PaperTodo.MathFonts.", StringComparison.Ordinal)) == 19,
+            "all 19 fixed KaTeX TTFs must be embedded in the PaperTodo assembly");
+        Require(
+            !File.Exists(Path.Combine(AppContext.BaseDirectory, "papertodo_math.dll")),
+            "math layout test must exercise the embedded native bridge, not a loose sidecar");
+        Require(
+            !Directory.Exists(Path.Combine(AppContext.BaseDirectory, "math-fonts")),
+            "math layout test must exercise embedded fonts, not loose font sidecars");
+
         Require(
             MarkdownMathRenderer.TryRender(
                 @"\frac{a+b}{c}",
