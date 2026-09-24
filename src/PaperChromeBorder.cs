@@ -99,7 +99,7 @@ internal class PaperChromeBorder : Border
         // expanded paper uses almost the full gutter, while the tighter capsule shadow
         // intentionally occupies less.
         var extent = Math.Clamp(blurRadius * 0.55, 2.0, 7.75);
-        var ringCount = Math.Clamp((int)Math.Ceiling(extent), 4, 8);
+        var ringCount = Math.Clamp((int)Math.Ceiling(extent), 4, 5);
         var step = extent / ringCount;
 
         // WPF DropShadowEffect's default direction is visually down/right. A small diagonal
