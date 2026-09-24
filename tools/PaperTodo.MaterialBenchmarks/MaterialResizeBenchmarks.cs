@@ -15,8 +15,11 @@ using PaperTodo;
 internal static class MaterialResizeBenchmarks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
 
-    private sealed record SizeSample(double Milliseconds, int Width, int Height, int CursorX, int CursorY);
+    private sealed record SizeSample(double Milliseconds, int Width, int Height);
 
     private sealed record Measurement(
         bool ShadowEnabled,
@@ -27,11 +30,9 @@ internal static class MaterialResizeBenchmarks
         long UiAllocatedBytes,
         long ProcessAllocatedBytes,
         int NativeSizeMessages,
-        int EnterSizeMove,
-        int ExitSizeMove,
         long Layouts,
         int GeometryBuilds,
-        double InputIntervalMedianMs,
+        double DriverIntervalMedianMs,
         double ResizeIntervalMedianMs,
         double ResizeIntervalP95Ms,
         int FinalWidth,
@@ -55,7 +56,6 @@ internal static class MaterialResizeBenchmarks
         controller.State.ResizeGripMode = ResizeGripModes.Standard;
         Theme.Invalidate();
 
-        GetCursorPos(out var oldCursor);
         var timerChanged = timeBeginPeriod(1) == 0;
         var results = new List<Measurement>();
         var paper = new PaperData
@@ -82,8 +82,6 @@ internal static class MaterialResizeBenchmarks
                 "default paper benchmark must use the transparent WPF window path");
             Program.Assert(!window.IsNativeMicaEffective,
                 "default paper benchmark must not activate a native backdrop");
-            Program.Assert(window.ResizeMode is ResizeMode.CanResize or ResizeMode.CanResizeWithGrip,
-                "default paper benchmark must remain resizable");
 
             var chrome = (UIElement)typeof(PaperWindow)
                 .GetField("_paperChrome", Private)!.GetValue(window)!;
@@ -114,8 +112,6 @@ internal static class MaterialResizeBenchmarks
         }
         finally
         {
-            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-            SetCursorPos(oldCursor.X, oldCursor.Y);
             if (timerChanged) timeEndPeriod(1);
             window.CloseForReal();
             controller.State.Papers.Remove(paper);
@@ -138,9 +134,8 @@ internal static class MaterialResizeBenchmarks
                 Runtime = RuntimeInformation.FrameworkDescription,
                 Processors = Environment.ProcessorCount,
                 RenderTier = RenderCapability.Tier >> 16,
-                ScreenWidth = SystemParameters.PrimaryScreenWidth,
-                ScreenHeight = SystemParameters.PrimaryScreenHeight,
-                Scope = "Issue #36. Real mouse bottom-right resizing of one empty production default-paper HWND. Same HWND/content/input path; only _paperChrome.Effect alternates between the production DropShadowEffect and null. Diagnostic only, not a performance gate.",
+                DragFullWindows = SystemParameters.DragFullWindows,
+                Scope = "Issue #36. One empty production default-paper HWND receives the same 160-step native SetWindowPos size trajectory. Same HWND/content/timing; only _paperChrome.Effect alternates between the production DropShadowEffect and null. This bypasses hosted Windows' outline-only interactive resize while retaining real HWND resize, WPF layout/render and DWM work. Diagnostic only, not a performance gate.",
                 Summary = new
                 {
                     ShadowProcessCpuMedianMs = shadowCpu,
@@ -173,25 +168,17 @@ internal static class MaterialResizeBenchmarks
         var source = HwndSource.FromHwnd(hwnd)!;
         var content = window.Content;
         Program.Assert(GetWindowRect(hwnd, out var initial), "read initial resize bounds");
-        Program.Assert(
-            initial.Right + 240 < GetSystemMetrics(0) &&
-            initial.Bottom + 160 < GetSystemMetrics(1),
-            "resize benchmark requires enough screen room for the fixed trajectory");
 
         long layouts = 0;
         EventHandler layout = (_, _) => layouts++;
         window.LayoutUpdated += layout;
         var samples = new List<SizeSample>(200);
         var nativeSizeMessages = 0;
-        var enters = 0;
-        var exits = 0;
         var previous = initial;
         var watch = Stopwatch.StartNew();
 
         HwndSourceHook hook = (IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
         {
-            if (msg == 0x0231) enters++;
-            if (msg == 0x0232) exits++;
             if (msg == 0x0047 && GetWindowRect(h, out var bounds))
             {
                 var width = bounds.Right - bounds.Left;
@@ -200,13 +187,7 @@ internal static class MaterialResizeBenchmarks
                     height != previous.Bottom - previous.Top)
                 {
                     nativeSizeMessages++;
-                    GetCursorPos(out var cursor);
-                    samples.Add(new(
-                        watch.Elapsed.TotalMilliseconds,
-                        width,
-                        height,
-                        cursor.X,
-                        cursor.Y));
+                    samples.Add(new(watch.Elapsed.TotalMilliseconds, width, height));
                 }
                 previous = bounds;
             }
@@ -214,11 +195,8 @@ internal static class MaterialResizeBenchmarks
         };
         source.AddHook(hook);
 
-        var startX = initial.Right - 3;
-        var startY = initial.Bottom - 3;
-        Program.Assert(SetCursorPos(startX, startY), "position resize cursor");
-        Wait(80);
-
+        var initialWidth = initial.Right - initial.Left;
+        var initialHeight = initial.Bottom - initial.Top;
         var allocatedBefore = GC.GetTotalAllocatedBytes(true);
         var uiAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var geometryBefore = surfaces.Sum(x => x.GeometryBuildCount);
@@ -230,37 +208,36 @@ internal static class MaterialResizeBenchmarks
         var driver = Task.Run(() =>
         {
             var times = new double[160];
-            try
+            for (var i = 0; i < times.Length; i++)
             {
-                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(45);
-                for (var i = 0; i < times.Length; i++)
+                var t = (i + 1d) / times.Length;
+                var width = initialWidth + (int)Math.Round(220 * t);
+                var height = initialHeight + (int)Math.Round(140 * t);
+                if (!SetWindowPos(
+                    hwnd,
+                    IntPtr.Zero,
+                    0,
+                    0,
+                    width,
+                    height,
+                    SwpNoMove | SwpNoZOrder | SwpNoActivate))
                 {
-                    var t = (i + 1d) / times.Length;
-                    var x = startX + (int)Math.Round(220 * t);
-                    var y = startY + (int)Math.Round(140 * t);
-                    if (!SetCursorPos(x, y))
-                        throw new InvalidOperationException("SetCursorPos failed during resize");
-                    times[i] = watch.Elapsed.TotalMilliseconds;
-                    Thread.Sleep(8);
+                    throw new InvalidOperationException("SetWindowPos failed during resize benchmark");
                 }
-                Thread.Sleep(35);
-                return times;
+                times[i] = watch.Elapsed.TotalMilliseconds;
+                Thread.Sleep(8);
             }
-            finally
-            {
-                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-            }
+            return times;
         });
 
         try
         {
-            while (!driver.IsCompleted && watch.Elapsed.TotalSeconds < 15)
+            while (!driver.IsCompleted && watch.Elapsed.TotalSeconds < 20)
                 Wait(10);
 
-            Program.Assert(driver.IsCompleted, "mouse resize ends after release");
-            var inputTimes = driver.GetAwaiter().GetResult();
-            Wait(70);
+            Program.Assert(driver.IsCompleted, "native resize driver completes");
+            var driverTimes = driver.GetAwaiter().GetResult();
+            Wait(100);
 
             var elapsed = watch.Elapsed.TotalMilliseconds;
             var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpuBefore).TotalMilliseconds;
@@ -272,12 +249,12 @@ internal static class MaterialResizeBenchmarks
             Program.Assert(GetWindowRect(hwnd, out var final), "read final resize bounds");
             var finalWidth = final.Right - final.Left;
             var finalHeight = final.Bottom - final.Top;
-            Program.Assert(samples.Count >= 35,
-                $"real resize changed HWND repeatedly: shadow={shadowEnabled}, samples={samples.Count}");
+            Program.Assert(samples.Count >= 120,
+                $"native resize changed HWND repeatedly: shadow={shadowEnabled}, samples={samples.Count}");
             Program.Assert(
-                finalWidth >= initial.Right - initial.Left + 170 &&
-                finalHeight >= initial.Bottom - initial.Top + 100,
-                $"real resize reached target extent: shadow={shadowEnabled}, final={finalWidth}x{finalHeight}");
+                finalWidth >= initialWidth + 210 &&
+                finalHeight >= initialHeight + 130,
+                $"native resize reached target extent: shadow={shadowEnabled}, final={finalWidth}x{finalHeight}");
             Program.Assert(
                 ReferenceEquals(content, window.Content) &&
                 new WindowInteropHelper(window).Handle == hwnd,
@@ -285,8 +262,8 @@ internal static class MaterialResizeBenchmarks
 
             var resizeIntervals = samples.Zip(
                 samples.Skip(1), (a, b) => b.Milliseconds - a.Milliseconds).ToArray();
-            var inputIntervals = inputTimes.Zip(
-                inputTimes.Skip(1), (a, b) => b - a).ToArray();
+            var driverIntervals = driverTimes.Zip(
+                driverTimes.Skip(1), (a, b) => b - a).ToArray();
 
             var measurement = new Measurement(
                 shadowEnabled,
@@ -297,11 +274,9 @@ internal static class MaterialResizeBenchmarks
                 uiBytes,
                 processBytes,
                 nativeSizeMessages,
-                enters,
-                exits,
                 layouts,
                 geometryBuilds,
-                Percentile(inputIntervals, .5),
+                Percentile(driverIntervals, .5),
                 Percentile(resizeIntervals, .5),
                 Percentile(resizeIntervals, .95),
                 finalWidth,
@@ -319,7 +294,6 @@ internal static class MaterialResizeBenchmarks
         {
             source.RemoveHook(hook);
             window.LayoutUpdated -= layout;
-            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
         }
     }
 
@@ -396,13 +370,6 @@ internal static class MaterialResizeBenchmarks
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct NativePoint
-    {
-        internal int X;
-        internal int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
     {
         internal int Left;
@@ -412,19 +379,17 @@ internal static class MaterialResizeBenchmarks
     }
 
     [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out NativePoint point);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetCursorPos(int x, int y);
-
-    [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
 
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
-
-    [DllImport("user32.dll")]
-    private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(
+        IntPtr hwnd,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
 
     [DllImport("winmm.dll")]
     private static extern uint timeBeginPeriod(uint value);
