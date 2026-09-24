@@ -162,8 +162,8 @@ internal sealed partial class MarkdownSemanticPresentation
         }
         else
         {
-            // The bitmap is cached independently of the viewport, but its WPF Image element is
-            // rescaled to the current available width.
+            // The frozen WPF drawing is cached independently of the viewport; only its vector
+            // presentation scale changes with the available width.
             ScheduleRedraw();
         }
     }
@@ -203,8 +203,13 @@ internal sealed partial class MarkdownSemanticPresentation
     /// </summary>
     private void SyncMathRevealRedraw()
     {
+        if (!_mathPresentationAttached)
+        {
+            return;
+        }
+
         MarkdownSemanticSpan? next = null;
-        if (FullRevealEnabled && TryGetMathSpanAtOffset(CaretReveal.CaretOffset, out var found))
+        if (RevealEnabled && TryGetMathSpanAtOffset(CaretReveal.CaretOffset, out var found))
         {
             next = found;
         }
@@ -214,9 +219,13 @@ internal sealed partial class MarkdownSemanticPresentation
             return;
         }
 
+        var previous = _lastRevealedMathSpan;
         _lastRevealedMathSpan = next;
-        SyncMathCollapsedLines();
-        ScheduleRedraw();
+        if (previous.HasValue || next.HasValue)
+        {
+            SyncMathCollapsedLines();
+            ScheduleRedraw();
+        }
     }
 
     private bool IsMathSpanRevealed(MarkdownSemanticSpan span)
@@ -231,7 +240,7 @@ internal sealed partial class MarkdownSemanticPresentation
     }
 
     private bool IsMathSpanCurrentlyRevealed(MarkdownSemanticSpan span) =>
-        FullRevealEnabled &&
+        RevealEnabled &&
         MarkdownSemanticReveal.RevealRange(CaretReveal, span.Start, span.End);
 
     private static bool SameMathRange(
@@ -242,6 +251,31 @@ internal sealed partial class MarkdownSemanticPresentation
          (left.Value.Start == right!.Value.Start &&
           left.Value.End == right.Value.End &&
           left.Value.Kind == right.Value.Kind));
+
+    private bool TryGetMathSpanIntersectingRange(
+        int start,
+        int end,
+        out MarkdownSemanticSpan span)
+    {
+        span = default;
+        if (end <= start || !TryCurrentSnapshot(out var snapshot))
+        {
+            return false;
+        }
+
+        foreach (var candidate in snapshot.Spans)
+        {
+            if (IsMathSpan(candidate) &&
+                candidate.Start < end &&
+                candidate.End > start)
+            {
+                span = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private bool TryGetMathSpanAtOffset(int offset, out MarkdownSemanticSpan span)
     {
