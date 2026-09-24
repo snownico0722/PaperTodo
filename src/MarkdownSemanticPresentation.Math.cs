@@ -17,6 +17,7 @@ internal sealed partial class MarkdownSemanticPresentation
     private MarkdownSemanticSpan? _lastRevealedMathSpan;
     private bool _syncingMathCollapsedLines;
     private bool _mathCollapseSyncQueued;
+    private bool _mathPresentationAttached;
 
     private readonly record struct MathCollapseKey(int Start, int End);
 
@@ -26,10 +27,29 @@ internal sealed partial class MarkdownSemanticPresentation
         bool ShouldFold);
 
     private bool RenderMath =>
-        ApplyMarkdownStyle && (_editor.IsPreviewMode || IsFullMode);
+        _mathPresentationAttached &&
+        ApplyMarkdownStyle &&
+        (_editor.IsPreviewMode || IsFullMode);
+
+    private void EnsureMathPresentationAttachedIfNeeded()
+    {
+        if (_disposed ||
+            _mathPresentationAttached ||
+            !TryCurrentSnapshot(out var snapshot) ||
+            !snapshot.Spans.Any(IsMathSpan))
+        {
+            return;
+        }
+
+        AttachMathPresentation();
+    }
 
     private void AttachMathPresentation()
     {
+        if (_mathPresentationAttached)
+        {
+            return;
+        }
         // Let AvalonEdit own physical-line folding and height-tree bookkeeping. Formula folding is
         // presentation-only, so hide the gutter and put PaperTodo's replacement generator first.
         _mathFoldingManager = FoldingManager.Install(_editor.TextArea);
@@ -53,11 +73,16 @@ internal sealed partial class MarkdownSemanticPresentation
         // collapse cell. Multi-line formulas are allowed to consume newlines only after their
         // continuation lines have been registered in AvalonEdit's height tree below.
         _editor.TextArea.TextView.ElementGenerators.Insert(0, _mathElementGenerator);
+        _mathPresentationAttached = true;
         SyncMathCollapsedLines();
     }
 
     private void DetachMathPresentation()
     {
+        if (!_mathPresentationAttached)
+        {
+            return;
+        }
         _semanticDocument.SnapshotChanged -= OnMathSnapshotChanged;
         _editor.TextArea.Caret.PositionChanged -= OnMathCaretPositionChanged;
         _editor.GotKeyboardFocus -= OnMathEditorGotFocus;
@@ -80,6 +105,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
         _lastRevealedMathSpan = null;
         _mathCollapseSyncQueued = false;
+        _mathPresentationAttached = false;
     }
 
     private void OnMathSnapshotChanged(MarkdownSourceChange? change)
