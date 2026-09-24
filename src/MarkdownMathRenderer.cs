@@ -714,8 +714,9 @@ internal static class MarkdownMathRenderer
         var blue = ToByte(b);
         var alpha = ToByte(a);
         var key = ((uint)alpha << 24) | ((uint)red << 16) | ((uint)green << 8) | blue;
-        if (cache.TryGetValue(key, out brush))
+        if (cache.TryGetValue(key, out var cached))
         {
+            brush = cached;
             return true;
         }
 
