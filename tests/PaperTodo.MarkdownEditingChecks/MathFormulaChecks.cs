@@ -208,7 +208,7 @@ internal static partial class Program
             var box = editor.Box;
             var span = MathSpans(MarkdownSemanticSnapshot.Parse(source)).Single();
 
-            box.SetMarkdownRenderMode(MarkdownRenderModes.Enhanced);
+            box.SetMarkdownRenderMode(MarkdownRenderModes.Basic);
             box.SetPreviewMode(false);
             Pump();
             LayoutMathEditor(box);
