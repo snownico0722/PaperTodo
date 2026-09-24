@@ -43,7 +43,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore .\PaperTodo.csproj
+        run: dotnet restore .\PaperTodo.csproj --configfile .\NuGet.Config
 
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
@@ -51,11 +51,14 @@ jobs:
       - name: Run regression checks
         run: ./tools/testing/Run-Checks.ps1 -Group regression
 
+      - name: Restore native material and skin checks
+        run: dotnet restore .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj --configfile .\NuGet.Config
+
       - name: Native material and skin checks
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
           PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
-        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
+        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release --no-restore
 
       - name: Upload material visual evidence
         if: always()

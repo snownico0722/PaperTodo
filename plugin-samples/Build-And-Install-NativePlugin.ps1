@@ -83,14 +83,23 @@ $stagingDirectory = Join-Path (
 $artifactsDirectory = Join-Path $stagingDirectory "artifacts"
 $publishDirectory = Join-Path $stagingDirectory "publish"
 $packageDirectory = Join-Path $stagingDirectory "package"
+$nugetConfig = Join-Path $PaperTodoRoot "NuGet.Config"
 
 try {
     New-Item -ItemType Directory -Force -Path $publishDirectory, $packageDirectory | Out-Null
+
+    & dotnet restore $ProjectPath `
+        -r $RuntimeIdentifier `
+        --configfile $nugetConfig
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native plugin restore failed with exit code $LASTEXITCODE."
+    }
 
     & dotnet publish $ProjectPath `
         -c Release `
         -r $RuntimeIdentifier `
         --self-contained false `
+        --no-restore `
         --artifacts-path $artifactsDirectory `
         -o $publishDirectory `
         /p:DebugType=none `
