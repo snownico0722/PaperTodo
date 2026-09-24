@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -48,18 +48,6 @@ jobs:
       - name: Build native math library
         run: .\native\math\build.ps1 -Configuration Release -ForceRebuild
 
-      - name: Sync native math v2 binary
-        if: contains(github.event.head_commit.message, '[sync-native]')
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- native/math/bin/win-x64/papertodo_math.dll
-          if (git diff --cached --quiet) {
-            Write-Output "Native DLL already matches the generated v2 binary."
-            exit 0
-          }
-          git commit -m "chore(math): sync generated v2 native library"
-          git push origin HEAD:${{ github.ref_name }}
       - name: Upload native math build
         uses: actions/upload-artifact@v6
         with:
