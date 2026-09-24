@@ -63,8 +63,7 @@ internal sealed class MarkdownSemanticDocument : IDisposable
         var source = _document.Text;
         MarkdownSemanticSnapshot next;
         MarkdownSourceChange? change = null;
-        if (source.Length < FullParseThresholdChars ||
-            MarkdownMathIncremental.ChangeMayAffectDelimiterState(_snapshotSource, source))
+        if (source.Length < FullParseThresholdChars)
         {
             next = MarkdownSemanticSnapshot.Parse(source);
         }
