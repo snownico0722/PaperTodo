@@ -6,13 +6,19 @@ using System.Windows.Media.Animation;
 
 namespace PaperTodo;
 
-// The outer Border still owns the shell's original layout and shadow. Only the
-// empty background Border is arranged shorter; the editor never changes size.
+// The outer Border still owns the shell's original layout. Its ordinary paper shadow is
+// painted as a handful of cached soft rings instead of a full-surface DropShadowEffect.
+// Only the empty background Border is arranged shorter; the editor never changes size.
 internal class PaperChromeBorder : Border
 {
     private readonly Border _surface = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     private Geometry? _contentClip;
     private int _animationGeneration;
+    private double _surfaceInset;
+    private Pen[] _lightweightShadowPens = Array.Empty<Pen>();
+    private double _lightweightShadowStep;
+    private double _lightweightShadowDepthX;
+    private double _lightweightShadowDepthY;
 
     internal static readonly DependencyProperty HeaderOpacityProperty = DependencyProperty.Register(
         nameof(HeaderOpacity), typeof(double), typeof(PaperChromeBorder),
@@ -23,6 +29,7 @@ internal class PaperChromeBorder : Border
 
     internal double HeaderOpacity => (double)GetValue(HeaderOpacityProperty);
     internal double HeaderExtent { get; private set; }
+    internal bool HasLightweightShadow => _lightweightShadowPens.Length > 0;
 
     protected override int VisualChildrenCount => base.VisualChildrenCount + 1;
     protected override Visual GetVisualChild(int index) =>
@@ -37,8 +44,104 @@ internal class PaperChromeBorder : Border
 
     protected override void OnRender(DrawingContext drawingContext)
     {
+        DrawLightweightShadow(drawingContext);
         if (_surface.Visibility != Visibility.Visible)
             base.OnRender(drawingContext);
+    }
+
+    // The shadow lives in the existing transparent window gutter. Drawing several frozen,
+    // non-overlapping rings is size-independent work: resize changes only their rectangles,
+    // never a bitmap/effect surface. The paper itself paints afterwards and hides the inner
+    // half of every ring, naturally producing the same outside-only silhouette.
+    private void DrawLightweightShadow(DrawingContext drawingContext)
+    {
+        if (_lightweightShadowPens.Length == 0 ||
+            RenderSize.Width <= 0 ||
+            RenderSize.Height - _surfaceInset <= 0)
+        {
+            return;
+        }
+
+        var baseRect = new Rect(
+            _lightweightShadowDepthX,
+            _surfaceInset + _lightweightShadowDepthY,
+            RenderSize.Width,
+            RenderSize.Height - _surfaceInset);
+        var radius = Math.Max(0, CornerRadius.TopLeft);
+
+        for (var i = 0; i < _lightweightShadowPens.Length; i++)
+        {
+            var expand = (i + 0.5) * _lightweightShadowStep;
+            var rect = baseRect;
+            rect.Inflate(expand, expand);
+            var ringRadius = radius + expand;
+            drawingContext.DrawRoundedRectangle(
+                null,
+                _lightweightShadowPens[i],
+                rect,
+                ringRadius,
+                ringRadius);
+        }
+    }
+
+    internal void SetLightweightShadow(double blurRadius, double depth, double opacity)
+    {
+        blurRadius = Math.Clamp(blurRadius, 0, 32);
+        depth = Math.Clamp(depth, 0, 16);
+        opacity = Math.Clamp(opacity, 0, 1);
+        if (blurRadius <= 0 || opacity <= 0)
+        {
+            ClearLightweightShadow();
+            return;
+        }
+
+        // The existing paper HWND reserves an 8-DIP gutter. Keep every ring within it:
+        // expanded paper uses almost the full gutter, while the tighter capsule shadow
+        // intentionally occupies less.
+        var extent = Math.Clamp(blurRadius * 0.55, 2.0, 7.75);
+        var ringCount = Math.Clamp((int)Math.Ceiling(extent), 4, 8);
+        var step = extent / ringCount;
+
+        // WPF DropShadowEffect's default direction is visually down/right. A small diagonal
+        // shift retains that weight without making the lightweight rings depend on window size.
+        var diagonalDepth = depth / Math.Sqrt(2);
+        var pens = new Pen[ringCount];
+        for (var i = 0; i < ringCount; i++)
+        {
+            var t = ringCount == 1 ? 0 : (double)i / (ringCount - 1);
+            // Dense at the contact edge, then quickly fade. Rings do not overlap, so their
+            // individual alpha directly describes the local shadow strength.
+            var falloff = Math.Pow(1 - t, 1.45);
+            var alpha = (byte)Math.Clamp(
+                Math.Round(255 * opacity * (0.12 + 0.36 * falloff)),
+                0,
+                255);
+            var brush = new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0));
+            brush.Freeze();
+            var pen = new Pen(brush, step);
+            pen.Freeze();
+            pens[i] = pen;
+        }
+
+        _lightweightShadowPens = pens;
+        _lightweightShadowStep = step;
+        _lightweightShadowDepthX = diagonalDepth;
+        _lightweightShadowDepthY = diagonalDepth;
+        InvalidateVisual();
+    }
+
+    internal void ClearLightweightShadow()
+    {
+        if (_lightweightShadowPens.Length == 0)
+        {
+            return;
+        }
+
+        _lightweightShadowPens = Array.Empty<Pen>();
+        _lightweightShadowStep = 0;
+        _lightweightShadowDepthX = 0;
+        _lightweightShadowDepthY = 0;
+        InvalidateVisual();
     }
 
     protected override HitTestResult? HitTestCore(PointHitTestParameters parameters)
@@ -80,6 +183,7 @@ internal class PaperChromeBorder : Border
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
             inset = Math.Round(inset * dpi) / dpi;
         }
+        _surfaceInset = inset;
         if (inset <= 0 || size.Width <= 0 || size.Height <= 0)
         {
             _surface.Visibility = Visibility.Collapsed;
