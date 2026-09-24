@@ -14,7 +14,7 @@ internal static class Program
             Console.WriteLine("  --drag-benchmark <json>");
             Console.WriteLine("  --drag-snapshot-timing <json>");
             Console.WriteLine("  --resize-shadow-benchmark <json>");
-            Console.WriteLine("Run in Release on Windows. Drag/resize modes use real mouse input and an isolated fixture.");
+            Console.WriteLine("Run in Release on Windows. Drag modes use real mouse input; resize uses isolated native HWND sizing.");
             return 0;
         }
 
