@@ -13,6 +13,8 @@ internal static class MaterialPresentationChecks
 {
     internal static void Run(AppController controller)
     {
+        CheckDefaultPaperLightweightShadow(controller);
+
         var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
         var ordinary = BackgroundCaptureLayout.Create(
             new Int32Rect(100, 100, 560, 440),
@@ -107,6 +109,71 @@ internal static class MaterialPresentationChecks
             Theme.Invalidate();
         }
     }
+    private static void CheckDefaultPaperLightweightShadow(AppController controller)
+    {
+        var nativeProperty = typeof(AppController).GetProperty(
+            "UsesNativeMicaWindows",
+            Program.Private)!;
+        var savedNative = (bool)nativeProperty.GetValue(controller)!;
+        var saved = (
+            controller.State.PaperSkin,
+            controller.State.Theme,
+            controller.State.UseCapsuleMode);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo,
+            Title = "Lightweight shadow regression",
+            X = 80,
+            Y = 80,
+            Width = 360,
+            Height = 280
+        };
+        PaperWindow? window = null;
+        try
+        {
+            nativeProperty.SetValue(controller, false);
+            controller.State.PaperSkin = PaperSkins.Paper;
+            controller.State.Theme = "light";
+            controller.State.UseCapsuleMode = true;
+            Theme.Invalidate();
+
+            controller.State.Papers.Add(paper);
+            window = new PaperWindow(paper, controller);
+            window.Show();
+            Wait(120);
+
+            var chrome = (PaperChromeBorder)typeof(PaperWindow)
+                .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            Program.Assert(
+                window.AllowsTransparency &&
+                chrome.Effect == null &&
+                chrome.HasLightweightShadow,
+                "default floating paper uses lightweight shadow instead of DropShadowEffect");
+
+            window.SetCollapsedState(true, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "default capsule keeps the lightweight shadow path");
+
+            window.SetCollapsedState(false, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "expanded default paper restores the lightweight shadow path");
+        }
+        finally
+        {
+            window?.CloseForReal();
+            controller.State.Papers.Remove(paper);
+            (controller.State.PaperSkin,
+                controller.State.Theme,
+                controller.State.UseCapsuleMode) = saved;
+            nativeProperty.SetValue(controller, savedNative);
+            Theme.Invalidate();
+        }
+    }
+
     private static void CheckRealRightClicks(AppController controller)
     {
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "Right-click regression",
