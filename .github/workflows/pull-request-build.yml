@@ -4,6 +4,7 @@ on:
   push:
     branches-ignore:
       - main
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -14,6 +15,7 @@ jobs:
     name: Build PaperTodo
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       contains(github.event.head_commit.message, '[ci]') ||
       contains(github.event.head_commit.message, '[debug-ci]')
     concurrency:
