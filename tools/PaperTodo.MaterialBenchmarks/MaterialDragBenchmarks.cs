@@ -25,7 +25,7 @@ internal static class MaterialDragBenchmarks
     internal static int RunSnapshotTimingIsolated(string output) =>
         RunIsolatedCore("--drag-snapshot-fixture", output);
 
-    internal static int RunIsolatedCore(string childMode, string output)
+    private static int RunIsolatedCore(string childMode, string output)
     {
         var directory = Path.Combine(Path.GetTempPath(), "PaperTodo.DragChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
