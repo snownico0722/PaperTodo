@@ -62,10 +62,6 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         _mathElementGenerator = new MathElementGenerator(this);
-        _semanticDocument.SnapshotChanged += OnMathSnapshotChanged;
-        _editor.TextArea.Caret.PositionChanged += OnMathCaretPositionChanged;
-        _editor.GotKeyboardFocus += OnMathEditorGotFocus;
-        _editor.CaretRevealGestureEnded += OnMathCaretRevealGestureEnded;
         _editor.SizeChanged += OnMathHostSizeChanged;
         _editor.TextArea.TextView.VisualLinesChanged += OnMathVisualLinesChanged;
 
@@ -83,10 +79,6 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             return;
         }
-        _semanticDocument.SnapshotChanged -= OnMathSnapshotChanged;
-        _editor.TextArea.Caret.PositionChanged -= OnMathCaretPositionChanged;
-        _editor.GotKeyboardFocus -= OnMathEditorGotFocus;
-        _editor.CaretRevealGestureEnded -= OnMathCaretRevealGestureEnded;
         _editor.SizeChanged -= OnMathHostSizeChanged;
         _editor.TextArea.TextView.VisualLinesChanged -= OnMathVisualLinesChanged;
         if (_mathElementGenerator != null)
@@ -108,45 +100,15 @@ internal sealed partial class MarkdownSemanticPresentation
         _mathPresentationAttached = false;
     }
 
-    private void OnMathSnapshotChanged(MarkdownSourceChange? change)
+    private void ResetMathPresentationState()
     {
-        if (_disposed)
+        if (!_mathPresentationAttached)
         {
             return;
         }
 
         _lastRevealedMathSpan = null;
         SyncMathCollapsedLines();
-    }
-
-    private void OnMathCaretPositionChanged(object? sender, EventArgs e)
-    {
-        if (_disposed || _revealGestureFrozen)
-        {
-            return;
-        }
-
-        // MarkdownSemanticPresentation subscribed its normal caret handler before this one, so
-        // CaretReveal already contains the new offset when this handler runs.
-        SyncMathRevealRedraw();
-    }
-
-    private void OnMathEditorGotFocus(object? sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (_disposed || _revealGestureFrozen)
-        {
-            return;
-        }
-
-        SyncMathRevealRedraw();
-    }
-
-    private void OnMathCaretRevealGestureEnded()
-    {
-        if (!_disposed)
-        {
-            SyncMathRevealRedraw();
-        }
     }
 
     private void OnMathHostSizeChanged(object sender, SizeChangedEventArgs e)
