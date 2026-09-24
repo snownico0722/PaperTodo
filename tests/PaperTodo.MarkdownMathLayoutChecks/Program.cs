@@ -16,7 +16,8 @@ internal static class Program
             VectorRendererUsesGlyphRuns();
             PreviewingMultilineFormulaDoesNotSkipUncollapsedLines();
             FullModeRevealRestoresAndRecollapsesSource();
-            Console.WriteLine("Markdown math layout checks passed: 3");
+            TransientFindRevealRestoresAndRecollapsesSource();
+            Console.WriteLine("Markdown math layout checks passed: 4");
             return 0;
         }
         catch (Exception ex)
@@ -115,6 +116,33 @@ internal static class Program
         Require(HasMathElement(box, span), "leaving formula restores collapsed math element");
     }
 
+    private static void TransientFindRevealRestoresAndRecollapsesSource()
+    {
+        const string source = "before\n$\nx^2+y^2\n$\nafter";
+        using var editor = new Editor(source);
+        var box = editor.Box;
+        var span = MathSpan(source);
+
+        box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
+        box.SetPreviewMode(true);
+        Pump();
+        Layout(box);
+        Require(HasMathElement(box, span), "Full preview initially renders formula");
+
+        var matchOffset = source.IndexOf("x^2", StringComparison.Ordinal);
+        editor.SetTransientFindReveal(matchOffset, 3);
+        Pump();
+        Layout(box);
+        Require(!HasMathElement(box, span),
+            "find hit inside rendered formula reveals exact Markdown source");
+
+        editor.SetTransientFindReveal(null, 0);
+        Pump();
+        Layout(box);
+        Require(HasMathElement(box, span),
+            "clearing find reveal restores folded vector formula");
+    }
+
     private static MarkdownSemanticSpan MathSpan(string source)
     {
         var matches = MarkdownSemanticSnapshot.Parse(source)
@@ -177,6 +205,9 @@ internal static class Program
             Box.SetSemanticDocument(_document);
             _presentation = new MarkdownSemanticPresentation(Box, _document);
         }
+
+        public void SetTransientFindReveal(int? offset, int length) =>
+            _presentation.SetTransientFindReveal(offset, length);
 
         public void Dispose()
         {
