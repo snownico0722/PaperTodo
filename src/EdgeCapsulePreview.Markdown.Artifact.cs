@@ -145,6 +145,11 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
 
         var source = string.Join('\n', content.Lines.Select(line => line.Text));
+        if (!MarkdownMathScanner.MayContainDelimiter(source))
+        {
+            return result;
+        }
+
         var lineStarts = new int[content.Lines.Count];
         var cursor = 0;
         for (var index = 0; index < content.Lines.Count; index++)
