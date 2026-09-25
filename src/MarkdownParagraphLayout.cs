@@ -173,9 +173,13 @@ internal static class MarkdownParagraphLayout
                 if (piece.Math is { } mathSpec)
                 {
                     var style = request.Styles[piece.StyleIndex];
-                    var mathColor = style.Foreground is SolidColorBrush solid
-                        ? solid.Color
-                        : Theme.IsDark ? Colors.White : Colors.Black;
+                    var mathColor = style.Foreground switch
+                    {
+                        SolidColorBrush solid => solid.Color,
+                        GradientBrush gradient when gradient.GradientStops.Count > 0 =>
+                            gradient.GradientStops[0].Color,
+                        _ => Colors.Black
+                    };
                     if (MarkdownMathRenderer.TryRender(
                             mathSpec.Formula,
                             mathSpec.Display,
