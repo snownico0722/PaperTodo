@@ -37,7 +37,7 @@ internal static partial class Program
         Require(plan.Blocks.Select(b => b.Kind).Distinct().Count() == 6, "finite text/quote/list/rule/image/code vocabulary is covered");
         Require(plan.Styles.All(s => s.Foreground.IsFrozen && (s.Background?.IsFrozen ?? true)), "layout snapshot carries only frozen resources");
 
-        var mathSource = "before $x^2$ after\\n\u0024\u0024\\n\\\\frac{a+b}{c}\\n\u0024\u0024\\nafter";
+        var mathSource = "before $x^2$ after\n\u0024\u0024\n\\frac{a+b}{c}\n\u0024\u0024\nafter";
         var mathContent = Renderer.CaptureContent(mathSource, MarkdownRenderModes.Full);
         var mathPlan = Renderer.CaptureArtifactPlan(root, mathContent, 400, 1);
         Require(mathPlan.Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
@@ -48,15 +48,15 @@ internal static partial class Program
                 .Any(piece => piece.Math is { Formula: "x^2", Display: false }),
             "inline math stays inside the ordinary paragraph layout");
         Require(Renderer.CaptureArtifactPlan(root,
-                Renderer.CaptureContent("\u0024\u0024\\\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Basic), 400, 1)
+                Renderer.CaptureContent("\u0024\u0024\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Basic), 400, 1)
                 .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
             "Basic edge preview renders standalone formulas too");
         Require(!Renderer.CaptureArtifactPlan(root,
-                Renderer.CaptureContent("\u0024\u0024\\\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Off), 400, 1)
+                Renderer.CaptureContent("\u0024\u0024\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Off), 400, 1)
                 .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
             "Off mode keeps standalone formulas as source");
         Require(!Renderer.CaptureArtifactPlan(root,
-                Renderer.CaptureContent("```text\n$\\frac{1}{2}$\n```", MarkdownRenderModes.Full), 400, 1)
+                Renderer.CaptureContent("```text\n\u0024\u0024\\frac{1}{2}\u0024\u0024\n```", MarkdownRenderModes.Full), 400, 1)
                 .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
             "formula-looking text inside fenced code stays literal");
         var mathPanel = new StackPanel();
