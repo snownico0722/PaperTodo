@@ -47,6 +47,18 @@ internal static partial class Program
                 .SelectMany(block => block.Pieces)
                 .Any(piece => piece.Math is { Formula: "x^2", Display: false }),
             "inline math stays inside the ordinary paragraph layout");
+        Require(Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("$\\frac{1}{2}$", MarkdownRenderModes.Basic), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "Basic edge preview renders standalone formulas too");
+        Require(!Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("$\\frac{1}{2}$", MarkdownRenderModes.Off), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "Off mode keeps standalone formulas as source");
+        Require(!Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("```text\n$\\frac{1}{2}$\n```", MarkdownRenderModes.Full), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "formula-looking text inside fenced code stays literal");
         var mathPanel = new StackPanel();
         mathPanel.Resources["TextBrushKey"] = Brushes.Black;
         mathPanel.Resources["WeakTextBrushKey"] = Brushes.Gray;
