@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$nugetConfig = Join-Path $repository 'NuGet.Config'
 
 # Keep configurations explicit: a Release test of the Journal is not a Debug collector test.
 $checks = @(
@@ -51,10 +52,15 @@ try {
         Write-Host "`n=== $name ==="
         try {
             $project = "tests/PaperTodo.$($check.Project)/PaperTodo.$($check.Project).csproj"
-            $arguments = @('run', '--project', $project, '-c', $check.Configuration)
+            $restoreArguments = @('restore', $project, '--configfile', $nugetConfig)
+            if ($check.Runtime) { $restoreArguments += @('-r', $check.Runtime) }
+            & dotnet @restoreArguments
+            if ($LASTEXITCODE -ne 0) { throw "dotnet restore exited with code $LASTEXITCODE" }
+
+            $arguments = @('run', '--project', $project, '-c', $check.Configuration, '--no-restore')
             if ($check.Runtime) { $arguments += @('-r', $check.Runtime) }
             & dotnet @arguments
-            if ($LASTEXITCODE -ne 0) { throw "dotnet exited with code $LASTEXITCODE" }
+            if ($LASTEXITCODE -ne 0) { throw "dotnet run exited with code $LASTEXITCODE" }
             $passed = $true
         }
         catch { Write-Host "FAIL ${name}: $($_.Exception.Message)" }

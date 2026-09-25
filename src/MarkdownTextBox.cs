@@ -48,6 +48,12 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public event Action? ImageContextMenuClosed;
 
+    /// <summary>
+    /// Raised before a synchronous Markdown visual refresh so optional presentation layers can
+    /// update native layout state before AvalonEdit constructs replacement visual lines.
+    /// </summary>
+    internal event Action? MarkdownPresentationRefreshing;
+
     public bool IsImageContextMenuOpen { get; private set; }
 
     internal Func<ContextMenu>? ImageContextMenuFactory { get; set; }
@@ -256,6 +262,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public void RefreshVisualStyle()
     {
+        MarkdownPresentationRefreshing?.Invoke();
         Foreground = Theme.TextBrush;
         CaretBrush = _isPreviewMode || HasSelectedImageReference
             ? Brushes.Transparent

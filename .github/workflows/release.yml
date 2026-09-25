@@ -80,7 +80,7 @@ jobs:
           "framework_dependent_exe=PaperTodo-v$version-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
 
       - name: Restore
-        run: dotnet restore .\PaperTodo.csproj
+        run: dotnet restore .\PaperTodo.csproj -r win-x64 --configfile .\NuGet.Config
 
       - name: Publish release executables
         env:
@@ -98,6 +98,7 @@ jobs:
             -c Release `
             -r win-x64 `
             --self-contained true `
+            --no-restore `
             -o $selfContainedOut `
             /p:PublishSingleFile=true `
             /p:PublishReadyToRun=false `
@@ -119,6 +120,7 @@ jobs:
             -c Release `
             -r win-x64 `
             --self-contained false `
+            --no-restore `
             -o $frameworkDependentOut `
             /p:PublishSingleFile=true `
             /p:PublishReadyToRun=false `

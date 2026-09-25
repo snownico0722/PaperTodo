@@ -60,29 +60,51 @@ jobs:
           }
 
           $shortSha = $env:SOURCE_SHA.Substring(0, [Math]::Min(7, $env:SOURCE_SHA.Length))
-          $exeName = "PaperTodo-v$version-debug-test-$shortSha-win-x64-no-runtime.exe"
-          "exe_name=$exeName" >> $env:GITHUB_OUTPUT
-          "artifact_name=PaperTodo-debug-test-$shortSha" >> $env:GITHUB_OUTPUT
+          "self_contained_exe=PaperTodo-v$version-debug-test-$shortSha-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
+          "framework_dependent_exe=PaperTodo-v$version-debug-test-$shortSha-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
+          "artifact_prefix=PaperTodo-debug-test-$shortSha" >> $env:GITHUB_OUTPUT
 
       - name: Restore
-        run: dotnet restore .\PaperTodo.csproj -r win-x64
+        run: dotnet restore .\PaperTodo.csproj -r win-x64 --configfile .\NuGet.Config
 
-      - name: Publish framework-dependent single-file Debug executable
+      - name: Publish Debug test executables
         env:
-          EXE_NAME: ${{ steps.meta.outputs.exe_name }}
+          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
+          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
         run: |
-          $publishOut = Join-Path $env:RUNNER_TEMP "pr-test-debug-publish"
           $artifactDir = Join-Path $env:GITHUB_WORKSPACE "test-debug"
+          $selfContainedOut = Join-Path $env:RUNNER_TEMP "pr-test-debug-self-contained"
+          $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "pr-test-debug-no-runtime"
 
-          Remove-Item -LiteralPath $publishOut, $artifactDir -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $publishOut, $artifactDir | Out-Null
+          Remove-Item -LiteralPath $selfContainedOut, $frameworkDependentOut, $artifactDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $selfContainedOut, $frameworkDependentOut, $artifactDir | Out-Null
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Debug `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -o $selfContainedOut `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=true `
+            /p:PublishTrimmed=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=embedded `
+            /p:DebugSymbols=true
+
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") `
+            -Destination (Join-Path $artifactDir $env:SELF_CONTAINED_EXE)
 
           dotnet publish .\PaperTodo.csproj `
             -c Debug `
             -r win-x64 `
             --self-contained false `
             --no-restore `
-            -o $publishOut `
+            -o $frameworkDependentOut `
             /p:PublishSingleFile=true `
             /p:PublishReadyToRun=false `
             /p:IncludeNativeLibrariesForSelfExtract=true `
@@ -93,23 +115,77 @@ jobs:
             /p:DebugType=embedded `
             /p:DebugSymbols=true
 
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") `
+            -Destination (Join-Path $artifactDir $env:FRAMEWORK_DEPENDENT_EXE)
+
+          Get-ChildItem -LiteralPath $artifactDir -File | Sort-Object Name | Format-Table Name, Length
+
+      - name: Launch packaged math smoke
+        env:
+          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
+          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+        run: |
+          $artifactDir = Join-Path $env:GITHUB_WORKSPACE "test-debug"
+          $statePath = Join-Path $artifactDir "data.json"
+          $state = @'
+          {
+            "markdownRenderMode": "full",
+            "papers": [
+              {
+                "id": "math-package-smoke",
+                "type": "note",
+                "title": "Math Package Smoke",
+                "isVisible": true,
+                "content": "$$\\n\\\\frac{a+b}{c+d}\\n$$"
+              }
+            ]
+          }
+          '@
+
+          function Test-PackagedApp([string] $name) {
+            $exe = Join-Path $artifactDir $name
+            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+              throw "Packaged executable not found: $exe"
+            }
+
+            Set-Content -LiteralPath $statePath -Value $state -Encoding UTF8 -NoNewline
+            Remove-Item -LiteralPath (Join-Path $artifactDir "data.backup.json") -Force -ErrorAction SilentlyContinue
+
+            $process = Start-Process -FilePath $exe -WorkingDirectory $artifactDir -PassThru
+            try {
+              Start-Sleep -Seconds 5
+              if ($process.HasExited) {
+                throw "Packaged executable exited during math startup smoke: $name (code $($process.ExitCode))"
+              }
+            }
+            finally {
+              if (-not $process.HasExited) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                Wait-Process -Id $process.Id -ErrorAction SilentlyContinue
+              }
+              Remove-Item -LiteralPath $statePath, (Join-Path $artifactDir "data.backup.json") -Force -ErrorAction SilentlyContinue
+              Start-Sleep -Milliseconds 700
+            }
           }
 
-          $sourceExe = Join-Path $publishOut "PaperTodo.exe"
-          if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) {
-            throw "Published executable not found: $sourceExe"
-          }
+          Test-PackagedApp $env:SELF_CONTAINED_EXE
+          Test-PackagedApp $env:FRAMEWORK_DEPENDENT_EXE
 
-          Copy-Item -LiteralPath $sourceExe -Destination (Join-Path $artifactDir $env:EXE_NAME)
-          Get-ChildItem -LiteralPath $artifactDir -File | Format-Table Name, Length
-
-      - name: Upload Debug test executable
+      - name: Upload self-contained Debug test executable
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.meta.outputs.artifact_name }}
-          path: test-debug/${{ steps.meta.outputs.exe_name }}
+          name: ${{ steps.meta.outputs.artifact_prefix }}-self-contained
+          path: test-debug/${{ steps.meta.outputs.self_contained_exe }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload framework-dependent Debug test executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_prefix }}-no-runtime
+          path: test-debug/${{ steps.meta.outputs.framework_dependent_exe }}
           archive: false
           if-no-files-found: error
           retention-days: 1

@@ -9,6 +9,8 @@
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="Markdig" Version="1.3.2" />
+    <Compile Include="..\..\src\MarkdownMathIncremental.cs" Link="MarkdownMathIncremental.cs" />
+    <Compile Include="..\..\src\MarkdownMathScanner.cs" Link="MarkdownMathScanner.cs" />
     <Compile Include="..\..\src\MarkdownSemanticDocument.cs" Link="MarkdownSemanticDocument.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.cs" Link="MarkdownSemanticSnapshot.cs" />
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.Blocks.cs" Link="MarkdownSemanticSnapshot.Blocks.cs" />

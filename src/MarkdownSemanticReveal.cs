@@ -60,6 +60,8 @@ internal static class MarkdownSemanticReveal
             MarkdownSemanticSpanKind.Strong or
             MarkdownSemanticSpanKind.Strikethrough or
             MarkdownSemanticSpanKind.InlineCode or
+            MarkdownSemanticSpanKind.InlineMath or
+            MarkdownSemanticSpanKind.BlockMath or
             MarkdownSemanticSpanKind.HtmlContainer;
     }
 

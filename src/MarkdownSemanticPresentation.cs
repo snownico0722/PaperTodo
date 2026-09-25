@@ -47,6 +47,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _editor.CaretRevealGestureEnded += OnCaretRevealGestureEnded;
         SyncCaretReveal();
         SyncRevealFade();
+        EnsureMathPresentationAttachedIfNeeded();
         AttachMarkerSlots();
         AttachCollapseGenerator();
         RedrawAll();
@@ -135,6 +136,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             // Collapse table and colorizer both read CaretReveal, so one transient value updates
             // hidden syntax, list/task marker presentation and wrapping through the existing path.
             AlignCollapseTableToReveal(scheduleRedraw: false);
+            SyncMathRevealRedraw();
             ScheduleRedraw();
         }
     }
@@ -251,6 +253,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         SyncCaretReveal();
         SyncRevealFade();
         AlignCollapseTableToReveal(scheduleRedraw: true);
+        SyncMathRevealRedraw();
     }
 
     private void OnEditorGotFocus(object? sender, KeyboardFocusChangedEventArgs e)
@@ -270,6 +273,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         SyncCaretReveal();
         SyncRevealFade();
         AlignCollapseTableToReveal(scheduleRedraw: true);
+        SyncMathRevealRedraw();
     }
 
     private void SyncCaretReveal()
@@ -314,6 +318,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
             SyncCaretReveal();
             SyncRevealFade();
             AlignCollapseTableToReveal(scheduleRedraw: true);
+            SyncMathRevealRedraw();
         }
     }
 
@@ -321,6 +326,8 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
     {
         // 文本编辑会使标记位移：中止进行中的淡入，避免把旧 alpha 施加到新布局的标记上。
         AbortRevealFade();
+        EnsureMathPresentationAttachedIfNeeded();
+        ResetMathPresentationState();
 
         // 静态候选随 snapshot 重建：优先按语义层增量窗口局部 rebase（逐键、不整篇扫）；
         // 不满足（整篇解析/预览态等）时回退置 null，由下次 Ensure 整篇构建。
@@ -411,6 +418,7 @@ internal sealed partial class MarkdownSemanticPresentation : IDisposable
         _editor.CaretRevealGestureEnded -= OnCaretRevealGestureEnded;
         DetachMarkerSlots();
         DetachCollapseGenerator();
+        DetachMathPresentation();
         AbortRevealFade();
         var textView = _editor.TextArea.TextView;
         textView.LineTransformers.Remove(_colorizer);

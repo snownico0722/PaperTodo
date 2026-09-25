@@ -26,6 +26,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var hidden = new bool[text.Length];
         var links = new Uri?[text.Length];
         var images = new Dictionary<int, (int End, string Label)>();
+        var maths = new Dictionary<int, (int End, string Formula, bool Display)>();
         var full = mode == MarkdownRenderModes.Full;
         void Style(int start, int end, InlineStyle style)
         {
@@ -73,6 +74,12 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 Style(start, end, style);
             }
             else if (style != InlineStyle.None) Style(span.Start, span.End, style);
+            else if ((span.Kind is MarkdownSemanticSpanKind.InlineMath or MarkdownSemanticSpanKind.BlockMath) &&
+                span.Start >= 0 && span.End <= text.Length &&
+                MarkdownMathSource.TryExtract(text, span, out var formula, out var display))
+            {
+                maths[span.Start] = (span.End, formula, display);
+            }
             else if (span.Kind == MarkdownSemanticSpanKind.HtmlMarker) Syntax(span.Start, span.End);
             else if (span.Kind == MarkdownSemanticSpanKind.EscapeMarker && full) Syntax(span.Start, span.End);
             else if (span.Kind == MarkdownSemanticSpanKind.Image && span.Start >= 0 && span.End <= text.Length &&
@@ -100,6 +107,24 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         Uri? activeLink = null;
         for (var index = 0; index < text.Length;)
         {
+            if (maths.TryGetValue(index, out var math))
+            {
+                if (builder.Length > 0)
+                {
+                    yield return new InlinePiece(builder.ToString(), activeStyle, activeLink);
+                    builder.Clear();
+                }
+                activeStyle = InlineStyle.None;
+                activeLink = null;
+                yield return new InlinePiece(
+                    text[index..math.End],
+                    InlineStyle.None,
+                    null,
+                    new InlineMath(math.Formula, math.Display));
+                index = math.End;
+                continue;
+            }
+
             var style = styles[index];
             var link = links[index];
             string? replacement = null;
