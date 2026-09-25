@@ -74,7 +74,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                 Style(start, end, style);
             }
             else if (style != InlineStyle.None) Style(span.Start, span.End, style);
-            else if (span.Kind is MarkdownSemanticSpanKind.InlineMath or MarkdownSemanticSpanKind.BlockMath &&
+            else if ((span.Kind is MarkdownSemanticSpanKind.InlineMath or MarkdownSemanticSpanKind.BlockMath) &&
                 span.Start >= 0 && span.End <= text.Length &&
                 MarkdownMathSource.TryExtract(text, span, out var formula, out var display))
             {
