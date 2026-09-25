@@ -29,7 +29,7 @@
 | 分组 | 项目 | 主要保障 |
 | --- | --- | --- |
 | regression | WindowStackChecks、WindowCloseActivationChecks | 实际窗口层级、关闭后激活，不只检查字段 |
-| regression | MarkdownSemanticChecks、MarkdownEditingChecks | 解析结果、编辑、撤销、排版与可见文本 |
+| regression | MarkdownSemanticChecks、MarkdownMathChecks、MarkdownMathLayoutChecks、MarkdownEditingChecks | 解析结果、公式扫描/矢量布局、编辑、撤销、排版与可见文本 |
 | regression | TodoNavigationChecks | 待办定位与导航结果 |
 | regression | EdgeTitleChecks、EdgePreviewChecks | 标题、几何、交互、预览结果与生命周期 |
 | regression | ThreadingChecks、LifecycleChecks | 跨线程资源可用性、启动退出、保存和释放 |

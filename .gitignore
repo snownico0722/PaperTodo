@@ -2,6 +2,9 @@ bin/
 !native/lmdb/bin/
 !native/lmdb/bin/win-x64/
 !native/lmdb/bin/win-x64/papertodo_lmdb.dll
+!native/math/bin/
+!native/math/bin/win-x64/
+!native/math/bin/win-x64/papertodo_math.dll
 obj/
 输出/
 .vs/

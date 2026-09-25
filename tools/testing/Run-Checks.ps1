@@ -14,6 +14,8 @@ $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $checks = @(
     @{ Group = 'regression'; Project = 'WindowStackChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'MarkdownSemanticChecks'; Configuration = 'Release'; Runtime = '' }
+    @{ Group = 'regression'; Project = 'MarkdownMathChecks'; Configuration = 'Release'; Runtime = '' }
+    @{ Group = 'regression'; Project = 'MarkdownMathLayoutChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'MarkdownEditingChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'TodoNavigationChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'EdgeTitleChecks'; Configuration = 'Release'; Runtime = '' }

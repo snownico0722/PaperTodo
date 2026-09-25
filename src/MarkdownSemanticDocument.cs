@@ -13,7 +13,7 @@ internal readonly record struct MarkdownSourceChange(
 /// Per-editor semantic cache owned by the same thread as AvalonEdit's TextDocument. Opening a note
 /// always publishes one exact full-document Markdig snapshot. Completed edits below 8K characters
 /// are also parsed in full; larger notes use the lightweight local reparse path and synchronously
-/// fall back to a full parse only for the few global reference-definition cases it declines.
+/// fall back to a full parse for global reference, fence or math-delimiter changes it declines.
 /// There is no worker, semaphore, pending queue, stale generation or concurrent publication path.
 /// </summary>
 internal sealed class MarkdownSemanticDocument : IDisposable

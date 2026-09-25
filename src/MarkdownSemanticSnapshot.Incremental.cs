@@ -64,6 +64,17 @@ internal sealed partial class MarkdownSemanticSnapshot
             return true;
         }
 
+        if (MarkdownMathIncremental.ChangeMayAffectDelimiterState(
+                oldSource,
+                oldSnapshot,
+                newSource,
+                changedStart,
+                oldChangedEnd,
+                newChangedEnd))
+        {
+            return false;
+        }
+
         if (RangeContainsReferenceDependency(
                 oldSource,
                 changedStart,

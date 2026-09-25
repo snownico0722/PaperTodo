@@ -31,7 +31,15 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 
     [Flags]
     internal enum InlineStyle { None = 0, Strong = 1, Italic = 2, Strike = 4, Code = 8, Weak = 16, Syntax = 32, Underline = 64 }
-    internal readonly record struct InlinePiece(string Text, InlineStyle Style, Uri? Link = null);
+
+    // Keep formula recognition value-only here. The actual WPF Drawing is created later on the
+    // existing Markdown layout STA, so hover/animation code never pays formula rendering cost.
+    internal readonly record struct InlineMath(string Formula, bool Display);
+    internal readonly record struct InlinePiece(
+        string Text,
+        InlineStyle Style,
+        Uri? Link = null,
+        InlineMath? Math = null);
 
     internal static IEnumerable<InlinePiece> InlinePieces(string text, string mode) =>
         SemanticInlinePieces(text, mode);

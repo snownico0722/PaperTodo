@@ -56,6 +56,8 @@ internal sealed partial class MarkdownSemanticSnapshot
                     MarkdownSemanticSpanKind.Code or
                     MarkdownSemanticSpanKind.FencedCode or
                     MarkdownSemanticSpanKind.InlineCode or
+                    MarkdownSemanticSpanKind.InlineMath or
+                    MarkdownSemanticSpanKind.BlockMath or
                     MarkdownSemanticSpanKind.HtmlContainer) ||
                 span.End <= span.Start)
             {

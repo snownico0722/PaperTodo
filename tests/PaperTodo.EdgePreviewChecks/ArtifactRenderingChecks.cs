@@ -36,6 +36,40 @@ internal static partial class Program
         var plan = Renderer.CaptureArtifactPlan(root, marker, 400, 1);
         Require(plan.Blocks.Select(b => b.Kind).Distinct().Count() == 6, "finite text/quote/list/rule/image/code vocabulary is covered");
         Require(plan.Styles.All(s => s.Foreground.IsFrozen && (s.Background?.IsFrozen ?? true)), "layout snapshot carries only frozen resources");
+
+        var mathSource = "before $x^2$ after\n\u0024\u0024\n\\frac{a+b}{c}\n\u0024\u0024\nafter";
+        var mathContent = Renderer.CaptureContent(mathSource, MarkdownRenderModes.Full);
+        var mathPlan = Renderer.CaptureArtifactPlan(root, mathContent, 400, 1);
+        Require(mathPlan.Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "standalone display math becomes one bounded preview block");
+        Require(mathPlan.Blocks
+                .Where(block => block.Kind == Renderer.ArtifactBlockKind.Text)
+                .SelectMany(block => block.Pieces)
+                .Any(piece => piece.Math is { Formula: "x^2", Display: false }),
+            "inline math stays inside the ordinary paragraph layout");
+        Require(Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("\u0024\u0024\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Basic), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "Basic edge preview renders standalone formulas too");
+        Require(!Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("\u0024\u0024\\frac{1}{2}\u0024\u0024", MarkdownRenderModes.Off), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "Off mode keeps standalone formulas as source");
+        Require(!Renderer.CaptureArtifactPlan(root,
+                Renderer.CaptureContent("```text\n\u0024\u0024\\frac{1}{2}\u0024\u0024\n```", MarkdownRenderModes.Full), 400, 1)
+                .Blocks.Any(block => block.Kind == Renderer.ArtifactBlockKind.Math),
+            "formula-looking text inside fenced code stays literal");
+        var mathPanel = new StackPanel();
+        mathPanel.Resources["TextBrushKey"] = Brushes.Black;
+        mathPanel.Resources["WeakTextBrushKey"] = Brushes.Gray;
+        mathPanel.Resources["HoverBrushKey"] = Brushes.LightGray;
+        mathPanel.Resources["PaperBorderBrushKey"] = Brushes.Gray;
+        Require(!RenderForCheck(mathPanel, mathSource, _ => { }, MarkdownRenderModes.Full, new Size(400, 240)),
+            "inline and block formulas fit the bounded preview");
+        var mathArtifact = mathPanel.Children.OfType<MarkdownPreviewArtifactSurface>().Single().Artifact;
+        Require(mathArtifact.Drawing.IsFrozen && Glyphs(mathArtifact.Drawing).Any(),
+            "formula preview publishes one frozen vector artifact");
+
         // Underline belongs to its enclosing Span/Hyperlink, not faded syntax Runs.
         root.Resources["TextBrushKey"] = Brushes.Black;
         root.Resources["LinkBrushKey"] = Brushes.Blue;
@@ -54,7 +88,7 @@ internal static partial class Program
                 "nested faded syntax retains the enclosing decoration color");
         }
         IndependentDrawingReferences();
-        Console.WriteLine("PASS artifact budgets, clipping, empty lines, complete block vocabulary and independent drawing references");
+        Console.WriteLine("PASS artifact budgets, formula layout, clipping, empty lines, block vocabulary and independent drawing references");
     }
 
     private static void IndependentDrawingReferences()
