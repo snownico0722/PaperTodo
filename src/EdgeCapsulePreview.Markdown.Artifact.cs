@@ -194,9 +194,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             var startLine = LineForOffset(span.Start);
             var endLine = LineForOffset(Math.Max(span.Start, span.End - 1));
             var startLineStart = lineStarts[startLine];
-            var startLineEnd = startLineStart + content.Lines[startLine].Text.Length;
-            var endLineStart = lineStarts[endLine];
-            var endLineEnd = endLineStart + content.Lines[endLine].Text.Length;
+            var endLineEnd = lineStarts[endLine] + content.Lines[endLine].Text.Length;
             if (!IsWhitespace(startLineStart, span.Start) ||
                 !IsWhitespace(span.End, endLineEnd))
             {
