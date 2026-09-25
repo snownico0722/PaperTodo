@@ -20,6 +20,19 @@ internal static partial class Program
                 FontStretches.Normal, 14, "en-US", Brushes.Black, null, null) },
             Array.Empty<string>(), new Size(260, height), dpi, TextFormattingMode.Display);
 
+    private static MarkdownParagraphRequest MathWorkerRequest() =>
+        new(new[]
+            {
+                new MarkdownLayoutPiece(
+                    @"$\frac{a}{b}$",
+                    0,
+                    -1,
+                    new MarkdownMathLayout(@"\frac{a}{b}", Display: false))
+            },
+            new[] { new MarkdownRunStyle("Segoe UI", null, FontStyles.Normal, FontWeights.Normal,
+                FontStretches.Normal, 14, "en-US", Brushes.Black, null, null) },
+            Array.Empty<string>(), new Size(260, 300), 1, TextFormattingMode.Display);
+
     private static byte[] DrawingPixels(MarkdownParagraphResult result)
     {
         var visual = new DrawingVisual();
@@ -75,6 +88,14 @@ internal static partial class Program
                 "worker retains exact dimensions, visible lines and truncation");
             Require(DrawingPixels(result).SequenceEqual(DrawingPixels(sync)), "worker/local kernel pixels are byte-identical");
         }
+
+        var mathResult = AwaitWorkerCheck(worker.PrepareAsync(MathWorkerRequest(), false, default));
+        Require(mathResult.FormattingThreadId != uiThread && mathResult.Drawing.IsFrozen,
+            "formula layout stays on the existing preview STA and returns a frozen drawing");
+        Require(Glyphs(mathResult.Drawing).Any(glyph =>
+                glyph.GlyphRun.GlyphTypeface.FontUri.ToString().Contains("WpfMath", StringComparison.OrdinalIgnoreCase)),
+            "worker formula uses WpfMath glyphs rather than falling back to literal TeX source");
+
         var mutable = new SolidColorBrush(Colors.Black);
         var rejected = false;
         try
@@ -125,7 +146,7 @@ internal static partial class Program
         WorkerLiveAnimation();
         worker.Dispose(); UntilReview(() => worker.Completion.IsCompleted, "worker shuts down without a UI Join");
         Require(worker.OutstandingCount == 0, "all worker consumers are released");
-        Console.WriteLine("PASS worker STA execution, frozen pixels (4 DPI values), duplicate requests, demand priority, cancellation and shutdown");
+        Console.WriteLine("PASS worker STA formula/text execution, frozen pixels (4 DPI values), duplicate requests, priority, cancellation and shutdown");
     }
 
     private static void WorkerResourceInvalidation()
