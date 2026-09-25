@@ -32,6 +32,9 @@ internal static class MarkdownMathRenderer
     private const double MaximumRenderedDimension = 8_192;
 
     private static readonly object CacheGate = new();
+    // WpfMath exposes one process-wide parser instance. Keep only parsing serialized so the
+    // editor Dispatcher and edge-preview STA can render concurrently without sharing parser state.
+    private static readonly object ParserGate = new();
     private static readonly Dictionary<CacheKey, LinkedListNode<CacheEntry>> Cache = new();
     private static readonly LinkedList<CacheEntry> CacheOrder = new();
 
@@ -139,7 +142,11 @@ internal static class MarkdownMathRenderer
         Color color,
         string textFontName)
     {
-        var formula = WpfTeXFormulaParser.Instance.Parse(formulaText);
+        TexFormula formula;
+        lock (ParserGate)
+        {
+            formula = WpfTeXFormulaParser.Instance.Parse(formulaText);
+        }
         var brush = new SolidColorBrush(color);
         brush.Freeze();
 
