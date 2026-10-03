@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "collapse-authority", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "collapse-authority", "master-queue-transfer", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -200,6 +200,72 @@ internal static class Program
                 await Until(
                     () => !first.IsVisible && first.IsDeepCapsuleSlotVisible,
                     "collapsed edge terminal authority");
+                return;
+            }
+            if (name == "master-queue-transfer")
+            {
+                var sourceMargin = controller.DeepCapsuleStartTopMarginForQueue(
+                    "",
+                    EdgeCapsuleEdge.Right);
+                Require(
+                    controller.TryBeginMasterCapsuleQueueTransfer(
+                        "",
+                        EdgeCapsuleEdge.Right,
+                        sourceMargin,
+                        out var transfer),
+                    "master queue transfer did not start");
+                Require(
+                    controller.State.CapsuleCollapseAllActiveQueues.Count == 1,
+                    "master drag did not temporarily retract the source queue");
+
+                Require(
+                    WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                        null,
+                        out var monitor),
+                    "master transfer test monitor");
+                var drop = new DeviceScreenPoint(
+                    monitor.WorkArea.Left + Math.Max(1, monitor.WorkArea.Width / 4),
+                    monitor.WorkArea.Top + Math.Max(1, monitor.WorkArea.Height / 3));
+                Require(
+                    controller.CommitMasterCapsuleQueueTransfer(
+                        transfer,
+                        drop),
+                    "master queue transfer did not commit");
+
+                var expectedMonitor =
+                    WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
+                        monitor.DeviceName);
+                Require(
+                    controller.State.Papers.Take(count).All(paper =>
+                        paper.CapsuleSide == DeepCapsuleSides.Left &&
+                        string.Equals(
+                            paper.CapsuleMonitorDeviceName,
+                            expectedMonitor,
+                            StringComparison.Ordinal)),
+                    "master transfer did not move every queue member to the target monitor/edge");
+                Require(
+                    controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
+                    "temporary master-drag retraction leaked into the committed queue");
+
+                Require(
+                    MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                        drop,
+                        "",
+                        EdgeCapsuleEdge.Right,
+                        count + 1,
+                        controller.DeepCapsuleGap,
+                        out var target),
+                    "master transfer target policy did not resolve");
+                Require(
+                    Math.Abs(
+                        controller.DeepCapsuleStartTopMarginForQueue(
+                            expectedMonitor,
+                            EdgeCapsuleEdge.Left) -
+                        target.StartTopMargin) < 0.01,
+                    "master transfer did not preserve the drop height as the new queue anchor");
+                await Until(
+                    () => windows.Values.All(window => window.IsDeepCapsuleSlotVisible),
+                    "master-transferred queue presentation");
                 return;
             }
             if (name == "early-exit")
