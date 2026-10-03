@@ -5,6 +5,7 @@ internal readonly record struct MasterCapsuleQueueTransferSnapshot(
     EdgeCapsuleEdge SourceEdge,
     string[] PaperIds,
     bool SourceWasCollapsed,
+    bool SourceHadStartTopMargin,
     double SourceStartTopMargin)
 {
     public bool IsValid => PaperIds is { Length: > 0 };
