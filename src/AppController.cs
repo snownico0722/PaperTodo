@@ -923,6 +923,15 @@ public sealed partial class AppController : IDisposable
         {
             if (IsLinkedPaperShown(paper.Id))
             {
+                if (State.UseCapsuleMode &&
+                    State.EnableTodoPaperLinks &&
+                    State.HideLinkedPapersFromCapsules &&
+                    IsPaperLinkedToAnyTodo(paper))
+                {
+                    HidePaper(paper);
+                    return;
+                }
+
                 if (State.CollapseExpandedDeepCapsuleOnClick && window.TryHandleLinkedPaperRepeatedOpenAsDeepCapsuleToggle())
                 {
                     RefreshTodoRowsForLinkedPaper(paper.Id);
