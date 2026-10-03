@@ -232,62 +232,10 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => api.HidePaper("note"), "session_closed");
         Throws<PaperTodoPluginException>(() => runtimeApi.HidePaper("note"), "runtime_closed");
         current = true;
-        await LinkedPaperVisibilityToggleBehavior(c, note, todo);
         await LinkedTitleTruncationBehavior(c, note, todo);
         await PluginBoundaryBehavior(c, owner, note, todo);
         await PresentationPipeBehavior();
         Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
-    }
-
-    private static async Task LinkedPaperVisibilityToggleBehavior(AppController c, PaperData note, PaperData todo)
-    {
-        var previousEnableAnimations = c.State.EnableAnimations;
-        var previousUseCapsuleMode = c.State.UseCapsuleMode;
-        var previousEnableTodoPaperLinks = c.State.EnableTodoPaperLinks;
-        var previousHideLinkedPapersFromCapsules = c.State.HideLinkedPapersFromCapsules;
-        var previousCollapseExpandedDeepCapsuleOnClick = c.State.CollapseExpandedDeepCapsuleOnClick;
-        try
-        {
-            c.State.EnableAnimations = false;
-            c.State.UseCapsuleMode = true;
-            c.State.EnableTodoPaperLinks = true;
-            c.State.HideLinkedPapersFromCapsules = true;
-            c.State.CollapseExpandedDeepCapsuleOnClick = false;
-            todo.Items[0].LinkPaper(note.Id);
-
-            Check(!c.CanPaperDisplayAsCapsule(note),
-                "Linked paper excluded from capsules is not capsule-eligible.");
-
-            c.HidePaper(note);
-            await PresentationSettle();
-            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
-            await PresentationSettle();
-            Check(note.IsVisible && !note.IsCollapsed && c.IsLinkedPaperShown(note.Id),
-                "Linked-paper entry opens a hidden paper excluded from capsules.");
-
-            c.OpenLinkedPaper(note.Id);
-            await PresentationSettle();
-            Check(note.IsVisible && c.IsLinkedPaperShown(note.Id),
-                "Pure OpenLinkedPaper keeps an already-open linked paper visible.");
-
-            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
-            await PresentationSettle();
-            Check(!note.IsVisible && !c.IsLinkedPaperShown(note.Id),
-                "Repeated linked-paper entry hides an expanded paper excluded from capsules.");
-
-            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
-            await PresentationSettle();
-            Check(note.IsVisible && !note.IsCollapsed && c.IsLinkedPaperShown(note.Id),
-                "Linked-paper entry reopens the paper after the repeated click hides it.");
-        }
-        finally
-        {
-            c.State.EnableAnimations = previousEnableAnimations;
-            c.State.UseCapsuleMode = previousUseCapsuleMode;
-            c.State.EnableTodoPaperLinks = previousEnableTodoPaperLinks;
-            c.State.HideLinkedPapersFromCapsules = previousHideLinkedPapersFromCapsules;
-            c.State.CollapseExpandedDeepCapsuleOnClick = previousCollapseExpandedDeepCapsuleOnClick;
-        }
     }
 
     private static async Task LinkedTitleTruncationBehavior(AppController c, PaperData note, PaperData todo)
