@@ -287,6 +287,7 @@ Hovering over a docked capsule slides out a **real-time interactive preview card
 The top-most capsule in the dock is the **Master Capsule**:
 - **Batch Toggle**: Click to expand or collapse the entire edge queue;
 - **Height Offset**: Drag up and down to adjust the queue's vertical anchor on screen;
+- **Move the whole queue**: Pull the master capsule horizontally to temporarily retract the queue and switch to the same floating drag capsule used by ordinary edge items. Drop it on the left or right side of the target monitor to move the whole queue while preserving member order;
 - **Global Menu**: Right-click to access the full system tray menu directly.
 
 ---
