@@ -26,7 +26,8 @@ public sealed class MasterCapsuleWindow : Window
     {
         Idle,
         Pending,
-        Dragging
+        Dragging,
+        QueueTransfer
     }
 
     private sealed record MasterDragSession(
@@ -46,6 +47,7 @@ public sealed class MasterCapsuleWindow : Window
     private const double MasterRightPadding = 3;
     private const double MasterInteriorBorderThickness = 1;
     private const string MasterTwoDigitCountSample = "88";
+    private const double MasterQueueTransferUnlockDistance = 56;
 
     private readonly AppController _controller;
     private readonly DeepCapsuleContextMenuSession _contextMenuSession;
@@ -78,9 +80,9 @@ public sealed class MasterCapsuleWindow : Window
     private double _animatedWidthDip;
     private int _moveGeneration;
     private bool _isClosingForReal;
-    // The master pill is dragged vertically only: it slides its queue's stack by driving the
-    // shared start-top margin. It never detaches or changes edge/monitor — that is done by
-    // dragging an individual side capsule to another edge / screen.
+    // Small vertical movement keeps adjusting the queue anchor. Pulling horizontally beyond the
+    // ordinary cross-queue threshold switches to a queue transfer: members retract temporarily and
+    // this master is represented by the shared FloatingFree drag HWND until the drop commits.
     private MasterDragSession? _dragSession;
 
     private static readonly DependencyProperty AnimatedTopProperty =
@@ -292,6 +294,15 @@ public sealed class MasterCapsuleWindow : Window
                 return;
             }
 
+            if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
+            {
+                if (TryRunQueueTransfer(currentScreenPos, session))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (_gestureState == MasterGestureState.Pending)
             {
                 _gestureState = MasterGestureState.Dragging;
@@ -300,18 +311,21 @@ public sealed class MasterCapsuleWindow : Window
                 BeginAnimation(AnimatedTopProperty, null);
             }
 
-            // The master stays pinned to its queue's edge; vertical drag slides that queue's stack
-            // by driving the shared start-top margin. It never detaches or changes edge/monitor —
-            // moving capsules between queues is done by dragging an individual side capsule.
             var targetMargin = session.StartTopMargin + deltaY;
-            _controller.SetDeepCapsuleStartTopMargin(_queueMonitorDeviceName, _queueEdge, targetMargin);
+            _controller.SetDeepCapsuleStartTopMargin(
+                _queueMonitorDeviceName,
+                _queueEdge,
+                targetMargin);
 
             e.Handled = true;
         };
         _pill.PreviewMouseLeftButtonUp += (_, e) =>
         {
+            var hadGesture =
+                _gestureState != MasterGestureState.Idle &&
+                _dragSession != null;
             var wasDragging = FinishMasterGesture(commit: true, clearFocus: false);
-            if (!wasDragging)
+            if (hadGesture && !wasDragging)
             {
                 _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(
                     _queueMonitorDeviceName,
@@ -322,7 +336,13 @@ public sealed class MasterCapsuleWindow : Window
             ClearCapsuleInteractionKeyboardFocus();
             e.Handled = true;
         };
-        _pill.LostMouseCapture += (_, _) => FinishMasterGesture(commit: false);
+        _pill.LostMouseCapture += (_, _) =>
+        {
+            if (_gestureState != MasterGestureState.QueueTransfer)
+            {
+                FinishMasterGesture(commit: false);
+            }
+        };
         _pill.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -444,6 +464,121 @@ public sealed class MasterCapsuleWindow : Window
         // the master pill does not move, so there is nothing to reposition here.
         _isHovering = hovering;
         UpdateExperimentalOpacity();
+    }
+
+    private bool TryRunQueueTransfer(
+        DeviceScreenPoint currentScreenPos,
+        MasterDragSession session)
+    {
+        if (_isClosingForReal ||
+            _experimentalPassive ||
+            !_controller.TryCreateMasterQueueFloatingDragHostOptions(
+                _queueMonitorDeviceName,
+                _queueEdge,
+                _glyph.Text,
+                _label.Text,
+                out var options) ||
+            !_controller.TryBeginMasterCapsuleQueueTransfer(
+                _queueMonitorDeviceName,
+                _queueEdge,
+                session.StartTopMargin,
+                out var snapshot))
+        {
+            return false;
+        }
+
+        EdgeCapsuleDragWindow? floatingHost = null;
+        var committed = false;
+        try
+        {
+            _gestureState = MasterGestureState.QueueTransfer;
+            ++_moveGeneration;
+            _animatedMonitorGeometry = null;
+            BeginAnimation(AnimatedTopProperty, null);
+
+            if (_pill.IsMouseCaptured)
+            {
+                _pill.ReleaseMouseCapture();
+            }
+
+            floatingHost = EdgeCapsuleDragWindow.Rent(options);
+            floatingHost.ShowWithEntrance(
+                currentScreenPos,
+                animate: false,
+                scaleFrom: 1,
+                durationMilliseconds: 0);
+
+            // The floating pill is now the only visible representative of this source queue.
+            // Source members were retracted by the controller before this point.
+            if (IsVisible)
+            {
+                Hide();
+            }
+
+            EdgeCapsuleNativeDragOutcome outcome;
+            if (Mouse.LeftButton == MouseButtonState.Pressed)
+            {
+                outcome = floatingHost.RunNativeDragFromCursor();
+            }
+            else
+            {
+                var drop = WindowNative.TryGetCursorScreenPosition(out var livePointer)
+                    ? livePointer
+                    : currentScreenPos;
+                outcome = new EdgeCapsuleNativeDragOutcome(
+                    EdgeCapsuleNativeDragResult.Completed,
+                    drop);
+            }
+
+            if (outcome.Result == EdgeCapsuleNativeDragResult.Completed)
+            {
+                committed = _controller.CommitMasterCapsuleQueueTransfer(
+                    snapshot,
+                    outcome.DropPosition);
+            }
+
+            if (!committed)
+            {
+                _controller.CancelMasterCapsuleQueueTransfer(snapshot);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                "Master capsule queue transfer failed: {0}",
+                ex.Message);
+            _controller.CancelMasterCapsuleQueueTransfer(snapshot);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                floatingHost?.ReturnToPool();
+            }
+            catch
+            {
+                // A failed pooled host must not strand the queue transaction.
+            }
+
+            _gestureState = MasterGestureState.Idle;
+            _dragSession = null;
+            if (!_isClosingForReal)
+            {
+                if (!IsVisible)
+                {
+                    Show();
+                }
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 1;
+                MoveToTarget(animate: false);
+                RefreshEffectiveTopmost();
+            }
+
+            ClearCapsuleInteractionKeyboardFocus();
+            UpdateExperimentalOpacity();
+        }
     }
 
     private bool FinishMasterGesture(bool commit, bool clearFocus = true)
