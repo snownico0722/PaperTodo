@@ -927,6 +927,7 @@ public sealed partial class AppController : IDisposable
             if (IsLinkedPaperShown(paper.Id))
             {
                 if (toggleIfExcludedFromCapsules &&
+                    State.CollapseExpandedDeepCapsuleOnClick &&
                     State.UseCapsuleMode &&
                     State.EnableTodoPaperLinks &&
                     State.HideLinkedPapersFromCapsules &&
