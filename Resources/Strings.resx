@@ -1124,6 +1124,12 @@
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>限制静止时边缘胶囊显示的标题长度，0 隐藏标题文字但保留图标，不修改真实标题。加减可在「无限制、0、1…20」之间循环。关闭悬停预览时，鼠标移入会展开被截短的标题，移出后收回。</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主胶囊缩短</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>开启后主胶囊仅显示箭头，不显示当前队列的胶囊数量。</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>无限制</value>
   </data>
