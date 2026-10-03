@@ -65,9 +65,11 @@ public static class SystemSettingsHelper
             if (approvalValue != null && !StartupApprovalAllowsLaunch(approvalValue))
             {
                 approvalKey!.DeleteValue(AppKeyName, false);
-                approvalValue = null;
             }
 
+            // Read both layers back instead of treating a successful registry call as proof that
+            // Windows now sees the startup item as enabled.
+            approvalValue = approvalKey?.GetValue(AppKeyName);
             return IsStartupEnabled(runKey.GetValue(AppKeyName), approvalValue, processPath!);
         }
         catch
