@@ -109,6 +109,13 @@ public static class SystemSettingsHelper
         // keep that timestamp clear (seen with 0x00, 0x02 and 0x06 prefixes), while a Task
         // Manager / Startup Apps disable writes a non-zero timestamp. Do not overfit the
         // leading status byte; require the real 12-byte shape and a clear timestamp.
-        return data[^8..].All(value => value == 0);
+        for (var i = data.Length - 8; i < data.Length; i++)
+        {
+            if (data[i] != 0)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
