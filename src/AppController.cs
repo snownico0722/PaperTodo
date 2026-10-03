@@ -70,6 +70,7 @@ public sealed partial class AppController : IDisposable
     private DateTimeOffset _lastFullscreenGlobalScanAt = DateTimeOffset.MinValue;
     private DisplayMetricsRefreshState _displayMetricsRefreshState;
     private readonly EdgeCapsuleArrangeGate _deepCapsuleArrangeGate = new();
+    private bool _masterCapsuleQueueTransferInProgress;
     private PaperWindow? _paperLinkTargetWindow;
     private string? _paperLinkTargetItemId;
     private readonly HashSet<string> _deepCapsuleContextMenuOwners = new(StringComparer.Ordinal);
@@ -1673,7 +1674,8 @@ public sealed partial class AppController : IDisposable
     }
 
     private bool HasDeepCapsuleReorderDragInProgress()
-        => _windows.Values.Any(window => window.IsDeepCapsuleReorderDragInProgress);
+        => _masterCapsuleQueueTransferInProgress ||
+            _windows.Values.Any(window => window.IsDeepCapsuleReorderDragInProgress);
 
     internal void BeginDeepCapsuleReorderDrag(PaperData draggedPaper)
     {
@@ -2258,6 +2260,306 @@ public sealed partial class AppController : IDisposable
 
             window.PreviewDeepCapsulePlacement(plan.Placements[member.Id]);
         }
+    }
+
+    internal bool TryCreateMasterQueueFloatingDragHostOptions(
+        string monitorDeviceName,
+        EdgeCapsuleEdge edge,
+        string icon,
+        string label,
+        out EdgeCapsuleDragWindowOptions options)
+    {
+        options = null!;
+        var side = edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var queueKey = QueueKey(monitorDeviceName, side);
+        foreach (var paper in DeepCapsulePapersInOrder())
+        {
+            if (!string.Equals(QueueKey(paper), queueKey, StringComparison.Ordinal) ||
+                !_windows.TryGetValue(paper.Id, out var window))
+            {
+                continue;
+            }
+
+            if (window.TryCreateMasterQueueFloatingDragHostOptions(
+                    icon,
+                    label,
+                    out options))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal bool TryBeginMasterCapsuleQueueTransfer(
+        string monitorDeviceName,
+        EdgeCapsuleEdge edge,
+        double rollbackStartTopMargin,
+        out MasterCapsuleQueueTransferSnapshot snapshot)
+    {
+        snapshot = default;
+        if (_masterCapsuleQueueTransferInProgress ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode ||
+            !State.UseCapsuleCollapseAll)
+        {
+            return false;
+        }
+
+        var normalizedMonitor =
+            WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
+        var side = edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var sourceKey = QueueKey(normalizedMonitor, side);
+        var hasLiveMember = DeepCapsulePapersInOrder().Any(
+            paper => string.Equals(
+                QueueKey(paper),
+                sourceKey,
+                StringComparison.Ordinal));
+        if (!hasLiveMember)
+        {
+            return false;
+        }
+
+        var paperIds = State.Papers
+            .Where(paper => string.Equals(
+                QueueKey(paper),
+                sourceKey,
+                StringComparison.Ordinal))
+            .Select(paper => paper.Id)
+            .ToArray();
+        if (paperIds.Length == 0)
+        {
+            return false;
+        }
+
+        snapshot = new MasterCapsuleQueueTransferSnapshot(
+            normalizedMonitor,
+            edge,
+            paperIds,
+            IsCapsuleCollapseAllActiveForQueue(sourceKey),
+            State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey),
+            rollbackStartTopMargin);
+
+        SuppressEdgeCapsulePreviewForMasterQueueLayout(
+            normalizedMonitor,
+            edge);
+        State.CapsuleCollapseAllActiveQueues[sourceKey] = true;
+        ArrangeDeepCapsules(animate: false);
+        _masterCapsuleQueueTransferInProgress = true;
+        return true;
+    }
+
+    internal void CancelMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot)
+    {
+        if (!_masterCapsuleQueueTransferInProgress || !snapshot.IsValid)
+        {
+            return;
+        }
+
+        var sourceSide = snapshot.SourceEdge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var sourceKey = QueueKey(
+            snapshot.SourceMonitorDeviceName,
+            sourceSide);
+        if (snapshot.SourceWasCollapsed)
+        {
+            State.CapsuleCollapseAllActiveQueues[sourceKey] = true;
+        }
+        else
+        {
+            State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+        }
+
+        if (snapshot.SourceHadStartTopMargin)
+        {
+            State.DeepCapsuleQueueStartTopMargins[sourceKey] =
+                snapshot.SourceStartTopMargin;
+        }
+        else
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(sourceKey);
+        }
+
+        var refreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
+        ArrangeDeepCapsules(animate: true);
+        if (refreshDisplayMetrics)
+        {
+            ScheduleDisplayMetricsRefresh();
+        }
+    }
+
+    internal bool CommitMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        DeviceScreenPoint dropPoint)
+    {
+        if (!_masterCapsuleQueueTransferInProgress ||
+            !snapshot.IsValid ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode)
+        {
+            return false;
+        }
+
+        var sourceSide = snapshot.SourceEdge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var sourceKey = QueueKey(
+            snapshot.SourceMonitorDeviceName,
+            sourceSide);
+        var sourceIds = snapshot.PaperIds.ToHashSet(StringComparer.Ordinal);
+        var livePapers = DeepCapsulePapersInOrder();
+        var sourceLiveCount = livePapers.Count(
+            paper => sourceIds.Contains(paper.Id));
+        if (sourceLiveCount == 0 ||
+            !MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                dropPoint,
+                snapshot.SourceMonitorDeviceName,
+                snapshot.SourceEdge,
+                slotCount: sourceLiveCount + 1,
+                DeepCapsuleGap,
+                out var preliminaryTarget))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        var targetSide = preliminaryTarget.Edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var targetKey = QueueKey(
+            preliminaryTarget.MonitorDeviceName,
+            targetSide);
+        var targetLiveCount = livePapers.Count(
+            paper => !sourceIds.Contains(paper.Id) &&
+                string.Equals(
+                    QueueKey(paper),
+                    targetKey,
+                    StringComparison.Ordinal));
+        var finalSlotCount =
+            sourceLiveCount +
+            targetLiveCount +
+            (State.UseCapsuleCollapseAll ? 1 : 0);
+        if (!MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                dropPoint,
+                snapshot.SourceMonitorDeviceName,
+                snapshot.SourceEdge,
+                finalSlotCount,
+                DeepCapsuleGap,
+                out var target))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        targetSide = target.Edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        targetKey = QueueKey(target.MonitorDeviceName, targetSide);
+
+        if (string.Equals(sourceKey, targetKey, StringComparison.Ordinal))
+        {
+            if (snapshot.SourceWasCollapsed)
+            {
+                State.CapsuleCollapseAllActiveQueues[sourceKey] = true;
+            }
+            else
+            {
+                State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+            }
+            State.DeepCapsuleQueueStartTopMargins[sourceKey] =
+                target.StartTopMargin;
+
+            var refreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
+            ArrangeDeepCapsules(animate: true);
+            RefreshTrayMenu();
+            SaveNow();
+            if (refreshDisplayMetrics)
+            {
+                ScheduleDisplayMetricsRefresh();
+            }
+            return true;
+        }
+
+        var targetWasCollapsed =
+            IsCapsuleCollapseAllActiveForQueue(targetKey);
+        var targetHasLiveQueue = targetLiveCount > 0;
+        var sourceBlock = State.Papers
+            .Where(paper => sourceIds.Contains(paper.Id))
+            .ToList();
+        if (sourceBlock.Count == 0)
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        var firstSourceIndex = State.Papers.FindIndex(
+            paper => sourceIds.Contains(paper.Id));
+        var remaining = State.Papers
+            .Where(paper => !sourceIds.Contains(paper.Id))
+            .ToList();
+        var lastTargetIndex = remaining.FindLastIndex(
+            paper => string.Equals(
+                QueueKey(paper),
+                targetKey,
+                StringComparison.Ordinal));
+        var insertAt = lastTargetIndex >= 0
+            ? lastTargetIndex + 1
+            : Math.Clamp(firstSourceIndex, 0, remaining.Count);
+
+        foreach (var paper in sourceBlock)
+        {
+            paper.CapsuleMonitorDeviceName = target.MonitorDeviceName;
+            paper.CapsuleSide = targetSide;
+        }
+        remaining.InsertRange(insertAt, sourceBlock);
+        State.Papers = remaining;
+
+        State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+        if (targetHasLiveQueue
+                ? targetWasCollapsed
+                : snapshot.SourceWasCollapsed)
+        {
+            State.CapsuleCollapseAllActiveQueues[targetKey] = true;
+        }
+        else
+        {
+            State.CapsuleCollapseAllActiveQueues.Remove(targetKey);
+        }
+
+        State.DeepCapsuleQueueStartTopMargins.Remove(sourceKey);
+        State.DeepCapsuleQueueStartTopMargins[targetKey] =
+            target.StartTopMargin;
+
+        var shouldRefreshDisplayMetrics =
+            EndMasterCapsuleQueueTransferGate();
+        ArrangeDeepCapsules(animate: true);
+        RefreshTrayMenu();
+        SaveNow();
+        if (shouldRefreshDisplayMetrics)
+        {
+            ScheduleDisplayMetricsRefresh();
+        }
+        return true;
+    }
+
+    private bool EndMasterCapsuleQueueTransferGate()
+    {
+        _masterCapsuleQueueTransferInProgress = false;
+        if (_displayMetricsRefreshState !=
+            DisplayMetricsRefreshState.DeferredForCapsuleDrag)
+        {
+            return false;
+        }
+
+        _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
+        return true;
     }
 
     // Reassign a capsule to a different (monitor, edge) queue — the cross-edge / cross-monitor
