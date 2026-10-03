@@ -2638,6 +2638,9 @@ public sealed partial class AppController
     private void ToggleDeepCapsuleExpandedSlot() =>
         SetSettingFromUi("capsule.show_while_expanded", !State.ShowDeepCapsuleWhileExpanded);
 
+    private void ToggleCompactMasterCapsule() =>
+        SetSettingFromUi("capsule.master_compact", !State.CompactMasterCapsule);
+
     private void ToggleHideEdgeCapsuleCloseButtonOnHover() =>
         SetSettingFromUi("capsule.hide_close_button", !State.HideEdgeCapsuleCloseButtonOnHover);
 
