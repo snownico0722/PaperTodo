@@ -47,7 +47,7 @@ public sealed class MasterCapsuleWindow : Window
     private const double MasterRightPadding = 3;
     private const double MasterInteriorBorderThickness = 1;
     private const string MasterTwoDigitCountSample = "88";
-    private const double MasterQueueTransferUnlockDistance = 56;
+    private const double MasterQueueTransferUnlockDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
 
     private readonly AppController _controller;
     private readonly DeepCapsuleContextMenuSession _contextMenuSession;
