@@ -911,7 +911,10 @@ public sealed partial class AppController : IDisposable
             IsPaperLinkedToAnyTodo(paper));
     }
 
-    public void OpenLinkedPaper(string? paperId, Window? anchorWindow = null)
+    public void OpenLinkedPaper(
+        string? paperId,
+        Window? anchorWindow = null,
+        bool toggleIfExcludedFromCapsules = false)
     {
         var paper = FindPaper(paperId);
         if (paper == null)
@@ -923,7 +926,8 @@ public sealed partial class AppController : IDisposable
         {
             if (IsLinkedPaperShown(paper.Id))
             {
-                if (State.UseCapsuleMode &&
+                if (toggleIfExcludedFromCapsules &&
+                    State.UseCapsuleMode &&
                     State.EnableTodoPaperLinks &&
                     State.HideLinkedPapersFromCapsules &&
                     IsPaperLinkedToAnyTodo(paper))
