@@ -14,7 +14,6 @@ internal readonly record struct MasterCapsuleQueueTransferSnapshot(
 internal readonly record struct MasterCapsuleQueueTransferTarget(
     string MonitorDeviceName,
     EdgeCapsuleEdge Edge,
-    MonitorGeometry Geometry,
     double StartTopMargin);
 
 internal static class MasterCapsuleQueueTransferPolicy
@@ -61,7 +60,6 @@ internal static class MasterCapsuleQueueTransferPolicy
         target = new MasterCapsuleQueueTransferTarget(
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName),
             edge,
-            geometry,
             startTopMargin);
         return true;
     }
