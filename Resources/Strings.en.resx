@@ -434,7 +434,7 @@ Error: {0}</value>
     <value>Remember open position</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>Click edge capsule again to retract paper</value>
+    <value>Click capsule again to retract paper</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Hide edge close button</value>
@@ -610,7 +610,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>When expanding from the edge, restore the last position and size; otherwise use edge placement.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>If the paper is already expanded from the edge, click the same capsule again to retract it.</value>
+    <value>Click the same capsule again to retract an expanded paper. If a linked paper is excluded from capsules, click its linked-paper entry again to hide it.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
