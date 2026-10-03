@@ -1111,6 +1111,12 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>대기 중인 가장자리 캡슐의 제목 길이를 제한합니다. 0은 제목 글자만 숨기며 아이콘과 저장된 제목은 유지합니다. +/−로 무제한, 0, 1…20을 순환합니다. 호버 미리보기가 꺼져 있으면 마우스를 올릴 때 잘린 제목을 펼치고 벗어나면 다시 줄입니다.</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>메인 캡슐 축소</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>켜면 메인 캡슐에 화살표만 표시하고 현재 대기열의 캡슐 수는 숨깁니다.</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>무제한</value>
   </data>
