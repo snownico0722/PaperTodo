@@ -104,18 +104,11 @@ public static class SystemSettingsHelper
             return false;
         }
 
-        // StartupApproved is an undocumented Explorer-owned binary value. Current Windows
-        // variants use the trailing eight bytes as the disabled timestamp: enabled records
-        // keep that timestamp clear (seen with 0x00, 0x02 and 0x06 prefixes), while a Task
-        // Manager / Startup Apps disable writes a non-zero timestamp. Do not overfit the
-        // leading status byte; require the real 12-byte shape and a clear timestamp.
-        for (var i = data.Length - 8; i < data.Length; i++)
-        {
-            if (data[i] != 0)
-            {
-                return false;
-            }
-        }
-        return true;
+        // StartupApproved is an undocumented Explorer-owned binary value. The first DWORD
+        // is the approval state (0x00/0x02/0x06 enabled, 0x03/0x07 disabled). The trailing
+        // FILETIME is history, not the state: a re-enabled 0x06 record can retain it, and
+        // a disabled 0x03 record can have no timestamp. Unknown states fail closed.
+        return data[1] == 0 && data[2] == 0 && data[3] == 0 &&
+            data[0] is 0x00 or 0x02 or 0x06;
     }
 }

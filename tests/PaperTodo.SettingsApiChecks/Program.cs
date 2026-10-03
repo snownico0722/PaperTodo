@@ -107,6 +107,20 @@ internal static partial class Program
             "Task Manager disabled state with a timestamp overrides the Run entry.");
         Check(!Enabled(path, new byte[] { 0x07, 0, 0, 0, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 }),
             "Alternate disabled state with a timestamp overrides the Run entry.");
+        Check(Enabled(path, new byte[] { 0x06, 0, 0, 0, 0x1E, 0x38, 0x9F, 0x4C, 0x7D, 0x2A, 0xDB, 0x01 }),
+            "A re-enabled StartupApproved 0x06 record remains enabled with a historical timestamp.");
+        Check(Enabled(path, new byte[] { 0x02, 0, 0, 0, 0x1E, 0x38, 0x9F, 0x4C, 0x7D, 0x2A, 0xDB, 0x01 }),
+            "An enabled approval state is independent of its historical timestamp.");
+        Check(!Enabled(path, new byte[] { 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "Disabled StartupApproved 0x03 overrides the Run entry even without a timestamp.");
+        Check(!Enabled(path, new byte[] { 0x07, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "Disabled StartupApproved 0x07 overrides the Run entry even without a timestamp.");
+        Check(!Enabled(path, new byte[] { 0x08, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "An unknown approval state fails closed even with a clear timestamp.");
+        Check(!Enabled(path, new byte[] { 0x02, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "Approval matching checks the entire state DWORD, not just its first byte.");
+        Check(!Enabled(path, "020000000000000000000000"),
+            "A non-binary approval value fails closed.");
         Check(!Enabled(path, new byte[] { 0x02 }),
             "Malformed short StartupApproved state fails closed.");
         Check(!Enabled(@"C:\Old\PaperTodo.exe", null),
