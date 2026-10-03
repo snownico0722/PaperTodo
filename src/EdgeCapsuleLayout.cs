@@ -31,6 +31,7 @@ public static class EdgeCapsuleLayout
     // the same coordinate system instead of intersecting two offset rounded rectangles.
     internal const double OutlineThickness = 2;
     internal const double OutlineOverlap = 1;
+    internal const double CrossQueueDragUnlockDistance = 56;
     internal const double OutlineSilhouetteInset =
         WindowChromeMargin - OutlineThickness + OutlineOverlap;
     internal const double OutlineSilhouetteRadius =
