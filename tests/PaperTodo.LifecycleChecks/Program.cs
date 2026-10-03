@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "collapse-authority", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -134,7 +134,8 @@ internal static class Program
             TelemetryEnabled = false, EnableAnimations = true,
             UseCapsuleMode = true, UseDeepCapsuleMode = true,
             ExperimentalEdgeCapsuleHoverPreview = true,
-            UsePersistentPowerShellProcess = false, McpEnabled = false
+            UsePersistentPowerShellProcess = false, McpEnabled = false,
+            ShowDeepCapsuleWhileExpanded = name != "collapse-authority"
         };
         var area = SystemParameters.WorkArea;
         for (var i = 0; i < count; i++)
@@ -178,6 +179,28 @@ internal static class Program
                     "off-screen paper was not rescued after the bounded grace period");
                 Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
                     "bounded off-screen rescue hid or duplicated an already-restored paper");
+            }
+            if (name == "collapse-authority")
+            {
+                var first = windows["fixture-0"];
+                first.ActivateFromEdgeShortcut();
+                await Until(
+                    () => !controller.State.Papers.Single(paper => paper.Id == "fixture-0").IsCollapsed &&
+                          first.IsVisible &&
+                          !first.IsDeepCapsuleSlotVisible,
+                    "expanded paper without retained edge slot");
+
+                first.SetCollapsedState(true, animate: true);
+                await Until(
+                    () => first.IsDeepCapsuleSlotVisible,
+                    "edge host first visible frame during collapse");
+
+                Require(!first.IsVisible,
+                    "collapse exposed the main PaperWindow and EdgeCapsuleHost at the same time");
+                await Until(
+                    () => !first.IsVisible && first.IsDeepCapsuleSlotVisible,
+                    "collapsed edge terminal authority");
+                return;
             }
             if (name == "early-exit")
             {
