@@ -1111,6 +1111,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>静止時のエッジカプセルのタイトル長を制限します。0 は文字のみ非表示にし、アイコンと保存済みタイトルは保持します。＋／−で「無制限、0、1…20」を循環します。ホバープレビューがオフの場合、ホバーで省略されたタイトルを広げ、離れると戻します。</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>メインカプセルを短縮</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>有効にすると、メインカプセルは矢印のみを表示し、現在のキューのカプセル数を非表示にします。</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>無制限</value>
   </data>
