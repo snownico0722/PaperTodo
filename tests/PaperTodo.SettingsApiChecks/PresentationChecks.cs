@@ -260,17 +260,22 @@ internal static partial class Program
 
             c.HidePaper(note);
             await PresentationSettle();
-            c.OpenLinkedPaper(note.Id);
+            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
             await PresentationSettle();
             Check(note.IsVisible && !note.IsCollapsed && c.IsLinkedPaperShown(note.Id),
                 "Linked-paper entry opens a hidden paper excluded from capsules.");
 
             c.OpenLinkedPaper(note.Id);
             await PresentationSettle();
+            Check(note.IsVisible && c.IsLinkedPaperShown(note.Id),
+                "Pure OpenLinkedPaper keeps an already-open linked paper visible.");
+
+            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
+            await PresentationSettle();
             Check(!note.IsVisible && !c.IsLinkedPaperShown(note.Id),
                 "Repeated linked-paper entry hides an expanded paper excluded from capsules.");
 
-            c.OpenLinkedPaper(note.Id);
+            c.OpenLinkedPaper(note.Id, toggleIfExcludedFromCapsules: true);
             await PresentationSettle();
             Check(note.IsVisible && !note.IsCollapsed && c.IsLinkedPaperShown(note.Id),
                 "Linked-paper entry reopens the paper after the repeated click hides it.");
