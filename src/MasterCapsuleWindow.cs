@@ -15,11 +15,10 @@ using VerticalAlignment = System.Windows.VerticalAlignment;
 
 namespace PaperTodo;
 
-// Standalone "collapse-all" master capsule. It is permanently pinned at deep-capsule
-// slot 0 (real capsules shift down to slot 1..N). Clicking it toggles whether the
-// real capsules are retracted behind it. It owns only its own pill chrome and the
-// vertical stack anchor; the controller drives the retract/release of the real
-// capsule windows.
+// Standalone "collapse-all" master capsule. While docked it owns slot 0 (real capsules shift
+// down to slot 1..N). Clicking toggles queue retraction; vertical drag moves the queue anchor.
+// A horizontal pull hands only the floating visual to the shared EdgeCapsuleDragWindow while the
+// controller owns the queue transfer. The master never becomes a Paper/presenter authority.
 public sealed class MasterCapsuleWindow : Window
 {
     private enum MasterGestureState
