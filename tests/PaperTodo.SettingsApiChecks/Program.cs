@@ -41,6 +41,7 @@ internal static partial class Program
         var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
         Field(controller, "<State>k__BackingField", new AppState());
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
+        Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;
     }
     private static PaperSettingDefinition Boolean(string id, Func<bool> read, Action<bool> write, Action publish) => new()
