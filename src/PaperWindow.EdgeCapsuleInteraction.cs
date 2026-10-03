@@ -193,7 +193,13 @@ public sealed partial class PaperWindow
 
         var shape = EdgeCapsuleTargetPlanner.CreateFloatingShape(
             layout,
-            outlineVisible: true);
+            outlineVisible: true) with
+        {
+            // A queue master carries only its arrow/count while detached. Keep the same ordinary
+            // FloatingFree shell but use the normal compact drag width instead of inheriting the
+            // sampled paper's title-dependent resting width.
+            WindowWidthDip = PaperLayoutDefaults.CapsuleWidth
+        };
         if (!shape.Visible ||
             shape.Kind != EdgeCapsuleSurfaceKind.FloatingFree ||
             shape.WindowWidthDip <= 0 ||
