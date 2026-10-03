@@ -34,6 +34,8 @@ public sealed partial class AppController
     private ScrollViewer? _settingsPageScrollViewer;
     private SettingsPage? _settingsPageScrollViewerPage;
     private Window? _settingsWindow;
+    private DispatcherTimer? _settingsStartupRefreshTimer;
+    private bool? _settingsStartupEnabledSnapshot;
     private TextBox? _settingsExternalMarkdownTextBox;
     private CheckBox? _settingsHidePapersFromTaskbarCheckBox;
     private CheckBox? _settingsHidePapersFromWindowSwitcherCheckBox;
@@ -562,6 +564,7 @@ public sealed partial class AppController
 
         if (_settingsWindow != null)
         {
+            EnsureSettingsStartupStateRefresh();
             RefreshSettingsWindowContent();
             _settingsWindow.Show();
             _settingsWindow.Activate();
@@ -601,9 +604,11 @@ public sealed partial class AppController
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
         window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
         window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
+        window.Activated += (_, _) => RefreshSettingsStartupStateFromWindows();
         window.Closed += (_, _) =>
         {
             CommitSettingsExternalMarkdownEditor();
+            StopSettingsStartupStateRefresh();
             _settingsExternalMarkdownTextBox = null;
             _settingsHidePapersFromTaskbarCheckBox = null;
             _settingsHidePapersFromWindowSwitcherCheckBox = null;
@@ -625,6 +630,7 @@ public sealed partial class AppController
             _settingsWindow = null;
         };
         _settingsWindow = window;
+        EnsureSettingsStartupStateRefresh();
         if (UsesNativeMicaWindows)
         {
             _settingsMica = new NativeMicaBackdrop(window, () => window.Content as Border,
@@ -2520,8 +2526,55 @@ public sealed partial class AppController
         }
     }
 
-    private void ToggleStartup() =>
-        SetSettingFromUi("general.startup", !SystemSettingsHelper.IsStartupEnabled());
+    private void ToggleStartup()
+    {
+        var enable = !SystemSettingsHelper.IsStartupEnabled();
+        if (SetSettingFromUi("general.startup", enable))
+        {
+            _settingsStartupEnabledSnapshot = SystemSettingsHelper.IsStartupEnabled();
+        }
+    }
+
+    private void EnsureSettingsStartupStateRefresh()
+    {
+        _settingsStartupEnabledSnapshot = SystemSettingsHelper.IsStartupEnabled();
+        if (_settingsStartupRefreshTimer == null)
+        {
+            _settingsStartupRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _settingsStartupRefreshTimer.Tick += (_, _) => RefreshSettingsStartupStateFromWindows();
+        }
+        _settingsStartupRefreshTimer.Start();
+    }
+
+    private void StopSettingsStartupStateRefresh()
+    {
+        _settingsStartupRefreshTimer?.Stop();
+        _settingsStartupEnabledSnapshot = null;
+    }
+
+    private void RefreshSettingsStartupStateFromWindows()
+    {
+        if (_settingsWindow is not { IsVisible: true })
+        {
+            return;
+        }
+
+        var enabled = SystemSettingsHelper.IsStartupEnabled();
+        if (_settingsStartupEnabledSnapshot == enabled)
+        {
+            return;
+        }
+
+        _settingsStartupEnabledSnapshot = enabled;
+        if (_settingsPage == SettingsPage.General)
+        {
+            RefreshSettingsForChange("general.startup");
+        }
+        RebuildTrayMenu();
+    }
 
     private void ToggleAnimations() =>
         SetSettingFromUi("appearance.animations", !State.EnableAnimations);

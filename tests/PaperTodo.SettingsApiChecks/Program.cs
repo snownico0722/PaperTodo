@@ -64,6 +64,7 @@ internal static partial class Program
         try
         {
             ServiceBehavior();
+            StartupApprovalBehavior();
             CatalogBehavior();
             TodoMoveBehavior();
             AdapterBehavior();
@@ -86,6 +87,37 @@ internal static partial class Program
         c.RunMcpPostCommitUi(() => { calls++; throw new InvalidOperationException("UI refresh failed"); });
         DrainSettingsUi();
         Check(calls == 1, "A failed post-commit UI update must not replay its partial side effects.");
+    }
+
+    private static void StartupApprovalBehavior()
+    {
+        var check = typeof(SystemSettingsHelper).GetMethod(
+            "IsStartupEnabled",
+            BindingFlags.Static | BindingFlags.NonPublic,
+            null,
+            [typeof(object), typeof(object), typeof(string)],
+            null) ?? throw new InvalidOperationException("Missing startup state evaluator.");
+
+        const string path = @"C:\Program Files\PaperTodo\PaperTodo.exe";
+        bool Enabled(object? runValue, object? approvalValue) =>
+            (bool)check.Invoke(null, [runValue, approvalValue, path])!;
+
+        Check(Enabled($"\"{path}\"", null),
+            "A matching Run entry without StartupApproved state remains enabled.");
+        Check(Enabled(path, new byte[] { 0x02 }),
+            "StartupApproved 0x02 remains enabled.");
+        Check(Enabled(path, new byte[] { 0x06 }),
+            "StartupApproved 0x06 remains enabled.");
+        Check(!Enabled(path, new byte[] { 0x03 }),
+            "Task Manager disabled state 0x03 overrides the Run entry.");
+        Check(!Enabled(path, new byte[] { 0x07 }),
+            "Task Manager disabled state 0x07 overrides the Run entry.");
+        Check(!Enabled(path, new byte[] { 0x09 }),
+            "Unknown non-enabled StartupApproved states fail closed.");
+        Check(!Enabled(path, Array.Empty<byte>()),
+            "Malformed empty StartupApproved state fails closed.");
+        Check(!Enabled(@"C:\Old\PaperTodo.exe", null),
+            "A stale Run path is not reported as enabled.");
     }
 
     private static void ServiceBehavior()

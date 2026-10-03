@@ -50,6 +50,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Bug fixes and improvements
 
+- Fixed Windows startup remaining shown as enabled after PaperTodo was disabled in Startup Apps or Task Manager. While Settings is open, PaperTodo periodically refreshes the effective Windows startup state; explicitly enabling it again clears PaperTodo's disabled approval record, rewrites the Run entry, and verifies the result.
+
 - Fixed Web Mini surfaces sometimes becoming visible again while some controls no longer received clicks. Recovery now republishes the current interactive regions before reporting the surface ready, while normal layout updates keep their existing deduplication.
 - Fixed a batch of due todo reminders being marked as delivered when the tray notification was unavailable and only the first paper was actually opened. Only reminders that were actually surfaced are now acknowledged; the rest continue through the existing retry path.
 - Changing “Prefer PowerShell 7” or “Hide run window” now affects future script runs only and no longer stops the current persistent PowerShell process. Explicitly disabling persistent-process mode still stops it normally.
