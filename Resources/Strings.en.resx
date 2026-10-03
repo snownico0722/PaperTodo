@@ -1111,6 +1111,12 @@ Per-note percentage zoom stacks on top.</value>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Limit the title shown by resting edge capsules. 0 hides the title but keeps the icon and stored title. Plus/minus cycle through Unlimited, 0, 1…20. With hover preview off, hovering reveals a shortened title; leaving restores the limit.</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>Shorten main capsule</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>When enabled, the main capsule shows only the arrow and hides the capsule count for the current queue.</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>Unlimited</value>
   </data>
