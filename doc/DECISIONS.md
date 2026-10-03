@@ -413,7 +413,7 @@ V2.5 的日志还证明了 transaction 粒度本身会成为性能和正确性�
 
 ### Decision
 
-脱离队列/跨边拖拽使用 `EdgeCapsuleDragWindow`，不复用 docked 单边 host。controller 序列化 capsule reorder，因此进程级只维护一个 pooled drag HWND；其 HWND 和 WPF tree 长期存在，lease 时只重新绑定 paper-specific presentation。
+脱离队列/跨边拖拽使用 `EdgeCapsuleDragWindow`，不复用 docked 单边 host。controller 序列化 capsule reorder，因此进程级只维护一个 pooled drag HWND；其 HWND 和 WPF tree 长期存在，lease 时只重新绑定当前拖动对象的 presentation。主胶囊横向整队迁移同样租用这一 pooled HWND，只复用 `FloatingFree` 视觉与 native drag；队列成员、monitor/edge、collapse 状态和起始高度仍由 controller 的 queue transfer 一次提交，master 不伪装成 Paper。
 
 ### Why
 
@@ -429,6 +429,7 @@ Docked capsule 有 wall-side straight edge、close segment、bounded capacity �
 
 - `cc9906ab940bc0e11905401fb079fdedc1f05427` — `fix(edge): keep one persistent drag host`。
 - 当前 `src/EdgeCapsuleDragWindow.cs`。
+- 当前 `src/MasterCapsuleQueueTransfer.cs` / `src/MasterCapsuleWindow.cs`。
 
 ---
 
