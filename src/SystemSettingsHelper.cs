@@ -99,13 +99,16 @@ public static class SystemSettingsHelper
             return true;
         }
 
-        if (approvalValue is not byte[] data || data.Length == 0)
+        if (approvalValue is not byte[] data || data.Length < 12)
         {
             return false;
         }
 
-        // Explorer currently uses 0x02/0x06 for enabled entries and 0x03/0x07 for
-        // their disabled counterparts. Unknown non-empty values are treated conservatively.
-        return data[0] is 0x02 or 0x06;
+        // StartupApproved is an undocumented Explorer-owned binary value. Current Windows
+        // variants use the trailing eight bytes as the disabled timestamp: enabled records
+        // keep that timestamp clear (seen with 0x00, 0x02 and 0x06 prefixes), while a Task
+        // Manager / Startup Apps disable writes a non-zero timestamp. Do not overfit the
+        // leading status byte; require the real 12-byte shape and a clear timestamp.
+        return data[^8..].All(value => value == 0);
     }
 }
