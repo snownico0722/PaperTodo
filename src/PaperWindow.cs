@@ -195,7 +195,7 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleSlotOutlineOverlap =
         EdgeCapsuleLayout.OutlineOverlap;
     private const double DeepCapsuleReorderDragExtraThreshold = 4;
-    private const double DeepCapsuleCrossQueueDragUnlockDistance = 56;
+    private const double DeepCapsuleCrossQueueDragUnlockDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
     private const double DeepCapsuleCrossQueueDragScaleFrom = 0.97;
     private const int DeepCapsuleCrossQueueDragMorphMilliseconds = 90;
     private const int DeepCapsuleDockingHandoffMilliseconds = 160;
