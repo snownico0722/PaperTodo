@@ -174,6 +174,42 @@ public sealed partial class PaperWindow
         };
     }
 
+    internal bool TryCreateMasterQueueFloatingDragHostOptions(
+        string icon,
+        string label,
+        out EdgeCapsuleDragWindowOptions options)
+    {
+        options = null!;
+        if (!HasDeepCapsuleSlotPlacement)
+        {
+            return false;
+        }
+
+        var layout = CaptureEdgeCapsuleLayoutSnapshot();
+        if (!layout.IsUsable)
+        {
+            return false;
+        }
+
+        var shape = EdgeCapsuleTargetPlanner.CreateFloatingShape(
+            layout,
+            outlineVisible: true);
+        if (!shape.Visible ||
+            shape.Kind != EdgeCapsuleSurfaceKind.FloatingFree ||
+            shape.WindowWidthDip <= 0 ||
+            shape.WindowHeightDip <= 0)
+        {
+            return false;
+        }
+
+        options = CreateDeepCapsuleFloatingDragHostOptions(shape) with
+        {
+            Icon = icon,
+            Label = label
+        };
+        return true;
+    }
+
     private void QueueDeepCapsuleFloatingDragInfrastructurePrewarm(
         System.Windows.Threading.DispatcherPriority priority =
             System.Windows.Threading.DispatcherPriority.Background,
