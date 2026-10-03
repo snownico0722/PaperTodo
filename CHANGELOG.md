@@ -50,7 +50,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Bug fixes and improvements
 
-- Fixed linked papers excluded from the capsule list only being raised again when their Todo link was clicked a second time. The same link now hides the expanded paper, and another click reopens it.
+- Fixed linked papers excluded from the capsule list only being raised again when their Todo link was clicked a second time. With “Click capsule again to retract paper” enabled, clicking the linked-paper entry again hides the expanded paper and another click reopens it. The setting is renamed from “Click edge capsule again to retract paper.”
 - Fixed Web Mini surfaces sometimes becoming visible again while some controls no longer received clicks. Recovery now republishes the current interactive regions before reporting the surface ready, while normal layout updates keep their existing deduplication.
 - Fixed a batch of due todo reminders being marked as delivered when the tray notification was unavailable and only the first paper was actually opened. Only reminders that were actually surfaced are now acknowledged; the rest continue through the existing retry path.
 - Changing “Prefer PowerShell 7” or “Hide run window” now affects future script runs only and no longer stops the current persistent PowerShell process. Explicitly disabling persistent-process mode still stops it normally.
