@@ -91,16 +91,9 @@ internal static partial class Program
 
     private static void StartupApprovalBehavior()
     {
-        var check = typeof(SystemSettingsHelper).GetMethod(
-            "IsStartupEnabled",
-            BindingFlags.Static | BindingFlags.NonPublic,
-            null,
-            [typeof(object), typeof(object), typeof(string)],
-            null) ?? throw new InvalidOperationException("Missing startup state evaluator.");
-
         const string path = @"C:\Program Files\PaperTodo\PaperTodo.exe";
         bool Enabled(object? runValue, object? approvalValue) =>
-            (bool)check.Invoke(null, [runValue, approvalValue, path])!;
+            SystemSettingsHelper.IsStartupEnabled(runValue, approvalValue, path);
 
         Check(Enabled($"\"{path}\"", null),
             "A matching Run entry without StartupApproved state remains enabled.");
