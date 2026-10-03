@@ -2262,8 +2262,14 @@ public sealed partial class AppController
         if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
         {
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode &&
+            var canRetractExpandedEdgePaper = State.UseCapsuleMode &&
+                State.UseDeepCapsuleMode &&
                 State.ShowDeepCapsuleWhileExpanded;
+            var canHideExcludedLinkedPaper = State.UseCapsuleMode &&
+                State.EnableTodoPaperLinks &&
+                State.HideLinkedPapersFromCapsules;
+            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
+                canRetractExpandedEdgePaper || canHideExcludedLinkedPaper;
         }
         if (_settingsCapsuleCollapseAllCheckBox != null)
         {
