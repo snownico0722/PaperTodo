@@ -241,6 +241,9 @@ internal static partial class Program
 
     private static async Task LinkedPaperVisibilityToggleBehavior(AppController c, PaperData note, PaperData todo)
     {
+        var previousEnableAnimations = c.State.EnableAnimations;
+        var previousUseCapsuleMode = c.State.UseCapsuleMode;
+        var previousEnableTodoPaperLinks = c.State.EnableTodoPaperLinks;
         var previousHideLinkedPapersFromCapsules = c.State.HideLinkedPapersFromCapsules;
         var previousCollapseExpandedDeepCapsuleOnClick = c.State.CollapseExpandedDeepCapsuleOnClick;
         try
@@ -274,6 +277,9 @@ internal static partial class Program
         }
         finally
         {
+            c.State.EnableAnimations = previousEnableAnimations;
+            c.State.UseCapsuleMode = previousUseCapsuleMode;
+            c.State.EnableTodoPaperLinks = previousEnableTodoPaperLinks;
             c.State.HideLinkedPapersFromCapsules = previousHideLinkedPapersFromCapsules;
             c.State.CollapseExpandedDeepCapsuleOnClick = previousCollapseExpandedDeepCapsuleOnClick;
         }
