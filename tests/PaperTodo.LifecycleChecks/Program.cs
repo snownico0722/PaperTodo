@@ -208,6 +208,22 @@ internal static class Program
                     "",
                     EdgeCapsuleEdge.Right);
                 Require(
+                    controller.TryCreateMasterQueueFloatingDragHostOptions(
+                        "",
+                        EdgeCapsuleEdge.Right,
+                        "▾",
+                        count.ToString(),
+                        out var floatingOptions),
+                    "master queue did not create a floating drag presentation");
+                Require(
+                    floatingOptions.Shape.Kind == EdgeCapsuleSurfaceKind.FloatingFree &&
+                    Math.Abs(
+                        floatingOptions.Shape.WindowWidthDip -
+                        PaperLayoutDefaults.CapsuleWidth) < 0.01 &&
+                    floatingOptions.Icon == "▾" &&
+                    floatingOptions.Label == count.ToString(),
+                    "master queue drag does not reuse the ordinary FloatingFree capsule shape");
+                Require(
                     controller.TryBeginMasterCapsuleQueueTransfer(
                         "",
                         EdgeCapsuleEdge.Right,
@@ -226,6 +242,29 @@ internal static class Program
                 var drop = new DeviceScreenPoint(
                     monitor.WorkArea.Left + Math.Max(1, monitor.WorkArea.Width / 4),
                     monitor.WorkArea.Top + Math.Max(1, monitor.WorkArea.Height / 3));
+                var rightDrop = new DeviceScreenPoint(
+                    monitor.WorkArea.Left + Math.Max(1, monitor.WorkArea.Width * 3 / 4),
+                    drop.Y);
+                Require(
+                    MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                        rightDrop,
+                        "",
+                        EdgeCapsuleEdge.Left,
+                        count + 1,
+                        controller.DeepCapsuleGap,
+                        out var rightTarget) &&
+                    rightTarget.Edge == EdgeCapsuleEdge.Right,
+                    "master transfer did not resolve the target monitor's right half to the right queue");
+                Require(
+                    MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                        drop,
+                        "",
+                        EdgeCapsuleEdge.Right,
+                        count + 1,
+                        controller.DeepCapsuleGap,
+                        out var leftTarget) &&
+                    leftTarget.Edge == EdgeCapsuleEdge.Left,
+                    "master transfer did not resolve the target monitor's left half to the left queue");
                 Require(
                     controller.CommitMasterCapsuleQueueTransfer(
                         transfer,
