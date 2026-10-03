@@ -267,6 +267,12 @@ public sealed partial class AppController
             value => State.UseCapsuleCollapseAll = value,
             SettingEffects.CapsuleMode,
             title: Strings.Get("SettingsCapsuleCollapseAll"));
+        yield return DefineSetting<bool>("capsule.master_compact",
+            () => State.CompactMasterCapsule,
+            value => State.CompactMasterCapsule = value,
+            SettingEffects.Arrange,
+            title: Strings.Get("SettingsCompactMasterCapsule"),
+            description: "Show only the arrow in the master capsule and hide its queue count.");
         yield return DefineSetting<bool>("capsule.show_while_expanded",
             () => State.ShowDeepCapsuleWhileExpanded,
             value => State.ShowDeepCapsuleWhileExpanded = value,
