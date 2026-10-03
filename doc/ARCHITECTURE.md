@@ -369,7 +369,7 @@ Presentation contract 区分：
 
 跨队列/脱墙拖拽使用独立、进程级复用的 `EdgeCapsuleDragWindow`，不把 docked host 变形成自由 floating pill。
 
-开启 collapse-all master 时，每个队列的 `MasterCapsuleWindow` 占 slot 0，只拥有自身 presentation/gesture，不持有真实 paper 的第二套 presenter state。
+开启 collapse-all master 时，每个队列的 `MasterCapsuleWindow` 占 slot 0，只拥有自身 presentation/gesture，不持有真实 paper 的第二套 presenter state。主胶囊纵向拖动仍只改变该队列的起始高度；横向脱墙后由 controller 建立一次 queue transfer，成员临时 retract，并租用同一个进程级 `EdgeCapsuleDragWindow` 作为普通 `FloatingFree` 外观。松手只原子更新该队列成员的 monitor/edge、队列起始高度与 collapse 状态，再回到正常 arrange；master 本身不变成 Paper，也不新增 presenter authority。
 
 ### 6.4 WPF 与 DirectComposition
 
