@@ -432,6 +432,9 @@ public sealed class MasterCapsuleWindow : Window
     private void ApplyStateVisuals()
     {
         _glyph.Text = _active ? "▸" : "▾";
+        _label.Visibility = _controller.State.CompactMasterCapsule
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         _label.Text = _count.ToString(UiLanguages.EffectiveCulture);
         _pill.ToolTip = _active
             ? Strings.Get("CapsuleCollapseAllCollapsedTip")
@@ -486,23 +489,34 @@ public sealed class MasterCapsuleWindow : Window
 
     private double MasterDockedWidth(double pixelsPerDip)
     {
-        // Keep both the arrow slot and the two-digit count slot stable. The master capsule width
-        // never changes with collapse state or count.
+        // The arrow slot stays stable in both modes. Normal mode also reserves a stable
+        // two-digit count slot; compact mode removes that slot entirely.
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
             MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
-        var twoDigitCountWidth = MeasureText(
-            MasterTwoDigitCountSample,
-            MasterLabelFontSize,
-            MasterLabelFontWeight,
-            MasterLabelFontFamily,
-            pixelsPerDip);
-        _label.Width = twoDigitCountWidth;
+        var countWidth = 0d;
+        var countGap = 0d;
+        if (_controller.State.CompactMasterCapsule)
+        {
+            _label.Width = double.NaN;
+        }
+        else
+        {
+            countWidth = MeasureText(
+                MasterTwoDigitCountSample,
+                MasterLabelFontSize,
+                MasterLabelFontWeight,
+                MasterLabelFontFamily,
+                pixelsPerDip);
+            countGap = MasterGlyphGap;
+            _label.Width = countWidth;
+        }
+
         var bodyWidth = Math.Ceiling(
             MasterLeftPadding +
             glyphWidth +
-            MasterGlyphGap +
-            twoDigitCountWidth +
+            countGap +
+            countWidth +
             MasterRightPadding +
             MasterInteriorBorderThickness);
         return Math.Max(1, bodyWidth + WindowChromeMargin);
