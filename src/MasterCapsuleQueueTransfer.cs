@@ -1,6 +1,7 @@
 namespace PaperTodo;
 
 internal readonly record struct MasterCapsuleQueueTransferSnapshot(
+    string SourceQueueKey,
     string SourceMonitorDeviceName,
     EdgeCapsuleEdge SourceEdge,
     string[] PaperIds,
@@ -64,3 +65,4 @@ internal static class MasterCapsuleQueueTransferPolicy
         return true;
     }
 }
+

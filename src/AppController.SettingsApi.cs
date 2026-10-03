@@ -116,6 +116,7 @@ public sealed partial class AppController
         {
             // Settle the existing visual owner before changing flags; never fabricate a second
             // presentation state. The same preparation/handoff is used by the interactive UI.
+            CancelMasterCapsuleQueueTransfers();
             foreach (var window in _windows.Values.ToArray())
             {
                 window.PrepareForCapsulePresentationModeChange();
@@ -363,3 +364,4 @@ public sealed partial class AppController
         return setting;
     }
 }
+

@@ -83,6 +83,10 @@ public sealed class MasterCapsuleWindow : Window
     // ordinary cross-queue threshold switches to a queue transfer: members retract temporarily and
     // this master is represented by the shared FloatingFree drag HWND until the drop commits.
     private MasterDragSession? _dragSession;
+    private EdgeCapsuleDragWindow? _floatingDragHost;
+    private IntPtr _floatingFullscreenAvoidanceWindow;
+    private MasterCapsuleQueueTransferSnapshot? _queueTransferSnapshot;
+    private bool _queueTransferCanceled;
 
     private static readonly DependencyProperty AnimatedTopProperty =
         DependencyProperty.Register(
@@ -418,6 +422,70 @@ public sealed class MasterCapsuleWindow : Window
                 WindowNative.ApplyTopmostZOrder(this, topmost, avoidanceWindow);
             }
         }
+
+        RefreshFloatingDragTopmost();
+    }
+
+    private void RefreshFloatingDragTopmost()
+    {
+        if (_floatingDragHost is not { } floatingHost)
+        {
+            return;
+        }
+
+        var avoidanceWindow = _controller.FullscreenAvoidanceWindowFor(floatingHost);
+        _floatingFullscreenAvoidanceWindow = avoidanceWindow;
+        var topmost = !_controller.SuppressDeepCapsuleTopmostForContextMenu &&
+            avoidanceWindow == IntPtr.Zero;
+        floatingHost.Topmost = topmost;
+        if (floatingHost.IsVisible)
+        {
+            WindowNative.ApplyTopmostZOrder(floatingHost, topmost, avoidanceWindow);
+        }
+    }
+
+    private void OnFloatingDragHostLocationChanged(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, _floatingDragHost) &&
+            _floatingFullscreenAvoidanceWindow !=
+                _controller.FullscreenAvoidanceWindowFor(_floatingDragHost))
+        {
+            RefreshFloatingDragTopmost();
+        }
+    }
+
+    private void OnFloatingDragHostUnexpectedlyClosed(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, _floatingDragHost))
+        {
+            ReleaseFloatingDragHostHandlers();
+            CancelQueueTransfer();
+        }
+    }
+
+    private void ReleaseFloatingDragHostHandlers()
+    {
+        if (_floatingDragHost is { } host)
+        {
+            host.LocationChanged -= OnFloatingDragHostLocationChanged;
+            host.UnexpectedlyClosed -= OnFloatingDragHostUnexpectedlyClosed;
+            _floatingDragHost = null;
+        }
+        _floatingFullscreenAvoidanceWindow = IntPtr.Zero;
+    }
+
+    internal void CancelQueueTransfer()
+    {
+        if (_queueTransferSnapshot is not { } snapshot || _queueTransferCanceled)
+        {
+            return;
+        }
+
+        _queueTransferCanceled = true;
+        // The native move loop can still be on the stack. Withdraw its visible surface now,
+        // but keep the lease until that call returns so no later drag can rebind its HWND.
+        _floatingDragHost?.Hide();
+        _controller.CancelMasterCapsuleQueueTransfer(snapshot);
     }
 
     public void SetExperimentalPassive(bool enabled)
@@ -429,6 +497,7 @@ public sealed class MasterCapsuleWindow : Window
 
         if (enabled)
         {
+            CancelQueueTransfer();
             FinishMasterGesture(commit: false, clearFocus: true);
         }
 
@@ -490,6 +559,8 @@ public sealed class MasterCapsuleWindow : Window
         var committed = false;
         try
         {
+            _queueTransferSnapshot = snapshot;
+            _queueTransferCanceled = false;
             _gestureState = MasterGestureState.QueueTransfer;
             ++_moveGeneration;
             _animatedMonitorGeometry = null;
@@ -501,11 +572,19 @@ public sealed class MasterCapsuleWindow : Window
             }
 
             floatingHost = EdgeCapsuleDragWindow.Rent(options);
+            _floatingDragHost = floatingHost;
+            floatingHost.LocationChanged += OnFloatingDragHostLocationChanged;
+            floatingHost.UnexpectedlyClosed += OnFloatingDragHostUnexpectedlyClosed;
             floatingHost.ShowWithEntrance(
                 currentScreenPos,
                 animate: false,
                 scaleFrom: 1,
                 durationMilliseconds: 0);
+            RefreshFloatingDragTopmost();
+            if (_queueTransferCanceled || _isClosingForReal)
+            {
+                return true;
+            }
 
             // The floating pill is now the only visible representative of this source queue.
             // Source members were retracted by the controller before this point.
@@ -529,7 +608,9 @@ public sealed class MasterCapsuleWindow : Window
                     drop);
             }
 
-            if (outcome.Result == EdgeCapsuleNativeDragResult.Completed)
+            if (!_queueTransferCanceled &&
+                !_isClosingForReal &&
+                outcome.Result == EdgeCapsuleNativeDragResult.Completed)
             {
                 committed = _controller.CommitMasterCapsuleQueueTransfer(
                     snapshot,
@@ -552,27 +633,35 @@ public sealed class MasterCapsuleWindow : Window
         }
         finally
         {
-            try
-            {
-                floatingHost?.ReturnToPool();
-            }
-            catch
-            {
-                // A failed pooled host must not strand the queue transaction.
-            }
-
+            _queueTransferSnapshot = null;
+            ReleaseFloatingDragHostHandlers();
             _gestureState = MasterGestureState.Idle;
             _dragSession = null;
-            if (!_isClosingForReal)
+            try
             {
-                if (!IsVisible)
+                if (!_isClosingForReal)
                 {
-                    Show();
+                    BeginAnimation(OpacityProperty, null);
+                    Opacity = 1;
+                    MoveToTarget(animate: false);
+                    if (!IsVisible)
+                    {
+                        Show();
+                    }
+                    RefreshEffectiveTopmost();
                 }
-                BeginAnimation(OpacityProperty, null);
-                Opacity = 1;
-                MoveToTarget(animate: false);
-                RefreshEffectiveTopmost();
+            }
+            finally
+            {
+                try
+                {
+                    // Restore the surviving master before withdrawing its floating cover.
+                    floatingHost?.ReturnToPool();
+                }
+                catch
+                {
+                    // A failed pooled host must not strand the queue transaction.
+                }
             }
 
             ClearCapsuleInteractionKeyboardFocus();
@@ -947,6 +1036,7 @@ public sealed class MasterCapsuleWindow : Window
         }
 
         _isClosingForReal = true;
+        CancelQueueTransfer();
         FinishMasterGesture(commit: false, clearFocus: false);
         _contextMenuSession.Dispose();
         ++_moveGeneration;

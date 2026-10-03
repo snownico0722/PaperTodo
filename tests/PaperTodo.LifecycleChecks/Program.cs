@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "collapse-authority", "master-queue-transfer", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "collapse-authority", "master-queue-transfer", "master-queue-cancel", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -145,6 +145,13 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
+        if (name.StartsWith("master-queue-merge"))
+        {
+            state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[3].CapsuleSide = DeepCapsuleSides.Left;
+            if (name == "master-queue-merge-collapsed")
+                state.CapsuleCollapseAllActiveQueues["|" + DeepCapsuleSides.Left] = true;
+        }
         if (name == "missing-monitor")
             state.Papers.Add(new PaperData
             {
@@ -202,6 +209,93 @@ internal static class Program
                     "collapsed edge terminal authority");
                 return;
             }
+            if (name == "master-queue-hide")
+            {
+                var margin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
+                Require(controller.TryBeginMasterCapsuleQueueTransfer(
+                    "", EdgeCapsuleEdge.Right, margin, out var transfer),
+                    "hide fixture transfer did not start");
+                controller.HideAllPapers();
+                Require(controller.State.Papers.All(paper => !paper.IsVisible),
+                    "hide during master transfer did not hide the papers");
+                Require(Application.Current.Windows.Cast<Window>().All(window => !window.IsVisible),
+                    "hide during master transfer left a master or paper surface visible");
+                Require(controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
+                    "hide during master transfer persisted temporary collapse");
+                Require(!controller.CommitMasterCapsuleQueueTransfer(transfer, new DeviceScreenPoint(100, 100)),
+                    "hidden master transfer could still commit after lifecycle cancellation");
+                return;
+            }
+            if (name == "master-queue-disconnect")
+            {
+                MasterQueueMonitorChecks.Run(controller);
+                MasterQueueMonitorChecks.RunFloatingZOrder(controller);
+                return;
+            }
+            if (name == "master-queue-cancel")
+            {
+                controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, 80);
+                var originalMargin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
+                controller.SaveNow(sync: true);
+                controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, originalMargin + 20);
+                Require(controller.TryBeginMasterCapsuleQueueTransfer(
+                    "", EdgeCapsuleEdge.Right, originalMargin, out var cancelled),
+                    "cancellable master transfer did not start");
+                Require(windows.Values.All(window => window.IsCollapseAllRetracted),
+                    "temporary source retraction did not reach the presenters");
+                controller.SaveNow(sync: true); // native modal dragging permits unrelated saves
+                var duringDrag = store.Load();
+                Require(duringDrag.CapsuleCollapseAllActiveQueues.Count == 0,
+                    "saving during master drag persisted temporary retraction");
+                Require(Math.Abs(duringDrag.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right] - originalMargin) < 0.01,
+                    "saving during master drag persisted the preceding vertical preview");
+                controller.CancelMasterCapsuleQueueTransfer(cancelled);
+                Require(controller.State.Papers.Select(paper => paper.Id).SequenceEqual(
+                    Enumerable.Range(0, count).Select(i => "fixture-" + i)),
+                    "cancelling master transfer changed paper order");
+                Require(controller.State.Papers.All(paper => paper.CapsuleSide == DeepCapsuleSides.Right),
+                    "cancelling master transfer changed queue membership");
+                await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
+                    "cancelled master queue restored presentation");
+                Require(controller.TryBeginMasterCapsuleQueueTransfer(
+                    "", EdgeCapsuleEdge.Right, originalMargin, out var repeated),
+                    "cancelled master drag stranded the transfer gate");
+                controller.CancelMasterCapsuleQueueTransfer(cancelled); // late completion from the old native loop
+                Require(windows.Values.All(window => window.IsCollapseAllRetracted),
+                    "old transfer cancellation canceled the newer transfer");
+                Require(!controller.CommitMasterCapsuleQueueTransfer(cancelled, new DeviceScreenPoint(100, 100)),
+                    "old transfer committed over a newer transfer");
+                controller.CancelMasterCapsuleQueueTransfer(repeated);
+                return;
+            }
+            if (name.StartsWith("master-queue-merge"))
+            {
+                var targetCollapsed = name == "master-queue-merge-collapsed";
+                // The source is expanded in both cases; an existing target owns its collapse state.
+                var sourceMargin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
+                Require(controller.TryBeginMasterCapsuleQueueTransfer(
+                    "", EdgeCapsuleEdge.Right, sourceMargin, out var transfer),
+                    "merge transfer did not start");
+                Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
+                    "merge monitor geometry");
+                var drop = new DeviceScreenPoint(monitor.WorkArea.Left + 10, monitor.WorkArea.Top + 100);
+                Require(controller.CommitMasterCapsuleQueueTransfer(transfer, drop),
+                    "master transfer into existing queue did not commit");
+                var expectedOrder = new[] { "fixture-2", "fixture-3", "fixture-0", "fixture-1", "fixture-4" };
+                Require(controller.State.Papers.Select(paper => paper.Id).SequenceEqual(expectedOrder),
+                    "merge did not append source members in their original order");
+                Require(controller.State.Papers.All(paper => paper.CapsuleSide == DeepCapsuleSides.Left),
+                    "merge left source members behind");
+                await Until(() => windows.Values.All(window => window.IsCollapseAllRetracted == targetCollapsed),
+                    "merged queue retained target collapse state");
+                controller.SaveNow(sync: true);
+                var saved = store.Load();
+                Require(saved.Papers.Select(paper => paper.Id).SequenceEqual(expectedOrder),
+                    "merged member order did not survive persistence");
+                Require(saved.CapsuleCollapseAllActiveQueues.Values.Any(active => active) == targetCollapsed,
+                    "merged collapse state did not survive persistence");
+                return;
+            }
             if (name == "master-queue-transfer")
             {
                 var sourceMargin = controller.DeepCapsuleStartTopMarginForQueue(
@@ -231,8 +325,11 @@ internal static class Program
                         out var transfer),
                     "master queue transfer did not start");
                 Require(
-                    controller.State.CapsuleCollapseAllActiveQueues.Count == 1,
+                    windows.Values.All(window => window.IsCollapseAllRetracted),
                     "master drag did not temporarily retract the source queue");
+                Require(
+                    controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
+                    "temporary drag retraction changed persistent collapse state");
 
                 Require(
                     WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
@@ -395,3 +492,4 @@ internal static class Program
         if (!condition) throw new InvalidOperationException(message);
     }
 }
+
