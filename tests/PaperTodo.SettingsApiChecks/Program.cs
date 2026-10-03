@@ -104,18 +104,18 @@ internal static partial class Program
 
         Check(Enabled($"\"{path}\"", null),
             "A matching Run entry without StartupApproved state remains enabled.");
-        Check(Enabled(path, new byte[] { 0x02 }),
-            "StartupApproved 0x02 remains enabled.");
-        Check(Enabled(path, new byte[] { 0x06 }),
-            "StartupApproved 0x06 remains enabled.");
-        Check(!Enabled(path, new byte[] { 0x03 }),
-            "Task Manager disabled state 0x03 overrides the Run entry.");
-        Check(!Enabled(path, new byte[] { 0x07 }),
-            "Task Manager disabled state 0x07 overrides the Run entry.");
-        Check(!Enabled(path, new byte[] { 0x09 }),
-            "Unknown non-enabled StartupApproved states fail closed.");
-        Check(!Enabled(path, Array.Empty<byte>()),
-            "Malformed empty StartupApproved state fails closed.");
+        Check(Enabled(path, new byte[12]),
+            "A zeroed 12-byte StartupApproved value remains enabled.");
+        Check(Enabled(path, new byte[] { 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "StartupApproved 0x02 with a clear timestamp remains enabled.");
+        Check(Enabled(path, new byte[] { 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+            "StartupApproved 0x06 with a clear timestamp remains enabled.");
+        Check(!Enabled(path, new byte[] { 0x03, 0, 0, 0, 0xA5, 0x20, 0xF6, 0x4A, 0x95, 0xD7, 0xD9, 0x01 }),
+            "Task Manager disabled state with a timestamp overrides the Run entry.");
+        Check(!Enabled(path, new byte[] { 0x07, 0, 0, 0, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 }),
+            "Alternate disabled state with a timestamp overrides the Run entry.");
+        Check(!Enabled(path, new byte[] { 0x02 }),
+            "Malformed short StartupApproved state fails closed.");
         Check(!Enabled(@"C:\Old\PaperTodo.exe", null),
             "A stale Run path is not reported as enabled.");
     }
