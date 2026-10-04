@@ -13,6 +13,8 @@ internal static class MaterialPresentationChecks
 {
     internal static void Run(AppController controller)
     {
+        CheckDefaultPaperLightweightShadow(controller);
+
         var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
         var ordinary = BackgroundCaptureLayout.Create(
             new Int32Rect(100, 100, 560, 440),
@@ -107,6 +109,175 @@ internal static class MaterialPresentationChecks
             Theme.Invalidate();
         }
     }
+    private static void CheckDefaultPaperLightweightShadow(AppController controller)
+    {
+        var nativeProperty = typeof(AppController).GetProperty(
+            "UsesNativeMicaWindows",
+            Program.Private)!;
+        var savedNative = (bool)nativeProperty.GetValue(controller)!;
+        var saved = (
+            controller.State.PaperSkin,
+            controller.State.Theme,
+            controller.State.UseCapsuleMode);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo,
+            Title = "Lightweight shadow regression",
+            X = 80,
+            Y = 80,
+            Width = 360,
+            Height = 280
+        };
+        PaperWindow? window = null;
+        try
+        {
+            nativeProperty.SetValue(controller, false);
+            controller.State.PaperSkin = PaperSkins.Paper;
+            controller.State.Theme = "light";
+            controller.State.UseCapsuleMode = true;
+            Theme.Invalidate();
+
+            controller.State.Papers.Add(paper);
+            window = new PaperWindow(paper, controller);
+            window.Show();
+            Wait(120);
+
+            var chrome = (PaperChromeBorder)typeof(PaperWindow)
+                .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            Program.Assert(
+                window.AllowsTransparency &&
+                chrome.Effect == null &&
+                chrome.HasLightweightShadow,
+                "default floating paper uses lightweight shadow instead of DropShadowEffect");
+            AssertLightweightShadowRamp(window);
+
+            window.SetCollapsedState(true, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "default capsule keeps the lightweight shadow path");
+
+            window.SetCollapsedState(false, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "expanded default paper restores the lightweight shadow path");
+
+            // Theme/skin refresh may change only the shadow recipe here. During a real form
+            // transition Margin/CornerRadius are frame-owned, so refreshing paint must not
+            // snap those geometry values to an endpoint.
+            var normalMargin = chrome.Margin;
+            var normalCorner = chrome.CornerRadius;
+            var transitionMargin = new Thickness(3.25);
+            var transitionCorner = new CornerRadius(11.5);
+            chrome.Margin = transitionMargin;
+            chrome.CornerRadius = transitionCorner;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Margin == transitionMargin &&
+                chrome.CornerRadius == transitionCorner &&
+                chrome.Effect == null &&
+                chrome.HasLightweightShadow,
+                "skin refresh changes paper shadow without rewriting transition geometry");
+            chrome.Margin = normalMargin;
+            chrome.CornerRadius = normalCorner;
+            window.UpdateLayout();
+
+            var savedOutline = controller.State.HideSurfaceOutline;
+            controller.State.HideSurfaceOutline = true;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Effect == null && chrome.HasLightweightShadow,
+                "hiding the outer border does not disable the lightweight paper shadow");
+            AssertLightweightShadowRamp(window);
+            controller.State.HideSurfaceOutline = savedOutline;
+            window.RefreshSkin();
+
+            controller.State.PaperSkin = PaperSkins.Acrylic;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                !chrome.HasLightweightShadow && chrome.Effect is System.Windows.Media.Effects.DropShadowEffect,
+                "switching away from paper clears the lightweight shadow before restoring the legacy skin effect");
+
+            controller.State.PaperSkin = PaperSkins.Paper;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.HasLightweightShadow && chrome.Effect == null,
+                "switching back to paper restores only the lightweight shadow");
+        }
+        finally
+        {
+            window?.CloseForReal();
+            controller.State.Papers.Remove(paper);
+            (controller.State.PaperSkin,
+                controller.State.Theme,
+                controller.State.UseCapsuleMode) = saved;
+            nativeProperty.SetValue(controller, savedNative);
+            Theme.Invalidate();
+        }
+    }
+
+    private static void AssertLightweightShadowRamp(PaperWindow window)
+    {
+        window.UpdateLayout();
+        if (window.Content is not FrameworkElement host ||
+            host.ActualWidth <= 24 ||
+            host.ActualHeight <= 24)
+        {
+            throw new InvalidOperationException("default paper host is not renderable");
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(host);
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(host.ActualWidth * dpi.DpiScaleX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(host.ActualHeight * dpi.DpiScaleY));
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            pixelWidth,
+            pixelHeight,
+            96 * dpi.DpiScaleX,
+            96 * dpi.DpiScaleY,
+            PixelFormats.Pbgra32);
+        bitmap.Render(host);
+
+        byte Alpha(double xDip, double yDip)
+        {
+            var x = Math.Clamp((int)Math.Round(xDip * dpi.DpiScaleX), 0, pixelWidth - 1);
+            var y = Math.Clamp((int)Math.Round(yDip * dpi.DpiScaleY), 0, pixelHeight - 1);
+            var pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+            return pixel[3];
+        }
+
+        var midX = host.ActualWidth / 2;
+        var midY = host.ActualHeight / 2;
+        var left = new[] { Alpha(0, midY), Alpha(4, midY), Alpha(7, midY) };
+        var right = new[]
+        {
+            Alpha(host.ActualWidth - 1, midY),
+            Alpha(host.ActualWidth - 4, midY),
+            Alpha(host.ActualWidth - 7, midY)
+        };
+        var top = new[] { Alpha(midX, 0), Alpha(midX, 4), Alpha(midX, 7) };
+        var bottom = new[]
+        {
+            Alpha(midX, host.ActualHeight - 1),
+            Alpha(midX, host.ActualHeight - 4),
+            Alpha(midX, host.ActualHeight - 7)
+        };
+
+        static bool FadesIn(byte[] samples) =>
+            samples[0] < samples[1] &&
+            samples[1] < samples[2] &&
+            samples[1] >= 2;
+
+        Program.Assert(
+            FadesIn(left) && FadesIn(right) && FadesIn(top) && FadesIn(bottom),
+            $"lightweight shadow fades through every gutter edge: " +
+            $"L={string.Join(',', left)} R={string.Join(',', right)} " +
+            $"T={string.Join(',', top)} B={string.Join(',', bottom)}");
+    }
+
     private static void CheckRealRightClicks(AppController controller)
     {
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "Right-click regression",

@@ -168,6 +168,9 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (!decorated && !(systemMaterial && IsAuxiliary))
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            // Hiding the outer stroke must not also hide the paper shadow. This branch
+            // bypasses PaperChromeBorder.OnRender, so publish its lightweight shadow here.
+            DrawLightweightShadow(dc);
             EnsureGeometry();
             // BorderThickness keeps its layout role, but the outer stroke itself is absent.
             dc.DrawGeometry(Background, null, _shape);

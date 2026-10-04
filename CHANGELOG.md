@@ -20,6 +20,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Paper resize performance**: Default paper and capsule shadows no longer use a full-surface WPF blur. Resizing keeps a soft outer shadow while substantially reducing CPU use and resize stutter.
 - **Experimental skins**: Seven choices remain: paper, Mica, both Acrylic variants, tracing paper, Aero and pixel styling, all with independent colors. Retired skin IDs fall back to paper. Aero keeps clear tint, bounded reflections and position-aware parallax without desktop capture or frosting.
 - **Static auxiliary material backgrounds**: Layered capsules and menus for Mica, Acrylic, Clear Acrylic and tracing paper take one bounded local background snapshot and keep it frozen while shown. Capsule dragging takes one 50%-resolution virtual-desktop snapshot, applies one light Gaussian blur, and then only moves the crop; docked and floating drag hosts share that same texture. Releasing the drag replaces it with one final local snapshot. There is no continuous 100/250 ms desktop polling.
 - **Material transparency**: Material cover has five levels (very low / low / medium / high / very high); medium exactly preserves the previous appearance. The setting changes material tint/cover for native and auxiliary materials without applying Window opacity to text or controls. Aero reflections, relief and tracing-paper fibers stay independent of the transparency level.
