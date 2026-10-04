@@ -717,16 +717,9 @@ public sealed class MasterCapsuleWindow : Window
             _dragSession = null;
             try
             {
-                if (!_isClosingForReal)
+                if (!committed && !_isClosingForReal)
                 {
-                    BeginAnimation(OpacityProperty, null);
-                    Opacity = 1;
-                    MoveToTarget(animate: false);
-                    if (!IsVisible)
-                    {
-                        Show();
-                    }
-                    RefreshEffectiveTopmost();
+                    PrepareQueueTransferHandoff();
                 }
             }
             finally
@@ -1105,6 +1098,23 @@ public sealed class MasterCapsuleWindow : Window
             Opacity = 1;
         };
         BeginAnimation(OpacityProperty, fadeIn);
+    }
+
+    internal void PrepareQueueTransferHandoff()
+    {
+        if (_isClosingForReal) return;
+
+        // A drop/rollback swaps visible authority, so this master must be fully opaque rather
+        // than waiting for its ordinary first-show fade. Finish its WPF surface and the shared
+        // desktop-composition boundary before the floating cover is hidden or returned to pool.
+        BeginAnimation(OpacityProperty, null);
+        Opacity = 1;
+        MoveToTarget(animate: false);
+        if (!IsVisible) Show();
+        RefreshEffectiveTopmost();
+        UpdateLayout();
+        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+        WindowNative.FlushDesktopComposition();
     }
 
     public void CloseForReal()

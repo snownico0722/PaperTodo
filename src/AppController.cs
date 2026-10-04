@@ -2496,7 +2496,7 @@ public sealed partial class AppController : IDisposable
             State.DeepCapsuleQueueStartTopMargins[sourceKey] =
                 target.StartTopMargin;
 
-            CompleteMasterCapsuleQueueTransfer();
+            CompleteMasterCapsuleQueueTransfer(targetKey);
             return true;
         }
 
@@ -2549,7 +2549,7 @@ public sealed partial class AppController : IDisposable
         State.DeepCapsuleQueueStartTopMargins[targetKey] =
             target.StartTopMargin;
 
-        CompleteMasterCapsuleQueueTransfer();
+        CompleteMasterCapsuleQueueTransfer(targetKey);
         return true;
     }
 
@@ -2561,15 +2561,24 @@ public sealed partial class AppController : IDisposable
             snapshot.SourceMonitorAliases.Contains(
                 paper.CapsuleMonitorDeviceName.Trim(), StringComparer.Ordinal);
 
-    private void CompleteMasterCapsuleQueueTransfer()
+    private void CompleteMasterCapsuleQueueTransfer(string targetKey)
     {
         var shouldRefreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
-        ArrangeDeepCapsules(animate: true);
-        RefreshTrayMenu();
-        SaveNow();
-        if (shouldRefreshDisplayMetrics)
+        try
         {
-            ScheduleDisplayMetricsRefresh();
+            // The native loop has ended. Publish the target master before retiring the source;
+            // closing the source can otherwise withdraw the only visible floating authority.
+            ArrangeDeepCapsulesCore(animate: true, flushInitialPresentations: false,
+                masterTransferTargetKey: targetKey);
+            RefreshTrayMenu();
+            SaveNow();
+        }
+        finally
+        {
+            if (shouldRefreshDisplayMetrics)
+            {
+                ScheduleDisplayMetricsRefresh();
+            }
         }
     }
 
@@ -2934,7 +2943,8 @@ public sealed partial class AppController : IDisposable
         ArrangeDeepCapsulesCore(animate, flushInitialPresentations);
     }
 
-    private void ArrangeDeepCapsulesCore(bool animate, bool flushInitialPresentations)
+    private void ArrangeDeepCapsulesCore(bool animate, bool flushInitialPresentations,
+        string? masterTransferTargetKey = null)
     {
         animate = _deepCapsuleArrangeGate.Consume(animate);
         animate = animate && State.EnableAnimations;
@@ -2962,7 +2972,7 @@ public sealed partial class AppController : IDisposable
         {
             // The master owns slot 0, so startup creates it before publishing the real slots.
             // Suppress its standalone fade so the complete queue reaches the first frame together.
-            SyncMasterCapsules(plan, animate: false);
+            SyncMasterCapsules(plan, animate: false, masterTransferTargetKey);
         }
 
         foreach (var paper in State.Papers)
@@ -3025,13 +3035,14 @@ public sealed partial class AppController : IDisposable
 
         if (!flushInitialPresentations)
         {
-            SyncMasterCapsules(plan, animate);
+            SyncMasterCapsules(plan, animate, masterTransferTargetKey);
         }
     }
 
     // Reconcile one master pill per non-empty queue (when collapse-all is on). Creates/updates the
     // masters for live queues and closes masters whose queue disappeared.
-    private void SyncMasterCapsules(EdgeCapsuleQueuePlan plan, bool animate)
+    private void SyncMasterCapsules(EdgeCapsuleQueuePlan plan, bool animate,
+        string? masterTransferTargetKey = null)
     {
         if (!State.UseCapsuleCollapseAll)
         {
@@ -3040,6 +3051,7 @@ public sealed partial class AppController : IDisposable
         }
 
         var liveKeys = new HashSet<string>(StringComparer.Ordinal);
+        MasterCapsuleWindow? transferTarget = null;
 
         foreach (var queue in plan.Queues)
         {
@@ -3055,20 +3067,27 @@ public sealed partial class AppController : IDisposable
             var edge = sample.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
             var monitor = sample.CapsuleMonitorDeviceName;
             var retracted = IsCapsuleCollapseAllActiveForQueue(key);
+            var isTransferTarget = string.Equals(key, masterTransferTargetKey, StringComparison.Ordinal);
+            var animateMaster = animate && !isTransferTarget;
 
             if (!_masterCapsules.TryGetValue(key, out var master))
             {
                 master = new MasterCapsuleWindow(this, edge, monitor);
                 _masterCapsules[key] = master;
                 master.SetExperimentalPassive(_experimentalAllSurfacesPassive);
-                master.ShowPlaced(papers.Count, retracted, animate);
+                master.ShowPlaced(papers.Count, retracted, animateMaster);
             }
             else
             {
                 master.SetQueue(edge, monitor);
-                master.UpdateState(papers.Count, retracted, animate);
+                master.UpdateState(papers.Count, retracted, animateMaster);
             }
+            if (isTransferTarget) transferTarget = master;
         }
+
+        // One shared WPF/desktop boundary while the floating cover still exists. This also
+        // reveals a surviving source master for same-queue drops; member animations stay intact.
+        transferTarget?.PrepareQueueTransferHandoff();
 
         if (liveKeys.Count == 0)
         {
