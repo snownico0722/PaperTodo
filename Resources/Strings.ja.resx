@@ -434,7 +434,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>展開位置を記憶</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端のカプセルを再クリックして紙片を戻す</value>
+    <value>カプセルを再クリックして紙片を戻す</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>閉じるボタンを隠す</value>
@@ -623,7 +623,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>端から開くとき、前回の位置とサイズを復元します。使えない場合は端寄せで開きます。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端から開いた紙片に対し、同じカプセルをもう一度クリックすると戻します。</value>
+    <value>展開中の紙片は同じカプセルを再クリックすると戻ります。関連紙片をカプセルに表示しない場合は、関連入口を再クリックすると非表示になります。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
@@ -1110,6 +1110,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>静止時のエッジカプセルのタイトル長を制限します。0 は文字のみ非表示にし、アイコンと保存済みタイトルは保持します。＋／−で「無制限、0、1…20」を循環します。ホバープレビューがオフの場合、ホバーで省略されたタイトルを広げ、離れると戻します。</value>
+  </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>メインカプセルを短縮</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>有効にすると、メインカプセルは矢印のみを表示し、現在のキューのカプセル数を非表示にします。</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>無制限</value>

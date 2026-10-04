@@ -88,11 +88,18 @@ public sealed partial class AppController
             RefreshSettingsCapsuleToggleStates();
             return;
         }
+        if (id is "todo.paper_links" or "todo.hide_linked_paper_capsules")
+        {
+            RefreshSettingsCapsuleToggleStates();
+            RefreshSettingsRegions("general.todos");
+            return;
+        }
         if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
         var region = id switch
         {
             "appearance.animations" or "window.fullscreen_mode" => "general.options",
-            "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" => "general.capsuleAppearance",
+            "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
+                "capsule.master_compact" => "general.capsuleAppearance",
             "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
             "edge.non_topmost" => "general.edgeTopmost",
             "scripts.run_linked_on_click" => "general.todos",

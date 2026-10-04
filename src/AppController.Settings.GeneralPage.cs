@@ -98,7 +98,13 @@ public sealed partial class AppController
                     CreateDeepCapsuleTitleMeasureLimitStepper(),
                     editorWidth: 132,
                     tipKey: "TipDeepCapsuleTitleMeasureLimit",
-                    topMargin: 8))));
+                    topMargin: 8),
+                WrapWithHint(
+                    SettingsToggle(
+                        Strings.Get("SettingsCompactMasterCapsule"),
+                        State.CompactMasterCapsule,
+                        ToggleCompactMasterCapsule),
+                    "TipCompactMasterCapsule"))));
         }
 
         RefreshSettingsCapsuleToggleStates();
@@ -230,6 +236,7 @@ public sealed partial class AppController
         State.HideEdgeCapsuleCloseButtonOnHover = false;
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
+        State.CompactMasterCapsule = false;
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.EdgeCapsulePreviewPreferDownward = false;
         State.ExperimentalEdgeCapsuleHoverPreview = true;

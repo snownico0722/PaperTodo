@@ -447,7 +447,7 @@
     <value>记住展开位置</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>再次点击边缘胶囊收回纸片</value>
+    <value>再次点击胶囊收回纸片</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>悬停时隐藏关闭按钮</value>
@@ -645,7 +645,7 @@
     <value>从边缘展开时，恢复上次位置与大小；无记忆或不可用时仍按边缘展开。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>纸片已从边缘展开时，再点同一胶囊会收回。</value>
+    <value>纸片已展开时，再点同一胶囊会收回；关联纸片不显示为胶囊时，再点关联入口会隐藏。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
@@ -1123,6 +1123,12 @@
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>限制静止时边缘胶囊显示的标题长度，0 隐藏标题文字但保留图标，不修改真实标题。加减可在「无限制、0、1…20」之间循环。关闭悬停预览时，鼠标移入会展开被截短的标题，移出后收回。</value>
+  </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主胶囊缩短</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>开启后主胶囊仅显示箭头，不显示当前队列的胶囊数量。</value>
   </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>无限制</value>

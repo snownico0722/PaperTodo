@@ -64,6 +64,7 @@ internal static partial class Program
             ("ToggleAutoMoveCompletedTodosToBottom", "todo.move_completed_to_bottom", false),
             ("ToggleTodoBottomBar", "todo.bottom_bar", false),
             ("ToggleCapsuleCollapseAll", "capsule.master_enabled", false),
+            ("ToggleCompactMasterCapsule", "capsule.master_compact", false),
             ("ToggleCapsuleMode", "capsule.enabled", false),
             ("ToggleCapsuleTextBold", "capsule.text_bold", false),
             ("ToggleCollapseExpandedDeepCapsuleOnClick", "capsule.click_to_collapse", false),

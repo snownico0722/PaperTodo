@@ -2268,8 +2268,14 @@ public sealed partial class AppController
         if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
         {
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode &&
+            var canRetractExpandedEdgePaper = State.UseCapsuleMode &&
+                State.UseDeepCapsuleMode &&
                 State.ShowDeepCapsuleWhileExpanded;
+            var canHideExcludedLinkedPaper = State.UseCapsuleMode &&
+                State.EnableTodoPaperLinks &&
+                State.HideLinkedPapersFromCapsules;
+            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
+                canRetractExpandedEdgePaper || canHideExcludedLinkedPaper;
         }
         if (_settingsCapsuleCollapseAllCheckBox != null)
         {
@@ -2686,6 +2692,9 @@ public sealed partial class AppController
 
     private void ToggleDeepCapsuleExpandedSlot() =>
         SetSettingFromUi("capsule.show_while_expanded", !State.ShowDeepCapsuleWhileExpanded);
+
+    private void ToggleCompactMasterCapsule() =>
+        SetSettingFromUi("capsule.master_compact", !State.CompactMasterCapsule);
 
     private void ToggleHideEdgeCapsuleCloseButtonOnHover() =>
         SetSettingFromUi("capsule.hide_close_button", !State.HideEdgeCapsuleCloseButtonOnHover);

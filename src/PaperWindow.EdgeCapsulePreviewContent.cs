@@ -90,7 +90,10 @@ public sealed partial class PaperWindow
             if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId) ||
                 !_controller.RunLinkedScriptCapsule(item.LinkedPaperId))
             {
-                _controller.OpenLinkedPaper(item.LinkedPaperId, this);
+                _controller.OpenLinkedPaper(
+                    item.LinkedPaperId,
+                    this,
+                    toggleIfExcludedFromCapsules: true);
             }
             return true;
         }
