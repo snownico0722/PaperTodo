@@ -1,8 +1,12 @@
 # PaperTodo User Manual
 
-> **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](../CHANGELOG.md)
+**Language: English | [简体中文](USER_GUIDE.md)**
 
-This document is for everyday users of PaperTodo. If this is your first time using PaperTodo, please start with [1. Quick Start](#1-quick-start); other sections can be referenced as needed.
+> **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](../CHANGELOG.md)
+>
+> This manual covers **4.0.0-beta1**. Older versions may not include every feature described here. Screenshots illustrate basic operations; use the current version's settings layout.
+
+This document is for everyday users of PaperTodo. Start with [1. Quick Start](#1-quick-start), then use the contents to find individual features.
 
 ---
 
@@ -17,6 +21,7 @@ This document is for everyday users of PaperTodo. If this is your first time usi
   - [2.2 Top Bar Controls & Actions](#22-top-bar-controls--actions)
   - [2.3 Moving, Resizing & Windows Snap](#23-moving-resizing--windows-snap)
   - [2.4 Concept Breakdown: Collapse, Hide, Delete, Exit](#24-concept-breakdown-collapse-hide-delete-exit)
+  - [2.5 Full-Text Search](#25-full-text-search)
 - [3. Todo Paper Complete Guide](#3-todo-paper-complete-guide)
   - [3.1 Adding & Editing Items](#31-adding--editing-items)
   - [3.2 Ordering, Deletion & Batch Actions](#32-ordering-deletion--batch-actions)
@@ -43,7 +48,7 @@ This document is for everyday users of PaperTodo. If this is your first time usi
   - [7.3 Edge Capsule Quick Access (1~9)](#73-edge-capsule-quick-access-19)
 - [8. Settings Panoramic Walkthrough](#8-settings-panoramic-walkthrough)
   - [8.1 General Behaviors](#81-general-behaviors)
-  - [8.2 Visual Styling (Custom Fonts)](#82-visual-styling-custom-fonts)
+  - [8.2 Visual Styling (Backgrounds & Fonts)](#82-visual-styling-backgrounds--fonts)
   - [8.3 Hotkey Configuration](#83-hotkey-configuration)
   - [8.4 Plugin System Guide (Protocol 2.1)](#84-plugin-system-guide-protocol-21)
   - [8.5 Experimental Labs Features (4.0 Advanced)](#85-experimental-labs-features-40-advanced)
@@ -62,36 +67,36 @@ This document is for everyday users of PaperTodo. If this is your first time usi
 
 ### 1.1 Installation & Edition Choice
 
-PaperTodo is a green, portable single-executable program that requires no installer. Download the appropriate package from the [Releases page](https://github.com/snownico0722/PaperTodo/releases/latest):
+PaperTodo is a portable single-executable application with no installer. Choose a version on the [Releases page](https://github.com/snownico0722/PaperTodo/releases), then download its Windows x64 executable. To use the 4.0 features in this manual, choose the matching 4.0 prerelease rather than an older stable release.
 
 | Edition Identifier | Characteristics | Recommended Audience |
 | :--- | :--- | :--- |
-| `self-contained.exe` | Bundles .NET runtime (~70–80 MB) | **Recommended for most users**; runs immediately out of the box. |
-| `no-runtime.exe` | Tiny file size (~a few MBs) | For systems with **.NET 10 Desktop Runtime (x64)** already installed. |
+| `self-contained.exe` | Includes the .NET runtime | **Recommended for most users**; no separate runtime installation |
+| `no-runtime.exe` | Excludes the runtime; the compressed 4.0 single-file package is about 17 MiB, with the download page showing its exact size | Systems with **.NET 10 Desktop Runtime (x64)** installed |
 
 > [!IMPORTANT]
-> Create a dedicated folder on your drive (e.g. `D:\Apps\PaperTodo\`) and run `PaperTodo.exe` from there.  
-> **Do not** run from temporary zip extraction directories or read-only folders; otherwise, notes and images cannot be saved to disk.
+> Create a dedicated folder, such as `D:\Apps\PaperTodo\`, and run `PaperTodo.exe` from there.
+> **Do not** run from a temporary extraction directory or a read-only folder; data and images might not be saved. Exit from the tray before updating the executable, and keep the existing data files.
 
 ### 1.2 First Launch & Philosophy
 
-Upon launching `PaperTodo.exe`:
-- A default Todo paper appears in the center of your desktop;
+When you start `PaperTodo.exe`:
+- A default Todo paper appears in the center of the desktop;
 - The PaperTodo icon appears in the Windows notification area (system tray).
 
-**PaperTodo has no traditional main management window.** Each paper is an independent desktop interface, while the system tray icon acts as the global control gateway. If papers are hidden or moved off-screen, simply **double-click the tray icon** to illuminate and pull all papers back into view.
+**PaperTodo has no central management window.** Each paper is its own interface, and the tray is the global entry point. **Double-click the tray icon** to bring papers back when they are covered or off-screen.
+
+Version 4.0 supports up to **200 papers**. Collapsing or hiding a paper preserves it and does not free a slot; delete papers you no longer need.
 
 ### 1.3 3-Minute Quick Start
 
-Follow these 5 steps to master PaperTodo:
+1. **Enter a Todo**: Type in the blank row and press <kbd>Enter</kbd> to continue with another item below.
+2. **Mark Complete**: Check the box on the left; the text receives a strike-through.
+3. **Reposition Paper**: Drag the blank top-bar area; click the pin to toggle always-on-top.
+4. **Collapse to Capsule**: Click the top-right button. With capsule mode and edge docking enabled, the paper folds into the screen edge.
+5. **Preview or Open**: With live edge previews enabled, hover to browse content; click the capsule to open the full paper.
 
-1. **Enter a Todo**: Type a task in the blank bottom row of the default Todo paper (e.g., "Team meeting at 3 PM") and press <kbd>Enter</kbd> to add subsequent tasks.
-2. **Mark Complete**: Check the box on the left when a task is finished (the text will receive a strike-through).
-3. **Reposition Paper**: Click and drag the blank area of the top bar to move the paper anywhere. Click the top-left pin icon to keep it always on top.
-4. **Collapse to Capsule**: Click the collapse button on the top right. By default, the paper folds into a small pill and docks cleanly along the screen edge without obstructing your desktop.
-5. **Expand & Restore**: Hover your mouse over the docked capsule to view it, or click it to instantly expand it back into a full paper.
-
-Everything you type is saved incrementally in the background—no manual save button needed.
+Edits save automatically. To find content on another paper, press <kbd>Ctrl</kbd> + <kbd>F</kbd>; see [Full-Text Search](#25-full-text-search).
 
 ---
 
@@ -103,92 +108,103 @@ Everything you type is saved incrementally in the background—no manual save bu
 
 ### 2.1 Paper States: Expanded & Capsule
 
-Every paper exists in one of two states:
-- **Expanded State**: Standard sticky-note window for reading, typing, checking, and image viewing.
-- **Capsule State**: Folded pill-like widget docked along screen edges or floating on your desktop.
+A paper has two forms:
+- **Expanded**: A normal sticky-note window for reading, editing, checking tasks, and viewing images.
+- **Capsule**: A small folded pill floating on the desktop or docked along a screen edge.
 
-Collapse an expanded paper by clicking the top-right collapse button, pressing <kbd>Ctrl</kbd> + <kbd>W</kbd>, or **middle-clicking** the blank area of the top bar.
+Click the top-right collapse button, press <kbd>Ctrl</kbd> + <kbd>W</kbd>, or **middle-click the blank top-bar area** to close the active expanded paper. With capsule mode disabled, these actions hide the paper instead of deleting its content.
 
 ### 2.2 Top Bar Controls & Actions
 
-The top bar hosts convenient everyday controls:
-
 | Control / Area | Action | Description |
 | :--- | :--- | :--- |
-| **Pin Icon** | Click | Toggle always-on-top status (automatically yields during full-screen apps if enabled) |
-| **Title Text** | Click | Enter title edit mode; press <kbd>Enter</kbd> to commit, <kbd>Esc</kbd> to cancel |
-| **Link Icon** | Drag & Drop | Drag onto a todo item to link papers and create a quick-launch shortcut |
-| **Window Tether Handle** | Drag & Drop | *(Labs)* Drag onto any third-party app window (browser/IDE) to attach and follow it |
-| **New Todo / Note** | Click | Instantly spawn a new Todo or Note paper beside the current one |
-| **MD Export Button** | Click | *(Note paper only)* Export to a temporary file and open in your default Markdown editor |
-| **Collapse / Hide** | Click | Collapse into a capsule; hides the paper if capsule mode is disabled |
+| **Pin Icon** | Click | Toggle always-on-top; fullscreen avoidance follows your settings |
+| **Title Text** | Click | Edit the title; <kbd>Enter</kbd> commits and <kbd>Esc</kbd> cancels |
+| **Link Icon** | Drag | Link this paper to a target todo item |
+| **Window Tether Handle** | Drag | Attach to a third-party window after enabling the corresponding Labs feature |
+| **New Todo / Note** | Click | Create another paper beside the current one |
+| **MD Export Button** | Click | Notes only: export temporarily and open with the associated application |
+| **Collapse / Hide** | Click | Collapse into a capsule, or hide when capsule mode is disabled |
 
 > [!TIP]
-> When a paper is resized narrower, secondary action buttons automatically hide to prioritize the title text. Hover over icons to see tooltips.
+> Narrow papers hide some secondary buttons. Plugins can also add top-bar actions, such as the Codex CLI Bridge's `>_`; see [Plugin System Guide](#84-plugin-system-guide-protocol-21).
 
 ### 2.3 Moving, Resizing & Windows Snap
 
-- **Moving**: Click and drag any blank space on the top bar.
-- **Resizing**:
-  - Drag the dot-matrix grip in the bottom-right corner;
-  - If set to "Hidden" in "Settings → Visual", you can resize directly from all four borders and corners.
-- **Windows Snap**: Drag an expanded paper near screen borders to trigger native Windows Snap layouts; drops window shadows during snapping for clean alignment.
+- **Move**: Drag an empty area of the top bar.
+- **Resize**: Drag the bottom-right dotted grip. Set the grip to Hidden in "Settings → Visual" to resize from any border or corner instead.
+- **Windows Snap**: Drag an expanded paper to a screen edge to use Windows Snap. The outer shadow disappears while snapped and returns when unsnapped.
 
 ### 2.4 Concept Breakdown: Collapse, Hide, Delete, Exit
 
-| Action | Where it Goes | Data Retention | How to Restore |
+| Action | Where It Goes | Data Retention | How to Restore |
 | :--- | :--- | :--- | :--- |
-| **Collapse** | Folds into an edge capsule or floating pill | Fully Preserved | Click the capsule to expand |
-| **Hide** | Leaves the desktop and capsule queue; app stays in tray | Fully Preserved | Right-click tray and check in list, or double-click tray |
-| **Delete** | Paper is permanently removed | Deleted | Requires confirmation via tray or right-click menu |
-| **Exit** | Flushes data to disk and closes process | Fully Preserved | Double-click `PaperTodo.exe` to re-launch |
+| **Collapse** | Edge capsule or floating pill | Preserved | Click the capsule |
+| **Hide** | Leaves the desktop and capsule queue; the app stays running | Preserved | Show it from the tray list or double-click the tray |
+| **Delete** | Removes the paper | Content deleted | Requires confirmation; do not use as a substitute for hiding |
+| **Exit** | Saves data and closes PaperTodo | Preserved on disk | Run `PaperTodo.exe` again |
+
+### 2.5 Full-Text Search
+
+Press <kbd>Ctrl</kbd> + <kbd>F</kbd> in a Todo or Note paper and enter the text to find.
+
+- Search covers all todos and notes, with separate **current-paper** and **global** match counts.
+- Press <kbd>Enter</kbd> for the next match or <kbd>Shift</kbd> + <kbd>Enter</kbd> for the previous one, or use the search bar's navigation buttons.
+- Matches on other papers are located and highlighted automatically. A matching paper opens when it is currently collapsed into a capsule.
+- Drag the search bar out of the way when it covers content. Close it when you have finished searching.
 
 ---
 
 ## 3. Todo Paper Complete Guide
 
-Todo papers are crafted for checklists, daily agendas, and bite-sized action items.
+Todo papers are for everyday checklists, plans, and small tasks.
 
 ### 3.1 Adding & Editing Items
 
-- **New Item**: Click the bottom blank line to type; press <kbd>Enter</kbd> to commit and automatically insert a new item below.
-- **Edit & Double-Click Selection**: Single-click text to edit; **double-click** text to select the entire line for quick replacement.
-- **Quick Delete Blank Line**: Press <kbd>Backspace</kbd> on an unmarked empty line to delete it immediately.
-- **Smart Multi-Line Paste**: When pasting multi-line text from clipboard, PaperTodo strips bullet points (`-`, `*`), numbers (`1.`, `2.`), and task checkboxes (`- [ ]`), splitting text into discrete tasks.
-- **Undo & Redo**: Standard <kbd>Ctrl</kbd> + <kbd>Z</kbd> (undo) and <kbd>Ctrl</kbd> + <kbd>Y</kbd> (redo).
+- **New Item**: Type in the bottom blank row; press <kbd>Enter</kbd> to insert an item below.
+- **Edit and Select**: Click text to edit; double-click to select the item's text for copying or replacement.
+- **Move Between Items**: Use <kbd>↑</kbd> / <kbd>↓</kbd> at an editing boundary to continue into an adjacent item. Holding the key does not race across multiple items.
+- **Delete a Blank Row**: Press <kbd>Backspace</kbd> in an unmarked empty row.
+- **Multi-Line Paste**: Pasted lines become separate items, handling list bullets, numbering, and Markdown task markers. A notice appears when count or text limits are exceeded; do not assume rejected text was saved.
+- **Undo and Redo**: <kbd>Ctrl</kbd> + <kbd>Z</kbd> undoes, and <kbd>Ctrl</kbd> + <kbd>Y</kbd> redoes. One multi-line paste can be undone as one operation.
 
 ### 3.2 Ordering, Deletion & Batch Actions
 
-- **Drag Reorder & Delete**: Hold the right handle (`≡`) and drag vertically to adjust order; drag down to the bottom trash zone to delete.
-- **Continuous Swipe Multi-Selection**: Hold and drag left-click across items from the left margin to continuously select multiple rows.
-- **Batch Actions**: Once selected, batch check/uncheck, press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy, right-click to delete all, or drag the group to the trash.
+- **Reorder or Delete**: Drag the right-side handle (`≡`) vertically to reorder, or into the bottom trash area to delete.
+- **Swipe to Multi-Select**: Hold the left mouse button and drag along the left side of the items to select consecutive rows.
+- **Batch Actions**: Check / uncheck, copy, delete from the context menu, or drag the selected group into the trash.
+- **Copy Completion States**: <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> copies selected items as Markdown tasks, such as `- [ ] Unfinished` and `- [x] Finished`. Use <kbd>Ctrl</kbd> + <kbd>C</kbd> for ordinary copying.
 
 ### 3.3 Completed Items Workflow
 
-Checking an item marks it finished. Customize completion behavior in "Settings → General":
-- **Auto-Clear Completed Items**: Clears items from the list immediately upon checking (recoverable via <kbd>Ctrl</kbd> + <kbd>Z</kbd>).
-- **Auto-Sink Completed Items**: Automatically moves completed items to the bottom completed section; unchecking returns them to active tasks.
+Choose how completed items behave in "Settings → Todo":
+- **Auto-Clear Completed Items**: Remove an item after checking it; undo to recover an accidental removal.
+- **Auto-Sink Completed Items**: Move checked items to the completed area at the bottom; unchecked items return to the unfinished area.
+
+Auto-sink is unavailable while auto-clear is enabled.
 
 ### 3.4 Quick Launch: Linking Papers & Local Files
 
-Each todo entry can serve as a **desktop launchpad**.
+A todo can also be a shortcut to a paper, file, or folder. Related options are in "Settings → Todo".
 
 #### Link to Another Paper
-1. Expand a target paper (Note or Todo).
-2. Drag the **dedicated link icon** from the target top bar onto a specific todo item until highlighted, then release.
-3. A paper icon appears beside the task; click it to instantly expand and focus the target paper.
+1. Open the paper you want to link.
+2. Drag its top-bar **link icon** onto a todo item and release when the target highlights.
+3. Click the new paper icon on the todo's right side to open the linked paper.
 
 #### Link to External Files or Folders
-1. Select any file (e.g. spreadsheet, document) or folder in Windows File Explorer.
-2. Drag and drop it directly onto the target todo row.
-3. A file icon appears; click it to open with the system's default software, or right-click to reveal in explorer or unlink.
+1. Select a file or folder in Windows File Explorer.
+2. Drag it onto the target todo row.
+3. Click the right-side action to open it with the default application. Right-click the item to open its containing folder or remove the link.
 
 ### 3.5 Scheduled Countdown Reminders
 
-Right-click any todo item and select "Set Reminder":
-- **Quick Presets**: 15 minutes, 30 minutes, 1 hour, this evening, or tomorrow morning;
-- **Custom Duration**: Set an exact countdown time;
-- **Alert Notification**: Upon expiration, PaperTodo highlights the item, brings it to view, and triggers a system tray bubble notification with an alert chime.
+Enable **Todo reminders** in "Settings → Todo", then right-click an item to set a reminder.
+- **Presets**: Choose a minute / hour interval, this evening, tomorrow morning, or another available preset.
+- **Custom Duration**: Enter the countdown duration you need.
+- **Due Notification**: PaperTodo locates and highlights the item and sends a tray notification. Enable reminder sound and choose a sound in Settings when you need an audible alert.
+
+Reminders depend on PaperTodo running. Closing a paper is not the same as exiting the application.
 
 ---
 
@@ -198,52 +214,76 @@ Right-click any todo item and select "Set Reminder":
   <img src="../assets/Md.jpg" alt="Markdown note" width="80%">
 </div>
 
-Note papers provide frictionless drafting, scratchpad thinking, and image clipping.
+Note papers are for lightweight writing, ideas, and illustrated reminders.
 
 ### 4.1 Edit Mode & Reading Mode
 
-- **Edit Mode**: Single-click anywhere inside the body text to enter syntax-highlighted editing.
-- **Reading Mode**: Click outside the paper to lose focus; the note smoothly renders formatted Markdown.
-- **Link Interaction**:
-  - In Reading Mode: Click hyperlinks directly to open in your default browser;
-  - In Edit Mode: Hold <kbd>Ctrl</kbd> while clicking links to avoid accidental navigation while placing the cursor.
-- **Font Zoom**: Hold <kbd>Ctrl</kbd> + scroll wheel to dynamically zoom text size; a percentage badge displays in the corner (click to reset to 100%).
+Choose a rendering level in "Settings → Note → Markdown":
+
+| Level | Behavior |
+| :--- | :--- |
+| **Off** | View and edit Markdown mainly as plain source text |
+| **Basic** | Keep source markers with basic styling; reading mode fades syntax and displays bullets and dividers |
+| **Full Render** | Render headings, lists, quotes, code blocks, images, and inline styles directly, **including while editing** |
+
+- **Edit**: Click the body to place the caret. Full Render does not turn the entire note into plain source; relevant markers appear as you edit them so you can adjust the syntax.
+- **Read**: Click outside the paper. The note displays using the selected rendering level.
+- **Open Links**: Click directly while reading; hold <kbd>Ctrl</kbd> and click while editing.
+- **Zoom Text**: Use <kbd>Ctrl</kbd> + mouse wheel; click the percentage badge to reset to 100%.
+- **Copy Plain Text**: Select text and press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd>.
+
+#### Click Markdown Task Checkboxes
+
+Write a task list in the note:
+
+```markdown
+- [ ] Organize references
+- [x] Send email
+```
+
+Select **Full Render**, then click a rendered checkbox to mark the task complete or incomplete without editing `[ ]` / `[x]` manually. This works in both editing and reading modes. If the marker is showing as source, move the caret away so the checkbox reappears. Checking updates the note's content and supports undo.
+
+> [!NOTE]
+> Notes still have an input-protection limit. A notice appears when you reach it. Split very long content into multiple papers rather than repeatedly pasting past a warning.
 
 ### 4.2 Supported Markdown Syntax
 
-| Syntax | Example | Rendering Result |
+| Syntax | Example | Result |
 | :--- | :--- | :--- |
-| **Headings** | `# Heading 1` / `## Heading 2` | Large bold tiered typography |
+| **Headings** | `# Heading 1` / `## Heading 2` / `### Heading 3` | Heading levels |
 | **Bold** | `**Bold text**` | **Bold text** |
 | **Italic** | `*Italic text*` | *Italic text* |
-| **Bold-Italic** | `***Important***` | ***Important*** |
-| **Strikethrough** | `~~Deprecated~~` | ~~Deprecated~~ |
-| **Unordered List** | `- First item` or `* First item` | Bullet list |
-| **Ordered List** | `1. Step one`, `2. Step two` | Numbered list |
-| **Blockquote** | `> Quoted text` | Indented side-bordered quote |
-| **Inline Code** | `` `console.log()` `` | Monospaced shaded code tag |
-| **Code Block** | <code>\`\`\`<br>code block<br>\`\`\`</code> | Shaded code block |
-| **Hyperlinks** | `[Label](https://example.com)` | Clickable blue link |
-| **Horizontal Rule** | `---` or `***` | Subtle divider line |
+| **Bold-Italic** | `***Important***` or `___Important___` | ***Important*** |
+| **Strikethrough** | `~~Outdated~~` | ~~Outdated~~ |
+| **Unordered List** | `- First item` or `* First item` | Bulleted list |
+| **Ordered List** | `1. First step`, `2. Second step` | Numbered list |
+| **Task List** | `- [ ] Unfinished` / `- [x] Finished` | Clickable checkboxes in Full Render |
+| **Blockquote** | `> Quoted text` | Quoted paragraph |
+| **Inline Code** | `` `console.log()` `` | Monospaced code |
+| **Code Block** | <code>```<br>code<br>```</code> | Separate code block |
+| **Hyperlink** | `[Label](https://example.com)` | Clickable link |
+| **Horizontal Rule** | `---` or `***` | Divider |
+| **Backslash Escape** | `\*Not italic\*` | Literal asterisks |
+
+Bold, italic, strikethrough, and links can be combined. Version 4.0 uses consistent parsing for headings, quotes, lists, code fences, basic HTML, escapes, and images inside code, improving display and editing of nested content.
 
 > [!NOTE]
-> PaperTodo intentionally omits complex multi-column tables, remote image hosts, and raw HTML blocks to maintain maximum speed. For heavy formatting, click `MD` in the top bar to open in a dedicated editor.
+> PaperTodo remains lightweight: it does not provide complex tables, remote-hosted images, embedded attachments, or full block-level HTML layout. Use an external editor for more complex formatting.
 
 ### 4.3 Local Image Insertion & LMDB Storage
 
-Insert images into notes via:
-- Pressing <kbd>Ctrl</kbd> + <kbd>V</kbd> after taking a screenshot or copying an image;
-- Dragging and dropping image files directly into the note;
-- Right-clicking the note text and selecting "Insert Image".
+- Press <kbd>Ctrl</kbd> + <kbd>V</kbd> after copying an image or taking a screenshot.
+- Drag one or more image files from File Explorer.
+- Right-click the note body and choose "Insert Image".
 
-**Storage Architecture**: Images are referenced as `![image](uuid)` in text, while binary assets are safely stored in a transactional, single-file database (`note-assets.lmdb`). Right-click any image to copy or remove it.
+Images are referenced as `![image](uuid)` in the text, with the actual data in `note-assets.lmdb` beside the executable. Right-click a rendered image to copy it or remove its reference. Keep the image database together with the text data when migrating.
 
 ### 4.4 Opening in External Editors
 
-Click the `MD` button in the top bar. PaperTodo will package the note and its images into a temporary file and launch your system's default Markdown editor (VS Code, Typora, Notepad, etc.).
+Click `MD` in the top bar to export the note and its referenced images temporarily, then open it with the associated application. "Settings → Note" lets you change the file extension used for external opening.
 
 > [!WARNING]
-> This is a one-way export view. Modifications made in external editors do **not** automatically sync back. Copy modified text back into the paper manually.
+> External opening is a one-way export. Changes saved in another editor **do not** sync back automatically; copy them into PaperTodo manually.
 
 ---
 
@@ -255,39 +295,37 @@ Click the `MD` button in the top bar. PaperTodo will package the note and its im
 
 ### 5.1 Edge Docking & Auto Snapping
 
-With edge docking enabled, collapsing a paper causes it to dock automatically to screen edges (left or right):
-- In idle state, capsules show as slim colored slivers to keep your workspace clear;
-- Click any edge capsule to restore it to full size.
+Enable capsule mode and edge docking in "Settings → General" to collapse papers to the left or right screen edge. Click an edge capsule to open its full paper.
+
+- **Repeated Click**: With the corresponding option enabled and an edge slot retained for the expanded paper, another click retracts a clearly visible paper. A substantially covered paper is brought to the front instead.
+- **Title Length**: Advanced settings can limit edge-capsule title length, **hide it entirely**, or leave it **unlimited**.
+- **Sliding Title Reveal**: With live edge previews disabled, hover over a shortened title to slide it out to its full length; moving away retracts it. This reveals the title, not just the trailing close-button area.
+- **Close Button**: Hiding the close button also removes its empty space.
 
 ### 5.2 Interactive Hover Preview Cards
 
-Hovering over a docked capsule slides out a **real-time interactive preview card** powered by hardware-accelerated animations:
+With live edge previews enabled, hover over a docked capsule to browse a card without opening the full paper.
 
-- **Todo Card Interaction**:
-  - Displays the active task list;
-  - **Check / Uncheck Directly**: Mark items complete or undo directly in the hover card;
-  - **Mouse Wheel Scroll**: Scroll through tasks smoothly inside the card;
-  - **Click Background**: Click the blank card background to expand the full paper.
-- **Note Card Preview**:
-  - Live renders Markdown headings, lists, code fences, and image placeholders.
-- **Intent Prediction & Seamless Handoff**:
-  - Gliding your mouse along adjacent capsules transitions between preview cards without jarring retracts;
-  - Cards retract cleanly when moving away from the edge dock corridor.
-- **Drag Protection**:
-  - Preview cards automatically hide when dragging capsules to reorder or peel away.
+- **Todo Preview**: Browse a simplified scrollable list, check / uncheck tasks, and use dedicated linked-paper or file action targets. Click the card background to open the full paper.
+- **Note Preview**: Follows the note's Markdown rendering and previews up to **6000 characters**. Open the full paper for longer content; the preview limit does not truncate the original note.
+- **Continuous Browsing**: Move between adjacent capsules to switch cards. Adjustable pointer-intent prediction reduces accidental switches. Leaving the browse area retracts the card.
+- **Downward Expansion**: "Settings → General → Prefer downward expansion while browsing" is on by default. When there is enough space below, the card stays near the pointer instead of jumping upward to fill a gap. Turn it off to prioritize the upper space released by the previous card.
+- **Dragging**: Previews retract when a capsule drag begins, leaving reordering and edge-switching gestures unobstructed.
 
 ### 5.3 Multi-Monitor Queues & Reordering
 
-- **Edge Switching**: Drag a capsule to the opposite screen border or to another monitor to transfer it.
-- **Reordering**: Drag capsules vertically along the edge dock to reorder the queue.
-- **Multi-Monitor Layouts**: Full support for mixed-DPI multi-monitor setups.
+- **Switch Edges**: Drag a capsule to the opposite screen edge or another monitor's edge.
+- **Reorder**: Drag capsules up or down within a queue.
+- **Remember Expanded Position**: Enable this option to remember a full paper's position on a different monitor from its capsule. Different monitor scaling levels are supported.
 
 ### 5.4 Master Capsule (Queue Controller)
 
-The top-most capsule in the dock is the **Master Capsule**:
-- **Batch Toggle**: Click to expand or collapse the entire edge queue;
-- **Height Offset**: Drag up and down to adjust the queue's vertical anchor on screen;
-- **Global Menu**: Right-click to access the full system tray menu directly.
+The **Master Capsule shows only a count** at the top of the queue:
+- Click it to collapse or expand that side's capsule entries, not delete papers.
+- Drag it vertically to adjust the whole queue's starting position.
+- Right-click it to open the global menu.
+
+"Settings → General" also lets you disable forced always-on-top for docked and master capsules.
 
 ---
 
@@ -297,35 +335,34 @@ The top-most capsule in the dock is the **Master Capsule**:
   <img src="../assets/Power.gif" alt="Script capsule execution" width="60%">
 </div>
 
-Turn notes into one-click desktop automation triggers:
+A Note paper can be a convenient PowerShell script launcher.
 
 ### 6.1 Script Capsule Declaration Syntax
 
-Put a script prefix directive on the **first line** of a note, followed by PowerShell code:
+Put a directive on the note's **first line**, followed by the script:
 
 ```powershell
 !p
 Get-Service | Where-Object Status -eq 'Running' | Select-Object -First 5
 ```
 
-Supported prefixes:
-
-| Directive | Execution Behavior |
+| Directive | Behavior |
 | :--- | :--- |
-| `!p` or `!power` | Auto-selects system PowerShell; displays alerts on errors |
-| `!pwsh` or `!ps7` | Enforces modern **PowerShell 7** (pwsh) |
-| `!ps5` or `!winps` | Enforces legacy **Windows PowerShell 5.1** |
-| `!pf` or `!powerf` | **Persistent Process Mode**: Runs in a shared persistent session, retaining variables |
+| `!p` or `!power` | Automatically choose PowerShell and report execution errors |
+| `!pwsh` or `!ps7` | Use an installed PowerShell 7 |
+| `!ps5` or `!winps` | Use Windows PowerShell 5.1 |
+| `!pf` or `!powerf` | Reuse a session and retain variables when persistent processes are enabled |
 
 ### 6.2 Triggering & Persistent Processes
 
-- **Execution**: When collapsed into a capsule, a **lightning bolt icon** appears. **Left-clicking the capsule runs the script immediately** instead of expanding the paper!
-- **Editing Code**: Right-click the lightning capsule and select "Expand Paper" to edit code.
+- Collapsing the note displays a **lightning icon**. Left-clicking runs the script instead of opening the paper.
+- To edit the script, right-click the capsule and choose "Expand Paper".
+- Persistent processes, PowerShell 7 preference, and hidden execution windows are configured in "Settings → Note" with Advanced Mode enabled.
 
 ### 6.3 Security Guidelines
 
 > [!CAUTION]
-> Scripts run with your full Windows user privileges. Never paste unverified internet scripts into a note.
+> Scripts run with the permissions of the PaperTodo process. Do not run unknown or unchecked scripts.
 
 ---
 
@@ -335,103 +372,128 @@ Supported prefixes:
 
 | Shortcut | Scope | Action |
 | :--- | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>W</kbd> | Universal | Collapse to capsule (or hide if capsule disabled) |
-| <kbd>Esc</kbd> | Universal | Cancel selection/drag; collapses paper when idle |
-| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | Todo / Note | Undo previous action |
-| <kbd>Ctrl</kbd> + <kbd>Y</kbd> | Todo / Note | Redo previous action |
-| <kbd>Ctrl</kbd> + <kbd>B</kbd> | Note | Bold selected text (`**text**`) |
-| <kbd>Ctrl</kbd> + <kbd>I</kbd> | Note | Italicize selected text (`*text*`) |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Note | Insert Markdown link syntax |
-| <kbd>Ctrl</kbd> + Scroll Wheel | Note | Zoom body text size (click percentage to reset to 100%) |
+| <kbd>Ctrl</kbd> + <kbd>F</kbd> | Todo / Note | Open full-text search |
+| <kbd>Enter</kbd> / <kbd>Shift</kbd> + <kbd>Enter</kbd> | Search bar | Next / previous match |
+| <kbd>Ctrl</kbd> + <kbd>W</kbd> | General | Close the active paper; hide it when capsule mode is off |
+| <kbd>Esc</kbd> | General | Cancel an active edit, selection, or drag; close the paper when idle |
+| <kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Y</kbd> | Todo / Note | Undo / redo |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | Selected todos | Copy Markdown tasks with completion states |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | Selected note text | Copy plain text |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Todo editing | Move to the adjacent item at an editing boundary |
+| <kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd> | Note | Bold / italic / insert link |
+| <kbd>Ctrl</kbd> + mouse wheel | Note | Zoom text; click the percentage to reset |
+
+Plugins may provide their own hotkeys or handle <kbd>Esc</kbd> within their body. Follow the plugin's instructions.
 
 ### 7.2 Global System Hotkeys
 
-Configure global system hotkeys in "Settings → Hotkeys":
-- Show All / Hide All / Toggle Visibility
-- New Todo Paper / New Note Paper
-- Exit PaperTodo
+Record combinations in "Settings → Hotkeys" to use these actions while another application has focus:
+- Show All / Hide All / Toggle Visibility, New Todo / Note, and Exit.
+- Lock all papers.
+- Toggle opacity for all papers or the active paper, or for all capsules.
+- Send papers or capsules behind other windows.
+
+Some actions correspond to Labs features that must first be enabled. Combine modifiers such as <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Shift</kbd>, or <kbd>Win</kbd> with a regular key. Choose another combination if the system reports it is already in use.
 
 ### 7.3 Edge Capsule Quick Access (1~9)
 
-Enable "Quick Launch Side Capsules" to summon docked capsules 1 through 9 instantly using key combinations (default Left: <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>1~9</kbd>; Right: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>1~9</kbd>).
+Enable side-capsule quick access to open papers by their queue numbers. Defaults are <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>1~9</kbd> on the left and <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>1~9</kbd> on the right. You can choose whether number-row and numpad digits are distinguished.
 
 ---
 
 ## 8. Settings Panoramic Walkthrough
 
-Right-click the tray icon and choose "Settings" to enter the configuration panel. Enable "Advanced Mode" in the bottom-right corner to reveal the "Labs" page.
+Right-click the tray and choose "Settings". Version 4.0 uses **left-side navigation** for General, Todo, Note, Visual, Hotkeys, and Plugins. Advanced Mode reveals additional options and the Labs page.
+
+The window adapts to the active work area, display scaling, and monitor changes. Toggles and hotkey recording refresh locally where possible. Use the explanation icons for details.
 
 <div align="center">
-  <img src="../assets/Settings.jpg" alt="Settings screenshot" width="80%">
+  <img src="../assets/Settings.jpg" alt="Settings illustration; 4.0 uses left-side navigation" width="80%">
 </div>
 
 ### 8.1 General Behaviors
 
-- **System Integration**: Run on startup, tooltip toggles, smooth animations.
-- **Languages**: Follow System, 简体中文, English, 日本語, and 한국어 (restart required).
-- **Top Bar Customization**: Individually toggle New Todo, New Note, or External Open buttons to streamline chrome.
-- **Capsule Behaviors**: Capsule mode toggle, edge docking, master capsule, retain placeholder on expand.
-- **Todo Logic**: Auto-clear / auto-sink completed items, file drop linking, long title truncation.
-- **Full-Screen Yield** (Advanced): Automatically lowers window tier when full-screen games, video players, or presentations are active.
-- **Clean Desktop Mode** (Advanced): Hides expanded papers from the Windows taskbar and Alt+Tab switcher.
-- **Markdown Rendering**: Three levels (Plain text / Basic / Full Render). **Basic** uses the former Enhanced presentation, keeping Markdown markers while fading syntax and showing bullets and dividers. With **Full Render**, headings, lists, blockquotes, code fences, images, and inline styles are shown in their final layout directly inside the editor — **while editing too**: most Markdown markers (`#`, `>`, list bullets, code fences) are hidden, and among them heading, bold, and link markers no longer occupy width so the text is compactly reflowed to its final layout; the block under the caret reveals its markers so you can adjust heading levels, lists, or blockquotes directly. Blurring the paper returns to read-only whole-note rendering.
+- **General**: Startup, tooltips, animation, language, top-bar buttons, and capsule behavior. Advanced Mode adds taskbar / Alt+Tab visibility and fullscreen avoidance. Restart after changing the language.
+- **Todo**: Auto-clear / auto-sink completed items, paper and file links, reminders, and reminder sounds.
+- **Note**: Three Markdown rendering levels, Full Render editing animation, and external-opening extension. Advanced Mode adds large-image compression and script-capsule settings.
 
-### 8.2 Visual Styling (Custom Fonts)
+See [4.1](#41-edit-mode--reading-mode) for rendering behavior. Basic retains source markers; choose Full Render to keep the final layout while editing and click task checkboxes directly.
 
-- **Themes & Palettes**: Follow System, Light, Dark; 4 palettes: **Warm Paper**, **Ink**, **Forest**, and **Rosy**.
-- **Resize Grip**: Standard (opaque), Soft (semi-transparent), or Hidden (direct border drag).
-- **Typography**: System Default, Microsoft YaHei, DengXian; text rendering modes (Standard / Soft / Crisp).
+### 8.2 Visual Styling (Backgrounds & Fonts)
+
+- **Themes and Palettes**: Follow System, Light, Dark; Warm Paper, Ink, Forest, and Rosy palettes.
+- **Resize Grip**: Standard, Soft, or Hidden; Hidden enables direct border resizing.
+- **Typography**: System Default, Microsoft YaHei, DengXian; Standard / Soft / Crisp text rendering.
+
+#### Custom Paper Backgrounds
+
+1. Name an image `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` and place it **beside `PaperTodo.exe`**, not in `assets/` or `plugins/`.
+2. Restart and open "Settings → Visual → Paper background". This section appears after an image is detected.
+3. **Blend with paper colors**: Off shows the original image; on blends it with the current paper colors. This is **not an image visibility switch**.
+4. Choose Stretch, Center, Bottom Left, Bottom Center, or Bottom Right under Position. Stretch fills the area; the other options scale proportionally and align the image at the chosen position.
+
+The same image is used for **notes and todos**. After replacing it, toggle blending, change position, or restart to refresh. To remove the background, move or rename the candidate images and restart. When several candidates exist, PNG is preferred, then JPG, then JPEG.
+
+Decoding caps the longest edge at **4096 pixels** without modifying the original file. Blending and position preferences are stored separately in `%LOCALAPPDATA%\PaperTodo\paper-background.json`; see [Backup Procedure](#102-standard-backup-procedure).
 
 #### Custom Font Installation
-1. Prepare a `.ttf` or `.otf` font file;
-2. Rename it to `papertodo.ttf` (or `papertodo.otf`);
-3. Place it directly beside `PaperTodo.exe`;
-4. If a bold weight exists, rename it `papertodo_bold.ttf`;
-5. Restart PaperTodo.
+
+1. Prepare a `.ttf` or `.otf` font.
+2. Rename it to `papertodo.ttf` or `papertodo.otf` and place it beside the executable.
+3. Optionally add a matching bold font as `papertodo_bold.ttf`.
+4. Exit from the tray and restart to load the font.
 
 ### 8.3 Hotkey Configuration
 
-Interactive visual key recorder with automatic conflict detection.
+Click an action's recording field and press a combination. The interface checks for conflicts. "Restore defaults for this page" also resets the option to distinguish numpad digits. Configure plugin-provided hotkeys according to the plugin's instructions.
 
 ### 8.4 Plugin System Guide (Protocol 2.1)
 
-PaperTodo 4.0 introduces the **Protocol 2.1 Plugin Architecture**, transforming notes into desktop micro-apps (timers, clocks, review journals, etc.).
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menus, hotkeys, and dedicated capsule / Mini previews. Plugins must be compatible with **protocol 2.1**.
 
-#### Plugin Types
-- **Web Plugins**: Run via Windows WebView2 using HTML/CSS/JS (no compilation, instant prototyping);
-- **Native Plugins**: Built on .NET 10 + WPF for native performance and desktop integration.
-
-#### Protocol 2.1 Extensions
-- **Dedicated Capsules & Mini Views**: Plugins customize collapsed capsule visuals and provide lightweight hover mini cards;
-- **Top Bar Extensions**: Contribute action buttons and status tags;
-- **Todo Actions**: Inject inline/context actions for todo items with state snapshot access;
-- **Isolated Storage**: Plugin data is safely sandboxed in `plugins/data/`.
+- **Web Plugins**: HTML/CSS/JavaScript running through WebView2.
+- **Native Plugins**: Compiled .NET 10 + WPF plugins.
+- **Plugin Data**: Host-managed data is stored in `plugins/data/`, with configuration in "Settings → Plugins". Separate storage does not mean permission isolation.
 
 #### Installation Steps
-1. Ensure `plugin.json` is located at the plugin's root folder;
-2. Right-click the tray icon and select "Exit";
-3. Copy the plugin folder into `plugins/<plugin-id>/` (e.g., `plugins/com.example.clock/`);
-4. Restart PaperTodo and verify detection in "Settings → Plugins";
-5. Right-click any Note paper and select the plugin under "Body Type".
 
-#### Bundled Sample Plugins
-The `plugin-samples/` directory includes ready-to-run examples:
-- **`com.example.pomodoro`**: Pomodoro timer with countdowns and custom capsule states;
-- **`com.example.clock`**: Native WPF desktop analog clock;
-- **`com.example.review-pool`**: Task and review journal dashboard;
-- **`com.example.web-clock`**: Lightweight Web clock widget.
+1. Obtain a complete, runnable plugin folder. The repository's [`plugins/`](../plugins/) contains built plugins; [`plugin-samples/`](../plugin-samples/) contains source and development documentation. **Native source folders cannot be copied as a substitute for compiled plugins.** The main application release does not bundle these plugins.
+2. Exit PaperTodo from the tray.
+3. Place the complete folder at `plugins/<plugin-id>/` beside the executable. Its folder name must match `id` in `plugin.json`, and the manifest must be directly inside it, not nested one extra level down.
+4. Restart and verify detection in "Settings → Plugins".
+5. For plugins that provide a body, right-click a Note paper and select the plugin under "Body Type". Some plugins create an entry paper automatically according to their settings.
 
-Copy any sample into `plugins/` to try it immediately!
+Restart after updating or removing plugin files too. Replacing a Native DLL does not hot-reload it.
+
+> [!WARNING]
+> PaperTodo **does not provide a security sandbox for plugins**. Treat both Native and Web plugins as trusted code and install only from trusted sources. The data directory does not restrict a plugin's access to the system.
+>
+> Developers can use the [Plugin Development Manual](../plugin-samples/README.md).
+
+#### Sample Plugins and Codex CLI Bridge
+
+Runnable examples include a native clock, Pomodoro timer, review pool, Web clock, and **Codex CLI Bridge**. Select the plugins you need from the built directory; you do not need to install every example.
+
+Codex CLI Bridge requires Codex CLI to be installed and signed in on this computer:
+- The **`>_`** action beside a todo sends that item together with linked papers, file paths, or supported images to local Codex for background execution.
+- The top-bar **`>_`** sends the current Todo / Note paper's full content and opens a window for viewing the result.
+- The automatically created **Codex CLI paper** edits the default prompt. Plugin settings control the model, reasoning, command path, and default working directory.
+- Deleting the last paper for this plugin also removes its global buttons. Collapse its entry paper instead when you only want it out of the way.
+
+It uses your local Codex login, approval, and sandbox configuration; it is not a free AI service bundled with PaperTodo. See the [Codex CLI Bridge notes](../plugin-samples/PaperTodo.Plugin.CodexCliBridge/README.md) for more options.
 
 ### 8.5 Experimental Labs Features (4.0 Advanced)
 
-Enable "Advanced Mode" to unlock experimental capabilities:
+Enable Advanced Mode, then select the Labs capabilities you need:
 
-- **Local MCP Server**: Start with `--mcp` to spin up a Model Context Protocol server for AI assistants (Cursor, Claude, etc.);
-- **Window Tethering**: Drag the tether handle onto any third-party app window to dock and follow it smoothly;
-- **Countdown Reminders**: Right-click tasks to configure timer notifications;
-- **Idle Morphology**: Auto-collapse papers to capsules or auto-compact title bars upon losing focus;
-- **Desktop Sinking & Click-Through**: Sink papers to the wallpaper layer with click-through using global hotkeys.
+- **Local MCP**: Enable the feature and permissions, copy the client configuration and AI Skill prompt, and use them in an MCP-compatible client. The client starts `PaperTodo.exe --mcp` to read, create, append, or manage notes and todos as authorized.
+- **External Window Tethering**: Drag the top-bar tether handle onto another application's window to follow its movement, minimization, and restoration.
+- **Magnetic Edge Capsules**: Floating capsules snap near screen or external-window edges, slide out on hover, and retract when the pointer leaves. This is a different option from the fixed left / right edge queues.
+- **Focus-Loss Automation**: Fade a paper, hide its title icons / title bar, or collapse it when focus is lost.
+- **Resting Translucency**: Set separate idle opacity for normal and docked capsules.
+- **Send Behind and Click-Through**: Use global hotkeys to place papers or capsules below other windows. With click-through enabled, they no longer intercept mouse input.
+
+MCP gives an external client access to your content; grant trusted clients only the access they need. MCP and Codex CLI Bridge are separate entry points, and neither requires installing the other.
 
 ---
 
@@ -439,26 +501,27 @@ Enable "Advanced Mode" to unlock experimental capabilities:
 
 ### 9.1 System Tray Menu
 
-Right-click the PaperTodo icon in the notification area:
-- Version display
-- Show / Hide All Papers
-- New Todo / Note Paper
-- Paper Roster: Click to locate papers; click `×` to delete
-- Settings
-- Exit
+Right-click the PaperTodo icon in the Windows notification area:
+- The top of the menu shows the version.
+- Show / hide all papers, or create a Todo / Note paper.
+- The paper list shows titles and states. Click to locate a paper; use its `×` action to confirm deletion.
+- Settings opens configuration; Exit saves and closes the application.
 
 ### 9.2 CLI Launch Arguments
 
-Forward commands to the running instance via shortcuts or third-party launchers:
+Use these commands in shortcuts, batch files, or launchers:
 
 | Command | Alias | Action |
 | :--- | :--- | :--- |
-| `PaperTodo.exe --show` | `PaperTodo.exe open` | Wake and center all papers |
-| `PaperTodo.exe --hide` | None | Hide all papers (keeps running in tray) |
-| `PaperTodo.exe --toggle` | None | Toggle visibility |
-| `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a new Todo paper |
-| `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a new Note paper |
-| `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save data and exit cleanly |
+| `PaperTodo.exe --show` | `PaperTodo.exe open` | Show and recall all papers |
+| `PaperTodo.exe --hide` | None | Hide all papers while keeping the app running |
+| `PaperTodo.exe --toggle` | None | Toggle overall visibility |
+| `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a Todo paper |
+| `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a Note paper |
+| `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
+| `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client; see Labs |
+
+Normal GUI launches use a single instance. If PaperTodo is already running, subsequent launches forward commands and exit rather than creating another set of windows. `--mcp` is a separate connection mode, not a normal GUI launch command.
 
 ---
 
@@ -466,58 +529,78 @@ Forward commands to the running instance via shortcuts or third-party launchers:
 
 ### 10.1 Directory Structure & Files
 
+Core paper data lives beside the executable:
+
 ```text
 PaperTodo/
-├── PaperTodo.exe               # Application executable
-├── data.json                   # Core data: paper text, positions, and preferences
-├── data.backup.json            # Rolling snapshot backup created before every save
-├── note-assets.lmdb            # Database for note images
-├── plugins/                    # Plugins directory
-│   └── data/                   # Isolated plugin configuration and storage
-├── papertodo.ttf               # (Optional) Custom font file
-└── PaperTodo.ico               # (Optional) Custom tray icon
+├── PaperTodo.exe               # Application
+├── data.json                   # Paper content, positions, and main preferences
+├── data.backup.json            # Automatic backup, not updated on every save
+├── note-assets.lmdb            # Note image database
+├── plugins/                    # Runnable plugins
+│   └── data/                   # Plugin configuration and state
+├── papertodo.png               # Optional background; .jpg / .jpeg also supported
+├── papertodo.ttf               # Optional font
+└── PaperTodo.ico               # Optional tray icon
 ```
+
+Background blending and position preferences live separately at `%LOCALAPPDATA%\PaperTodo\paper-background.json`, not in this application directory.
+
+Version 4.0 reduces automatic backup frequency and checks availability before updating it. Consequently, `data.backup.json` is not guaranteed to represent the state immediately before your last edit, and it does not replace an independent backup.
 
 ### 10.2 Standard Backup Procedure
 
-1. Right-click the tray icon and choose **Exit**;
-2. Copy `data.json`, `data.backup.json`, and `note-assets.lmdb` to a backup location;
-3. If using plugins, copy the `plugins/` directory as well.
+1. **Exit from the tray** and wait for the process to finish before copying, to avoid copying partially written data.
+2. Copy `data.json`, `data.backup.json`, and `note-assets.lmdb`. Include the full `plugins/` directory when using plugins.
+3. Keep custom background, font, and icon files too. Copying the entire application directory is the simplest approach.
+4. To preserve background display options, also back up `%LOCALAPPDATA%\PaperTodo\paper-background.json`. Otherwise, configure those options again on the new computer.
 
 ### 10.3 Moving to a New PC & Disaster Recovery
 
 #### Migration
-1. Unpack a fresh `PaperTodo.exe` on your new computer;
-2. Copy your backed-up `data.json`, `note-assets.lmdb`, and `plugins/` into the new folder;
-3. Launch `PaperTodo.exe`.
+
+1. Place a PaperTodo version compatible with your data and plugins on the new computer; do not launch it yet.
+2. Copy the backed-up data, image database, plugins, and optional appearance files beside the executable.
+3. Restore the background preferences separately if needed, or configure them after launch.
+4. Launch and check text, images, and plugins. Keep the old computer's backup until you have verified the result.
 
 #### Disaster Recovery
-If an unexpected system shutdown corrupts `data.json`:
-1. Make a backup copy of the folder;
-2. Rename `data.backup.json` to `data.json`;
-3. Launch the app to restore the last automatic snapshot.
+
+If `data.json` is damaged:
+1. Exit the app and copy the entire existing folder as a recovery snapshot.
+2. Preserve the original file, then **copy** a usable `data.backup.json` to `data.json`. Do not leave yourself with only one recoverable copy.
+3. Restart and check the result. The automatic backup may be older, so recent edits are not guaranteed to be recoverable.
 
 ---
 
 ## 11. Frequently Asked Questions (FAQ)
 
-#### Q1: Why does PaperTodo remain in the system tray when I close a paper?
-**A**: Closing a paper collapses or hides it so you can summon it instantly via hotkeys or edge docks. To terminate the program completely, right-click the tray icon and select **Exit**.
+#### Q1: Why does PaperTodo stay in the tray when I close a paper?
+**A**: The button collapses or hides the paper; it does not exit the application. Choose Exit from the tray to close PaperTodo completely.
 
-#### Q2: What should I do if papers disappear after disconnecting an external monitor?
-**A**: Double-click the PaperTodo icon in the system tray. The app automatically pulls all off-screen papers back into the primary monitor's visible area.
+#### Q2: What if a paper disappears after disconnecting an external display?
+**A**: Double-click the tray icon to recall papers. Use Remember expanded position when you need to preserve a cross-monitor placement.
 
-#### Q3: I copied my data to a new computer, but note images show broken placeholders.
-**A**: The image database was omitted. Images are stored in `note-assets.lmdb`. Ensure you copy `note-assets.lmdb` alongside `data.json`.
+#### Q3: Why did my text migrate but not my images?
+**A**: Check that `note-assets.lmdb` was copied too. `data.json` does not contain the actual image data.
 
-#### Q4: Why aren't Markdown tables rendering properly?
-**A**: PaperTodo keeps Markdown lightweight (headings, lists, code, quotes) to ensure maximum speed. For complex tables, click the `MD` button in the top bar to open the note in Typora, VS Code, or another full-featured editor.
+#### Q4: Why do Markdown tables still not render?
+**A**: Full Render does not mean every Markdown extension is supported. Use `MD` to open complex tables in an external editor.
 
-#### Q5: I changed the interface language in Settings, but some strings did not change.
-**A**: Language changes take effect after restarting. Please exit from the tray and reopen PaperTodo.
+#### Q5: Why did some text not change after I selected another language?
+**A**: Exit from the tray and restart to apply the language throughout the application.
 
-#### Q6: I added `papertodo.ttf`, but the app's font didn't update.
-**A**: Custom fonts load during startup. Please exit completely from the tray and relaunch the app.
+#### Q6: Why did adding `papertodo.ttf` not change the font?
+**A**: Fonts load on startup. Check that the file is beside the executable, then exit completely and restart.
+
+#### Q7: Why can't I click a task checkbox in a note?
+**A**: Select Full Render in "Settings → Note" and use `- [ ]` / `- [x]` task syntax. If the marker is showing as source, move the caret away before clicking the rendered box.
+
+#### Q8: Why is the background still visible with blending turned off?
+**A**: Off displays the original image. To remove it entirely, move or rename the candidate background files beside the executable and restart.
+
+#### Q9: Why does a copied plugin not appear?
+**A**: Check that it is a runnable build, its directory name matches `id` in `plugin.json`, it is not nested an extra level, and it supports protocol 2.1. Restart and check "Settings → Plugins". Native source is not a substitute for a compiled plugin.
 
 ---
 
