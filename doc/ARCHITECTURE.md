@@ -369,7 +369,7 @@ Presentation contract 区分：
 
 跨队列/脱墙拖拽使用独立、进程级复用的 `EdgeCapsuleDragWindow`，不把 docked host 变形成自由 floating pill。
 
-开启 collapse-all master 时，每个队列的 `MasterCapsuleWindow` 占 slot 0，只拥有自身 presentation/gesture，不持有真实 paper 的第二套 presenter state。主胶囊纵向拖动仍只改变该队列的起始高度；横向脱墙后由 controller 建立一次 queue transfer，成员临时 retract，并租用同一个进程级 `EdgeCapsuleDragWindow` 作为普通 `FloatingFree` 外观。松手只原子更新起拖时实际占槽成员的 monitor/edge、队列起始高度与 collapse 状态，再回到正常 arrange；隐藏或不占槽的纸片保留原队列身份与配置。事务捕获源队列的持久 monitor 别名，提交前重新核对逻辑成员和顺序；成员变化则取消，不把显示器断连后的 live fallback 或临时 retract 当成成员变化。取消恢复手势按下时起始高度的数值与缺省状态；master 本身不变成 Paper，也不新增 presenter authority。
+开启 collapse-all master 时，每个队列的 `MasterCapsuleWindow` 占 slot 0，只拥有自身 presentation/gesture，不持有真实 paper 的第二套 presenter state。主胶囊纵向拖动仍只改变该队列的起始高度；横向脱墙后由 controller 建立一次 queue transfer，成员临时 retract，并租用同一个进程级 `EdgeCapsuleDragWindow` 作为普通 `FloatingFree` 外观。普通胶囊与主胶囊共用浮层的 Render 准备、原生拖动及目标就绪后的 flush/cover 释放；各自 owner 保留单纸片 presenter 或整队业务。队列提交先完成当前布局计划与旧 master 清理，再进入可重入的目标呈现边界；已提交事务不再取消仍由调用方持有的浮层 lease。松手只原子更新起拖时实际占槽成员的 monitor/edge、队列起始高度与 collapse 状态，再回到正常 arrange；隐藏或不占槽的纸片保留原队列身份与配置。事务捕获源队列的持久 monitor 别名，提交前重新核对逻辑成员和顺序；成员变化则取消，不把显示器断连后的 live fallback 或临时 retract 当成成员变化。取消恢复手势按下时起始高度的数值与缺省状态；master 本身不变成 Paper，也不新增 presenter authority。
 
 ### 6.4 WPF 与 DirectComposition
 
@@ -513,4 +513,5 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
+
 

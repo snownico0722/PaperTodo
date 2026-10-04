@@ -2496,7 +2496,7 @@ public sealed partial class AppController : IDisposable
             State.DeepCapsuleQueueStartTopMargins[sourceKey] =
                 target.StartTopMargin;
 
-            CompleteMasterCapsuleQueueTransfer(targetKey);
+            CompleteMasterCapsuleQueueTransfer(snapshot, targetKey);
             return true;
         }
 
@@ -2549,7 +2549,7 @@ public sealed partial class AppController : IDisposable
         State.DeepCapsuleQueueStartTopMargins[targetKey] =
             target.StartTopMargin;
 
-        CompleteMasterCapsuleQueueTransfer(targetKey);
+        CompleteMasterCapsuleQueueTransfer(snapshot, targetKey);
         return true;
     }
 
@@ -2561,15 +2561,26 @@ public sealed partial class AppController : IDisposable
             snapshot.SourceMonitorAliases.Contains(
                 paper.CapsuleMonitorDeviceName.Trim(), StringComparer.Ordinal);
 
-    private void CompleteMasterCapsuleQueueTransfer(string targetKey)
+    private void CompleteMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot, string targetKey)
     {
+        // The data transaction is committed, but its caller still owns the floating lease.
+        // Retiring the source master must no longer cancel or hide that cover.
+        if (_masterCapsules.TryGetValue(snapshot.SourceQueueKey, out var source))
+        {
+            source.MarkQueueTransferCommitted(snapshot);
+        }
         var shouldRefreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
         try
         {
-            // The native loop has ended. Publish the target master before retiring the source;
-            // closing the source can otherwise withdraw the only visible floating authority.
             ArrangeDeepCapsulesCore(animate: true, flushInitialPresentations: false,
                 masterTransferTargetKey: targetKey);
+            // Rendering can dispatch MCP/plugin mutations. Finish all plan-based cleanup first:
+            // no old liveKeys/placements may retire a queue created during this handoff.
+            if (_masterCapsules.TryGetValue(targetKey, out var target))
+            {
+                target.PrepareQueueTransferHandoff();
+            }
             RefreshTrayMenu();
             SaveNow();
         }
@@ -3051,7 +3062,6 @@ public sealed partial class AppController : IDisposable
         }
 
         var liveKeys = new HashSet<string>(StringComparer.Ordinal);
-        MasterCapsuleWindow? transferTarget = null;
 
         foreach (var queue in plan.Queues)
         {
@@ -3082,12 +3092,7 @@ public sealed partial class AppController : IDisposable
                 master.SetQueue(edge, monitor);
                 master.UpdateState(papers.Count, retracted, animateMaster);
             }
-            if (isTransferTarget) transferTarget = master;
         }
-
-        // One shared WPF/desktop boundary while the floating cover still exists. This also
-        // reveals a surviving source master for same-queue drops; member animations stay intact.
-        transferTarget?.PrepareQueueTransferHandoff();
 
         if (liveKeys.Count == 0)
         {

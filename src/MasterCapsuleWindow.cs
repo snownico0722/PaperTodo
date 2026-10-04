@@ -534,6 +534,17 @@ public sealed class MasterCapsuleWindow : Window
         _floatingDragHost?.EndDragBackground();
     }
 
+    internal void MarkQueueTransferCommitted(MasterCapsuleQueueTransferSnapshot snapshot)
+    {
+        if (_queueTransferSnapshot == snapshot)
+        {
+            // Business commit is complete. Closing an obsolete source master must not cancel
+            // that commit or hide its floating cover; the caller still owns the lease until the
+            // destination has been prepared and the shared handoff releases it.
+            _queueTransferSnapshot = null;
+        }
+    }
+
     internal void CancelQueueTransfer()
     {
         if (_queueTransferSnapshot is not { } snapshot || _queueTransferCanceled)
@@ -659,35 +670,15 @@ public sealed class MasterCapsuleWindow : Window
             // virtual-desktop capture used by ordinary capsule drags. Movement only crops it.
             _ = PrepareFloatingDragBackgroundAsync(floatingHost);
 
-            // Match ordinary capsule pull-out: finish the shown HWND's pending WPF layout before
-            // WindowNative re-centers on the live cursor and fixes the caption drag anchor. If that
-            // layout first runs inside the move loop, it can move/resize the HWND under the anchor
-            // and leave the pointer offset for the entire drag. Do not pump Input or DwmFlush here.
-            Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
-            if (_queueTransferCanceled ||
-                _isClosingForReal ||
-                !ReferenceEquals(floatingHost, _floatingDragHost))
-            {
-                return true;
-            }
-
-            EdgeCapsuleNativeDragOutcome outcome;
-            if (Mouse.LeftButton == MouseButtonState.Pressed)
-            {
-                outcome = floatingHost.RunNativeDragFromCursor();
-            }
-            else
-            {
-                var drop = WindowNative.TryGetCursorScreenPosition(out var livePointer)
-                    ? livePointer
-                    : currentScreenPos;
-                outcome = new EdgeCapsuleNativeDragOutcome(
-                    EdgeCapsuleNativeDragResult.Completed,
-                    drop);
-            }
+            var outcome = floatingHost.PrepareAndRunNativeDrag(
+                currentScreenPos,
+                () => !_queueTransferCanceled &&
+                    !_isClosingForReal &&
+                    ReferenceEquals(floatingHost, _floatingDragHost));
 
             if (!_queueTransferCanceled &&
                 !_isClosingForReal &&
+                ReferenceEquals(floatingHost, _floatingDragHost) &&
                 outcome.Result == EdgeCapsuleNativeDragResult.Completed)
             {
                 committed = _controller.CommitMasterCapsuleQueueTransfer(
@@ -712,20 +703,41 @@ public sealed class MasterCapsuleWindow : Window
         finally
         {
             _queueTransferSnapshot = null;
-            ReleaseFloatingDragHostHandlers();
             _gestureState = MasterGestureState.Idle;
             _dragSession = null;
+            var targetReady = committed;
             try
             {
                 if (!committed && !_isClosingForReal)
                 {
                     PrepareQueueTransferHandoff();
+                    targetReady = true;
                 }
             }
             finally
             {
-                // Restore the surviving master before withdrawing its floating cover.
-                floatingHost?.ReturnToPool();
+                void ReleaseCover()
+                {
+                    try
+                    {
+                        ReleaseFloatingDragHostHandlers();
+                    }
+                    finally
+                    {
+                        floatingHost?.ReturnToPool();
+                    }
+                }
+
+                // Keep the drag background and its lease until the surviving master is ready.
+                // A closed/canceled owner has no visible target to publish and only needs cleanup.
+                if (targetReady && floatingHost != null)
+                {
+                    floatingHost.CompleteHandoff(ReleaseCover);
+                }
+                else
+                {
+                    ReleaseCover();
+                }
             }
 
             ClearCapsuleInteractionKeyboardFocus();
@@ -1105,8 +1117,9 @@ public sealed class MasterCapsuleWindow : Window
         if (_isClosingForReal) return;
 
         // A drop/rollback swaps visible authority, so this master must be fully opaque rather
-        // than waiting for its ordinary first-show fade. Finish its WPF surface and the shared
-        // desktop-composition boundary before the floating cover is hidden or returned to pool.
+        // than waiting for its ordinary first-show fade. Finish its WPF surface here; the shared
+        // floating host completes the composition/release boundary after this method returns.
+        // Call only after controller queue synchronization has finished: Render can reenter it.
         BeginAnimation(OpacityProperty, null);
         Opacity = 1;
         MoveToTarget(animate: false);
@@ -1114,7 +1127,6 @@ public sealed class MasterCapsuleWindow : Window
         RefreshEffectiveTopmost();
         UpdateLayout();
         Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
-        WindowNative.FlushDesktopComposition();
     }
 
     public void CloseForReal()
@@ -1151,4 +1163,5 @@ public sealed class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
+
 

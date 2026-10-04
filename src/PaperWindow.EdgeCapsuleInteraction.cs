@@ -580,55 +580,26 @@ public sealed partial class PaperWindow
 #if DEBUG
             var stateAndZOrderMs =
                 EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(stageStartedAt);
-            stageStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
-#endif
-
-            // Push one render pass so the docked blank and new floating HWND share a layout tick.
-            // Do not DwmFlush or pump Input here: both freeze this UI thread while the cursor keeps
-            // moving, which feels like a sticky pull-out. A one-frame composition race is cheaper
-            // than a multi-frame hitch before the system move loop owns the pill. Fast release is
-            // handled after SendMessage returns (button already up → Completed at cursor).
-            Dispatcher.Invoke(
-                () => { },
-                System.Windows.Threading.DispatcherPriority.Render);
-#if DEBUG
-            var renderBarrierMs =
-                EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(stageStartedAt);
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"drag.transfer phase=host-ready paper={diagnosticId} " +
                 $"totalMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(transferStartedAt):F3} " +
                 $"transferStateMs={transferStateMs:F3} flushMs={flushMs:F3} " +
                 $"createShowMs={createShowMs:F3} " +
-                $"stateAndZOrderMs={stateAndZOrderMs:F3} " +
-                $"renderBarrierMs={renderBarrierMs:F3}");
-#endif
-
-            if (!ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) ||
-                !IsDeepCapsuleFloatingReordering)
-            {
-                return;
-            }
-
-            if (Mouse.LeftButton != MouseButtonState.Pressed)
-            {
-                CommitDeepCapsuleFloatingReorderAtCursor(currentScreenPos);
-                edgeHost.ReleaseContentPointer();
-                return;
-            }
-
-            // From here through button release, Windows is the sole drag owner. The reducer stays
-            // in FloatingReordering only so queue/layout work remains deferred until we sample the
-            // final native cursor position.
-#if DEBUG
+                $"stateAndZOrderMs={stateAndZOrderMs:F3}");
             var nativeDragStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
-            var nativeDragOutcome = edgeHost.TransferContentPointerToNativeDrag(
-                floatingHost.RunNativeDragFromCursor);
+            // Shared preparation checks this owner again after Render, then Windows owns the
+            // movement until button release. The reducer retains only its transaction/slot state.
+            var nativeDragOutcome = floatingHost.PrepareAndRunNativeDrag(
+                currentScreenPos,
+                () => ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) &&
+                    IsDeepCapsuleFloatingReordering,
+                edgeHost.TransferContentPointerToNativeDrag);
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"drag.transfer phase=native-return paper={diagnosticId} " +
                 $"result={nativeDragOutcome.Result} " +
-                $"nativeCallMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(nativeDragStartedAt):F3} " +
+                $"preparedNativeCallMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(nativeDragStartedAt):F3} " +
                 $"totalMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(transferStartedAt):F3} " +
                 $"drop={nativeDragOutcome.DropPosition.X:F0},{nativeDragOutcome.DropPosition.Y:F0}");
 #endif
@@ -646,6 +617,8 @@ public sealed partial class PaperWindow
             }
 
             CommitDeepCapsuleFloatingReorderAtCursor(nativeDragOutcome.DropPosition);
+            // A fast release can complete before the native loop releases WPF capture.
+            edgeHost.ReleaseContentPointer();
         }
         catch (Exception ex)
         {
@@ -910,4 +883,5 @@ public sealed partial class PaperWindow
         return Math.Clamp(index, 0, count - 1);
     }
 }
+
 

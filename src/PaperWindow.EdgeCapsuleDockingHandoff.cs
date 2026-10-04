@@ -106,8 +106,7 @@ public sealed partial class PaperWindow
             // ContextIdle has let WPF submit the revealed docked surface. Do not destroy the
             // floating cover until DWM has presented that update, otherwise two independent
             // layered HWNDs can expose the desktop for one or two refresh frames.
-            WindowNative.FlushDesktopComposition();
-            CloseDeepCapsuleFloatingDragHost();
+            floatingHost.CompleteHandoff(CloseDeepCapsuleFloatingDragHost);
         });
     }
 
@@ -382,8 +381,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        WindowNative.FlushDesktopComposition();
-        CloseDeepCapsuleFloatingDragHost();
+        floatingHost.CompleteHandoff(CloseDeepCapsuleFloatingDragHost);
         _controller.CompleteDeepCapsuleReorderDrag();
         _controller.RefreshFloatingSurfaceZOrder();
     }
@@ -509,9 +507,12 @@ public sealed partial class PaperWindow
 
                 if (settled)
                 {
-                    WindowNative.FlushDesktopComposition();
+                    floatingHost.CompleteHandoff(CloseDeepCapsuleFloatingDragHost);
                 }
-                CloseDeepCapsuleFloatingDragHost();
+                else
+                {
+                    CloseDeepCapsuleFloatingDragHost();
+                }
                 _controller.RefreshFloatingSurfaceZOrder();
                 _controller.ScheduleDisplayMetricsRefresh();
             },
@@ -519,3 +520,4 @@ public sealed partial class PaperWindow
             dirty: EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Measure);
     }
 }
+
