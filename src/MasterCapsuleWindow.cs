@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -84,6 +85,7 @@ public sealed class MasterCapsuleWindow : Window
     // this master is represented by the shared FloatingFree drag HWND until the drop commits.
     private MasterDragSession? _dragSession;
     private EdgeCapsuleDragWindow? _floatingDragHost;
+    private CancellationTokenSource? _floatingDragBackgroundCapture;
     private IntPtr _floatingFullscreenAvoidanceWindow;
     private MasterCapsuleQueueTransferSnapshot? _queueTransferSnapshot;
     private bool _queueTransferCanceled;
@@ -465,6 +467,7 @@ public sealed class MasterCapsuleWindow : Window
 
     private void ReleaseFloatingDragHostHandlers()
     {
+        EndFloatingDragBackground();
         if (_floatingDragHost is { } host)
         {
             host.LocationChanged -= OnFloatingDragHostLocationChanged;
@@ -472,6 +475,60 @@ public sealed class MasterCapsuleWindow : Window
             _floatingDragHost = null;
         }
         _floatingFullscreenAvoidanceWindow = IntPtr.Zero;
+    }
+
+    private async Task PrepareFloatingDragBackgroundAsync(EdgeCapsuleDragWindow host)
+    {
+        EndFloatingDragBackground();
+        if (!_controller.State.MatchAuxiliaryMaterialStrength ||
+            !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
+            SystemParameters.HighContrast ||
+            !DwmMicaApi.Instance.EffectsEnabled)
+        {
+            return;
+        }
+
+        var capture = new CancellationTokenSource();
+        _floatingDragBackgroundCapture = capture;
+        try
+        {
+            var snapshot = await DesktopBackgroundCapture.PrepareDragAsync(
+                new WindowInteropHelper(host).Handle,
+                capture.Token);
+            if (snapshot != null &&
+                !capture.IsCancellationRequested &&
+                ReferenceEquals(capture, _floatingDragBackgroundCapture) &&
+                ReferenceEquals(host, _floatingDragHost))
+            {
+                host.UseDragBackground(snapshot);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or
+            InvalidOperationException or ExternalException or ArgumentException or NotSupportedException)
+        {
+            if (ReferenceEquals(capture, _floatingDragBackgroundCapture))
+            {
+                _floatingDragBackgroundCapture = null;
+                capture.Dispose();
+            }
+            System.Diagnostics.Debug.WriteLine(
+                "Master drag background unavailable; keeping the live material: " + ex.Message);
+        }
+    }
+
+    private void EndFloatingDragBackground()
+    {
+        var capture = _floatingDragBackgroundCapture;
+        _floatingDragBackgroundCapture = null;
+        if (capture != null)
+        {
+            capture.Cancel();
+            capture.Dispose();
+        }
+        _floatingDragHost?.EndDragBackground();
     }
 
     internal void CancelQueueTransfer()
@@ -485,6 +542,7 @@ public sealed class MasterCapsuleWindow : Window
         // The native move loop can still be on the stack. Withdraw its visible surface now,
         // but keep the lease until that call returns so no later drag can rebind its HWND.
         _floatingDragHost?.Hide();
+        EndFloatingDragBackground();
         _controller.CancelMasterCapsuleQueueTransfer(snapshot);
     }
 
@@ -592,6 +650,10 @@ public sealed class MasterCapsuleWindow : Window
             {
                 Hide();
             }
+
+            // The source is hidden and this HWND can now be excluded from the same one-shot
+            // virtual-desktop capture used by ordinary capsule drags. Movement only crops it.
+            _ = PrepareFloatingDragBackgroundAsync(floatingHost);
 
             EdgeCapsuleNativeDragOutcome outcome;
             if (Mouse.LeftButton == MouseButtonState.Pressed)
