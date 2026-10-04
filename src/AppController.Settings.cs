@@ -2557,7 +2557,7 @@ public sealed partial class AppController
 
     private void RefreshSettingsStartupStateFromWindows()
     {
-        if (_settingsWindow is not { IsVisible: true })
+        if (_settingsWindow is not { IsVisible: true } || _settingsPage != SettingsPage.General)
         {
             return;
         }
@@ -2569,11 +2569,7 @@ public sealed partial class AppController
         }
 
         _settingsStartupEnabledSnapshot = enabled;
-        if (_settingsPage == SettingsPage.General)
-        {
-            RefreshSettingsForChange("general.startup");
-        }
-        RebuildTrayMenu();
+        RefreshSettingsForChange("general.startup");
     }
 
     private void ToggleAnimations() =>
