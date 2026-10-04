@@ -659,6 +659,18 @@ public sealed class MasterCapsuleWindow : Window
             // virtual-desktop capture used by ordinary capsule drags. Movement only crops it.
             _ = PrepareFloatingDragBackgroundAsync(floatingHost);
 
+            // Match ordinary capsule pull-out: finish the shown HWND's pending WPF layout before
+            // WindowNative re-centers on the live cursor and fixes the caption drag anchor. If that
+            // layout first runs inside the move loop, it can move/resize the HWND under the anchor
+            // and leave the pointer offset for the entire drag. Do not pump Input or DwmFlush here.
+            Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+            if (_queueTransferCanceled ||
+                _isClosingForReal ||
+                !ReferenceEquals(floatingHost, _floatingDragHost))
+            {
+                return true;
+            }
+
             EdgeCapsuleNativeDragOutcome outcome;
             if (Mouse.LeftButton == MouseButtonState.Pressed)
             {

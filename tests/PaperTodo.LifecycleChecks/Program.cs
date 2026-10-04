@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -42,9 +42,12 @@ internal static class Program
         }
         try
         {
-            if (args.Length != 0) throw new ArgumentException("Lifecycle measurements moved to tools/PaperTodo.DesktopBenchmarks.");
-            foreach (var name in Cases) RunIsolated(name);
-            Console.WriteLine("PASS lifecycle fixtures (isolated data; startup, cancellation, shutdown and persistence)");
+            var cases = args is ["--case", var caseName] && Cases.Contains(caseName)
+                ? [caseName]
+                : args.Length == 0 ? Cases
+                : throw new ArgumentException("Use --case with a lifecycle fixture name; measurements moved to tools/PaperTodo.DesktopBenchmarks.");
+            foreach (var name in cases) RunIsolated(name);
+            Console.WriteLine($"PASS {cases.Length} lifecycle fixtures (isolated data)");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -187,6 +190,13 @@ internal static class Program
                     "off-screen paper was not rescued after the bounded grace period");
                 Require(windows.Values.Count(window => window.HasVisibleSurface) == count + 1,
                     "bounded off-screen rescue hid or duplicated an already-restored paper");
+            }
+            if (name == "master-queue-drag-preparation")
+            {
+                MasterQueueDragPreparationChecks.Run(controller);
+                await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
+                    "master drag cancelled during layout restored presentation");
+                return;
             }
             if (name == "master-queue-hide")
             {
