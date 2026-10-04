@@ -200,14 +200,6 @@ public sealed partial class PaperWindow
             // sampled paper's title-dependent resting width.
             WindowWidthDip = PaperLayoutDefaults.CapsuleWidth
         };
-        if (!shape.Visible ||
-            shape.Kind != EdgeCapsuleSurfaceKind.FloatingFree ||
-            shape.WindowWidthDip <= 0 ||
-            shape.WindowHeightDip <= 0)
-        {
-            return false;
-        }
-
         options = CreateDeepCapsuleFloatingDragHostOptions(shape) with
         {
             Icon = icon,
@@ -918,3 +910,4 @@ public sealed partial class PaperWindow
         return Math.Clamp(index, 0, count - 1);
     }
 }
+

@@ -32,6 +32,8 @@ public sealed class MasterCapsuleWindow : Window
 
     private sealed record MasterDragSession(
         DeviceScreenPoint StartScreenPosition,
+        string SourceQueueKey,
+        bool SourceHadStartTopMargin,
         double StartTopMargin);
 
     private const int WmSettingChange = 0x001A;
@@ -263,6 +265,8 @@ public sealed class MasterCapsuleWindow : Window
         {
             _dragSession = new MasterDragSession(
                 DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
+                _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
+                _controller.HasDeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
                 _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge));
             _gestureState = MasterGestureState.Pending;
             _pill.CaptureMouse();
@@ -496,7 +500,6 @@ public sealed class MasterCapsuleWindow : Window
                 new WindowInteropHelper(host).Handle,
                 capture.Token);
             if (snapshot != null &&
-                !capture.IsCancellationRequested &&
                 ReferenceEquals(capture, _floatingDragBackgroundCapture) &&
                 ReferenceEquals(host, _floatingDragHost))
             {
@@ -608,7 +611,8 @@ public sealed class MasterCapsuleWindow : Window
                 _queueMonitorDeviceName,
                 _queueEdge,
                 session.StartTopMargin,
-                out var snapshot))
+                out var snapshot,
+                session.SourceHadStartTopMargin))
         {
             return false;
         }
@@ -715,15 +719,8 @@ public sealed class MasterCapsuleWindow : Window
             }
             finally
             {
-                try
-                {
-                    // Restore the surviving master before withdrawing its floating cover.
-                    floatingHost?.ReturnToPool();
-                }
-                catch
-                {
-                    // A failed pooled host must not strand the queue transaction.
-                }
+                // Restore the surviving master before withdrawing its floating cover.
+                floatingHost?.ReturnToPool();
             }
 
             ClearCapsuleInteractionKeyboardFocus();
@@ -746,15 +743,23 @@ public sealed class MasterCapsuleWindow : Window
         if (wasDragging)
         {
             // Live movement updates the queue immediately so the stack follows the pointer.
-            // Only the explicit MouseUp path persists that value; every other exit restores the
-            // session snapshot before the autosave timer can make the preview authoritative.
-            _controller.SetDeepCapsuleStartTopMargin(
-                _queueMonitorDeviceName,
-                _queueEdge,
-                commit
-                    ? _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge)
-                    : session!.StartTopMargin,
-                commit);
+            // Only MouseUp commits that value. Every other exit restores the original margin
+            // and its presence, so a canceled preview cannot pin the current product default.
+            if (commit)
+            {
+                _controller.SetDeepCapsuleStartTopMargin(
+                    _queueMonitorDeviceName,
+                    _queueEdge,
+                    _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
+                    commit: true);
+            }
+            else
+            {
+                _controller.RestoreMasterCapsuleQueueStartTopMargin(
+                    session!.SourceQueueKey,
+                    session.SourceHadStartTopMargin,
+                    session.StartTopMargin);
+            }
         }
 
         if (hadCapture && clearFocus)
@@ -1124,3 +1129,4 @@ public sealed class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
+

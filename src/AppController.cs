@@ -2299,7 +2299,8 @@ public sealed partial class AppController : IDisposable
         string monitorDeviceName,
         EdgeCapsuleEdge edge,
         double rollbackStartTopMargin,
-        out MasterCapsuleQueueTransferSnapshot snapshot)
+        out MasterCapsuleQueueTransferSnapshot snapshot,
+        bool? rollbackHadStartTopMargin = null)
     {
         snapshot = default;
         if (IsExiting ||
@@ -2317,21 +2318,8 @@ public sealed partial class AppController : IDisposable
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
         var sourceKey = QueueKey(normalizedMonitor, side);
-        var hasLiveMember = DeepCapsulePapersInOrder().Any(
-            paper => string.Equals(
-                QueueKey(paper),
-                sourceKey,
-                StringComparison.Ordinal));
-        if (!hasLiveMember)
-        {
-            return false;
-        }
-
-        var paperIds = State.Papers
-            .Where(paper => string.Equals(
-                QueueKey(paper),
-                sourceKey,
-                StringComparison.Ordinal))
+        var paperIds = DeepCapsulePapersInOrder()
+            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
             .Select(paper => paper.Id)
             .ToArray();
         if (paperIds.Length == 0)
@@ -2339,13 +2327,23 @@ public sealed partial class AppController : IDisposable
             return false;
         }
 
+        // Freeze the persisted monitor aliases behind this live queue. A disconnect may
+        // change its live QueueKey, but must not look like a membership mutation.
+        var sourceMonitorAliases = State.Papers
+            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
+            .Select(paper => paper.CapsuleMonitorDeviceName.Trim())
+            .Append(normalizedMonitor)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
         snapshot = new MasterCapsuleQueueTransferSnapshot(
             sourceKey,
             normalizedMonitor,
             edge,
             paperIds,
+            sourceMonitorAliases,
             IsCapsuleCollapseAllActiveForQueue(sourceKey),
-            State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey),
+            rollbackHadStartTopMargin ?? State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey),
             rollbackStartTopMargin);
 
         // Retraction belongs to this runtime transaction, never to the persisted collapse state.
@@ -2373,7 +2371,7 @@ public sealed partial class AppController : IDisposable
     internal void CancelMasterCapsuleQueueTransfer(
         MasterCapsuleQueueTransferSnapshot snapshot)
     {
-        if (_masterCapsuleQueueTransfer != snapshot || !snapshot.IsValid)
+        if (_masterCapsuleQueueTransfer != snapshot)
         {
             return;
         }
@@ -2418,7 +2416,6 @@ public sealed partial class AppController : IDisposable
     {
         if (IsExiting ||
             _masterCapsuleQueueTransfer != snapshot ||
-            !snapshot.IsValid ||
             !State.UseCapsuleMode ||
             !State.UseDeepCapsuleMode ||
             !State.UseCapsuleCollapseAll)
@@ -2431,10 +2428,17 @@ public sealed partial class AppController : IDisposable
         var sourceKey = snapshot.SourceQueueKey;
         var sourceIds = snapshot.PaperIds.ToHashSet(StringComparer.Ordinal);
         var livePapers = DeepCapsulePapersInOrder();
-        var sourceLiveCount = livePapers.Count(
-            paper => sourceIds.Contains(paper.Id));
-        if (sourceLiveCount == 0 ||
-            !MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+        // Native dragging pumps the Dispatcher: API/plugin/UI operations may have changed
+        // queue membership. Retraction does not change this logical slot query. Never apply
+        // an old member snapshot over a newer add/hide/delete/reassign operation.
+        if (!livePapers.Where(paper => BelongsToMasterTransferSource(paper, snapshot))
+                .Select(paper => paper.Id).SequenceEqual(snapshot.PaperIds))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+        var sourceLiveCount = snapshot.PaperIds.Length;
+        if (!MasterCapsuleQueueTransferPolicy.TryResolveTarget(
                 dropPoint,
                 snapshot.SourceMonitorDeviceName,
                 snapshot.SourceEdge,
@@ -2492,14 +2496,7 @@ public sealed partial class AppController : IDisposable
             State.DeepCapsuleQueueStartTopMargins[sourceKey] =
                 target.StartTopMargin;
 
-            var refreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
-            ArrangeDeepCapsules(animate: true);
-            RefreshTrayMenu();
-            SaveNow();
-            if (refreshDisplayMetrics)
-            {
-                ScheduleDisplayMetricsRefresh();
-            }
+            CompleteMasterCapsuleQueueTransfer();
             return true;
         }
 
@@ -2509,12 +2506,6 @@ public sealed partial class AppController : IDisposable
         var sourceBlock = State.Papers
             .Where(paper => sourceIds.Contains(paper.Id))
             .ToList();
-        if (sourceBlock.Count == 0)
-        {
-            CancelMasterCapsuleQueueTransfer(snapshot);
-            return false;
-        }
-
         var firstSourceIndex = State.Papers.FindIndex(
             paper => sourceIds.Contains(paper.Id));
         var remaining = State.Papers
@@ -2537,7 +2528,13 @@ public sealed partial class AppController : IDisposable
         remaining.InsertRange(insertAt, sourceBlock);
         State.Papers = remaining;
 
-        State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+        var sourceHasRemainingMembers = State.Papers.Any(
+            paper => !sourceIds.Contains(paper.Id) && BelongsToMasterTransferSource(paper, snapshot));
+        if (!sourceHasRemainingMembers)
+        {
+            State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+            State.DeepCapsuleQueueStartTopMargins.Remove(sourceKey);
+        }
         if (targetHasLiveQueue
                 ? targetWasCollapsed
                 : snapshot.SourceWasCollapsed)
@@ -2549,12 +2546,24 @@ public sealed partial class AppController : IDisposable
             State.CapsuleCollapseAllActiveQueues.Remove(targetKey);
         }
 
-        State.DeepCapsuleQueueStartTopMargins.Remove(sourceKey);
         State.DeepCapsuleQueueStartTopMargins[targetKey] =
             target.StartTopMargin;
 
-        var shouldRefreshDisplayMetrics =
-            EndMasterCapsuleQueueTransferGate();
+        CompleteMasterCapsuleQueueTransfer();
+        return true;
+    }
+
+    private static bool BelongsToMasterTransferSource(
+        PaperData paper,
+        MasterCapsuleQueueTransferSnapshot snapshot)
+        => (paper.CapsuleSide == DeepCapsuleSides.Left
+                ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right) == snapshot.SourceEdge &&
+            snapshot.SourceMonitorAliases.Contains(
+                paper.CapsuleMonitorDeviceName.Trim(), StringComparer.Ordinal);
+
+    private void CompleteMasterCapsuleQueueTransfer()
+    {
+        var shouldRefreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         SaveNow();
@@ -2562,7 +2571,6 @@ public sealed partial class AppController : IDisposable
         {
             ScheduleDisplayMetricsRefresh();
         }
-        return true;
     }
 
     private bool EndMasterCapsuleQueueTransferGate()
@@ -2868,9 +2876,20 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
+            // Hidden/non-slot papers still own their queue's persisted collapse choice.
+            // Moving the visible members must not reset those papers when they return.
+            if (State.Papers.Any(paper =>
+                    string.Equals(PersistentQueueKey(paper), staleKey, StringComparison.Ordinal) ||
+                    string.Equals(QueueKey(paper), staleKey, StringComparison.Ordinal)))
+            {
+                continue;
+            }
             State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
         }
     }
+
+    private static string PersistentQueueKey(PaperData paper)
+        => $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}";
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
     {
@@ -3057,10 +3076,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // Close masters for queues that no longer exist.
+        // Retire only the live master. Persisted queue cleanup is owned by
+        // RemoveStaleCollapseAllActiveQueues, including hidden/non-slot members.
         foreach (var staleKey in _masterCapsules.Keys.Where(k => !liveKeys.Contains(k)).ToList())
         {
-            State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
             _masterCapsules[staleKey].CloseForReal();
             _masterCapsules.Remove(staleKey);
         }
@@ -3897,6 +3916,29 @@ public sealed partial class AppController : IDisposable
             : EdgeCapsuleLayout.StartTopMargin;
     }
 
+    internal string MasterCapsuleQueueKey(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
+
+    internal bool HasDeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => State.DeepCapsuleQueueStartTopMargins.ContainsKey(MasterCapsuleQueueKey(monitorDeviceName, edge));
+
+    internal void RestoreMasterCapsuleQueueStartTopMargin(
+        string key,
+        bool hadStartTopMargin,
+        double startTopMargin)
+    {
+        if (hadStartTopMargin)
+        {
+            State.DeepCapsuleQueueStartTopMargins[key] = startTopMargin;
+        }
+        else
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(key);
+        }
+        ArrangeDeepCapsules(animate: false);
+        MarkDirty();
+    }
+
     // Reset every persisted per-queue start height to the product default.
     private void ResetDeepCapsuleStartTopMargins()
     {
@@ -4096,4 +4138,5 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
 

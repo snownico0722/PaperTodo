@@ -5,12 +5,10 @@ internal readonly record struct MasterCapsuleQueueTransferSnapshot(
     string SourceMonitorDeviceName,
     EdgeCapsuleEdge SourceEdge,
     string[] PaperIds,
+    string[] SourceMonitorAliases,
     bool SourceWasCollapsed,
     bool SourceHadStartTopMargin,
-    double SourceStartTopMargin)
-{
-    public bool IsValid => PaperIds is { Length: > 0 };
-}
+    double SourceStartTopMargin);
 
 internal readonly record struct MasterCapsuleQueueTransferTarget(
     string MonitorDeviceName,
@@ -65,4 +63,5 @@ internal static class MasterCapsuleQueueTransferPolicy
         return true;
     }
 }
+
 

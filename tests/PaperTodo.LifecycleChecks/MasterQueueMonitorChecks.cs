@@ -114,6 +114,21 @@ internal static class MasterQueueMonitorChecks
                 "disconnect commit did not migrate the stable source anchor");
             Require(controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
                 "disconnect commit leaked temporary retraction into the fallback queue");
+
+            // A vertical gesture also restores the key captured before a disconnect, not
+            // whichever queue the old monitor resolves to when its master is closed.
+            var primaryMargin = controller.State.DeepCapsuleQueueStartTopMargins[fallbackKey];
+            foreach (var paper in controller.State.Papers) paper.CapsuleMonitorDeviceName = SourceMonitor;
+            cacheField.SetValue(null, connected);
+            var verticalSourceKey = controller.MasterCapsuleQueueKey(SourceMonitor, EdgeCapsuleEdge.Right);
+            controller.State.DeepCapsuleQueueStartTopMargins.Remove(verticalSourceKey);
+            controller.SetDeepCapsuleStartTopMargin(SourceMonitor, EdgeCapsuleEdge.Right, 91);
+            cacheField.SetValue(null, originalCache);
+            controller.RestoreMasterCapsuleQueueStartTopMargin(verticalSourceKey,
+                hadStartTopMargin: false, startTopMargin: EdgeCapsuleLayout.StartTopMargin);
+            Require(!controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey) &&
+                    Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[fallbackKey] - primaryMargin) < 0.01,
+                "vertical cancellation after disconnect changed the fallback queue's anchor");
         }
         finally
         {
@@ -131,3 +146,4 @@ internal static class MasterQueueMonitorChecks
         if (!condition) throw new InvalidOperationException(message);
     }
 }
+

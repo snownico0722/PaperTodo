@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -157,6 +157,8 @@ internal static class Program
                 Id = "missing-screen", Type = PaperTypes.Note, Content = "keep my coordinates",
                 IsVisible = true, IsCollapsed = false, X = 1_000_000, Y = 100, Width = 300, Height = 240
             });
+        if (name == "master-queue-membership")
+            MasterQueueMembershipChecks.Prepare(state);
         var store = new StateStore();
         store.SaveJsonSync(store.SerializeState(state), 1);
         var controller = new AppController();
@@ -209,6 +211,16 @@ internal static class Program
                 MasterQueueMonitorChecks.RunFloatingZOrder(controller);
                 return;
             }
+            if (name == "master-queue-membership")
+            {
+                await MasterQueueMembershipChecks.RunMembership(controller, windows, store);
+                return;
+            }
+            if (name == "master-queue-mutations")
+            {
+                await MasterQueueMembershipChecks.RunMutations(controller, windows, store);
+                return;
+            }
             if (name == "master-queue-cancel")
             {
                 controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, 80);
@@ -243,6 +255,13 @@ internal static class Program
                 Require(!controller.CommitMasterCapsuleQueueTransfer(cancelled, new DeviceScreenPoint(100, 100)),
                     "old transfer committed over a newer transfer");
                 controller.CancelMasterCapsuleQueueTransfer(repeated);
+                await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
+                    "repeated master queue restored presentation");
+                Require(controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                        "|" + DeepCapsuleSides.Right, out var restoredMargin) &&
+                        Math.Abs(restoredMargin - originalMargin) < 0.01,
+                    "cancelling master transfer lost the existing source anchor");
+                MasterQueueMembershipChecks.RunAbsentMarginCancellation(controller, store);
                 return;
             }
             if (name.StartsWith("master-queue-merge"))
