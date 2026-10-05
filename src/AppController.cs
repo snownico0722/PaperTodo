@@ -2483,7 +2483,11 @@ public sealed partial class AppController : IDisposable
             : DeepCapsuleSides.Right;
         targetKey = QueueKey(target.MonitorDeviceName, targetSide);
 
-        if (string.Equals(sourceKey, targetKey, StringComparison.Ordinal))
+        // A reconnected monitor may have split the pressed fallback queue while dragging.
+        // Only skip reassignment when every captured member still belongs to this target.
+        if (string.Equals(sourceKey, targetKey, StringComparison.Ordinal) &&
+            livePapers.Where(paper => sourceIds.Contains(paper.Id)).All(paper =>
+                string.Equals(QueueKey(paper), targetKey, StringComparison.Ordinal)))
         {
             if (snapshot.SourceWasCollapsed)
             {
@@ -4162,5 +4166,6 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
 
 

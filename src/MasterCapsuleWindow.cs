@@ -288,45 +288,12 @@ public sealed class MasterCapsuleWindow : Window
                 return;
             }
 
-            var currentScreenPos = DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this)));
-            if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(_queueMonitorDeviceName, this, out var geometry))
+            if (ContinueMasterDrag(
+                    DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
+                    session))
             {
-                return;
+                e.Handled = true;
             }
-
-            var deltaX = (currentScreenPos.X - session.StartScreenPosition.X) / geometry.DpiScaleX;
-            var deltaY = (currentScreenPos.Y - session.StartScreenPosition.Y) / geometry.DpiScaleY;
-            if (_gestureState == MasterGestureState.Pending &&
-                Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance &&
-                Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
-            {
-                return;
-            }
-
-            if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
-            {
-                if (TryRunQueueTransfer(currentScreenPos, session))
-                {
-                    e.Handled = true;
-                    return;
-                }
-            }
-
-            if (_gestureState == MasterGestureState.Pending)
-            {
-                _gestureState = MasterGestureState.Dragging;
-                ++_moveGeneration;
-                _animatedMonitorGeometry = null;
-                BeginAnimation(AnimatedTopProperty, null);
-            }
-
-            var targetMargin = session.StartTopMargin + deltaY;
-            _controller.SetDeepCapsuleStartTopMargin(
-                _queueMonitorDeviceName,
-                _queueEdge,
-                targetMargin);
-
-            e.Handled = true;
         };
         _pill.PreviewMouseLeftButtonUp += (_, e) =>
         {
@@ -356,6 +323,56 @@ public sealed class MasterCapsuleWindow : Window
         {
             e.Handled = true;
         };
+    }
+
+    private bool ContinueMasterDrag(DeviceScreenPoint currentScreenPos, MasterDragSession session)
+    {
+        // A display change can invalidate the pressed queue before the delayed layout refresh
+        // retires its master. Never apply that gesture's source margin to the fallback queue.
+        if (!string.Equals(session.SourceQueueKey,
+                _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
+                StringComparison.Ordinal))
+        {
+            FinishMasterGesture(commit: false);
+            return true;
+        }
+
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(_queueMonitorDeviceName, this, out var geometry))
+        {
+            return false;
+        }
+
+        var deltaX = (currentScreenPos.X - session.StartScreenPosition.X) / geometry.DpiScaleX;
+        var deltaY = (currentScreenPos.Y - session.StartScreenPosition.Y) / geometry.DpiScaleY;
+        if (_gestureState == MasterGestureState.Pending &&
+            Math.Abs(deltaX) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(deltaY) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return false;
+        }
+
+        if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
+        {
+            if (TryRunQueueTransfer(currentScreenPos, session))
+            {
+                return true;
+            }
+        }
+
+        if (_gestureState == MasterGestureState.Pending)
+        {
+            _gestureState = MasterGestureState.Dragging;
+            ++_moveGeneration;
+            _animatedMonitorGeometry = null;
+            BeginAnimation(AnimatedTopProperty, null);
+        }
+
+        var targetMargin = session.StartTopMargin + deltaY;
+        _controller.SetDeepCapsuleStartTopMargin(
+            _queueMonitorDeviceName,
+            _queueEdge,
+            targetMargin);
+        return true;
     }
 
     public void UpdateTheme()
@@ -686,10 +703,6 @@ public sealed class MasterCapsuleWindow : Window
                     outcome.DropPosition);
             }
 
-            if (!committed)
-            {
-                _controller.CancelMasterCapsuleQueueTransfer(snapshot);
-            }
             return true;
         }
         catch (Exception ex)
@@ -697,7 +710,6 @@ public sealed class MasterCapsuleWindow : Window
             System.Diagnostics.Trace.TraceWarning(
                 "Master capsule queue transfer failed: {0}",
                 ex.Message);
-            _controller.CancelMasterCapsuleQueueTransfer(snapshot);
             return true;
         }
         finally
@@ -708,6 +720,12 @@ public sealed class MasterCapsuleWindow : Window
             var targetReady = committed;
             try
             {
+                // Begin can synchronously retire this master before it receives the snapshot.
+                // Every uncommitted exit must release the controller gate, even that early return.
+                if (!committed)
+                {
+                    _controller.CancelMasterCapsuleQueueTransfer(snapshot);
+                }
                 if (!committed && !_isClosingForReal)
                 {
                     PrepareQueueTransferHandoff();
@@ -1163,5 +1181,6 @@ public sealed class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
+
 
 
