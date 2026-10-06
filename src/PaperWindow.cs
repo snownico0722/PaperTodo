@@ -1805,7 +1805,9 @@ public sealed partial class PaperWindow : Window
         var transitionBrush = new SolidColorBrush(from);
         assignBrush(transitionBrush);
 
-        var animation = new System.Windows.Media.Animation.ColorAnimation(to, TimeSpan.FromMilliseconds(300))
+        var animation = new System.Windows.Media.Animation.ColorAnimation(
+            to,
+            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(300)))
         {
             EasingFunction = AnimationHelper.SmoothEase
         };
@@ -2903,7 +2905,9 @@ public sealed partial class PaperWindow : Window
             EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
         }
 
-        var delay = Math.Max(ExpandAnimationMilliseconds, CollapseResizeMilliseconds) + 30;
+        var delay = Math.Max(
+            AnimationTiming.ScaleMilliseconds(ExpandAnimationMilliseconds),
+            AnimationTiming.ScaleMilliseconds(CollapseResizeMilliseconds)) + 30;
         var timer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(delay)
