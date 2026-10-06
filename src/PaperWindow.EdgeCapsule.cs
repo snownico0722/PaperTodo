@@ -246,7 +246,9 @@ public sealed partial class PaperWindow
     {
         animate = animate && _controller.State.EnableAnimations;
         _edgeCapsule.RequestPresentation(animate
-            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            ? EdgeCapsuleMotion.Animate(
+                reason,
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
             : EdgeCapsuleMotion.Snap(reason));
 
         // State-driven requests are allowed to depend on controller settings captured in the
