@@ -48,14 +48,18 @@ internal static class NativeSurfaceChecks
                 // The fixture is about composited pixels, not activation-dependent Z order.
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
                     X = 50, Y = 50, Width = 400, Height = 340, AlwaysOnTop = true }, controller);
+                var readiness = AttachDesktopReadinessMarker(paper);
                 paper.Show(); paper.Activate(); Wait();
-                WaitForDesktopInk(paper, output, skin + "-" + mode);
+                WaitForDesktopInk(paper, readiness.Marker, output, skin + "-" + mode);
                 if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100) &&
                     skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.TracingPaper)
                 {
                     CheckCaptionSentinel(paper, output, skin + "-" + mode);
-                    WaitForDesktopInk(paper, output, skin + "-" + mode + "-after-alpha");
+                    WaitForDesktopInk(paper, readiness.Marker, output, skin + "-" + mode + "-after-alpha");
                 }
+                readiness.Host.Children.Remove(readiness.Marker);
+                paper.UpdateLayout();
+                Wait();
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
                 using (var image = Capture(paper, output, $"desktop-{skin}-{mode}"))
                 {
@@ -87,16 +91,13 @@ internal static class NativeSurfaceChecks
             Theme.Invalidate();
         }
     }
-    private static void WaitForDesktopInk(PaperWindow paper, string output, string name)
+    private static (Grid Host, Border Marker) AttachDesktopReadinessMarker(PaperWindow paper)
     {
-        // DwmFlush/ContentRendered do not prove that WPF's redirection bitmap has reached the
-        // desktop composite. Use a temporary, opaque WPF marker as readiness evidence, then keep
-        // the actual material/caption assertions independent from this synchronization probe.
+        // Install before Show(): adding the marker after the first presentation would itself
+        // invalidate WPF and could hide the missing-first-present regression this check exists for.
         var chrome = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)!;
-        Program.Assert(chrome.Child is Grid, name + ": paper root grid available for desktop readiness marker");
+        Program.Assert(chrome.Child is Grid, "paper root grid available for desktop readiness marker");
         var host = (Grid)chrome.Child;
-        var markerColor = Color.FromRgb(7, 241, 19);
-        var expected = D.Color.FromArgb(markerColor.R, markerColor.G, markerColor.B);
         var marker = new Border
         {
             Width = 20,
@@ -104,7 +105,7 @@ internal static class NativeSurfaceChecks
             Margin = new Thickness(8),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
-            Background = new SolidColorBrush(markerColor),
+            Background = new SolidColorBrush(Color.FromRgb(7, 241, 19)),
             IsHitTestVisible = false,
             SnapsToDevicePixels = true
         };
@@ -112,48 +113,49 @@ internal static class NativeSurfaceChecks
         Grid.SetColumnSpan(marker, Math.Max(1, host.ColumnDefinitions.Count));
         Panel.SetZIndex(marker, int.MaxValue);
         host.Children.Add(marker);
+        return (host, marker);
+    }
 
+    private static void WaitForDesktopInk(PaperWindow paper, Border marker, string output, string name)
+    {
+        // DwmFlush/ContentRendered do not prove that WPF's redirection bitmap has reached the
+        // desktop composite. Require the pre-show WPF marker in two consecutive desktop captures;
+        // the actual material/caption assertions remain independent from this readiness evidence.
+        var color = ((SolidColorBrush)marker.Background).Color;
+        var expected = D.Color.FromArgb(color.R, color.G, color.B);
         var stableFrames = 0;
         var lastMatches = 0;
         var lastSamples = 0;
-        try
+        for (var attempt = 0; attempt < 12; attempt++)
         {
-            for (var attempt = 0; attempt < 12; attempt++)
-            {
-                paper.UpdateLayout();
-                // Both the calibration rear window and the paper are topmost so desktop pixels cannot
-                // be contaminated by the runner shell. Do not rely on Activate() to order two windows
-                // in the same topmost band: GitHub runners occasionally leave the rear window above
-                // the paper. Reassert the paper at the top of that band before every evidence frame.
-                WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
-                using var image = Capture(paper, output, "ready-" + name + "-" + attempt);
-                var point = marker.TransformToAncestor(paper).Transform(new Point());
-                var dpi = VisualTreeHelper.GetDpi(paper);
-                var left = Math.Max(0, (int)Math.Floor(point.X * dpi.DpiScaleX));
-                var top = Math.Max(0, (int)Math.Floor(point.Y * dpi.DpiScaleY));
-                var right = Math.Min(image.Width, (int)Math.Ceiling((point.X + marker.ActualWidth) * dpi.DpiScaleX));
-                var bottom = Math.Min(image.Height, (int)Math.Ceiling((point.Y + marker.ActualHeight) * dpi.DpiScaleY));
-                lastMatches = 0;
-                lastSamples = Math.Max(0, right - left) * Math.Max(0, bottom - top);
-                for (var y = top; y < bottom; y++)
-                for (var x = left; x < right; x++)
-                    if (Difference(image.GetPixel(x, y), expected) <= 18) lastMatches++;
-
-                var markerReady = lastSamples > 0 && lastMatches >= Math.Ceiling(lastSamples * 0.65);
-                stableFrames = markerReady ? stableFrames + 1 : 0;
-                if (stableFrames >= 2) return;
-                Wait();
-            }
-            Program.Assert(false,
-                $"{name}: WPF readiness marker never reached a stable desktop composite ({lastMatches}/{lastSamples} pixels)");
-        }
-        finally
-        {
-            host.Children.Remove(marker);
             paper.UpdateLayout();
+            // Both the calibration rear window and the paper are topmost so desktop pixels cannot
+            // be contaminated by the runner shell. Do not rely on Activate() to order two windows
+            // in the same topmost band: GitHub runners occasionally leave the rear window above
+            // the paper. Reassert the paper at the top of that band before every evidence frame.
+            WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
+            using var image = Capture(paper, output, "ready-" + name + "-" + attempt);
+            var point = marker.TransformToAncestor(paper).Transform(new Point());
+            var dpi = VisualTreeHelper.GetDpi(paper);
+            var left = Math.Max(0, (int)Math.Floor(point.X * dpi.DpiScaleX));
+            var top = Math.Max(0, (int)Math.Floor(point.Y * dpi.DpiScaleY));
+            var right = Math.Min(image.Width, (int)Math.Ceiling((point.X + marker.ActualWidth) * dpi.DpiScaleX));
+            var bottom = Math.Min(image.Height, (int)Math.Ceiling((point.Y + marker.ActualHeight) * dpi.DpiScaleY));
+            lastMatches = 0;
+            lastSamples = Math.Max(0, right - left) * Math.Max(0, bottom - top);
+            for (var y = top; y < bottom; y++)
+            for (var x = left; x < right; x++)
+                if (Difference(image.GetPixel(x, y), expected) <= 18) lastMatches++;
+
+            var markerReady = lastSamples > 0 && lastMatches >= Math.Ceiling(lastSamples * 0.65);
+            stableFrames = markerReady ? stableFrames + 1 : 0;
+            if (stableFrames >= 2) return;
             Wait();
         }
+        Program.Assert(false,
+            $"{name}: pre-show WPF readiness marker never reached a stable desktop composite ({lastMatches}/{lastSamples} pixels)");
     }
+
     private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
     {
         var hwnd = new WindowInteropHelper(paper).Handle;
