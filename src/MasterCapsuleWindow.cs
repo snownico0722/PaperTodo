@@ -1012,7 +1012,8 @@ public sealed class MasterCapsuleWindow : Window
         {
             From = currentTop,
             To = targetTop,
-            Duration = TimeSpan.FromMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds),
+            Duration = TimeSpan.FromMilliseconds(
+                AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds)),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         topAnim.Completed += (_, _) =>
@@ -1162,7 +1163,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             From = 0,
             To = 1,
-            Duration = TimeSpan.FromMilliseconds(160),
+            Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(160)),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         fadeIn.Completed += (_, _) =>
@@ -1227,7 +1228,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             floatingHost.AnimateDockingReveal(
                 _controller.State.EnableAnimations
-                    ? EdgeCapsuleLayout.DockingRevealMilliseconds
+                    ? AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.DockingRevealMilliseconds)
                     : 1,
                 _ => floatingHost.CompleteHandoff(releaseCover));
         }
@@ -1276,7 +1277,7 @@ public sealed class MasterCapsuleWindow : Window
             targetBounds,
             targetEdge,
             _controller.State.EnableAnimations
-                ? EdgeCapsuleLayout.DockingHandoffMilliseconds
+                ? AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.DockingHandoffMilliseconds)
                 : 1,
             CompleteFlight);
     }
