@@ -1341,7 +1341,10 @@ public sealed partial class AppController : IDisposable
                 // 显示动画：淡入
                 if (State.EnableAnimations && originalOpacity > 0)
                 {
-                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, originalOpacity, TimeSpan.FromMilliseconds(200))
+                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
+                        0,
+                        originalOpacity,
+                        TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)))
                     {
                         EasingFunction = AnimationHelper.QuickEase
                     };
@@ -1825,7 +1828,10 @@ public sealed partial class AppController : IDisposable
             // 隐藏动画：淡出
             if (State.EnableAnimations && window.IsVisible)
             {
-                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(window.Opacity, 0, TimeSpan.FromMilliseconds(150))
+                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    window.Opacity,
+                    0,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(150)))
                 {
                     EasingFunction = AnimationHelper.QuickEase
                 };
