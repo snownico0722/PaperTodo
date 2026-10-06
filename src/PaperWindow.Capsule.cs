@@ -942,8 +942,11 @@ var expandedHeight = collapsed
             {
                 From = 0.0,
                 To = 1.0,
-                Duration = TimeSpan.FromMilliseconds(collapsed ? CollapseResizeMilliseconds : ExpandAnimationMilliseconds),
-                BeginTime = collapsed ? TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds) : TimeSpan.Zero,
+                Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(
+                    collapsed ? CollapseResizeMilliseconds : ExpandAnimationMilliseconds)),
+                BeginTime = collapsed
+                    ? TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds))
+                    : TimeSpan.Zero,
                 EasingFunction = easeOut
             };
 
@@ -956,7 +959,7 @@ var expandedHeight = collapsed
                 {
                     From = 1.0,
                     To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
                 _shell.BeginAnimation(UIElement.OpacityProperty, fadeOutShell);
@@ -965,8 +968,8 @@ var expandedHeight = collapsed
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(CollapseResizeMilliseconds),
-                    BeginTime = TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseResizeMilliseconds)),
+                    BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
                 _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeInCapsule);
@@ -981,7 +984,7 @@ var expandedHeight = collapsed
                 {
                     From = 1.0,
                     To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
                 _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeOutCapsule);
@@ -990,8 +993,8 @@ var expandedHeight = collapsed
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(ExpandShellFadeInMilliseconds),
-                    BeginTime = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandShellFadeInMilliseconds)),
+                    BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
                 _shell.BeginAnimation(UIElement.OpacityProperty, fadeInShell);
