@@ -29,7 +29,7 @@ jobs:
           REVIEW_FIXED: 'true'
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/interaction-audit" | Out-Null
-          python .github/scripts/startup_intent_review.py
+          python .github/scripts/final_interaction_review.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ('${{ matrix.fixed }}' -eq 'false') {
           @'
@@ -57,6 +57,7 @@ jobs:
             'lifetime-body-visibility' = 'RETIRED_VISIBILITY:'
             'lifetime-body-failure' = 'STALE_BODY_FAILURE:'
             'lifetime-mini-reset' = 'REENTRANT_MINI_RESET:'
+            'lifetime-mini-create' = 'MINI_STALE_CREATE:'
             'lifetime-reminder-flash' = 'FLASH_BASE_OWNER:'
             'startup-intent-hide-all' = 'STARTUP_OVERRIDES_HIDE:'
             'startup-intent-hide-one' = 'STARTUP_OVERRIDES_HIDE:'
@@ -66,6 +67,7 @@ jobs:
             'startup-intent-unchanged' = ''
             'startup-intent-other-paper' = ''
           }
+          $errors = @()
           $configs = if ($env:REVIEW_FIXED -eq 'true') { @('Debug','Release') } else { @('Release') }
           foreach ($config in $configs) {
             dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c $config
@@ -75,12 +77,13 @@ jobs:
               dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c $config -- --case $case 2>&1 | Tee-Object $log
               $code = $LASTEXITCODE
               if ($env:REVIEW_FIXED -eq 'true' -or $cases[$case] -eq '') {
-                if ($code -ne 0) { throw "Positive check failed $case in $config (exit=$code)" }
+                if ($code -ne 0) { $errors += "Positive check failed $case in $config (exit=$code)" }
               } elseif ($code -eq 0 -or !(Select-String -Path $log -SimpleMatch $cases[$case] -Quiet)) {
-                throw "Baseline did not fail at the intended $case assertion (exit=$code)"
+                $errors += "Baseline did not fail at the intended $case assertion (exit=$code)"
               }
             }
           }
+          if ($errors.Count) { throw ($errors -join "`n") }
           exit 0
       - name: Publish only the verified candidate to the review branch
         if: matrix.fixed
@@ -89,8 +92,8 @@ jobs:
           if ((git rev-parse origin/fix/interaction-lifetime-audit) -ne '${{ github.sha }}') { throw 'Review branch moved; refusing to publish over newer changes' }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/AppController.cs src/AppController.PluginStartup.cs src/PaperWindow.PluginBodies.cs src/PaperWindow.PluginMiniView.cs src/AnimationHelper.cs tests/PaperTodo.LifecycleChecks/Program.cs tests/PaperTodo.LifecycleChecks/InteractionLifetimeChecks.cs
-          git commit -m 'fix(startup): respect newer user visibility and form intent after shell preparation'
+          git add src/AppController.cs src/AppController.PluginStartup.cs src/PaperWindow.PluginBodies.cs src/PaperWindow.PluginMiniView.cs src/AnimationHelper.cs tests/PaperTodo.LifecycleChecks/Program.cs tests/PaperTodo.LifecycleChecks/InteractionLifetimeChecks.cs tests/PaperTodo.LifecycleChecks/StartupDeferredIntentChecks.cs
+          git commit -m 'fix(lifecycle): preserve current startup, preview and reminder owners across callbacks'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin HEAD:refs/heads/fix/interaction-lifetime-audit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
