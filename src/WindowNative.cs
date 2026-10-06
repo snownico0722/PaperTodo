@@ -682,6 +682,26 @@ internal static partial class WindowNative
         return applied;
     }
 
+    // Paper form animation commits both size axes immediately, without joining an Edge batch
+    // or touching position. WM_SIZE synchronizes WPF's Width/Height from this one rectangle.
+    internal static bool TrySetWindowDeviceSize(Window window, int width, int height)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero || width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        if (GetWindowRect(handle, out var current) &&
+            current.Right - current.Left == width && current.Bottom - current.Top == height)
+        {
+            return true;
+        }
+
+        return SetWindowPos(handle, IntPtr.Zero, 0, 0, width, height,
+            SwpNoMove | SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder);
+    }
+
     // A System Aware floating HWND owns its fixed logical size for its entire lifetime. Handoff
     // frames may move it, but must not submit a competing native size.
     public static bool TryMoveWindowDevicePosition(Window window, DeviceScreenPoint position)

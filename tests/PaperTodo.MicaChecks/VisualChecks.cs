@@ -90,6 +90,12 @@ internal static class VisualChecks
             CheckFormFrames(window, chrome, collapsed: true);
             CheckFormFrames(window, chrome, collapsed: false);
             CheckReversedExpansion(window, chrome);
+            controller.State.MicaBackdropType = MicaBackdropTypes.Acrylic;
+            window.RefreshNativeMica(); Wait();
+            CheckFormFrames(window, chrome, collapsed: true, prefix: "acrylic-");
+            CheckFormFrames(window, chrome, collapsed: false, prefix: "acrylic-");
+            controller.State.MicaBackdropType = MicaBackdropTypes.Mica;
+            window.RefreshNativeMica(); Wait();
             window.SetCollapsedState(true, animate: true, saveGeometry: false);
             WaitUntil(() => double.IsNaN(chrome.Width));
             Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
@@ -265,28 +271,63 @@ internal static class VisualChecks
         var hwnd = new WindowInteropHelper(window).Handle;
         window.SetCollapsedState(collapsed, animate: true, saveGeometry: false);
         window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
-        foreach (var progress in new[] { 0.0, 0.5, 1.0 })
+        var source = HwndSource.FromHwnd(hwnd)!;
+        var sizeFrames = new List<(int Width, int Height, double ChromeWidth, double ChromeHeight)>();
+        IntPtr ObserveSize(IntPtr handle, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            window.TransitionProgress = progress;
-            window.UpdateLayout();
-            Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
-                "form transition suspends the native material and resize frame");
-            Program.Assert((GetWindowLong(hwnd, -16) & 0x00C40000) == 0,
-                "no native caption/border/THICKFRAME may outline the transparent animation gutter");
-            Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 1,
-                "form transition clears the full-window system backdrop");
-            Program.Assert(Math.Abs(chrome.Width + chrome.Margin.Left + chrome.Margin.Right - window.Width) < 0.01 &&
-                Math.Abs(chrome.Height + chrome.Margin.Top + chrome.Margin.Bottom - window.Height) < 0.01,
-                $"form bounds: collapsed={collapsed}, progress={progress}, window={window.Width}x{window.Height}, " +
-                $"actual={window.ActualWidth}x{window.ActualHeight}, chrome={chrome.Width}x{chrome.Height}, margin={chrome.Margin}");
-            Program.Assert(Math.Abs(window.ActualWidth - window.Width) <= 1 && Math.Abs(window.ActualHeight - window.Height) <= 1,
-                "native HWND follows the presented size without minimum-size clamping");
-            if (progress == 0.5)
+            if (message == 0x0005 /* WM_SIZE */ && GetWindowRect(handle, out var bounds))
             {
-                Program.Pump();
-                Capture(window, prefix + (collapsed ? "03a-collapse-mid" : "04a-expand-mid"), null, null, dark: null);
+                // Observe inside the native resize, before WPF's layout hook can repair an
+                // intermediate frame. A final-size assertion alone misses separate axis writes.
+                var dpi = VisualTreeHelper.GetDpi(window);
+                sizeFrames.Add((bounds.Right - bounds.Left, bounds.Bottom - bounds.Top,
+                    (chrome.Width + chrome.Margin.Left + chrome.Margin.Right) * dpi.DpiScaleX,
+                    (chrome.Height + chrome.Margin.Top + chrome.Margin.Bottom) * dpi.DpiScaleY));
+            }
+            return IntPtr.Zero;
+        }
+        source.AddHook(ObserveSize);
+        try
+        {
+            // Small progress increments also exercise expansion while below the ordinary
+            // window minimum, where raising MinWidth/MinHeight used to resize each axis first.
+            foreach (var progress in new[] { 0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0 })
+            {
+                Program.Assert(GetWindowRect(hwnd, out var before), "pre-frame native bounds available");
+                sizeFrames.Clear();
+                window.TransitionProgress = progress;
+                window.UpdateLayout();
+                Program.Assert(GetWindowRect(hwnd, out var after), "post-frame native bounds available");
+                var changed = after.Right - after.Left != before.Right - before.Left ||
+                    after.Bottom - after.Top != before.Bottom - before.Top;
+                Program.Assert(sizeFrames.Count == (changed ? 1 : 0),
+                    $"one native size commit per form frame: collapsed={collapsed}, progress={progress}, " +
+                    $"resizeMessages={sizeFrames.Count}, changed={changed}");
+                foreach (var frame in sizeFrames)
+                    Program.Assert(Math.Abs(frame.Width - frame.ChromeWidth) < 0.01 &&
+                        Math.Abs(frame.Height - frame.ChromeHeight) < 0.01,
+                        $"inner chrome is ready at WM_SIZE: collapsed={collapsed}, progress={progress}, " +
+                        $"native={frame.Width}x{frame.Height}, chrome={frame.ChromeWidth}x{frame.ChromeHeight}");
+                Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
+                    "form transition suspends the native material and resize frame");
+                Program.Assert((GetWindowLong(hwnd, -16) & 0x00C40000) == 0,
+                    "no native caption/border/THICKFRAME may outline the transparent animation gutter");
+                Program.Assert(DwmMicaApi.DwmGetWindowAttribute(hwnd, 38, out var type, 4) >= 0 && type == 1,
+                    "form transition clears the full-window system backdrop");
+                Program.Assert(Math.Abs(chrome.Width + chrome.Margin.Left + chrome.Margin.Right - window.Width) < 0.01 &&
+                    Math.Abs(chrome.Height + chrome.Margin.Top + chrome.Margin.Bottom - window.Height) < 0.01,
+                    $"form bounds: collapsed={collapsed}, progress={progress}, window={window.Width}x{window.Height}, " +
+                    $"actual={window.ActualWidth}x{window.ActualHeight}, chrome={chrome.Width}x{chrome.Height}, margin={chrome.Margin}");
+                Program.Assert(Math.Abs(window.ActualWidth - window.Width) <= 1 && Math.Abs(window.ActualHeight - window.Height) <= 1,
+                    "native HWND follows the presented size without minimum-size clamping");
+                if (progress == 0.5)
+                {
+                    Program.Pump();
+                    Capture(window, prefix + (collapsed ? "03a-collapse-mid" : "04a-expand-mid"), null, null, dark: null);
+                }
             }
         }
+        finally { source.RemoveHook(ObserveSize); }
         var width = window.Width;
         var height = window.Height;
         var paperWidth = chrome.Width;

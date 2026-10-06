@@ -395,6 +395,7 @@ internal static class Program
                 }
                 Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
+                Check("paper form animations defer material capture until the endpoint", () => PaperFormMaterialChecks.Run(controller));
                 if (!noRaster)
                 {
                     Check("native activation, shape and desktop pixels", () => VisualChecks.Run(controller));

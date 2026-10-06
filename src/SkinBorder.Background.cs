@@ -59,8 +59,8 @@ internal sealed partial class SkinBorder
         }
 
         _sampledBackgroundCaptureSuspended = suspended;
-        // Keep the already-rendered material scene as the live DComp source, but stop acquisition
-        // immediately so WDA_EXCLUDEFROMCAPTURE cannot overlap the queue cloak/cover handoff.
+        // Keep the already-rendered scene through a paper form animation or DComp handoff,
+        // but stop acquisition immediately so intermediate frames never start new captures.
         // Resuming marks that retained scene stale and replaces it with one endpoint snapshot.
         RefreshBackground();
     }

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -74,6 +75,9 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
+        // IsCapsule changes to the target form before its size animation starts. Keep the
+        // current scene, but never acquire a new desktop snapshot for an intermediate frame.
+        if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
         RefreshNativeMica();
     }
 
@@ -89,6 +93,21 @@ public sealed partial class PaperWindow
             : PaperPresentationState.Expanded;
 
         RefreshNativeMica();
+
+        if (_paperChrome is SkinBorder skin)
+        {
+            var generation = _collapseTransitionGeneration;
+            // Render/layout and already queued native geometry notifications must settle
+            // before the one endpoint capture. A reversed/closed transition cannot resume it.
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
+                    generation == _collapseTransitionGeneration && !IsPaperFormTransitioning)
+                {
+                    skin.SetSampledBackgroundCaptureSuspended(false);
+                }
+            }));
+        }
 
         // Collapse: release images only after the form transition finishes so the fading shell
         // still shows bitmaps. Expand restores rendering earlier (when the shell becomes visible).
@@ -250,6 +269,7 @@ public sealed partial class PaperWindow
         if (_controller.IsRunning) CommitPendingEditsForSave();
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
+        if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
         AbortAllInteractions(InteractionAbortReason.Closing);

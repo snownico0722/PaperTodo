@@ -816,6 +816,16 @@ var expandedHeight = collapsed
             // expanded native papers target edge-to-edge chrome.
             _targetTransitionChromeMargin = UsesNativePaperChrome ? 0 : WindowChromeMargin;
 
+            if (_controller.UsesNativeMicaWindows)
+            {
+                // Minimum changes can resize a live WPF HWND immediately. Establish the
+                // animation's lower bounds once; completion/settle restores the final policy.
+                MinWidth = Math.Min(PaperLayoutDefaults.MinWidth,
+                    Math.Min(_startTransitionWidth, _targetTransitionWidth));
+                MinHeight = Math.Min(PaperLayoutDefaults.MinHeight,
+                    Math.Min(_startTransitionHeight, _targetTransitionHeight));
+            }
+
             // Establish the initial visual BEFORE native placement can resize the HWND and
             // synchronously run WPF layout. Otherwise the full-size chrome is exposed first,
             // then reset to capsule size when the expand animation starts.
