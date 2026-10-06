@@ -110,7 +110,6 @@ internal static class FormTransitionBenchmarks
                     {
                         var sample = Measure(window, chrome, skin, full, round, collapsed);
                         if (round >= 0 || !sample.Passed) results.Add(sample.Values);
-                        WriteResults();
                         Program.Assert(sample.Passed, sample.Failure ?? "Form measurement failed.");
                     }
                     if (skin == PaperSkins.Acrylic)

@@ -821,9 +821,11 @@ var expandedHeight = collapsed
                 // Minimum changes can resize a live WPF HWND immediately. Establish the
                 // animation's lower bounds once; completion/settle restores the final policy.
                 MinWidth = Math.Min(PaperLayoutDefaults.MinWidth,
-                    Math.Min(_startTransitionWidth, _targetTransitionWidth));
+                    Math.Min(RoundToDevicePixelX(_startTransitionWidth),
+                        RoundToDevicePixelX(_targetTransitionWidth)));
                 MinHeight = Math.Min(PaperLayoutDefaults.MinHeight,
-                    Math.Min(_startTransitionHeight, _targetTransitionHeight));
+                    Math.Min(RoundToDevicePixelY(_startTransitionHeight),
+                        RoundToDevicePixelY(_targetTransitionHeight)));
             }
 
             // Establish the initial visual BEFORE native placement can resize the HWND and

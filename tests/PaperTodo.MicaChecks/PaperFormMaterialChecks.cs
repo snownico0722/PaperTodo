@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using PaperTodo;
 
 // Exercise the main paper's real HWND and animation clocks. A stopped sampler on an
@@ -121,9 +122,38 @@ internal static class PaperFormMaterialChecks
         var expandedWidth = window.ActualWidth;
         var frames = fixture.Surface.BackgroundFrameCount;
         using var probe = new AnimationProbe(fixture, "collapse reversed to expand");
-        window.SetCollapsedState(true, animate: true, saveGeometry: false);
-        Until(() => IsTransitioning(window) && window.ActualWidth < expandedWidth - 8,
-            "collapse has actually changed the native window before reversing");
+        var intermediate = false;
+        DispatcherFrame? waiting = null;
+        void OnIntermediateSize(object sender, SizeChangedEventArgs e)
+        {
+            if (!IsTransitioning(window) || window.TransitionProgress is <= 0 or >= 1 ||
+                e.NewSize.Width >= expandedWidth - 8) return;
+            intermediate = true;
+            if (waiting != null) waiting.Continue = false;
+        }
+        window.SizeChanged += OnIntermediateSize;
+        try
+        {
+            window.SetCollapsedState(true, animate: true, saveGeometry: false);
+            var timeout = Stopwatch.StartNew();
+            while (!intermediate && timeout.ElapsedMilliseconds < 5000)
+            {
+                // ApplicationIdle can be postponed until the whole animation finishes.
+                // Leave this pump as soon as a real intermediate layout is observed,
+                // but reverse only after the current WPF operation has unwound.
+                var frame = new DispatcherFrame();
+                waiting = frame;
+                window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,
+                    new Action(() => frame.Continue = false));
+                Dispatcher.PushFrame(frame);
+                waiting = null;
+                if (!intermediate) Thread.Sleep(2);
+            }
+            Program.Assert(intermediate && IsTransitioning(window) && window.TransitionProgress < 1 &&
+                window.ActualWidth < expandedWidth - 8,
+                "reversal begins after a real intermediate size, before collapse completion");
+        }
+        finally { window.SizeChanged -= OnIntermediateSize; }
         window.SetCollapsedState(false, animate: true, saveGeometry: false);
         Until(() => !IsTransitioning(window), "reversed transition reaches the expanded endpoint");
         probe.AssertAnimated();
@@ -150,10 +180,17 @@ internal static class PaperFormMaterialChecks
         using (var probe = new AnimationProbe(fixture, "new collapse with an old endpoint queued"))
         {
             window.SetCollapsedState(true, animate: true, saveGeometry: false);
-            Program.Pump();
-            Program.Assert(IsTransitioning(window) && surface.SampledBackgroundCaptureSuspended &&
-                !surface.HasBackgroundCapture && surface.BackgroundFrameCount == frames,
-                "the previous endpoint callback cannot resume capture during a newer transition");
+            // Check in the same FIFO priority immediately after the old completion,
+            // rather than sampling after an unbounded ApplicationIdle pump returns.
+            var inspected = new DispatcherFrame();
+            window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                Program.Assert(IsTransitioning(window) && surface.SampledBackgroundCaptureSuspended &&
+                    !surface.HasBackgroundCapture && surface.BackgroundFrameCount == frames,
+                    "the previous endpoint callback cannot resume capture during a newer transition");
+                inspected.Continue = false;
+            }));
+            Dispatcher.PushFrame(inspected);
             Until(() => !IsTransitioning(window), "newer collapse completes");
             probe.AssertAnimated();
         }

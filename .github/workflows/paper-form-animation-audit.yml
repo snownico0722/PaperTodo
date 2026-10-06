@@ -33,28 +33,43 @@ jobs:
           ref: 9e176abfe33cbc0ca873c03576691b153f1299a0
           fetch-depth: 0
           submodules: recursive
+      - name: Check out main before PR 319
+        uses: actions/checkout@v7
+        with:
+          path: pre319
+          ref: 7534fc43ce894464ebd339bfa9e70e8b6ca96f74
+          fetch-depth: 0
+          submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Use the same measurement code and build both revisions
+      - name: Use the same measurement code and build all three revisions
         run: |
           $benchPath = 'tools/PaperTodo.MaterialBenchmarks'
           Copy-Item "candidate/$benchPath/Program.cs" "baseline/$benchPath/Program.cs" -Force
           Copy-Item "candidate/$benchPath/FormTransitionBenchmarks.cs" "baseline/$benchPath/FormTransitionBenchmarks.cs" -Force
+          Copy-Item "candidate/$benchPath/Program.cs" "pre319/$benchPath/Program.cs" -Force
+          Copy-Item "candidate/$benchPath/FormTransitionBenchmarks.cs" "pre319/$benchPath/FormTransitionBenchmarks.cs" -Force
+          dotnet build "pre319/$benchPath/PaperTodo.MaterialBenchmarks.csproj" -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Pre-319 build failed.' }
           dotnet build "baseline/$benchPath/PaperTodo.MaterialBenchmarks.csproj" -c Release
           if ($LASTEXITCODE -ne 0) { throw 'Baseline build failed.' }
           dotnet build "candidate/$benchPath/PaperTodo.MaterialBenchmarks.csproj" -c Release
           if ($LASTEXITCODE -ne 0) { throw 'Candidate build failed.' }
-      - name: Measure baseline and candidate in separate processes
+      - name: Measure pre-319, main and candidate in separate processes
         run: |
           $results = Join-Path $env:RUNNER_TEMP 'paper-form-audit'
           New-Item -ItemType Directory -Path $results -Force | Out-Null
+          $env:PAPER_BENCH_REVISION = 'pre319-7534fc4'
+          dotnet run --project pre319/tools/PaperTodo.MaterialBenchmarks/PaperTodo.MaterialBenchmarks.csproj -c Release --no-build -- --form-benchmark "$results/pre319.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Pre-319 measurement failed.' }
           $env:PAPER_BENCH_REVISION = 'baseline-9e176ab'
           dotnet run --project baseline/tools/PaperTodo.MaterialBenchmarks/PaperTodo.MaterialBenchmarks.csproj -c Release --no-build -- --form-benchmark "$results/baseline.json"
           if ($LASTEXITCODE -ne 0) { throw 'Baseline measurement failed.' }
           $env:PAPER_BENCH_REVISION = 'candidate'
           dotnet run --project candidate/tools/PaperTodo.MaterialBenchmarks/PaperTodo.MaterialBenchmarks.csproj -c Release --no-build -- --form-benchmark "$results/candidate.json"
           if ($LASTEXITCODE -ne 0) { throw 'Candidate measurement failed.' }
+          Get-Content "$results/pre319.json"
           Get-Content "$results/baseline.json"
           Get-Content "$results/candidate.json"
       - name: Validate candidate material and native form behavior
