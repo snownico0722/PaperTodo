@@ -2581,6 +2581,9 @@ public sealed partial class AppController
     private void ToggleAnimations() =>
         SetSettingFromUi("appearance.animations", !State.EnableAnimations);
 
+    private void ToggleFastAnimations() =>
+        SetSettingFromUi("appearance.fast_animations", !State.FastAnimations);
+
     private void SetResizeGripMode(string mode) =>
         SetSettingFromUi("window.resize_grip", ResizeGripModes.Normalize(mode));
 
