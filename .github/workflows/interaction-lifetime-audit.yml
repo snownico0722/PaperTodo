@@ -1,0 +1,80 @@
+name: Interaction lifetime audit
+on:
+  push:
+    branches: [fix/interaction-lifetime-audit]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: contains(github.event.head_commit.message, '[interaction-audit]')
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        fixed: [false, true]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Apply reviewed candidate or identical baseline tests
+        env:
+          REVIEW_FIXED: ${{ matrix.fixed }}
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/interaction-audit" | Out-Null
+          python .github/scripts/interaction_lifetime_review.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff > "$env:RUNNER_TEMP/interaction-audit/reviewed.diff"
+      - name: Four deterministic reentrant and animation cases
+        env:
+          REVIEW_FIXED: ${{ matrix.fixed }}
+        run: |
+          $cases = [ordered]@{
+            'lifetime-body-visibility' = 'RETIRED_VISIBILITY:'
+            'lifetime-body-failure' = 'STALE_BODY_FAILURE:'
+            'lifetime-mini-reset' = 'REENTRANT_MINI_RESET:'
+            'lifetime-reminder-flash' = 'FLASH_BASE_OWNER:'
+          }
+          $configs = if ($env:REVIEW_FIXED -eq 'true') { @('Debug','Release') } else { @('Release') }
+          foreach ($config in $configs) {
+            dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c $config
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            foreach ($case in $cases.Keys) {
+              $log = "$env:RUNNER_TEMP/interaction-audit/$case-$config.txt"
+              dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c $config -- --case $case 2>&1 | Tee-Object $log
+              $code = $LASTEXITCODE
+              if ($env:REVIEW_FIXED -eq 'true') {
+                if ($code -ne 0) { throw "Candidate failed $case in $config (exit=$code)" }
+              } elseif ($code -eq 0 -or !(Select-String -Path $log -SimpleMatch $cases[$case] -Quiet)) {
+                throw "Baseline did not fail at the intended $case assertion (exit=$code)"
+              }
+            }
+          }
+      - name: Publish only the verified candidate to the review branch
+        if: matrix.fixed
+        run: |
+          git fetch origin fix/interaction-lifetime-audit
+          if ((git rev-parse origin/fix/interaction-lifetime-audit) -ne '${{ github.sha }}') { throw 'Review branch moved; refusing to publish over newer changes' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/PaperWindow.PluginBodies.cs src/PaperWindow.PluginMiniView.cs src/AnimationHelper.cs tests/PaperTodo.LifecycleChecks/Program.cs
+          git commit -m 'fix(lifecycle): keep reentrant body callbacks and reminder clocks scoped to their owners'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/fix/interaction-lifetime-audit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git archive --format=zip -o "$env:RUNNER_TEMP/interaction-audit/verified-source.zip" HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: interaction-lifetime-fixed-${{ matrix.fixed }}-${{ github.sha }}
+          path: ${{ runner.temp }}/interaction-audit
+          retention-days: 1
