@@ -312,7 +312,8 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                EdgeCapsuleLayout.HorizontalResizeMilliseconds));
+                AnimationTiming.ScaleMilliseconds(
+                    EdgeCapsuleLayout.HorizontalResizeMilliseconds)));
             dirty |= EdgeCapsuleDirty.Presentation;
         }
 
@@ -374,7 +375,8 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                EdgeCapsuleLayout.HorizontalResizeMilliseconds));
+                AnimationTiming.ScaleMilliseconds(
+                    EdgeCapsuleLayout.HorizontalResizeMilliseconds)));
             var retarget = ReconcilePresentation(layout, apply, now);
             if (!retarget.Applied)
             {
