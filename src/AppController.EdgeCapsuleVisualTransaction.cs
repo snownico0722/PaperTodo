@@ -358,7 +358,9 @@ public sealed partial class AppController
             .Where(entry =>
                 entry.Motion.Kind == EdgeCapsuleMotionKind.Animate)
             .Select(entry => entry.Motion.DurationMilliseconds)
-            .DefaultIfEmpty(EdgeCapsuleLayout.SlotMoveMilliseconds)
+            .DefaultIfEmpty(
+                AnimationTiming.ScaleMilliseconds(
+                    EdgeCapsuleLayout.SlotMoveMilliseconds))
             .Max();
         var byWindow = entries.ToDictionary(
             entry => entry.Window);
