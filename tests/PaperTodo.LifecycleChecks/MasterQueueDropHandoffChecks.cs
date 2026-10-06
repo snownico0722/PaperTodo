@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -151,6 +152,48 @@ internal static class MasterQueueDropHandoffChecks
         typeof(MasterCapsuleWindow).GetField("_queueTransferSnapshot", Private)!.SetValue(survivingSource, sameQueue);
         withdrawn = targetReadyAtWithdrawal = renderedWithCover = flewBeforeReveal = false;
         committedTarget = null;
+        var compactBeforeFlight = controller.State.CompactMasterCapsule;
+        var membershipBeforeFlight = controller.State.Papers.Select(paper =>
+            (paper.Id, paper.CapsuleSide, paper.CapsuleMonitorDeviceName,
+                paper.IsVisible, paper.IsCollapsed)).ToArray();
+        DispatcherOperation? changeCompact = null;
+        var changedDuringFlight = false;
+        var sampledReveal = false;
+        var alignedThroughoutReveal = true;
+        var alignedAtRelease = false;
+
+        string? HandoffPhase()
+        {
+            var animation = typeof(EdgeCapsuleDragWindow)
+                .GetField("_dockingHandoffAnimation", Private)!.GetValue(host);
+            return animation?.GetType().GetProperty("Phase")!.GetValue(animation)?.ToString();
+        }
+
+        bool CoverMatchesCurrentTarget()
+        {
+            if (masters[targetKey] is not MasterCapsuleWindow current ||
+                !current.TryGetQueueTransferDockingTarget(out var anchor, out var edge) ||
+                !WindowNative.TryGetWindowDeviceBounds(host, out var actualBounds)) return false;
+            var expected = EdgeCapsuleGeometry.FloatingHandoffGeometry(
+                actualBounds, anchor, edge, options.Shape.WindowWidthDip,
+                options.Shape.WindowHeightDip, monitor.DpiScaleX, monitor.DpiScaleY);
+            var currentWidth = (double)typeof(EdgeCapsuleDragWindow)
+                .GetField("_currentSurfaceWidthDip", Private)!.GetValue(host)!;
+            var surface = (FrameworkElement)typeof(EdgeCapsuleDragWindow)
+                .GetField("_surface", Private)!.GetValue(host)!;
+            return expected.IsUsable &&
+                EdgeCapsuleGeometry.DeviceBoundsMatch(actualBounds, expected.HostTargetBounds, tolerance: 2) &&
+                Math.Abs(currentWidth - expected.SurfaceTargetWidthDip) < 0.01 &&
+                Math.Abs(surface.ActualWidth - expected.SurfaceTargetWidthDip) * monitor.DpiScaleX <= 1;
+        }
+
+        void OnCompactRendering(object? sender, EventArgs e)
+        {
+            if (!host.IsVisible || HandoffPhase() != "Reveal") return;
+            sampledReveal = true;
+            alignedThroughoutReveal &= CoverMatchesCurrentTarget();
+        }
+
         try
         {
             host.ShowWithEntrance(drop, false, 1, 0);
@@ -158,32 +201,62 @@ internal static class MasterQueueDropHandoffChecks
             survivingSource.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
             host.IsVisibleChanged += OnHostVisibilityChanged;
             CompositionTarget.Rendering += OnRendering;
+            CompositionTarget.Rendering += OnCompactRendering;
             Require(controller.CommitMasterCapsuleQueueTransfer(
                     sameQueue, drop, out committedTarget) &&
                     ReferenceEquals(survivingSource, committedTarget) &&
                     ReferenceEquals(survivingSource, masters[targetKey]) &&
                     !survivingSource.IsVisible && host.IsVisible,
                 "same-queue commit did not retain the hidden master for the return flight");
+            Require(committedTarget!.TryGetQueueTransferDockingTarget(out var oldAnchor, out _),
+                "same-queue compact handoff did not expose its initial anchor");
             var released = false;
             BeginFloatingHandoff(survivingSource, host, committedTarget!, () =>
             {
+                // Sample before pooling resets the floating surface. The docked target alone
+                // can be correct even when an obsolete-width cover fades above it.
+                alignedAtRelease = CoverMatchesCurrentTarget();
                 typeof(MasterCapsuleWindow).GetMethod("ReleaseFloatingDragHostHandlers", Private)!
                     .Invoke(survivingSource, null);
                 host.ReturnToPool();
                 released = true;
             });
+            changeCompact = survivingSource.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            {
+                changedDuringFlight = host.IsVisible && !survivingSource.IsVisible && HandoffPhase() == "Flight";
+                controller.PublicSettings.Set("capsule.master_compact",
+                    JsonSerializer.SerializeToElement(!compactBeforeFlight));
+                Require(masters[targetKey] is MasterCapsuleWindow current &&
+                        current.TryGetQueueTransferDockingTarget(out var newAnchor, out _) &&
+                        !EdgeCapsuleGeometry.DeviceBoundsMatch(oldAnchor, newAnchor, tolerance: 1),
+                    "compact setting did not change the in-flight docking anchor");
+            }));
             PumpUntil(() => released, "same-queue master return flight");
+            Require(changeCompact.Status == DispatcherOperationStatus.Completed && changedDuringFlight,
+                "compact setting did not change through the public API during the master return flight");
+            Require(sampledReveal && alignedThroughoutReveal && alignedAtRelease,
+                "master floating cover used stale geometry after compact mode changed during flight");
             Require(renderedWithCover && withdrawn && targetReadyAtWithdrawal,
                 "same-queue floating lease was withdrawn before the surviving master was ready");
+            Require(!EdgeCapsuleDragWindow.HasActiveLease &&
+                    controller.State.CapsuleCollapseAllActiveQueues[targetKey] &&
+                    controller.State.Papers.Select(paper =>
+                        (paper.Id, paper.CapsuleSide, paper.CapsuleMonitorDeviceName,
+                            paper.IsVisible, paper.IsCollapsed)).SequenceEqual(membershipBeforeFlight),
+                "compact handoff changed queue membership or collapse state, or retained the floating lease");
         }
         finally
         {
+            changeCompact?.Abort();
+            CompositionTarget.Rendering -= OnCompactRendering;
             CompositionTarget.Rendering -= OnRendering;
             host.IsVisibleChanged -= OnHostVisibilityChanged;
             typeof(MasterCapsuleWindow).GetMethod("ReleaseFloatingDragHostHandlers", Private)!
                 .Invoke(survivingSource, null);
             typeof(MasterCapsuleWindow).GetField("_queueTransferSnapshot", Private)!.SetValue(survivingSource, null);
             host.ReturnToPool();
+            controller.PublicSettings.Set("capsule.master_compact",
+                JsonSerializer.SerializeToElement(compactBeforeFlight));
         }
         var nextLease = EdgeCapsuleDragWindow.Rent(options);
         try { Require(ReferenceEquals(host, nextLease), "completed drop stranded the shared floating HWND lease"); }

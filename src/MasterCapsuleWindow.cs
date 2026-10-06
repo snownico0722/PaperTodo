@@ -1217,56 +1217,90 @@ public sealed class MasterCapsuleWindow : Window
         MasterCapsuleWindow target,
         Action releaseCover)
     {
-        if (!target.TryGetQueueTransferDockingTarget(
-                out var targetBounds,
-                out var targetEdge))
+        var targetMonitor = target._queueMonitorDeviceName;
+        var targetEdge = target._queueEdge;
+        var hasTarget = target.TryGetQueueTransferDockingTarget(
+            out var targetBounds,
+            out _);
+
+        void Reveal()
         {
-            target.PrepareQueueTransferHandoff();
-            floatingHost.CompleteHandoff(releaseCover);
-            return;
+            floatingHost.AnimateDockingReveal(
+                _controller.State.EnableAnimations
+                    ? EdgeCapsuleLayout.DockingRevealMilliseconds
+                    : 1,
+                _ => floatingHost.CompleteHandoff(releaseCover));
         }
 
+        void CompleteFlight(bool reachedTarget)
+        {
+            var current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            current?.PrepareQueueTransferHandoff();
+
+            // Preparing the WPF surface pumps Render and can dispatch an arrange that replaces
+            // the master or changes its geometry. Resolve once more after that boundary, then
+            // publish synchronously so the cover uses the same current endpoint as the master.
+            current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            current?.PublishQueueTransferHandoff();
+            if (current == null)
+            {
+                floatingHost.CompleteHandoff(releaseCover);
+                return;
+            }
+            if (!reachedTarget ||
+                !current.TryGetQueueTransferDockingTarget(out var currentBounds, out var currentEdge))
+            {
+                Reveal();
+                return;
+            }
+
+            if (currentEdge == targetEdge &&
+                EdgeCapsuleGeometry.DeviceBoundsMatch(currentBounds, targetBounds, tolerance: 0))
+            {
+                Reveal();
+            }
+            else
+            {
+                // An arrange during the flight is allowed. Align to its latest endpoint directly;
+                // do not replay the flight or hold a second controller transaction open.
+                floatingHost.AnimateDockingHandoff(currentBounds, currentEdge, 0, _ => Reveal());
+            }
+        }
+
+        if (!hasTarget)
+        {
+            CompleteFlight(false);
+            return;
+        }
         floatingHost.AnimateDockingHandoff(
             targetBounds,
             targetEdge,
             _controller.State.EnableAnimations
                 ? EdgeCapsuleLayout.DockingHandoffMilliseconds
                 : 1,
-            reachedTarget =>
-            {
-                // The ordinary capsule keeps its permanent host hidden until the floating flight
-                // reaches the wall. Masters do the same: publish the real target under the cover,
-                // then reuse the same reveal fade before returning the shared drag HWND to its pool.
-                target.PrepareQueueTransferHandoff();
-                if (!reachedTarget)
-                {
-                    floatingHost.CompleteHandoff(releaseCover);
-                    return;
-                }
-
-                floatingHost.AnimateDockingReveal(
-                    _controller.State.EnableAnimations
-                        ? EdgeCapsuleLayout.DockingRevealMilliseconds
-                        : 1,
-                    _ => floatingHost.CompleteHandoff(releaseCover));
-            });
+            CompleteFlight);
     }
 
     internal void PrepareQueueTransferHandoff()
     {
         if (_isClosingForReal) return;
 
-        // A drop/rollback swaps visible authority, so this master must be fully opaque rather
-        // than waiting for its ordinary first-show fade. Finish its WPF surface here; the shared
-        // floating host completes the composition/release boundary after this method returns.
+        PublishQueueTransferHandoff();
         // Call only after controller queue synchronization has finished: Render can reenter it.
+        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    private void PublishQueueTransferHandoff()
+    {
+        if (_isClosingForReal) return;
+
+        // A drop/rollback swaps visible authority, so publish fully opaque under the floating cover.
         BeginAnimation(OpacityProperty, null);
         Opacity = 1;
         MoveToTarget(animate: false);
         if (!IsVisible) Show();
         RefreshEffectiveTopmost();
         UpdateLayout();
-        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
     }
 
     public void CloseForReal()
