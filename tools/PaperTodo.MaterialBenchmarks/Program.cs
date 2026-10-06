@@ -13,7 +13,6 @@ internal static class Program
             Console.WriteLine("  --benchmark <json>");
             Console.WriteLine("  --drag-benchmark <json>");
             Console.WriteLine("  --drag-snapshot-timing <json>");
-            Console.WriteLine("  --form-benchmark <json>");
             Console.WriteLine("Run in Release on Windows. Drag modes use real mouse input and an isolated fixture.");
             return 0;
         }
@@ -31,15 +30,6 @@ internal static class Program
                 return MaterialDragBenchmarks.RunIsolated(dragOutput);
             if (args is ["--drag-snapshot-timing", var timingOutput])
                 return MaterialDragBenchmarks.RunSnapshotTimingIsolated(timingOutput);
-            if (args is ["--form-benchmark", var formOutput])
-                return FormTransitionBenchmarks.RunIsolated(formOutput);
-            if (args is ["--form-fixture", var formFixtureOutput])
-            {
-                RequireFixture(FormTransitionBenchmarks.FixtureMarker);
-                using var controller = new AppController();
-                FormTransitionBenchmarks.Run(controller, formFixtureOutput);
-                return 0;
-            }
             if (args is ["--drag-fixture", var fixtureOutput])
             {
                 RequireFixture();
@@ -74,10 +64,10 @@ internal static class Program
         if (!condition) throw new InvalidOperationException(message);
     }
 
-    private static void RequireFixture(string marker = MaterialDragBenchmarks.FixtureMarker)
+    private static void RequireFixture()
     {
-        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, marker)))
-            throw new InvalidOperationException("Refusing to use non-fixture data for material measurements.");
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, MaterialDragBenchmarks.FixtureMarker)))
+            throw new InvalidOperationException("Refusing to use non-fixture data for dragging.");
     }
 
     private static Application CreateApplication()
