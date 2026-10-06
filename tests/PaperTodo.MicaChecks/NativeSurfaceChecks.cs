@@ -96,6 +96,7 @@ internal static class NativeSurfaceChecks
         var pin = (Button)typeof(PaperWindow).GetField("_paperIconButton", Program.Private)!.GetValue(paper)!;
         pin.Foreground = new SolidColorBrush(Color.FromRgb(7, 241, 19));
         pin.Opacity = 1;
+        pin.IsHitTestVisible = false; // Avoid hover/leave restoring the themed foreground during capture.
         return pin;
     }
 
@@ -116,7 +117,7 @@ internal static class NativeSurfaceChecks
             // in the same topmost band: GitHub runners occasionally leave the rear window above
             // the paper. Reassert the paper at the top of that band before every evidence frame.
             WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
-            using var image = Capture(paper, attempt == 0 ? output : null, "ready-" + name);
+            using var image = Capture(paper, attempt is 0 or 11 ? output : null, "ready-" + name);
             var point = pin.TransformToAncestor(paper).Transform(new Point());
             var dpi = VisualTreeHelper.GetDpi(paper);
             var left = Math.Max(0, (int)Math.Floor(point.X * dpi.DpiScaleX));
