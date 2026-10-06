@@ -89,6 +89,7 @@ internal sealed class DesktopBackgroundCapture : IDisposable
     private void CaptureOnce(Region region, CancellationToken token)
     {
         var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        Exception? failure = null;
         try
         {
             token.ThrowIfCancellationRequested();
@@ -111,24 +112,12 @@ internal sealed class DesktopBackgroundCapture : IDisposable
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or ExternalException or ArgumentException)
         {
-            if (!IsStopped && !_dispatcher.HasShutdownStarted)
-            {
-                try
-                {
-                    _dispatcher.BeginInvoke(
-                        DispatcherPriority.Background,
-                        new Action(() => { if (!IsStopped) _failed(ex); }));
-                }
-                catch (InvalidOperationException)
-                {
-                    // Dispatcher shutdown won.
-                }
-            }
+            failure = ex;
         }
         finally
         {
             if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
-            NotifyCompleted();
+            NotifyCompleted(failure);
         }
     }
 
@@ -141,14 +130,21 @@ internal sealed class DesktopBackgroundCapture : IDisposable
         }
     }
 
-    private void NotifyCompleted()
+    private void NotifyCompleted(Exception? failure)
     {
-        if (_frameReady == null || IsStopped || _dispatcher.HasShutdownStarted) return;
+        if ((failure == null && _frameReady == null) || IsStopped || _dispatcher.HasShutdownStarted) return;
         try
         {
             _dispatcher.BeginInvoke(
                 DispatcherPriority.Render,
-                new Action(() => { if (!IsStopped) _frameReady(); }));
+                new Action(() =>
+                {
+                    if (IsStopped) return;
+                    // One terminal result owns delivery. A separate lower-priority failure can
+                    // otherwise be overtaken by ready -> Dispose and silently disappear.
+                    if (failure != null) _failed(failure);
+                    else _frameReady?.Invoke();
+                }));
         }
         catch (InvalidOperationException)
         {

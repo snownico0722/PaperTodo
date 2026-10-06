@@ -19,13 +19,17 @@ internal static class MasterMaterialHandoffChecks
         var skins = papers.ToDictionary(w => w, w => (SkinBorder)Part(hosts[w], "Chrome"));
         var proxies = (IDictionary)Part(controller, "_edgeCapsuleQueueCompositionProxies");
         var admitted = new HashSet<EdgeCapsuleQueueCompositionProxy>();
+        var cycleOutputs = new HashSet<IntPtr>();
         var captureOverlappedProxy = false;
         var cursorSaved = GetCursorPos(out var cursor);
 
         void Observe()
         {
             foreach (EdgeCapsuleQueueCompositionProxy proxy in proxies.Values)
+            {
                 admitted.Add(proxy);
+                if (proxy.OutputHandle != IntPtr.Zero) cycleOutputs.Add(proxy.OutputHandle);
+            }
             foreach (var paper in papers)
             {
                 if (!controller.IsEdgeCapsuleQueueProxyRetainingSource(paper)) continue;
@@ -73,6 +77,9 @@ internal static class MasterMaterialHandoffChecks
             }
             Require(!captureOverlappedProxy, "local material acquisition overlapped a retained proxy source");
             Require(admitted.All(p => !p.CoverLost), "normal master completion fell back to emergency cover loss");
+            await Until(() => cycleOutputs.All(h => !WindowNative.IsWindowHandleAlive(h)),
+                "completed master output HWNDs retire instead of remaining in the warm pool");
+            cycleOutputs.Clear();
         }
 
         CompositionTarget.Rendering += Rendering;

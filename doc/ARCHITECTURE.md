@@ -393,7 +393,7 @@ DirectComposition queue proxy 负责：
 
 边缘浏览材质由已呈现帧的 `DockedPreview` 标记选择：`EdgeCapsuleHost.Apply` 在几何更新前让 `SkinBorder` 使用同材质固定色调与 alpha 的静态表面和细高光，展开／收回期间不随大小、强弱档或采样准备状态改变底色，不进行桌面采样、像素着色、法线条纹重建或指针光效订阅。退出浏览的形态过渡仍保持此路径，回到紧凑胶囊终态后恢复普通材质；不改变 frame、内容、命中或 HWND ownership。
 
-当 queue proxy 保留真实胶囊 HWND 作为 live source 时，该 source 暂停新的辅助材质采样并立即释放正在进行的采样租约，但保留已经呈现的静态材质 scene 供 live surface 使用；只有 compositor handoff 已把 visual authority 归还真实 HWND 后，才在终点重新取得一张局部静态快照替换旧 scene。采样租约不能跨 cloak／cover authority 边界，也不能因此扩大 proxy envelope 或真实 HostBounds 的输入区域。
+当 queue proxy 保留真实胶囊 HWND 作为 live source 时，该 source 暂停新的辅助材质采样并立即释放正在进行的采样租约，但保留已经呈现的静态材质 scene 供 live surface 使用；只有 compositor handoff 已把 visual authority 归还真实 HWND 后，才在终点重新取得一张局部静态快照替换旧 scene。采样租约不能跨 cloak／cover authority 边界，也不能因此扩大 proxy envelope 或真实 HostBounds 的输入区域。后台采样只投递一个成功或失败终态通知，已取消任务不得发布结果；晚到的拖拽快照仍按当前材质资格接收，不恢复已经关闭或切成轻量预览的背景。
 
 Production translation backend 不承担 snapshot、clip/scale/effect resize 或另一套 deferred-resize presentation model。需要 shape/size 变化时，回到 WPF bounded host 或明确 native fallback 边界。
 

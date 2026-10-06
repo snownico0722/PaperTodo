@@ -261,7 +261,9 @@ internal sealed partial class SkinBorder
 
         internal void UseDragSnapshot(DesktopBackgroundCapture.Snapshot snapshot)
         {
-            if (!_owner.IsCapsule || !PaperSkins.UsesSampledAuxiliary(_owner.Skin)) return;
+            // A drag frame may finish after full material was disabled or preview took over.
+            // Reuse the current material request policy; a late result cannot reactivate it.
+            if (!_owner.IsCapsule || !_owner.RequestsSampledBackground) return;
             _dragSnapshotActive = true;
             CancelCapture();
             SetScene(snapshot.Layout, snapshot.Bitmap, snapshot.PreBlurred);

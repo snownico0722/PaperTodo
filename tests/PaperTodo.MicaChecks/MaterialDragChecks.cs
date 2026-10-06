@@ -107,6 +107,28 @@ internal static class MaterialDragChecks
             Program.Assert(!ReferenceEquals(dragBitmap, session.Bitmap) && ReferenceEquals(content, surface.Child),
                 "final local snapshot replaces only the material background");
 
+            // Simulate a prepared drag result arriving after the material setting changed.
+            controller.State.MatchAuxiliaryMaterialStrength = false;
+            surface.RefreshSkin();
+            var rejectedFrames = surface.BackgroundFrameCount;
+            surface.UseDragBackground(drag!);
+            Program.Assert(!surface.IsBackgroundActive && !surface.HasBackgroundCapture &&
+                surface.BackgroundFrameCount == rejectedFrames,
+                "late drag snapshot cannot restore software material after full material is disabled");
+            controller.State.MatchAuxiliaryMaterialStrength = true;
+            surface.RefreshSkin();
+            Until(() => surface.IsBackgroundActive && !surface.HasBackgroundCapture,
+                "re-enable full material after rejecting a late result");
+            surface.UseLightweightMaterial = true;
+            rejectedFrames = surface.BackgroundFrameCount;
+            surface.UseDragBackground(drag!);
+            Program.Assert(!surface.IsBackgroundActive && surface.BackgroundFrameCount == rejectedFrames,
+                "late drag snapshot cannot overwrite lightweight preview material");
+            surface.UseLightweightMaterial = false;
+            Until(() => surface.IsBackgroundActive && !surface.HasBackgroundCapture,
+                "ordinary material resumes after lightweight surface exits");
+            Console.WriteLine("PASS late drag results respect current full/lightweight material state");
+
             surface.Opacity = .6;
             Wait(80);
             Program.Assert(!surface.IsBackgroundActive && !surface.HasBackgroundCapture,
