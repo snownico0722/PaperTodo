@@ -61,7 +61,7 @@ public sealed partial class AppController
         }
     }
 
-    private async void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)
+    private async Task SchedulePluginStartupPapers(StartupCommandKind visibilityCommand, int restoreGeneration)
     {
         var generation = ++_pluginStartupPaperGeneration;
         if (IsExiting) return;
@@ -79,6 +79,21 @@ public sealed partial class AppController
             EnablePluginRuntimeReconciliation();
             return;
         }
+        var requests = candidates.ToDictionary(descriptor => descriptor.Id, descriptor =>
+        {
+            var paper = FindPluginStartupPaper(descriptor.Id, descriptor.Manifest!.StartupPaper!.InstanceKey);
+            return (Paper: paper, Visible: paper?.IsVisible, Collapsed: paper?.IsCollapsed,
+                VisibilityVersion: paper == null ? 0 : _visibilityAnimationVersions.GetValueOrDefault(paper.Id));
+        });
+        bool StillOwnsStartupIntent(PaperBodyPluginDescriptor descriptor)
+        {
+            if (restoreGeneration != _paperSurfaceRestoreGeneration) return false;
+            var request = requests[descriptor.Id];
+            var paper = FindPluginStartupPaper(descriptor.Id, descriptor.Manifest!.StartupPaper!.InstanceKey);
+            return ReferenceEquals(paper, request.Paper) && (paper == null ||
+                (paper.IsVisible == request.Visible && paper.IsCollapsed == request.Collapsed &&
+                 _visibilityAnimationVersions.GetValueOrDefault(paper.Id) == request.VisibilityVersion));
+        }
         try
         {
             // Even an already-complete shell queue must not initialize a plugin inline in
@@ -93,7 +108,9 @@ public sealed partial class AppController
                 await shells;
                 if (IsExiting || generation != _pluginStartupPaperGeneration) return;
             } while (!ReferenceEquals(shells, _startupShellPrewarmTask));
-            EnsurePluginStartupPapers(candidates);
+            // Startup defaults lose to commands issued while shell preparation was pending.
+            // Runtime initialization is independent and must still run for hidden entity papers.
+            EnsurePluginStartupPapers(candidates, StillOwnsStartupIntent);
             EnablePluginRuntimeReconciliation();
         }
         catch (Exception ex)
@@ -103,12 +120,13 @@ public sealed partial class AppController
     }
 
     private void EnsurePluginStartupPapers(
-        IReadOnlyList<PaperBodyPluginDescriptor> descriptors)
+        IReadOnlyList<PaperBodyPluginDescriptor> descriptors,
+        Func<PaperBodyPluginDescriptor, bool> stillOwnsStartupIntent)
     {
         var changed = false;
         foreach (var descriptor in descriptors)
         {
-            if (!IsPluginEnabled(descriptor.Id))
+            if (!IsPluginEnabled(descriptor.Id) || !stillOwnsStartupIntent(descriptor))
             {
                 continue;
             }
@@ -119,15 +137,7 @@ public sealed partial class AppController
                 continue;
             }
 
-            var paper = State.Papers.FirstOrDefault(candidate =>
-                string.Equals(
-                    candidate.StartupOwnerPluginId,
-                    descriptor.Id,
-                    StringComparison.Ordinal) &&
-                string.Equals(
-                    candidate.StartupInstanceKey,
-                    startup.InstanceKey,
-                    StringComparison.Ordinal));
+            var paper = FindPluginStartupPaper(descriptor.Id, startup.InstanceKey);
             if (paper != null &&
                 (!string.Equals(
                      paper.BodyProviderId,
@@ -193,6 +203,11 @@ public sealed partial class AppController
         RefreshTrayMenu();
         MarkDirty();
     }
+
+    private PaperData? FindPluginStartupPaper(string providerId, string instanceKey) =>
+        State.Papers.FirstOrDefault(paper =>
+            string.Equals(paper.StartupOwnerPluginId, providerId, StringComparison.Ordinal) &&
+            string.Equals(paper.StartupInstanceKey, instanceKey, StringComparison.Ordinal));
 
     private bool StartupSettingEnabled(
         PaperBodyPluginDescriptor descriptor,

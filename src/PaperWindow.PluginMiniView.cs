@@ -55,6 +55,7 @@ public sealed partial class PaperWindow
         if (_bodyDescriptor?.Kind == PaperBodyPluginKind.Native &&
             _paperBodyHost.Current is IPaperMiniViewProvider nativeProvider)
         {
+            var generation = _bodySessionGeneration;
             var preferred = ReadPreferredMiniSize(
                 () => nativeProvider.PreferredMiniViewSize,
                 PaperMiniViewSize.Default);
@@ -62,10 +63,12 @@ public sealed partial class PaperWindow
                 preferred,
                 size => CreateNativePluginMiniView(
                     nativeProvider,
+                    generation,
                     context,
                     size),
                 visible => NotifyNativePluginMiniViewVisibility(
                     nativeProvider,
+                    generation,
                     visible));
         }
 
@@ -126,10 +129,18 @@ public sealed partial class PaperWindow
 
     private FrameworkElement CreateNativePluginMiniView(
         IPaperMiniViewProvider provider,
+        int generation,
         EdgeCapsulePreviewContext context,
         EdgeCapsulePreviewSize size)
     {
-        EnsurePluginMiniViewGeneration(provider, size);
+        if (!EnsurePluginMiniViewGeneration(provider, generation, size))
+        {
+            return BuildPluginCapsuleEdgePreviewContent(context, size);
+        }
+        bool OwnsMiniRequest() => generation == _bodySessionGeneration &&
+            ReferenceEquals(provider, _paperBodyHost.Current) &&
+            ReferenceEquals(provider, _pluginMiniViewProvider) &&
+            _pluginMiniViewGeneration == generation && _pluginMiniViewSize == size;
         if (_pluginMiniViewAttempted)
         {
             _pluginMiniViewActive = _pluginMiniView != null;
@@ -152,6 +163,8 @@ public sealed partial class PaperWindow
                 contentWidth,
                 contentHeight,
                 CurrentPaperBodyTheme()));
+            // A factory can synchronously replace its body; never publish the old result.
+            if (!OwnsMiniRequest()) return BuildPluginCapsuleEdgePreviewContent(context, size);
             if (view == null ||
                 view is Window ||
                 view.Parent != null ||
@@ -173,35 +186,47 @@ public sealed partial class PaperWindow
         }
         catch
         {
-            _pluginMiniView = null;
-            _pluginMiniViewActive = false;
+            if (OwnsMiniRequest())
+            {
+                _pluginMiniView = null;
+                _pluginMiniViewActive = false;
+            }
             return BuildPluginCapsuleEdgePreviewContent(context, size);
         }
     }
 
-    private void EnsurePluginMiniViewGeneration(
+    private bool EnsurePluginMiniViewGeneration(
         IPaperMiniViewProvider provider,
+        int generation,
         EdgeCapsulePreviewSize size)
     {
+        if (generation != _bodySessionGeneration || !ReferenceEquals(provider, _paperBodyHost.Current))
+            return false;
         if (_pluginMiniViewGeneration == _bodySessionGeneration &&
             ReferenceEquals(_pluginMiniViewProvider, provider) &&
             Math.Abs(_pluginMiniViewSize.WidthDip - size.WidthDip) <= 0.001 &&
             Math.Abs(_pluginMiniViewSize.HeightDip - size.HeightDip) <= 0.001)
         {
-            return;
+            return true;
         }
 
         ResetPluginMiniViewCache();
-        _pluginMiniViewGeneration = _bodySessionGeneration;
+        if (generation != _bodySessionGeneration || !ReferenceEquals(provider, _paperBodyHost.Current) ||
+            _pluginMiniViewProvider != null)
+            return false;
+        _pluginMiniViewGeneration = generation;
         _pluginMiniViewProvider = provider;
         _pluginMiniViewSize = size;
+        return true;
     }
 
     private void NotifyNativePluginMiniViewVisibility(
         IPaperMiniViewProvider provider,
+        int generation,
         bool visible)
     {
-        if (!_pluginMiniViewActive ||
+        if (generation != _bodySessionGeneration || !ReferenceEquals(provider, _paperBodyHost.Current) ||
+            !_pluginMiniViewActive ||
             !ReferenceEquals(provider, _pluginMiniViewProvider) ||
             _pluginMiniViewVisible == visible)
         {

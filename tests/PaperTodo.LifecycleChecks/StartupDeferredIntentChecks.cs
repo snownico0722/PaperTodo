@@ -23,6 +23,7 @@ internal static class StartupDeferredIntentChecks
         var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var manifest = new PaperBodyPluginManifest
         {
+            MaxPaperInstances = 0,
             StartupPaper = new PaperBodyPluginStartupManifest
             {
                 EnabledSetting = "autoStart", InstanceKey = "audit", Presentation = "capsule"

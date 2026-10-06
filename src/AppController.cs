@@ -252,7 +252,7 @@ public sealed partial class AppController : IDisposable
                 SaveNow();
             }
             RefreshMcpRuntime();
-            SchedulePluginStartupPapers(initialVisibilityCommand);
+            _ = SchedulePluginStartupPapers(initialVisibilityCommand, _paperSurfaceRestoreGeneration);
             return;
         }
 
@@ -269,12 +269,14 @@ public sealed partial class AppController : IDisposable
         // Tray/show-all (and second-instance show) still restore everything intentionally.
         var papersToRestore = State.Papers.Where(paper =>
             paper.IsVisible && !startupDeferredPaperIds.Contains(paper.Id)).ToList();
-        await RestorePaperSurfacesAsync(papersToRestore);
+        var restore = RestorePaperSurfacesAsync(papersToRestore);
+        var restoreGeneration = _paperSurfaceRestoreGeneration;
+        await restore;
         if (startupDeferredPaperIds.Count > 0)
         {
             _ = CompleteStartupMissingMonitorGraceAsync(
                 startupDeferredPaperIds.ToArray(),
-                _paperSurfaceRestoreGeneration);
+                restoreGeneration);
         }
 
         if (rescuedPapers)
@@ -282,7 +284,7 @@ public sealed partial class AppController : IDisposable
             SaveNow();
         }
         RefreshMcpRuntime();
-        SchedulePluginStartupPapers(initialVisibilityCommand);
+        _ = SchedulePluginStartupPapers(initialVisibilityCommand, restoreGeneration);
     }
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)

@@ -180,28 +180,30 @@ public static class AnimationHelper
         target.BeginAnimation(property, animation);
     }
 
-    // 闪烁高亮（用于撤销提示）
+    // 提醒高亮只拥有动画值，不修改背景的基础值或绑定。
     public static void FlashHighlight(Border element, Color highlightColor, double duration = 120)
     {
-        var highlightBrush = new SolidColorBrush(Colors.Transparent);
-
-        var flashAnim = new ColorAnimation
+        element.BeginAnimation(Border.BackgroundProperty, new FlashBrushAnimation(highlightColor)
         {
-            From = Colors.Transparent,
-            To = Color.FromArgb((byte)(highlightColor.A * 0.4), highlightColor.R, highlightColor.G, highlightColor.B),
             Duration = TimeSpan.FromMilliseconds(duration),
             AutoReverse = true,
-            EasingFunction = new QuadraticEase()
-        };
-        // The flash owns an animation, not the base brush/binding. WPF replaces an older
-        // flash clock and restores the CURRENT base at completion, including intervening themes.
-        var flashBackground = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = TimeSpan.FromMilliseconds(duration * 2),
             FillBehavior = FillBehavior.Stop
-        };
-        flashBackground.KeyFrames.Add(new DiscreteObjectKeyFrame(highlightBrush, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        element.BeginAnimation(Border.BackgroundProperty, flashBackground);
-        highlightBrush.BeginAnimation(SolidColorBrush.ColorProperty, flashAnim);
+        });
+    }
+
+    private sealed class FlashBrushAnimation(Color color) : AnimationTimeline
+    {
+        public override Type TargetPropertyType => typeof(Brush);
+        public override bool IsDestinationDefault => false;
+        protected override Freezable CreateInstanceCore() => new FlashBrushAnimation(color);
+        public override object GetCurrentValue(object defaultOriginValue, object defaultDestinationValue, AnimationClock clock)
+        {
+            if (clock.CurrentState == ClockState.Stopped) return defaultDestinationValue;
+            var progress = QuickEase.Ease(clock.CurrentProgress ?? 0);
+            var brush = new SolidColorBrush(Color.FromArgb(
+                (byte)(color.A * 0.4 * progress), color.R, color.G, color.B));
+            brush.Freeze();
+            return brush;
+        }
     }
 }

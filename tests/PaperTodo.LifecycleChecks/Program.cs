@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "lifetime-body-visibility", "lifetime-body-failure", "lifetime-mini-reset", "lifetime-reminder-flash", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "lifetime-body-visibility", "lifetime-body-failure", "lifetime-mini-reset", "lifetime-mini-create", "lifetime-reminder-flash", "startup-intent-hide-all", "startup-intent-hide-one", "startup-intent-form", "startup-intent-delete", "startup-intent-unchanged", "startup-intent-other-paper", "startup-intent-before-schedule", "real-exit", "early-expand", "cancel-prewarm", "real-exit-scripts", "early-exit"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -183,6 +183,11 @@ internal static class Program
             if (name.StartsWith("lifetime-", StringComparison.Ordinal))
             {
                 await InteractionLifetimeChecks.Run(name, windows.Values.First());
+                return;
+            }
+            if (name.StartsWith("startup-intent-", StringComparison.Ordinal))
+            {
+                await StartupDeferredIntentChecks.Run(name, controller, windows.Values.First());
                 return;
             }
             if (name == "missing-monitor")
