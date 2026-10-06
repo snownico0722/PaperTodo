@@ -1035,12 +1035,16 @@ public sealed partial class PaperWindow
         Action<IPaperBodySession> callback,
         bool disableOnFailure = false)
     {
+        var session = _paperBodyHost.Current;
+        var generation = _bodySessionGeneration;
         var failure = _paperBodyHost.Invoke(callback);
         if (failure != null)
         {
             Trace.TraceWarning("Plugin body callback failed: {0}: {1}", _paper.BodyProviderId, failure);
             if (!disableOnFailure ||
-                _windowLifecycle != PaperWindowLifecycleState.Alive)
+                _windowLifecycle != PaperWindowLifecycleState.Alive ||
+                generation != _bodySessionGeneration ||
+                !ReferenceEquals(session, _paperBodyHost.Current))
             {
                 return;
             }
@@ -1134,7 +1138,13 @@ public sealed partial class PaperWindow
         InvokeBodySession(item =>
         {
             item.OnPresentationChanged(visible);
-            item.OnVisibilityChanged(runtimeVisible);
+            // Plugin callbacks can synchronously hide, reload or replace their own body. The
+            // second notification must not resurrect an obsolete state or call a retired session.
+            if (ReferenceEquals(item, _paperBodyHost.Current) &&
+                _bodyRuntimeVisible == runtimeVisible)
+            {
+                item.OnVisibilityChanged(runtimeVisible);
+            }
         });
         if (runtimeStatusChanged)
         {

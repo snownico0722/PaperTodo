@@ -221,16 +221,9 @@ public sealed partial class PaperWindow
 
     private void ResetPluginMiniViewCache()
     {
-        if (_pluginMiniViewVisible && _pluginMiniViewProvider != null)
-        {
-            try
-            {
-                _pluginMiniViewProvider.OnMiniViewVisibilityChanged(false);
-            }
-            catch
-            {
-            }
-        }
+        var visibleProvider = _pluginMiniViewVisible ? _pluginMiniViewProvider : null;
+        // Revoke this cache before notifying foreign code. A callback may close/reload the body
+        // or establish a replacement mini; it must not recursively retire the same generation.
         _pluginMiniViewGeneration = -1;
         _pluginMiniViewProvider = null;
         _pluginMiniView = null;
@@ -238,6 +231,14 @@ public sealed partial class PaperWindow
         _pluginMiniViewAttempted = false;
         _pluginMiniViewActive = false;
         _pluginMiniViewVisible = false;
+        try
+        {
+            visibleProvider?.OnMiniViewVisibilityChanged(false);
+        }
+        catch
+        {
+            // Optional mini cleanup cannot block body retirement.
+        }
     }
 
     private EdgeCapsulePreviewDescriptor DescribePluginCapsuleFallback(

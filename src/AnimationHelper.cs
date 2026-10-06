@@ -183,9 +183,7 @@ public static class AnimationHelper
     // 闪烁高亮（用于撤销提示）
     public static void FlashHighlight(Border element, Color highlightColor, double duration = 120)
     {
-        var originalBg = element.Background;
         var highlightBrush = new SolidColorBrush(Colors.Transparent);
-        element.Background = highlightBrush;
 
         var flashAnim = new ColorAnimation
         {
@@ -195,8 +193,15 @@ public static class AnimationHelper
             AutoReverse = true,
             EasingFunction = new QuadraticEase()
         };
-        flashAnim.Completed += (s, e) => element.Background = originalBg;
-
+        // The flash owns an animation, not the base brush/binding. WPF replaces an older
+        // flash clock and restores the CURRENT base at completion, including intervening themes.
+        var flashBackground = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = TimeSpan.FromMilliseconds(duration * 2),
+            FillBehavior = FillBehavior.Stop
+        };
+        flashBackground.KeyFrames.Add(new DiscreteObjectKeyFrame(highlightBrush, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        element.BeginAnimation(Border.BackgroundProperty, flashBackground);
         highlightBrush.BeginAnimation(SolidColorBrush.ColorProperty, flashAnim);
     }
 }
