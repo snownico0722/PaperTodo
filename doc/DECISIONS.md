@@ -64,6 +64,7 @@
 | D-053 | 材质绘制、原生背景与可选采样职责收敛 | Partially superseded by D-054 | 主题 / Rendering |
 | D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
+| D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 
 ## 维护规则
 
@@ -470,7 +471,7 @@ Docked capsule 有 wall-side straight edge、close segment、bounded capacity �
 
 proxy animation 到逻辑终点后，最终 real/WPF presentation 必须先完成 endpoint flush/apply、必要的 WPF render turn、真实 bounds verify 和 authority swap 条件，再允许撤 compositor cover。
 
-completion timer 只能发起完成尝试，本身不是 WPF terminal frame 已就绪的证明；尝试失败时 cover 继续持有 authority，并在后续重试中重新走 endpoint 准备与验证。
+completion timer 只能发起完成尝试，本身不是 WPF terminal frame 已就绪的证明；尝试失败时 cover 继续持有 authority，并在后续重试中重新走 endpoint 准备与验证。D-056 补充精确终帧要求；不能用动画准入容差替代终态提交与 handoff 验证。
 
 ### Why
 
@@ -498,7 +499,7 @@ DComp 动画结束和 WPF 最后一帧真正进入 DWM 并非天然同一个调�
 
 ### Decision
 
-Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看见/已应用 presentation 的 `InteractiveBounds` 为准。WPF/native enter/leave 只是触发重新采样的 signal。proxy 拥有可见像素时，也消费同一 sampled logical frame 的 `InteractiveBounds` 做输入路由。
+Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看见/已应用 presentation 的 `InteractiveBounds` 为准。WPF/native enter/leave 只是触发重新采样的 signal。proxy 拥有可见像素时，也消费同一 sampled logical frame 的 `InteractiveBounds` 做输入路由。主胶囊收起／展开 proxy 不拥有 capsule 输入语义，因此其 output HWND 在 publication 前进入已验证的原生 passthrough 模式，而不是把整个透明 envelope 交给 hit-test 兜底；该模式按 host generation 单向锁存，interactive proxy 使用未进入 passthrough 的 output host。
 
 ### Why
 
@@ -1734,3 +1735,33 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 - `903d3a4ec2a34656b8e4b9954455c2203bd203e7` / `21e09d4b30c6f72347597dc6582725eb98d87bf5` — 隔离 redirection alpha 并做真实材质验证。
 - `b93efc3b369e231070198146a44468962427d5f0` — 撤回失败的 BlurBehind 产品实现。
 - `tests/PaperTodo.MicaChecks/MaterialStudyChecks.cs` — 真实后景像素对照边界。
+
+---
+
+## D-056 — 精确终帧与主胶囊纯视觉输入隔离（2026-10-07）
+
+**Status:** Accepted
+
+### Context / Evidence
+
+PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到，并叠加两阶段 settle recovery 与强制 cover-loss。重新审查并等待真实队列事务提交后，Windows 日志记录到 applied opacity 为 `0.9994429137551172`，而 endpoint 为 `1`；几何一致，但严格 frame equality 持续拒绝 handoff。
+
+`ResolveSettledFrame` 把动画准入使用的近似相等误用为终态，反复 Flush／ForceApply 仍保留该尾差。Windows A/B（PR #319，run `37529373611`）中，原版精确终帧测试失败；提交 canonical target 的同一测试在左右边缘 × 四档 DPI 下通过。实际完整材质收展对照中，修正后六次 proxy 启动均正常交接，没有 retry-exhausted／emergency-release。
+
+### Decision
+
+- timeline 结束或取消后，Presenter 提交 `TargetPresentation.ToFrame()`。近似比较只用于决定是否需要动画；handoff 保持精确一致性验证。
+- 撤掉此次 PR 尚未合并的 stage-local settle recovery 和 synthetic cover-loss。它们未解决终帧尾差，还会把局部失败扩大为共享 compositor runtime 失效；保留既有真实设备／output 丢失恢复路径。
+- 主胶囊收展 output 仍是纯视觉层：首次 publication 前进入 layered + transparent passthrough，完成后退休该 host；interactive proxy 使用未切入该模式的 host。同 HWND 反向切换不作为已验证能力。
+- 输入测试同时检查真实 live DComp 像素与跨线程原生点击，不能把“不可见窗口让点击通过”当作有效视觉代理。生命周期测试必须等待已排队事务执行，并验证 applied/native 终态、capture/affinity 释放与恢复后真实点击；空代理字典不能替代“曾经成功接管”。
+
+### Boundaries
+
+此次审查确认的是精确终帧缺陷及原生 passthrough 行为，不声称复现了用户每一种显卡／显示器时序，也不声称任意持续 Win32 失败都能自动恢复。#227 新增材质采样与 #318 的采样隔离是另一条生命周期边界；不能仅按 PR 出现顺序证明所有卡死均由材质采样触发。
+
+### Code
+
+- `src/EdgeCapsulePresenter.cs` / `src/EdgeCapsuleTransitionPolicy.cs`
+- `src/EdgeCapsuleQueueCompositionProxy.Runtime.cs` / `src/EdgeCapsuleQueueProxyWindow.cs`
+- `tests/PaperTodo.EdgeTitleChecks/TerminalHandoffFrameChecks.cs` / `ProxyVisualEvidence.cs`
+- `tests/PaperTodo.LifecycleChecks/MasterMaterialHandoffChecks.cs`

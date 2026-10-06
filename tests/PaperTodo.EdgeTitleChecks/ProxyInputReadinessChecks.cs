@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -8,8 +9,10 @@ internal static partial class Program
 {
     private static void ProxyInputReadiness()
     {
+        TerminalHandoffFrames();
         ProxyCompletionFailureStopsRetrying();
         ProxyOutputWindowVisibility();
+        ProxyCrossThreadInputPassthrough();
         ProxyPointerMessageCoordinates();
         ProxyImmediateInputChecks();
         // Exercise the real native mouse-message adapter and proxy callback. Lifecycle fields are
@@ -117,7 +120,9 @@ internal static partial class Program
             timer.Stop();
         }
 
-        Check(stopped, "Repeated completion failure eventually stops scheduling retries");
+        Check(stopped && !timer.IsEnabled,
+            "Repeated completion failure reports finite retry exhaustion");
+
         Console.WriteLine("PASS proxy completion failure has a finite retry lifecycle");
     }
 
@@ -129,7 +134,7 @@ internal static partial class Program
         {
             var initial = new DeviceScreenRect(100, 100, 200, 140);
             using var output = EdgeCapsuleQueueProxyWindow.TryCreate(initial, topmost,
-                _ => false, _ => { }, () => { }, () => { }, () => { });
+                _ => true, _ => { }, () => { }, () => { }, () => { });
             Check(output != null, "Create proxy output for native publication checks");
             var handle = output!.Handle;
             Check(handle != IntPtr.Zero && !IsProxyCheckWindowVisible(handle),
@@ -157,6 +162,175 @@ internal static partial class Program
         Console.WriteLine("PASS proxy-native-output-show-hide-and-reuse");
     }
 
+    private static void ProxyCrossThreadInputPassthrough()
+    {
+        var bounds = new DeviceScreenRect(240, 180, 440, 320);
+        EdgeCapsuleQueueProxyWindow? target = null;
+        Dispatcher? targetDispatcher = null;
+        var targetClicks = 0;
+        using var ready = new ManualResetEventSlim();
+        var targetThread = new Thread(() =>
+        {
+            targetDispatcher = Dispatcher.CurrentDispatcher;
+            target = EdgeCapsuleQueueProxyWindow.TryCreate(
+                bounds,
+                topmost: false,
+                _ => true,
+                input =>
+                {
+                    if (input.Message == 0x0201)
+                    {
+                        Interlocked.Increment(ref targetClicks);
+                    }
+                },
+                () => { },
+                () => { },
+                () => { });
+            if (target == null || !target.Show(bounds, topmost: false))
+            {
+                ready.Set();
+                return;
+            }
+            ready.Set();
+            Dispatcher.Run();
+        });
+        targetThread.SetApartmentState(ApartmentState.STA);
+        targetThread.Start();
+        Check(ready.Wait(TimeSpan.FromSeconds(5)) && target != null && targetDispatcher != null,
+            "Create cross-thread native target below proxy output");
+
+        var routesInput = true;
+        var proxyClicks = 0;
+        using var proxy = EdgeCapsuleQueueProxyWindow.TryCreate(
+            bounds,
+            topmost: true,
+            _ => routesInput,
+            input =>
+            {
+                if (input.Message == 0x0201)
+                {
+                    proxyClicks++;
+                }
+            },
+            () => { },
+            () => { },
+            () => { });
+        Check(proxy != null && proxy.Show(bounds, topmost: true),
+            "Show cross-thread passthrough proxy above target");
+        var liveProxy = proxy!;
+        using var visibleCover = new ProxyVisualEvidence(liveProxy.Handle, bounds);
+
+        GetCursorPosForProxyCheck(out var originalCursor);
+        try
+        {
+            var x = bounds.Left + bounds.Width / 2;
+            var y = bounds.Top + bounds.Height / 2;
+            Check(SetCursorPosForProxyCheck(x, y), "Position pointer over proxy test windows");
+
+            visibleCover.AssertRedAndCloakSource();
+            ClickAtCursor();
+            Check(WaitForProxyCheck(() => proxyClicks == 1),
+                "Interactive proxy receives the native click");
+            Check(Volatile.Read(ref targetClicks) == 0,
+                "Interactive proxy keeps the lower cross-thread window from receiving the click");
+
+            routesInput = false;
+            liveProxy.EnableInputPassthrough();
+            visibleCover.AssertLivePassthrough();
+            ClickAtCursor();
+            Check(WaitForProxyCheck(() => Volatile.Read(ref targetClicks) == 1),
+                "Purely visual proxy passes a real click to the lower cross-thread window");
+            Check(proxyClicks == 1,
+                "Purely visual proxy does not consume the cross-thread click");
+
+            // Passthrough is deliberately one-way for one output HWND. Retire it and prove that a
+            // fresh interactive output can own input again, matching QueueHost's runtime policy.
+            liveProxy.Hide();
+            var replacementClicks = 0;
+            using var replacement = EdgeCapsuleQueueProxyWindow.TryCreate(
+                bounds,
+                topmost: true,
+                _ => true,
+                input =>
+                {
+                    if (input.Message == 0x0201)
+                    {
+                        replacementClicks++;
+                    }
+                },
+                () => { },
+                () => { },
+                () => { });
+            Check(replacement != null && replacement.Show(bounds, topmost: true),
+                "Create fresh interactive proxy after retiring master passthrough output");
+            ClickAtCursor();
+            Check(WaitForProxyCheck(() => replacementClicks == 1),
+                "Fresh interactive proxy receives native input after master host retirement");
+            replacement!.Hide();
+
+            // Production sets passthrough before publication, not only on a shown output.
+            var coldClicks = 0;
+            using var cold = EdgeCapsuleQueueProxyWindow.TryCreate(bounds, true, _ => false,
+                _ => coldClicks++, () => { }, () => { }, () => { });
+            Check(cold != null, "Create a cold master output for simultaneous pixel/input evidence");
+            cold!.EnableInputPassthrough();
+            using var coldPixels = new ProxyVisualEvidence(cold.Handle, bounds);
+            Check(cold.Show(bounds, true), "Publish cold passthrough output with a live DComp root");
+            coldPixels.AssertRedAndCloakSource();
+            coldPixels.AssertLivePassthrough();
+            // These are independent single-click checks on the same lower HWND. Move outside
+            // the double-click rectangle instead of depending on the runner's click timing.
+            Check(SetCursorPosForProxyCheck(x + 20, y + 20), "Separate the cold single-click probe");
+            ClickAtCursor();
+            Check(WaitForProxyCheck(() => Volatile.Read(ref targetClicks) == 2) && coldClicks == 0,
+                "Cold master cover remains visibly live while passing the native click across threads");
+        }
+        finally
+        {
+            _ = SetCursorPosForProxyCheck(originalCursor.X, originalCursor.Y);
+            liveProxy.Hide();
+            targetDispatcher!.BeginInvoke(
+                DispatcherPriority.Send,
+                (Action)(() =>
+                {
+                    target?.Dispose();
+                    Dispatcher.CurrentDispatcher.BeginInvokeShutdown(
+                        DispatcherPriority.Send);
+                }));
+            targetThread.Join(TimeSpan.FromSeconds(5));
+        }
+
+        Console.WriteLine("PASS visible live master proxy, cold/warm cross-thread passthrough and fresh interactive replacement");
+    }
+
+    private static bool WaitForProxyCheck(Func<bool> predicate)
+    {
+        var deadline = Stopwatch.StartNew();
+        while (!predicate() && deadline.ElapsedMilliseconds < 1500)
+        {
+            var frame = new DispatcherFrame();
+            Dispatcher.CurrentDispatcher.BeginInvoke(
+                DispatcherPriority.Background,
+                (Action)(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+            Thread.Sleep(5);
+        }
+        return predicate();
+    }
+
+    private static void ClickAtCursor()
+    {
+        MouseEventForProxyCheck(0x0002, 0, 0, 0, UIntPtr.Zero);
+        MouseEventForProxyCheck(0x0004, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProxyCheckNativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct ProxyCheckNativeRect
     {
@@ -169,6 +343,22 @@ internal static partial class Program
     [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsProxyCheckWindowVisible(IntPtr window);
+
+    [DllImport("user32.dll", EntryPoint = "GetCursorPos")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPosForProxyCheck(out ProxyCheckNativePoint point);
+
+    [DllImport("user32.dll", EntryPoint = "SetCursorPos")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPosForProxyCheck(int x, int y);
+
+    [DllImport("user32.dll", EntryPoint = "mouse_event")]
+    private static extern void MouseEventForProxyCheck(
+        uint flags,
+        uint dx,
+        uint dy,
+        uint data,
+        UIntPtr extraInfo);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowRect", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

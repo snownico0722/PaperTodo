@@ -419,13 +419,12 @@ internal sealed class EdgeCapsulePresenter
 
         _pendingMotion = EdgeCapsuleMotion.Preserve(EdgeCapsuleTransitionReason.State);
         _rebasePendingTransition = false;
+        // A stopped timeline must submit the exact target. FramesMatch deliberately tolerates
+        // tiny differences for animation admission; retaining that approximate sample here
+        // makes the strict queue handoff verification fail forever (not a render delay).
         var sample = Transition is { } active
             ? EdgeCapsuleTransitionPolicy.Sample(active, nowTimestamp)
-            : new EdgeCapsuleTransitionSample(
-                EdgeCapsuleTransitionPolicy.ResolveSettledFrame(
-                    AppliedPresentation,
-                    TargetPresentation),
-                true);
+            : new EdgeCapsuleTransitionSample(TargetPresentation.ToFrame(), true);
         var shouldApply = forceApply || sample.Frame != AppliedPresentation || targetChanged;
         var applied = !shouldApply || ApplyPresentationFrame(apply, sample.Frame);
         if (applied && shouldApply)

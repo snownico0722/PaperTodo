@@ -156,18 +156,6 @@ internal static class EdgeCapsuleTransitionPolicy
         return new EdgeCapsuleTransitionSample(frame, false);
     }
 
-    public static EdgeCapsulePresentationFrame ResolveSettledFrame(
-        EdgeCapsulePresentationFrame applied,
-        EdgeCapsuleTargetPresentation target)
-    {
-        if (FramesMatch(applied, target))
-        {
-            return applied;
-        }
-
-        return target.ToFrame();
-    }
-
     public static bool FramesMatch(
         EdgeCapsulePresentationFrame applied,
         EdgeCapsuleTargetPresentation target) =>

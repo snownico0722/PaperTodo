@@ -88,7 +88,9 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         public IDCompositionTarget Target { get; }
         public EdgeCapsuleQueueCompositionProxy? Current { get; private set; }
         public EdgeCapsuleQueueCompositionProxy? Staged { get; private set; }
+        private bool _inputPassthroughLatched;
         public bool HasOwner => Current != null || Staged != null;
+        public bool InputPassthroughLatched => _inputPassthroughLatched;
         public bool IsAvailable =>
             !_disposed &&
             !HasOwner &&
@@ -180,11 +182,24 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
             EdgeCapsuleQueueCompositionProxy proxy,
             EdgeCapsuleQueueCompositionProxy? predecessor)
         {
-            if (!CanStage(predecessor))
+            if (!CanStage(predecessor) ||
+                (_inputPassthroughLatched && proxy.RoutesPointerInput) ||
+                (Current != null &&
+                 Current.RoutesPointerInput != proxy.RoutesPointerInput))
             {
                 return false;
             }
+
             Staged = proxy;
+            if (Current == null && !proxy.RoutesPointerInput)
+            {
+                // Cross-thread click verification showed that the native passthrough style is
+                // reliable in this direction but not as a same-HWND reversible mode. Latch it
+                // before cold publication and retire this output host when the master generation
+                // drains instead of reusing it later for an interactive proxy.
+                Window.EnableInputPassthrough();
+                _inputPassthroughLatched = true;
+            }
             return true;
         }
 
@@ -465,7 +480,24 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
         internal void ReturnIdleHost(QueueHost host)
         {
             _dispatcher.VerifyAccess();
-            if (_disposed || !host.IsAvailable)
+            if (_disposed || host.HasOwner)
+            {
+                return;
+            }
+
+            if (host.InputPassthroughLatched)
+            {
+                foreach (var pair in _hosts
+                             .Where(pair => ReferenceEquals(pair.Value, host))
+                             .ToArray())
+                {
+                    _hosts.Remove(pair.Key);
+                }
+                try { host.Dispose(); } catch { }
+                return;
+            }
+
+            if (!host.IsAvailable)
             {
                 return;
             }

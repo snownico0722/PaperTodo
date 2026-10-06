@@ -10,9 +10,12 @@ namespace PaperTodo;
 internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
 {
     private const int GwlWndProc = -4;
+    private const int GwlExStyle = -20;
     private const int WsPopup = unchecked((int)0x80000000);
     private const int WsExTopmost = 0x00000008;
     private const int WsExToolWindow = 0x00000080;
+    private const int WsExTransparent = 0x00000020;
+    private const int WsExLayered = 0x00080000;
     private const int WsExNoRedirectionBitmap = 0x00200000;
     private const int WsExNoActivate = 0x08000000;
     private const int WmDestroy = 0x0002;
@@ -30,7 +33,11 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
     private const int HtTransparent = -1;
     private const int MaNoActivate = 3;
     private const int SwHide = 0;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
     private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
     private const uint SwpShowWindow = 0x0040;
     private const uint SwpNoOwnerZOrder = 0x0200;
     private static readonly IntPtr HwndTop = IntPtr.Zero;
@@ -150,6 +157,40 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         {
             _ = ShowWindow(Handle, SwHide);
         }
+    }
+
+    public void EnableInputPassthrough()
+    {
+        if (_disposed || Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var current = GetWindowLongPtr(Handle, GwlExStyle).ToInt64();
+        const long passthroughMask = WsExTransparent | WsExLayered;
+        var updated = current | passthroughMask;
+        if (updated == current)
+        {
+            return;
+        }
+
+        _ = SetWindowLongPtr(
+            Handle,
+            GwlExStyle,
+            new IntPtr(updated));
+        _ = SetWindowPos(
+            Handle,
+            IntPtr.Zero,
+            0,
+            0,
+            0,
+            0,
+            SwpNoMove |
+            SwpNoSize |
+            SwpNoZOrder |
+            SwpNoActivate |
+            SwpFrameChanged |
+            SwpNoOwnerZOrder);
     }
 
     private IntPtr WindowMessage(
@@ -330,6 +371,11 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         IntPtr menu,
         IntPtr instance,
         IntPtr parameter);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr(
+        IntPtr hwnd,
+        int index);
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr SetWindowLongPtr(
