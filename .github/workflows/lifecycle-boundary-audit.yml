@@ -1,0 +1,50 @@
+name: Lifecycle boundary audit
+on:
+  push:
+    branches: [fix/lifecycle-boundary-audit]
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: contains(github.event.head_commit.message, '[boundary-audit]')
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Select executable boundary regression
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/boundary-audit" | Out-Null
+          @'
+          from pathlib import Path
+          p = Path('tests/PaperTodo.MicaChecks/Program.cs')
+          s = p.read_text(encoding='utf-8-sig')
+          needle = '        var temp = Path.Combine(Path.GetTempPath(), "PaperTodo.NativeMicaChecks", Guid.NewGuid().ToString("N"));'
+          assert s.count(needle) == 1
+          s = s.replace(needle, '''        using (var boundaryController = new AppController())
+                  {
+                      try { MenuOpeningBoundaryChecks.Run(boundaryController); return 0; }
+                      catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+                  }
+          ''' + needle)
+          p.write_text(s, encoding='utf-8')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Pending menu target lifetime
+        run: |
+          dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release 2>&1 | Tee-Object "$env:RUNNER_TEMP/boundary-audit/menu.txt"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boundary-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/boundary-audit
+          retention-days: 1
