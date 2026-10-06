@@ -24,17 +24,32 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Apply reviewed candidate or identical baseline tests
+      - name: Apply candidate and identical behavior tests
         env:
-          REVIEW_FIXED: ${{ matrix.fixed }}
+          REVIEW_FIXED: 'true'
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/interaction-audit" | Out-Null
-          python .github/scripts/interaction_lifetime_review.py
+          python .github/scripts/startup_intent_review.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ('${{ matrix.fixed }}' -eq 'false') {
+          @'
+          from pathlib import Path
+          import subprocess
+          base = '9e176abfe33cbc0ca873c03576691b153f1299a0'
+          for path in ['src/AppController.cs', 'src/AppController.PluginStartup.cs', 'src/PaperWindow.PluginBodies.cs', 'src/PaperWindow.PluginMiniView.cs', 'src/AnimationHelper.cs']:
+              s = subprocess.check_output(['git', 'show', base + ':' + path]).decode('utf-8-sig')
+              if path.endswith('AppController.PluginStartup.cs'):
+                  s = s.replace('private async void SchedulePluginStartupPapers(StartupCommandKind visibilityCommand)', 'private async Task SchedulePluginStartupPapers(StartupCommandKind visibilityCommand, int restoreGeneration)')
+              if path.endswith('AppController.cs'):
+                  s = s.replace('SchedulePluginStartupPapers(initialVisibilityCommand);', '_ = SchedulePluginStartupPapers(initialVisibilityCommand, _paperSurfaceRestoreGeneration);')
+              Path(path).write_text(s, encoding='utf-8', newline='\n')
+          '@ | python -
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff > "$env:RUNNER_TEMP/interaction-audit/reviewed.diff"
-      - name: Four deterministic reentrant and animation cases
+      - name: Reentry, visible animation and delayed startup commands
         env:
           REVIEW_FIXED: ${{ matrix.fixed }}
         run: |
@@ -43,6 +58,13 @@ jobs:
             'lifetime-body-failure' = 'STALE_BODY_FAILURE:'
             'lifetime-mini-reset' = 'REENTRANT_MINI_RESET:'
             'lifetime-reminder-flash' = 'FLASH_BASE_OWNER:'
+            'startup-intent-hide-all' = 'STARTUP_OVERRIDES_HIDE:'
+            'startup-intent-hide-one' = 'STARTUP_OVERRIDES_HIDE:'
+            'startup-intent-form' = 'STARTUP_OVERRIDES_FORM:'
+            'startup-intent-delete' = 'STARTUP_RECREATES_DELETED:'
+            'startup-intent-before-schedule' = 'STARTUP_OVERRIDES_HIDE:'
+            'startup-intent-unchanged' = ''
+            'startup-intent-other-paper' = ''
           }
           $configs = if ($env:REVIEW_FIXED -eq 'true') { @('Debug','Release') } else { @('Release') }
           foreach ($config in $configs) {
@@ -52,13 +74,14 @@ jobs:
               $log = "$env:RUNNER_TEMP/interaction-audit/$case-$config.txt"
               dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c $config -- --case $case 2>&1 | Tee-Object $log
               $code = $LASTEXITCODE
-              if ($env:REVIEW_FIXED -eq 'true') {
-                if ($code -ne 0) { throw "Candidate failed $case in $config (exit=$code)" }
+              if ($env:REVIEW_FIXED -eq 'true' -or $cases[$case] -eq '') {
+                if ($code -ne 0) { throw "Positive check failed $case in $config (exit=$code)" }
               } elseif ($code -eq 0 -or !(Select-String -Path $log -SimpleMatch $cases[$case] -Quiet)) {
                 throw "Baseline did not fail at the intended $case assertion (exit=$code)"
               }
             }
           }
+          exit 0
       - name: Publish only the verified candidate to the review branch
         if: matrix.fixed
         run: |
@@ -66,8 +89,8 @@ jobs:
           if ((git rev-parse origin/fix/interaction-lifetime-audit) -ne '${{ github.sha }}') { throw 'Review branch moved; refusing to publish over newer changes' }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/PaperWindow.PluginBodies.cs src/PaperWindow.PluginMiniView.cs src/AnimationHelper.cs tests/PaperTodo.LifecycleChecks/Program.cs
-          git commit -m 'fix(lifecycle): keep reentrant body callbacks and reminder clocks scoped to their owners'
+          git add src/AppController.cs src/AppController.PluginStartup.cs src/PaperWindow.PluginBodies.cs src/PaperWindow.PluginMiniView.cs src/AnimationHelper.cs tests/PaperTodo.LifecycleChecks/Program.cs tests/PaperTodo.LifecycleChecks/InteractionLifetimeChecks.cs
+          git commit -m 'fix(startup): respect newer user visibility and form intent after shell preparation'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin HEAD:refs/heads/fix/interaction-lifetime-audit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
