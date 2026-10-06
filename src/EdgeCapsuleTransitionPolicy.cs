@@ -34,7 +34,7 @@ internal static class EdgeCapsuleTransitionPolicy
         }
 
         var durationMilliseconds = motion.Kind == EdgeCapsuleMotionKind.Preserve
-            ? EdgeCapsuleLayout.SlotMoveMilliseconds
+            ? AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds)
             : Math.Max(1, motion.DurationMilliseconds);
         var durationTicks = Math.Max(
             1,
