@@ -85,8 +85,13 @@ internal sealed class MaterialMenuOpening
     {
         private readonly CancellationTokenSource _source = new();
         internal CancellationToken Token { get; }
+        internal UIElement? Target { get; }
         private bool _disposed;
-        internal OpeningRequest() => Token = _source.Token;
+        internal OpeningRequest(UIElement? target)
+        {
+            Target = target;
+            Token = _source.Token;
+        }
         internal void Cancel() { if (!_disposed && !Token.IsCancellationRequested) _source.Cancel(); }
         public void Dispose() { if (_disposed) return; _disposed = true; _source.Dispose(); }
     }
@@ -120,10 +125,14 @@ internal sealed class MaterialMenuOpening
             return true;
         if (_request == null)
         {
-            var request = _request = new OpeningRequest();
+            var request = _request = new OpeningRequest(_target());
             InputManager.Current.PreProcessInput += OnPendingInput;
-            _anchor = _target() as FrameworkElement;
-            if (_anchor != null) _anchor.Unloaded += OnAnchorUnloaded;
+            _anchor = request.Target as FrameworkElement;
+            if (_anchor != null)
+            {
+                _anchor.Unloaded += OnAnchorUnloaded;
+                _anchor.IsVisibleChanged += OnAnchorVisibilityChanged;
+            }
             // The dispatcher adapter is the async-void boundary; preparation itself is
             // an awaitable operation. Exceptions still reach the normal UI dispatcher.
             _owner.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(async () =>
@@ -181,7 +190,12 @@ internal sealed class MaterialMenuOpening
         { failed = true; Debug.WriteLine("Menu background preparation: " + ex.Message); }
         finally
         {
-            if (ReferenceEquals(request, _request) && !_owner.Dispatcher.HasShutdownStarted)
+            // Hiding keeps a WPF tree loaded; a reusable menu may also receive a new target
+            // while its readback is in flight. Neither can authorize this old request to open.
+            if (ReferenceEquals(request, _request) &&
+                (_owner.Dispatcher.HasShutdownStarted || !ReferenceEquals(request.Target, _target())))
+                Cancel();
+            if (ReferenceEquals(request, _request))
             {
                 DetachPendingInput();
                 _request = null; _ready = true;
@@ -209,10 +223,22 @@ internal sealed class MaterialMenuOpening
     private void DetachPendingInput()
     {
         InputManager.Current.PreProcessInput -= OnPendingInput;
-        if (_anchor != null) _anchor.Unloaded -= OnAnchorUnloaded;
+        if (_anchor != null)
+        {
+            _anchor.Unloaded -= OnAnchorUnloaded;
+            _anchor.IsVisibleChanged -= OnAnchorVisibilityChanged;
+        }
         _anchor = null;
     }
-    private void OnAnchorUnloaded(object sender, RoutedEventArgs e) => _owner.SetCurrentValue(_isOpen, false);
+    private void OnAnchorUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (ReferenceEquals(sender, _anchor)) _owner.SetCurrentValue(_isOpen, false);
+    }
+    private void OnAnchorVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (ReferenceEquals(sender, _anchor) && e.NewValue is false)
+            _owner.SetCurrentValue(_isOpen, false);
+    }
     private void OnPendingInput(object sender, PreProcessInputEventArgs e)
     {
         if (e.StagingItem.Input is KeyEventArgs { Key: Key.Escape, IsDown: true } ||
