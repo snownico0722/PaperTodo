@@ -89,31 +89,70 @@ internal static class NativeSurfaceChecks
     }
     private static void WaitForDesktopInk(PaperWindow paper, string output, string name)
     {
-        // The compositor may expose its uniform fallback before WPF's first present.
-        // A blank frame is not evidence that the actual header/body material matches.
-        var pin = (Button)typeof(PaperWindow).GetField("_paperIconButton", Program.Private)!.GetValue(paper)!;
-        for (var attempt = 0; attempt < 12; attempt++)
+        // DwmFlush/ContentRendered do not prove that WPF's redirection bitmap has reached the
+        // desktop composite. Use a temporary, opaque WPF marker as readiness evidence, then keep
+        // the actual material/caption assertions independent from this synchronization probe.
+        var chrome = (SkinBorder)typeof(PaperWindow).GetField("_paperChrome", Program.Private)!.GetValue(paper)!;
+        Program.Assert(chrome.Child is Grid, name + ": paper root grid available for desktop readiness marker");
+        var host = (Grid)chrome.Child;
+        var markerColor = Color.FromRgb(7, 241, 19);
+        var expected = D.Color.FromArgb(markerColor.R, markerColor.G, markerColor.B);
+        var marker = new Border
         {
+            Width = 20,
+            Height = 20,
+            Margin = new Thickness(8),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(markerColor),
+            IsHitTestVisible = false,
+            SnapsToDevicePixels = true
+        };
+        Grid.SetRowSpan(marker, Math.Max(1, host.RowDefinitions.Count));
+        Grid.SetColumnSpan(marker, Math.Max(1, host.ColumnDefinitions.Count));
+        Panel.SetZIndex(marker, int.MaxValue);
+        host.Children.Add(marker);
+
+        var stableFrames = 0;
+        var lastMatches = 0;
+        var lastSamples = 0;
+        try
+        {
+            for (var attempt = 0; attempt < 12; attempt++)
+            {
+                paper.UpdateLayout();
+                // Both the calibration rear window and the paper are topmost so desktop pixels cannot
+                // be contaminated by the runner shell. Do not rely on Activate() to order two windows
+                // in the same topmost band: GitHub runners occasionally leave the rear window above
+                // the paper. Reassert the paper at the top of that band before every evidence frame.
+                WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
+                using var image = Capture(paper, output, "ready-" + name + "-" + attempt);
+                var point = marker.TransformToAncestor(paper).Transform(new Point());
+                var dpi = VisualTreeHelper.GetDpi(paper);
+                var left = Math.Max(0, (int)Math.Floor(point.X * dpi.DpiScaleX));
+                var top = Math.Max(0, (int)Math.Floor(point.Y * dpi.DpiScaleY));
+                var right = Math.Min(image.Width, (int)Math.Ceiling((point.X + marker.ActualWidth) * dpi.DpiScaleX));
+                var bottom = Math.Min(image.Height, (int)Math.Ceiling((point.Y + marker.ActualHeight) * dpi.DpiScaleY));
+                lastMatches = 0;
+                lastSamples = Math.Max(0, right - left) * Math.Max(0, bottom - top);
+                for (var y = top; y < bottom; y++)
+                for (var x = left; x < right; x++)
+                    if (Difference(image.GetPixel(x, y), expected) <= 18) lastMatches++;
+
+                var markerReady = lastSamples > 0 && lastMatches >= Math.Ceiling(lastSamples * 0.65);
+                stableFrames = markerReady ? stableFrames + 1 : 0;
+                if (stableFrames >= 2) return;
+                Wait();
+            }
+            Program.Assert(false,
+                $"{name}: WPF readiness marker never reached a stable desktop composite ({lastMatches}/{lastSamples} pixels)");
+        }
+        finally
+        {
+            host.Children.Remove(marker);
             paper.UpdateLayout();
-            // Both the calibration rear window and the paper are topmost so desktop pixels cannot
-            // be contaminated by the runner shell. Do not rely on Activate() to order two windows
-            // in the same topmost band: GitHub runners occasionally leave the rear window above
-            // the paper. Reassert the paper at the top of that band before every evidence frame.
-            WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
-            DwmFlush();
-            using var image = Capture(paper, output, "ready-" + name);
-            var point = pin.TransformToAncestor(paper).Transform(new Point());
-            var dpi = VisualTreeHelper.GetDpi(paper);
-            var color = ((SolidColorBrush)pin.Foreground).Color;
-            var expected = D.Color.FromArgb(color.R, color.G, color.B);
-            var matches = 0;
-            for (var y = Math.Max(0, (int)(point.Y * dpi.DpiScaleY)); y < Math.Min(image.Height, (point.Y + pin.ActualHeight) * dpi.DpiScaleY); y++)
-            for (var x = Math.Max(0, (int)(point.X * dpi.DpiScaleX)); x < Math.Min(image.Width, (point.X + pin.ActualWidth) * dpi.DpiScaleX); x++)
-                if (Difference(image.GetPixel(x, y), expected) <= 18) matches++;
-            if (matches >= 2) return;
             Wait();
         }
-        Program.Assert(false, name + ": actual WPF pin never appeared in the desktop composite");
     }
     private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
     {
