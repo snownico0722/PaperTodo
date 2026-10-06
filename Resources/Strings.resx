@@ -687,6 +687,12 @@
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>常见操作使用过渡动画；关闭后响应更直接。</value>
   </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>快速动画</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“启用动画效果”时此设置不生效。</value>
+  </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>缩放把手</value>
   </data>
