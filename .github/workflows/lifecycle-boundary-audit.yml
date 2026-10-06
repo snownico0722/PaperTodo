@@ -7,6 +7,10 @@ permissions:
 jobs:
   probe:
     if: contains(github.event.head_commit.message, '[boundary-audit]')
+    strategy:
+      fail-fast: false
+      matrix:
+        area: [menu, queue]
     runs-on: windows-latest
     timeout-minutes: 12
     defaults:
@@ -20,7 +24,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Select executable boundary regression
+      - name: Select executable boundary regressions
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/boundary-audit" | Out-Null
           @'
@@ -36,15 +40,35 @@ jobs:
                   }
           ''' + needle)
           p.write_text(s, encoding='utf-8')
+          p = Path('tests/PaperTodo.LifecycleChecks/Program.cs')
+          s = p.read_text(encoding='utf-8-sig')
+          needle = '                await MasterMaterialHandoffChecks.Run(controller, windows);'
+          assert s.count(needle) == 1
+          s = s.replace(needle, '                await QueueFeatureBoundaryChecks.Run(controller, windows, Environment.GetEnvironmentVariable("PAPER_BOUNDARY_CASE")!);')
+          p.write_text(s, encoding='utf-8')
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Pending menu target lifetime
+        if: matrix.area == 'menu'
         run: |
           dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release 2>&1 | Tee-Object "$env:RUNNER_TEMP/boundary-audit/menu.txt"
           exit $LASTEXITCODE
+      - name: Real queue feature intersections
+        if: matrix.area == 'queue'
+        run: |
+          dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $failures = @()
+          foreach ($case in @('hide','hide-all','delete','disable-edge','disable-master','disable-animations','disable-material','switch-skin')) {
+            $env:PAPER_BOUNDARY_CASE = $case
+            dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- --case master-queue-material-handoff 2>&1 | Tee-Object "$env:RUNNER_TEMP/boundary-audit/queue-$case.txt"
+            if ($LASTEXITCODE -ne 0) { $failures += $case }
+          }
+          "FAILED_CASES=$($failures -join ',')" | Tee-Object "$env:RUNNER_TEMP/boundary-audit/summary.txt"
+          if ($failures.Count -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: boundary-audit-${{ github.sha }}
+          name: boundary-audit-${{ matrix.area }}-${{ github.sha }}
           path: ${{ runner.temp }}/boundary-audit
           retention-days: 1
