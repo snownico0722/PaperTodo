@@ -1335,6 +1335,14 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         if (!_disposed && Chrome is SkinBorder skin) skin.EndDragBackground();
     }
 
+    internal void SetSampledBackgroundCaptureSuspended(bool suppressed)
+    {
+        if (!_disposed && Chrome is SkinBorder skin)
+        {
+            skin.SetSampledBackgroundCaptureSuspended(suppressed);
+        }
+    }
+
     internal void RefreshSkin()
     {
         if (_disposed) return;

@@ -154,6 +154,9 @@ public sealed partial class PaperWindow
     internal IntPtr EdgeCapsuleQueueProxySourceHandle =>
         _edgeCapsuleHost?.Handle ?? IntPtr.Zero;
 
+    internal void SetEdgeCapsuleQueueProxyMaterialCaptureSuspended(bool suppressed) =>
+        _edgeCapsuleHost?.SetSampledBackgroundCaptureSuspended(suppressed);
+
     internal bool CanRouteEdgeCapsuleQueueProxyInput =>
         CanEnterEdgeCapsulePreview;
 

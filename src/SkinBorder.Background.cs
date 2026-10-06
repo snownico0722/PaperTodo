@@ -10,6 +10,7 @@ internal sealed partial class SkinBorder
     private BackgroundSession? _background;
     private MaterialSurfaceHost? _materialHost;
     private bool _menuRendered;
+    private bool _sampledBackgroundCaptureSuspended;
     internal BackgroundSession? BackgroundSessionState => _background;
     internal bool SuppressStaticBackgroundForOpening { get; private set; }
     internal bool FirstMenuRenderUsedBackground { get; private set; }
@@ -23,6 +24,7 @@ internal sealed partial class SkinBorder
     internal System.Collections.Generic.IReadOnlyList<UIElement> MaterialOpacityOwners =>
         _materialHost?.OpacityOwners ?? Array.Empty<UIElement>();
     internal bool HasMaterialHostSubscription => _materialHost?.IsObserving == true;
+    internal bool SampledBackgroundCaptureSuspended => _sampledBackgroundCaptureSuspended;
     private ContainerVisual? BackgroundVisual => _background?.Visual;
     private bool FullAuxiliaryMaterial =>
         AppController.Current?.State.MatchAuxiliaryMaterialStrength == true;
@@ -49,6 +51,20 @@ internal sealed partial class SkinBorder
     internal IDisposable FreezeBackgroundForEvidence() =>
         (_background ??= new BackgroundSession(this)).FreezeBackgroundForEvidence();
 
+    internal void SetSampledBackgroundCaptureSuspended(bool suspended)
+    {
+        if (_sampledBackgroundCaptureSuspended == suspended)
+        {
+            return;
+        }
+
+        _sampledBackgroundCaptureSuspended = suspended;
+        // Keep the already-rendered material scene as the live DComp source, but stop acquisition
+        // immediately so WDA_EXCLUDEFROMCAPTURE cannot overlap the queue cloak/cover handoff.
+        // Resuming marks that retained scene stale and replaces it with one endpoint snapshot.
+        RefreshBackground();
+    }
+
     internal void RefreshBackground()
     {
         var sampled = RequestsSampledBackground;
@@ -65,6 +81,8 @@ internal sealed partial class SkinBorder
             _materialHost = null;
         }
         if (sampled && IsLoaded) _background ??= new BackgroundSession(this);
+        _background?.SetCaptureSuspended(
+            sampled && _sampledBackgroundCaptureSuspended);
         _background?.RefreshBackground();
         UpdateAeroReflection();
     }

@@ -310,6 +310,23 @@ public sealed partial class AppController
             return false;
         }
 
+        // Successors can reveal predecessor-only members in the same DWM boundary. Keep the
+        // material gate coherent across both generations, then derive the final state from the
+        // controller's actual retained-source map after success/rollback.
+        var materialWindows = members
+            .Select(member => member.Window)
+            .Concat(predecessor?.Members.Select(member => member.Window) ??
+                Array.Empty<PaperWindow>())
+            .Distinct()
+            .ToArray();
+        foreach (var window in materialWindows)
+        {
+            // The compositor is about to retain this HWND as a live source. A sampled auxiliary
+            // background temporarily uses display-affinity on the same HWND; letting that start or
+            // remain active during the cloak/root handoff can poison the cover and delay cleanup.
+            window.SetEdgeCapsuleQueueProxyMaterialCaptureSuspended(true);
+        }
+
         TraceEdgeCapsuleQueueVisibility(proxy, "before-start");
         if (!proxy.TryStart(out realHostMayHaveChanged))
         {
@@ -331,9 +348,14 @@ public sealed partial class AppController
             {
                 proxy.AbortStaged();
             }
+            RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(materialWindows);
             return false;
         }
         TraceEdgeCapsuleQueueVisibility(proxy, "started");
+        // A successful successor may have revealed members that were present only in its
+        // predecessor. They no longer appear in the successor's finish set, so release their
+        // material gate here while retained successor sources remain suppressed.
+        RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(materialWindows);
         return true;
     }
 
@@ -530,6 +552,7 @@ public sealed partial class AppController
                     catch { }
                 }
             }
+            RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(windows);
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.session phase=emergency-release session={current.SessionOrdinal} " +
@@ -663,6 +686,10 @@ public sealed partial class AppController
         {
             current.ForceDisposeForShutdown();
         }
+        // The real HWNDs now own the visible pixels again. Re-enable sampled materials only after
+        // the output cover is hidden/detached, so each capsule takes exactly one fresh endpoint
+        // snapshot instead of sampling while its source is still cloaked under the proxy.
+        RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(windows);
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.session phase=complete session={current.SessionOrdinal} " +
@@ -747,6 +774,24 @@ public sealed partial class AppController
         _edgeCapsuleQueueCompositionProxyByWindow
             .TryGetValue(window, out var proxy) &&
         proxy.RetainsSource(window);
+
+    private void RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(
+        IEnumerable<PaperWindow> windows)
+    {
+        foreach (var window in windows.Distinct())
+        {
+            if (window.IsClosed)
+            {
+                continue;
+            }
+
+            var suspended =
+                _edgeCapsuleQueueCompositionProxyByWindow
+                    .TryGetValue(window, out var proxy) &&
+                proxy.RetainsSource(window);
+            window.SetEdgeCapsuleQueueProxyMaterialCaptureSuspended(suspended);
+        }
+    }
 
     internal void CompleteEdgeCapsuleQueueCompositionProxyFor(
         PaperWindow window,

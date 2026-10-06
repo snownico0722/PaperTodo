@@ -51,6 +51,29 @@ internal static class MaterialPipelineChecks
             Until(() => surface.IsBackgroundActive && !surface.HasBackgroundCapture,
                 "capsule receives one completed static snapshot");
 
+            var completedFrames = surface.BackgroundFrameCount;
+            var retainedBitmap = surface.BackgroundSessionState!.Bitmap;
+            var hwnd = new WindowInteropHelper(window).Handle;
+            surface.SetSampledBackgroundCaptureSuspended(true);
+            Program.Pump();
+            Program.Assert(
+                surface.SampledBackgroundCaptureSuspended &&
+                surface.IsBackgroundActive &&
+                ReferenceEquals(retainedBitmap, surface.BackgroundSessionState!.Bitmap) &&
+                !surface.HasBackgroundCapture &&
+                DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
+                "proxy-owned source suspension keeps the presented material but releases capture affinity");
+
+            surface.SetSampledBackgroundCaptureSuspended(false);
+            Until(() => surface.BackgroundFrameCount > completedFrames &&
+                        surface.IsBackgroundActive &&
+                        !surface.HasBackgroundCapture,
+                "settled source resumes with one fresh local snapshot");
+            Program.Assert(
+                !surface.SampledBackgroundCaptureSuspended &&
+                DesktopBackgroundCapture.ReadAffinity(hwnd) == 0,
+                "settled source leaves no capture exclusion behind");
+
             var session = surface.BackgroundSessionState!;
             var bitmap = session.Bitmap;
             var frames = surface.BackgroundFrameCount;
@@ -93,7 +116,7 @@ internal static class MaterialPipelineChecks
 
         Program.Assert(!surface.HasBackgroundCapture && !surface.HasMaterialHostSubscription,
             "closed static surface releases capture and host observation");
-        Console.WriteLine("PIPELINE: one-shot capture, retained projection and geometry refresh passed.");
+        Console.WriteLine("PIPELINE: one-shot capture, proxy suspension, retained projection and geometry refresh passed.");
     }
 
     private static void CheckPreparedMenu(AppController controller)

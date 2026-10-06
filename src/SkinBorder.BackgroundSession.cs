@@ -40,6 +40,7 @@ internal sealed partial class SkinBorder
         private string? _requestedSkin;
         private bool _failed;
         private bool _evidenceFrozen;
+        private bool _captureSuspended;
         private bool _recaptureRequested = true;
         private bool _dragSnapshotActive;
 
@@ -106,6 +107,23 @@ internal sealed partial class SkinBorder
             BackgroundFailure = null;
         }
 
+        internal void SetCaptureSuspended(bool suspended)
+        {
+            if (_captureSuspended == suspended)
+            {
+                return;
+            }
+
+            _captureSuspended = suspended;
+            if (suspended)
+            {
+                CancelCapture();
+                // Keep the current scene as compositor pixels, but require one fresh endpoint
+                // snapshot before the settled real HWND considers that scene current again.
+                _recaptureRequested = true;
+            }
+        }
+
         private DesktopBackgroundCapture.Region? CaptureRegion(IntPtr hwnd)
         {
             if (!DesktopBackgroundCapture.TryGetBounds(hwnd, out var bounds)) return null;
@@ -125,7 +143,7 @@ internal sealed partial class SkinBorder
 
         internal void RefreshBackground()
         {
-            if (_evidenceFrozen) return;
+            if (_evidenceFrozen || _captureSuspended) return;
             if (_requestedSkin != _owner.Skin)
             {
                 _requestedSkin = _owner.Skin;
@@ -405,6 +423,7 @@ internal sealed partial class SkinBorder
             CancelCapture();
             ClearScene();
             _dragSnapshotActive = false;
+            _captureSuspended = false;
             _recaptureRequested = true;
         }
     }
