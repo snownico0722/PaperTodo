@@ -33,6 +33,10 @@ public sealed partial class AppController
             value => State.EnableAnimations = value,
             SettingEffects.Animations,
             title: Strings.Get("SettingsEnableAnimations"));
+        yield return DefineSetting<bool>("appearance.fast_animations",
+            () => State.FastAnimations,
+            value => State.FastAnimations = value,
+            title: Strings.Get("SettingsFastAnimations"));
         yield return DefineSetting<string>("appearance.theme",
             () => State.Theme,
             value => State.Theme = value,
