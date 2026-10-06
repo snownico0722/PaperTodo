@@ -118,6 +118,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
 
     public event EventHandler? UnexpectedlyClosed;
 
+    internal static bool HasActiveLease => s_pooledHostLeased;
+
     public static bool NeedsInfrastructurePrewarm
     {
         get

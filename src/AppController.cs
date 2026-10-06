@@ -2318,6 +2318,7 @@ public sealed partial class AppController : IDisposable
     {
         snapshot = default;
         if (IsExiting ||
+            EdgeCapsuleDragWindow.HasActiveLease ||
             HasDeepCapsuleReorderDragInProgress() ||
             !State.UseCapsuleMode ||
             !State.UseDeepCapsuleMode ||
@@ -2428,6 +2429,25 @@ public sealed partial class AppController : IDisposable
         MasterCapsuleQueueTransferSnapshot snapshot,
         DeviceScreenPoint dropPoint)
     {
+        var committed = CommitMasterCapsuleQueueTransfer(
+            snapshot,
+            dropPoint,
+            out var handoffTarget);
+        if (committed)
+        {
+            // Non-gesture callers do not own a floating cover. Preserve the established
+            // synchronous publication contract for lifecycle checks and direct transactions.
+            handoffTarget?.PrepareQueueTransferHandoff();
+        }
+        return committed;
+    }
+
+    internal bool CommitMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        DeviceScreenPoint dropPoint,
+        out MasterCapsuleWindow? handoffTarget)
+    {
+        handoffTarget = null;
         if (IsExiting ||
             _masterCapsuleQueueTransfer != snapshot ||
             !State.UseCapsuleMode ||
@@ -2514,7 +2534,7 @@ public sealed partial class AppController : IDisposable
             State.DeepCapsuleQueueStartTopMargins[sourceKey] =
                 target.StartTopMargin;
 
-            CompleteMasterCapsuleQueueTransfer(snapshot, targetKey);
+            CompleteMasterCapsuleQueueTransfer(snapshot, targetKey, out handoffTarget);
             return true;
         }
 
@@ -2567,7 +2587,7 @@ public sealed partial class AppController : IDisposable
         State.DeepCapsuleQueueStartTopMargins[targetKey] =
             target.StartTopMargin;
 
-        CompleteMasterCapsuleQueueTransfer(snapshot, targetKey);
+        CompleteMasterCapsuleQueueTransfer(snapshot, targetKey, out handoffTarget);
         return true;
     }
 
@@ -2580,8 +2600,11 @@ public sealed partial class AppController : IDisposable
                 paper.CapsuleMonitorDeviceName.Trim(), StringComparer.Ordinal);
 
     private void CompleteMasterCapsuleQueueTransfer(
-        MasterCapsuleQueueTransferSnapshot snapshot, string targetKey)
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        string targetKey,
+        out MasterCapsuleWindow? handoffTarget)
     {
+        handoffTarget = null;
         // The data transaction is committed, but its caller still owns the floating lease.
         // Retiring the source master must no longer cancel or hide that cover.
         if (_masterCapsules.TryGetValue(snapshot.SourceQueueKey, out var source))
@@ -2593,12 +2616,10 @@ public sealed partial class AppController : IDisposable
         {
             ArrangeDeepCapsulesCore(animate: true, flushInitialPresentations: false,
                 masterTransferTargetKey: targetKey);
-            // Rendering can dispatch MCP/plugin mutations. Finish all plan-based cleanup first:
-            // no old liveKeys/placements may retire a queue created during this handoff.
-            if (_masterCapsules.TryGetValue(targetKey, out var target))
-            {
-                target.PrepareQueueTransferHandoff();
-            }
+            // Finish all plan-based cleanup first: no old liveKeys/placements may retire a queue
+            // created during this handoff. The gesture caller keeps a newly created target
+            // transparent until its floating HWND finishes the ordinary return flight.
+            _masterCapsules.TryGetValue(targetKey, out handoffTarget);
             RefreshTrayMenu();
             SaveNow();
         }
@@ -3103,7 +3124,14 @@ public sealed partial class AppController : IDisposable
                 master = new MasterCapsuleWindow(this, edge, monitor);
                 _masterCapsules[key] = master;
                 master.SetExperimentalPassive(_experimentalAllSurfacesPassive);
-                master.ShowPlaced(papers.Count, retracted, animateMaster);
+                if (isTransferTarget)
+                {
+                    master.PrepareQueueTransferTarget(papers.Count, retracted);
+                }
+                else
+                {
+                    master.ShowPlaced(papers.Count, retracted, animateMaster);
+                }
             }
             else
             {

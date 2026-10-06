@@ -40,6 +40,10 @@ public static class EdgeCapsuleLayout
     public const int SlotMoveMilliseconds = 200;
     // Quick retract toward the master when a slot leaves the queue.
     public const int SlotRetractMoveMilliseconds = 120;
+    // Shared detached-capsule return flight and reveal timings. Master and ordinary capsules use
+    // the same floating HWND, so their wall-return motion must not drift apart.
+    internal const int DockingHandoffMilliseconds = 160;
+    internal const int DockingRevealMilliseconds = 80;
     // Display-weighted character count: CJK / fullwidth glyphs count as 2, everything
     // else as 1. A 6-digit number title then weighs the same as a 3-CJK-character title,
     // so the capsule no longer looks long-but-empty for numeric titles.

@@ -377,6 +377,11 @@ public sealed partial class PaperWindow
     private void StartDeepCapsuleReorderDrag(DeviceScreenPoint currentScreenPos)
     {
         _previewOriginReorderBaseline = null;
+        if (EdgeCapsuleDragWindow.HasActiveLease)
+        {
+            CancelDeepCapsuleReorderDrag();
+            return;
+        }
         if (_edgeCapsule.NativeBatchRetryPending)
         {
             CancelDeepCapsuleReorderDrag(restoreLayout: true);

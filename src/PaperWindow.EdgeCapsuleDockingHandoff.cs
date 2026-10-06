@@ -193,7 +193,7 @@ public sealed partial class PaperWindow
             targetBounds,
             targetEdge,
             _controller.State.EnableAnimations
-                ? DeepCapsuleDockingHandoffMilliseconds
+                ? EdgeCapsuleLayout.DockingHandoffMilliseconds
                 : 1,
             floatingSettled =>
             {
@@ -315,7 +315,7 @@ public sealed partial class PaperWindow
 
                 floatingHost.AnimateDockingReveal(
                     _controller.State.EnableAnimations
-                        ? DeepCapsuleDockingRevealMilliseconds
+                        ? EdgeCapsuleLayout.DockingRevealMilliseconds
                         : 1,
                     floatingFaded => CompleteDeepCapsuleDockingReveal(
                         floatingHost,
