@@ -520,6 +520,7 @@ public sealed class AppState
     public bool HideEdgeCapsuleCloseButtonOnHover { get; set; }
     public bool CollapseExpandedDeepCapsuleOnClick { get; set; }
     public bool EnableAnimations { get; set; } = true;
+    public bool FastAnimations { get; set; }
     public bool EnableToolTips { get; set; } = true;
     public bool ExperimentalInactivePaperOpacity { get; set; }
     public double ExperimentalInactivePaperOpacityLevel { get; set; } =
