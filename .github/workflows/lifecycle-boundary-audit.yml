@@ -3,7 +3,7 @@ on:
   push:
     branches: [fix/lifecycle-boundary-audit]
 permissions:
-  contents: write
+  contents: read
 jobs:
   probe:
     if: contains(github.event.head_commit.message, '[boundary-audit]')
@@ -24,13 +24,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Apply reviewed correction and select regressions
+      - name: Select regressions without modifying production code
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/boundary-audit" | Out-Null
-          python .github/scripts/boundary_apply.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @'
           from pathlib import Path
           p = Path('tests/PaperTodo.MicaChecks/Program.cs')
@@ -70,14 +66,6 @@ jobs:
           }
           "FAILED_CASES=$($failures -join ',')" | Tee-Object "$env:RUNNER_TEMP/boundary-audit/summary.txt"
           if ($failures.Count -ne 0) { exit 1 }
-      - name: Commit verified menu correction only
-        if: matrix.area == 'menu' && success()
-        run: |
-          git add src/MaterialMenuOpening.cs
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(material): revoke pending menu on hidden or replaced target'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push origin HEAD:refs/heads/fix/lifecycle-boundary-audit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
