@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -121,7 +122,10 @@ internal static class McpBridge
             }
             catch (JsonException ex)
             {
-                message = FormatInvalidToolArgument(argument.Key, ex);
+                message = FormatInvalidToolArgument(
+                    argument.Key,
+                    parameter.ParameterType,
+                    ex);
                 return true;
             }
             catch (NotSupportedException)
@@ -160,6 +164,7 @@ internal static class McpBridge
 
     private static string FormatInvalidToolArgument(
         string parameterName,
+        Type parameterType,
         JsonException exception)
     {
         var path = parameterName;
@@ -197,6 +202,9 @@ internal static class McpBridge
             fields = fields.Trim().TrimEnd('.');
             if (fields.Length > 0)
             {
+                fields = NormalizeMissingFieldNames(
+                    parameterType,
+                    fields);
                 return
                     $"PaperTodo error (invalid_params): {path} is missing required field(s): {fields}.";
             }
@@ -204,5 +212,37 @@ internal static class McpBridge
 
         return
             $"PaperTodo error (invalid_params): {path} has the wrong type or shape.";
+    }
+
+    private static string NormalizeMissingFieldNames(
+        Type parameterType,
+        string fields)
+    {
+        var contractType = parameterType;
+        if (contractType.IsArray)
+        {
+            contractType = contractType.GetElementType() ?? contractType;
+        }
+        else if (contractType.IsGenericType &&
+                 contractType.GetGenericArguments() is [var itemType])
+        {
+            contractType = itemType;
+        }
+
+        var names = fields.Split(
+            ',',
+            StringSplitOptions.TrimEntries |
+            StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index < names.Length; index++)
+        {
+            var property = contractType.GetProperty(
+                names[index],
+                BindingFlags.Instance | BindingFlags.Public);
+            names[index] =
+                property?.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
+                ?? names[index];
+        }
+
+        return string.Join(", ", names);
     }
 }

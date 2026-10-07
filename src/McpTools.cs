@@ -122,7 +122,7 @@ internal sealed partial class McpTools
         Destructive = true,
         Idempotent = true,
         OpenWorld = false)]
-    [Description("Fill or replace todo text, change completion state, and/or link another PaperTodo paper. Filling blank text needs additive writes; replacing existing text/state or changing a paper link needs full writes.")]
+    [Description("Fill or replace todo text, change completion state, reorder the item, and/or link another PaperTodo paper. Filling blank text needs additive writes; replacing existing text/state, reordering, or changing a paper link needs full writes.")]
     public Task<JsonElement> UpdateTodo(
         [Description("Exact todo paper ID.")] string paper_id,
         [Description("Exact todo item ID.")] string todo_id,
