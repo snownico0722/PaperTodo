@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
@@ -43,7 +44,7 @@ internal sealed partial class McpTools
         ReadOnly = true,
         Destructive = false,
         OpenWorld = false)]
-    [Description("List PaperTodo papers and compact metadata. Use this first to discover paper IDs.")]
+    [Description("List PaperTodo papers and compact metadata. Each result exposes its identifier as both id and paper_id; pass paper_id to tools that target a paper.")]
     public Task<JsonElement> ListPapers(
         [Description("Optional filter: 'todo' or 'note'.")] string? type = null,
         CancellationToken cancellationToken = default)
@@ -73,7 +74,8 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new todo paper. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateTodoPaper(
-        [Description("Optional paper title.")] string? title = null,
+        [MaxLength(PaperTitles.MaxTitleLength)]
+        [Description("Optional paper title. The current PaperTodo title.max_length setting applies (default 6, configurable from 2 to 20).")] string? title = null,
         [Description("Optional ordered todo steps.")] IReadOnlyList<McpTodoInput>? todos = null,
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)
@@ -89,7 +91,8 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new note with optional Markdown content. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateNote(
-        [Description("Optional paper title.")] string? title = null,
+        [MaxLength(PaperTitles.MaxTitleLength)]
+        [Description("Optional paper title. The current PaperTodo title.max_length setting applies (default 6, configurable from 2 to 20).")] string? title = null,
         [Description("Initial note content.")] string content = "",
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)
@@ -125,12 +128,13 @@ internal sealed partial class McpTools
         [Description("Exact todo item ID.")] string todo_id,
         [Description("Replacement text. Omit to keep text unchanged.")] string? text = null,
         [Description("Replacement completion state. Omit to keep it unchanged.")] bool? done = null,
+        [Description("Zero-based target position within the todo paper. Values outside the current range are clamped; PaperTodo's completed-item ordering rules still apply. Omit to keep the current order. Requires full writes.")] int? order = null,
         [Description("Paper ID to link from this todo, such as a Note containing longer details. Omit to keep the current link unchanged. Requires PaperTodo full writes.")] string? linked_paper_id = null,
         [Description("Set true to unlink the todo's linked Paper without deleting the Note. Mutually exclusive with linked_paper_id. Requires full writes.")] bool clear_linked_paper = false,
         CancellationToken cancellationToken = default)
         => _client.InvokeAsync(
             "update_todo",
-            OptionalUpdateParameters(paper_id, todo_id, text, done, linked_paper_id, clear_linked_paper),
+            OptionalUpdateParameters(paper_id, todo_id, text, done, order, linked_paper_id, clear_linked_paper),
             cancellationToken);
 
     [McpServerTool(
@@ -202,6 +206,7 @@ internal sealed partial class McpTools
         string todoId,
         string? text,
         bool? done,
+        int? order,
         string? linkedPaperId,
         bool clearLinkedPaper = false)
     {
@@ -219,6 +224,10 @@ internal sealed partial class McpTools
         if (done.HasValue)
         {
             parameters["done"] = done.Value;
+        }
+        if (order.HasValue)
+        {
+            parameters["order"] = order.Value;
         }
         if (linkedPaperId != null || clearLinkedPaper)
         {

@@ -113,6 +113,7 @@ internal sealed partial class McpCommandService
                 return new
                 {
                     id = paper.Id,
+                    paper_id = paper.Id,
                     type = paper.Type,
                     title = paper.Title,
                     is_visible = paper.IsVisible,
@@ -424,6 +425,7 @@ internal sealed partial class McpCommandService
             return new
             {
                 id = paper.Id,
+                paper_id = paper.Id,
                 type = paper.Type,
                 title = paper.Title,
                 is_visible = paper.IsVisible,
@@ -439,6 +441,7 @@ internal sealed partial class McpCommandService
         return new
         {
             id = paper.Id,
+            paper_id = paper.Id,
             type = paper.Type,
             title = paper.Title,
             is_visible = paper.IsVisible,

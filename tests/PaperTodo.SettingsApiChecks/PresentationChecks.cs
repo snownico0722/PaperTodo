@@ -209,8 +209,10 @@ internal static partial class Program
         Check(events.OfType<PaperChangedEvent>().Any(e => e.After.Id == "note" && e.Metadata.Origin == PaperTodoEventOrigin.Mcp), "MCP event attribution survives shared UI dispatch.");
         var details = Json(Mcp("get_paper", new { paper_id = "note" }));
         Check(!details.GetProperty("is_visible").GetBoolean() && !details.GetProperty("is_collapsed").GetBoolean(), "MCP details expose both logical states.");
+        Check(details.GetProperty("paper_id").GetString() == "note", "MCP details expose paper_id alongside id.");
         var listed = Json(Mcp("list_papers", new { })).GetProperty("papers");
         Check(listed.EnumerateArray().All(p => p.TryGetProperty("is_collapsed", out _)), "MCP list includes collapsed state.");
+        Check(listed.EnumerateArray().All(p => p.GetProperty("paper_id").GetString() == p.GetProperty("id").GetString()), "MCP list exposes paper_id as a stable alias for id.");
         Throws<McpApiException>(() => Mcp("show_paper", new { paper_id = "missing" }), "paper_not_found");
         Throws<McpApiException>(() => Mcp("show_paper", new { paper_id = "note", activate = "yes" }), "invalid_params");
         c.State.McpEnabled = false;

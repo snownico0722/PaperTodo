@@ -52,6 +52,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Bug fixes and improvements
 
+- MCP tool calls now identify invalid argument paths and missing required fields instead of returning only a generic invocation failure. Paper query results expose a `paper_id` alias alongside `id`, create-paper schemas advertise the hard title-length cap while descriptions note the current configurable limit, and `update_todo` can reorder an item by zero-based `order`.
+
 - Fixed Windows startup remaining shown as enabled after PaperTodo was disabled in Startup Apps or Task Manager. While Settings is open, PaperTodo periodically refreshes the effective Windows startup state; explicitly enabling it again clears PaperTodo's disabled approval record, rewrites the Run entry, and verifies the result.
 - Fixed linked papers excluded from the capsule list only being raised again when their Todo link was clicked a second time. With “Click capsule again to retract paper” enabled, clicking the linked-paper entry again hides the expanded paper and another click reopens it. The setting is renamed from “Click edge capsule again to retract paper.”
 - Fixed Web Mini surfaces sometimes becoming visible again while some controls no longer received clicks. Recovery now republishes the current interactive regions before reporting the surface ready, while normal layout updates keep their existing deduplication.
