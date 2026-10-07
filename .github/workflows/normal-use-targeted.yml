@@ -1,0 +1,92 @@
+name: Targeted small-list review
+on:
+  push:
+    branches: [audit/pr324-326-normal-use-20261008]
+    paths: [.github/workflows/normal-use-targeted.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Check out exact reviewed product candidate
+        run: |
+          git fetch origin f2a4c1dfbcc3568f01cb5117d196fbb8e9d22a2f
+          git worktree add --detach "$env:RUNNER_TEMP/small-list-target" f2a4c1dfbcc3568f01cb5117d196fbb8e9d22a2f
+          Set-Location "$env:RUNNER_TEMP/small-list-target"
+          git submodule update --init --recursive
+          dotnet build tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release
+      - name: Exact candidate small-list history behavior
+        working-directory: ${{ runner.temp }}/small-list-target
+        run: dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- --case todo-history
+      - name: Exact candidate native context menu
+        if: always()
+        working-directory: ${{ runner.temp }}/small-list-target
+        run: dotnet run --no-build --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- --case todo-context-menu
+      - name: Collect native target diagnosis without changing acceptance
+        if: failure()
+        run: |
+          @'
+          from pathlib import Path
+          import os
+          root = Path(os.environ['RUNNER_TEMP']) / 'small-list-target'
+          path = root / 'tests/PaperTodo.LifecycleChecks/TodoContextMenuChecks.cs'
+          text = path.read_text(encoding='utf-8')
+          old = '''    internal static bool IsMouseTarget(PaperWindow window, Point point) =>
+                  WindowFromPoint(new NativePoint { X = (int)Math.Round(point.X), Y = (int)Math.Round(point.Y) }) ==
+                  new WindowInteropHelper(window).Handle;'''
+          new = '''    private static IntPtr _reportedWindow;
+              internal static bool IsMouseTarget(PaperWindow window, Point point)
+              {
+                  var expected = new WindowInteropHelper(window).Handle;
+                  var actual = WindowFromPoint(new NativePoint { X = (int)Math.Round(point.X), Y = (int)Math.Round(point.Y) });
+                  if (actual != expected && _reportedWindow != expected)
+                  {
+                      _reportedWindow = expected;
+                      var name = new System.Text.StringBuilder(300);
+                      var title = new System.Text.StringBuilder(300);
+                      GetClassName(actual, name, name.Capacity);
+                      GetWindowText(actual, title, title.Capacity);
+                      GetWindowThreadProcessId(actual, out var process);
+                      GetWindowRect(expected, out var bounds);
+                      GetWindowRect(actual, out var actualBounds);
+                      var dpi = VisualTreeHelper.GetDpi(window);
+                      Console.WriteLine($"MOUSE_DIAG point={point} expected=0x{expected.ToInt64():X} actual=0x{actual.ToInt64():X} class={name} title={title} pid={process} foreground=0x{GetForegroundWindow().ToInt64():X} visible={window.IsVisible} opacity={window.Opacity} active={window.IsActive} actualSize={window.ActualWidth}x{window.ActualHeight} expectedRect={bounds.Left},{bounds.Top},{bounds.Right},{bounds.Bottom} actualRect={actualBounds.Left},{actualBounds.Top},{actualBounds.Right},{actualBounds.Bottom} dpi={dpi.DpiScaleX},{dpi.DpiScaleY} desktop={GetSystemMetrics(76)},{GetSystemMetrics(77)},{GetSystemMetrics(78)},{GetSystemMetrics(79)}");
+                  }
+                  return actual == expected;
+              }
+              [StructLayout(LayoutKind.Sequential)]
+              private struct NativeRect { public int Left, Top, Right, Bottom; }
+              [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+              [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder text, int count);
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int count);
+              [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint process);
+          '''
+          if text.count(old) != 1: raise RuntimeError('diagnostic edit not unique')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          '@ | python -
+          Set-Location "$env:RUNNER_TEMP/small-list-target"
+          dotnet run --project tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj -c Release -- --case todo-context-menu
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: small-list-target-diagnosis
+          path: ${{ runner.temp }}/small-list-target/tests/PaperTodo.LifecycleChecks/TodoContextMenuChecks.cs
+          retention-days: 1
