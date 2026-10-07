@@ -403,7 +403,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         {
             From = scaleFrom,
             To = 1,
-            Duration = TimeSpan.FromMilliseconds(durationMilliseconds),
+            Duration = TimeSpan.FromMilliseconds(
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds)),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         _entranceScale.BeginAnimation(ScaleTransform.ScaleXProperty, animation, HandoffBehavior.SnapshotAndReplace);

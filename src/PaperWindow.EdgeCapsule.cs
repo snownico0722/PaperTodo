@@ -246,7 +246,9 @@ public sealed partial class PaperWindow
     {
         animate = animate && _controller.State.EnableAnimations;
         _edgeCapsule.RequestPresentation(animate
-            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            ? EdgeCapsuleMotion.Animate(
+                reason,
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
             : EdgeCapsuleMotion.Snap(reason));
 
         // State-driven requests are allowed to depend on controller settings captured in the
@@ -285,7 +287,9 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.InvalidateNativeMetrics();
         _edgeCapsule.ForceApplyCurrentPresentation();
         _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
-            EdgeCapsuleTransitionReason.DisplayMetrics));
+            EdgeCapsuleTransitionReason.DisplayMetrics,
+            AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds)));
         InvalidateEdgeCapsule(
             EdgeCapsuleDirty.Presentation |
             EdgeCapsuleDirty.Measure |
@@ -608,7 +612,11 @@ public sealed partial class PaperWindow
             CaptureEdgeCapsuleLayoutSnapshot,
             CaptureEdgeCapsulePointerPosition,
             ResolveEdgeCapsulePresentedFrame,
-            ApplyEdgeCapsulePresentationFrame);
+            ApplyEdgeCapsulePresentationFrame,
+            pointerDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.HorizontalResizeMilliseconds),
+            preserveDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds));
         var pointer = _edgeCapsule.LastPointerSample;
         if (!_edgeCapsuleReconcileNotificationPending)
         {

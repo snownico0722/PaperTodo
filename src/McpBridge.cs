@@ -1,7 +1,5 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -67,231 +65,71 @@ internal static class McpBridge
             }
         };
 
+    // Diagnose only failed SDK bindings; let the JSON serializer validate the
+    // nested tool shape instead of maintaining a second recursive schema walker.
     internal static bool TryDescribeInvalidToolArguments(
         CallToolRequestParams? request,
         out string message)
     {
         message = "";
-        if (request == null ||
-            !TryGetToolMethod(request.Name, out var method))
+        if (request == null)
         {
             return false;
         }
 
-        var parameters = method.GetParameters();
-        foreach (var parameter in parameters)
+        var method = typeof(McpTools)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .FirstOrDefault(candidate =>
+                candidate.GetCustomAttribute<McpServerToolAttribute>()?.Name ==
+                request.Name);
+        if (method == null)
         {
-            if (parameter.ParameterType == typeof(CancellationToken) ||
-                parameter.HasDefaultValue)
+            return false;
+        }
+
+        foreach (var parameter in method.GetParameters())
+        {
+            if (parameter.ParameterType == typeof(CancellationToken))
             {
                 continue;
             }
 
             if (request.Arguments == null ||
-                !request.Arguments.ContainsKey(parameter.Name!))
+                !request.Arguments.TryGetValue(parameter.Name!, out var value))
             {
+                if (parameter.HasDefaultValue)
+                {
+                    continue;
+                }
+
                 message =
                     $"PaperTodo error (invalid_params): {parameter.Name} is required.";
-                return true;
-            }
-        }
-
-        if (request.Arguments == null)
-        {
-            return false;
-        }
-
-        foreach (var argument in request.Arguments)
-        {
-            var parameter = parameters.FirstOrDefault(candidate =>
-                string.Equals(
-                    candidate.Name,
-                    argument.Key,
-                    StringComparison.Ordinal));
-            if (parameter == null ||
-                parameter.ParameterType == typeof(CancellationToken))
-            {
-                continue;
-            }
-
-            if (TryDescribeMissingRequiredMember(
-                    argument.Value,
-                    parameter.ParameterType,
-                    argument.Key,
-                    out message))
-            {
                 return true;
             }
 
             try
             {
                 _ = JsonSerializer.Deserialize(
-                    argument.Value.GetRawText(),
+                    value.GetRawText(),
                     parameter.ParameterType,
                     ToolArgumentJsonOptions);
             }
             catch (JsonException ex)
             {
-                message = FormatInvalidToolArgument(
-                    argument.Key,
-                    ex);
-                return true;
-            }
-            catch (NotSupportedException)
-            {
-                // The SDK owns special parameter binding. If a parameter cannot
-                // be reproduced safely here, preserve its original error path.
-            }
-        }
-
-        return false;
-    }
-
-    private static bool TryGetToolMethod(
-        string toolName,
-        out MethodInfo method)
-    {
-        foreach (var candidate in typeof(McpTools).GetMethods(
-                     BindingFlags.Instance | BindingFlags.Public))
-        {
-            var attribute =
-                candidate.GetCustomAttribute<McpServerToolAttribute>();
-            if (attribute?.Name != null &&
-                string.Equals(
-                    attribute.Name,
-                    toolName,
-                    StringComparison.Ordinal))
-            {
-                method = candidate;
-                return true;
-            }
-        }
-
-        method = null!;
-        return false;
-    }
-
-    private static bool TryDescribeMissingRequiredMember(
-        JsonElement value,
-        Type expectedType,
-        string path,
-        out string message)
-    {
-        message = "";
-        expectedType = Nullable.GetUnderlyingType(expectedType) ?? expectedType;
-        if (value.ValueKind == JsonValueKind.Null)
-        {
-            return false;
-        }
-
-        if (TryGetCollectionElementType(expectedType, out var itemType))
-        {
-            if (value.ValueKind != JsonValueKind.Array)
-            {
-                return false;
-            }
-
-            var index = 0;
-            foreach (var item in value.EnumerateArray())
-            {
-                if (TryDescribeMissingRequiredMember(
-                        item,
-                        itemType,
-                        $"{path}[{index}]",
-                        out message))
+                var path = parameter.Name!;
+                if (ex.Path is { Length: > 1 } nestedPath)
                 {
-                    return true;
+                    path += nestedPath.StartsWith("$", StringComparison.Ordinal)
+                        ? nestedPath[1..]
+                        : "." + nestedPath;
                 }
-                index++;
-            }
-            return false;
-        }
 
-        if (value.ValueKind != JsonValueKind.Object)
-        {
-            return false;
-        }
-
-        foreach (var property in expectedType.GetProperties(
-                     BindingFlags.Instance | BindingFlags.Public))
-        {
-            if (!property.IsDefined(
-                    typeof(RequiredMemberAttribute),
-                    inherit: true) &&
-                !property.IsDefined(
-                    typeof(JsonRequiredAttribute),
-                    inherit: true))
-            {
-                continue;
-            }
-
-            var jsonName =
-                property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
-                ?? ToolArgumentJsonOptions.PropertyNamingPolicy?.ConvertName(
-                    property.Name)
-                ?? property.Name;
-            if (!value.TryGetProperty(jsonName, out var child))
-            {
                 message =
-                    $"PaperTodo error (invalid_params): {path}.{jsonName} is required.";
-                return true;
-            }
-
-            if (TryDescribeMissingRequiredMember(
-                    child,
-                    property.PropertyType,
-                    $"{path}.{jsonName}",
-                    out message))
-            {
+                    $"PaperTodo error (invalid_params): {path}: {ex.Message}";
                 return true;
             }
         }
 
         return false;
     }
-
-    private static bool TryGetCollectionElementType(
-        Type type,
-        out Type elementType)
-    {
-        if (type.IsArray)
-        {
-            elementType = type.GetElementType()!;
-            return true;
-        }
-
-        var enumerable = type
-            .GetInterfaces()
-            .Append(type)
-            .FirstOrDefault(candidate =>
-                candidate.IsGenericType &&
-                candidate.GetGenericTypeDefinition() ==
-                    typeof(IEnumerable<>));
-        if (enumerable != null)
-        {
-            elementType = enumerable.GetGenericArguments()[0];
-            return true;
-        }
-
-        elementType = null!;
-        return false;
-    }
-
-    private static string FormatInvalidToolArgument(
-        string parameterName,
-        JsonException exception)
-    {
-        var path = parameterName;
-        if (!string.IsNullOrWhiteSpace(exception.Path) &&
-            !string.Equals(exception.Path, "$", StringComparison.Ordinal))
-        {
-            path += exception.Path!.StartsWith("$", StringComparison.Ordinal)
-                ? exception.Path[1..]
-                : "." + exception.Path;
-        }
-
-        return
-            $"PaperTodo error (invalid_params): {path} has the wrong type or shape.";
-    }
-
 }

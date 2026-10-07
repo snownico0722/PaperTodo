@@ -665,6 +665,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>よく使う操作に遷移アニメーションを付けます。オフにすると反応がより直接的になります。</value>
   </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>高速アニメーション</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
+  </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>リサイズグリップ</value>
   </data>

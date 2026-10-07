@@ -107,7 +107,9 @@ public static class AnimationHelper
     {
         if (brush is not SolidColorBrush solidBrush) return;
 
-        var anim = new ColorAnimation(toColor, TimeSpan.FromMilliseconds(duration))
+        var anim = new ColorAnimation(
+            toColor,
+            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
         {
             EasingFunction = SmoothEase
         };
@@ -157,7 +159,10 @@ public static class AnimationHelper
         animatable.BeginAnimation(property, null);
         target.SetValue(property, value);
 
-        var animation = new DoubleAnimation(from, value, TimeSpan.FromMilliseconds(duration))
+        var animation = new DoubleAnimation(
+            from,
+            value,
+            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
         {
             EasingFunction = easing,
             FillBehavior = FillBehavior.Stop
@@ -171,7 +176,10 @@ public static class AnimationHelper
         var baseValue = (double)target.GetAnimationBaseValue(property);
         target.BeginAnimation(property, null);
 
-        var animation = new DoubleAnimation(baseValue, scale, TimeSpan.FromMilliseconds(duration))
+        var animation = new DoubleAnimation(
+            baseValue,
+            scale,
+            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
         {
             AutoReverse = true,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
@@ -191,7 +199,7 @@ public static class AnimationHelper
         {
             From = Colors.Transparent,
             To = Color.FromArgb((byte)(highlightColor.A * 0.4), highlightColor.R, highlightColor.G, highlightColor.B),
-            Duration = TimeSpan.FromMilliseconds(duration),
+            Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)),
             AutoReverse = true,
             EasingFunction = new QuadraticEase()
         };

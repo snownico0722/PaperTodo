@@ -216,6 +216,15 @@ internal static partial class Program
             Check(EdgeCapsuleTransitionPolicy.Create(resting.ToFrame(), hovered,
                 EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.Pointer), false, 0, 1000) == null,
                 "Animation disabled remains an immediate apply");
+            var explicitPreserve = EdgeCapsuleTransitionPolicy.Create(
+                resting.ToFrame(),
+                hovered,
+                EdgeCapsuleMotion.Preserve(EdgeCapsuleTransitionReason.Measure, 60),
+                transitionAlreadyActive: true,
+                nowTimestamp: 0,
+                timestampFrequency: 1000);
+            Check(explicitPreserve?.DurationTimestampTicks == 60,
+                "Preserve transition uses the explicit caller-provided duration");
             var previewsEnabled = layout with { ExpandedWidthDip = layout.RestingWidthDip };
             var ordinaryHover = Plan(hoverModel, previewsEnabled);
             Check(!ordinaryHover.TitleVisible && ordinaryHover.BodyWindowWidthDevice == resting.BodyWindowWidthDevice,

@@ -118,7 +118,7 @@ public sealed partial class PaperWindow
         _paperChrome.SetHeaderOpacity(
             hidden ? 0 : 1,
             animate && _controller.State.EnableAnimations
-                ? ExperimentalOpacityTransitionMilliseconds : 0,
+                ? AnimationTiming.ScaleMilliseconds(ExperimentalOpacityTransitionMilliseconds) : 0,
             hidden ? null : RestoreExperimentalInactiveTitleBarPresentation);
     }
 

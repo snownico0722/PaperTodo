@@ -665,6 +665,12 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>자주 쓰는 작업에 전환 애니메이션을 적용합니다. 끄면 반응이 더 직접적입니다.</value>
   </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>빠른 애니메이션</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>화면 애니메이션 시간을 기본의 약 60%로 줄여 전환 효과는 유지하면서 더 빠르게 반응합니다. “애니메이션 효과 사용”이 꺼져 있으면 적용되지 않습니다.</value>
+  </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>크기 조절 손잡이</value>
   </data>

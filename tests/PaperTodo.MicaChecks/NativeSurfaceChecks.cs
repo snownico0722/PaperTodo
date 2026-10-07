@@ -48,13 +48,14 @@ internal static class NativeSurfaceChecks
                 // The fixture is about composited pixels, not activation-dependent Z order.
                 paper = new PaperWindow(new PaperData { Type = PaperTypes.Todo, Title = "实际材质 · 顶栏与包边",
                     X = 50, Y = 50, Width = 400, Height = 340, AlwaysOnTop = true }, controller);
+                var pin = PrepareDesktopInkProbe(paper);
                 paper.Show(); paper.Activate(); Wait();
-                WaitForDesktopInk(paper, output, skin + "-" + mode);
+                WaitForDesktopInk(paper, pin, output, skin + "-" + mode);
                 if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100) &&
                     skin is PaperSkins.Mica or PaperSkins.Acrylic or PaperSkins.TracingPaper)
                 {
                     CheckCaptionSentinel(paper, output, skin + "-" + mode);
-                    WaitForDesktopInk(paper, output, skin + "-" + mode + "-after-alpha");
+                    WaitForDesktopInk(paper, pin, output, skin + "-" + mode + "-after-alpha");
                 }
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(paper)!;
                 using (var image = Capture(paper, output, $"desktop-{skin}-{mode}"))
@@ -87,11 +88,27 @@ internal static class NativeSurfaceChecks
             Theme.Invalidate();
         }
     }
-    private static void WaitForDesktopInk(PaperWindow paper, string output, string name)
+    private static Button PrepareDesktopInkProbe(PaperWindow paper)
     {
-        // The compositor may expose its uniform fallback before WPF's first present.
-        // A blank frame is not evidence that the actual header/body material matches.
+        // Keep the real production control and visual tree. Only give the existing pin a unique,
+        // opaque pre-show foreground so desktop capture can distinguish real WPF ink from the
+        // native material/fallback. Do not add/remove visuals or invalidate after Show().
         var pin = (Button)typeof(PaperWindow).GetField("_paperIconButton", Program.Private)!.GetValue(paper)!;
+        pin.Foreground = new SolidColorBrush(Color.FromRgb(7, 241, 19));
+        pin.Opacity = 1;
+        pin.IsHitTestVisible = false; // Avoid hover/leave restoring the themed foreground during capture.
+        return pin;
+    }
+
+    private static void WaitForDesktopInk(PaperWindow paper, Button pin, string output, string name)
+    {
+        // DwmFlush/ContentRendered do not prove that WPF's redirection bitmap has reached the
+        // desktop composite. Require the actual production pin ink in two consecutive captures.
+        var color = ((SolidColorBrush)pin.Foreground).Color;
+        var expected = D.Color.FromArgb(color.R, color.G, color.B);
+        var stableFrames = 0;
+        var lastMatches = 0;
+        var lastRequired = 0;
         for (var attempt = 0; attempt < 12; attempt++)
         {
             paper.UpdateLayout();
@@ -100,21 +117,29 @@ internal static class NativeSurfaceChecks
             // in the same topmost band: GitHub runners occasionally leave the rear window above
             // the paper. Reassert the paper at the top of that band before every evidence frame.
             WindowNative.ApplyTopmostZOrder(paper, topmost: true, insertAfter: IntPtr.Zero);
-            DwmFlush();
-            using var image = Capture(paper, output, "ready-" + name);
+            using var image = Capture(paper, attempt is 0 or 11 ? output : null, "ready-" + name);
             var point = pin.TransformToAncestor(paper).Transform(new Point());
             var dpi = VisualTreeHelper.GetDpi(paper);
-            var color = ((SolidColorBrush)pin.Foreground).Color;
-            var expected = D.Color.FromArgb(color.R, color.G, color.B);
-            var matches = 0;
-            for (var y = Math.Max(0, (int)(point.Y * dpi.DpiScaleY)); y < Math.Min(image.Height, (point.Y + pin.ActualHeight) * dpi.DpiScaleY); y++)
-            for (var x = Math.Max(0, (int)(point.X * dpi.DpiScaleX)); x < Math.Min(image.Width, (point.X + pin.ActualWidth) * dpi.DpiScaleX); x++)
-                if (Difference(image.GetPixel(x, y), expected) <= 18) matches++;
-            if (matches >= 2) return;
+            var left = Math.Max(0, (int)Math.Floor(point.X * dpi.DpiScaleX));
+            var top = Math.Max(0, (int)Math.Floor(point.Y * dpi.DpiScaleY));
+            var right = Math.Min(image.Width, (int)Math.Ceiling((point.X + pin.ActualWidth) * dpi.DpiScaleX));
+            var bottom = Math.Min(image.Height, (int)Math.Ceiling((point.Y + pin.ActualHeight) * dpi.DpiScaleY));
+            var samples = Math.Max(0, right - left) * Math.Max(0, bottom - top);
+            lastRequired = Math.Max(8, (int)Math.Ceiling(samples * 0.03));
+            lastMatches = 0;
+            for (var y = top; y < bottom; y++)
+            for (var x = left; x < right; x++)
+                if (Difference(image.GetPixel(x, y), expected) <= 18) lastMatches++;
+
+            var inkReady = samples > 0 && lastMatches >= lastRequired;
+            stableFrames = inkReady ? stableFrames + 1 : 0;
+            if (stableFrames >= 2) return;
             Wait();
         }
-        Program.Assert(false, name + ": actual WPF pin never appeared in the desktop composite");
+        Program.Assert(false,
+            $"{name}: actual WPF pin never reached a stable desktop composite ({lastMatches}/{lastRequired} required pixels)");
     }
+
     private static void CheckCaptionSentinel(PaperWindow paper, string output, string name)
     {
         var hwnd = new WindowInteropHelper(paper).Handle;

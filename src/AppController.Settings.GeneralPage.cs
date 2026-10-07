@@ -153,6 +153,12 @@ public sealed partial class AppController
                 State.EnableAnimations,
                 ToggleAnimations),
             "TipEnableAnimations"));
+        leftColumn.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("SettingsFastAnimations"),
+                State.FastAnimations,
+                ToggleFastAnimations),
+            "TipFastAnimations"));
 
         leftColumn.Children.Add(BuildSettingsLiveRegion(
             "general.telemetry",
@@ -223,6 +229,7 @@ public sealed partial class AppController
     {
         State.EnableToolTips = true;
         State.EnableAnimations = true;
+        State.FastAnimations = false;
         State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;

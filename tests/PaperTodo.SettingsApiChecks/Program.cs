@@ -452,6 +452,19 @@ internal static partial class Program
             !createNoteTitleSchema.TryGetProperty("maxLength", out _),
             "MCP create_note schema describes the dynamic title limit without advertising a false fixed maxLength.");
 
+        var validTodoShape = new ModelContextProtocol.Protocol.CallToolRequestParams
+        {
+            Name = "add_todos",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["paper_id"] = Json("paper"),
+                ["todos"] = Json(new[] { new { text = "first", done = false } })
+            }
+        };
+        Check(
+            !McpBridge.TryDescribeInvalidToolArguments(validTodoShape, out _),
+            "MCP error translation leaves valid tool arguments alone.");
+
         var name = "PaperTodo.SettingsChecks." + Guid.NewGuid().ToString("N");
         var requests = new List<JsonElement>();
         McpApiHost? host = null;

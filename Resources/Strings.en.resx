@@ -652,6 +652,12 @@ Settings info icons always stay available.</value>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>Transition animations for common actions; off feels more immediate.</value>
   </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>Fast animations</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
+  </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>Resize grip</value>
   </data>

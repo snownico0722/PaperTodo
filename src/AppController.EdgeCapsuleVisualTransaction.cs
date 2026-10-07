@@ -358,7 +358,9 @@ public sealed partial class AppController
             .Where(entry =>
                 entry.Motion.Kind == EdgeCapsuleMotionKind.Animate)
             .Select(entry => entry.Motion.DurationMilliseconds)
-            .DefaultIfEmpty(EdgeCapsuleLayout.SlotMoveMilliseconds)
+            .DefaultIfEmpty(
+                AnimationTiming.ScaleMilliseconds(
+                    EdgeCapsuleLayout.SlotMoveMilliseconds))
             .Max();
         var byWindow = entries.ToDictionary(
             entry => entry.Window);
@@ -442,7 +444,9 @@ public sealed partial class AppController
                     motion.Kind == EdgeCapsuleMotionKind.Snap)
                 {
                     motion = EdgeCapsuleMotion.Preserve(
-                        motion.Reason);
+                        motion.Reason,
+                        AnimationTiming.ScaleMilliseconds(
+                            EdgeCapsuleLayout.SlotMoveMilliseconds));
                 }
 
                 if (motion.Kind == EdgeCapsuleMotionKind.Animate)

@@ -97,7 +97,8 @@ public sealed partial class AppController
         if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
         var region = id switch
         {
-            "appearance.animations" or "window.fullscreen_mode" => "general.options",
+            "appearance.animations" or "appearance.fast_animations" or
+                "window.fullscreen_mode" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
             "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",

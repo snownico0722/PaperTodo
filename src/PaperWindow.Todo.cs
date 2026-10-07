@@ -1437,8 +1437,14 @@ public sealed partial class PaperWindow
                 var animationGeneration = _todoRowsGeneration;
                 row.IsHitTestVisible = false;
                 AnimationHelper.EnsureTransform(row);
-                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
-                var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 30, TimeSpan.FromMilliseconds(200))
+                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    1,
+                    0,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)));
+                var slideOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    0,
+                    30,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)))
                 {
                     EasingFunction = AnimationHelper.QuickEase
                 };
@@ -1534,11 +1540,13 @@ public sealed partial class PaperWindow
             if (animatedRows.Count > 0)
             {
                 var rowGeneration = _todoRowsGeneration;
+                var rowAnimationMilliseconds = AnimationTiming.ScaleMilliseconds(180);
+                var rowStaggerMilliseconds = AnimationTiming.ScaleMilliseconds(30);
                 for (int i = 0; i < animatedRows.Count; i++)
                 {
                     var row = animatedRows[i];
                     row.IsHitTestVisible = false;
-                    var delay = i * 30;
+                    var delay = i * rowStaggerMilliseconds;
                     void StartRowAnimation()
                     {
                         if (clearDoneGeneration != _clearDoneGeneration ||
@@ -1548,8 +1556,14 @@ public sealed partial class PaperWindow
                             return;
                         }
 
-                        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180));
-                        var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 20, TimeSpan.FromMilliseconds(180))
+                        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                            1,
+                            0,
+                            TimeSpan.FromMilliseconds(rowAnimationMilliseconds));
+                        var slideOut = new System.Windows.Media.Animation.DoubleAnimation(
+                            0,
+                            20,
+                            TimeSpan.FromMilliseconds(rowAnimationMilliseconds))
                         {
                             EasingFunction = AnimationHelper.QuickEase
                         };
@@ -1578,7 +1592,9 @@ public sealed partial class PaperWindow
 
                 var finalizeTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(((animatedRows.Count - 1) * 30) + 180)
+                    Interval = TimeSpan.FromMilliseconds(
+                        ((animatedRows.Count - 1) * rowStaggerMilliseconds) +
+                        rowAnimationMilliseconds)
                 };
                 finalizeTimer.Tick += (_, _) =>
                 {

@@ -13,7 +13,9 @@ public sealed partial class PaperWindow
     {
         animate = animate && _controller.State.EnableAnimations;
         var motion = animate
-            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            ? EdgeCapsuleMotion.Animate(
+                reason,
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
             : EdgeCapsuleMotion.Snap(reason);
         return _controller.TryStageEdgeCapsuleVisualTransaction(
             this,
