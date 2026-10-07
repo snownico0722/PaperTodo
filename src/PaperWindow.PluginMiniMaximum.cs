@@ -17,11 +17,11 @@ public sealed partial class PaperWindow
     {
         if (_paper.Type == PaperTypes.Todo)
         {
-            return new EdgeCapsulePreviewSize(450, 400);
+            return new EdgeCapsulePreviewSize(450, EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
         }
         if (_paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown)
         {
-            return new EdgeCapsulePreviewSize(460, 410);
+            return new EdgeCapsulePreviewSize(460, EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
         }
 
         var descriptor = CurrentPluginMiniMaximumDescriptor();

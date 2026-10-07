@@ -57,7 +57,7 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
                 62 + Math.Min(MaximumRenderedItems, estimatedLines) *
                     AppTypography.Scale(28),
                 150,
-                400);
+                EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
         if (items.Count == 0)
         {
             width = Math.Max(130, width);
