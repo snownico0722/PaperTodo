@@ -10,12 +10,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [menu, queue]
+        area: [menu, environment, queue]
     runs-on: windows-latest
     timeout-minutes: 12
     defaults:
       run:
         shell: pwsh
+    env:
+      BOUNDARY_AREA: ${{ matrix.area }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -24,34 +26,15 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Select regressions without modifying production code
+      - name: Select tests without modifying production code
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/boundary-audit" | Out-Null
-          @'
-          from pathlib import Path
-          p = Path('tests/PaperTodo.MicaChecks/Program.cs')
-          s = p.read_text(encoding='utf-8-sig')
-          needle = '        var temp = Path.Combine(Path.GetTempPath(), "PaperTodo.NativeMicaChecks", Guid.NewGuid().ToString("N"));'
-          assert s.count(needle) == 1
-          s = s.replace(needle, '''        using (var boundaryController = new AppController())
-                  {
-                      try { MenuOpeningBoundaryChecks.Run(boundaryController); return 0; }
-                      catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-                  }
-          ''' + needle)
-          p.write_text(s, encoding='utf-8')
-          p = Path('tests/PaperTodo.LifecycleChecks/Program.cs')
-          s = p.read_text(encoding='utf-8-sig')
-          needle = '                await MasterMaterialHandoffChecks.Run(controller, windows);'
-          assert s.count(needle) == 1
-          s = s.replace(needle, '                await QueueFeatureBoundaryChecks.Run(controller, windows, Environment.GetEnvironmentVariable("PAPER_BOUNDARY_CASE")!);')
-          p.write_text(s, encoding='utf-8')
-          '@ | python -
+          python .github/scripts/boundary_select_checks.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Pending menu target lifetime
-        if: matrix.area == 'menu'
+      - name: Material request and capability boundaries
+        if: matrix.area != 'queue'
         run: |
-          dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release 2>&1 | Tee-Object "$env:RUNNER_TEMP/boundary-audit/menu.txt"
+          dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release 2>&1 | Tee-Object "$env:RUNNER_TEMP/boundary-audit/${env:BOUNDARY_AREA}.txt"
           exit $LASTEXITCODE
       - name: Real queue feature intersections
         if: matrix.area == 'queue'
