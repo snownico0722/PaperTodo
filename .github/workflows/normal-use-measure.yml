@@ -1,0 +1,79 @@
+name: Small-list paired measurements
+on:
+  push:
+    branches: [audit/pr324-326-normal-use-20261008]
+    paths: [.github/workflows/normal-use-measure.yml]
+permissions:
+  contents: read
+jobs:
+  measure:
+    name: Small-list PR ${{ matrix.pr }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pr: [324, 325]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
+      AUDIT_PR: ${{ matrix.pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Measurements only; functional validation is in the other workflows
+        run: |
+          @'
+          from pathlib import Path
+          import os, subprocess, sys
+          scripts=Path(os.environ['GITHUB_WORKSPACE'])/'.github/scripts'
+          source=scripts/'normal-use-bench.cs'
+          text=source.read_text(encoding='utf-8')
+          old='''        var point = editor.PointToScreen(new Point(20, editor.ActualHeight / 2));
+                  LifecycleInput.MoveCursor(point);
+                  await Idle();
+                  Require(LifecycleInput.IsMouseTarget(window, point), "right-click target is obscured");'''
+          new='''        await Until(() => editor.ActualWidth > 20 && editor.ActualHeight > 0 &&
+                      LifecycleInput.IsMouseTarget(window,
+                          editor.PointToScreen(new Point(20, editor.ActualHeight / 2))));
+                  var point = editor.PointToScreen(new Point(20, editor.ActualHeight / 2));
+                  LifecycleInput.MoveCursor(point);
+                  await Idle();
+                  Require(LifecycleInput.IsMouseTarget(window, point), "right-click target is obscured");'''
+          if text.count(old)!=1: raise RuntimeError('Readiness edit is not unique')
+          source.write_text(text.replace(old,new),encoding='utf-8')
+          # A subprocess launched through Python must not introduce a visible console over
+          # the UI fixture. This covers build servers and the PowerShell/test parents too.
+          original_run=subprocess.run
+          def no_console_run(args, **kwargs):
+              kwargs['creationflags']=subprocess.CREATE_NO_WINDOW
+              return original_run(args, **kwargs)
+          subprocess.run=no_console_run
+          sys.argv=['normal-use-measure',os.environ['AUDIT_PR']]
+          code=(scripts/'normal-use-audit.py').read_text(encoding='utf-8')
+          # Reuse the exact same measurement harness, but not the validation or write-object
+          # sections. This read-only job produces timing evidence, never a CI-pass substitute.
+          exec(code[:code.index('\ncandidate = checkout(')],globals())
+          candidates={324:'4c342f70f6db60e33b4a2ff4e308efcbe68929e6',325:'f2a4c1dfbcc3568f01cb5117d196fbb8e9d22a2f'}
+          candidate=checkout('candidate',candidates[PR])
+          start=code.index('\nsamples = []')
+          end=code.index('\nchanged = run(',start)
+          exec(code[start:end],globals())
+          print('MEASUREMENTS_COMPLETE',PR,len(samples),flush=True)
+          '@ | python -
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: small-list-measurements-${{ matrix.pr }}
+          path: ${{ runner.temp }}/normal-use-${{ matrix.pr }}
+          retention-days: 1
