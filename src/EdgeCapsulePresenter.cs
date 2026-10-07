@@ -289,7 +289,9 @@ internal sealed class EdgeCapsulePresenter
         Func<EdgeCapsulePresentationFrame, EdgeCapsulePresentationFrame>
             resolvePresentedFrame,
         Func<EdgeCapsulePresentationFrame, bool> apply,
-        long? nowTimestamp = null)
+        long? nowTimestamp = null,
+        int pointerDurationMilliseconds = EdgeCapsuleLayout.HorizontalResizeMilliseconds,
+        int preserveDurationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds)
     {
         var remaining = EdgeCapsuleDirty.None;
         var now = nowTimestamp ??
@@ -312,8 +314,7 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                AnimationTiming.ScaleMilliseconds(
-                    EdgeCapsuleLayout.HorizontalResizeMilliseconds)));
+                pointerDurationMilliseconds));
             dirty |= EdgeCapsuleDirty.Presentation;
         }
 
@@ -346,7 +347,8 @@ internal sealed class EdgeCapsulePresenter
                 RequestPresentation(EdgeCapsuleMotion.Preserve(
                     displayMetrics
                         ? EdgeCapsuleTransitionReason.DisplayMetrics
-                        : EdgeCapsuleTransitionReason.Measure));
+                        : EdgeCapsuleTransitionReason.Measure,
+                    preserveDurationMilliseconds));
                 dirty |= EdgeCapsuleDirty.Presentation;
             }
         }
@@ -358,7 +360,11 @@ internal sealed class EdgeCapsulePresenter
 
         var layout = _layoutSnapshot ?? captureLayout();
         SetLayoutSnapshot(layout);
-        var result = ReconcilePresentation(layout, apply, now);
+        var result = ReconcilePresentation(
+            layout,
+            apply,
+            now,
+            preserveDurationMilliseconds);
         if (!result.Applied)
         {
             remaining |= EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.ApplyRetry;
@@ -375,9 +381,12 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                AnimationTiming.ScaleMilliseconds(
-                    EdgeCapsuleLayout.HorizontalResizeMilliseconds)));
-            var retarget = ReconcilePresentation(layout, apply, now);
+                pointerDurationMilliseconds));
+            var retarget = ReconcilePresentation(
+                layout,
+                apply,
+                now,
+                preserveDurationMilliseconds);
             if (!retarget.Applied)
             {
                 remaining |= EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.ApplyRetry;
@@ -394,7 +403,8 @@ internal sealed class EdgeCapsulePresenter
     private PresentationResult ReconcilePresentation(
         EdgeCapsuleLayoutSnapshot layout,
         Func<EdgeCapsulePresentationFrame, bool> apply,
-        long nowTimestamp)
+        long nowTimestamp,
+        int preserveDurationMilliseconds)
     {
         var forceApplyVersion = _forceApplyVersion;
         var forceApply = _appliedForceApplyVersion != forceApplyVersion;
@@ -419,7 +429,9 @@ internal sealed class EdgeCapsulePresenter
             TargetPlan = plan;
         }
 
-        _pendingMotion = EdgeCapsuleMotion.Preserve(EdgeCapsuleTransitionReason.State);
+        _pendingMotion = EdgeCapsuleMotion.Preserve(
+            EdgeCapsuleTransitionReason.State,
+            preserveDurationMilliseconds);
         _rebasePendingTransition = false;
         // A stopped timeline must submit the exact target. FramesMatch deliberately tolerates
         // tiny differences for animation admission; retaining that approximate sample here

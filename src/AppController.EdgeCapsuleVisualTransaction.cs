@@ -444,7 +444,9 @@ public sealed partial class AppController
                     motion.Kind == EdgeCapsuleMotionKind.Snap)
                 {
                     motion = EdgeCapsuleMotion.Preserve(
-                        motion.Reason);
+                        motion.Reason,
+                        AnimationTiming.ScaleMilliseconds(
+                            EdgeCapsuleLayout.SlotMoveMilliseconds));
                 }
 
                 if (motion.Kind == EdgeCapsuleMotionKind.Animate)

@@ -287,7 +287,9 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.InvalidateNativeMetrics();
         _edgeCapsule.ForceApplyCurrentPresentation();
         _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
-            EdgeCapsuleTransitionReason.DisplayMetrics));
+            EdgeCapsuleTransitionReason.DisplayMetrics,
+            AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds)));
         InvalidateEdgeCapsule(
             EdgeCapsuleDirty.Presentation |
             EdgeCapsuleDirty.Measure |
@@ -610,7 +612,11 @@ public sealed partial class PaperWindow
             CaptureEdgeCapsuleLayoutSnapshot,
             CaptureEdgeCapsulePointerPosition,
             ResolveEdgeCapsulePresentedFrame,
-            ApplyEdgeCapsulePresentationFrame);
+            ApplyEdgeCapsulePresentationFrame,
+            pointerDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.HorizontalResizeMilliseconds),
+            preserveDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds));
         var pointer = _edgeCapsule.LastPointerSample;
         if (!_edgeCapsuleReconcileNotificationPending)
         {
