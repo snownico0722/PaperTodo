@@ -441,13 +441,16 @@ internal static partial class Program
         var createNoteTool = ModelContextProtocol.Server.McpServerTool.Create(
             typeof(McpTools).GetMethod(nameof(McpTools.CreateNote))!,
             toolTarget);
+        var createNoteTitleSchema = createNoteTool.ProtocolTool.InputSchema
+            .GetProperty("properties")
+            .GetProperty("title");
         Check(
-            createNoteTool.ProtocolTool.InputSchema
-                .GetProperty("properties")
-                .GetProperty("title")
-                .GetProperty("maxLength")
-                .GetInt32() == PaperTitles.MaxTitleLength,
-            "MCP create_note schema exposes the hard title limit.");
+            createNoteTitleSchema
+                .GetProperty("description")
+                .GetString()?
+                .Contains("title.max_length", StringComparison.Ordinal) == true &&
+            !createNoteTitleSchema.TryGetProperty("maxLength", out _),
+            "MCP create_note schema describes the dynamic title limit without advertising a false fixed maxLength.");
 
         var name = "PaperTodo.SettingsChecks." + Guid.NewGuid().ToString("N");
         var requests = new List<JsonElement>();
