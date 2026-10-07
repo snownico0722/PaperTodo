@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -113,6 +114,15 @@ internal static class McpBridge
                 continue;
             }
 
+            if (TryDescribeMissingRequiredMember(
+                    argument.Value,
+                    parameter.ParameterType,
+                    argument.Key,
+                    out message))
+            {
+                return true;
+            }
+
             try
             {
                 _ = JsonSerializer.Deserialize(
@@ -124,7 +134,6 @@ internal static class McpBridge
             {
                 message = FormatInvalidToolArgument(
                     argument.Key,
-                    parameter.ParameterType,
                     ex);
                 return true;
             }
@@ -162,9 +171,114 @@ internal static class McpBridge
         return false;
     }
 
+    private static bool TryDescribeMissingRequiredMember(
+        JsonElement value,
+        Type expectedType,
+        string path,
+        out string message)
+    {
+        message = "";
+        expectedType = Nullable.GetUnderlyingType(expectedType) ?? expectedType;
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            return false;
+        }
+
+        if (TryGetCollectionElementType(expectedType, out var itemType))
+        {
+            if (value.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            var index = 0;
+            foreach (var item in value.EnumerateArray())
+            {
+                if (TryDescribeMissingRequiredMember(
+                        item,
+                        itemType,
+                        $"{path}[{index}]",
+                        out message))
+                {
+                    return true;
+                }
+                index++;
+            }
+            return false;
+        }
+
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var property in expectedType.GetProperties(
+                     BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (!property.IsDefined(
+                    typeof(RequiredMemberAttribute),
+                    inherit: true) &&
+                !property.IsDefined(
+                    typeof(JsonRequiredAttribute),
+                    inherit: true))
+            {
+                continue;
+            }
+
+            var jsonName =
+                property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
+                ?? ToolArgumentJsonOptions.PropertyNamingPolicy?.ConvertName(
+                    property.Name)
+                ?? property.Name;
+            if (!value.TryGetProperty(jsonName, out var child))
+            {
+                message =
+                    $"PaperTodo error (invalid_params): {path}.{jsonName} is required.";
+                return true;
+            }
+
+            if (TryDescribeMissingRequiredMember(
+                    child,
+                    property.PropertyType,
+                    $"{path}.{jsonName}",
+                    out message))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetCollectionElementType(
+        Type type,
+        out Type elementType)
+    {
+        if (type.IsArray)
+        {
+            elementType = type.GetElementType()!;
+            return true;
+        }
+
+        var enumerable = type
+            .GetInterfaces()
+            .Append(type)
+            .FirstOrDefault(candidate =>
+                candidate.IsGenericType &&
+                candidate.GetGenericTypeDefinition() ==
+                    typeof(IEnumerable<>));
+        if (enumerable != null)
+        {
+            elementType = enumerable.GetGenericArguments()[0];
+            return true;
+        }
+
+        elementType = null!;
+        return false;
+    }
+
     private static string FormatInvalidToolArgument(
         string parameterName,
-        Type parameterType,
         JsonException exception)
     {
         var path = parameterName;
@@ -176,73 +290,8 @@ internal static class McpBridge
                 : "." + exception.Path;
         }
 
-        const string missingMarker =
-            "was missing required properties, including the following:";
-        var missingIndex = exception.Message.IndexOf(
-            missingMarker,
-            StringComparison.Ordinal);
-        if (missingIndex >= 0)
-        {
-            var fields = exception.Message[
-                (missingIndex + missingMarker.Length)..];
-            var diagnosticsIndex = fields.IndexOf(
-                " Path:",
-                StringComparison.Ordinal);
-            if (diagnosticsIndex < 0)
-            {
-                diagnosticsIndex = fields.IndexOf(
-                    " |",
-                    StringComparison.Ordinal);
-            }
-            if (diagnosticsIndex >= 0)
-            {
-                fields = fields[..diagnosticsIndex];
-            }
-
-            fields = fields.Trim().TrimEnd('.');
-            if (fields.Length > 0)
-            {
-                fields = NormalizeMissingFieldNames(
-                    parameterType,
-                    fields);
-                return
-                    $"PaperTodo error (invalid_params): {path} is missing required field(s): {fields}.";
-            }
-        }
-
         return
             $"PaperTodo error (invalid_params): {path} has the wrong type or shape.";
     }
 
-    private static string NormalizeMissingFieldNames(
-        Type parameterType,
-        string fields)
-    {
-        var contractType = parameterType;
-        if (contractType.IsArray)
-        {
-            contractType = contractType.GetElementType() ?? contractType;
-        }
-        else if (contractType.IsGenericType &&
-                 contractType.GetGenericArguments() is [var itemType])
-        {
-            contractType = itemType;
-        }
-
-        var names = fields.Split(
-            ',',
-            StringSplitOptions.TrimEntries |
-            StringSplitOptions.RemoveEmptyEntries);
-        for (var index = 0; index < names.Length; index++)
-        {
-            var property = contractType.GetProperty(
-                names[index],
-                BindingFlags.Instance | BindingFlags.Public);
-            names[index] =
-                property?.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
-                ?? names[index];
-        }
-
-        return string.Join(", ", names);
-    }
 }
