@@ -2,30 +2,42 @@ name: Normal-use PR audit
 on:
   push:
     branches: [audit/pr324-326-normal-use-20261008]
-    paths: [.github/workflows/normal-use-audit.yml, .github/scripts/normal-use-audit.py]
+    paths: [.github/workflows/normal-use-audit.yml, '.github/scripts/normal-use-*']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  review:
+    name: Review PR ${{ matrix.pr }}
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        pr: [324, 325, 326]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Export fixed review sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/review-source"
-          for item in main:39292c739901b74a0d718c4d697ecdc1183bdcc0 pr324:f55c392210ed559c160f78e7e027c21f6c7a8ad5 pr325:4112df23eb3bafbea4e2ff9165659cae439a973b pr326:a1b296fba72ea575de268b36ff6cc84737d55a16; do
-            label="${item%%:*}"
-            sha="${item#*:}"
-            git archive --format=zip -o "$RUNNER_TEMP/review-source/$label.zip" "$sha" src tests tools/testing doc AGENTS.md PaperTodo.csproj .github/workflows
-          done
-      - uses: actions/upload-artifact@v4
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
         with:
-          name: normal-use-review-source
-          path: ${{ runner.temp }}/review-source
-          retention-days: 2
+          dotnet-version: 10.0.x
+      - name: Review, paired measurements and candidate Git objects
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/normal-use-audit.py ${{ matrix.pr }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: normal-use-review-${{ matrix.pr }}
+          path: ${{ runner.temp }}/normal-use-${{ matrix.pr }}
+          retention-days: 7
