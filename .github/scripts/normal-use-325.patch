@@ -1,0 +1,124 @@
+diff --git a/src/PaperWindow.Todo.cs b/src/PaperWindow.Todo.cs
+--- a/src/PaperWindow.Todo.cs
++++ b/src/PaperWindow.Todo.cs
+@@ -162,37 +162,42 @@
+             orderedRows.Add(row);
+         }
+ 
+-        // Keep the largest set of rows whose relative order is already correct.
+-        // Moving the first item to the end should detach one row, not every other row.
+-        var retainedRows = TodoRowsToKeepInPlace(orderedRows, _todoPanel.Children);
+-        UIElement? nextRow = _appendArea != null &&
+-            _todoPanel.Children.Count > 0 &&
+-            ReferenceEquals(_todoPanel.Children[_todoPanel.Children.Count - 1], _appendArea)
+-                ? _appendArea
+-                : null;
+-        for (var index = orderedRows.Count - 1; index >= 0; index--)
+-        {
+-            var row = orderedRows[index];
+-            if (!retainedRows.Contains(row))
+-            {
+-                var nextIndex = nextRow != null
+-                    ? _todoPanel.Children.IndexOf(nextRow)
+-                    : _todoPanel.Children.Count;
+-                var currentIndex = _todoPanel.Children.IndexOf(row);
+-                if (currentIndex < 0 || currentIndex != nextIndex - 1)
++        // Most visibility/content refreshes keep the same visual row order. Avoid allocating
++        // the LIS index, predecessor arrays and retained set when nothing needs moving.
++        if (!TodoRowsAreInPlace(orderedRows, _todoPanel.Children))
++        {
++            // Keep the largest set of rows whose relative order is already correct.
++            // Moving the first item to the end should detach one row, not every other row.
++            var retainedRows = TodoRowsToKeepInPlace(orderedRows, _todoPanel.Children);
++            UIElement? nextRow = _appendArea != null &&
++                _todoPanel.Children.Count > 0 &&
++                ReferenceEquals(_todoPanel.Children[_todoPanel.Children.Count - 1], _appendArea)
++                    ? _appendArea
++                    : null;
++            for (var index = orderedRows.Count - 1; index >= 0; index--)
++            {
++                var row = orderedRows[index];
++                if (!retainedRows.Contains(row))
+                 {
+-                    if (currentIndex >= 0)
++                    var nextIndex = nextRow != null
++                        ? _todoPanel.Children.IndexOf(nextRow)
++                        : _todoPanel.Children.Count;
++                    var currentIndex = _todoPanel.Children.IndexOf(row);
++                    if (currentIndex < 0 || currentIndex != nextIndex - 1)
+                     {
+-                        _todoPanel.Children.RemoveAt(currentIndex);
+-                        if (currentIndex < nextIndex)
++                        if (currentIndex >= 0)
+                         {
+-                            nextIndex--;
++                            _todoPanel.Children.RemoveAt(currentIndex);
++                            if (currentIndex < nextIndex)
++                            {
++                                nextIndex--;
++                            }
+                         }
++                        _todoPanel.Children.Insert(nextIndex, row);
+                     }
+-                    _todoPanel.Children.Insert(nextIndex, row);
+                 }
++                nextRow = row;
+             }
+-            nextRow = row;
+         }
+ 
+         _todoRows.Clear();
+@@ -205,6 +210,18 @@
+         }
+     }
+ 
++    private static bool TodoRowsAreInPlace(
++        IReadOnlyList<Border> orderedRows,
++        UIElementCollection children)
++    {
++        if (children.Count < orderedRows.Count) return false;
++        for (var index = 0; index < orderedRows.Count; index++)
++        {
++            if (!ReferenceEquals(children[index], orderedRows[index])) return false;
++        }
++        return true;
++    }
++
+     private static HashSet<Border> TodoRowsToKeepInPlace(
+         IReadOnlyList<Border> orderedRows,
+         UIElementCollection children)
+diff --git a/tests/PaperTodo.LifecycleChecks/TodoHistoryChecks.cs b/tests/PaperTodo.LifecycleChecks/TodoHistoryChecks.cs
+--- a/tests/PaperTodo.LifecycleChecks/TodoHistoryChecks.cs
++++ b/tests/PaperTodo.LifecycleChecks/TodoHistoryChecks.cs
+@@ -50,6 +50,31 @@
+         var panel = InstallCountingPanel(window);
+         await Idle();
+ 
++        // Ordinary single-paper lists must preserve live editors and focus even when the
++        // no-move path skips the LIS. Also cover append-area synchronization on that path.
++        foreach (var count in new[] { 1, 5, 10 })
++        {
++            await Reset(count);
++            var unchanged = Capture(window, paper);
++            var focused = Editors(window)["row-0"];
++            focused.Select(2, 4);
++            var caret = (focused.SelectionStart, focused.SelectionLength, focused.CaretIndex);
++            panel.ResetCounts();
++            ReconcileRows(window);
++            await Idle();
++            RequireVisualChanges(panel, 0, 0, $"{count}-row unchanged refresh");
++            RequireRetained(unchanged, window, paper, [], $"{count}-row unchanged refresh");
++            RequireSelection(focused, caret, $"{count}-row unchanged refresh");
++            Require(focused.IsKeyboardFocused, "unchanged small-list refresh lost keyboard focus");
++            controller.State.ShowTodoBottomBar = true;
++            ReconcileRows(window);
++            Require(panel.Children.Count == count + 1, "no-move refresh failed to enable append area");
++            controller.State.ShowTodoBottomBar = false;
++            ReconcileRows(window);
++            RequireNoAppendArea(window);
++        }
++        await Reset(12);
++
+         // Pure reorder changes list position, not the models captured by row event handlers.
+         var originalOrder = paper.Items.Select(item => item.Id).ToArray();
+         var move = typeof(PaperWindow).GetMethod("MoveItems", Private)!;
