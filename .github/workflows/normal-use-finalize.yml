@@ -1,0 +1,73 @@
+name: Prepare reviewed normal-use commits
+on:
+  push:
+    branches: [audit/pr324-326-normal-use-20261008]
+    paths: [.github/workflows/normal-use-finalize.yml]
+permissions:
+  contents: write
+jobs:
+  objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Create fixed-source commit objects only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request
+          root = pathlib.Path.cwd()
+          heads = {324: 'f55c392210ed559c160f78e7e027c21f6c7a8ad5', 325: '4112df23eb3bafbea4e2ff9165659cae439a973b'}
+          expected = {
+            324: {'src/PaperWindow.Todo.cs':'13f3dd15c8a8f65f559713d45f6324ef0610eee2', 'src/PaperWindow.TodoLinksAndSelection.cs':'7df4b8b8b7d7f7449362333b8626448992a38b9c', 'tests/PaperTodo.LifecycleChecks/TodoVisibilityChecks.cs':'b2c5b997162889319248d29b7dd4836156f23967'},
+            325: {'src/PaperWindow.Todo.cs':'42ffb6a5ec2df4be9cc0e7c868c68e91ddcbb45e', 'tests/PaperTodo.LifecycleChecks/TodoHistoryChecks.cs':'0bff8c44a6d811ffcad18e2d4baa8e4bb3641843'}
+          }
+          def cmd(args, cwd=root):
+            return subprocess.check_output(args, cwd=cwd, text=True).strip()
+          def post(path, payload):
+            req = urllib.request.Request('https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+path, json.dumps(payload).encode(), method='POST', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json', 'Content-Type':'application/json'})
+            with urllib.request.urlopen(req, timeout=60) as resp: return json.load(resp)
+          results=[]
+          for pr, parent in heads.items():
+            work=root.parent/('normalized-pr-'+str(pr))
+            cmd(['git','-c','core.autocrlf=false','worktree','add','--detach',str(work),parent])
+            patch=root/'.github/scripts'/('normal-use-'+str(pr)+'.patch')
+            cmd(['git','apply','--check',str(patch)],work)
+            cmd(['git','apply',str(patch)],work)
+            for name, sha in expected[pr].items():
+              data=(work/name).read_bytes()
+              actual=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              if actual != sha: raise RuntimeError('Reviewed source does not match: '+name)
+            if pr==324:
+              replacements={
+                'CHANGELOG.md': ('- Improved Show/Hide All responsiveness with large Todo lists by refreshing only rows with linked-paper buttons while preserving ordinary Todo editors and text selections.', '- Improved Show/Hide All responsiveness by refreshing linked-paper buttons in place while preserving all Todo editors, text selections and native text undo history.'),
+                'CHANGELOG.zh.md': ('- 优化“全部显示／隐藏纸片”在待办较多时的响应，只刷新关联纸片按钮所在的行，并保留普通待办的编辑器与文字选区。', '- 优化“全部显示／隐藏纸片”的响应，原位刷新关联纸片按钮，不重建待办行；普通行与关联行都保留原有编辑器、文字选区和文本撤销记录。')
+              }
+              for name,(old,new) in replacements.items():
+                text=(work/name).read_text(encoding='utf-8')
+                if text.count(old)!=1: raise RuntimeError('Changelog edit not unique')
+                (work/name).write_text(text.replace(old,new),encoding='utf-8')
+            cmd(['git','diff','--check'],work)
+            changed=cmd(['git','diff','--name-only'],work).splitlines()
+            permitted=set(expected[pr]) | ({'CHANGELOG.md','CHANGELOG.zh.md'} if pr==324 else set())
+            if set(changed)!=permitted: raise RuntimeError('Unexpected changed files')
+            entries=[]
+            for name in changed:
+              data=(work/name).read_bytes()
+              blob=post('/git/blobs',{'content':base64.b64encode(data).decode(),'encoding':'base64'})
+              entries.append({'path':name,'mode':'100644','type':'blob','sha':blob['sha']})
+            tree=post('/git/trees',{'base_tree':cmd(['git','rev-parse','HEAD^{tree}'],work),'tree':entries})
+            message='[ci] fix(todo): '+('显隐原位更新关联按钮并保留编辑状态' if pr==324 else '未改变行顺序时跳过重排计算并补小列表回归')
+            commit=post('/git/commits',{'message':message,'tree':tree['sha'],'parents':[parent]})
+            results.append({'pr':pr,'parent':parent,'candidate':commit['sha'],'tree':tree['sha'],'files':entries,'diffstat':cmd(['git','diff','--stat'],work),'tests':'See separate Windows audit runs; no test-success claim from this object-only job.'})
+          pathlib.Path('reviewed-commits.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(results,ensure_ascii=False,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-normal-use-commits
+          path: reviewed-commits.json
+          retention-days: 1
