@@ -99,7 +99,7 @@ def instrument(path):
         '            if (c.Capsule && PaperSkins.UsesSampledAuxiliary(c.Skin))\n'
         '            {\n'
         '                var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 2;\n'
-        '                bool Recovered() => surfaces.Where(s => s.IsCapsule && s.RequestsSampledBackground)\n'
+        '                bool Recovered() => surfaces.Where(s => s.IsCapsule)\n'
         '                    .All(s => s.IsBackgroundActive && !s.HasBackgroundCapture &&\n'
         '                      s.BackgroundSessionState?.GetType().GetField("_dragSnapshotActive", Private)?\n'
         '                          .GetValue(s.BackgroundSessionState) is not true);\n'
