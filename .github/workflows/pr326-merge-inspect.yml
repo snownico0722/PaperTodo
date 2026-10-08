@@ -1,0 +1,52 @@
+name: Audit PR326 merge conflicts
+on:
+  push:
+    branches: [audit/resolve-pr326-20261008]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Three-way merge and collect conflict evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p merge-output
+          git config user.name "PaperTodo CI"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --detach a1b296fba72ea575de268b36ff6cc84737d55a16
+          git fetch origin main
+          set +e
+          git -c merge.conflictStyle=diff3 merge --no-commit --no-ff origin/main >merge-output/merge.log 2>&1
+          result=$?
+          set -e
+          echo "Merge result: $result"
+          cat merge-output/merge.log
+          git status --short | tee merge-output/status.txt
+          git diff --name-only --diff-filter=U | tee merge-output/conflicts.txt
+          while IFS= read -r file; do
+            if [ -z "$file" ]; then continue; fi
+            mkdir -p "merge-output/files/$(dirname "$file")"
+            cp "$file" "merge-output/files/$file.merged"
+            git show ":1:$file" > "merge-output/files/$file.base" || true
+            git show ":2:$file" > "merge-output/files/$file.ours" || true
+            git show ":3:$file" > "merge-output/files/$file.theirs" || true
+            echo "======== CONFLICT: $file ========="
+            grep -n -A38 -B12 '^<<<<<<<' "$file" | head -180 || true
+          done < merge-output/conflicts.txt
+          printf 'merge_status=%s\nsource=%s\ntarget=%s\n' "$result" \
+            'a1b296fba72ea575de268b36ff6cc84737d55a16' "$(git rev-parse origin/main)" \
+            > merge-output/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr326-merge-conflict-evidence
+          path: merge-output
+          retention-days: 1
