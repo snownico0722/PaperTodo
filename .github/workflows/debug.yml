@@ -42,10 +42,21 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
+
+      - name: Native math checks
+        run: cargo test --manifest-path .\native\math\Cargo.toml --target x86_64-pc-windows-msvc --locked
+
+      - name: Build native math library
+        run: .\native\math\build.ps1 -Configuration Release -ForceRebuild
 
       - name: Read project metadata
         id: meta

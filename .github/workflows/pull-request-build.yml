@@ -20,7 +20,7 @@ jobs:
       group: pull-request-build-${{ github.ref }}
       cancel-in-progress: true
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     defaults:
       run:
@@ -37,6 +37,26 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Native math checks
+        run: cargo test --manifest-path .\native\math\Cargo.toml --target x86_64-pc-windows-msvc --locked
+
+      - name: Build native math library
+        run: .\native\math\build.ps1 -Configuration Release -ForceRebuild
+
+      - name: Upload native math build
+        uses: actions/upload-artifact@v4
+        with:
+          name: papertodo-math-native
+          path: |
+            native/math/bin/win-x64/papertodo_math.dll
+            native/math/Cargo.lock
+          if-no-files-found: error
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -50,6 +70,38 @@ jobs:
 
       - name: Run regression checks
         run: ./tools/testing/Run-Checks.ps1 -Group regression
+
+      - name: Single-file math publish smoke
+        run: |
+          $publishOut = Join-Path $env:RUNNER_TEMP "math-single-file-smoke"
+          Remove-Item -LiteralPath $publishOut -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $publishOut | Out-Null
+
+          dotnet publish .\PaperTodo.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o $publishOut `
+            /p:PublishSingleFile=true `
+            /p:PublishReadyToRun=false `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=false `
+            /p:PublishTrimmed=false `
+            /p:EmbedAllSources=false `
+            /p:EmbedUntrackedSources=false `
+            /p:DebugType=none `
+            /p:DebugSymbols=false
+
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath (Join-Path $publishOut "PaperTodo.exe") -PathType Leaf)) {
+            throw "Single-file smoke did not produce PaperTodo.exe."
+          }
+          if (Test-Path -LiteralPath (Join-Path $publishOut "papertodo_math.dll")) {
+            throw "Native math bridge escaped the single-file package as a sidecar."
+          }
+          if (Test-Path -LiteralPath (Join-Path $publishOut "math-fonts")) {
+            throw "KaTeX fonts escaped the single-file package as sidecars."
+          }
 
       - name: Native material and skin checks
         env:
