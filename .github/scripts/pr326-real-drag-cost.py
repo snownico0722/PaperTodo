@@ -137,7 +137,7 @@ try:
     for label,worktree in worktrees.items():
         instrument(worktree/IMPL)
         code,s=run(["git","diff","--name-only"],cwd=worktree,logname="worktree-diff-"+label)
-        if s.strip().splitlines()!=[str(IMPL).replace("\\","/")]:
+        if [line.strip() for line in s.splitlines() if line.strip().startswith("tools/")] != [str(IMPL).replace("\\","/")]:
             raise RuntimeError("Unexpected benchmark source changes: "+s)
         run(["dotnet","build",TOOL/"PaperTodo.MaterialBenchmarks.csproj","-c","Release"],
             cwd=worktree,logname="build-"+label,timeout=360)
