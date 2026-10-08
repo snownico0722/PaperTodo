@@ -74,7 +74,7 @@ internal static class Pr326DeterministicCost
             {
                 hostField.SetValue(master, host);
                 var begin = Stopwatch.GetTimestamp();
-                var job = (Task)prepare.Invoke(master, [host])!;
+                var job = master.Dispatcher.Invoke(() => (Task)prepare.Invoke(master, [host])!);
                 var uiStartMs = MsSince(begin);
                 GetWindowRect(hwnd, out var rect);
                 var first = Stopwatch.GetTimestamp();
