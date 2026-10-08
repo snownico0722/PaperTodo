@@ -73,17 +73,28 @@ internal static class Pr326DeterministicCost
             for (var n = 0; n < 6; n++) // 2 warmups, 4 steady samples per skin
             {
                 hostField.SetValue(master, host);
-                var begin = Stopwatch.GetTimestamp();
-                var job = master.Dispatcher.Invoke(() => (Task)prepare.Invoke(master, [host])!);
-                var uiStartMs = MsSince(begin);
+                Task? job = null;
+                double uiStartMs = 0;
+                // Enter through a queued WPF dispatcher turn, like the actual mouse handler.
+                // Dispatcher.Invoke on this STA may execute inline without installing WPF
+                // SynchronizationContext; that causes an artificial cross-thread continuation.
+                master.Dispatcher.BeginInvoke((Action)(() =>
+                {
+                    Require(SynchronizationContext.Current is DispatcherSynchronizationContext,
+                        "WPF dispatcher context missing for drag lifecycle");
+                    var start = Stopwatch.GetTimestamp();
+                    job = (Task)prepare.Invoke(master, [host])!;
+                    uiStartMs = MsSince(start);
+                }), DispatcherPriority.Normal);
+                Until(() => job != null, "WPF drag entry dispatch");
                 GetWindowRect(hwnd, out var rect);
                 var first = Stopwatch.GetTimestamp();
                 Require(SetWindowPos(hwnd, IntPtr.Zero, rect.Left + 4, rect.Top + 3,
                     0, 0, 0x0015), "first real native move");
                 var firstNativeMoveMs = MsSince(first);
                 var untilSnapshot = Stopwatch.GetTimestamp();
-                Until(() => job.IsCompleted, "virtual desktop snapshot");
-                job.GetAwaiter().GetResult();
+                Until(() => job!.IsCompleted, "virtual desktop snapshot");
+                job!.GetAwaiter().GetResult();
                 var snapshotAwaitMs = MsSince(untilSnapshot);
                 var texture = surface.BackgroundSessionState?.Bitmap;
                 var validSnapshot = !sampled ||
