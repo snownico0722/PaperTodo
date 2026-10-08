@@ -22,43 +22,56 @@ internal sealed partial class MarkdownSemanticPresentation
             var end = Math.Clamp(start + length, start, document.TextLength);
             if (end > start)
             {
-                // Ask the existing collapse table what normal Full preview actually hides. We
-                // temporarily sync the same table to None for the probe, then always restore it to
-                // the effective reveal below. This stays O(log n + nearby runs) and does not build a
-                // second parser, cache or element generator.
-                var table = EnsureCollapseTable();
-                table.SyncTo(MarkdownCaretReveal.None);
-                var runs = table.Runs;
-                var index = LowerBoundStart(runs, start);
-                if (index > 0 && runs[index - 1].End > start)
+                // Math replacement has its own element/folding path rather than the ordinary
+                // syntax-collapse table. A find hit inside rendered math must still reveal the
+                // exact source so the selected match is visible.
+                if (TryGetMathSpanIntersectingRange(start, end, out var mathSpan))
                 {
-                    index--;
+                    var revealOffset = Math.Clamp(start, mathSpan.Start, Math.Max(mathSpan.Start, mathSpan.End - 1));
+                    var line = document.GetLineByOffset(revealOffset);
+                    next = new MarkdownCaretReveal(revealOffset, line.LineNumber - 1);
                 }
-
-                for (; index < runs.Count; index++)
+                else
                 {
-                    var run = runs[index];
-                    if (run.Start >= end)
+                    // Ask the existing collapse table what normal Full preview actually hides. We
+                    // temporarily sync the same table to None for the probe, then always restore it to
+                    // the effective reveal below. This stays O(log n + nearby runs) and does not build a
+                    // second parser, cache or element generator.
+                    var table = EnsureCollapseTable();
+                    table.SyncTo(MarkdownCaretReveal.None);
+                    var runs = table.Runs;
+                    var index = LowerBoundStart(runs, start);
+                    if (index > 0 && runs[index - 1].End > start)
                     {
+                        index--;
+                    }
+
+                    for (; index < runs.Count; index++)
+                    {
+                        var run = runs[index];
+                        if (run.Start >= end)
+                        {
+                            break;
+                        }
+                        if (run.End <= start)
+                        {
+                            continue;
+                        }
+
+                        // A synthetic caret anywhere inside the hidden syntax unit makes the existing
+                        // reveal rules expose the complete semantic unit (for example an inline link).
+                        var revealOffset = Math.Max(start, run.Start);
+                        var line = document.GetLineByOffset(revealOffset);
+                        next = new MarkdownCaretReveal(
+                            revealOffset,
+                            line.LineNumber - 1);
                         break;
                     }
-                    if (run.End <= start)
-                    {
-                        continue;
-                    }
-
-                    // A synthetic caret anywhere inside the hidden syntax unit makes the existing
-                    // reveal rules expose the complete semantic unit (for example an inline link).
-                    var revealOffset = Math.Max(start, run.Start);
-                    var line = document.GetLineByOffset(revealOffset);
-                    next = new MarkdownCaretReveal(
-                        revealOffset,
-                        line.LineNumber - 1);
-                    break;
                 }
 
                 _transientFindReveal = next;
-                table.SyncTo(CaretReveal);
+                EnsureCollapseTable().SyncTo(CaretReveal);
+                SyncMathRevealRedraw();
             }
         }
 
@@ -68,6 +81,7 @@ internal sealed partial class MarkdownSemanticPresentation
             if (IsFullMode)
             {
                 AlignCollapseTableToReveal(scheduleRedraw: false);
+                SyncMathRevealRedraw();
             }
         }
 

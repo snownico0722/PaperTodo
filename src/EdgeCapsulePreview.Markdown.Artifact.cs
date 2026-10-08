@@ -96,6 +96,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
     internal enum ArtifactBlockKind
     {
         Text,
+        Math,
         Quote,
         List,
         Rule,
@@ -127,6 +128,93 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         bool RowBackground = false,
         bool RuleTextVisible = true,
         bool RuleFullSpan = true);
+
+    private sealed record PreviewMathBlock(
+        int StartLine,
+        int EndLine,
+        string Source,
+        string Formula,
+        bool Display);
+
+    private static IReadOnlyDictionary<int, PreviewMathBlock> FindPreviewMathBlocks(PreviewContent content)
+    {
+        var result = new Dictionary<int, PreviewMathBlock>();
+        if (content.RenderMode == MarkdownRenderModes.Off || content.Lines.Count == 0)
+        {
+            return result;
+        }
+
+        var source = string.Join('\n', content.Lines.Select(line => line.Text));
+        if (!MarkdownMathScanner.MayContainDelimiter(source))
+        {
+            return result;
+        }
+
+        var lineStarts = new int[content.Lines.Count];
+        var cursor = 0;
+        for (var index = 0; index < content.Lines.Count; index++)
+        {
+            lineStarts[index] = cursor;
+            cursor += content.Lines[index].Text.Length;
+            if (index + 1 < content.Lines.Count)
+            {
+                cursor++;
+            }
+        }
+
+        int LineForOffset(int offset)
+        {
+            var found = Array.BinarySearch(lineStarts, Math.Clamp(offset, 0, source.Length));
+            if (found >= 0)
+            {
+                return found;
+            }
+            return Math.Clamp(~found - 1, 0, lineStarts.Length - 1);
+        }
+
+        bool IsWhitespace(int start, int end)
+        {
+            for (var index = Math.Max(0, start); index < Math.Min(source.Length, end); index++)
+            {
+                if (!char.IsWhiteSpace(source[index]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        var snapshot = MarkdownSemanticSnapshot.Parse(source);
+        foreach (var span in snapshot.Spans)
+        {
+            if (span.Kind != MarkdownSemanticSpanKind.BlockMath ||
+                span.Start < 0 ||
+                span.End > source.Length ||
+                span.End <= span.Start ||
+                !MarkdownMathSource.TryExtract(source, span, out var formula, out var display))
+            {
+                continue;
+            }
+
+            var startLine = LineForOffset(span.Start);
+            var endLine = LineForOffset(Math.Max(span.Start, span.End - 1));
+            var startLineStart = lineStarts[startLine];
+            var endLineEnd = lineStarts[endLine] + content.Lines[endLine].Text.Length;
+            if (!IsWhitespace(startLineStart, span.Start) ||
+                !IsWhitespace(span.End, endLineEnd))
+            {
+                continue;
+            }
+
+            result[startLine] = new PreviewMathBlock(
+                startLine,
+                endLine,
+                source[span.Start..span.End],
+                formula,
+                display);
+        }
+        return result;
+    }
 
     internal sealed record MarkdownPreviewArtifactPlan(
         double Width,
@@ -377,6 +465,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         var linkTargets = new List<string>();
         var linkIndices = new Dictionary<Uri, int>(ReferenceEqualityComparer.Instance);
         var blocks = new List<ArtifactBlock>();
+        var mathBlocks = FindPreviewMathBlocks(content);
 
         int LinkIndex(Uri? uri)
         {
@@ -412,6 +501,16 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             foreach (var piece in content.Inlines.Get(text, mode).Pieces)
             {
                 if (piece.Text.Length == 0) continue;
+                if (piece.Math is { } math)
+                {
+                    values.Add(new MarkdownLayoutPiece(
+                        piece.Text,
+                        styles.Style(@base, piece.Style, link: false),
+                        -1,
+                        new MarkdownMathLayout(math.Formula, math.Display)));
+                    continue;
+                }
+
                 var link = LinkIndex(piece.Link);
                 values.Add(new MarkdownLayoutPiece(
                     piece.Text,
@@ -442,6 +541,19 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             3 => ArtifactBaseStyle.Heading3,
             _ => ArtifactBaseStyle.HeadingOther
         };
+
+        void AddMathBlock(PreviewMathBlock math)
+        {
+            var fallback = math.Source.Replace('\n', ' ');
+            var piece = new MarkdownLayoutPiece(
+                fallback,
+                styles.Style(ArtifactBaseStyle.Normal, InlineStyle.None, link: false),
+                -1,
+                new MarkdownMathLayout(math.Formula, math.Display));
+            blocks.Add(new ArtifactBlock(
+                ArtifactBlockKind.Math,
+                Array.AsReadOnly(new[] { piece })));
+        }
 
         void AddSourceBlock(ContentLine previewLine)
         {
@@ -589,7 +701,18 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         }
         else if (content.RenderMode != MarkdownRenderModes.Full)
         {
-            foreach (var line in content.Lines) AddSourceBlock(line);
+            for (var lineIndex = 0; lineIndex < content.Lines.Count;)
+            {
+                if (mathBlocks.TryGetValue(lineIndex, out var math))
+                {
+                    AddMathBlock(math);
+                    lineIndex = math.EndLine + 1;
+                    continue;
+                }
+
+                AddSourceBlock(content.Lines[lineIndex]);
+                lineIndex++;
+            }
         }
         else
         {
@@ -603,8 +726,17 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     Rows: Array.AsReadOnly(codeRows.ToArray())));
                 codeRows = null;
             }
-            foreach (var previewLine in content.Lines)
+            for (var lineIndex = 0; lineIndex < content.Lines.Count;)
             {
+                if (codeRows == null && mathBlocks.TryGetValue(lineIndex, out var math))
+                {
+                    FinishCode();
+                    AddMathBlock(math);
+                    lineIndex = math.EndLine + 1;
+                    continue;
+                }
+
+                var previewLine = content.Lines[lineIndex];
                 var line = previewLine.Text.TrimEnd();
                 if (previewLine.FenceKind == MarkdownFenceLineKind.Opening)
                 {
@@ -627,6 +759,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                     FinishCode();
                     AddFullBlock(line);
                 }
+                lineIndex++;
             }
             FinishCode();
         }
@@ -710,6 +843,18 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
                             commands.Add(new RectangleCommand(plan.HoverBrush,
                                 new Rect(0, y, plan.Width, result.Size.Height), 0));
                         AddResult(result, 0, y);
+                        y += result.Size.Height;
+                        truncated |= result.Truncated;
+                    }
+                    break;
+                }
+                case ArtifactBlockKind.Math:
+                {
+                    var result = await Layout(block.Pieces, plan.Width, Remaining(y)).ConfigureAwait(false);
+                    if (result != null)
+                    {
+                        var x = Math.Max(0, (plan.Width - result.ContentWidth) / 2);
+                        AddResult(result, x, y);
                         y += result.Size.Height;
                         truncated |= result.Truncated;
                     }

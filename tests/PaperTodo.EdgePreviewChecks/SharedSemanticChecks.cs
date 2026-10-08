@@ -23,6 +23,20 @@ internal static class SharedPreviewSemanticChecks
         Require(nested.Any(p => p.Text.Contains("nested") && (p.Style & (Style.Strong | Style.Italic)) == (Style.Strong | Style.Italic)),
             "nested emphasis composes both styles");
         Require(Visible(@"\*literal\* \[not link\]") == "*literal* [not link]", "escaped punctuation stays literal");
+        var dollarMath = Full("$x^2$");
+        Require(Visible("$x^2$") == "$x^2$" &&
+            dollarMath.Length == 1 &&
+            dollarMath[0].Math is { Formula: "x^2", Display: false },
+            "inline formula keeps source for measurement and carries a render request");
+        var aliasMath = Full(@"\(x+y\)");
+        Require(Visible(@"\(x+y\)") == @"\(x+y\)" &&
+            aliasMath.Length == 1 &&
+            aliasMath[0].Math is { Formula: "x+y", Display: false },
+            "backslash formula carries the same render request");
+        Require(Renderer.InlinePieces("$x^2$", MarkdownRenderModes.Basic).Single().Math != null,
+            "Basic edge preview also renders recognized math");
+        Require(Renderer.InlinePieces("$x^2$", MarkdownRenderModes.Off).All(piece => piece.Math == null),
+            "Off mode keeps formula source as ordinary text");
         Require(Visible("``a ` b``") == "a ` b", "multiple-backtick inline code follows shared grammar");
         var adjacent = Full("[a **bold**](https://example.com)[second](https://example.com)");
         Require(string.Concat(adjacent.Select(p => p.Text)) == "a boldsecond" &&
@@ -41,6 +55,6 @@ internal static class SharedPreviewSemanticChecks
         foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic })
             Require(string.Concat(Renderer.InlinePieces(ordinary, mode).Select(p => p.Text)) == ordinary,
                 "non-Full modes retain the exact source: " + mode);
-        Console.WriteLine("PASS shared semantic grammar, nested styles, escapes, code, HTML, images, link destinations and bounded publication");
+        Console.WriteLine("PASS shared semantic grammar, math requests, nested styles, escapes, code, HTML, images, links and bounded publication");
     }
 }

@@ -11,7 +11,12 @@ internal sealed record MarkdownRunStyle(
     string FontFamily, Uri? FontBaseUri, FontStyle FontStyle, FontWeight FontWeight,
     FontStretch FontStretch, double FontSize, string Culture,
     Brush Foreground, Brush? Background, TextDecorationCollection? Decorations);
-internal readonly record struct MarkdownLayoutPiece(string Text, int StyleIndex, int LinkIndex);
+internal readonly record struct MarkdownMathLayout(string Formula, bool Display);
+internal readonly record struct MarkdownLayoutPiece(
+    string Text,
+    int StyleIndex,
+    int LinkIndex,
+    MarkdownMathLayout? Math = null);
 internal readonly record struct MarkdownLinkHit(Rect Bounds, int LinkIndex);
 internal sealed record MarkdownParagraphResult(
     DrawingGroup Drawing, Size Size, string VisibleText, int FormattedLines, bool Truncated,
@@ -42,8 +47,13 @@ internal sealed class MarkdownParagraphRequest : IEquatable<MarkdownParagraphReq
             if (!style.Foreground.IsFrozen || style.Background?.IsFrozen == false || style.Decorations?.IsFrozen == false)
                 throw new ArgumentException("Layout resources must be frozen snapshots.");
         foreach (var piece in Pieces)
-            if (piece.StyleIndex < 0 || piece.StyleIndex >= Styles.Count || piece.LinkIndex < -1 || piece.LinkIndex >= LinkTargets.Count)
+        {
+            if (piece.StyleIndex < 0 || piece.StyleIndex >= Styles.Count ||
+                piece.LinkIndex < -1 || piece.LinkIndex >= LinkTargets.Count)
                 throw new ArgumentException("Invalid paragraph piece index.");
+            if (piece.Math != null && (piece.Text.Length == 0 || piece.LinkIndex >= 0))
+                throw new ArgumentException("Math pieces need fallback source text and cannot also be links.");
+        }
         var hash = new HashCode(); hash.Add(Viewport); hash.Add(PixelsPerDip); hash.Add(FormattingMode);
         foreach (var piece in Pieces) hash.Add(piece);
         foreach (var link in LinkTargets) hash.Add(link);
@@ -142,7 +152,7 @@ internal static class MarkdownParagraphLayout
 
     private sealed class ParagraphSource : TextSource
     {
-        private readonly (int Start, int End, RunProperties Properties)[] _runs;
+        private readonly (int Start, int End, RunProperties Properties, MarkdownMathDrawing? Math, double MathScale)[] _runs;
         internal readonly record struct LinkRange(int Start, int End, int LinkIndex);
         internal string Text { get; }
         internal List<LinkRange> Links { get; } = new();
@@ -153,12 +163,40 @@ internal static class MarkdownParagraphLayout
             var styles = request.Styles.Select(style => new RunProperties(style) { PixelsPerDip = request.PixelsPerDip }).ToArray();
             DefaultProperties = styles[0];
             Text = string.Concat(request.Pieces.Select(piece => piece.Text));
-            _runs = new (int, int, RunProperties)[request.Pieces.Count];
+            _runs = new (int, int, RunProperties, MarkdownMathDrawing?, double)[request.Pieces.Count];
             var offset = 0;
             for (var i = 0; i < request.Pieces.Count; i++)
             {
                 var piece = request.Pieces[i];
-                _runs[i] = (offset, offset + piece.Text.Length, styles[piece.StyleIndex]);
+                MarkdownMathDrawing? math = null;
+                var mathScale = 1.0;
+                if (piece.Math is { } mathSpec)
+                {
+                    var style = request.Styles[piece.StyleIndex];
+                    if (MarkdownMathRenderer.TryRender(
+                            mathSpec.Formula,
+                            mathSpec.Display,
+                            style.FontSize,
+                            style.Foreground,
+                            style.FontFamily,
+                            out var rendered))
+                    {
+                        mathScale = rendered.Width <= request.Viewport.Width
+                            ? 1.0
+                            : request.Viewport.Width / rendered.Width;
+                        if (double.IsFinite(mathScale) && mathScale >= 0.2)
+                        {
+                            math = rendered;
+                        }
+                    }
+                }
+
+                _runs[i] = (
+                    offset,
+                    offset + piece.Text.Length,
+                    styles[piece.StyleIndex],
+                    math,
+                    mathScale);
                 if (piece.LinkIndex >= 0)
                 {
                     if (Links.Count > 0 && Links[^1].End == offset && Links[^1].LinkIndex == piece.LinkIndex)
@@ -174,8 +212,77 @@ internal static class MarkdownParagraphLayout
             var low = 0; var high = _runs.Length - 1;
             while (low < high) { var middle = (low + high) / 2; if (_runs[middle].End <= index) low = middle + 1; else high = middle; }
             var run = _runs[low];
+            if (run.Math != null && index == run.Start)
+            {
+                return new MathDrawingRun(
+                    run.Properties,
+                    run.Math,
+                    run.MathScale,
+                    run.End - run.Start);
+            }
             return new TextCharacters(Text, index, run.End - index, run.Properties);
         }
+
+        private sealed class MathDrawingRun : TextEmbeddedObject
+        {
+            private readonly TextRunProperties _properties;
+            private readonly DrawingGroup _drawing;
+            private readonly double _scale;
+            private readonly double _width;
+            private readonly double _height;
+            private readonly double _baseline;
+            private readonly int _length;
+
+            internal MathDrawingRun(
+                TextRunProperties properties,
+                MarkdownMathDrawing drawing,
+                double scale,
+                int length)
+            {
+                _properties = properties;
+                _drawing = drawing.Drawing;
+                _scale = Math.Clamp(scale, 0.2, 1.0);
+                _width = Math.Max(1, drawing.Width * _scale);
+                _height = Math.Max(1, drawing.Height * _scale);
+                _baseline = Math.Clamp(drawing.Baseline * _scale, 0, _height);
+                _length = Math.Max(1, length);
+            }
+
+            public override LineBreakCondition BreakBefore => LineBreakCondition.BreakPossible;
+            public override LineBreakCondition BreakAfter => LineBreakCondition.BreakPossible;
+            public override bool HasFixedSize => true;
+            public override CharacterBufferReference CharacterBufferReference => new();
+            public override int Length => _length;
+            public override TextRunProperties Properties => _properties;
+
+            public override TextEmbeddedObjectMetrics Format(double remainingParagraphWidth) =>
+                new(_width, _height, _baseline);
+
+            public override Rect ComputeBoundingBox(bool rightToLeft, bool sideways) =>
+                new(0, 0, _width, _height);
+
+            public override void Draw(
+                DrawingContext drawingContext,
+                Point origin,
+                bool rightToLeft,
+                bool sideways)
+            {
+                drawingContext.PushTransform(new TranslateTransform(
+                    origin.X,
+                    origin.Y - _baseline));
+                if (Math.Abs(_scale - 1) > 0.001)
+                {
+                    drawingContext.PushTransform(new ScaleTransform(_scale, _scale));
+                }
+                drawingContext.DrawDrawing(_drawing);
+                if (Math.Abs(_scale - 1) > 0.001)
+                {
+                    drawingContext.Pop();
+                }
+                drawingContext.Pop();
+            }
+        }
+
         public override TextSpan<CultureSpecificCharacterBufferRange> GetPrecedingText(int limit) =>
             new(limit, new CultureSpecificCharacterBufferRange(DefaultProperties.CultureInfo, new CharacterBufferRange(Text, 0, Math.Min(limit, Text.Length))));
         public override int GetTextEffectCharacterIndexFromTextSourceCharacterIndex(int index) => index;
