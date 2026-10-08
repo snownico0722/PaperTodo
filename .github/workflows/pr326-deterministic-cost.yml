@@ -1,0 +1,40 @@
+name: PR326 deterministic drag cost
+on:
+  push:
+    branches: [audit/pr326-real-drag-cost-20261008]
+    paths:
+      - '.github/workflows/pr326-deterministic-cost.yml'
+      - '.github/scripts/pr326-deterministic-cost.py'
+      - '.github/scripts/pr326-deterministic-cost.cs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    name: Same-runner WPF and native HWND drag A/B
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Measure drag preparation, native movement, and material restore
+        run: python .github/scripts/pr326-deterministic-cost.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr326-deterministic-cost-evidence
+          path: ${{ runner.temp }}/pr326-deterministic-cost
+          retention-days: 1
