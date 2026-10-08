@@ -1,0 +1,81 @@
+name: Validate resolved PR326 integration
+on:
+  push:
+    branches: [audit/resolve-pr326-20261008]
+    paths:
+      - '.github/workflows/pr326-merge-validation.yml'
+      - '.github/scripts/pr326-resolve-merge.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      PAPER_MICA_CAPTURE: ${{ runner.temp }}/merge-material/native
+      PAPER_SKIN_CAPTURE: ${{ runner.temp }}/merge-material/skins
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Merge main into exact PR326 and resolve only reviewed conflicts
+        run: |
+          Copy-Item .github/scripts/pr326-resolve-merge.py "$env:RUNNER_TEMP/pr326-resolve-merge.py"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout --detach a1b296fba72ea575de268b36ff6cc84737d55a16
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot check out original PR #326' }
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch main' }
+          $actual = (git rev-parse origin/main).Trim()
+          if ($actual -ne 'fb9fa6ee14f6b02a5021511b089682dcf7d5d775') { throw "Main moved: $actual" }
+          git -c merge.conflictStyle=diff3 merge --no-commit --no-ff origin/main
+          if ($LASTEXITCODE -ne 1) { throw "Unexpected merge result: $LASTEXITCODE" }
+          python "$env:RUNNER_TEMP/pr326-resolve-merge.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Resolution failed' }
+          git diff --cached --stat
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+          (git diff --cached --stat) | Out-File "$env:RUNNER_TEMP/merge-stat.txt"
+      - name: Release build
+        run: |
+          dotnet build PaperTodo.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: Nine regression groups with combined lifecycle cases
+        run: |
+          ./tools/testing/Run-Checks.ps1 -Group regression
+          if ($LASTEXITCODE -ne 0) { throw 'Regression failed' }
+      - name: Persistence and plugin state regression
+        run: |
+          dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Persistence tests failed' }
+      - name: Native material and skin checks
+        run: |
+          dotnet run --project tests/PaperTodo.MicaChecks/PaperTodo.MicaChecks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Native material checks failed' }
+      - name: Publish verified two-parent merge commit to isolated candidate ref
+        run: |
+          git status --short
+          git commit -m "[ci] merge(main): 同步已合入的 #324、#325，保留 #326 材质与生命周期修复"
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to create merge commit' }
+          git push origin HEAD:refs/heads/audit/pr326-merged-candidate-20261008
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate push failed; original PR remains untouched' }
+          git log -1 --format='%H %P %s'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr326-resolved-integration-evidence
+          path: |
+            ${{ runner.temp }}/merge-material
+            ${{ runner.temp }}/merge-stat.txt
+          retention-days: 1
