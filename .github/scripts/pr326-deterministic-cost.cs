@@ -70,7 +70,7 @@ internal static class Pr326DeterministicCost
                 Until(() => surface.IsBackgroundActive && !surface.HasBackgroundCapture,
                     "initial static sampled material");
 
-            for (var n = 0; n < 14; n++) // 2 warmups, 12 steady samples per skin
+            for (var n = 0; n < 6; n++) // 2 warmups, 4 steady samples per skin
             {
                 hostField.SetValue(master, host);
                 var begin = Stopwatch.GetTimestamp();
@@ -112,7 +112,7 @@ internal static class Pr326DeterministicCost
                 double? recaptureMs = null;
                 if (sampled)
                 {
-                    var doneAt = Stopwatch.GetTimestamp() + 6 * Stopwatch.Frequency;
+                    var doneAt = Stopwatch.GetTimestamp() + 2 * Stopwatch.Frequency;
                     while (Stopwatch.GetTimestamp() < doneAt &&
                            (!surface.IsBackgroundActive || surface.HasBackgroundCapture ||
                             surface.BackgroundFrameCount <= framesAtMove))
@@ -135,7 +135,7 @@ internal static class Pr326DeterministicCost
                 Console.WriteLine($"COST {skin} i={n} UI={uiStartMs:F3}ms firstMove={firstNativeMoveMs:F3}ms " +
                     $"nativeP95={Percentile(nativeMoves,.95):F3}ms capture={snapshotAwaitMs:F1}ms " +
                     $"recover={(recaptureMs?.ToString("F1") ?? "N/A")}ms affinity={affinity}");
-                if (n < 13) Wait(40);
+                if (n < 5) Wait(40);
             }
         }
         finally

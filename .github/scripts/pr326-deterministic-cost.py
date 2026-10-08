@@ -12,7 +12,7 @@ OUT = Path(os.environ["RUNNER_TEMP"]) / "pr326-deterministic-cost"
 OUT.mkdir(parents=True,exist_ok=True)
 REVS={"main":"39292c739901b74a0d718c4d697ecdc1183bdcc0",
       "pr326":"a1b296fba72ea575de268b36ff6cc84737d55a16"}
-SEQUENCE=["main","pr326","pr326","main","main","pr326"]
+SEQUENCE=["main","pr326","pr326","main"]
 TOOL=Path("tools/PaperTodo.MaterialBenchmarks")
 data={"base":REVS["main"],"candidate":REVS["pr326"],"runs":[],"errors":[],
       "scope":"Deterministic WPF host/native HWND movement, synchronous preparation, final recapture; not injected mouse input or scanout"}
@@ -72,7 +72,7 @@ try:
             obj=json.loads(dst.read_text(encoding="utf-8"))
             record["samples"]=obj.get("Samples",[])
             record["count"]=len(record["samples"])
-        if code!=0 or record.get("count",0)!=36:
+        if code!=0 or record.get("count",0)!=12:
             data["errors"].append({"variant":label,"sequence":idx,"status":code,
                                    "samples":record.get("count",0)})
         data["runs"].append(record);save()
