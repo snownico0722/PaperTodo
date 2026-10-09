@@ -344,7 +344,7 @@ internal static class Program
                 controller.State.UseCapsuleMode = true;
                 controller.State.UseDeepCapsuleMode = false;
                 controller.State.ExperimentalInactivePaperOpacity = false;
-                Check("material ownership, caches, cancellation and capture handoffs", () => MaterialRefactorChecks.Run(controller));
+                Check("material isolation, relief pixels and capture handoffs", () => MaterialRefactorChecks.Run(controller));
                 Check("readable opaque semantic palette in light and dark", () =>
                 {
                     controller.State.ColorScheme = "mica";

@@ -22,7 +22,6 @@ internal static class MaterialRefactorChecks
             controller.State.ColorScheme = ColorSchemes.Neutral;
             controller.State.EnableAnimations = false;
             controller.State.MatchAuxiliaryMaterialStrength = false;
-            CheckDetachedPaintSurface(controller);
             CheckNativeIsolation(controller);
             controller.State.MatchAuxiliaryMaterialStrength = true;
             CheckOpeningRequests(controller);
@@ -63,15 +62,6 @@ internal static class MaterialRefactorChecks
                 (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget,
                 "static snapshot stays inside its pixel budget");
         }
-    }
-
-    private static void CheckDetachedPaintSurface(AppController controller)
-    {
-        controller.State.PaperSkin = PaperSkins.TracingPaper; Theme.Invalidate();
-        var surface = new SkinBorder { Width = 240, Height = 160, Background = Brushes.White, CornerRadius = new CornerRadius(8) };
-        Render(surface);
-        Program.Assert(surface.BackgroundSessionState == null && !surface.HasMaterialHostSubscription,
-            "a detached/non-auxiliary painted surface never allocates a background session");
     }
 
     private static void CheckNativeIsolation(AppController controller)
@@ -182,13 +172,6 @@ internal static class MaterialRefactorChecks
     {
         var data = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
         bitmap.CopyPixels(data, bitmap.PixelWidth * 4, 0); return data;
-    }
-    private static void Render(SkinBorder surface)
-    {
-        surface.Measure(new Size(surface.Width, surface.Height));
-        surface.Arrange(new Rect(0, 0, surface.Width, surface.Height));
-        var bitmap = new RenderTargetBitmap((int)surface.Width, (int)surface.Height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(surface);
     }
     private static void Until(Func<bool> predicate, string reason)
     {

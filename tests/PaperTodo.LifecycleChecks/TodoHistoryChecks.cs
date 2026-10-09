@@ -68,6 +68,35 @@ internal static class TodoHistoryChecks
             ReconcileRows(window);
             RequireNoAppendArea(window);
         }
+        // Reordering/rebuilding another Todo must preserve the focused row's actual
+        // native text history as well as its visible text, caret and selection.
+        await Reset(6);
+        var unaffected = Editors(window)["row-0"];
+        var originalUnaffectedText = unaffected.Text;
+        unaffected.Select(unaffected.Text.Length, 0);
+        unaffected.SelectedText = " pending edit";
+        Require(unaffected.CanUndo, "unrelated-row fixture did not record a native text edit");
+        unaffected.Select(2, 4);
+        var unaffectedSelection = (unaffected.SelectionStart, unaffected.SelectionLength, unaffected.CaretIndex);
+        var changedRow = paper.Items[^1];
+        paper.Items.RemoveAt(paper.Items.Count - 1);
+        changedRow.Text += " refreshed";
+        paper.Items.Insert(1, changedRow);
+        ReconcileRows(window, [changedRow.Id]);
+        await Idle();
+        Require(paper.Items[1].Id == changedRow.Id, "reordering the changed Todo did not take effect");
+        RequirePresentation(window, paper, "unrelated row moved and rebuilt");
+        unaffected = Editors(window)["row-0"];
+        Require(unaffected.IsKeyboardFocused && unaffected.CanUndo,
+            "reordering an unrelated Todo lost the focused editor or its native undo history");
+        RequireSelection(unaffected, unaffectedSelection, "unrelated row moved and rebuilt");
+        unaffected.Undo();
+        Require(unaffected.Text == originalUnaffectedText && paper.Items[0].Text == originalUnaffectedText,
+            "the unrelated Todo refresh broke native undo or its live text binding");
+        unaffected.Redo();
+        Require(unaffected.Text == originalUnaffectedText + " pending edit" &&
+                paper.Items[0].Text == unaffected.Text,
+            "the unrelated Todo refresh broke native redo or its live text binding");
         await Reset(12);
 
         // Reordering and history must preserve the user's selection and keep live edits working.
@@ -296,7 +325,7 @@ internal static class TodoHistoryChecks
             "restored row retained its obsolete deletion animation");
         RequireNoAppendArea(window);
         RequireHistoryIsolation(window, paper);
-        Console.WriteLine("PASS Todo history: native Ctrl+Z/Y, row order and presentation, focus/selection, all row fields, text-history priority, external ordering, insertion/deletion and animation interruption");
+        Console.WriteLine("PASS Todo history: native Ctrl+Z/Y, row order and presentation, unrelated editor undo/redo and selection, all row fields, external ordering, insertion/deletion and animation interruption");
 
         async Task Reset(int count, Action<PaperItem>? prepare = null)
         {
