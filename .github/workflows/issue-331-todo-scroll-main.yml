@@ -1,0 +1,45 @@
+name: Issue 331 Todo scroll check (main)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/PaperWindow.Todo.cs"
+      - "src/PaperWindow.TodoLinksAndSelection.cs"
+      - "src/TodoRules.cs"
+      - "tests/PaperTodo.TodoScrollChecks/**"
+      - ".github/workflows/issue-331-todo-scroll-main.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  todo-scroll:
+    name: Verify actual Todo viewport on main
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Check out full Git history and submodules
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore exact WPF regression fixture
+        run: dotnet restore .\tests\PaperTodo.TodoScrollChecks\PaperTodo.TodoScrollChecks.csproj -r win-x64
+
+      - name: Test 80-todo checkbox scrolling with real PaperWindow
+        run: dotnet run --project .\tests\PaperTodo.TodoScrollChecks\PaperTodo.TodoScrollChecks.csproj -c Release -r win-x64 --no-restore
