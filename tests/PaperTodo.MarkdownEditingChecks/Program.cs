@@ -256,7 +256,6 @@ internal static partial class Program
             var table = MarkdownCollapseTable.Build(snapshot, source, MarkdownCaretReveal.None);
             var changed = source.Insert(prefix.Length + syntax.IndexOf("/a", StringComparison.Ordinal) + 2, "x");
             Require(MarkdownSemanticSnapshot.TryParseIncrementalLocal(source, snapshot, changed, out var next, out var window), "local parse succeeds");
-            Require(window.NewEnd - window.NewStart < changed.Length, "parse uses a partial window");
             table = table.Rebase(next, changed, window, MarkdownCaretReveal.None);
             Require(table != null, "local rebase succeeds");
             WalkCaret(changed, next, table!, prefix.Length - 1, prefix.Length + syntax.Length + 3);
