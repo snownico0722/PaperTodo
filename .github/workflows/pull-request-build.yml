@@ -49,13 +49,15 @@ jobs:
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
       - name: Run regression checks
-        run: ./tools/testing/Run-Checks.ps1 -Group regression
+        run: |
+          ./tools/testing/Run-Checks.ps1 -Group all -List
+          ./tools/testing/Run-Checks.ps1 -Group regression
 
       - name: Native material and skin checks
         env:
           PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
           PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
-        run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release
+        run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
 
       - name: Upload material visual evidence
         if: always()
