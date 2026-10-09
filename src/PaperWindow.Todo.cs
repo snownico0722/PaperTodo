@@ -95,6 +95,55 @@ public sealed partial class PaperWindow
         }
     }
 
+    // A checkbox changes one item's ordering. Keep every unrelated editor attached so
+    // its focus, caret, selection and native text history survive this operation.
+    private void RebuildMovedTodoRow(PaperItem item)
+    {
+        if (_todoPanel == null)
+        {
+            return;
+        }
+
+        var currentIndex = _todoRows.FindIndex(row =>
+            string.Equals(row.Tag as string, item.Id, StringComparison.Ordinal));
+        var targetIndex = _paper.Items.FindIndex(candidate =>
+            string.Equals(candidate.Id, item.Id, StringComparison.Ordinal));
+        if (currentIndex < 0 || targetIndex < 0)
+        {
+            RebuildTodoRows();
+            return;
+        }
+
+        var oldRow = _todoRows[currentIndex];
+        var panelIndex = _todoPanel.Children.IndexOf(oldRow);
+        if (panelIndex < 0)
+        {
+            RebuildTodoRows();
+            return;
+        }
+
+        _todoRowsGeneration++;
+        if (ReferenceEquals(_linkedNoteDropRow, oldRow))
+        {
+            _linkedNoteDropRow = null;
+        }
+        if (ReferenceEquals(_activeDropRow, oldRow))
+        {
+            ClearActiveDropIndicator();
+        }
+
+        // Removing the focused row releases its old editor. Do not focus the new editor at
+        // the item's distant completed position: that made ScrollViewer jump to the bottom.
+        _todoEditors.Remove(item.Id);
+        _todoPanel.Children.RemoveAt(panelIndex);
+        _todoRows.RemoveAt(currentIndex);
+
+        var newRow = (Border)BuildTodoRow(item, isNewItem: false);
+        _todoRows.Remove(newRow); // BuildTodoRow registers its new row at the list's end.
+        _todoRows.Insert(targetIndex, newRow);
+        _todoPanel.Children.Insert(targetIndex, newRow);
+    }
+
     private void FocusTodoItem(string? itemId, TodoFocusPlacement placement = TodoFocusPlacement.End)
     {
         if (string.IsNullOrWhiteSpace(itemId))
@@ -444,7 +493,6 @@ public sealed partial class PaperWindow
 
         check.Checked += (_, _) =>
         {
-            var focusedItemId = CurrentFocusedTodoItemId();
             PushUndoSnapshot();
             item.Done = true;
             text.IsDone = true;
@@ -459,7 +507,7 @@ public sealed partial class PaperWindow
 
             if (MoveTodoItemAfterDoneChange(item, done: true))
             {
-                RebuildTodoRows(focusedItemId);
+                RebuildMovedTodoRow(item);
                 return;
             }
 
@@ -472,7 +520,6 @@ public sealed partial class PaperWindow
 
         check.Unchecked += (_, _) =>
         {
-            var focusedItemId = CurrentFocusedTodoItemId();
             PushUndoSnapshot();
             item.Done = false;
             text.IsDone = false;
@@ -481,7 +528,7 @@ public sealed partial class PaperWindow
 
             if (MoveTodoItemAfterDoneChange(item, done: false))
             {
-                RebuildTodoRows(focusedItemId);
+                RebuildMovedTodoRow(item);
                 return;
             }
 
