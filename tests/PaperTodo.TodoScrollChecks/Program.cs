@@ -94,7 +94,7 @@ internal static class Program
         }
         finally
         {
-            window.CloseForReal(saveBeforeClose: false);
+            window.CloseForReal();
         }
     }
 
