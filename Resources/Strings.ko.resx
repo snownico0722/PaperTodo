@@ -38,7 +38,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
 오류: {0}</value>
   </data>
   <data name="AppendAreaToolTip" xml:space="preserve">
-    <value>클릭해 내용을 추가하고, 여기로 끌어 삭제</value>
+    <value>클릭해서 할 일 추가</value>
   </data>
   <data name="CapsuleNote" xml:space="preserve">
     <value>메모</value>

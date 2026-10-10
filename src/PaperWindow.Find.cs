@@ -343,6 +343,7 @@ public sealed partial class PaperWindow
         popup.Opened += (_, _) =>
         {
             HookBuiltInFindContentChanges();
+            RefreshTodoFindCues();
             CancelExperimentalAutoCollapse();
             RefreshExperimentalOpacity();
         };
@@ -351,6 +352,7 @@ public sealed partial class PaperWindow
             EndBuiltInFindDrag();
             UnhookBuiltInFindContentChanges();
             ReleaseTodoInactiveFindSelection();
+            RefreshTodoFindCues();
             RefreshExperimentalOpacity();
         };
 
@@ -731,6 +733,7 @@ public sealed partial class PaperWindow
         {
             _findMatchIndex = -1;
             ClearAppliedFindSelection();
+            RefreshTodoFindCues();
             SynchronizeGlobalFindState(query);
             UpdateFindCount();
             return;
@@ -757,6 +760,7 @@ public sealed partial class PaperWindow
             _findAppliedMatch = null;
             ReleaseTodoInactiveFindSelection();
         }
+        RefreshTodoFindCues();
         SynchronizeGlobalFindState(query);
         UpdateFindCount();
     }
@@ -865,6 +869,21 @@ public sealed partial class PaperWindow
             match.Offset + match.Length > editor.Text.Length)
         {
             _findAppliedMatch = null;
+            return;
+        }
+
+        if (IsTodoFindMatchHidden(match))
+        {
+            // Selecting text that is visually hidden can scroll the clipped editor;
+            // cue the user without changing either folding state or search focus.
+            ReleaseTodoInactiveFindSelection();
+            if (IsCompletedTodoItemHidden(match.TodoItemId))
+                _completedTodoSectionHeader?.BringIntoView();
+            else
+                _todoRows.FirstOrDefault(row =>
+                    string.Equals(row.Tag as string, match.TodoItemId, StringComparison.Ordinal))
+                    ?.BringIntoView();
+            _findAppliedMatch = match;
             return;
         }
 
@@ -979,6 +998,7 @@ public sealed partial class PaperWindow
 
         var hasMatch = TryGetCurrentFindMatch(out var match);
         _findPopup.IsOpen = false;
+        RefreshTodoFindCues();
 
         if (!restoreFocus ||
             !IsVisible ||
@@ -1008,7 +1028,8 @@ public sealed partial class PaperWindow
 
         if (hasMatch &&
             match.TodoItemId != null &&
-            _todoEditors.TryGetValue(match.TodoItemId, out var editor))
+            _todoEditors.TryGetValue(match.TodoItemId, out var editor) &&
+            !IsTodoFindMatchHidden(match))
         {
             editor.Focus();
             return;

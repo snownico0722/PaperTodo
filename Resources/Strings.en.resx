@@ -38,7 +38,7 @@ Open PaperTodo again manually. If this keeps happening, restart the PC or repair
 Error: {0}</value>
   </data>
   <data name="AppendAreaToolTip" xml:space="preserve">
-    <value>Click to add content; drag here to delete</value>
+    <value>Click to add a todo</value>
   </data>
   <data name="CapsuleNote" xml:space="preserve">
     <value>Note</value>
