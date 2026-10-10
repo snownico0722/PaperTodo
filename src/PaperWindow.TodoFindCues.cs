@@ -12,6 +12,20 @@ public sealed partial class PaperWindow
         _todoFoldFindControls = new(StringComparer.Ordinal);
     private readonly HashSet<string> _findHiddenTodoItemIds = new(StringComparer.Ordinal);
     private bool _findHiddenCompletedTodoMatch;
+    private bool _todoFindCueRefreshQueued;
+
+    // A long list can queue many independent fold-layout callbacks. Coalesce their
+    // visual cues instead of rescanning every match for every individual row.
+    private void QueueTodoFindCueRefresh()
+    {
+        if (!IsBuiltInFindOpen || _todoFindCueRefreshQueued) return;
+        _todoFindCueRefreshQueued = true;
+        _ = Dispatcher.BeginInvoke((Action)(() =>
+        {
+            _todoFindCueRefreshQueued = false;
+            if (IsBuiltInFindOpen) RefreshTodoFindCues();
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
 
     private bool IsTodoFindMatchBehindFold(PaperFindMatch match)
     {
@@ -44,8 +58,12 @@ public sealed partial class PaperWindow
             {
                 if (match.TodoItemId == null) continue;
                 if (IsCompletedTodoItemHidden(match.TodoItemId))
+                {
                     _findHiddenCompletedTodoMatch = true;
-                else if (IsTodoFindMatchBehindFold(match))
+                    continue;
+                }
+                if (!_findHiddenTodoItemIds.Contains(match.TodoItemId) &&
+                    IsTodoFindMatchBehindFold(match))
                     _findHiddenTodoItemIds.Add(match.TodoItemId);
             }
         }

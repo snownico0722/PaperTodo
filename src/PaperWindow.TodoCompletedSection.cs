@@ -11,6 +11,7 @@ public sealed partial class PaperWindow
 {
     // Presentation only: folding never changes Order, Done, or the saved data model.
     private bool _completedTodoSectionCollapsed;
+    private readonly HashSet<string> _hiddenCompletedTodoItemIds = new(StringComparer.Ordinal);
     private Border? _completedTodoSectionHeader;
     private Border? _completedTodoSectionChevron;
     private TextBlock? _completedTodoSectionArrow;
@@ -50,10 +51,13 @@ public sealed partial class PaperWindow
 
         var completedIds = ordered.Where(item => item.Done)
             .Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        _hiddenCompletedTodoItemIds.Clear();
+        if (hasCompletedGroup && _completedTodoSectionCollapsed)
+            _hiddenCompletedTodoItemIds.UnionWith(completedIds);
         foreach (var row in _todoRows)
         {
-            row.Visibility = hasCompletedGroup && _completedTodoSectionCollapsed &&
-                             row.Tag is string id && completedIds.Contains(id)
+            row.Visibility = row.Tag is string id &&
+                             _hiddenCompletedTodoItemIds.Contains(id)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         }
@@ -118,11 +122,7 @@ public sealed partial class PaperWindow
     }
 
     private bool IsCompletedTodoItemHidden(string itemId) =>
-        _completedTodoSectionCollapsed &&
-        _completedTodoSectionHeader != null &&
-        _todoPanel?.Children.Contains(_completedTodoSectionHeader) == true &&
-        _paper.Items.Any(item => item.Done &&
-            string.Equals(item.Id, itemId, StringComparison.Ordinal));
+        _hiddenCompletedTodoItemIds.Contains(itemId);
 
     private void UpdateCompletedTodoSectionVisuals()
     {

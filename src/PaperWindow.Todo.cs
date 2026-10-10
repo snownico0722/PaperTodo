@@ -1258,7 +1258,7 @@ public sealed partial class PaperWindow
                     }
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
-            if (IsBuiltInFindOpen) RefreshTodoFindCues();
+            QueueTodoFindCueRefresh();
         }
 
         void QueueFoldRefresh()
@@ -1286,7 +1286,17 @@ public sealed partial class PaperWindow
                 if (text.IsKeyboardFocusWithin) Keyboard.ClearFocus();
             }
             RefreshFoldPresentation();
-            if (IsBuiltInFindOpen) ApplyCurrentFindMatch();
+            if (IsBuiltInFindOpen)
+            {
+                // The new MaxLines layout settles after the click. Recompute hit
+                // visibility before selecting the current match, without auto-opening.
+                _ = Dispatcher.BeginInvoke((Action)(() =>
+                {
+                    if (!IsBuiltInFindOpen) return;
+                    RefreshTodoFindCues();
+                    ApplyCurrentFindMatch();
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
             e.Handled = true;
         };
         text.Loaded += (_, _) => QueueFoldRefresh();
