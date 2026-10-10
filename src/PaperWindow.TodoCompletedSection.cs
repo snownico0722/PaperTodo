@@ -17,6 +17,16 @@ public sealed partial class PaperWindow
     private TextBlock? _completedTodoSectionArrow;
     private TextBlock? _completedTodoSectionLabel;
 
+    private void ResetCompletedTodoSectionHeader()
+    {
+        // The full row rebuild can follow a typography/skin change. Recreate the
+        // section header with the same current metrics as the new rows.
+        _completedTodoSectionHeader = null;
+        _completedTodoSectionChevron = null;
+        _completedTodoSectionArrow = null;
+        _completedTodoSectionLabel = null;
+    }
+
     private void RemoveCompletedTodoSectionHeaderFromPanel()
     {
         if (_todoPanel != null && _completedTodoSectionHeader != null)

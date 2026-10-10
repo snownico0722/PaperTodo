@@ -91,6 +91,7 @@ public sealed partial class PaperWindow
         var existingIds = new HashSet<string>(_todoRows.Select(r => (string)r.Tag));
 
         _todoPanel.Children.Clear();
+        ResetCompletedTodoSectionHeader();
         _todoFoldFindControls.Clear();
         _todoEditors.Clear();
         _todoReminderCountdowns.Clear();

@@ -1029,8 +1029,11 @@ public sealed partial class PaperWindow
         if (hasMatch &&
             match.TodoItemId != null &&
             _todoEditors.TryGetValue(match.TodoItemId, out var editor) &&
+            !_foldedTodoItemIds.Contains(match.TodoItemId) &&
             !IsTodoFindMatchHidden(match))
         {
+            // Giving a folded editor focus would reveal its full text on search
+            // close, even if the user never chose to expand it.
             editor.Focus();
             return;
         }
