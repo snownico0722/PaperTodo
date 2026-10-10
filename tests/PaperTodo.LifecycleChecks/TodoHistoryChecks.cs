@@ -301,28 +301,43 @@ internal static class TodoHistoryChecks
         Require(editor.MaxLines == 2 && editor.LineCount == 5 && editor.ActualHeight < expandedHeight &&
                 editor.Text == longText && paper.Items[0].Text == longText && paper.Items.Count == 4,
             "folding changed the model or failed to reduce the visible height to two lines");
+        var foldPreview = FoldPreview(window, "row-0");
+        Require(foldPreview.Visibility == Visibility.Visible &&
+                foldPreview.TextTrimming == TextTrimming.CharacterEllipsis &&
+                foldPreview.Text == longText &&
+                foldPreview.ActualWidth > 0 && foldPreview.ActualHeight > 0 &&
+                foldPreview.ActualHeight <= editor.ActualHeight + 1 && editor.Opacity == 0,
+            "folded todo must show a two-line visual ellipsis without modifying the editor or model");
         await Focus(window, editor);
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1,
             "focusing a folded todo did not restore the full editor height");
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "editing a folded todo retained its ellipsis overlay");
         Keyboard.ClearFocus();
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == 2 && editor.ActualHeight < expandedHeight - 1,
             "leaving a folded todo did not restore two visible lines");
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "leaving the editor did not restore the ellipsis preview");
         ReconcileRows(window, ["row-0"]);
         await Idle();
         editor = Editors(window)["row-0"];
         foldButton = FoldButton(window, "row-0");
         Require(editor.MaxLines == 2 && foldButton.Visibility == Visibility.Visible &&
                 editor.Text == longText, "rebuilt todo row lost its folded display state");
+        Require(FoldPreview(window, "row-0").Visibility == Visibility.Visible,
+            "rebuilding the row did not restore the ellipsis preview");
         ClickFold(foldButton);
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1 &&
                 editor.Text == longText,
             "expanding a folded todo did not restore the full editor content and height");
+        Require(FoldPreview(window, "row-0").Visibility == Visibility.Collapsed,
+            "expanding a folded todo did not hide its preview");
 
         // A completed long todo may draw strikethrough lines only inside its
         // clipped, two-line editor; hidden lines must not paint over later rows.
@@ -362,11 +377,17 @@ internal static class TodoHistoryChecks
         ClickFold(foldButton);
         await Idle();
         Require(editor.MaxLines == 2, "wrapped todo did not fold");
+        var wrapPreview = FoldPreview(window, "row-0");
+        Require(wrapPreview.Visibility == Visibility.Visible &&
+                Math.Abs(wrapPreview.ActualWidth - editor.ActualWidth) < 1,
+            "soft-wrapped todo ellipsis did not match the editor width");
         editor.Width = 450;
         window.UpdateLayout();
         await Idle();
         Require(editor.LineCount <= 4 && foldButton.Visibility == Visibility.Collapsed &&
                 editor.MaxLines == int.MaxValue, "widening a folded todo failed to remove an unnecessary fold");
+        Require(wrapPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "widening the editor left an obsolete folded preview");
 
         // Shift+Enter edits one todo, respects the selected text and the input limit,
         // and stays within the native text undo/redo history.
@@ -501,6 +522,13 @@ internal static class TodoHistoryChecks
             window.RemoveHandler(Keyboard.PreviewKeyDownEvent, down);
             window.RemoveHandler(Keyboard.PreviewKeyUpEvent, up);
         }
+    }
+
+    private static TextBlock FoldPreview(PaperWindow window, string id)
+    {
+        var grid = (Grid)Rows(window)[id].Child;
+        return grid.Children.OfType<TextBlock>()
+            .Single(child => Equals(child.Tag, "TodoFoldPreview"));
     }
 
     private static Border FoldButton(PaperWindow window, string id)

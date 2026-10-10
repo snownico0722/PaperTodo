@@ -663,6 +663,11 @@ public sealed partial class PaperWindow
             MaxLength = TodoTextMaxLength
         };
 
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        var foldPreview = new TodoFoldPreview(text, grid);
+        foldPreview.SetDone(item.Done);
+
         _todoEditors[item.Id] = text;
 
         text.TextChanged += (_, _) =>
@@ -728,6 +733,7 @@ public sealed partial class PaperWindow
             }
             text.IsDone = true;
             text.Foreground = BrightWeakTextBrush;
+            foldPreview.SetDone(true);
             _controller.MarkDirty();
 
             if (_controller.State.AutoClearCompletedTodos)
@@ -770,6 +776,7 @@ public sealed partial class PaperWindow
             }
             text.IsDone = false;
             text.Foreground = TextBrush;
+            foldPreview.SetDone(false);
             _controller.MarkDirty();
 
             if (MoveTodoItemsAfterDoneChange([item], done: false))
@@ -885,9 +892,6 @@ public sealed partial class PaperWindow
         AttachItemContextMenu(row);
         AttachItemContextMenu(check);
         AttachItemContextMenu(text);
-
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
 
         if (hasLinkedPath)
         {
@@ -1225,14 +1229,14 @@ public sealed partial class PaperWindow
         {
             Data = TodoFoldUp,
             Stroke = WeakTextBrush,
-            StrokeThickness = AppTypography.Scale(1.5),
+            StrokeThickness = AppTypography.Scale(1.15),
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round,
             Stretch = Stretch.Uniform,
-            Width = AppTypography.Scale(11),
-            Height = AppTypography.Scale(9),
-            Opacity = 0.58,
+            Width = AppTypography.Scale(9),
+            Height = AppTypography.Scale(6),
+            Opacity = 0.48,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -1294,6 +1298,7 @@ public sealed partial class PaperWindow
                 : metrics.RowMinHeight;
             text.VerticalContentAlignment = folded ? VerticalAlignment.Top : VerticalAlignment.Center;
             var maxLines = folded ? TodoFoldVisibleLines : int.MaxValue;
+            foldPreview.SetFolded(folded);
             if (ApplyFoldLineLimit(maxLines) && folded)
             {
                 // After editing near the end, folding should show the first two lines.
@@ -1318,9 +1323,9 @@ public sealed partial class PaperWindow
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
-        foldButton.MouseEnter += (_, _) => foldGlyph.Opacity = 0.9;
+        foldButton.MouseEnter += (_, _) => foldGlyph.Opacity = 0.78;
         foldButton.MouseLeave += (_, _) =>
-            foldGlyph.Opacity = _findHiddenTodoItemIds.Contains(item.Id) ? 1.0 : 0.58;
+            foldGlyph.Opacity = _findHiddenTodoItemIds.Contains(item.Id) ? 1.0 : 0.48;
         foldButton.MouseLeftButtonDown += (_, e) => e.Handled = true;
         foldButton.MouseLeftButtonUp += (_, e) =>
         {
@@ -1352,6 +1357,7 @@ public sealed partial class PaperWindow
         text.TextChanged += (_, _) => QueueFoldRefresh();
         text.GotKeyboardFocus += (_, _) =>
         {
+            foldPreview.SetFolded(false);
             if (_foldedTodoItemIds.Contains(item.Id)) ApplyFoldLineLimit(int.MaxValue);
             QueueFoldRefresh();
         };

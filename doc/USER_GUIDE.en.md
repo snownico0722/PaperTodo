@@ -153,7 +153,7 @@ Todo papers are crafted for checklists, daily agendas, and bite-sized action ite
 
 - **New Item**: Click the bottom blank line to type; press <kbd>Enter</kbd> to commit and automatically insert a new item below.
 - **Line Break**: Press <kbd>Shift</kbd> + <kbd>Enter</kbd> to start a new line in the same todo.
-- **Fold Long Items**: When text occupies more than four displayed lines, use the arrow above the right drag grip to fold it to two lines or expand it. Focusing a folded item temporarily shows the full text for editing.
+- **Fold Long Items**: When text occupies more than four displayed lines, use the small arrow above the right drag grip to fold it to two lines or expand it. The folded two-line preview ends with a visual ellipsis; focusing the item restores its full, unmodified text for editing.
 - **Edit & Double-Click Selection**: Single-click text to edit; **double-click** text to select the entire line for quick replacement.
 - **Quick Delete Blank Line**: Press <kbd>Backspace</kbd> on an unmarked empty line to delete it immediately.
 - **Find Hidden Text**: Search matches hidden by a long todo's fold highlight that row and its expand arrow without expanding the text.
