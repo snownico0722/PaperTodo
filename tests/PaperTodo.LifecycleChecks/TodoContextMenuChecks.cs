@@ -117,7 +117,7 @@ internal static class TodoContextMenuChecks
             AssertSingleItemMenu(opened);
             await Close();
 
-            var handle = ((Grid)row.Child).Children.OfType<Border>()
+            var handle = Descendants(row).OfType<Border>()
                 .Single(border => border.Cursor == Cursors.SizeAll);
             opened = await Open((FrameworkElement)handle.Child, "mouse");
             Require(ReferenceEquals(handle.ContextMenu, opened) &&

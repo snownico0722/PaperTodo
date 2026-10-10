@@ -1249,7 +1249,6 @@ public sealed partial class PaperWindow
         trailingControls.Children.Add(foldButton);
         Grid.SetRow(handle, 1);
         trailingControls.Children.Add(handle);
-        AttachItemContextMenu(foldButton);
 
         var foldRefreshQueued = false;
         void RefreshFoldPresentation()

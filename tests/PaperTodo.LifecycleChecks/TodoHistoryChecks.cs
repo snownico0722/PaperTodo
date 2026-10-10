@@ -290,6 +290,7 @@ internal static class TodoHistoryChecks
         window.UpdateLayout();
         await Idle();
         var longText = editor.Text;
+        var expandedHeight = editor.ActualHeight;
         var foldButton = FoldButton(window, "row-0");
         Require(editor.LineCount == 5 && foldButton.Visibility == Visibility.Visible &&
                 editor.MaxLines == int.MaxValue, "five-line todo did not offer an initially expanded fold control");
@@ -297,9 +298,9 @@ internal static class TodoHistoryChecks
         await Idle();
         ClickFold(foldButton);
         await Idle();
-        Require(editor.MaxLines == 2 && editor.LineCount == 5 && editor.Text == longText &&
-                paper.Items[0].Text == longText && paper.Items.Count == 4,
-            "folding changed the model or failed to limit the visible lines");
+        Require(editor.MaxLines == 2 && editor.LineCount == 5 && editor.ActualHeight < expandedHeight &&
+                editor.Text == longText && paper.Items[0].Text == longText && paper.Items.Count == 4,
+            "folding changed the model or failed to reduce the visible height to two lines");
         await Focus(window, editor);
         Require(editor.MaxLines == int.MaxValue, "focusing a folded todo did not expand it for editing");
         Keyboard.ClearFocus();
