@@ -152,6 +152,7 @@ Todo papers are crafted for checklists, daily agendas, and bite-sized action ite
 ### 3.1 Adding & Editing Items
 
 - **New Item**: Click the bottom blank line to type; press <kbd>Enter</kbd> to commit and automatically insert a new item below.
+- **Line Break**: Press <kbd>Shift</kbd> + <kbd>Enter</kbd> to start a new line in the same todo.
 - **Edit & Double-Click Selection**: Single-click text to edit; **double-click** text to select the entire line for quick replacement.
 - **Quick Delete Blank Line**: Press <kbd>Backspace</kbd> on an unmarked empty line to delete it immediately.
 - **Smart Multi-Line Paste**: When pasting multi-line text from clipboard, PaperTodo strips bullet points (`-`, `*`), numbers (`1.`, `2.`), and task checkboxes (`- [ ]`), splitting text into discrete tasks.

@@ -283,6 +283,35 @@ internal static class TodoHistoryChecks
             "external redo order or current model was lost");
         RequireHistoryIsolation(window, paper);
 
+        // Shift+Enter edits one todo, respects the selected text and the input limit,
+        // and stays within the native text undo/redo history.
+        await Reset(4);
+        editor = Editors(window)["row-0"];
+        var originalLine = editor.Text;
+        editor.Select(4, 0);
+        await SendKey(window, Key.Enter, expectPaperHistory: false, control: false, shift: true);
+        var multiline = originalLine.Insert(4, Environment.NewLine);
+        Require(paper.Items.Count == 4 && editor.Text == multiline && paper.Items[0].Text == multiline &&
+                editor.CaretIndex == 4 + Environment.NewLine.Length,
+            "Shift+Enter did not insert a line break inside the current todo");
+        Require(editor.CanUndo && History(window, "_undoStack").Count == 0,
+            "Shift+Enter bypassed native text history");
+        await SendKey(window, Key.Z, expectPaperHistory: false);
+        Require(editor.Text == originalLine && paper.Items[0].Text == originalLine,
+            "native undo did not remove the inserted line break");
+        await SendKey(window, Key.Y, expectPaperHistory: false);
+        Require(editor.Text == multiline && paper.Items[0].Text == multiline,
+            "native redo did not restore the inserted line break");
+        editor.MaxLength = editor.Text.Length;
+        editor.Select(2, 0);
+        await SendKey(window, Key.Enter, expectPaperHistory: false, control: false, shift: true);
+        Require(editor.Text == multiline && paper.Items.Count == 4,
+            "Shift+Enter exceeded the todo text length limit");
+        editor.Select(2, 2);
+        await SendKey(window, Key.Enter, expectPaperHistory: false, control: false, shift: true);
+        Require(editor.Text == multiline.Remove(2, 2).Insert(2, Environment.NewLine) && paper.Items.Count == 4,
+            "Shift+Enter did not replace a selection at the text length limit");
+
         // Enter insertion, last-row deletion and the disabled append area retain their contracts.
         await Reset(4);
         await Focus(window, Editors(window)["row-0"]);
@@ -355,7 +384,7 @@ internal static class TodoHistoryChecks
         Require(editor.IsKeyboardFocused, "fixture could not give the live Todo editor keyboard focus");
     }
 
-    private static async Task SendKey(PaperWindow window, Key key, bool expectPaperHistory = true, bool control = true)
+    private static async Task SendKey(PaperWindow window, Key key, bool expectPaperHistory = true, bool control = true, bool shift = false)
     {
         var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var observed = false;
@@ -372,7 +401,7 @@ internal static class TodoHistoryChecks
         try
         {
             var virtualKey = (ushort)KeyInterop.VirtualKeyFromKey(key);
-            LifecycleInput.KeyChord(control ? [0x11, virtualKey] : [virtualKey]);
+            LifecycleInput.KeyChord(control ? [0x11, virtualKey] : shift ? [0x10, virtualKey] : [virtualKey]);
             await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await Idle();
             Require(observed, "native keyboard input was not received by the PaperWindow");

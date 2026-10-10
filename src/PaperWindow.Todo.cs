@@ -1239,6 +1239,17 @@ public sealed partial class PaperWindow
             return;
         }
 
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            // Keep the native TextBox undo/redo path and honor the existing text limit.
+            if (box.Text.Length - box.SelectionLength + Environment.NewLine.Length <= box.MaxLength)
+            {
+                box.SelectedText = Environment.NewLine;
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
         {
             var newItem = AddItemAfter(item, "");
