@@ -283,6 +283,61 @@ internal static class TodoHistoryChecks
             "external redo order or current model was lost");
         RequireHistoryIsolation(window, paper);
 
+        // The arrow only appears above four *visual* lines; folding leaves one editable text value.
+        await Reset(4, item => item.Text = string.Join(Environment.NewLine,
+            Enumerable.Range(1, 5).Select(index => "line " + index)));
+        editor = Editors(window)["row-0"];
+        window.UpdateLayout();
+        await Idle();
+        var longText = editor.Text;
+        var foldButton = FoldButton(window, "row-0");
+        Require(editor.LineCount == 5 && foldButton.Visibility == Visibility.Visible &&
+                editor.MaxLines == int.MaxValue, "five-line todo did not offer an initially expanded fold control");
+        Keyboard.ClearFocus();
+        await Idle();
+        ClickFold(foldButton);
+        await Idle();
+        Require(editor.MaxLines == 2 && editor.LineCount == 5 && editor.Text == longText &&
+                paper.Items[0].Text == longText && paper.Items.Count == 4,
+            "folding changed the model or failed to limit the visible lines");
+        await Focus(window, editor);
+        Require(editor.MaxLines == int.MaxValue, "focusing a folded todo did not expand it for editing");
+        Keyboard.ClearFocus();
+        await Idle();
+        Require(editor.MaxLines == 2, "leaving a folded todo did not restore two visible lines");
+        ReconcileRows(window, ["row-0"]);
+        await Idle();
+        editor = Editors(window)["row-0"];
+        foldButton = FoldButton(window, "row-0");
+        Require(editor.MaxLines == 2 && foldButton.Visibility == Visibility.Visible &&
+                editor.Text == longText, "rebuilt todo row lost its folded display state");
+        ClickFold(foldButton);
+        await Idle();
+        Require(editor.MaxLines == int.MaxValue && editor.Text == longText,
+            "expanding a folded todo did not restore the original editor content");
+        editor.Text = string.Join(Environment.NewLine, Enumerable.Range(1, 4).Select(i => "line " + i));
+        window.UpdateLayout();
+        await Idle();
+        Require(editor.LineCount == 4 && foldButton.Visibility == Visibility.Collapsed,
+            "four-line todo incorrectly retained the fold button");
+
+        // Wrapping and paper width also change eligibility without editing the text.
+        editor.Text = new string('W', 70);
+        editor.Width = 80;
+        window.UpdateLayout();
+        await Idle();
+        Require(editor.LineCount > 4 && foldButton.Visibility == Visibility.Visible,
+            "narrow wrapped todo did not offer folding");
+        Keyboard.ClearFocus();
+        ClickFold(foldButton);
+        await Idle();
+        Require(editor.MaxLines == 2, "wrapped todo did not fold");
+        editor.Width = 450;
+        window.UpdateLayout();
+        await Idle();
+        Require(editor.LineCount <= 4 && foldButton.Visibility == Visibility.Collapsed &&
+                editor.MaxLines == int.MaxValue, "widening a folded todo failed to remove an unnecessary fold");
+
         // Shift+Enter edits one todo, respects the selected text and the input limit,
         // and stays within the native text undo/redo history.
         await Reset(4);
@@ -354,7 +409,7 @@ internal static class TodoHistoryChecks
             "restored row retained its obsolete deletion animation");
         RequireNoAppendArea(window);
         RequireHistoryIsolation(window, paper);
-        Console.WriteLine("PASS Todo history: native Ctrl+Z/Y, row order and presentation, unrelated editor undo/redo and selection, all row fields, external ordering, insertion/deletion and animation interruption");
+        Console.WriteLine("PASS Todo history: native Ctrl+Z/Y, row order and presentation, multiline folding and focus, width changes, unrelated editor undo/redo and selection, all row fields, external ordering, insertion/deletion and animation interruption");
 
         async Task Reset(int count, Action<PaperItem>? prepare = null)
         {
@@ -413,6 +468,23 @@ internal static class TodoHistoryChecks
             window.RemoveHandler(Keyboard.PreviewKeyDownEvent, down);
             window.RemoveHandler(Keyboard.PreviewKeyUpEvent, up);
         }
+    }
+
+    private static Border FoldButton(PaperWindow window, string id)
+    {
+        var grid = (Grid)Rows(window)[id].Child;
+        var trailing = grid.Children.OfType<Grid>()
+            .Single(child => Grid.GetColumn(child) == grid.ColumnDefinitions.Count - 1);
+        return trailing.Children.OfType<Border>()
+            .Single(child => Grid.GetRow(child) == 0);
+    }
+
+    private static void ClickFold(Border button)
+    {
+        button.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonUpEvent
+        });
     }
 
     private static void RequirePresentation(PaperWindow window, PaperData paper, string operation,
