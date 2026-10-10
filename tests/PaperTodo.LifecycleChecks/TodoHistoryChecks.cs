@@ -304,7 +304,9 @@ internal static class TodoHistoryChecks
         var foldPreview = FoldPreview(window, "row-0");
         Require(foldPreview.Visibility == Visibility.Visible &&
                 foldPreview.TextTrimming == TextTrimming.CharacterEllipsis &&
-                foldPreview.Text == longText &&
+                foldPreview.TextWrapping == TextWrapping.NoWrap &&
+                foldPreview.Text.EndsWith("…", StringComparison.Ordinal) &&
+                foldPreview.Text != longText &&
                 foldPreview.ActualWidth > 0 && foldPreview.ActualHeight > 0 &&
                 foldPreview.ActualHeight <= editor.ActualHeight + 1 && editor.Opacity == 0,
             "folded todo must show a two-line visual ellipsis without modifying the editor or model");
@@ -562,13 +564,13 @@ internal static class TodoHistoryChecks
         var height = (int)Math.Ceiling(preview.ActualHeight);
         if (width < 20 || height < 14) return false;
 
-        byte[] Render(TextTrimming trimming)
+        byte[] Render(string text)
         {
             var sample = new TextBlock
             {
-                Text = preview.Text,
+                Text = text,
                 TextWrapping = preview.TextWrapping,
-                TextTrimming = trimming,
+                TextTrimming = preview.TextTrimming,
                 TextAlignment = preview.TextAlignment,
                 FontFamily = preview.FontFamily,
                 FontSize = preview.FontSize,
@@ -594,8 +596,9 @@ internal static class TodoHistoryChecks
             return pixels;
         }
 
-        var trimmed = Render(TextTrimming.CharacterEllipsis);
-        var ordinary = Render(TextTrimming.None);
+        if (!preview.Text.EndsWith("…", StringComparison.Ordinal)) return false;
+        var trimmed = Render(preview.Text);
+        var ordinary = Render(preview.Text[..^1]);
         var changedInkPixels = 0;
         for (var y = height / 3; y < height; y++)
         for (var x = 0; x < width; x++)

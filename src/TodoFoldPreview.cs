@@ -7,8 +7,9 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 // WPF TextBox has MaxLines but no TextTrimming. This display-only overlay uses
-// TextBlock's native character ellipsis while retaining the same live editor,
-// text, history and hit-test path underneath. It never modifies PaperItem.Text.
+// its actual first two visual-line boundaries and adds a display-only ellipsis.
+// TextBlock's native character trimming keeps that ellipsis inside the second
+// line when it is full. It never modifies PaperItem.Text or editor history.
 internal sealed class TodoFoldPreview
 {
     private readonly TodoTextBox _editor;
@@ -28,7 +29,9 @@ internal sealed class TodoFoldPreview
             FontWeight = editor.FontWeight,
             TextAlignment = editor.TextAlignment,
             Padding = editor.Padding,
-            TextWrapping = TextWrapping.Wrap,
+            // Line breaks come from the TextBox's visual layout; do not wrap
+            // those extracted lines a second time with TextBlock metrics.
+            TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
@@ -100,7 +103,9 @@ internal sealed class TodoFoldPreview
         // lines, even if other controls make the parent row taller. The caret
         // rectangle uses the TextBox's *actual* wrapping and current DPI.
         var secondStart = _editor.GetCharacterIndexFromLineIndex(1);
-        if (secondStart < 0) return;
+        var secondLength = _editor.GetLineLength(1);
+        if (secondStart < 0 || secondLength < 0) return;
+        var secondEnd = Math.Clamp(secondStart + secondLength, secondStart, _editor.Text.Length);
         var secondLine = _editor.GetRectFromCharacterIndex(secondStart);
         if (secondLine.IsEmpty || secondLine.Height <= 0) return;
 
@@ -111,7 +116,12 @@ internal sealed class TodoFoldPreview
 
         if (twoLineHeight <= 0) return;
 
-        _preview.Text = _editor.Text;
+        // A two-line TextBlock with the *entire* source can silently clip
+        // vertical overflow without drawing a trimming glyph. Explicitly
+        // extract the visible lines and append an ellipsis to line two.
+        var first = _editor.Text[..secondStart].TrimEnd('\r', '\n');
+        var second = _editor.Text[secondStart..secondEnd].TrimEnd('\r', '\n', ' ', '\t');
+        _preview.Text = first + "\n" + second + "…";
         _preview.Width = _editor.ActualWidth;
         _preview.Height = twoLineHeight;
         _preview.Visibility = Visibility.Visible;
