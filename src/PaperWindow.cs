@@ -271,6 +271,7 @@ public sealed partial class PaperWindow : Window
         public bool IsDragging { get; set; }
         public string? TargetId { get; set; }
         public DropPlacement TargetPlacement { get; set; } = DropPlacement.After;
+        public bool DropAtEnd { get; set; }
 
         public Border? Ghost { get; set; }
         public Point MouseOffsetInRow { get; }
@@ -307,6 +308,12 @@ public sealed partial class PaperWindow : Window
     private static Brush LinkedPaperActiveTextBrush => Theme.TextBrush;
 
     private static Brush CheckBoxBorderBrush => Theme.CheckBoxBorderBrush;
+
+    private static Brush TrashBgBrush => Theme.Danger((byte)(Theme.IsDark ? 16 : 12));
+    private static Brush TrashBorderBrush => Theme.Danger(50);
+    private static Brush TrashTextBrush => Theme.DangerBrush;
+    private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
+    private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
     // The single skin surface continues behind the controls. Native caption color is
     // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
@@ -3397,7 +3404,7 @@ public sealed partial class PaperWindow : Window
         menu.Resources["WeakTextBrushKey"] = WeakTextBrush;
         menu.Resources["HoverBrushKey"] = HoverBrush;
         menu.Resources["MenuHoverBrushKey"] = MenuHoverBrush;
-        menu.Resources["DangerTextBrushKey"] = Theme.DangerBrush;
+        menu.Resources["DangerTextBrushKey"] = TrashTextBrush;
         menu.Background = PaperBrush;
         menu.BorderBrush = PaperBorderBrush;
         menu.Foreground = TextBrush;

@@ -38,7 +38,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
 エラー: {0}</value>
   </data>
   <data name="AppendAreaToolTip" xml:space="preserve">
-    <value>クリックしてToDoを追加</value>
+    <value>クリックして内容を追加、ドラッグして削除</value>
   </data>
   <data name="CapsuleNote" xml:space="preserve">
     <value>メモ</value>

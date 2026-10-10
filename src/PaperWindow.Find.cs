@@ -877,12 +877,9 @@ public sealed partial class PaperWindow
             // Selecting text that is visually hidden can scroll the clipped editor;
             // cue the user without changing either folding state or search focus.
             ReleaseTodoInactiveFindSelection();
-            if (IsCompletedTodoItemHidden(match.TodoItemId))
-                _completedTodoSectionHeader?.BringIntoView();
-            else
-                _todoRows.FirstOrDefault(row =>
-                    string.Equals(row.Tag as string, match.TodoItemId, StringComparison.Ordinal))
-                    ?.BringIntoView();
+            _todoRows.FirstOrDefault(row =>
+                string.Equals(row.Tag as string, match.TodoItemId, StringComparison.Ordinal))
+                ?.BringIntoView();
             _findAppliedMatch = match;
             return;
         }

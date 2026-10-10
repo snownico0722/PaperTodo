@@ -45,7 +45,7 @@
 错误信息：{0}</value>
   </data>
   <data name="AppendAreaToolTip" xml:space="preserve">
-    <value>点击新增待办</value>
+    <value>点击添加内容；拖到这里删除</value>
   </data>
   <data name="CapsuleNote" xml:space="preserve">
     <value>笔记</value>

@@ -53,6 +53,14 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // An explicitly armed trash drop takes priority over edge scrolling.
+        if (_todoDrag.DropAtEnd && IsPointerOverTodoTrash(Mouse.GetPosition(this)))
+        {
+            _todoDragEdgeScrollDirection = 0;
+            _todoDragEdgeScrollLastTick = Stopwatch.GetTimestamp();
+            return;
+        }
+
         var pos = Mouse.GetPosition(scroll);
         var edge = Math.Min(AppTypography.Scale(48), scroll.ActualHeight / 4);
         var direction = 0;
@@ -100,7 +108,9 @@ public sealed partial class PaperWindow
              (direction > 0 && before < scroll.ScrollableHeight)))
         {
             // A stationary pointer must keep targeting the newly scrolled rows.
-            UpdateTodoMouseDrag(Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this));
+            UpdateTodoMouseDrag(
+                Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this),
+                fromAutoScroll: true);
         }
     }
 

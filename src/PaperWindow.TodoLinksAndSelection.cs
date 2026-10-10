@@ -885,6 +885,18 @@ public sealed partial class PaperWindow
             : fallback;
     }
 
+    private bool DeleteTodoGroupDragItems()
+    {
+        if (!IsTodoGroupDrag)
+        {
+            return false;
+        }
+
+        DeleteSelectedTodoItems();
+        ClearTodoDragGroupState();
+        return true;
+    }
+
     private void ClearTodoDragGroupState()
     {
         _todoGroupDragItemIds.Clear();
