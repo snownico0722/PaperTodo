@@ -58,6 +58,8 @@ public sealed partial class PaperWindow
         PreviewMouseLeftButtonUp += OnTodoSweepPreviewMouseLeftButtonUp;
         LostMouseCapture += OnTodoSweepLostMouseCapture;
         Deactivated += OnTodoSweepWindowDeactivated;
+        LostMouseCapture += OnTodoDragLostMouseCapture;
+        Deactivated += OnTodoDragWindowDeactivated;
     }
 
     private void OnTodoSelectionWindowPreviewMouseLeftButtonDown(
@@ -642,7 +644,9 @@ public sealed partial class PaperWindow
             ? TodoSelectionBrush
             : reminding
                 ? TodoReminderActiveBrush
-                : row.IsMouseOver ? HoverBrush : Brushes.Transparent;
+                : itemId != null && _findHiddenTodoItemIds.Contains(itemId)
+                    ? Theme.Tint((byte)(Theme.IsDark ? 42 : 28))
+                    : row.IsMouseOver ? HoverBrush : Brushes.Transparent;
 
         if (itemId == null || !_todoEditors.TryGetValue(itemId, out var text))
         {

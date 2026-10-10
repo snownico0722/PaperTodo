@@ -156,12 +156,13 @@ Todo papers are crafted for checklists, daily agendas, and bite-sized action ite
 - **Fold Long Items**: When text occupies more than four displayed lines, use the arrow above the right drag grip to fold it to two lines or expand it. Focusing a folded item temporarily shows the full text for editing.
 - **Edit & Double-Click Selection**: Single-click text to edit; **double-click** text to select the entire line for quick replacement.
 - **Quick Delete Blank Line**: Press <kbd>Backspace</kbd> on an unmarked empty line to delete it immediately.
+- **Find Hidden Text**: Search matches hidden by a long todo's fold highlight that row and its expand arrow without expanding the text.
 - **Smart Multi-Line Paste**: When pasting multi-line text from clipboard, PaperTodo strips bullet points (`-`, `*`), numbers (`1.`, `2.`), and task checkboxes (`- [ ]`), splitting text into discrete tasks.
 - **Undo & Redo**: Standard <kbd>Ctrl</kbd> + <kbd>Z</kbd> (undo) and <kbd>Ctrl</kbd> + <kbd>Y</kbd> (redo).
 
 ### 3.2 Ordering, Deletion & Batch Actions
 
-- **Drag Reorder & Delete**: Hold the right handle (`≡`) and drag vertically to adjust order; drag down to the bottom trash zone to delete.
+- **Drag Reorder & Delete**: Hold the right handle (`≡`) to reorder. Hovering near list edges auto-scrolls, even with a stationary pointer. If the trash zone moves under the pointer, including through auto-scrolling, it previews deletion without pausing edge scrolling. Drag away to cancel the preview; release over the trash to delete.
 - **Continuous Swipe Multi-Selection**: Hold and drag left-click across items from the left margin to continuously select multiple rows.
 - **Batch Actions**: Once selected, batch check/uncheck, press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy, right-click to delete all, or drag the group to the trash.
 

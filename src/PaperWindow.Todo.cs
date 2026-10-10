@@ -45,6 +45,7 @@ public sealed partial class PaperWindow
             Content = _todoPanel,
             FocusVisualStyle = null
         };
+        scrollViewer.ScrollChanged += OnTodoDragScrollChanged;
         AttachTodoBackgroundHost(scrollViewer);
         return scrollViewer;
     }
@@ -91,6 +92,7 @@ public sealed partial class PaperWindow
         var existingIds = new HashSet<string>(_todoRows.Select(r => (string)r.Tag));
 
         _todoPanel.Children.Clear();
+        _todoFoldFindControls.Clear();
         _todoEditors.Clear();
         _todoReminderCountdowns.Clear();
         _todoRows.Clear();
@@ -105,6 +107,7 @@ public sealed partial class PaperWindow
         }
 
         SyncTodoAppendArea();
+        RefreshTodoFindCues();
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -210,6 +213,7 @@ public sealed partial class PaperWindow
         _todoRows.Clear();
         _todoRows.AddRange(orderedRows);
         SyncTodoAppendArea();
+        RefreshTodoFindCues();
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -282,6 +286,7 @@ public sealed partial class PaperWindow
         }
 
         _todoEditors.Remove(itemId);
+        _todoFoldFindControls.Remove(itemId);
         _todoReminderCountdowns.Remove(itemId);
         foreach (var paperId in _linkedPaperTitleRefreshers.Keys.ToList())
         {
@@ -1242,6 +1247,7 @@ public sealed partial class PaperWindow
             Visibility = Visibility.Collapsed,
             Child = foldGlyph
         };
+        _todoFoldFindControls[item.Id] = (foldButton, foldGlyph);
         var trailingControls = new Grid();
         trailingControls.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         trailingControls.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -1301,6 +1307,7 @@ public sealed partial class PaperWindow
                     }
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
+            QueueTodoFindCueRefresh();
         }
 
         void QueueFoldRefresh()
@@ -1312,7 +1319,8 @@ public sealed partial class PaperWindow
         }
 
         foldButton.MouseEnter += (_, _) => foldGlyph.Opacity = 0.9;
-        foldButton.MouseLeave += (_, _) => foldGlyph.Opacity = 0.58;
+        foldButton.MouseLeave += (_, _) =>
+            foldGlyph.Opacity = _findHiddenTodoItemIds.Contains(item.Id) ? 1.0 : 0.58;
         foldButton.MouseLeftButtonDown += (_, e) => e.Handled = true;
         foldButton.MouseLeftButtonUp += (_, e) =>
         {
@@ -1327,6 +1335,16 @@ public sealed partial class PaperWindow
                 if (text.IsKeyboardFocusWithin) Keyboard.ClearFocus();
             }
             RefreshFoldPresentation();
+            if (IsBuiltInFindOpen)
+            {
+                // Wait for MaxLines layout before selecting a newly visible search hit.
+                _ = Dispatcher.BeginInvoke((Action)(() =>
+                {
+                    if (!IsBuiltInFindOpen) return;
+                    RefreshTodoFindCues();
+                    ApplyCurrentFindMatch();
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
             e.Handled = true;
         };
         text.Loaded += (_, _) => QueueFoldRefresh();
@@ -2098,6 +2116,7 @@ public sealed partial class PaperWindow
         UpdateTodoDragGhost(_todoDrag, _todoDrag.StartPoint);
 
         ShowAppendAreaAsTrashBin(active: true);
+        StartTodoDragEdgeScroll();
     }
 
     private void OnWindowPreviewMouseMove(object sender, MouseEventArgs e)
@@ -2145,8 +2164,36 @@ public sealed partial class PaperWindow
             return;
         }
 
-        EndTodoMouseDrag(commit: _todoDrag.IsDragging);
+        if (_todoDrag.IsDragging && _todoPanel != null)
+        {
+            // Flush a pending ScrollToVerticalOffset request, then commit the
+            // drop target at the pointer's actual release-time position.
+            FindVisualAncestor<ScrollViewer>(_todoPanel)?.UpdateLayout();
+            if (_todoDrag?.IsDragging == true)
+                UpdateTodoMouseDrag(e.GetPosition(_todoPanel), e.GetPosition(this));
+        }
+
+        EndTodoMouseDrag(commit: _todoDrag?.IsDragging == true);
         e.Handled = true;
+    }
+
+    // The trash and edge-scroll timer share exactly one hit-test.
+    private bool IsPointerOverTodoTrash(Point pointOnWindow)
+    {
+        if (_appendArea == null || !_appendArea.IsVisible)
+            return false;
+
+        try
+        {
+            var pos = this.TransformToVisual(_appendArea).Transform(pointOnWindow);
+            return pos.X >= 0 && pos.X <= _appendArea.ActualWidth &&
+                   pos.Y >= 0 && pos.Y <= _appendArea.ActualHeight;
+        }
+        catch
+        {
+            // Match the legacy fallback when a layout change detaches the bar.
+            return false;
+        }
     }
 
     private void UpdateTodoMouseDrag(Point pointOnPanel, Point pointOnWindow)
@@ -2157,47 +2204,35 @@ public sealed partial class PaperWindow
         }
 
         UpdateTodoDragGhost(_todoDrag, pointOnWindow);
-        ClearActiveDropIndicator();
 
-        bool overTrash = false;
-        if (_appendArea != null && _appendArea.IsVisible)
-        {
-            try
-            {
-                var transform = this.TransformToVisual(_appendArea);
-                Point posInAppend = transform.Transform(pointOnWindow);
-                if (posInAppend.X >= 0 && posInAppend.X <= _appendArea.ActualWidth &&
-                    posInAppend.Y >= 0 && posInAppend.Y <= _appendArea.ActualHeight)
-                {
-                    overTrash = true;
-                }
-            }
-            catch
-            {
-                // Fallback in case layout is not fully updated
-            }
-        }
-
+        // The current pointer/target geometry decides whether deletion is previewed,
+        // regardless of whether the pointer or the list moved.
+        var overTrash = IsPointerOverTodoTrash(pointOnWindow);
         if (overTrash)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
+            if (!_todoDrag.DropAtEnd)
+                ShowAppendAreaAsTrashBin(active: true, hovered: true);
             _todoDrag.DropAtEnd = true;
-            ShowAppendAreaAsTrashBin(active: true, hovered: true);
             return;
         }
 
-        ShowAppendAreaAsTrashBin(active: true, hovered: false);
+        if (_todoDrag.DropAtEnd)
+            ShowAppendAreaAsTrashBin(active: true, hovered: false);
+        _todoDrag.DropAtEnd = false;
 
         var candidates = _todoRows
             .Where(row =>
+                row.IsVisible &&
                 row.Tag is string id &&
                 !_todoGroupDragItemIds.Contains(id))
             .ToList();
 
         if (candidates.Count == 0)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
             return;
         }
 
@@ -2214,8 +2249,8 @@ public sealed partial class PaperWindow
 
         if (bestRow == null)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
             return;
         }
 
@@ -2361,6 +2396,7 @@ public sealed partial class PaperWindow
         }
 
         _todoDrag = null;
+        StopTodoDragEdgeScroll();
 
         if (IsMouseCaptured)
         {
@@ -2386,7 +2422,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (state.DropAtEnd && _controller.State.ShowTodoBottomBar)
+        if (state.DropAtEnd && _controller.State.ShowTodoBottomBar &&
+            IsPointerOverTodoTrash(Mouse.GetPosition(this)))
         {
             if (DeleteTodoGroupDragItems())
             {
