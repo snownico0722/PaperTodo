@@ -2186,8 +2186,7 @@ public sealed partial class PaperWindow
         }
     }
 
-    private void UpdateTodoMouseDrag(
-        Point pointOnPanel, Point pointOnWindow, bool fromAutoScroll = false)
+    private void UpdateTodoMouseDrag(Point pointOnPanel, Point pointOnWindow)
     {
         if (_todoDrag == null || _todoPanel == null)
         {
@@ -2196,10 +2195,9 @@ public sealed partial class PaperWindow
 
         UpdateTodoDragGhost(_todoDrag, pointOnWindow);
 
-        // The user must actually move onto the trash. The timer scrolling
-        // content underneath a stationary pointer must never arm deletion.
-        var overTrash = IsPointerOverTodoTrash(pointOnWindow) &&
-                        (!fromAutoScroll || _todoDrag.DropAtEnd);
+        // The current pointer/target geometry decides whether deletion is previewed,
+        // regardless of whether the pointer or the list moved.
+        var overTrash = IsPointerOverTodoTrash(pointOnWindow);
         if (overTrash)
         {
             ClearActiveDropIndicator();

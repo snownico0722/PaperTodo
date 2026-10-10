@@ -53,7 +53,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        // An explicitly armed trash drop takes priority over edge scrolling.
+        // Any active trash preview takes priority over edge scrolling.
         if (_todoDrag.DropAtEnd && IsPointerOverTodoTrash(Mouse.GetPosition(this)))
         {
             _todoDragEdgeScrollDirection = 0;
@@ -107,10 +107,9 @@ public sealed partial class PaperWindow
             ((direction < 0 && before > 0) ||
              (direction > 0 && before < scroll.ScrollableHeight)))
         {
-            // A stationary pointer must keep targeting the newly scrolled rows.
+            // A stationary pointer can target a new row or trash as content scrolls.
             UpdateTodoMouseDrag(
-                Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this),
-                fromAutoScroll: true);
+                Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this));
         }
     }
 
