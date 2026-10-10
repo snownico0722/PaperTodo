@@ -308,6 +308,35 @@ internal static class TodoHistoryChecks
                 foldPreview.ActualWidth > 0 && foldPreview.ActualHeight > 0 &&
                 foldPreview.ActualHeight <= editor.ActualHeight + 1 && editor.Opacity == 0,
             "folded todo must show a two-line visual ellipsis without modifying the editor or model");
+        Require(HasRasterEllipsis(foldPreview),
+            "folded preview must actually render an ellipsis on the final visible line");
+
+        // A visible find hit must expose the native TextBox selection highlight.
+        // Search in the clipped third+ line still takes the existing row/arrow cue.
+        editor.Select(0, 4);
+        editor.IsInactiveSelectionHighlightEnabled = true;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1 &&
+                editor.MaxLines == 2 && paper.Items[0].Text == longText,
+            "visible find selection was hidden behind the folded ellipsis preview");
+        editor.IsInactiveSelectionHighlightEnabled = false;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "clearing a visible find hit did not restore the folded ellipsis preview");
+
+        editor.IsSweepSelected = true;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "sweep-selected folded text lost its original selection drawing");
+        editor.IsSweepSelected = false;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "clearing sweep selection did not restore the folded preview");
+
+        Invoke(window, "RefreshTodoFindCues");
+        var foldGlyph = (System.Windows.Shapes.Path)foldButton.Child;
+        Require(Math.Abs(foldGlyph.Opacity - 0.48) < 0.001,
+            "a search cue refresh changed the folded icon's neutral opacity");
         await Focus(window, editor);
         window.UpdateLayout();
         await Idle();
@@ -522,6 +551,60 @@ internal static class TodoHistoryChecks
             window.RemoveHandler(Keyboard.PreviewKeyDownEvent, down);
             window.RemoveHandler(Keyboard.PreviewKeyUpEvent, up);
         }
+    }
+
+    private static bool HasRasterEllipsis(TextBlock preview)
+    {
+        // Compare the real WPF glyph raster with an otherwise identical
+        // two-line TextBlock without trimming. Property-only checks cannot
+        // establish that the final visible line actually gained an ellipsis.
+        var width = (int)Math.Ceiling(preview.ActualWidth);
+        var height = (int)Math.Ceiling(preview.ActualHeight);
+        if (width < 20 || height < 14) return false;
+
+        byte[] Render(TextTrimming trimming)
+        {
+            var sample = new TextBlock
+            {
+                Text = preview.Text,
+                TextWrapping = preview.TextWrapping,
+                TextTrimming = trimming,
+                TextAlignment = preview.TextAlignment,
+                FontFamily = preview.FontFamily,
+                FontSize = preview.FontSize,
+                FontWeight = preview.FontWeight,
+                FontStyle = preview.FontStyle,
+                FontStretch = preview.FontStretch,
+                Padding = preview.Padding,
+                LineHeight = preview.LineHeight,
+                Foreground = preview.Foreground,
+                ClipToBounds = true,
+                Width = preview.ActualWidth,
+                Height = preview.ActualHeight
+            };
+            sample.Measure(new Size(preview.ActualWidth, preview.ActualHeight));
+            sample.Arrange(new Rect(0, 0, preview.ActualWidth, preview.ActualHeight));
+            sample.UpdateLayout();
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(sample);
+            var pixels = new byte[width * height * 4];
+            bitmap.CopyPixels(pixels, width * 4, 0);
+            return pixels;
+        }
+
+        var trimmed = Render(TextTrimming.CharacterEllipsis);
+        var ordinary = Render(TextTrimming.None);
+        var changedInkPixels = 0;
+        for (var y = height / 3; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var alphaIndex = (y * width + x) * 4 + 3;
+            if (Math.Abs(trimmed[alphaIndex] - ordinary[alphaIndex]) > 48)
+                changedInkPixels++;
+        }
+        return changedInkPixels >= 4;
     }
 
     private static TextBlock FoldPreview(PaperWindow window, string id)

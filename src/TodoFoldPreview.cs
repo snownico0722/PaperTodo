@@ -45,6 +45,7 @@ internal sealed class TodoFoldPreview
         editor.Loaded += (_, _) => QueueRefresh();
         editor.SizeChanged += (_, _) => QueueRefresh();
         editor.TextChanged += (_, _) => QueueRefresh();
+        editor.FoldSelectionVisualChanged += (_, _) => QueueRefresh();
     }
 
     internal void SetDone(bool done)
@@ -77,7 +78,20 @@ internal sealed class TodoFoldPreview
     private void Refresh()
     {
         _refreshQueued = false;
-        if (!_folded || !_editor.IsLoaded || _editor.IsKeyboardFocusWithin ||
+        if (!_folded) return;
+
+        // Search selection and multi-row sweep selection are already drawn by
+        // TodoTextBox. Show that original clipped surface for these transient
+        // highlights rather than hide them beneath the ellipsis preview.
+        if (_editor.IsSweepSelected ||
+            (_editor.IsInactiveSelectionHighlightEnabled && _editor.SelectionLength > 0))
+        {
+            _preview.Visibility = Visibility.Collapsed;
+            _editor.Opacity = 1;
+            return;
+        }
+
+        if (!_editor.IsLoaded || _editor.IsKeyboardFocusWithin ||
             _editor.MaxLines != 2 || _editor.LineCount <= 2 ||
             _editor.ActualWidth <= 0 || _editor.ActualHeight <= 0)
             return;

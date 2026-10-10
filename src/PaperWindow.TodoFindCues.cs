@@ -79,6 +79,8 @@ public sealed partial class PaperWindow
         controls.Button.Background = highlighted
             ? Theme.Tint((byte)(Theme.IsDark ? 96 : 78)) : Brushes.Transparent;
         controls.Icon.Stroke = highlighted ? TextBrush : WeakTextBrush;
-        controls.Icon.Opacity = highlighted ? 1.0 : 0.58;
+        controls.Icon.Opacity = highlighted
+            ? 1.0
+            : controls.Button.IsMouseOver ? 0.78 : 0.48;
     }
 }
