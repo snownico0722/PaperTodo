@@ -3397,7 +3397,7 @@ public sealed partial class PaperWindow : Window
         menu.Resources["WeakTextBrushKey"] = WeakTextBrush;
         menu.Resources["HoverBrushKey"] = HoverBrush;
         menu.Resources["MenuHoverBrushKey"] = MenuHoverBrush;
-        menu.Resources["DangerTextBrushKey"] = TrashTextBrush;
+        menu.Resources["DangerTextBrushKey"] = Theme.DangerBrush;
         menu.Background = PaperBrush;
         menu.BorderBrush = PaperBorderBrush;
         menu.Foreground = TextBrush;
