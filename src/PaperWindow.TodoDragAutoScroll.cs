@@ -93,16 +93,22 @@ public sealed partial class PaperWindow
             (now - _todoDragEdgeScrollEnteredAt) /
             (Stopwatch.Frequency * 0.20), 0, 1);
         var speed = 28 + 520 * proximity * proximity;
-        var before = scroll.VerticalOffset;
-        scroll.ScrollToVerticalOffset(before + direction * speed * easeIn * elapsedSeconds);
-        if (_todoPanel != null && elapsedSeconds > 0 &&
-            ((direction < 0 && before > 0) ||
-             (direction > 0 && before < scroll.ScrollableHeight)))
-        {
-            // A stationary pointer can target a new row or trash as content scrolls.
-            UpdateTodoMouseDrag(
-                Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this));
-        }
+        // The ScrollChanged handler updates the drop target after layout has
+        // applied the new offset, rather than sampling stale row positions here.
+        scroll.ScrollToVerticalOffset(scroll.VerticalOffset +
+            direction * speed * easeIn * elapsedSeconds);
+    }
+
+    private void OnTodoDragScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        // ScrollToVerticalOffset is applied during layout, not necessarily when
+        // it is requested. Use the actual offset change to refresh stationary
+        // pointer targets, including the bottom trash area.
+        if (_todoDrag?.IsDragging != true || _todoPanel == null ||
+            e.VerticalChange == 0 || !ReferenceEquals(e.OriginalSource, sender))
+            return;
+
+        UpdateTodoMouseDrag(Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this));
     }
 
     private void OnTodoDragLostMouseCapture(object sender, MouseEventArgs e)

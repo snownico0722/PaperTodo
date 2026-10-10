@@ -45,6 +45,7 @@ public sealed partial class PaperWindow
             Content = _todoPanel,
             FocusVisualStyle = null
         };
+        scrollViewer.ScrollChanged += OnTodoDragScrollChanged;
         AttachTodoBackgroundHost(scrollViewer);
         return scrollViewer;
     }
@@ -2163,7 +2164,16 @@ public sealed partial class PaperWindow
             return;
         }
 
-        EndTodoMouseDrag(commit: _todoDrag.IsDragging);
+        if (_todoDrag.IsDragging && _todoPanel != null)
+        {
+            // Flush a pending ScrollToVerticalOffset request, then commit the
+            // drop target at the pointer's actual release-time position.
+            FindVisualAncestor<ScrollViewer>(_todoPanel)?.UpdateLayout();
+            if (_todoDrag?.IsDragging == true)
+                UpdateTodoMouseDrag(e.GetPosition(_todoPanel), e.GetPosition(this));
+        }
+
+        EndTodoMouseDrag(commit: _todoDrag?.IsDragging == true);
         e.Handled = true;
     }
 
