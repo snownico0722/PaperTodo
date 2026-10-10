@@ -408,11 +408,19 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 {
                     return false;
                 }
-                ConfigureAnimations(animationTimestamp);
+                var inputTicket = ConfigureAnimations(animationTimestamp);
 #if DEBUG
                 using (var edgeJournalNative = EdgeDiagnosticObservation.Begin("native.dcomp-commit"))
 #endif
                     _device.Commit().CheckError();
+                // The input owner receives the same absolute QPC only after DComp accepted the
+                // visual transaction. If Commit stalls, HRGN remains at the old finite region;
+                // activation immediately samples the elapsed ticket instead of starting a new clock.
+                if (inputTicket != null && !_window.TryStartInputAnimation(inputTicket))
+                {
+                    throw new InvalidOperationException(
+                        "The dedicated native input owner could not activate the committed queue animation ticket.");
+                }
                 _animationStartedAtTimestamp = animationTimestamp;
 #if DEBUG
                 EdgeCapsuleColdStartDiagnostics.Boundary("animation-clock-published");

@@ -1,0 +1,256 @@
+name: Edge routes 1 and 2 experiment
+
+on:
+  push:
+    branches:
+      - exp/edge-routes12-20260920
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-routes12-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  routes:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Capture environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/routes12 | Out-Null
+          git rev-parse HEAD | Set-Content artifacts/routes12/head.txt
+          dotnet --info | Set-Content artifacts/routes12/dotnet-info.txt
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12/display.json
+      - name: Build isolated R3 production entry without changing product startup
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed' }
+          dotnet build tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj -c Release --no-restore -p:EdgeRoutes12R3Production=true 2>&1 | Tee-Object artifacts/routes12/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+      - name: Route1 input-only production boundary probe
+        timeout-minutes: 7
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Resolve-Path tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe
+          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File artifacts/routes12/entry-sha256.txt
+          & $exe 2>&1 | Tee-Object artifacts/routes12/routes12.log
+          if ($LASTEXITCODE -ne 0) { throw "Routes12 failed: $LASTEXITCODE" }
+          'R3 keeps the production DComp output on the WPF thread and moves only the finite input HWND/HRGN clock to a dedicated native owner. The legacy H8 SetWindowSubclass observer cannot attach cross-thread and is deliberately not run in this entry; R0-R2 preserve its known-bad evidence. Hosted Windows evidence is not full application capture/drag handoff, physical high-refresh, or mixed-DPI acceptance.' | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Preserve successes and failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-routes12-${{ github.sha }}
+          path: artifacts/routes12
+          if-no-files-found: warn
+
+  main-vs-route1:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-ab]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      MAIN_SHA: c10837bb9efb0b306b993805663b15ea78b1b714
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare exact current-main worktree
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/routes12-ab | Out-Null
+          $mainDir = Join-Path $env:RUNNER_TEMP 'papertodo-main-ab'
+          if (Test-Path $mainDir) { Remove-Item -Recurse -Force $mainDir }
+          git worktree add --detach $mainDir $env:MAIN_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create main worktree' }
+          git -C $mainDir submodule update --init --recursive
+          if ($LASTEXITCODE -ne 0) { throw 'Could not initialize main submodules' }
+          Copy-Item tests/PaperTodo.EdgeTitleChecks/MainVsRoute1Comparison.cs (Join-Path $mainDir 'tests/PaperTodo.EdgeTitleChecks/MainVsRoute1Comparison.cs')
+          git rev-parse HEAD | Set-Content artifacts/routes12-ab/route1-head.txt
+          git -C $mainDir rev-parse HEAD | Set-Content artifacts/routes12-ab/main-head.txt
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12-ab/display.json
+          dotnet --info | Set-Content artifacts/routes12-ab/dotnet-info.txt
+          "MAIN_DIR=$mainDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build exact main with neutral A/B entry
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:MAIN_DIR 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/main-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main restore failed' }
+          $appProject = Join-Path $env:MAIN_DIR 'PaperTodo.csproj'
+          dotnet build $appProject -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-ab/main-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/main-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main A/B build failed' }
+      - name: Build route1 with the same A/B entry
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-ab/route1-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 restore failed' }
+          dotnet build PaperTodo.csproj -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-ab/route1-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=MainVsRoute1ComparisonEntry 2>&1 | Tee-Object artifacts/routes12-ab/route1-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 A/B build failed' }
+      - name: Run same-machine current-main vs route1 A/B
+        timeout-minutes: 8
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $mainExe = Join-Path $env:MAIN_DIR 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+          $routeExe = Resolve-Path 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0/PaperTodo.EdgeTitleChecks.exe'
+
+          $env:PAPERTODO_AB_SOURCE_SHA = $env:MAIN_SHA
+          & $mainExe --mode main 2>&1 | Tee-Object artifacts/routes12-ab/main.log
+          $mainExit = $LASTEXITCODE
+
+          $routeSha = (git rev-parse HEAD).Trim()
+          $env:PAPERTODO_AB_SOURCE_SHA = $routeSha
+          & $routeExe --mode route1 2>&1 | Tee-Object artifacts/routes12-ab/route1.log
+          $routeExit = $LASTEXITCODE
+
+          Get-Content artifacts/routes12-ab/main.log | Where-Object { $_ -match '^AB_(CASE|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content artifacts/routes12-ab/route1.log | Where-Object { $_ -match '^AB_(CASE|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+          "mainExit=$mainExit route1Exit=$routeExit" | Tee-Object artifacts/routes12-ab/exits.txt
+          if ($mainExit -ne 0 -or $routeExit -ne 0) { throw "A/B failed: main=$mainExit route1=$routeExit" }
+      - name: Preserve A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-routes12-ab-${{ github.sha }}
+          path: artifacts/routes12-ab
+          if-no-files-found: warn
+
+
+  edge-browse-main-vs-route1:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[routes12-browse]')
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      MAIN_SHA: c10837bb9efb0b306b993805663b15ea78b1b714
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare exact current-main browse worktree
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/routes12-browse | Out-Null
+          $mainDir = Join-Path $env:RUNNER_TEMP 'papertodo-main-browse'
+          if (Test-Path $mainDir) { Remove-Item -Recurse -Force $mainDir }
+          git worktree add --detach $mainDir $env:MAIN_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create main browse worktree' }
+          git -C $mainDir submodule update --init --recursive
+          if ($LASTEXITCODE -ne 0) { throw 'Could not initialize main browse submodules' }
+          Copy-Item tests/PaperTodo.EdgeTitleChecks/EdgeBrowsingComparison.cs (Join-Path $mainDir 'tests/PaperTodo.EdgeTitleChecks/EdgeBrowsingComparison.cs')
+          git rev-parse HEAD | Set-Content artifacts/routes12-browse/route1-head.txt
+          git -C $mainDir rev-parse HEAD | Set-Content artifacts/routes12-browse/main-head.txt
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | ConvertTo-Json | Set-Content artifacts/routes12-browse/display.json
+          "MAIN_BROWSE_DIR=$mainDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build exact main browse fixture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:MAIN_BROWSE_DIR 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-browse/main-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse restore failed' }
+          $appProject = Join-Path $env:MAIN_BROWSE_DIR 'PaperTodo.csproj'
+          dotnet build $appProject -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-browse/main-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=EdgeBrowsingComparisonEntry 2>&1 | Tee-Object artifacts/routes12-browse/main-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Main browse fixture build failed' }
+      - name: Build route1 browse fixture
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = 'tests/PaperTodo.EdgeTitleChecks/PaperTodo.EdgeTitleChecks.csproj'
+          dotnet restore $project 2>&1 | Tee-Object artifacts/routes12-browse/route1-restore.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse restore failed' }
+          dotnet build PaperTodo.csproj -c Release --no-restore 2>&1 | Tee-Object artifacts/routes12-browse/route1-app-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse app build failed' }
+          dotnet build $project -c Release --no-restore -p:BuildProjectReferences=false -p:StartupObject=EdgeBrowsingComparisonEntry 2>&1 | Tee-Object artifacts/routes12-browse/route1-build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Route1 browse fixture build failed' }
+      - name: Run real continuous edge browsing A/B
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $mainBin = Join-Path $env:MAIN_BROWSE_DIR 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
+          $routeBin = Resolve-Path 'tests/PaperTodo.EdgeTitleChecks/bin/Release/net10.0-windows10.0.17763.0'
+          $routeSha = (git rev-parse HEAD).Trim()
+          $failures = @()
+
+          for ($iteration = 1; $iteration -le 5; $iteration++) {
+            foreach ($mode in @('main', 'route1')) {
+              $sourceBin = if ($mode -eq 'main') { $mainBin } else { $routeBin }
+              $runDir = Join-Path $env:RUNNER_TEMP "papertodo-browse-$mode-$iteration"
+              if (Test-Path $runDir) { Remove-Item -Recurse -Force $runDir }
+              New-Item -ItemType Directory -Force $runDir | Out-Null
+              Copy-Item (Join-Path $sourceBin '*') $runDir -Recurse -Force
+
+              # Built-in browsing only: no startup-paper plugins may inject extra Papers.
+              $plugins = Join-Path $runDir 'plugins'
+              if (Test-Path $plugins) { Remove-Item -Recurse -Force $plugins }
+
+              $env:PAPERTODO_BROWSE_AB = '1'
+              $env:PAPERTODO_BROWSE_SOURCE_SHA = if ($mode -eq 'main') { $env:MAIN_SHA } else { $routeSha }
+              $log = "$env:GITHUB_WORKSPACE/artifacts/routes12-browse/$mode-$iteration.log"
+              Push-Location $runDir
+              & .\PaperTodo.EdgeTitleChecks.exe --mode $mode 2>&1 | Tee-Object $log
+              $exit = $LASTEXITCODE
+              Pop-Location
+
+              if ($exit -ne 0) { $failures += "$mode-$iteration=$exit" }
+              Get-Content $log | Where-Object { $_ -match '^BROWSE_(CASE|TRANSFER|SUMMARY)' } | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+          }
+
+          Get-ChildItem artifacts/routes12-browse/*-*.log |
+            ForEach-Object { Get-Content $_.FullName } |
+            Where-Object { $_ -match '^BROWSE_SUMMARY' } |
+            Set-Content artifacts/routes12-browse/summaries.txt
+
+          if ($failures.Count -gt 0) {
+            $failures -join ' ' | Tee-Object artifacts/routes12-browse/exits.txt
+            throw "Browse A/B repeated runs failed: $($failures -join ', ')"
+          }
+          'all 10 browse runs exited 0' | Tee-Object artifacts/routes12-browse/exits.txt
+      - name: Preserve browse A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edge-routes12-browse-${{ github.sha }}
+          path: artifacts/routes12-browse
+          if-no-files-found: warn
