@@ -301,28 +301,74 @@ internal static class TodoHistoryChecks
         Require(editor.MaxLines == 2 && editor.LineCount == 5 && editor.ActualHeight < expandedHeight &&
                 editor.Text == longText && paper.Items[0].Text == longText && paper.Items.Count == 4,
             "folding changed the model or failed to reduce the visible height to two lines");
+        var foldPreview = FoldPreview(window, "row-0");
+        Require(foldPreview.Visibility == Visibility.Visible &&
+                foldPreview.TextTrimming == TextTrimming.CharacterEllipsis &&
+                foldPreview.TextWrapping == TextWrapping.NoWrap &&
+                foldPreview.Text.EndsWith("…", StringComparison.Ordinal) &&
+                foldPreview.Text != longText &&
+                foldPreview.ActualWidth > 0 && foldPreview.ActualHeight > 0 &&
+                foldPreview.ActualHeight <= editor.ActualHeight + 1 && editor.Opacity == 0,
+            "folded todo must show a two-line visual ellipsis without modifying the editor or model");
+        Require(HasRasterEllipsis(foldPreview),
+            "folded preview must actually render an ellipsis on the final visible line");
+
+        // A visible find hit must expose the native TextBox selection highlight.
+        // Search in the clipped third+ line still takes the existing row/arrow cue.
+        editor.Select(0, 4);
+        editor.IsInactiveSelectionHighlightEnabled = true;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1 &&
+                editor.MaxLines == 2 && paper.Items[0].Text == longText,
+            "visible find selection was hidden behind the folded ellipsis preview");
+        editor.IsInactiveSelectionHighlightEnabled = false;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "clearing a visible find hit did not restore the folded ellipsis preview");
+
+        editor.IsSweepSelected = true;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "sweep-selected folded text lost its original selection drawing");
+        editor.IsSweepSelected = false;
+        await Idle();
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "clearing sweep selection did not restore the folded preview");
+
+        Invoke(window, "RefreshTodoFindCues");
+        var foldGlyph = (System.Windows.Shapes.Path)foldButton.Child;
+        Require(Math.Abs(foldGlyph.Opacity - 0.48) < 0.001,
+            "a search cue refresh changed the folded icon's neutral opacity");
         await Focus(window, editor);
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1,
             "focusing a folded todo did not restore the full editor height");
+        Require(foldPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "editing a folded todo retained its ellipsis overlay");
         Keyboard.ClearFocus();
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == 2 && editor.ActualHeight < expandedHeight - 1,
             "leaving a folded todo did not restore two visible lines");
+        Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
+            "leaving the editor did not restore the ellipsis preview");
         ReconcileRows(window, ["row-0"]);
         await Idle();
         editor = Editors(window)["row-0"];
         foldButton = FoldButton(window, "row-0");
         Require(editor.MaxLines == 2 && foldButton.Visibility == Visibility.Visible &&
                 editor.Text == longText, "rebuilt todo row lost its folded display state");
+        Require(FoldPreview(window, "row-0").Visibility == Visibility.Visible,
+            "rebuilding the row did not restore the ellipsis preview");
         ClickFold(foldButton);
         window.UpdateLayout();
         await Idle();
         Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1 &&
                 editor.Text == longText,
             "expanding a folded todo did not restore the full editor content and height");
+        Require(FoldPreview(window, "row-0").Visibility == Visibility.Collapsed,
+            "expanding a folded todo did not hide its preview");
 
         // A completed long todo may draw strikethrough lines only inside its
         // clipped, two-line editor; hidden lines must not paint over later rows.
@@ -362,11 +408,17 @@ internal static class TodoHistoryChecks
         ClickFold(foldButton);
         await Idle();
         Require(editor.MaxLines == 2, "wrapped todo did not fold");
+        var wrapPreview = FoldPreview(window, "row-0");
+        Require(wrapPreview.Visibility == Visibility.Visible &&
+                Math.Abs(wrapPreview.ActualWidth - editor.ActualWidth) < 1,
+            "soft-wrapped todo ellipsis did not match the editor width");
         editor.Width = 450;
         window.UpdateLayout();
         await Idle();
         Require(editor.LineCount <= 4 && foldButton.Visibility == Visibility.Collapsed &&
                 editor.MaxLines == int.MaxValue, "widening a folded todo failed to remove an unnecessary fold");
+        Require(wrapPreview.Visibility == Visibility.Collapsed && editor.Opacity == 1,
+            "widening the editor left an obsolete folded preview");
 
         // Shift+Enter edits one todo, respects the selected text and the input limit,
         // and stays within the native text undo/redo history.
@@ -501,6 +553,68 @@ internal static class TodoHistoryChecks
             window.RemoveHandler(Keyboard.PreviewKeyDownEvent, down);
             window.RemoveHandler(Keyboard.PreviewKeyUpEvent, up);
         }
+    }
+
+    private static bool HasRasterEllipsis(TextBlock preview)
+    {
+        // Compare the real WPF glyph raster with an otherwise identical
+        // two-line TextBlock without trimming. Property-only checks cannot
+        // establish that the final visible line actually gained an ellipsis.
+        var width = (int)Math.Ceiling(preview.ActualWidth);
+        var height = (int)Math.Ceiling(preview.ActualHeight);
+        if (width < 20 || height < 14) return false;
+
+        byte[] Render(string text)
+        {
+            var sample = new TextBlock
+            {
+                Text = text,
+                TextWrapping = preview.TextWrapping,
+                TextTrimming = preview.TextTrimming,
+                TextAlignment = preview.TextAlignment,
+                FontFamily = preview.FontFamily,
+                FontSize = preview.FontSize,
+                FontWeight = preview.FontWeight,
+                FontStyle = preview.FontStyle,
+                FontStretch = preview.FontStretch,
+                Padding = preview.Padding,
+                LineHeight = preview.LineHeight,
+                Foreground = preview.Foreground,
+                ClipToBounds = true,
+                Width = preview.ActualWidth,
+                Height = preview.ActualHeight
+            };
+            sample.Measure(new Size(preview.ActualWidth, preview.ActualHeight));
+            sample.Arrange(new Rect(0, 0, preview.ActualWidth, preview.ActualHeight));
+            sample.UpdateLayout();
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(sample);
+            var pixels = new byte[width * height * 4];
+            bitmap.CopyPixels(pixels, width * 4, 0);
+            return pixels;
+        }
+
+        if (!preview.Text.EndsWith("…", StringComparison.Ordinal)) return false;
+        var trimmed = Render(preview.Text);
+        var ordinary = Render(preview.Text[..^1]);
+        var changedInkPixels = 0;
+        for (var y = height / 3; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var alphaIndex = (y * width + x) * 4 + 3;
+            if (Math.Abs(trimmed[alphaIndex] - ordinary[alphaIndex]) > 48)
+                changedInkPixels++;
+        }
+        return changedInkPixels >= 4;
+    }
+
+    private static TextBlock FoldPreview(PaperWindow window, string id)
+    {
+        var grid = (Grid)Rows(window)[id].Child;
+        return grid.Children.OfType<TextBlock>()
+            .Single(child => Equals(child.Tag, "TodoFoldPreview"));
     }
 
     private static Border FoldButton(PaperWindow window, string id)

@@ -24,6 +24,10 @@ public sealed class TodoTextBox : TextBox
     private const double StrikeVerticalRatio = 0.56;
     private bool _transientFindHighlightEnabled;
 
+    // A folded preview must yield to the editor's own selection renderer during
+    // find and sweep selection, without adding a second highlighting algorithm.
+    internal event EventHandler? FoldSelectionVisualChanged;
+
     public static readonly DependencyProperty IsDoneProperty =
         DependencyProperty.Register(
             nameof(IsDone),
@@ -42,7 +46,10 @@ public sealed class TodoTextBox : TextBox
             nameof(IsSweepSelected),
             typeof(bool),
             typeof(TodoTextBox),
-            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(false,
+                FrameworkPropertyMetadataOptions.AffectsRender,
+                (element, _) => ((TodoTextBox)element).FoldSelectionVisualChanged?
+                    .Invoke(element, EventArgs.Empty)));
 
     public bool IsSweepSelected
     {
@@ -65,6 +72,7 @@ public sealed class TodoTextBox : TextBox
 
             _transientFindHighlightEnabled = value;
             InvalidateVisual();
+            FoldSelectionVisualChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -89,6 +97,7 @@ public sealed class TodoTextBox : TextBox
         {
             InvalidateVisual();
         }
+        FoldSelectionVisualChanged?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
