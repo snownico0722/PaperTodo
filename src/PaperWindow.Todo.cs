@@ -1251,6 +1251,23 @@ public sealed partial class PaperWindow
         trailingControls.Children.Add(handle);
 
         var foldRefreshQueued = false;
+
+        bool ApplyFoldLineLimit(int maxLines)
+        {
+            if (text.MaxLines == maxLines) return false;
+
+            // WPF caches MaxLines as a cap on the inner ScrollViewer. Restoring
+            // int.MaxValue alone leaves that cap in place; an explicit unbounded
+            // MaxHeight makes WPF clear it. Remove the override before folding.
+            if (maxLines == int.MaxValue)
+                text.MaxHeight = double.PositiveInfinity;
+            else
+                text.ClearValue(FrameworkElement.MaxHeightProperty);
+
+            text.MaxLines = maxLines;
+            return true;
+        }
+
         void RefreshFoldPresentation()
         {
             foldRefreshQueued = false;
@@ -1271,22 +1288,18 @@ public sealed partial class PaperWindow
                 : metrics.RowMinHeight;
             text.VerticalContentAlignment = folded ? VerticalAlignment.Top : VerticalAlignment.Center;
             var maxLines = folded ? TodoFoldVisibleLines : int.MaxValue;
-            if (text.MaxLines != maxLines)
+            if (ApplyFoldLineLimit(maxLines) && folded)
             {
-                text.MaxLines = maxLines;
-                if (folded)
+                // After editing near the end, folding should show the first two lines.
+                Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    // After editing near the end, folding should show the first two lines.
-                    Dispatcher.BeginInvoke(new Action(() =>
+                    if (_todoEditors.TryGetValue(item.Id, out var current) &&
+                        ReferenceEquals(current, text) &&
+                        text.MaxLines == TodoFoldVisibleLines && !text.IsKeyboardFocusWithin)
                     {
-                        if (_todoEditors.TryGetValue(item.Id, out var current) &&
-                            ReferenceEquals(current, text) &&
-                            text.MaxLines == TodoFoldVisibleLines && !text.IsKeyboardFocusWithin)
-                        {
-                            text.ScrollToLine(0);
-                        }
-                    }), System.Windows.Threading.DispatcherPriority.Loaded);
-                }
+                        text.ScrollToLine(0);
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
 
@@ -1321,7 +1334,7 @@ public sealed partial class PaperWindow
         text.TextChanged += (_, _) => QueueFoldRefresh();
         text.GotKeyboardFocus += (_, _) =>
         {
-            if (_foldedTodoItemIds.Contains(item.Id)) text.MaxLines = int.MaxValue;
+            if (_foldedTodoItemIds.Contains(item.Id)) ApplyFoldLineLimit(int.MaxValue);
             QueueFoldRefresh();
         };
         text.LostKeyboardFocus += (_, _) => QueueFoldRefresh();
@@ -1362,7 +1375,11 @@ public sealed partial class PaperWindow
             // Keep the native TextBox undo/redo path and honor the existing text limit.
             if (box.Text.Length - box.SelectionLength + Environment.NewLine.Length <= box.MaxLength)
             {
+                var insertionStart = box.SelectionStart;
                 box.SelectedText = Environment.NewLine;
+                // SelectedText preserves the inserted range as a selection in WPF.
+                // Collapse it so the next keystroke continues on the new line.
+                box.Select(insertionStart + Environment.NewLine.Length, 0);
             }
             e.Handled = true;
             return;

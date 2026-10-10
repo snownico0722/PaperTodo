@@ -302,10 +302,15 @@ internal static class TodoHistoryChecks
                 editor.Text == longText && paper.Items[0].Text == longText && paper.Items.Count == 4,
             "folding changed the model or failed to reduce the visible height to two lines");
         await Focus(window, editor);
-        Require(editor.MaxLines == int.MaxValue, "focusing a folded todo did not expand it for editing");
-        Keyboard.ClearFocus();
+        window.UpdateLayout();
         await Idle();
-        Require(editor.MaxLines == 2, "leaving a folded todo did not restore two visible lines");
+        Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1,
+            "focusing a folded todo did not restore the full editor height");
+        Keyboard.ClearFocus();
+        window.UpdateLayout();
+        await Idle();
+        Require(editor.MaxLines == 2 && editor.ActualHeight < expandedHeight - 1,
+            "leaving a folded todo did not restore two visible lines");
         ReconcileRows(window, ["row-0"]);
         await Idle();
         editor = Editors(window)["row-0"];
@@ -313,9 +318,33 @@ internal static class TodoHistoryChecks
         Require(editor.MaxLines == 2 && foldButton.Visibility == Visibility.Visible &&
                 editor.Text == longText, "rebuilt todo row lost its folded display state");
         ClickFold(foldButton);
+        window.UpdateLayout();
         await Idle();
-        Require(editor.MaxLines == int.MaxValue && editor.Text == longText,
-            "expanding a folded todo did not restore the original editor content");
+        Require(editor.MaxLines == int.MaxValue && editor.ActualHeight >= expandedHeight - 1 &&
+                editor.Text == longText,
+            "expanding a folded todo did not restore the full editor content and height");
+
+        // A completed long todo may draw strikethrough lines only inside its
+        // clipped, two-line editor; hidden lines must not paint over later rows.
+        paper.Items[0].Done = true;
+        ReconcileRows(window, ["row-0"]);
+        await Idle();
+        editor = Editors(window)["row-0"];
+        foldButton = FoldButton(window, "row-0");
+        Require(editor.IsDone && foldButton.Visibility == Visibility.Visible,
+            "completed multiline todo lost its fold control");
+        ClickFold(foldButton);
+        window.UpdateLayout();
+        await Idle();
+        Require(editor.MaxLines == 2 && editor.ActualHeight < expandedHeight - 1 &&
+                editor.ClipToBounds,
+            "completed folded todo did not bound its strikethrough presentation");
+        paper.Items[0].Done = false;
+        ReconcileRows(window, ["row-0"]);
+        await Idle();
+        editor = Editors(window)["row-0"];
+        foldButton = FoldButton(window, "row-0");
+
         editor.Text = string.Join(Environment.NewLine, Enumerable.Range(1, 4).Select(i => "line " + i));
         window.UpdateLayout();
         await Idle();
@@ -347,9 +376,11 @@ internal static class TodoHistoryChecks
         editor.Select(4, 0);
         await SendKey(window, Key.Enter, expectPaperHistory: false, control: false, shift: true);
         var multiline = originalLine.Insert(4, Environment.NewLine);
-        Require(paper.Items.Count == 4 && editor.Text == multiline && paper.Items[0].Text == multiline &&
-                editor.CaretIndex == 4 + Environment.NewLine.Length,
-            "Shift+Enter did not insert a line break inside the current todo");
+        Require(paper.Items.Count == 4, "Shift+Enter created an unexpected todo row");
+        Require(editor.Text == multiline && paper.Items[0].Text == multiline,
+            "Shift+Enter did not insert a line break into the current todo");
+        Require(editor.SelectionLength == 0 && editor.CaretIndex == 4 + Environment.NewLine.Length,
+            "Shift+Enter did not collapse the inserted selection after the line break");
         Require(editor.CanUndo && History(window, "_undoStack").Count == 0,
             "Shift+Enter bypassed native text history");
         await SendKey(window, Key.Z, expectPaperHistory: false);
@@ -365,8 +396,9 @@ internal static class TodoHistoryChecks
             "Shift+Enter exceeded the todo text length limit");
         editor.Select(2, 2);
         await SendKey(window, Key.Enter, expectPaperHistory: false, control: false, shift: true);
-        Require(editor.Text == multiline.Remove(2, 2).Insert(2, Environment.NewLine) && paper.Items.Count == 4,
-            "Shift+Enter did not replace a selection at the text length limit");
+        Require(editor.Text == multiline.Remove(2, 2).Insert(2, Environment.NewLine) && paper.Items.Count == 4 &&
+                editor.SelectionLength == 0 && editor.CaretIndex == 2 + Environment.NewLine.Length,
+            "Shift+Enter did not replace and collapse a selection at the text length limit");
 
         // Enter insertion, last-row deletion and the disabled append area retain their contracts.
         await Reset(4);

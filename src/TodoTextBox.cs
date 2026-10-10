@@ -12,6 +12,13 @@ namespace PaperTodo;
 
 public sealed class TodoTextBox : TextBox
 {
+    public TodoTextBox()
+    {
+        // Completed-item strike lines and selection overlays must never paint
+        // into the next row when a long todo is folded to two visible lines.
+        ClipToBounds = true;
+    }
+
     private const double StrikeInset = 3;
     private const double StrikeThickness = 1.35;
     private const double StrikeVerticalRatio = 0.56;
@@ -267,6 +274,11 @@ public sealed class TodoTextBox : TextBox
 
         for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
         {
+            var y = SnapToDevicePixel(firstLineStrikeY + (lineIndex * lineAdvance), dpiScaleY);
+            if (!IsFinite(y)) continue;
+            if (y - StrikeThickness / 2 >= ActualHeight) break;
+            if (y + StrikeThickness / 2 <= 0) continue;
+
             int start;
             int length;
             try
@@ -294,8 +306,7 @@ public sealed class TodoTextBox : TextBox
                 continue;
             }
 
-            var y = SnapToDevicePixel(firstLineStrikeY + (lineIndex * lineAdvance), dpiScaleY);
-            if (rightLimit <= StrikeInset + 1 || !IsFinite(y))
+            if (rightLimit <= StrikeInset + 1)
             {
                 continue;
             }
