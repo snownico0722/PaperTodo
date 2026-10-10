@@ -14,7 +14,12 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private readonly TodoArrowNavigation _todoArrowNavigation = new();
+    private readonly HashSet<string> _foldedTodoItemIds = new(StringComparer.Ordinal);
+    private static readonly Geometry TodoFoldUp = Geometry.Parse("M 2,8 L 6,4 L 10,8");
+    private static readonly Geometry TodoFoldDown = Geometry.Parse("M 2,4 L 6,8 L 10,4");
 
+    private const int TodoFoldThreshold = 4;
+    private const int TodoFoldVisibleLines = 2;
     internal const int TodoTextMaxLength = 5000;
     internal const int MaxPastedTodoLines = 200;
 
@@ -80,6 +85,7 @@ public sealed partial class PaperWindow
         NormalizeTodoItems();
         NormalizeOrders();
         PruneTodoSelection();
+        _foldedTodoItemIds.IntersectWith(_paper.Items.Select(item => item.Id));
 
         // 记录现有行的ID，用于判断哪些是新增的
         var existingIds = new HashSet<string>(_todoRows.Select(r => (string)r.Tag));
@@ -123,6 +129,7 @@ public sealed partial class PaperWindow
         NormalizeTodoItems();
         NormalizeOrders();
         PruneTodoSelection();
+        _foldedTodoItemIds.IntersectWith(_paper.Items.Select(item => item.Id));
 
         var rebuildIds = rebuildItemIds?.ToHashSet(StringComparer.Ordinal) ?? [];
         var orderedItems = OrderedItems().ToList();
@@ -1208,8 +1215,132 @@ public sealed partial class PaperWindow
         };
         AttachItemContextMenu(handle);
 
-        Grid.SetColumn(handle, showTodoReminderControl ? 4 : 3);
-        grid.Children.Add(handle);
+        // Reuse the trailing drag column; clipping the native editor never alters its text.
+        var foldGlyph = new System.Windows.Shapes.Path
+        {
+            Data = TodoFoldUp,
+            Stroke = WeakTextBrush,
+            StrokeThickness = AppTypography.Scale(1.5),
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Stretch = Stretch.Uniform,
+            Width = AppTypography.Scale(11),
+            Height = AppTypography.Scale(9),
+            Opacity = 0.58,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var foldButton = new Border
+        {
+            Width = Math.Max(AppTypography.Scale(18), metrics.CheckColumnWidth - AppTypography.Scale(4)),
+            Height = AppTypography.Scale(16),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Visibility = Visibility.Collapsed,
+            Child = foldGlyph
+        };
+        var trailingControls = new Grid();
+        trailingControls.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        trailingControls.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(foldButton, 0);
+        trailingControls.Children.Add(foldButton);
+        Grid.SetRow(handle, 1);
+        trailingControls.Children.Add(handle);
+
+        var foldRefreshQueued = false;
+
+        bool ApplyFoldLineLimit(int maxLines)
+        {
+            if (text.MaxLines == maxLines) return false;
+
+            // WPF caches MaxLines as a cap on the inner ScrollViewer. Restoring
+            // int.MaxValue alone leaves that cap in place; an explicit unbounded
+            // MaxHeight makes WPF clear it. Remove the override before folding.
+            if (maxLines == int.MaxValue)
+                text.MaxHeight = double.PositiveInfinity;
+            else
+                text.ClearValue(FrameworkElement.MaxHeightProperty);
+
+            text.MaxLines = maxLines;
+            return true;
+        }
+
+        void RefreshFoldPresentation()
+        {
+            foldRefreshQueued = false;
+            if (!_todoEditors.TryGetValue(item.Id, out var live) || !ReferenceEquals(live, text))
+                return;
+
+            var lineCount = text.LineCount;
+            if (lineCount < 0) return; // Layout/width change will retry when lines become available.
+            var available = lineCount > TodoFoldThreshold;
+            if (!available) _foldedTodoItemIds.Remove(item.Id);
+            var folded = available && _foldedTodoItemIds.Contains(item.Id) && !text.IsKeyboardFocusWithin;
+
+            foldButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+            foldGlyph.Data = folded ? TodoFoldDown : TodoFoldUp;
+            foldButton.ToolTip = Strings.Get(folded ? "TodoExpandFold" : "TodoCollapseFold");
+            handle.MinHeight = available
+                ? Math.Max(AppTypography.Scale(16), metrics.RowMinHeight - AppTypography.Scale(9))
+                : metrics.RowMinHeight;
+            text.VerticalContentAlignment = folded ? VerticalAlignment.Top : VerticalAlignment.Center;
+            var maxLines = folded ? TodoFoldVisibleLines : int.MaxValue;
+            if (ApplyFoldLineLimit(maxLines) && folded)
+            {
+                // After editing near the end, folding should show the first two lines.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_todoEditors.TryGetValue(item.Id, out var current) &&
+                        ReferenceEquals(current, text) &&
+                        text.MaxLines == TodoFoldVisibleLines && !text.IsKeyboardFocusWithin)
+                    {
+                        text.ScrollToLine(0);
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+
+        void QueueFoldRefresh()
+        {
+            if (foldRefreshQueued) return;
+            foldRefreshQueued = true;
+            Dispatcher.BeginInvoke(new Action(RefreshFoldPresentation),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        foldButton.MouseEnter += (_, _) => foldGlyph.Opacity = 0.9;
+        foldButton.MouseLeave += (_, _) => foldGlyph.Opacity = 0.58;
+        foldButton.MouseLeftButtonDown += (_, e) => e.Handled = true;
+        foldButton.MouseLeftButtonUp += (_, e) =>
+        {
+            var alreadyFolded = _foldedTodoItemIds.Contains(item.Id) && !text.IsKeyboardFocusWithin;
+            if (alreadyFolded)
+            {
+                _foldedTodoItemIds.Remove(item.Id);
+            }
+            else
+            {
+                _foldedTodoItemIds.Add(item.Id);
+                if (text.IsKeyboardFocusWithin) Keyboard.ClearFocus();
+            }
+            RefreshFoldPresentation();
+            e.Handled = true;
+        };
+        text.Loaded += (_, _) => QueueFoldRefresh();
+        text.SizeChanged += (_, e) => { if (e.WidthChanged) QueueFoldRefresh(); };
+        text.TextChanged += (_, _) => QueueFoldRefresh();
+        text.GotKeyboardFocus += (_, _) =>
+        {
+            if (_foldedTodoItemIds.Contains(item.Id)) ApplyFoldLineLimit(int.MaxValue);
+            QueueFoldRefresh();
+        };
+        text.LostKeyboardFocus += (_, _) => QueueFoldRefresh();
+
+        Grid.SetColumn(trailingControls, showTodoReminderControl ? 4 : 3);
+        grid.Children.Add(trailingControls);
 
         row.Child = grid;
         ConfigureTodoPathDrop(row, item);
@@ -1235,6 +1366,21 @@ public sealed partial class PaperWindow
     {
         if (e.Key == Key.Back && _suppressTodoBackspaceUntilKeyUp)
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            // Keep the native TextBox undo/redo path and honor the existing text limit.
+            if (box.Text.Length - box.SelectionLength + Environment.NewLine.Length <= box.MaxLength)
+            {
+                var insertionStart = box.SelectionStart;
+                box.SelectedText = Environment.NewLine;
+                // SelectedText preserves the inserted range as a selection in WPF.
+                // Collapse it so the next keystroke continues on the new line.
+                box.Select(insertionStart + Environment.NewLine.Length, 0);
+            }
             e.Handled = true;
             return;
         }
