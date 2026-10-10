@@ -53,14 +53,6 @@ public sealed partial class PaperWindow
             return;
         }
 
-        // Any active trash preview takes priority over edge scrolling.
-        if (_todoDrag.DropAtEnd && IsPointerOverTodoTrash(Mouse.GetPosition(this)))
-        {
-            _todoDragEdgeScrollDirection = 0;
-            _todoDragEdgeScrollLastTick = Stopwatch.GetTimestamp();
-            return;
-        }
-
         var pos = Mouse.GetPosition(scroll);
         var edge = Math.Min(AppTypography.Scale(48), scroll.ActualHeight / 4);
         var direction = 0;

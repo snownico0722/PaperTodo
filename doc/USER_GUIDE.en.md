@@ -162,7 +162,7 @@ Todo papers are crafted for checklists, daily agendas, and bite-sized action ite
 
 ### 3.2 Ordering, Deletion & Batch Actions
 
-- **Drag Reorder & Delete**: Hold the right handle (`≡`) to reorder. Hovering near list edges auto-scrolls, even with a stationary pointer. If the trash zone moves under the pointer, including through auto-scrolling, it previews deletion and pauses scrolling. Drag away to cancel the preview; release over the trash to delete.
+- **Drag Reorder & Delete**: Hold the right handle (`≡`) to reorder. Hovering near list edges auto-scrolls, even with a stationary pointer. If the trash zone moves under the pointer, including through auto-scrolling, it previews deletion without pausing edge scrolling. Drag away to cancel the preview; release over the trash to delete.
 - **Continuous Swipe Multi-Selection**: Hold and drag left-click across items from the left margin to continuously select multiple rows.
 - **Batch Actions**: Once selected, batch check/uncheck, press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy, right-click to delete all, or drag the group to the trash.
 
