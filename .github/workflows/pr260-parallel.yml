@@ -1,0 +1,71 @@
+name: PR260 parallel experiments
+
+on:
+  push:
+    branches:
+      - exp/pr260-parallel-automation
+
+permissions:
+  contents: read
+
+jobs:
+  scoped-prewarm-pointer:
+    name: Scoped prewarm pointer candidate
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Guard intended scope
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prewarm = Get-Content src/AppController.EdgePrewarm.cs -Raw
+          $pointer = Get-Content src/AppController.EdgeCapsulePreviewPointerInput.cs -Raw
+          if (!$prewarm.Contains('_edgePrewarmLastPointer')) {
+            throw 'Existing pointer de-duplication must remain intact'
+          }
+          if (!$pointer.Contains('_edgeCapsulePreviewSession != null')) {
+            throw 'Active preview sessions must keep conservative prewarm interaction handling'
+          }
+          if (!$pointer.Contains('inputWindow.IsEdgeCapsuleInteractiveAt(pointer.Value)')) {
+            throw 'Retained-proxy desktop motion is not scoped to a PaperTodo hit'
+          }
+          if (!$pointer.Contains('ObserveEdgePrewarmPointer(pointer)')) {
+            throw 'Scoped proxy pointer path no longer uses the canonical de-duplicating observer'
+          }
+      - name: Restore product
+        run: dotnet restore .\PaperTodo.csproj
+      - name: Build product Release
+        run: dotnet build .\PaperTodo.csproj -c Release --no-restore
+      - name: Build EdgeTitle checks Release
+        run: dotnet build .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
+      - name: Locate EdgeTitle checks executable
+        id: checks
+        run: |
+          $exe = Get-ChildItem tests/PaperTodo.EdgeTitleChecks/bin/Release -Recurse -Filter PaperTodo.EdgeTitleChecks.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (!$exe) { throw 'EdgeTitle checks executable was not produced' }
+          "exe=$exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      - name: Run prewarm coordinator checks
+        run: |
+          & '${{ steps.checks.outputs.exe }}' --prewarm-coordinator-only
+          exit $LASTEXITCODE
+      - name: Run standard EdgeTitle checks
+        run: |
+          & '${{ steps.checks.outputs.exe }}'
+          exit $LASTEXITCODE
+      - name: Run full native input checks
+        run: |
+          & '${{ steps.checks.outputs.exe }}' --proxy-native-input
+          exit $LASTEXITCODE
