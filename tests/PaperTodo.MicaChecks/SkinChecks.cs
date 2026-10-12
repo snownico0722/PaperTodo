@@ -363,7 +363,7 @@ internal static class SkinChecks
                 Theme.Invalidate();
                 window.UpdateTheme();
                 Program.Pump();
-                var gripInk = new List<long>();
+                var gripSnapshots = new List<byte[]>();
                 foreach (var grip in new[] { ResizeGripModes.Standard, ResizeGripModes.Soft, ResizeGripModes.Hidden })
                 {
                     setMode.Invoke(controller, [grip]);
@@ -381,15 +381,24 @@ internal static class SkinChecks
                         $"UI settings published {skin}/{grip} grip alpha");
                     CheckResizeHitTests(window, $"layered {skin}/{grip}");
                     if (skin == PaperSkins.Paper)
-                        gripInk.Add(ResizeGripPaintedAlpha(FindResizeGrip(window)));
-                    if (skin == PaperSkins.Paper && grip == ResizeGripModes.Standard ||
-                        skin == PaperSkins.Aero && grip == ResizeGripModes.Hidden)
-                        DragActualResizeGrip(window, $"layered {skin}/{grip}");
+                    {
+                        CheckGripTemplateBrush(window, grip, expectedAlpha);
+                        gripSnapshots.Add(CaptureActualGripPixels(window));
+                    }
                 }
                 if (skin == PaperSkins.Paper)
-                    Program.Assert(gripInk[0] > gripInk[1] && gripInk[1] > gripInk[2],
-                        "WPF resize-grip pixels follow standard/soft/hidden setting " +
-                        $"(standard={gripInk[0]}, soft={gripInk[1]}, hidden={gripInk[2]})");
+                {
+                    var standardDelta = GripPixelDelta(gripSnapshots[0], gripSnapshots[2]);
+                    var softDelta = GripPixelDelta(gripSnapshots[1], gripSnapshots[2]);
+                    Program.Assert(standardDelta > softDelta && softDelta > 0,
+                        "actual window pixels must show stronger standard than soft grip " +
+                        $"(standard-hidden={standardDelta}, soft-hidden={softDelta})");
+                    setMode.Invoke(controller, [ResizeGripModes.Standard]);
+                    Program.Pump();
+                    DragActualResizeGrip(window, "layered paper/standard after skin change");
+                }
+                else if (skin == PaperSkins.Aero)
+                    DragActualResizeGrip(window, "layered Aero/hidden after skin change");
             }
         }
         finally
@@ -462,19 +471,55 @@ internal static class SkinChecks
         return grips[0];
     }
 
-    private static long ResizeGripPaintedAlpha(ResizeGrip grip)
+    private static T? FirstVisualChild<T>(DependencyObject root) where T : DependencyObject
     {
-        // Render only the real control, not the opaque paper behind it. The actual
-        // rendered dot alpha must change, not merely the application resource entry.
-        var bitmap = new RenderTargetBitmap(
-            Math.Max(1, (int)Math.Ceiling(grip.ActualWidth)),
-            Math.Max(1, (int)Math.Ceiling(grip.ActualHeight)),
-            96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(grip);
-        var pixels = Pixels(bitmap);
-        long alpha = 0;
-        for (var i = 3; i < pixels.Length; i += 4) alpha += pixels[i];
-        return alpha;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) return match;
+            if (FirstVisualChild<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+
+    private static void CheckGripTemplateBrush(PaperWindow window, string mode, int expectedAlpha)
+    {
+        var grip = FindResizeGrip(window);
+        var path = FirstVisualChild<System.Windows.Shapes.Path>(grip);
+        var painted = ((path?.Fill as DrawingBrush)?.Drawing as GeometryDrawing)?.Brush as SolidColorBrush;
+        var alpha = painted?.Color.A ?? -1;
+        var styleMatches = ReferenceEquals(grip.Style, Application.Current.Resources[typeof(ResizeGrip)]);
+        Program.Assert(alpha == expectedAlpha,
+            $"real WPF grip template follows {mode}: brush alpha {alpha} expected {expectedAlpha}; " +
+            $"styleMatches={styleMatches}, gripOpacity={grip.Opacity}, children={VisualTreeHelper.GetChildrenCount(grip)}");
+    }
+
+    private static byte[] CaptureActualGripPixels(PaperWindow window)
+    {
+        // Render the attached complete Window. Render(grip) alone can produce empty
+        // pixels because the stock Window template owns/clips the resize control.
+        var grip = FindResizeGrip(window);
+        var bounds = grip.TransformToAncestor(window).TransformBounds(
+            new Rect(0, 0, grip.ActualWidth, grip.ActualHeight));
+        var bitmap = Render(window, 1);
+        var bytes = Pixels(bitmap);
+        var left = Math.Clamp((int)Math.Floor(bounds.Left), 0, bitmap.PixelWidth - 1);
+        var top = Math.Clamp((int)Math.Floor(bounds.Top), 0, bitmap.PixelHeight - 1);
+        var right = Math.Clamp((int)Math.Ceiling(bounds.Right), left + 1, bitmap.PixelWidth);
+        var bottom = Math.Clamp((int)Math.Ceiling(bounds.Bottom), top + 1, bitmap.PixelHeight);
+        var pixels = new byte[(right - left) * (bottom - top) * 4];
+        for (var y = top; y < bottom; y++)
+            Array.Copy(bytes, (y * bitmap.PixelWidth + left) * 4,
+                pixels, (y - top) * (right - left) * 4, (right - left) * 4);
+        return pixels;
+    }
+
+    private static long GripPixelDelta(byte[] a, byte[] b)
+    {
+        Program.Assert(a.Length == b.Length, "comparison uses stable grip bounds");
+        long sum = 0;
+        for (var i = 0; i < a.Length; i++) sum += Math.Abs(a[i] - b[i]);
+        return sum;
     }
 
     private static void DragActualResizeGrip(PaperWindow window, string scenario)
