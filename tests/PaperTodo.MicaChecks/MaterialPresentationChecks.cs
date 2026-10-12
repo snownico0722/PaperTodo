@@ -593,8 +593,10 @@ internal static class MaterialPresentationChecks
                 .GetField("_windows", Program.Private)!.GetValue(controller)!;
             Program.Assert(windows.TryGetValue(paper.Id, out var window),
                 "edge menu fixture has a real PaperWindow");
-            var host = (EdgeCapsuleHost)typeof(PaperWindow)
-                .GetField("_edgeCapsuleHost", Program.Private)!.GetValue(window)!;
+            var hostField = typeof(PaperWindow).GetField("_edgeCapsuleHost", Program.Private)!;
+            Until(() => hostField.GetValue(window) is EdgeCapsuleHost,
+                "real Edge capsule host is constructed after the placement is dispatched");
+            var host = (EdgeCapsuleHost)hostField.GetValue(window)!;
             var content = (FrameworkElement)typeof(EdgeCapsuleHost)
                 .GetProperty("ContentArea", Program.Private)!.GetValue(host)!;
             Until(() => host.IsVisible && content.ContextMenu != null &&
