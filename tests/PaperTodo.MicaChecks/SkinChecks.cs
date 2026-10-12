@@ -433,8 +433,11 @@ internal static class SkinChecks
         Program.Assert(ResizeHit(hwnd, (int)Math.Round(center.X), (int)Math.Round(center.Y)) == 17,
             $"{scenario}: actual WPF resize grip center must resize");
         var neighbor = grip.PointToScreen(new Point(-8, 1));
-        Program.Assert(ResizeHit(hwnd, (int)Math.Round(neighbor.X), (int)Math.Round(neighbor.Y)) == 1,
-            $"{scenario}: body area beside grip remains an interactive client");
+        var neighborHit = ResizeHit(hwnd, (int)Math.Round(neighbor.X), (int)Math.Round(neighbor.Y));
+        Program.Assert(neighborHit == 1,
+            $"{scenario}: body area beside grip remains an interactive client " +
+            $"(hit={neighborHit}, grip={grip.ActualWidth:0.#}x{grip.ActualHeight:0.#}, " +
+            $"pointer={neighbor.X:0},{neighbor.Y:0}, hwnd={rect.Right}x{rect.Bottom})");
         if (chrome.HeaderOpacity != 0)
             Program.Assert(ResizeHit(hwnd, centerX, rect.Top + topInset) == 12,
                 $"{scenario}: painted top edge must resize");
@@ -483,8 +486,10 @@ internal static class SkinChecks
         Program.Assert(GetCursorPos(out var priorCursor), $"{scenario}: original cursor");
         window.Activate();
         Program.Pump();
-        Program.Assert(WindowFromPoint(origin) == hwnd,
-            $"{scenario}: actual grip is reachable by OS input, not just SendMessage");
+        var nativeTarget = WindowFromPoint(origin);
+        Program.Assert(nativeTarget == hwnd,
+            $"{scenario}: actual grip must receive native input " +
+            $"(target={nativeTarget}, paper={hwnd}, point={origin.X},{origin.Y})");
 
         try
         {
@@ -514,9 +519,13 @@ internal static class SkinChecks
             drag.GetAwaiter().GetResult();
             Program.Pump();
             Program.Assert(GetWindowRect(hwnd, out var after), $"{scenario}: final bounds");
-            Program.Assert(after.Right - after.Left >= before.Right - before.Left + 25 &&
-                after.Bottom - after.Top >= before.Bottom - before.Top + 20,
-                $"{scenario}: real mouse drag must increase BOTH dimensions");
+            var oldW = before.Right - before.Left;
+            var oldH = before.Bottom - before.Top;
+            var newW = after.Right - after.Left;
+            var newH = after.Bottom - after.Top;
+            Program.Assert(newW >= oldW + 25 && newH >= oldH + 20,
+                $"{scenario}: real mouse drag must increase BOTH dimensions " +
+                $"({oldW}x{oldH} -> {newW}x{newH})");
         }
         finally
         {
