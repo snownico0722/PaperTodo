@@ -1565,7 +1565,7 @@
     <value>向右移动</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>关联拖拽（固定后拖动）</value>
+    <value>按住此项拖动以关联</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>插件操作</value>

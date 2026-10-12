@@ -20,7 +20,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
-- **Unified paper menu and customizable title bar**: Expanded papers now expose a `···` button that opens the same actions as the paper context menu. New installs start with optional shortcuts tucked away; Todo and Note shortcuts can be pinned, unpinned, and reordered independently. Narrow windows overflow optional actions while preserving core window controls, and plugin actions remain available from the menu. Existing visibility preferences migrate on upgrade, replacing the three redundant settings toggles.
+- **Unified paper menu and customizable title bar**: Expanded papers now expose a `···` button that opens the same actions as the paper context menu. New installs start with optional shortcuts tucked away; Todo and Note shortcuts can be pinned, unpinned, and reordered independently. User-pinned built-in shortcuts display as one group or overflow together on narrow papers; plugin action icons have lower priority and use only the remaining space. The shared right-click/ellipsis menu offers commands that are not already visible on the title bar, including drag-to-associate and any hidden plugin actions. Existing pinned choices migrate on upgrade, replacing the three redundant settings toggles.
 
 - **Fast animations**: General settings now includes an optional fast-animation mode that reduces visual transition durations to about 60% while keeping animations enabled. The default remains off, and non-visual timers are unchanged.
 - **Compact built-in edge previews**: Note and Todo hover previews now share a 320 DIP maximum height while shorter content remains naturally sized. Plugin Mini size limits are unchanged.

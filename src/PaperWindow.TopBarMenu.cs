@@ -30,28 +30,29 @@ public sealed partial class PaperWindow
     private void ReorderTopBarUserButtons()
     {
         if (_topBarActionButtonsHost == null) return;
-        var choices = PaperTopBarShortcuts.Choices(_paper.Type);
-        FrameworkElement? Resolve(string action) =>
-            action == PaperTopBarShortcuts.PluginActions
-                ? _pluginTopBarButtonsHost
-                : GetTopBarUserButton(action);
-
-        var elements = choices.Select(Resolve).OfType<FrameworkElement>().Distinct().ToArray();
+        // Built-in buttons follow the user's order; plugin actions always render last.
+        var choices = PaperTopBarShortcuts.Choices(_paper.Type)
+            .Where(action => action != PaperTopBarShortcuts.PluginActions);
+        var buttons = choices.Select(GetTopBarUserButton)
+            .OfType<Button>().Distinct().ToArray();
         var ordered = PaperTopBarShortcuts.Get(_controller.State, _paper.Type)
+            .Where(action => action != PaperTopBarShortcuts.PluginActions)
             .Concat(choices).Distinct(StringComparer.Ordinal)
-            .Select(Resolve).OfType<FrameworkElement>().ToArray();
+            .Select(GetTopBarUserButton).OfType<Button>()
+            .Cast<FrameworkElement>().ToList();
+        if (_pluginTopBarButtonsHost != null)
+            ordered.Add(_pluginTopBarButtonsHost);
 
-        // Plugin actions are one host-owned group. Its position is configurable just like
-        // the four built-in buttons; passive plugin labels still remain at the leading edge.
         var current = _topBarActionButtonsHost.Children.OfType<FrameworkElement>()
             .Where(element => element is Button ||
                 ReferenceEquals(element, _pluginTopBarButtonsHost)).ToArray();
         if (current.SequenceEqual(ordered)) return;
 
-        // Do not detach/reparent live controls when the order is already stable:
-        // a drag source may be holding mouse capture or keyboard focus.
-        foreach (var element in elements)
-            _topBarActionButtonsHost.Children.Remove(element);
+        // Keep attached controls in place when order is unchanged (mouse capture/focus).
+        foreach (var button in buttons)
+            _topBarActionButtonsHost.Children.Remove(button);
+        if (_pluginTopBarButtonsHost != null)
+            _topBarActionButtonsHost.Children.Remove(_pluginTopBarButtonsHost);
         var insertAt = _pluginTopBarLabelsHost == null ? 0 :
             _topBarActionButtonsHost.Children.IndexOf(_pluginTopBarLabelsHost) + 1;
         insertAt = Math.Max(0, insertAt);
@@ -67,6 +68,27 @@ public sealed partial class PaperWindow
         PaperTopBarShortcuts.NewNote => _newNoteButton,
         _ => null
     };
+
+    private bool IsTopBarCommandVisible(Button? button) =>
+        !_paper.IsCollapsed && IsVisible && _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
+        button?.Visibility == Visibility.Visible;
+
+    private MenuItem BuildAssociationDragMenuItem(ContextMenu menu)
+    {
+        var item = new MenuItem
+        {
+            Header = Strings.Get("MenuTopBarAssociationDrag"),
+            ToolTip = AssociationDragHint(),
+            Padding = new Thickness(8, 4, 10, 4),
+            StaysOpenOnClick = true
+        };
+        // A regular Click cannot implement association. Let users drag out of the
+        // overflow popup using the very same gesture and target adapters as the
+        // title-bar button; close the popup when the gesture ends.
+        ConfigureTopBarDragGesture(item,
+            CreateAssociationDragBehavior(() => menu.IsOpen = false));
+        return item;
+    }
 
     private bool ShouldShowPinnedHostButton(Button button)
     {
@@ -119,7 +141,9 @@ public sealed partial class PaperWindow
             menu.Items.Add(option);
         }
 
-        if (pinned.Count < 2) return;
+        var reorderable = pinned.Where(action =>
+            action != PaperTopBarShortcuts.PluginActions).ToList();
+        if (reorderable.Count < 2) return;
         menu.Items.Add(MenuSeparator());
         var reorder = new MenuItem
         {
@@ -128,15 +152,15 @@ public sealed partial class PaperWindow
         };
         // Keep the reorder menu one level deep: select "move action left/right"
         // directly, instead of opening another submenu for every action.
-        for (var i = 0; i < pinned.Count; i++)
+        for (var i = 0; i < reorderable.Count; i++)
         {
-            var action = pinned[i];
+            var action = reorderable[i];
             var label = TopBarActionText(action);
             if (i > 0)
                 reorder.Items.Add(MenuItem(
                     Strings.Get("MenuTopBarMoveLeft") + " · " + label,
                     (_, _) => _controller.MoveTopBarShortcut(paperType, action, -1)));
-            if (i < pinned.Count - 1)
+            if (i < reorderable.Count - 1)
                 reorder.Items.Add(MenuItem(
                     Strings.Get("MenuTopBarMoveRight") + " · " + label,
                     (_, _) => _controller.MoveTopBarShortcut(paperType, action, 1)));
@@ -154,37 +178,38 @@ public sealed partial class PaperWindow
         _ => action
     };
 
-    // The same paper menu is used by right-click and by the visible ellipsis. Top-bar
-    // actions supplied by plugins remain reachable here even when not pinned or overflowed.
+    // Context and ellipsis menus both rebuild on Opened, so the plugin menu contains
+    // only commands not already visible in the current title bar.
     private void AttachPluginTopBarActionsToMenu(ContextMenu menu)
     {
+        var hidden = _controller.GetPluginTopBarRenderState(_paper.Id).Actions
+            .Where(binding => binding.Action.Visible &&
+                !(_pluginTopBarActionElements.Any(entry =>
+                    Equals(entry.Binding, binding)) &&
+                  !_paper.IsCollapsed && IsVisible &&
+                  _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
+                  _pluginTopBarButtonsHost?.Visibility == Visibility.Visible))
+            .ToArray();
+        if (hidden.Length == 0) return;
+
         var pluginMenu = new MenuItem
         {
             Header = Strings.Get("MenuTopBarPluginActions"),
             Padding = new Thickness(8, 4, 10, 4)
         };
-        menu.Items.Add(pluginMenu);
-        void Refresh()
+        foreach (var binding in hidden)
         {
-            pluginMenu.Items.Clear();
-            foreach (var binding in _controller.GetPluginTopBarRenderState(_paper.Id).Actions)
-            {
-                if (!binding.Action.Visible) continue;
-                var text = string.IsNullOrWhiteSpace(binding.Action.ToolTip)
-                    ? binding.Action.Id : binding.Action.ToolTip;
-                var command = MenuItem(text, (_, _) =>
-                    _controller.InvokePluginTopBarAction(
-                        binding, _paper.Id, _paper.Type,
-                        _paper.Type == PaperTypes.Note
-                            ? NormalizeBodyProviderId(_paper.BodyProviderId)
-                            : string.Empty));
-                command.IsEnabled = binding.Action.Enabled;
-                pluginMenu.Items.Add(command);
-            }
-            pluginMenu.Visibility = pluginMenu.Items.Count > 0
-                ? Visibility.Visible : Visibility.Collapsed;
+            var label = string.IsNullOrWhiteSpace(binding.Action.ToolTip)
+                ? binding.Action.Id : binding.Action.ToolTip;
+            var command = MenuItem(label, (_, _) =>
+                _controller.InvokePluginTopBarAction(
+                    binding, _paper.Id, _paper.Type,
+                    _paper.Type == PaperTypes.Note
+                        ? NormalizeBodyProviderId(_paper.BodyProviderId)
+                        : string.Empty));
+            command.IsEnabled = binding.Action.Enabled;
+            pluginMenu.Items.Add(command);
         }
-        Refresh();
-        menu.Opened += (_, _) => Refresh();
+        menu.Items.Add(pluginMenu);
     }
 }

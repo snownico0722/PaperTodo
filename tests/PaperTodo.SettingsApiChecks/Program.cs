@@ -99,9 +99,16 @@ internal static partial class Program
               !PaperTopBarShortcuts.Contains(state, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo),
             "Moving past the edge does nothing; Note shortcuts do not change Todo shortcuts.");
         var normalized = PaperTopBarShortcuts.Normalize(PaperTypes.Todo,
-            [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewTodo, "unknown", PaperTopBarShortcuts.ExternalEditor]);
-        Check(normalized.SequenceEqual([PaperTopBarShortcuts.NewTodo]),
-            "Unknown, duplicate and other-paper-type shortcut identifiers are dropped.");
+            [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewTodo,
+             PaperTopBarShortcuts.NewTodo, "unknown", PaperTopBarShortcuts.ExternalEditor]);
+        Check(normalized.SequenceEqual([PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.PluginActions]),
+            "Unknown and duplicate pins are dropped; plugins are always last.");
+        state.TodoTopBarShortcuts = normalized;
+        Check(!PaperTopBarShortcuts.Move(state, PaperTypes.Todo,
+                PaperTopBarShortcuts.PluginActions, -1) &&
+              !PaperTopBarShortcuts.Move(state, PaperTypes.Todo,
+                PaperTopBarShortcuts.NewTodo, 1),
+            "Plugin pin priority cannot be changed by built-in shortcut sorting.");
 
         var controller = Controller();
         controller.State.TodoTopBarShortcuts = [PaperTopBarShortcuts.Association];
@@ -158,10 +165,10 @@ internal static partial class Program
                   !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
                 "Old data.json visibility preferences migrate once to per-type ordered shortcuts.");
             Check(PaperTopBarShortcuts.Get(loaded, PaperTypes.Todo).SequenceEqual(
-                      [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+                      [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.PluginActions]) &&
                   PaperTopBarShortcuts.Get(loaded, PaperTypes.Note).SequenceEqual(
-                      [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
-                "Migrated plugin actions retain their original position before built-in shortcuts.");
+                      [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.PluginActions]),
+                "Migration preserves pinned actions but puts plugin shortcuts last.");
 
             // Explicit empty arrays are the new minimal preference, not a signal to remigrate.
             loaded.TodoTopBarShortcuts = [];

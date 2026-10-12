@@ -137,6 +137,7 @@ internal static class MaterialPresentationChecks
         PaperWindow? window = null;
         var paperOwner = Guid.NewGuid();
         var globalOwner = Guid.NewGuid();
+        GetCursorPos(out var previousCursor);
         try
         {
             state.PaperSkin = PaperSkins.Paper;
@@ -193,51 +194,164 @@ internal static class MaterialPresentationChecks
                 Program.Pump();
             }
 
+            // User pins are a single group even if the stored plugin pin comes first.
             LayoutAt(235);
-            Program.Assert(plugins.Children.Count >= 2 &&
-                createTodo.Visibility != Visibility.Visible &&
+            Program.Assert(plugins.Children.Count == 0 &&
+                createTodo.Visibility == Visibility.Visible &&
+                createNote.Visibility == Visibility.Visible &&
                 close.Visibility == Visibility.Visible &&
                 more.Visibility == Visibility.Visible &&
                 pin.Visibility == Visibility.Visible &&
                 host.Visibility == Visibility.Visible,
-                "narrow title bar keeps the higher-priority plugin group and fixed controls");
+                "built-in shortcuts outrank every plugin icon while fixed controls survive");
+
+            LayoutAt(185);
+            Program.Assert(plugins.Children.Count == 0 &&
+                createTodo.Visibility != Visibility.Visible &&
+                createNote.Visibility != Visibility.Visible &&
+                host.Visibility == Visibility.Visible,
+                "a narrow paper overflows all built-in pins together, not one by one");
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Pump();
+            var narrowMenu = more.ContextMenu!;
+            Program.Assert(narrowMenu.Items.OfType<MenuItem>().Any(item =>
+                    Equals(item.Header, Strings.Get("MenuNewTodoPaper"))) &&
+                narrowMenu.Items.OfType<MenuItem>().Any(item =>
+                    Equals(item.Header, Strings.Get("MenuNewNotePaper"))) &&
+                narrowMenu.Items.OfType<MenuItem>().Any(item =>
+                    Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag"))),
+                "all hidden built-in commands, including a draggable association entry, are in overflow");
+            var narrowPlugins = narrowMenu.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuTopBarPluginActions")));
+            Program.Assert(narrowPlugins.Items.Count == 4,
+                "all hidden plugin actions remain accessible in the shared paper menu");
+            narrowMenu.IsOpen = false;
+
+            LayoutAt(280);
+            var shownPlugins = plugins.Children.OfType<Button>()
+                .Where(button => button.Visibility == Visibility.Visible)
+                .Select(button => button.ToolTip as string).ToArray();
+            Program.Assert(shownPlugins.Length is >= 2 and < 4 &&
+                createTodo.Visibility == Visibility.Visible &&
+                createNote.Visibility == Visibility.Visible,
+                "global plugin actions consume only the space left after the complete user group");
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Pump();
+            var partialMenu = more.ContextMenu!;
+            var partialPlugins = partialMenu.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuTopBarPluginActions")));
+            var hiddenPlugins = partialPlugins.Items.OfType<MenuItem>()
+                .Select(item => item.Header as string).ToArray();
+            Program.Assert(hiddenPlugins.Length == 4 - shownPlugins.Length &&
+                shownPlugins.All(label => !hiddenPlugins.Contains(label)),
+                "plugin menu contains only buttons actually hidden by overflow");
+            partialMenu.IsOpen = false;
+
             LayoutAt(430);
             Program.Assert(plugins.Children.Count == 4 &&
                 createTodo.Visibility == Visibility.Visible &&
                 createNote.Visibility == Visibility.Visible,
-                "resizing wider restores all paper/global plugin actions and built-in pins");
+                "expanding restores all built-in and plugin controls");
 
             state.TodoTopBarShortcuts =
-                [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.Association,
-                 PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewNote];
+                [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewTodo,
+                 PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote];
             window.UpdateTopBarNewPaperButtons();
             LayoutAt(235);
             Program.Assert(createTodo.Visibility == Visibility.Visible &&
                 association.Visibility == Visibility.Visible &&
+                createNote.Visibility == Visibility.Visible &&
+                plugins.Children.Count == 0,
+                "pinning association keeps the complete user group ahead of plugins");
+
+            LayoutAt(185);
+            Program.Assert(createTodo.Visibility != Visibility.Visible &&
+                createNote.Visibility != Visibility.Visible &&
+                association.Visibility != Visibility.Visible &&
                 plugins.Children.Count == 0 &&
                 host.Visibility == Visibility.Visible,
-                "a newly enabled association never hides the entire shortcut host");
-            LayoutAt(430);
-            Program.Assert(plugins.Children.Count == 4,
-                "plugin actions return when space grows without requiring a plugin refresh");
-
-            // The ellipsis and the chrome right-click build the same paper-level menu.
+                "the entire shortcut group, including association, enters overflow at narrow widths");
             more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            var popup = more.ContextMenu;
-            var context = Field<SkinBorder>("_paperChrome").ContextMenu;
-            Program.Assert(popup != null && context != null &&
-                popup.Items.OfType<MenuItem>().Select(item => item.Header as string).SequenceEqual(
-                    context.Items.OfType<MenuItem>().Select(item => item.Header as string)),
-                "ellipsis and right-click expose identical paper command lists");
+            Program.Pump();
+            var narrowAssociationMenu = more.ContextMenu!;
+            var dragEntry = narrowAssociationMenu.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag")));
+            Program.Assert(dragEntry.StaysOpenOnClick,
+                "association in overflow remains a drag origin instead of a no-op click");
+            // Exercise WPF's real mouse capture on the popup MenuItem. A mere
+            // StaysOpenOnClick flag would not prove users can drag from this HWND.
+            try
+            {
+                var from = dragEntry.PointToScreen(
+                    new Point(dragEntry.ActualWidth / 2, dragEntry.ActualHeight / 2));
+                var sx = (int)Math.Round(from.X);
+                var sy = (int)Math.Round(from.Y);
+                SetCursorPos(sx, sy);
+                Wait(30);
+                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                Wait(30);
+                SetCursorPos(sx + 65, sy + 15);
+                Wait(70);
+                var drag = typeof(PaperWindow).GetField("_topBarDrag", Program.Private)!
+                    .GetValue(window);
+                Program.Assert(drag != null &&
+                    drag.GetType().GetProperty("IsDragging")!.GetValue(drag) is true,
+                    "actual mouse movement begins association drag from the overflow popup");
+            }
+            finally
+            {
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                narrowAssociationMenu.IsOpen = false;
+                Wait(25);
+            }
+
+            LayoutAt(430);
+            Program.Assert(plugins.Children.Count == 4 &&
+                association.Visibility == Visibility.Visible,
+                "user pins and lowest-priority plugins return on expansion");
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Pump();
+            var popup = more.ContextMenu!;
+            Program.Assert(!popup.Items.OfType<MenuItem>().Any(item =>
+                    Equals(item.Header, Strings.Get("MenuNewTodoPaper")) ||
+                    Equals(item.Header, Strings.Get("MenuNewNotePaper")) ||
+                    Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag")) ||
+                    Equals(item.Header, Strings.Get("MenuTopBarPluginActions"))),
+                "commands visible as title-bar icons are not duplicated in overflow");
+            var titles = popup.Items.OfType<MenuItem>()
+                .Select(item => item.Header as string).ToArray();
+            popup.IsOpen = false;
+            var chrome = Field<SkinBorder>("_paperChrome");
+            var context = chrome.ContextMenu!;
+            context.PlacementTarget = chrome;
+            context.IsOpen = true;
+            Program.Pump();
+            Program.Assert(context.Items.OfType<MenuItem>()
+                    .Select(item => item.Header as string).SequenceEqual(titles),
+                "existing right-click menu refreshes to match the ellipsis after resizes");
+            context.IsOpen = false;
+
+            // Actual checkbox click still refreshes the controller-owned window.
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Pump();
+            popup = more.ContextMenu!;
             var customize = popup.Items.OfType<MenuItem>().Single(item =>
                 Equals(item.Header, Strings.Get("MenuCustomizeTopBar")));
             var newNote = customize.Items.OfType<MenuItem>().Single(item =>
                 Equals(item.Header, Strings.Get("MenuNewNotePaper")));
-            Program.Assert(newNote.IsChecked, "pinned command is checked in the visible menu");
+            Program.Assert(newNote.IsChecked, "pinned command is checked in the menu");
             newNote.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Program.Assert(!PaperTopBarShortcuts.Contains(state, paper.Type, PaperTopBarShortcuts.NewNote) &&
+            Program.Assert(!PaperTopBarShortcuts.Contains(state, paper.Type,
+                    PaperTopBarShortcuts.NewNote) &&
                 createNote.Visibility != Visibility.Visible,
-                "clicking the actual menu checkbox removes the live title-bar shortcut");
+                "clicking the menu checkbox removes the live title-bar shortcut");
+            popup.IsOpen = false;
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Pump();
+            popup = more.ContextMenu!;
+            Program.Assert(popup.Items.OfType<MenuItem>().Any(item =>
+                    Equals(item.Header, Strings.Get("MenuNewNotePaper"))),
+                "a shortcut removed from the title bar appears in overflow again");
             popup.IsOpen = false;
         }
         finally
@@ -249,6 +363,7 @@ internal static class MaterialPresentationChecks
             state.TodoTopBarShortcuts = oldPins;
             state.EnableTodoPaperLinks = oldLinks;
             state.PaperSkin = oldSkin;
+            SetCursorPos(previousCursor.X, previousCursor.Y);
             Theme.Invalidate();
         }
     }

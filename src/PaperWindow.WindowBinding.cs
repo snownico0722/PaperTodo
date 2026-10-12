@@ -63,30 +63,32 @@ public sealed partial class PaperWindow
         };
         button.PreviewMouseRightButtonUp +=
             (_, e) => OpenWindowBindingButtonMenu(button, e);
-        ConfigureTopBarDragGesture(
-            button,
-            new TopBarDragBehavior
-            {
-                Kind = TopBarDragKind.WindowBinding,
-                CanBegin = CanBeginAssociationDrag,
-                Started = () =>
-                {
-                    _windowBindingDragTarget = null;
-                    _windowBindingTargetSampleTimestamp = 0;
-                    ExitNoteEditor();
-                    if (CanBeginPaperLinkDrag())
-                    {
-                        _controller.BeginPaperLinkDrag(_paper);
-                    }
-                },
-                CreateFeedback = CreateWindowBindingDragFeedback,
-                Moved = UpdateAssociationDragTarget,
-                Completed = CompleteAssociationDrag,
-                GhostPlacement = TopBarDragGhostPlacement.PointerOffset,
-                DraggingOpacity = 0.72
-            });
+        ConfigureTopBarDragGesture(button, CreateAssociationDragBehavior());
         RefreshWindowBindingButton();
     }
+
+    private TopBarDragBehavior CreateAssociationDragBehavior(Action? afterDrag = null) => new()
+    {
+        Kind = TopBarDragKind.WindowBinding,
+        CanBegin = CanBeginAssociationDrag,
+        Started = () =>
+        {
+            _windowBindingDragTarget = null;
+            _windowBindingTargetSampleTimestamp = 0;
+            ExitNoteEditor();
+            if (CanBeginPaperLinkDrag())
+                _controller.BeginPaperLinkDrag(_paper);
+        },
+        CreateFeedback = CreateWindowBindingDragFeedback,
+        Moved = UpdateAssociationDragTarget,
+        Completed = commit =>
+        {
+            CompleteAssociationDrag(commit);
+            afterDrag?.Invoke();
+        },
+        GhostPlacement = TopBarDragGhostPlacement.PointerOffset,
+        DraggingOpacity = 0.72
+    };
 
     internal void RefreshAssociationButton()
     {

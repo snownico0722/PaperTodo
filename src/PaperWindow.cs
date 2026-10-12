@@ -2422,53 +2422,43 @@ public sealed partial class PaperWindow : Window
                 TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
-            // One layout owner distributes space in the user's saved order. The plugin
-            // group is one priority slot; its paper-scoped actions are atomic and its global
-            // tail can shrink. Neither branch hides the entire host to probe WPF layout.
+            // Built-in user shortcuts are atomic. Saved order affects placement,
+            // never which subset survives a narrow title bar.
             _topBarActionButtonsHost.Visibility = Visibility.Visible;
             foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
                 button.Visibility = Visibility.Collapsed;
-            if (_pluginTopBarLabelsHost != null)
-                _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
-
-            var overflow = false;
-            var pluginHandled = false;
-            foreach (var action in PaperTopBarShortcuts.Get(_controller.State, _paper.Type))
+            var pinnedButtons = PaperTopBarShortcuts.Get(_controller.State, _paper.Type)
+                .Where(action => action != PaperTopBarShortcuts.PluginActions)
+                .Select(GetTopBarUserButton)
+                .OfType<Button>()
+                .Where(ShouldShowPinnedHostButton)
+                .ToArray();
+            var groupWidth = pinnedButtons.Sum(TopBarOuterWidth);
+            var groupFits = groupWidth <= remaining;
+            if (groupFits)
             {
-                if (action == PaperTopBarShortcuts.PluginActions)
-                {
-                    pluginHandled = true;
-                    var count = overflow ? 0 : PluginTopBarFittingCount(remaining);
-                    ReconcilePluginTopBarCapacity(count);
-                    if (count > 0 && _pluginTopBarButtonsHost != null)
-                        remaining -= TopBarOuterWidth(_pluginTopBarButtonsHost);
-                    else if (_pluginTopBarDesiredActions.Length > 0)
-                        overflow = true;
-                    continue;
-                }
-
-                var button = GetTopBarUserButton(action);
-                if (button == null || !ShouldShowPinnedHostButton(button)) continue;
-                var width = TopBarOuterWidth(button);
-                if (!overflow && width <= remaining)
-                {
+                foreach (var button in pinnedButtons)
                     button.Visibility = Visibility.Visible;
-                    remaining -= width;
-                }
-                else
-                {
-                    overflow = true;
-                }
+                remaining -= groupWidth;
             }
 
-            if (!pluginHandled) ReconcilePluginTopBarCapacity(0);
+            // Plugins cannot displace any built-in shortcut. Paper-scoped actions
+            // stay atomic, while global plugin actions can yield one by one.
+            var pluginCount = groupFits &&
+                PaperTopBarShortcuts.Contains(_controller.State, _paper.Type,
+                    PaperTopBarShortcuts.PluginActions)
+                ? PluginTopBarFittingCount(remaining) : 0;
+            ReconcilePluginTopBarCapacity(pluginCount);
+            if (pluginCount > 0 && _pluginTopBarButtonsHost != null)
+                remaining -= TopBarOuterWidth(_pluginTopBarButtonsHost);
 
-            // Passive plugin status labels do not depend on the plugin action pin setting
-            // and never displace interactive shortcuts.
-            if (!overflow && _pluginTopBarLabelsHost != null &&
-                _pluginTopBarLabelsHost.Children.Count > 0 &&
-                TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining)
-                _pluginTopBarLabelsHost.Visibility = Visibility.Visible;
+            // Passive plugin labels receive only the last available space.
+            if (_pluginTopBarLabelsHost != null)
+                _pluginTopBarLabelsHost.Visibility =
+                    _pluginTopBarLabelsHost.Children.Count > 0 &&
+                    groupFits &&
+                    TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining
+                        ? Visibility.Visible : Visibility.Collapsed;
 
             var hideTitle = availableWidth < fixedWidth + titleMinWidth;
             if (hideTitle && _isEditingTitle) CommitTitleEdit();
@@ -2665,10 +2655,26 @@ public sealed partial class PaperWindow : Window
     private ContextMenu BuildPaperContextMenu(bool forDeepCapsuleSlot = false)
     {
         var menu = CreateContextMenu();
+        PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
+        // Context menus survive resizes and paper preference changes. Rebuild when
+        // opened so right-click and ellipsis reflect the actual visible bar.
+        menu.Opened += (_, _) => PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
+        return menu;
+    }
 
-        menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"), (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
-        menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"), (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
-        menu.Items.Add(MenuSeparator());
+    private void PopulatePaperContextMenu(ContextMenu menu, bool forDeepCapsuleSlot)
+    {
+        menu.Items.Clear();
+        if (!IsTopBarCommandVisible(_newTodoButton))
+            menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"), (_, _) =>
+                _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
+        if (!IsTopBarCommandVisible(_newNoteButton))
+            menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"), (_, _) =>
+                _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
+        if (CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton))
+            menu.Items.Add(BuildAssociationDragMenuItem(menu));
+        if (menu.Items.Count > 0)
+            menu.Items.Add(MenuSeparator());
 
         if (_paper.Type == PaperTypes.Todo)
         {
@@ -2677,7 +2683,8 @@ public sealed partial class PaperWindow : Window
         else if (_paper.Type == PaperTypes.Note)
         {
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
-            if (IsCurrentBodyProviderMarkdown)
+            if (IsCurrentBodyProviderMarkdown &&
+                !IsTopBarCommandVisible(_openMarkdownButton))
             {
                 menu.Items.Add(MenuItem(
                     OpenMarkdownEditorToolTip(),
@@ -2718,7 +2725,6 @@ public sealed partial class PaperWindow : Window
             (_, _) => DeletePaperFromPaperMenu(),
             isDanger: true));
 
-        return menu;
     }
 
     private void ToggleTopmost()

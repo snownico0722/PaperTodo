@@ -1516,7 +1516,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>오른쪽으로 이동</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>연결 드래그 (고정 후 사용)</value>
+    <value>누른 채 끌어서 연결</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>

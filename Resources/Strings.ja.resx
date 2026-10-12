@@ -1516,7 +1516,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>右へ移動</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>関連付けドラッグ（固定して使用）</value>
+    <value>押したままドラッグして関連付け</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>プラグイン操作</value>

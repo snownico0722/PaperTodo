@@ -1516,7 +1516,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Move right</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>Drag to associate (pin to drag)</value>
+    <value>Hold and drag to associate</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>Plugin actions</value>

@@ -23,9 +23,16 @@ internal static class PaperTopBarShortcuts
     internal static bool IsAllowed(string paperType, string action) =>
         Choices(paperType).Contains(action, StringComparer.Ordinal);
 
-    internal static List<string> Normalize(string paperType, IEnumerable<string>? actions) =>
-        (actions ?? []).Where(action => action != null && IsAllowed(paperType, action))
+    internal static List<string> Normalize(string paperType, IEnumerable<string>? actions)
+    {
+        var ordered = (actions ?? [])
+            .Where(action => action != null && IsAllowed(paperType, action))
             .Distinct(StringComparer.Ordinal).ToList();
+        // Plugin buttons are always below the built-in shortcut group, independent
+        // of old saved positions or customized order.
+        if (ordered.Remove(PluginActions)) ordered.Add(PluginActions);
+        return ordered;
+    }
 
     internal static IReadOnlyList<string> Get(AppState state, string paperType) =>
         paperType == PaperTypes.Note
@@ -55,7 +62,10 @@ internal static class PaperTopBarShortcuts
         var list = Normalize(paperType, Get(state, paperType));
         var at = list.IndexOf(action);
         var next = at + direction;
-        if (at < 0 || next < 0 || next >= list.Count || Math.Abs(direction) != 1) return false;
+        if (action == PluginActions ||
+            at < 0 || next < 0 || next >= list.Count ||
+            list[next] == PluginActions || Math.Abs(direction) != 1)
+            return false;
         (list[at], list[next]) = (list[next], list[at]);
         Store(state, paperType, list);
         return true;
@@ -79,18 +89,19 @@ internal static class PaperTopBarShortcuts
     {
         if (todo)
         {
-            // The legacy plugin host was visually before the built-in shortcuts.
-            var actions = new List<string> { PluginActions, Association };
+            var actions = new List<string> { Association };
             if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
             if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
+            actions.Add(PluginActions);
             state.TodoTopBarShortcuts = actions;
         }
         if (note)
         {
-            var actions = new List<string> { PluginActions, Association };
+            var actions = new List<string> { Association };
             if (state.ShowTopBarExternalOpenButton) actions.Add(ExternalEditor);
             if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
             if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
+            actions.Add(PluginActions);
             state.NoteTopBarShortcuts = actions;
         }
     }
