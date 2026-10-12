@@ -2,26 +2,21 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    internal void SetTopBarShortcut(string paperType, string action, bool pinned)
+    // One global layout: insertion index is measured within the destination section
+    // with the moving item excluded.
+    internal bool MoveTopBarShortcut(string action, bool pinned, int destinationIndex)
     {
-        if (!PaperTopBarShortcuts.IsAllowed(paperType, action) ||
-            PaperTopBarShortcuts.Contains(State, paperType, action) == pinned) return;
-
-        PaperTopBarShortcuts.Set(State, paperType, action, pinned);
+        if (!PaperTopBarShortcuts.MoveTo(State, action, pinned, destinationIndex))
+            return false;
         MarkDirty();
         RefreshTopBarShortcuts();
-    }
-
-    internal void MoveTopBarShortcut(string paperType, string action, int direction)
-    {
-        if (!PaperTopBarShortcuts.Move(State, paperType, action, direction)) return;
-        MarkDirty();
-        RefreshTopBarShortcuts();
+        RefreshSettingsRegions("general.topbar");
+        return true;
     }
 
     private void RefreshTopBarShortcuts()
     {
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
             window.UpdateTopBarNewPaperButtons();
     }
 }

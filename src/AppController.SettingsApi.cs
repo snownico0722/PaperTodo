@@ -104,10 +104,9 @@ public sealed partial class AppController
         var oldCapsule = State.UseCapsuleMode;
         var oldDeep = State.UseDeepCapsuleMode;
         var oldTaskbar = State.HidePapersFromTaskbar;
-        var oldTodoTopBar = effects == SettingEffects.TopBar
-            ? new List<string>(State.TodoTopBarShortcuts) : null;
-        var oldNoteTopBar = effects == SettingEffects.TopBar
-            ? new List<string>(State.NoteTopBarShortcuts) : null;
+        var oldTopBarOrder = effects == SettingEffects.TopBar
+            ? State.TopBarShortcutOrder.ToList() : null;
+        var oldTopBarCount = State.TopBarPinnedCount;
         var oldQueues = effects == SettingEffects.CapsuleMode
             ? new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues) : null;
         var titles = id == "title.max_length"
@@ -160,10 +159,12 @@ public sealed partial class AppController
             Rollback: () =>
             {
                 set(previous);
-                // A legacy API switch can affect two per-type layouts. Reversing just the
-                // boolean cannot restore an asymmetric user layout after a rejected save.
-                if (oldTodoTopBar != null) State.TodoTopBarShortcuts = oldTodoTopBar;
-                if (oldNoteTopBar != null) State.NoteTopBarShortcuts = oldNoteTopBar;
+                // Restore both fields of the single layout on failed API writes.
+                if (oldTopBarOrder != null)
+                {
+                    State.TopBarShortcutOrder = oldTopBarOrder;
+                    State.TopBarPinnedCount = oldTopBarCount;
+                }
                 if (id == "appearance.paper_skin")
                 {
                     // Preserve the legacy null migration sentinel and the last system recipe

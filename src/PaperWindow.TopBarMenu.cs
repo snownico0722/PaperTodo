@@ -30,14 +30,10 @@ public sealed partial class PaperWindow
     private void ReorderTopBarUserButtons()
     {
         if (_topBarActionButtonsHost == null) return;
-        // Built-in buttons follow the user's order; plugin actions always render last.
-        var choices = PaperTopBarShortcuts.Choices(_paper.Type)
-            .Where(action => action != PaperTopBarShortcuts.PluginActions);
+        var choices = PaperTopBarShortcuts.All;
         var buttons = choices.Select(GetTopBarUserButton)
             .OfType<Button>().Distinct().ToArray();
-        var ordered = PaperTopBarShortcuts.Get(_controller.State, _paper.Type)
-            .Where(action => action != PaperTopBarShortcuts.PluginActions)
-            .Concat(choices).Distinct(StringComparer.Ordinal)
+        var ordered = PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder)
             .Select(GetTopBarUserButton).OfType<Button>()
             .Cast<FrameworkElement>().ToList();
         if (_pluginTopBarButtonsHost != null)
@@ -48,16 +44,16 @@ public sealed partial class PaperWindow
                 ReferenceEquals(element, _pluginTopBarButtonsHost)).ToArray();
         if (current.SequenceEqual(ordered)) return;
 
-        // Keep attached controls in place when order is unchanged (mouse capture/focus).
+        // Reparent only on a true order change; a drag gesture may hold mouse capture.
         foreach (var button in buttons)
             _topBarActionButtonsHost.Children.Remove(button);
         if (_pluginTopBarButtonsHost != null)
             _topBarActionButtonsHost.Children.Remove(_pluginTopBarButtonsHost);
-        var insertAt = _pluginTopBarLabelsHost == null ? 0 :
+        var at = _pluginTopBarLabelsHost == null ? 0 :
             _topBarActionButtonsHost.Children.IndexOf(_pluginTopBarLabelsHost) + 1;
-        insertAt = Math.Max(0, insertAt);
+        at = Math.Max(0, at);
         foreach (var element in ordered)
-            _topBarActionButtonsHost.Children.Insert(insertAt++, element);
+            _topBarActionButtonsHost.Children.Insert(at++, element);
     }
 
     private Button? GetTopBarUserButton(string action) => action switch
@@ -107,76 +103,6 @@ public sealed partial class PaperWindow
                 !_pluginHiddenHostTopBarActions.HasFlag(PaperHostTopBarActions.NewNotePaper);
         return false;
     }
-
-    private MenuItem BuildTopBarCustomizationMenu()
-    {
-        var item = new MenuItem
-        {
-            Header = Strings.Get("MenuCustomizeTopBar"),
-            Padding = new Thickness(8, 4, 10, 4)
-        };
-        RefreshTopBarCustomizationMenu(item);
-        item.SubmenuOpened += (_, e) =>
-        {
-            // SubmenuOpened bubbles from nested reorder entries. Do not rebuild their parent
-            // while an inner submenu is opening (it would discard the active hover target).
-            if (ReferenceEquals(e.OriginalSource, item))
-                RefreshTopBarCustomizationMenu(item);
-        };
-        return item;
-    }
-
-    private void RefreshTopBarCustomizationMenu(MenuItem menu)
-    {
-        menu.Items.Clear();
-        var paperType = _paper.Type;
-        var pinned = PaperTopBarShortcuts.Get(_controller.State, paperType).ToList();
-        foreach (var action in PaperTopBarShortcuts.Choices(paperType))
-        {
-            var isPinned = pinned.Contains(action, StringComparer.Ordinal);
-            var option = MenuItem(TopBarActionText(action),
-                (_, _) => _controller.SetTopBarShortcut(paperType, action, !isPinned));
-            option.IsCheckable = true;
-            option.IsChecked = isPinned;
-            menu.Items.Add(option);
-        }
-
-        var reorderable = pinned.Where(action =>
-            action != PaperTopBarShortcuts.PluginActions).ToList();
-        if (reorderable.Count < 2) return;
-        menu.Items.Add(MenuSeparator());
-        var reorder = new MenuItem
-        {
-            Header = Strings.Get("MenuReorderTopBar"),
-            Padding = new Thickness(8, 4, 10, 4)
-        };
-        // Keep the reorder menu one level deep: select "move action left/right"
-        // directly, instead of opening another submenu for every action.
-        for (var i = 0; i < reorderable.Count; i++)
-        {
-            var action = reorderable[i];
-            var label = TopBarActionText(action);
-            if (i > 0)
-                reorder.Items.Add(MenuItem(
-                    Strings.Get("MenuTopBarMoveLeft") + " · " + label,
-                    (_, _) => _controller.MoveTopBarShortcut(paperType, action, -1)));
-            if (i < reorderable.Count - 1)
-                reorder.Items.Add(MenuItem(
-                    Strings.Get("MenuTopBarMoveRight") + " · " + label,
-                    (_, _) => _controller.MoveTopBarShortcut(paperType, action, 1)));
-        }
-        menu.Items.Add(reorder);
-    }
-
-    private static string TopBarActionText(string action) => action switch
-    {
-        PaperTopBarShortcuts.Association => Strings.Get("MenuTopBarAssociationDrag"),
-        PaperTopBarShortcuts.ExternalEditor => Strings.Get("SettingsShowTopBarExternalOpenButton"),
-        PaperTopBarShortcuts.NewTodo => Strings.Get("MenuNewTodoPaper"),
-        PaperTopBarShortcuts.NewNote => Strings.Get("MenuNewNotePaper"),
-        PaperTopBarShortcuts.PluginActions => Strings.Get("MenuTopBarPluginActions"),
-        _ => action
-    };
 
     // Context and ellipsis menus both rebuild on Opened, so the plugin menu contains
     // only commands not already visible in the current title bar.

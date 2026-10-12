@@ -1570,4 +1570,25 @@
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>插件操作</value>
   </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>顶栏快捷</value>
+  </data>
+  <data name="TopBarSettingsHint" xml:space="preserve">
+    <value>拖动调整顺序，移过分界线可切换显示位置。</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>显示在顶栏</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>显示在菜单</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>拖动快捷项到这里</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>关联拖拽</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>外部编辑</value>
+  </data>
 </root>

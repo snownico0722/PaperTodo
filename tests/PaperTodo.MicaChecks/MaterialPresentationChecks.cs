@@ -125,7 +125,8 @@ internal static class MaterialPresentationChecks
     private static void CheckPaperTopBar(AppController controller)
     {
         var state = controller.State;
-        var oldPins = state.TodoTopBarShortcuts.ToList();
+        var oldOrder = state.TopBarShortcutOrder.ToList();
+        var oldDivider = state.TopBarPinnedCount;
         var oldSkin = state.PaperSkin;
         var oldLinks = state.EnableTodoPaperLinks;
         var paper = new PaperData
@@ -142,12 +143,9 @@ internal static class MaterialPresentationChecks
         {
             state.PaperSkin = PaperSkins.Paper;
             state.EnableTodoPaperLinks = true;
-            state.TodoTopBarShortcuts =
-                [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewTodo,
-                 PaperTopBarShortcuts.NewNote];
+            state.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+            state.TopBarPinnedCount = 2;
             Theme.Invalidate();
-            // Use the real controller-owned window so a menu pin change must refresh
-            // the live instance through AppController, not just mutate AppState.
             controller.ShowPaper(paper);
             var liveWindows = (Dictionary<string, PaperWindow>)typeof(AppController)
                 .GetField("_windows", Program.Private)!.GetValue(controller)!;
@@ -162,7 +160,7 @@ internal static class MaterialPresentationChecks
                 new PaperTopBarAction { Id = "paper-two", ToolTip = "Paper two",
                     Icon = PaperTopBarIcon.Character("2") }
             };
-            var globals = new[]
+            var globalActions = new[]
             {
                 new PaperTopBarAction { Id = "global-one", ToolTip = "Global one",
                     Icon = PaperTopBarIcon.Character("3") },
@@ -172,7 +170,7 @@ internal static class MaterialPresentationChecks
             controller.SetPluginPaperTopBarActions(paperOwner, "topbar-fixture",
                 paper.Id, paperActions, PaperHostTopBarActions.None, () => true, _ => { });
             controller.SetPluginGlobalTopBarActions(globalOwner, "topbar-fixture",
-                globals, () => true, _ => { });
+                globalActions, () => true, _ => { });
             window.RefreshPluginTopBarActions();
             window.UpdateLayout();
             Wait(50);
@@ -185,46 +183,47 @@ internal static class MaterialPresentationChecks
             var createNote = Field<Button>("_newNoteButton");
             var association = Field<Button>("_windowBindingButton");
             var more = Field<Button>("_moreActionsButton");
-            var close = Field<Button>("_closeButton");
-            var pin = Field<Button>("_paperIconButton");
             void LayoutAt(double width)
             {
                 window.Width = width;
                 window.UpdateLayout();
                 Program.Pump();
             }
+            void OpenMenu()
+            {
+                more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Program.Pump();
+            }
+            static bool Has(ContextMenu menu, string header) =>
+                menu.Items.OfType<MenuItem>().Any(item => Equals(item.Header, header));
 
-            // User pins are a single group even if the stored plugin pin comes first.
             LayoutAt(235);
             Program.Assert(plugins.Children.Count == 0 &&
                 createTodo.Visibility == Visibility.Visible &&
                 createNote.Visibility == Visibility.Visible &&
-                close.Visibility == Visibility.Visible &&
-                more.Visibility == Visibility.Visible &&
-                pin.Visibility == Visibility.Visible &&
+                association.Visibility != Visibility.Visible &&
                 host.Visibility == Visibility.Visible,
-                "built-in shortcuts outrank every plugin icon while fixed controls survive");
+                "default global pins outrank even the paper's own plugin buttons");
 
             LayoutAt(185);
-            Program.Assert(plugins.Children.Count == 0 &&
-                createTodo.Visibility != Visibility.Visible &&
+            Program.Assert(createTodo.Visibility != Visibility.Visible &&
                 createNote.Visibility != Visibility.Visible &&
-                host.Visibility == Visibility.Visible,
-                "a narrow paper overflows all built-in pins together, not one by one");
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
+                plugins.Children.Count == 0 && host.Visibility == Visibility.Visible,
+                "narrow title bar overflows all built-in buttons together");
+            OpenMenu();
             var narrowMenu = more.ContextMenu!;
-            Program.Assert(narrowMenu.Items.OfType<MenuItem>().Any(item =>
-                    Equals(item.Header, Strings.Get("MenuNewTodoPaper"))) &&
-                narrowMenu.Items.OfType<MenuItem>().Any(item =>
-                    Equals(item.Header, Strings.Get("MenuNewNotePaper"))) &&
-                narrowMenu.Items.OfType<MenuItem>().Any(item =>
-                    Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag"))),
-                "all hidden built-in commands, including a draggable association entry, are in overflow");
+            Program.Assert(Has(narrowMenu, Strings.Get("MenuQuick")) &&
+                Has(narrowMenu, Strings.Get("MenuNewTodoPaper")) &&
+                Has(narrowMenu, Strings.Get("MenuNewNotePaper")) &&
+                Has(narrowMenu, Strings.Get("MenuTopBarAssociationDrag")) &&
+                Has(narrowMenu, Strings.Get("TraySettings")) &&
+                Has(narrowMenu, controller.PaperCapsuleTitle(paper)) &&
+                !Has(narrowMenu, Strings.Get("MenuCustomizeTopBar")),
+                "overflow restores Quick, paper title and Settings, without title-bar customization");
             var narrowPlugins = narrowMenu.Items.OfType<MenuItem>().Single(item =>
                 Equals(item.Header, Strings.Get("MenuTopBarPluginActions")));
             Program.Assert(narrowPlugins.Items.Count == 4,
-                "all hidden plugin actions remain accessible in the shared paper menu");
+                "all hidden plugin commands remain reachable inside Quick");
             narrowMenu.IsOpen = false;
 
             LayoutAt(280);
@@ -234,52 +233,39 @@ internal static class MaterialPresentationChecks
             Program.Assert(shownPlugins.Length is >= 2 and < 4 &&
                 createTodo.Visibility == Visibility.Visible &&
                 createNote.Visibility == Visibility.Visible,
-                "global plugin actions consume only the space left after the complete user group");
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
-            var partialMenu = more.ContextMenu!;
-            var partialPlugins = partialMenu.Items.OfType<MenuItem>().Single(item =>
-                Equals(item.Header, Strings.Get("MenuTopBarPluginActions")));
-            var hiddenPlugins = partialPlugins.Items.OfType<MenuItem>()
-                .Select(item => item.Header as string).ToArray();
+                "automatic plugin actions use remaining space without a user pin switch");
+            OpenMenu();
+            var partial = more.ContextMenu!;
+            var hiddenPlugins = partial.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuTopBarPluginActions")))
+                .Items.OfType<MenuItem>().Select(item => item.Header as string).ToArray();
             Program.Assert(hiddenPlugins.Length == 4 - shownPlugins.Length &&
-                shownPlugins.All(label => !hiddenPlugins.Contains(label)),
-                "plugin menu contains only buttons actually hidden by overflow");
-            partialMenu.IsOpen = false;
+                shownPlugins.All(x => !hiddenPlugins.Contains(x)),
+                "menu contains only the plugin commands not already shown");
+            partial.IsOpen = false;
 
             LayoutAt(430);
             Program.Assert(plugins.Children.Count == 4 &&
                 createTodo.Visibility == Visibility.Visible &&
                 createNote.Visibility == Visibility.Visible,
-                "expanding restores all built-in and plugin controls");
+                "all plugin icons return after expansion");
 
-            state.TodoTopBarShortcuts =
-                [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewTodo,
-                 PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote];
-            window.UpdateTopBarNewPaperButtons();
+            Program.Assert(controller.MoveTopBarShortcut(PaperTopBarShortcuts.Association, true, 2),
+                "global settings can drag association into the title-bar group");
             LayoutAt(235);
-            Program.Assert(createTodo.Visibility == Visibility.Visible &&
-                association.Visibility == Visibility.Visible &&
+            Program.Assert(association.Visibility == Visibility.Visible &&
+                createTodo.Visibility == Visibility.Visible &&
                 createNote.Visibility == Visibility.Visible &&
                 plugins.Children.Count == 0,
-                "pinning association keeps the complete user group ahead of plugins");
+                "three built-in pins display together ahead of plugins");
 
             LayoutAt(185);
-            Program.Assert(createTodo.Visibility != Visibility.Visible &&
-                createNote.Visibility != Visibility.Visible &&
-                association.Visibility != Visibility.Visible &&
-                plugins.Children.Count == 0 &&
-                host.Visibility == Visibility.Visible,
-                "the entire shortcut group, including association, enters overflow at narrow widths");
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
-            var narrowAssociationMenu = more.ContextMenu!;
-            var dragEntry = narrowAssociationMenu.Items.OfType<MenuItem>().Single(item =>
+            OpenMenu();
+            var dragMenu = more.ContextMenu!;
+            var dragEntry = dragMenu.Items.OfType<MenuItem>().Single(item =>
                 Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag")));
             Program.Assert(dragEntry.StaysOpenOnClick,
-                "association in overflow remains a drag origin instead of a no-op click");
-            // Exercise WPF's real mouse capture on the popup MenuItem. A mere
-            // StaysOpenOnClick flag would not prove users can drag from this HWND.
+                "association remains a draggable menu command when the whole group overflows");
             try
             {
                 var from = dragEntry.PointToScreen(
@@ -296,63 +282,57 @@ internal static class MaterialPresentationChecks
                     .GetValue(window);
                 Program.Assert(drag != null &&
                     drag.GetType().GetProperty("IsDragging")!.GetValue(drag) is true,
-                    "actual mouse movement begins association drag from the overflow popup");
+                    "actual drag can begin from the overflow menu");
             }
             finally
             {
                 mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-                narrowAssociationMenu.IsOpen = false;
+                dragMenu.IsOpen = false;
                 Wait(25);
             }
 
             LayoutAt(430);
-            Program.Assert(plugins.Children.Count == 4 &&
-                association.Visibility == Visibility.Visible,
-                "user pins and lowest-priority plugins return on expansion");
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
-            var popup = more.ContextMenu!;
-            Program.Assert(!popup.Items.OfType<MenuItem>().Any(item =>
-                    Equals(item.Header, Strings.Get("MenuNewTodoPaper")) ||
-                    Equals(item.Header, Strings.Get("MenuNewNotePaper")) ||
-                    Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag")) ||
-                    Equals(item.Header, Strings.Get("MenuTopBarPluginActions"))),
-                "commands visible as title-bar icons are not duplicated in overflow");
-            var titles = popup.Items.OfType<MenuItem>()
+            OpenMenu();
+            var wideMenu = more.ContextMenu!;
+            Program.Assert(!Has(wideMenu, Strings.Get("MenuNewTodoPaper")) &&
+                !Has(wideMenu, Strings.Get("MenuNewNotePaper")) &&
+                !Has(wideMenu, Strings.Get("MenuTopBarAssociationDrag")) &&
+                !Has(wideMenu, Strings.Get("MenuTopBarPluginActions")) &&
+                Has(wideMenu, Strings.Get("MenuQuick")) &&
+                Has(wideMenu, Strings.Get("TraySettings")),
+                "visible built-in/plugin icons are not duplicated in the shared menu");
+            var titles = wideMenu.Items.OfType<MenuItem>()
                 .Select(item => item.Header as string).ToArray();
-            popup.IsOpen = false;
+            wideMenu.IsOpen = false;
             var chrome = Field<SkinBorder>("_paperChrome");
-            var context = chrome.ContextMenu!;
-            context.PlacementTarget = chrome;
-            context.IsOpen = true;
+            var rightClick = chrome.ContextMenu!;
+            rightClick.PlacementTarget = chrome;
+            rightClick.IsOpen = true;
             Program.Pump();
-            Program.Assert(context.Items.OfType<MenuItem>()
+            Program.Assert(rightClick.Items.OfType<MenuItem>()
                     .Select(item => item.Header as string).SequenceEqual(titles),
-                "existing right-click menu refreshes to match the ellipsis after resizes");
-            context.IsOpen = false;
+                "cached right-click menu mirrors the latest ellipsis menu");
+            rightClick.IsOpen = false;
 
-            // Actual checkbox click still refreshes the controller-owned window.
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
-            popup = more.ContextMenu!;
-            var customize = popup.Items.OfType<MenuItem>().Single(item =>
-                Equals(item.Header, Strings.Get("MenuCustomizeTopBar")));
-            var newNote = customize.Items.OfType<MenuItem>().Single(item =>
-                Equals(item.Header, Strings.Get("MenuNewNotePaper")));
-            Program.Assert(newNote.IsChecked, "pinned command is checked in the menu");
-            newNote.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Program.Assert(!PaperTopBarShortcuts.Contains(state, paper.Type,
-                    PaperTopBarShortcuts.NewNote) &&
+            Program.Assert(controller.MoveTopBarShortcut(PaperTopBarShortcuts.NewNote, false, 0),
+                "dragging New Note below the divider is accepted");
+            OpenMenu();
+            var overflow = more.ContextMenu!;
+            Program.Assert(Has(overflow, Strings.Get("MenuNewNotePaper")) &&
                 createNote.Visibility != Visibility.Visible,
-                "clicking the menu checkbox removes the live title-bar shortcut");
-            popup.IsOpen = false;
-            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Program.Pump();
-            popup = more.ContextMenu!;
-            Program.Assert(popup.Items.OfType<MenuItem>().Any(item =>
-                    Equals(item.Header, Strings.Get("MenuNewNotePaper"))),
-                "a shortcut removed from the title bar appears in overflow again");
-            popup.IsOpen = false;
+                "moving a shortcut into the menu immediately removes the live title-bar icon");
+            overflow.IsOpen = false;
+
+            // Verify the actual General settings control is one two-group drag surface.
+            var build = typeof(AppController).GetMethod("BuildTopBarShortcutSettings", Program.Private)!;
+            var editor = (UIElement)build.Invoke(controller, null)!;
+            var labels = Descendants(editor).OfType<TextBlock>().Select(t => t.Text).ToArray();
+            Program.Assert(labels.Contains(Strings.Get("TopBarShownHeading")) &&
+                labels.Contains(Strings.Get("TopBarMenuHeading")) &&
+                labels.Contains(Strings.Get("TopBarAssociation")) &&
+                labels.Contains(Strings.Get("TopBarExternalEditor")) &&
+                !Descendants(editor).OfType<CheckBox>().Any(),
+                "Settings contains exactly one reorderable two-section list, without checkboxes");
         }
         finally
         {
@@ -360,7 +340,8 @@ internal static class MaterialPresentationChecks
             controller.RemovePluginGlobalTopBarRuntime(globalOwner, "topbar-fixture");
             window?.CloseForReal();
             state.Papers.Remove(paper);
-            state.TodoTopBarShortcuts = oldPins;
+            state.TopBarShortcutOrder = oldOrder;
+            state.TopBarPinnedCount = oldDivider;
             state.EnableTodoPaperLinks = oldLinks;
             state.PaperSkin = oldSkin;
             SetCursorPos(previousCursor.X, previousCursor.Y);

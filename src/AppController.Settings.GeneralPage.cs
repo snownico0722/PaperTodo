@@ -161,6 +161,9 @@ public sealed partial class AppController
             "TipFastAnimations"));
 
         leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.topbar", BuildTopBarShortcutSettings));
+
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
 
@@ -217,8 +220,10 @@ public sealed partial class AppController
         State.ShowTopBarNewTodoButton = true;
         State.ShowTopBarNewNoteButton = true;
         State.ShowTopBarExternalOpenButton = true;
-        State.TodoTopBarShortcuts = [];
-        State.NoteTopBarShortcuts = [];
+        State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+        State.TopBarPinnedCount = 2;
+        State.TodoTopBarShortcuts = null;
+        State.NoteTopBarShortcuts = null;
         State.UseCapsuleMode = true;
         State.UseDeepCapsuleMode = true;
         State.ShowDeepCapsuleWhileExpanded = true;

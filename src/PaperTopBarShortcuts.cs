@@ -4,111 +4,126 @@ using System.Linq;
 
 namespace PaperTodo;
 
-// The per-type shortcut order is the single source of truth. The complete paper menu remains
-// available regardless of whether a command is pinned or currently fits in the title bar.
+// The complete global order and its divider index are one preference. Applicability is
+// filtered only when rendering a particular paper; plugins never enter this configuration.
 internal static class PaperTopBarShortcuts
 {
     internal const string Association = "association";
     internal const string ExternalEditor = "external-editor";
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
+
+    // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] TodoChoices = [Association, NewTodo, NewNote, PluginActions];
-    private static readonly string[] NoteChoices = [Association, ExternalEditor, NewTodo, NewNote, PluginActions];
+    private static readonly string[] Defaults = [NewTodo, NewNote, Association, ExternalEditor];
 
-    internal static IReadOnlyList<string> Choices(string paperType) =>
-        paperType == PaperTypes.Note ? NoteChoices : TodoChoices;
+    internal static IReadOnlyList<string> All => Defaults;
 
-    internal static bool IsAllowed(string paperType, string action) =>
-        Choices(paperType).Contains(action, StringComparer.Ordinal);
-
-    internal static List<string> Normalize(string paperType, IEnumerable<string>? actions)
+    internal static List<string> NormalizeOrder(IEnumerable<string>? source)
     {
-        var ordered = (actions ?? [])
-            .Where(action => action != null && IsAllowed(paperType, action))
+        var selected = (source ?? [])
+            .Where(action => action != null && Defaults.Contains(action, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal).ToList();
-        // Plugin buttons are always below the built-in shortcut group, independent
-        // of old saved positions or customized order.
-        if (ordered.Remove(PluginActions)) ordered.Add(PluginActions);
-        return ordered;
+        foreach (var action in Defaults)
+            if (!selected.Contains(action, StringComparer.Ordinal))
+                selected.Add(action);
+        return selected;
     }
 
-    internal static IReadOnlyList<string> Get(AppState state, string paperType) =>
-        paperType == PaperTypes.Note
-            ? state.NoteTopBarShortcuts ?? []
-            : state.TodoTopBarShortcuts ?? [];
+    internal static void Normalize(AppState state)
+    {
+        state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
+        state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
+        state.TodoTopBarShortcuts = null;
+        state.NoteTopBarShortcuts = null;
+    }
+
+    // An old user can have two different shortcut selections. Preserve the union and
+    // prefer the Todo ordering first, then still-pinned Note-only commands, with all
+    // previously unpinned commands following the divider.
+    internal static void MigrateLegacy(AppState state)
+    {
+        var pinned = (state.TodoTopBarShortcuts ?? [])
+            .Concat(state.NoteTopBarShortcuts ?? [])
+            .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal).ToList();
+        state.TopBarShortcutOrder = NormalizeOrder(pinned);
+        state.TopBarPinnedCount = pinned.Count;
+        Normalize(state);
+    }
+
+    // Legacy 3.x saves predating the per-type shortcut model store three toggles.
+    internal static void MigrateLegacyBooleans(AppState state, bool missingTodo, bool missingNote)
+    {
+        if (missingTodo)
+        {
+            var choices = new List<string> { Association };
+            if (state.ShowTopBarNewTodoButton) choices.Add(NewTodo);
+            if (state.ShowTopBarNewNoteButton) choices.Add(NewNote);
+            state.TodoTopBarShortcuts = choices;
+        }
+        if (missingNote)
+        {
+            var choices = new List<string> { Association };
+            if (state.ShowTopBarExternalOpenButton) choices.Add(ExternalEditor);
+            if (state.ShowTopBarNewTodoButton) choices.Add(NewTodo);
+            if (state.ShowTopBarNewNoteButton) choices.Add(NewNote);
+            state.NoteTopBarShortcuts = choices;
+        }
+    }
+
+    internal static IReadOnlyList<string> Pinned(AppState state) =>
+        NormalizeOrder(state.TopBarShortcutOrder)
+            .Take(Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length)).ToArray();
+
+    internal static IReadOnlyList<string> Menu(AppState state) =>
+        NormalizeOrder(state.TopBarShortcutOrder)
+            .Skip(Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length)).ToArray();
+
+    internal static bool IsApplicable(string paperType, string action) =>
+        Defaults.Contains(action, StringComparer.Ordinal) &&
+        (action != ExternalEditor || paperType == PaperTypes.Note);
+
+    internal static bool IsPinned(AppState state, string action) =>
+        Pinned(state).Contains(action, StringComparer.Ordinal);
 
     internal static bool Contains(AppState state, string paperType, string action) =>
-        Get(state, paperType).Contains(action, StringComparer.Ordinal);
+        IsApplicable(paperType, action) && IsPinned(state, action);
 
-    internal static void Set(AppState state, string paperType, string action, bool pinned)
+    // Preserve old public settings API IDs as compatibility aliases for one global divider.
+    internal static bool SetPinned(AppState state, string action, bool pinned)
     {
-        if (!IsAllowed(paperType, action)) return;
-        var list = Normalize(paperType, Get(state, paperType));
-        if (pinned)
-        {
-            if (!list.Contains(action, StringComparer.Ordinal)) list.Add(action);
-        }
-        else
-        {
-            list.Remove(action);
-        }
-        Store(state, paperType, list);
-    }
-
-    internal static bool Move(AppState state, string paperType, string action, int direction)
-    {
-        var list = Normalize(paperType, Get(state, paperType));
-        var at = list.IndexOf(action);
-        var next = at + direction;
-        if (action == PluginActions ||
-            at < 0 || next < 0 || next >= list.Count ||
-            list[next] == PluginActions || Math.Abs(direction) != 1)
-            return false;
-        (list[at], list[next]) = (list[next], list[at]);
-        Store(state, paperType, list);
+        if (!Defaults.Contains(action, StringComparer.Ordinal)) return false;
+        var order = NormalizeOrder(state.TopBarShortcutOrder);
+        var count = Math.Clamp(state.TopBarPinnedCount, 0, order.Count);
+        var index = order.IndexOf(action);
+        if ((index < count) == pinned) return false;
+        order.RemoveAt(index);
+        if (index < count) count--;
+        order.Insert(count, action);
+        if (pinned) count++;
+        state.TopBarShortcutOrder = order;
+        state.TopBarPinnedCount = count;
         return true;
     }
 
-    internal static void SetBoth(AppState state, string action, bool pinned)
+    // targetIndex is the index within the destination section with the dragged item
+    // excluded. Using section-local indices handles both same-group and cross-group moves.
+    internal static bool MoveTo(AppState state, string action, bool pinned, int targetIndex)
     {
-        Set(state, PaperTypes.Todo, action, pinned);
-        Set(state, PaperTypes.Note, action, pinned);
-    }
-
-    internal static bool InBoth(AppState state, string action) =>
-        Contains(state, PaperTypes.Todo, action) && Contains(state, PaperTypes.Note, action);
-
-    // A legacy global write is complete only when both per-type values agree with it.
-    internal static bool MatchesBoth(AppState state, string action, bool pinned) =>
-        Contains(state, PaperTypes.Todo, action) == pinned &&
-        Contains(state, PaperTypes.Note, action) == pinned;
-
-    internal static void MigrateLegacy(AppState state, bool todo, bool note)
-    {
-        if (todo)
-        {
-            var actions = new List<string> { Association };
-            if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
-            if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
-            actions.Add(PluginActions);
-            state.TodoTopBarShortcuts = actions;
-        }
-        if (note)
-        {
-            var actions = new List<string> { Association };
-            if (state.ShowTopBarExternalOpenButton) actions.Add(ExternalEditor);
-            if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
-            if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
-            actions.Add(PluginActions);
-            state.NoteTopBarShortcuts = actions;
-        }
-    }
-
-    private static void Store(AppState state, string paperType, List<string> list)
-    {
-        if (paperType == PaperTypes.Note) state.NoteTopBarShortcuts = list;
-        else state.TodoTopBarShortcuts = list;
+        if (!Defaults.Contains(action, StringComparer.Ordinal)) return false;
+        var order = NormalizeOrder(state.TopBarShortcutOrder);
+        var count = Math.Clamp(state.TopBarPinnedCount, 0, order.Count);
+        var top = order.Take(count).Where(x => x != action).ToList();
+        var menu = order.Skip(count).Where(x => x != action).ToList();
+        var target = pinned ? top : menu;
+        target.Insert(Math.Clamp(targetIndex, 0, target.Count), action);
+        var merged = top.Concat(menu).ToList();
+        var nextCount = top.Count;
+        if (nextCount == count && merged.SequenceEqual(order)) return false;
+        state.TopBarShortcutOrder = merged;
+        state.TopBarPinnedCount = nextCount;
+        return true;
     }
 }

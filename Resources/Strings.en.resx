@@ -1521,4 +1521,25 @@ When off, open at the docked edge or remembered position.</value>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>Plugin actions</value>
   </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>Top-bar shortcuts</value>
+  </data>
+  <data name="TopBarSettingsHint" xml:space="preserve">
+    <value>Drag to reorder, or move an action between the two areas.</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>Show in title bar</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>Show in menu</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>Drag an action here</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>Drag to associate</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>Open externally</value>
+  </data>
 </root>

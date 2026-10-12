@@ -2663,15 +2663,15 @@ public sealed partial class AppController
 
     private void ToggleTopBarNewTodoButton() =>
         SetSettingFromUi("topbar.new_todo",
-            !PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewTodo));
+            !PaperTopBarShortcuts.IsPinned(State, PaperTopBarShortcuts.NewTodo));
 
     private void ToggleTopBarNewNoteButton() =>
         SetSettingFromUi("topbar.new_note",
-            !PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewNote));
+            !PaperTopBarShortcuts.IsPinned(State, PaperTopBarShortcuts.NewNote));
 
     private void ToggleTopBarExternalOpenButton() =>
         SetSettingFromUi("topbar.external_open",
-            !PaperTopBarShortcuts.Contains(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor));
+            !PaperTopBarShortcuts.IsPinned(State, PaperTopBarShortcuts.ExternalEditor));
 
     private void ToggleLinkedPaperNameDisplay() =>
         SetSettingFromUi("todo.show_linked_paper_name", !State.ShowLinkedPaperName);

@@ -1521,4 +1521,25 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>プラグイン操作</value>
   </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>上部バーのショートカット</value>
+  </data>
+  <data name="TopBarSettingsHint" xml:space="preserve">
+    <value>ドラッグして並べ替えたり、表示先を変更したりできます。</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>上部バーに表示</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>メニューに表示</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>ここにドラッグ</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>関連付けドラッグ</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>外部エディターで開く</value>
+  </data>
 </root>

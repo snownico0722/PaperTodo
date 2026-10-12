@@ -2427,8 +2427,7 @@ public sealed partial class PaperWindow : Window
             _topBarActionButtonsHost.Visibility = Visibility.Visible;
             foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
                 button.Visibility = Visibility.Collapsed;
-            var pinnedButtons = PaperTopBarShortcuts.Get(_controller.State, _paper.Type)
-                .Where(action => action != PaperTopBarShortcuts.PluginActions)
+            var pinnedButtons = PaperTopBarShortcuts.Pinned(_controller.State)
                 .Select(GetTopBarUserButton)
                 .OfType<Button>()
                 .Where(ShouldShowPinnedHostButton)
@@ -2444,10 +2443,7 @@ public sealed partial class PaperWindow : Window
 
             // Plugins cannot displace any built-in shortcut. Paper-scoped actions
             // stay atomic, while global plugin actions can yield one by one.
-            var pluginCount = groupFits &&
-                PaperTopBarShortcuts.Contains(_controller.State, _paper.Type,
-                    PaperTopBarShortcuts.PluginActions)
-                ? PluginTopBarFittingCount(remaining) : 0;
+            var pluginCount = groupFits ? PluginTopBarFittingCount(remaining) : 0;
             ReconcilePluginTopBarCapacity(pluginCount);
             if (pluginCount > 0 && _pluginTopBarButtonsHost != null)
                 remaining -= TopBarOuterWidth(_pluginTopBarButtonsHost);
@@ -2665,16 +2661,41 @@ public sealed partial class PaperWindow : Window
     private void PopulatePaperContextMenu(ContextMenu menu, bool forDeepCapsuleSlot)
     {
         menu.Items.Clear();
-        if (!IsTopBarCommandVisible(_newTodoButton))
-            menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"), (_, _) =>
-                _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
-        if (!IsTopBarCommandVisible(_newNoteButton))
-            menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"), (_, _) =>
-                _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
-        if (CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton))
-            menu.Items.Add(BuildAssociationDragMenuItem(menu));
-        if (menu.Items.Count > 0)
-            menu.Items.Add(MenuSeparator());
+        menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
+
+        // Follow one global order for both the top bar and its dynamic overflow.
+        // The menu lists only the commands not currently shown as title-bar buttons.
+        foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
+        {
+            switch (action)
+            {
+                case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
+                    menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
+                        (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
+                    break;
+                case PaperTopBarShortcuts.NewNote when !IsTopBarCommandVisible(_newNoteButton):
+                    menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
+                        (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
+                    break;
+                case PaperTopBarShortcuts.Association when
+                    CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
+                    menu.Items.Add(BuildAssociationDragMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.ExternalEditor when
+                    _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&
+                    !IsTopBarCommandVisible(_openMarkdownButton):
+                    menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
+                        (_, _) => OpenMarkdownInDefaultEditor()));
+                    break;
+            }
+        }
+
+        AttachPluginTopBarActionsToMenu(menu);
+        menu.Items.Add(MenuItem(Strings.Get("TraySettings"),
+            (_, _) => _controller.OpenSettingsWindow()));
+
+        menu.Items.Add(MenuSeparator());
+        menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
         if (_paper.Type == PaperTypes.Todo)
         {
@@ -2683,20 +2704,9 @@ public sealed partial class PaperWindow : Window
         else if (_paper.Type == PaperTypes.Note)
         {
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
-            if (IsCurrentBodyProviderMarkdown &&
-                !IsTopBarCommandVisible(_openMarkdownButton))
-            {
-                menu.Items.Add(MenuItem(
-                    OpenMarkdownEditorToolTip(),
-                    (_, _) => OpenMarkdownInDefaultEditor()));
-            }
         }
 
         AttachPluginPaperMenuActions(menu);
-        AttachPluginTopBarActionsToMenu(menu);
-        menu.Items.Add(MenuSeparator());
-        menu.Items.Add(BuildTopBarCustomizationMenu());
-        menu.Items.Add(MenuSeparator());
 
         if (CanDisplayAsCapsule())
         {
@@ -2724,7 +2734,6 @@ public sealed partial class PaperWindow : Window
             Strings.Get("MenuDelete"),
             (_, _) => DeletePaperFromPaperMenu(),
             isDanger: true));
-
     }
 
     private void ToggleTopmost()

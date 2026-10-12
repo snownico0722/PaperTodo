@@ -532,18 +532,18 @@ public sealed class StateStore
             CommentHandling = StateJsonReadPolicy.CommentHandling
         });
         var root = document.RootElement;
+        // New global layout is the only authority when present.
+        if (root.TryGetProperty("topBarShortcutOrder", out _)) return;
         var missingTodo = !root.TryGetProperty("todoTopBarShortcuts", out _);
         var missingNote = !root.TryGetProperty("noteTopBarShortcuts", out _);
         if (missingTodo || missingNote)
-            PaperTopBarShortcuts.MigrateLegacy(state, missingTodo, missingNote);
+            PaperTopBarShortcuts.MigrateLegacyBooleans(state, missingTodo, missingNote);
+        PaperTopBarShortcuts.MigrateLegacy(state);
     }
 
     private static void NormalizeGlobalState(AppState state)
     {
-        state.TodoTopBarShortcuts = PaperTopBarShortcuts.Normalize(
-            PaperTypes.Todo, state.TodoTopBarShortcuts);
-        state.NoteTopBarShortcuts = PaperTopBarShortcuts.Normalize(
-            PaperTypes.Note, state.NoteTopBarShortcuts);
+        PaperTopBarShortcuts.Normalize(state);
         if (state.Theme is not ("system" or "light" or "dark"))
         {
             state.Theme = "system";

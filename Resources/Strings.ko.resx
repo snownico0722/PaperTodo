@@ -1521,4 +1521,25 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>
   </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>상단 바 바로가기</value>
+  </data>
+  <data name="TopBarSettingsHint" xml:space="preserve">
+    <value>끌어서 순서를 변경하거나 표시 위치를 바꿀 수 있습니다.</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>상단 바에 표시</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>메뉴에 표시</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>항목을 여기로 끌기</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>연결 드래그</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>외부 편집기로 열기</value>
+  </data>
 </root>
