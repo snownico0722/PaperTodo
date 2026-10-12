@@ -388,7 +388,8 @@ internal static class SkinChecks
                 }
                 if (skin == PaperSkins.Paper)
                     Program.Assert(gripInk[0] > gripInk[1] && gripInk[1] > gripInk[2],
-                        "WPF resize-grip pixels follow standard/soft/hidden setting");
+                        "WPF resize-grip pixels follow standard/soft/hidden setting " +
+                        $"(standard={gripInk[0]}, soft={gripInk[1]}, hidden={gripInk[2]})");
             }
         }
         finally
