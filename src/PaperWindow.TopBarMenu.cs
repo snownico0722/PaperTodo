@@ -84,7 +84,13 @@ public sealed partial class PaperWindow
             Padding = new Thickness(8, 4, 10, 4)
         };
         RefreshTopBarCustomizationMenu(item);
-        item.SubmenuOpened += (_, _) => RefreshTopBarCustomizationMenu(item);
+        item.SubmenuOpened += (_, e) =>
+        {
+            // SubmenuOpened bubbles from nested reorder entries. Do not rebuild their parent
+            // while an inner submenu is opening (it would discard the active hover target).
+            if (ReferenceEquals(e.OriginalSource, item))
+                RefreshTopBarCustomizationMenu(item);
+        };
         return item;
     }
 

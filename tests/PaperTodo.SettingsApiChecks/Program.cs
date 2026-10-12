@@ -129,12 +129,24 @@ internal static partial class Program
             root.Remove("todoTopBarShortcuts");
             root.Remove("noteTopBarShortcuts");
             File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
-            var loaded = new StateStore(temp, DurableAtomicFileWriter.Shared).Load();
+            var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
+            var loaded = store.Load();
             Check(PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.Association) &&
                   PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.NewNote) &&
                   !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo) &&
                   !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
                 "Old data.json visibility preferences migrate once to per-type ordered shortcuts.");
+
+            // Explicit empty arrays are the new minimal preference, not a signal to remigrate.
+            loaded.TodoTopBarShortcuts = [];
+            loaded.NoteTopBarShortcuts = [];
+            var serialized = JsonSerializer.Serialize(loaded,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            File.WriteAllText(Path.Combine(temp, "data.json"), serialized);
+            var reloaded = store.Load();
+            Check(PaperTopBarShortcuts.Get(reloaded, PaperTypes.Todo).Count == 0 &&
+                  PaperTopBarShortcuts.Get(reloaded, PaperTypes.Note).Count == 0,
+                "Explicitly unpinned shortcuts stay unpinned across restart.");
         }
         finally { Directory.Delete(temp, recursive: true); }
     }
