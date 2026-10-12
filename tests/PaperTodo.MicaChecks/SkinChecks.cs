@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Resources;
@@ -360,6 +361,7 @@ internal static class SkinChecks
                 Theme.Invalidate();
                 window.UpdateTheme();
                 Program.Pump();
+                var gripInk = new List<long>();
                 foreach (var grip in new[] { ResizeGripModes.Standard, ResizeGripModes.Soft, ResizeGripModes.Hidden })
                 {
                     setMode.Invoke(controller, [grip]);
@@ -376,11 +378,20 @@ internal static class SkinChecks
                     Program.Assert(brush.Color.A == expectedAlpha,
                         $"UI settings published {skin}/{grip} grip alpha");
                     CheckResizeHitTests(window, $"layered {skin}/{grip}");
+                    if (skin == PaperSkins.Paper)
+                        gripInk.Add(ResizeGripPaintedAlpha(FindResizeGrip(window)));
+                    if (skin == PaperSkins.Paper && grip == ResizeGripModes.Standard ||
+                        skin == PaperSkins.Aero && grip == ResizeGripModes.Hidden)
+                        DragActualResizeGrip(window, $"layered {skin}/{grip}");
                 }
+                if (skin == PaperSkins.Paper)
+                    Program.Assert(gripInk[0] > gripInk[1] && gripInk[1] > gripInk[2],
+                        "WPF resize-grip pixels follow standard/soft/hidden setting");
             }
         }
         finally
         {
+            setMode.Invoke(controller, [previousGripMode]);
             window.CloseForReal();
             controller.State.PaperSkin = previousSkin;
             controller.State.ResizeGripMode = previousGripMode;
@@ -445,6 +456,74 @@ internal static class SkinChecks
         return grips[0];
     }
 
+    private static long ResizeGripPaintedAlpha(ResizeGrip grip)
+    {
+        // Render only the real control, not the opaque paper behind it. The actual
+        // rendered dot alpha must change, not merely the application resource entry.
+        var bitmap = new RenderTargetBitmap(
+            Math.Max(1, (int)Math.Ceiling(grip.ActualWidth)),
+            Math.Max(1, (int)Math.Ceiling(grip.ActualHeight)),
+            96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(grip);
+        var pixels = Pixels(bitmap);
+        long alpha = 0;
+        for (var i = 3; i < pixels.Length; i += 4) alpha += pixels[i];
+        return alpha;
+    }
+
+    private static void DragActualResizeGrip(PaperWindow window, string scenario)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        var center = FindResizeGrip(window).PointToScreen(
+            new Point(FindResizeGrip(window).ActualWidth / 2, FindResizeGrip(window).ActualHeight / 2));
+        var origin = new NativePoint((int)Math.Round(center.X), (int)Math.Round(center.Y));
+        Program.Assert(GetWindowRect(hwnd, out var before), $"{scenario}: original bounds");
+        Program.Assert(GetCursorPos(out var priorCursor), $"{scenario}: original cursor");
+        window.Activate();
+        Program.Pump();
+        Program.Assert(WindowFromPoint(origin) == hwnd,
+            $"{scenario}: actual grip is reachable by OS input, not just SendMessage");
+
+        try
+        {
+            // Win32 enters a modal sizing loop on mouse-down; inject the entire
+            // press/move/release from another thread while WPF continues pumping.
+            var drag = Task.Run(() =>
+            {
+                if (!SetCursorPos(origin.X, origin.Y)) throw new InvalidOperationException("Move to grip failed");
+                Thread.Sleep(80);
+                try
+                {
+                    MouseEvent(0x0002, 0, 0, 0, UIntPtr.Zero); // LEFTDOWN
+                    Thread.Sleep(100);
+                    for (var step = 1; step <= 4; step++)
+                    {
+                        if (!SetCursorPos(origin.X + step * 18, origin.Y + step * 15))
+                            throw new InvalidOperationException("Resize drag pointer move failed");
+                        Thread.Sleep(55);
+                    }
+                }
+                finally { MouseEvent(0x0004, 0, 0, 0, UIntPtr.Zero); } // LEFTUP
+            });
+            var elapsed = Stopwatch.StartNew();
+            while (!drag.IsCompleted && elapsed.Elapsed < TimeSpan.FromSeconds(8))
+                Program.Pump();
+            Program.Assert(drag.IsCompleted, $"{scenario}: native resize gesture timed out");
+            drag.GetAwaiter().GetResult();
+            Program.Pump();
+            Program.Assert(GetWindowRect(hwnd, out var after), $"{scenario}: final bounds");
+            Program.Assert(after.Right - after.Left >= before.Right - before.Left + 25 &&
+                after.Bottom - after.Top >= before.Bottom - before.Top + 20,
+                $"{scenario}: real mouse drag must increase BOTH dimensions");
+        }
+        finally
+        {
+            MouseEvent(0x0004, 0, 0, 0, UIntPtr.Zero);
+            _ = SetCursorPos(priorCursor.X, priorCursor.Y);
+            Program.Pump();
+        }
+    }
+
     private static int ResizeHit(IntPtr hwnd, int x, int y)
     {
         var packed = new IntPtr(unchecked((int)((uint)(ushort)x | ((uint)(ushort)y << 16))));
@@ -453,9 +532,19 @@ internal static class SkinChecks
 
     [StructLayout(LayoutKind.Sequential)]
     private struct WindowRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private record struct NativePoint(int X, int Y);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(NativePoint point);
+    [DllImport("user32.dll", EntryPoint = "mouse_event")]
+    private static extern void MouseEvent(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
