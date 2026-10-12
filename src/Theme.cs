@@ -204,6 +204,24 @@ public static class Theme
         };
     }
 
+    // Resource replacement must happen at the Path.Fill dependency property.
+    // A DynamicResource nested inside DrawingBrush.Drawing does not reliably refresh
+    // a live Window-template ResizeGrip when its mode/color changes.
+    public static DrawingBrush ResizeGripTileBrush(Brush dots)
+    {
+        var tile = new DrawingBrush(new GeometryDrawing(
+            dots, null, Geometry.Parse("M 0,0 L 2,0 L 2,2 L 0,2 z")))
+        {
+            Viewbox = new Rect(0, 0, 3, 3),
+            Viewport = new Rect(0, 0, 3, 3),
+            TileMode = TileMode.Tile,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            ViewportUnits = BrushMappingMode.Absolute
+        };
+        tile.Freeze();
+        return tile;
+    }
+
     // Match main's faint title tint. A native HWND also needs an opaque custom header;
     // otherwise the system accent caption can show through the WPF title controls.
     internal static Brush TitleBarBrush(bool opaque) => opaque
