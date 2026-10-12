@@ -388,6 +388,12 @@ internal static class SkinChecks
             $"{scenario}: painted bottom edge must resize");
         Program.Assert(ResizeHit(hwnd, rect.Right - rightInset, rect.Bottom - bottomInset) == 17,
             $"{scenario}: painted bottom-right corner must resize");
+        var gripX = rect.Right - (int)Math.Round((chrome.Margin.Right +
+            SystemParameters.VerticalScrollBarWidth / 2) * dpi.DpiScaleX);
+        var gripY = rect.Bottom - (int)Math.Round((chrome.Margin.Bottom +
+            SystemParameters.HorizontalScrollBarHeight / 2) * dpi.DpiScaleY);
+        Program.Assert(ResizeHit(hwnd, gripX, gripY) == 17,
+            $"{scenario}: visible resize grip center must resize");
         if (chrome.HeaderOpacity != 0)
             Program.Assert(ResizeHit(hwnd, centerX, rect.Top + topInset) == 12,
                 $"{scenario}: painted top edge must resize");
