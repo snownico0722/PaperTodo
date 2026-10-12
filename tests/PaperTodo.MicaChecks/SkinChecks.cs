@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Resources;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
@@ -275,6 +276,7 @@ internal static class SkinChecks
         var paper = new PaperData { Type = PaperTypes.Note, Title = "材质切换 · 同一张纸", Content = "# 今日待办\n\n保持正文清晰，**不要重建编辑器**。\n\n- 拖动纸片观察反光\n- 收起为胶囊\n- 切换深浅色", Width = 360, Height = 320, X = 40, Y = 40 };
         controller.State.Papers.Add(paper);
         var window = new PaperWindow(paper, controller);
+        var previousGripMode = controller.State.ResizeGripMode;
         try
         {
             window.Show(); Program.Pump();
@@ -287,6 +289,11 @@ internal static class SkinChecks
             {
                 controller.State.Theme = mode; controller.State.PaperSkin = skin;
                 Theme.Invalidate(); window.UpdateTheme(); Program.Pump();
+                foreach (var grip in new[] { ResizeGripModes.Standard, ResizeGripModes.Soft, ResizeGripModes.Hidden })
+                {
+                    controller.State.ResizeGripMode = grip;
+                    CheckResizeHitTests(window, $"native {skin}/{mode}/{grip}");
+                }
                 Program.Assert(ReferenceEquals(editor, noteProperty.GetValue(window)) && new WindowInteropHelper(window).Handle == handle, "actual editor and HWND preserved");
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(window)!;
                 if (skin == PaperSkins.Paper)
@@ -304,7 +311,7 @@ internal static class SkinChecks
                 window.SetCollapsedState(false, animate: false, saveGeometry: false); Program.Pump();
             }
         }
-        finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
+        finally { controller.State.ResizeGripMode = previousGripMode; window.CloseForReal(); controller.State.Papers.Remove(paper); }
         var todo = new PaperData { Type = PaperTypes.Todo, Title = "材质与控件", Width = 360, Height = 260 };
         todo.Items.Add(new PaperItem { Text = "普通中文保持清晰", Done = false });
         todo.Items.Add(new PaperItem { Text = "完成项目", Done = true });
@@ -322,6 +329,84 @@ internal static class SkinChecks
         }
         finally { todoWindow.CloseForReal(); }
     }
+
+    internal static void CheckLayeredResize(AppController controller)
+    {
+        var previousSkin = controller.State.PaperSkin;
+        var previousGripMode = controller.State.ResizeGripMode;
+        var window = new PaperWindow(new PaperData
+        {
+            Type = PaperTypes.Note, Width = 360, Height = 320, X = 60, Y = 60
+        }, controller);
+        try
+        {
+            Program.Assert(window.AllowsTransparency, "layered resize check requires a layered paper");
+            window.Show(); Program.Pump();
+            foreach (var skin in PaperSkins.All)
+            {
+                controller.State.PaperSkin = skin;
+                Theme.Invalidate();
+                window.UpdateTheme();
+                Program.Pump();
+                foreach (var grip in new[] { ResizeGripModes.Standard, ResizeGripModes.Soft, ResizeGripModes.Hidden })
+                {
+                    controller.State.ResizeGripMode = grip;
+                    CheckResizeHitTests(window, $"layered {skin}/{grip}");
+                }
+            }
+        }
+        finally
+        {
+            window.CloseForReal();
+            controller.State.PaperSkin = previousSkin;
+            controller.State.ResizeGripMode = previousGripMode;
+            Theme.Invalidate();
+        }
+    }
+
+    private static void CheckResizeHitTests(PaperWindow window, string scenario)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        Program.Assert(window.ResizeMode == ResizeMode.CanResizeWithGrip &&
+            GetWindowRect(hwnd, out var rect), $"{scenario}: expanded HWND must be resizable");
+
+        var chrome = (PaperChromeBorder)typeof(PaperWindow)
+            .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+        var dpi = VisualTreeHelper.GetDpi(window);
+        var leftInset = (int)Math.Round((chrome.Margin.Left + 2) * dpi.DpiScaleX);
+        var rightInset = (int)Math.Round((chrome.Margin.Right + 2) * dpi.DpiScaleX);
+        var topInset = (int)Math.Round((chrome.Margin.Top + 2) * dpi.DpiScaleY);
+        var bottomInset = (int)Math.Round((chrome.Margin.Bottom + 2) * dpi.DpiScaleY);
+        var centerX = (rect.Left + rect.Right) / 2;
+        var centerY = (rect.Top + rect.Bottom) / 2;
+        Program.Assert(ResizeHit(hwnd, rect.Left + leftInset, centerY) == 10,
+            $"{scenario}: painted left edge must resize");
+        Program.Assert(ResizeHit(hwnd, rect.Right - rightInset, centerY) == 11,
+            $"{scenario}: painted right edge must resize");
+        Program.Assert(ResizeHit(hwnd, centerX, rect.Bottom - bottomInset) == 15,
+            $"{scenario}: painted bottom edge must resize");
+        Program.Assert(ResizeHit(hwnd, rect.Right - rightInset, rect.Bottom - bottomInset) == 17,
+            $"{scenario}: painted bottom-right corner must resize");
+        if (chrome.HeaderOpacity != 0)
+            Program.Assert(ResizeHit(hwnd, centerX, rect.Top + topInset) == 12,
+                $"{scenario}: painted top edge must resize");
+    }
+
+    private static int ResizeHit(IntPtr hwnd, int x, int y)
+    {
+        var packed = new IntPtr(unchecked((int)((uint)(ushort)x | ((uint)(ushort)y << 16))));
+        return SendMessage(hwnd, 0x0084 /* WM_NCHITTEST */, IntPtr.Zero, packed).ToInt32();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRect { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
     private static void CheckHeaderSeam(Window window, Border header)
     {
         var image = Render(window, 1); var bytes = Pixels(image);
