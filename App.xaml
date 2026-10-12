@@ -7,6 +7,13 @@
         <SolidColorBrush x:Key="PaperScrollThumbHoverBrush" Color="#96784F" />
         <SolidColorBrush x:Key="PaperScrollTrackBrush" Color="#00FFFFFF" />
         <SolidColorBrush x:Key="PaperResizeGripBrush" Color="#808A7A63" />
+        <DrawingBrush x:Key="PaperResizeGripTileBrush"
+                      Viewbox="0,0,3,3" Viewport="0,0,3,3"
+                      TileMode="Tile" ViewportUnits="Absolute" ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing Brush="#808A7A63" Geometry="M 0,0 L 2,0 L 2,2 L 0,2 z" />
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
 
         <!-- Stock Aero2 ResizeGrip geometry/size/placement; only tile brush alpha is themed. -->
         <Style TargetType="{x:Type ResizeGrip}">
@@ -22,22 +29,8 @@
                             <Path HorizontalAlignment="Right"
                                   VerticalAlignment="Bottom"
                                   Margin="0,0,2,2"
-                                  Data="M 9,0 L 11,0 L 11,11 L 0,11 L 0,9 L 3,9 L 3,6 L 6,6 L 6,3 L 9,3 z">
-                                <Path.Fill>
-                                    <DrawingBrush Viewbox="0,0,3,3"
-                                                  Viewport="0,0,3,3"
-                                                  TileMode="Tile"
-                                                  ViewportUnits="Absolute"
-                                                  ViewboxUnits="Absolute">
-                                        <DrawingBrush.Drawing>
-                                            <DrawingGroup>
-                                                <GeometryDrawing Brush="{DynamicResource PaperResizeGripBrush}"
-                                                                 Geometry="M 0,0 L 2,0 L 2,2 L 0,2 z" />
-                                            </DrawingGroup>
-                                        </DrawingBrush.Drawing>
-                                    </DrawingBrush>
-                                </Path.Fill>
-                            </Path>
+                                  Data="M 9,0 L 11,0 L 11,11 L 0,11 L 0,9 L 3,9 L 3,6 L 6,6 L 6,3 L 9,3 z"
+                                  Fill="{DynamicResource PaperResizeGripTileBrush}" />
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>
