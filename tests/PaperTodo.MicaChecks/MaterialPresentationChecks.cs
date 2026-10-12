@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -78,6 +79,7 @@ internal static class MaterialPresentationChecks
 
             CheckRealRightClicks(controller);
             CheckPaperTopBar(controller);
+            CheckTopBarSettingsDropRouting(controller);
             CheckPaperStartupFade(controller);
             CheckMasterRightClicks(controller);
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
@@ -346,6 +348,183 @@ internal static class MaterialPresentationChecks
             state.PaperSkin = oldSkin;
             SetCursorPos(previousCursor.X, previousCursor.Y);
             Theme.Invalidate();
+        }
+    }
+
+    private static void CheckTopBarSettingsDropRouting(AppController controller)
+    {
+        // Drive the actual WPF DragOver/Drop routed handlers on the real settings
+        // controls. This covers separator/heading hit routing as well as row slots;
+        // it neither captures desktop pixels nor needs a second CI runner.
+        const string dragFormat = "PaperTodo.TopBarShortcut";
+        var state = controller.State;
+        var originalOrder = state.TopBarShortcutOrder.ToArray();
+        var originalCount = state.TopBarPinnedCount;
+        GetCursorPos(out var savedCursor);
+        Window? surface = null;
+        try
+        {
+            state.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+            state.TopBarPinnedCount = 2;
+            surface = new Window
+            {
+                Width = 380, Height = 435, Left = 285, Top = 105,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                ShowInTaskbar = false
+            };
+            var builder = typeof(AppController).GetMethod(
+                "BuildTopBarShortcutSettings", Program.Private)!;
+            StackPanel Rebuild()
+            {
+                var root = (StackPanel)builder.Invoke(controller, null)!;
+                surface.Content = root;
+                surface.UpdateLayout();
+                Program.Pump();
+                return root;
+            }
+
+            var root = Rebuild();
+            surface.Show();
+            surface.Activate();
+            Program.Pump();
+
+            var createDragEvent = typeof(DragEventArgs).GetConstructor(
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: [typeof(IDataObject), typeof(DragDropKeyStates),
+                    typeof(DragDropEffects), typeof(DependencyObject), typeof(Point)],
+                modifiers: null)!;
+            DragEventArgs RaiseDrag(FrameworkElement target, RoutedEvent kind,
+                string action, Point position)
+            {
+                var evt = (DragEventArgs)createDragEvent.Invoke([
+                    new DataObject(dragFormat, action),
+                    DragDropKeyStates.LeftMouseButton, DragDropEffects.Move,
+                    target, position
+                ]);
+                evt.RoutedEvent = kind;
+                target.RaiseEvent(evt);
+                return evt;
+            }
+
+            var upperGroup = (StackPanel)root.Children[3];
+            var separator = (Border)root.Children[4];
+            var menuHeading = (TextBlock)root.Children[5];
+            Program.Assert(root.AllowDrop && upperGroup.AllowDrop &&
+                separator.ActualHeight > 0 && menuHeading.ActualHeight > 0,
+                "real settings editor has a hit-testable drop surface and divider");
+
+            var hover = RaiseDrag(menuHeading, DragDrop.DragOverEvent,
+                PaperTopBarShortcuts.NewNote,
+                new Point(8, menuHeading.ActualHeight / 2));
+            Program.Assert(hover.Handled && hover.Effects == DragDropEffects.Move,
+                "hovering the menu heading is an accepted WPF drag target");
+            var dropped = RaiseDrag(menuHeading, DragDrop.DropEvent,
+                PaperTopBarShortcuts.NewNote,
+                new Point(8, menuHeading.ActualHeight / 2));
+            Program.Assert(dropped.Handled && state.TopBarPinnedCount == 1 &&
+                PaperTopBarShortcuts.Menu(state)[0] == PaperTopBarShortcuts.NewNote,
+                "dropping on the lower section heading moves an actual item below the divider");
+
+            root = Rebuild();
+            separator = (Border)root.Children[4];
+            var movedLower = RaiseDrag(separator, DragDrop.DropEvent,
+                PaperTopBarShortcuts.NewTodo,
+                new Point(10, separator.ActualHeight * 0.75));
+            Program.Assert(movedLower.Handled && state.TopBarPinnedCount == 0 &&
+                PaperTopBarShortcuts.Menu(state)[0] == PaperTopBarShortcuts.NewTodo,
+                "the divider's lower half drops into the menu without a dead zone");
+
+            root = Rebuild();
+            var upperHeading = (TextBlock)root.Children[2];
+            RaiseDrag(upperHeading, DragDrop.DropEvent,
+                PaperTopBarShortcuts.Association,
+                new Point(8, upperHeading.ActualHeight / 2));
+            Program.Assert(state.TopBarPinnedCount == 1 &&
+                PaperTopBarShortcuts.Pinned(state)[0] == PaperTopBarShortcuts.Association,
+                "the upper group heading accepts a drop at its first slot");
+
+            root = Rebuild();
+            separator = (Border)root.Children[4];
+            var movedUpper = RaiseDrag(separator, DragDrop.DropEvent,
+                PaperTopBarShortcuts.NewTodo,
+                new Point(10, separator.ActualHeight * 0.25));
+            Program.Assert(movedUpper.Handled && state.TopBarPinnedCount == 2 &&
+                PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                    [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo]),
+                "the divider's upper half appends to the title-bar group");
+
+            root = Rebuild();
+            var lowerGroup = (StackPanel)root.Children[6];
+            var firstRow = (Grid)lowerGroup.Children[0];
+            var rowHover = RaiseDrag(firstRow, DragDrop.DragOverEvent,
+                PaperTopBarShortcuts.ExternalEditor,
+                new Point(10, firstRow.ActualHeight * 0.2));
+            var insertion = firstRow.Children.OfType<Border>().Last();
+            Program.Assert(rowHover.Handled &&
+                insertion.Visibility == Visibility.Visible &&
+                insertion.VerticalAlignment == VerticalAlignment.Top,
+                "hovering a row shows the real WPF before/after insertion indicator");
+            var rowDrop = RaiseDrag(firstRow, DragDrop.DropEvent,
+                PaperTopBarShortcuts.ExternalEditor,
+                new Point(10, firstRow.ActualHeight * 0.2));
+            Program.Assert(rowDrop.Handled &&
+                PaperTopBarShortcuts.Menu(state).SequenceEqual(
+                    [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                insertion.Visibility != Visibility.Visible,
+                "dropping on a real row reorders the menu and clears the insertion mark");
+
+            // A physical left-button drag verifies the source gesture from
+            // PreviewMouseLeftButtonDown through DragDrop.DoDragDrop to Drop.
+            root = Rebuild();
+            upperGroup = (StackPanel)root.Children[3];
+            menuHeading = (TextBlock)root.Children[5];
+            var sourceRow = (Grid)upperGroup.Children[1]; // New Todo
+            var from = sourceRow.PointToScreen(new Point(
+                sourceRow.ActualWidth / 2, sourceRow.ActualHeight / 2));
+            var to = menuHeading.PointToScreen(new Point(
+                menuHeading.ActualWidth / 2, menuHeading.ActualHeight / 2));
+            var sourceX = (int)Math.Round(from.X);
+            var sourceY = (int)Math.Round(from.Y);
+            var destX = (int)Math.Round(to.X);
+            var destY = (int)Math.Round(to.Y);
+            SetCursorPos(sourceX, sourceY);
+            Wait(50);
+            try
+            {
+                var movePointer = Task.Run(() =>
+                {
+                    Thread.Sleep(70);
+                    mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(65);
+                    // Start inside the row before leaving it, to preserve the
+                    // expected drag threshold and pointer capture behavior.
+                    SetCursorPos(sourceX + 9, sourceY + 6);
+                    Thread.Sleep(100);
+                    SetCursorPos(destX, destY);
+                    Thread.Sleep(140);
+                    mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                });
+                Wait(490);
+                movePointer.GetAwaiter().GetResult();
+                Until(() => state.TopBarPinnedCount == 1,
+                    "real left-button drag moves New Todo into the lower section");
+                Program.Assert(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                        [PaperTopBarShortcuts.Association]) &&
+                    PaperTopBarShortcuts.Menu(state)[0] == PaperTopBarShortcuts.NewTodo,
+                    "mouse-driven WPF drag and drop persists a single global section move");
+            }
+            finally
+            {
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+            }
+        }
+        finally
+        {
+            surface?.Close();
+            SetCursorPos(savedCursor.X, savedCursor.Y);
+            state.TopBarShortcutOrder = originalOrder.ToList();
+            state.TopBarPinnedCount = originalCount;
         }
     }
 

@@ -16,6 +16,8 @@ public sealed partial class AppController
     {
         var root = new StackPanel
         {
+            AllowDrop = true,
+            Background = Brushes.Transparent,
             Margin = new Thickness(0, 4, 0, 4)
         };
         root.Children.Add(SettingsSectionLabel(Strings.Get("TopBarSettingsTitle")));
@@ -29,12 +31,50 @@ public sealed partial class AppController
         });
 
         root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
-        root.Children.Add(BuildTopBarShortcutDropGroup(
-            PaperTopBarShortcuts.Pinned(State), pinned: true));
-        root.Children.Add(SettingsSoftDivider());
+        var shownGroup = BuildTopBarShortcutDropGroup(
+            PaperTopBarShortcuts.Pinned(State), pinned: true);
+        root.Children.Add(shownGroup);
+        var divider = SettingsSoftDivider();
+        root.Children.Add(divider);
         root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
         root.Children.Add(BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Menu(State), pinned: false));
+
+        // Items own their exact before/after insertion targets. The enclosing editor
+        // accepts drops on headings, the separator and gaps between groups too.
+        // These regions must not be dead spots when crossing the divider.
+        root.DragOver += (_, e) =>
+        {
+            if (GetTopBarDraggedAction(e) == null) return;
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+        };
+        root.Drop += (_, e) =>
+        {
+            var action = GetTopBarDraggedAction(e);
+            if (action == null) return;
+            var y = e.GetPosition(root).Y;
+            var shownStart = shownGroup.TranslatePoint(new Point(0, 0), root).Y;
+            var dividerMiddle = divider.TranslatePoint(
+                new Point(0, divider.ActualHeight / 2), root).Y;
+            if (y < shownStart)
+            {
+                MoveTopBarShortcut(action, pinned: true, destinationIndex: 0);
+            }
+            else if (y < dividerMiddle)
+            {
+                MoveTopBarShortcut(action, pinned: true,
+                    destinationIndex: PaperTopBarShortcuts.Pinned(State)
+                        .Count(item => item != action));
+            }
+            else
+            {
+                // The separator's lower half and menu heading insert at the
+                // start of the lower section; its rows handle their own slots.
+                MoveTopBarShortcut(action, pinned: false, destinationIndex: 0);
+            }
+            e.Handled = true;
+        };
         return root;
     }
 
@@ -153,10 +193,18 @@ public sealed partial class AppController
                 start = e.GetPosition(frame);
             };
             frame.PreviewMouseLeftButtonUp += (_, _) => start = null;
+            frame.PreviewMouseRightButtonDown += (_, _) => start = null;
+            frame.LostMouseCapture += (_, _) => start = null;
             frame.PreviewMouseMove += (_, e) =>
             {
-                if (start is not { } origin || e.LeftButton != MouseButtonState.Pressed)
+                // A mouse-up may happen outside the row without routing back to it.
+                // Never reuse an old press on a later gesture.
+                if (e.LeftButton != MouseButtonState.Pressed)
+                {
+                    start = null;
                     return;
+                }
+                if (start is not { } origin) return;
                 var current = e.GetPosition(frame);
                 if (Math.Abs(current.X - origin.X) < SystemParameters.MinimumHorizontalDragDistance &&
                     Math.Abs(current.Y - origin.Y) < SystemParameters.MinimumVerticalDragDistance)
@@ -173,7 +221,11 @@ public sealed partial class AppController
                 e.Handled = true;
             };
             frame.MouseEnter += (_, _) => border.Background = TrayHoverBrush;
-            frame.MouseLeave += (_, _) => border.Background = Brushes.Transparent;
+            frame.MouseLeave += (_, _) =>
+            {
+                start = null;
+                border.Background = Brushes.Transparent;
+            };
 
             frame.DragOver += (_, e) =>
             {
