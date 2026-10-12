@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.IO;
 using System.Resources;
+using System.Reflection;
+using System.Text.Json;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Windows;
@@ -334,6 +336,15 @@ internal static class SkinChecks
     {
         var previousSkin = controller.State.PaperSkin;
         var previousGripMode = controller.State.ResizeGripMode;
+        var settingsField = typeof(AppController).GetField("_publicSettings", Program.Private)!;
+        var previousSettings = settingsField.GetValue(controller);
+        var definitions = (IEnumerable<PaperSettingDefinition>)typeof(AppController)
+            .GetMethod("CreatePublicSettingsCatalog", Program.Private)!.Invoke(controller, null)!;
+        // Exercise the real UI entry point + settings publication, but keep this test away
+        // from the user's StateStore. SettingsUiChecks uses the same commit substitution.
+        settingsField.SetValue(controller, new PaperSettingsService(definitions,
+            () => true, () => true, publish => publish()));
+        var setMode = typeof(AppController).GetMethod("SetResizeGripMode", Program.Private)!;
         var window = new PaperWindow(new PaperData
         {
             Type = PaperTypes.Note, Width = 360, Height = 320, X = 60, Y = 60
@@ -350,7 +361,19 @@ internal static class SkinChecks
                 Program.Pump();
                 foreach (var grip in new[] { ResizeGripModes.Standard, ResizeGripModes.Soft, ResizeGripModes.Hidden })
                 {
-                    controller.State.ResizeGripMode = grip;
+                    setMode.Invoke(controller, [grip]);
+                    Program.Pump();
+                    Program.Assert(controller.State.ResizeGripMode == grip,
+                        $"UI settings entry point applied {grip}");
+                    var brush = (SolidColorBrush)Application.Current.Resources["PaperResizeGripBrush"];
+                    var expectedAlpha = grip switch
+                    {
+                        ResizeGripModes.Standard => 255,
+                        ResizeGripModes.Soft => 128,
+                        _ => 0
+                    };
+                    Program.Assert(brush.Color.A == expectedAlpha,
+                        $"UI settings published {skin}/{grip} grip alpha");
                     CheckResizeHitTests(window, $"layered {skin}/{grip}");
                 }
             }
@@ -360,6 +383,7 @@ internal static class SkinChecks
             window.CloseForReal();
             controller.State.PaperSkin = previousSkin;
             controller.State.ResizeGripMode = previousGripMode;
+            settingsField.SetValue(controller, previousSettings);
             Theme.Invalidate();
         }
     }
@@ -388,15 +412,36 @@ internal static class SkinChecks
             $"{scenario}: painted bottom edge must resize");
         Program.Assert(ResizeHit(hwnd, rect.Right - rightInset, rect.Bottom - bottomInset) == 17,
             $"{scenario}: painted bottom-right corner must resize");
-        var gripX = rect.Right - (int)Math.Round((chrome.Margin.Right +
-            SystemParameters.VerticalScrollBarWidth / 2) * dpi.DpiScaleX);
-        var gripY = rect.Bottom - (int)Math.Round((chrome.Margin.Bottom +
-            SystemParameters.HorizontalScrollBarHeight / 2) * dpi.DpiScaleY);
-        Program.Assert(ResizeHit(hwnd, gripX, gripY) == 17,
-            $"{scenario}: visible resize grip center must resize");
+        // Locate the WPF control in the actual window tree instead of repeating
+        // PaperWindow's geometric approximation of where the grip should be.
+        var grip = FindResizeGrip(window);
+        var center = grip.PointToScreen(new Point(grip.ActualWidth / 2, grip.ActualHeight / 2));
+        Program.Assert(ResizeHit(hwnd, (int)Math.Round(center.X), (int)Math.Round(center.Y)) == 17,
+            $"{scenario}: actual WPF resize grip center must resize");
+        var neighbor = grip.PointToScreen(new Point(-8, 1));
+        Program.Assert(ResizeHit(hwnd, (int)Math.Round(neighbor.X), (int)Math.Round(neighbor.Y)) == 1,
+            $"{scenario}: body area beside grip remains an interactive client");
         if (chrome.HeaderOpacity != 0)
             Program.Assert(ResizeHit(hwnd, centerX, rect.Top + topInset) == 12,
                 $"{scenario}: painted top edge must resize");
+    }
+
+    private static ResizeGrip FindResizeGrip(Window window)
+    {
+        static IEnumerable<ResizeGrip> Grips(DependencyObject root)
+        {
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is ResizeGrip grip) yield return grip;
+                foreach (var descendant in Grips(child)) yield return descendant;
+            }
+        }
+
+        var grips = Grips(window).Where(g => g.IsVisible &&
+            g.ActualWidth >= 8 && g.ActualHeight >= 8).ToArray();
+        Program.Assert(grips.Length == 1, $"expected one visible WPF resize grip, found {grips.Length}");
+        return grips[0];
     }
 
     private static int ResizeHit(IntPtr hwnd, int x, int y)
