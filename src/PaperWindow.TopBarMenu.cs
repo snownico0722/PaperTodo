@@ -31,22 +31,32 @@ public sealed partial class PaperWindow
     {
         if (_topBarActionButtonsHost == null) return;
         var choices = PaperTopBarShortcuts.Choices(_paper.Type);
-        var buttons = choices.Select(GetTopBarUserButton).OfType<Button>().Distinct().ToArray();
+        FrameworkElement? Resolve(string action) =>
+            action == PaperTopBarShortcuts.PluginActions
+                ? _pluginTopBarButtonsHost
+                : GetTopBarUserButton(action);
+
+        var elements = choices.Select(Resolve).OfType<FrameworkElement>().Distinct().ToArray();
         var ordered = PaperTopBarShortcuts.Get(_controller.State, _paper.Type)
             .Concat(choices).Distinct(StringComparer.Ordinal)
-            .Select(GetTopBarUserButton).OfType<Button>().ToArray();
-        // Do not detach and reattach live WPF controls on unrelated settings/plugin refreshes:
-        // reparenting a drag origin can interrupt mouse capture and keyboard focus.
-        if (_topBarActionButtonsHost.Children.OfType<Button>().SequenceEqual(ordered)) return;
-        foreach (var button in buttons)
-            _topBarActionButtonsHost.Children.Remove(button);
+            .Select(Resolve).OfType<FrameworkElement>().ToArray();
 
-        // Retain the existing plugin host/labels, and reorder only PaperTodo's four actions.
-        var insertAt = _pluginTopBarButtonsHost == null ? 0 :
-            _topBarActionButtonsHost.Children.IndexOf(_pluginTopBarButtonsHost) + 1;
+        // Plugin actions are one host-owned group. Its position is configurable just like
+        // the four built-in buttons; passive plugin labels still remain at the leading edge.
+        var current = _topBarActionButtonsHost.Children.OfType<FrameworkElement>()
+            .Where(element => element is Button ||
+                ReferenceEquals(element, _pluginTopBarButtonsHost)).ToArray();
+        if (current.SequenceEqual(ordered)) return;
+
+        // Do not detach/reparent live controls when the order is already stable:
+        // a drag source may be holding mouse capture or keyboard focus.
+        foreach (var element in elements)
+            _topBarActionButtonsHost.Children.Remove(element);
+        var insertAt = _pluginTopBarLabelsHost == null ? 0 :
+            _topBarActionButtonsHost.Children.IndexOf(_pluginTopBarLabelsHost) + 1;
         insertAt = Math.Max(0, insertAt);
-        foreach (var button in ordered)
-            _topBarActionButtonsHost.Children.Insert(insertAt++, button);
+        foreach (var element in ordered)
+            _topBarActionButtonsHost.Children.Insert(insertAt++, element);
     }
 
     private Button? GetTopBarUserButton(string action) => action switch
