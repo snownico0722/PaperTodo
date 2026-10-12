@@ -607,7 +607,7 @@ internal static class MaterialPresentationChecks
             Program.Assert(WindowNative.HasNoActivateStyle(nativeWindow),
                 "edge owner stays NOACTIVATE for normal capsule interactions");
             CheckCapsuleExternalForeground(controller, content, content.ContextMenu!,
-                host.Handle, "EDGE", window.UpdateTheme,
+                host.Handle, "EDGE", host.RefreshSkin,
                 area.Left + 180, area.Top + 120);
             Console.WriteLine("PASS real EDGE right-click: external foreground, stable popup, outside click (both material strengths)");
         }
@@ -661,6 +661,10 @@ internal static class MaterialPresentationChecks
                 Theme.Invalidate();
                 refreshTheme();
                 Wait(70);
+                // PaperWindow can replace Edge context-menu instances when its shell
+                // is refreshed; exercise the menu currently attached to the real surface.
+                menu = target.ContextMenu ??
+                    throw new InvalidOperationException(name + " has no live owner context menu");
 
                 SetCursorPos(externalX, externalY);
                 Wait(30);
