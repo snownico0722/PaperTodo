@@ -906,6 +906,7 @@ public sealed partial class PaperWindow : Window
     {
         hitTest = 0;
         if (_paper.IsCollapsed ||
+            _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
             (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
