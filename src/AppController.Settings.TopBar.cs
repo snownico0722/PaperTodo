@@ -20,16 +20,38 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             Margin = new Thickness(0, 4, 0, 4)
         };
-        root.Children.Add(SettingsSectionLabel(Strings.Get("TopBarSettingsTitle")));
-        root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
+        root.Children.Add(SettingsSectionLabelWithHint(
+            Strings.Get("TopBarSettingsTitle"), "TipTopBarShortcutSettings"));
+
+        var actions = new StackPanel { Background = Brushes.Transparent };
+        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
         var shownGroup = BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Pinned(State), pinned: true);
-        root.Children.Add(shownGroup);
-        var divider = (FrameworkElement)SettingsSoftDivider();
-        root.Children.Add(divider);
-        root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
-        root.Children.Add(BuildTopBarShortcutDropGroup(
+        actions.Children.Add(shownGroup);
+
+        // This is an in-editor divider, not the roomy separator between settings.
+        var divider = new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 5, 0, 6),
+            Background = TrayBorderBrush,
+            Opacity = 0.4,
+            SnapsToDevicePixels = true
+        };
+        actions.Children.Add(divider);
+        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
+        actions.Children.Add(BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Menu(State), pinned: false));
+        root.Children.Add(new Border
+        {
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Padding = new Thickness(8, 7, 8, 8),
+            Margin = new Thickness(0, 2, 0, 3),
+            Child = actions
+        });
 
         // Items own their exact before/after insertion targets. The enclosing editor
         // accepts drops on headings, the separator and gaps between groups too.
@@ -273,18 +295,29 @@ public sealed partial class AppController
                 "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
             _ => null
         };
+        // Both font glyphs and vector paths live in the same centered slot.
+        // Their advance widths must not shift the icon column between rows.
+        var slot = new Grid
+        {
+            Width = AppTypography.Scale(24),
+            Height = AppTypography.Scale(20),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
         if (pathData == null)
         {
-            return new TextBlock
+            slot.Children.Add(new TextBlock
             {
                 Text = action == PaperTopBarShortcuts.NewTodo ? "✓" : "✎",
                 FontFamily = AppTypography.SymbolFontFamily,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = TrayWeakTextBrush,
                 FontSize = AppTypography.Scale(12),
-                Width = AppTypography.Scale(24),
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
-            };
+            });
+            return slot;
         }
 
         var canvas = new Canvas { Width = 24, Height = 24 };
@@ -297,12 +330,6 @@ public sealed partial class AppController
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round
         });
-        var slot = new Grid
-        {
-            Width = AppTypography.Scale(24),
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
         slot.Children.Add(new Viewbox
         {
             Width = AppTypography.Scale(16),
