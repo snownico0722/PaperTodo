@@ -12,6 +12,7 @@ internal static class PaperTodoOperationSkill
           - 软件设置先 `list_settings` / `get_setting` 查询公开 ID、类型、范围和 writable；只有任务明确要求更改时才 `set_setting`。这不同于插件自己的设置，禁止修改内部字段或自行提升未获准权限。
           - 长待办需要关联笔记时，先 `get_setting(id="todo.paper_links")`；关闭或未知则跳过关联方案，不先创建额外 Note。解绑用 `update_todo(clear_linked_paper=true)`，不可同时传绑定 ID。
           - 提醒用 `set_todo_reminder`，时间包含日期和时区；删除用 `delete_paper` / `delete_todo`，仅在用户要求删除时使用。
+          - 用户明确授权外部编辑 data.json 后，调用 `reload_data` 接受文件为当前状态，再查询 `get_data_reload_status`；这会覆盖尚未保存的内存修改。没有主动重载时，正常自动保存可以覆盖外部文件。普通内容修改仍优先使用领域工具。
           - 遵循 MCP 权限；权限不足或连接失败时说明原因，不直接修改 data.json 或插件数据文件。工具确认成功后再报告完成；写入结果不明时先读取核对，避免重复追加。
           """
         : $"""
@@ -22,6 +23,7 @@ internal static class PaperTodoOperationSkill
           - Discover public application setting IDs, types, limits, and writable with `list_settings` / `get_setting`; use `set_setting` only for a requested settings change. These are not plugin-private settings. Never edit internal fields or grant yourself an unauthorized permission.
           - Before creating a linked detail Note, call `get_setting(id="todo.paper_links")`; if disabled or unknown, skip that approach rather than creating an extra Note first. Unlink with `update_todo(clear_linked_paper=true)`, without a linked paper ID.
           - Use `set_todo_reminder` with a future date, time, and UTC offset; use `delete_paper` / `delete_todo` only when the user requests deletion.
+          - After explicit authorization to edit data.json, call `reload_data` to accept the file as authoritative and check `get_data_reload_status`. Unsaved in-memory edits may be replaced; without an explicit reload, ordinary saves may overwrite disk edits. Prefer domain tools for normal edits.
           - Respect MCP permissions. Explain permission or connection failures; do not edit data.json or plugin data files directly. Report completion only after tool success; read back uncertain writes before retrying to avoid duplicate appends.
           """;
 }

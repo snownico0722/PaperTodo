@@ -125,6 +125,7 @@ public sealed partial class PaperWindow
 
     internal void CommitPendingEditsForSave()
     {
+        if (_controller.SuppressDataReloadEditorCommit) return;
         CancelPendingTitleEditIntent();
         if (_isEditingTitle)
         {
@@ -132,6 +133,15 @@ public sealed partial class PaperWindow
         }
 
         CommitPendingNoteContent();
+    }
+
+    // An external data.json reload must collect host-owned edits without flushing
+    // unrelated third-party plugin bodies (which have independent persistence).
+    internal void CommitPendingEditsForDataReload()
+    {
+        CancelPendingTitleEditIntent();
+        if (_isEditingTitle) EndTitleEdit(commit: true);
+        CommitPendingMarkdownContentForSave();
     }
 
     internal void CommitPendingNoteContentForSave()

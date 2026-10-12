@@ -2787,6 +2787,7 @@ public sealed partial class AppController : IDisposable
 
     public void UpdateGeometry(PaperData paper, Window window)
     {
+        if (IsDataReloading) return;
         if (window is PaperWindow { SuppressGeometrySave: true })
         {
             return;
@@ -3304,6 +3305,7 @@ public sealed partial class AppController : IDisposable
 
     private bool TrySaveNow(bool sync)
     {
+        if (IsDataReloading) return false;
         long? attemptedVersion = null;
         try
         {
@@ -3362,6 +3364,7 @@ public sealed partial class AppController : IDisposable
 
     internal void CommitPendingMarkdownContentsForSave()
     {
+        if (SuppressDataReloadEditorCommit) return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
@@ -4094,6 +4097,7 @@ public sealed partial class AppController : IDisposable
         {
             return;
         }
+        if (!FinishDataReloadBeforeExit()) return;
 
         CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         foreach (var window in _windows.Values.ToList())
@@ -4176,6 +4180,7 @@ public sealed partial class AppController : IDisposable
 
         if (_lifecycleState == AppLifecycleState.Running)
         {
+            CompletePendingDataReload();
             foreach (var window in _windows.Values.ToList())
             {
                 window.CommitPendingEditsForSave();

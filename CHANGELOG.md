@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **On-demand data.json reload**: Native/Web plugins and MCP can explicitly reload a validated `data.json` into running papers, todos, notes and settings without restarting. There is no automatic file watching or merge; disk values replace pending in-memory edits, and ordinary saves may overwrite external edits until reload is requested. Interface language changes and first-time native materials still require restart.
+
 - **Fast animations**: General settings now includes an optional fast-animation mode that reduces visual transition durations to about 60% while keeping animations enabled. The default remains off, and non-visual timers are unchanged.
 - **Compact built-in edge previews**: Note and Todo hover previews now share a 320 DIP maximum height while shorter content remains naturally sized. Plugin Mini size limits are unchanged.
 - **Master-capsule queue drag**: Pulling a master capsule horizontally now temporarily retracts its queue and switches to the same floating drag appearance as an ordinary capsule, staying aligned with the pointer even during a fast pull-out. On release, that floating capsule now uses the ordinary capsule return flight into the final master position before the real target is revealed, instead of jumping directly to the screen edge. Drop it on another monitor or side to move the current capsule queue while preserving member order. Hidden papers and expanded papers without a queue slot stay where they were. Vertical dragging still only adjusts the queue's starting height.

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PaperTodo;
 
-public sealed class StateStore
+public sealed partial class StateStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
     {

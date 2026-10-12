@@ -41,6 +41,8 @@ internal sealed partial class McpCommandService
         {
             return method switch
             {
+                "reload_data" => ReloadData(),
+                "get_data_reload_status" => _commands.GetDataReloadStatus(),
                 "list_settings" => ListSettings(parameters),
                 "get_setting" => GetSetting(parameters),
                 "set_setting" => SetSetting(parameters),
@@ -96,6 +98,12 @@ internal sealed partial class McpCommandService
             throw new McpApiException("invalid_params", "value is required.");
         var result = _controller.PublicSettings.Set(id, value);
         return result with { Setting = SettingsAccess(result.Setting) };
+    }
+
+    private DataReloadResult ReloadData()
+    {
+        RequireFullWrites();
+        return _commands.ReloadData(PaperOperationContext.Mcp());
     }
 
     private object ListPapers(JsonElement parameters)

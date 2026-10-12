@@ -173,6 +173,14 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 
 全局 crash boundary 不执行普通“最后强行保存”。正常 durability 由常规保存、同步退出保存和 backup 提供。
 
+#### data.json 按需显式重载
+
+只有 Native / Web Workspace API 或 GUI MCP 显式调用 `reload_data` 时，`PaperCommandService` 才请求 `AppController.DataReload` 读取当前 `data.json`；不注册文件监听，不进行定时检查，不维护文件版本历史或三方合并基线。未请求时，用户对文件的外部修改不会自动进入运行态，下一次正常保存可以直接覆盖这些修改。
+
+显式请求以经过校验的主文件为准：可以覆盖尚未保存的内存／编辑器修改，不逐字段合并、不生成冲突归档。文件无效或缺失则原样报告，不在运行时套用启动备份恢复或默认空数据。读取与正常保存共用 `StateStore` 的写锁和版本序号；接受文件后使较旧的排队异步保存失效，且重载过程不再次写主文件。普通保存、正常退出、备份、崩溃路径维持已有协议和开销，不额外解析、复制或持有持久化历史快照。
+
+`AppState` / `PaperData` / `PaperItem` 按 ID 原位更新存活实体，必要时通过既有窗口、插件 Runtime 和 Edge presentation 路径协调；如果调用者当前插件纸片被删除，实际 session 释放延迟到本次 API 返回后。状态与 UI 的短暂交接期拒绝重入共享命令或保存。界面语言变化及首次启用原生 HWND 材质仍须重启；不对插件 DLL / manifest 做代码热替换。取舍见 D-057。
+
 ### 4.3 图片资产
 
 图片二进制不进入 `data.json`。`NoteImageStore` 统一串行化 LMDB 访问，外部业务代码不直接拥有 LMDB transaction authority。

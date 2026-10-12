@@ -16,6 +16,16 @@ internal sealed partial class McpTools
     }
 
 
+    [McpServerTool(Name = "reload_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Explicitly replace PaperTodo's running state with the validated current data.json file. Requires full writes. Unsaved in-memory edits may be discarded; no file watcher or automatic merge. Check get_data_reload_status for UI reconciliation.")]
+    public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("reload_data", new { }, cancellationToken);
+
+    [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Read the last explicit data reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file.")]
+    public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
+
     [McpServerTool(Name = "list_settings", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("List public PaperTodo application settings, stable IDs, current values, types, constraints and this caller's writability. Plugin-private settings and internal state are not included.")]
     public Task<JsonElement> ListSettings(
