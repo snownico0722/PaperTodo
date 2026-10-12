@@ -1573,9 +1573,6 @@
   <data name="TopBarSettingsTitle" xml:space="preserve">
     <value>顶栏快捷</value>
   </data>
-  <data name="TopBarSettingsHint" xml:space="preserve">
-    <value>拖动调整顺序，移过分界线可切换显示位置。</value>
-  </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>显示在顶栏</value>
   </data>

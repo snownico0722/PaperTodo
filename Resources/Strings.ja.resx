@@ -1524,9 +1524,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TopBarSettingsTitle" xml:space="preserve">
     <value>上部バーのショートカット</value>
   </data>
-  <data name="TopBarSettingsHint" xml:space="preserve">
-    <value>ドラッグして並べ替えたり、表示先を変更したりできます。</value>
-  </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>上部バーに表示</value>
   </data>

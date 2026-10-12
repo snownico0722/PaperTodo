@@ -147,7 +147,10 @@ internal static class MaterialPresentationChecks
         {
             state.PaperSkin = PaperSkins.Paper;
             state.EnableTodoPaperLinks = true;
-            state.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+            // Preserve an explicit two-creation-button fixture for width and overflow tests.
+            state.TopBarShortcutOrder =
+                [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote,
+                 PaperTopBarShortcuts.Association, PaperTopBarShortcuts.ExternalEditor];
             state.TopBarPinnedCount = 2;
             Theme.Invalidate();
             controller.ShowPaper(paper);
@@ -207,7 +210,7 @@ internal static class MaterialPresentationChecks
                 createNote.Visibility == Visibility.Visible &&
                 association.Visibility != Visibility.Visible &&
                 host.Visibility == Visibility.Visible,
-                "default global pins outrank even the paper's own plugin buttons");
+                "configured global pins outrank even the paper's own plugin buttons");
 
             LayoutAt(185);
             Program.Assert(createTodo.Visibility != Visibility.Visible &&
@@ -366,7 +369,10 @@ internal static class MaterialPresentationChecks
         Window? surface = null;
         try
         {
-            state.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+            // Exercise drag routes with an explicit pre-change layout, not the new defaults.
+            state.TopBarShortcutOrder =
+                [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote,
+                 PaperTopBarShortcuts.Association, PaperTopBarShortcuts.ExternalEditor];
             state.TopBarPinnedCount = 2;
             surface = new Window
             {
@@ -389,6 +395,10 @@ internal static class MaterialPresentationChecks
             surface.Show();
             surface.Activate();
             Program.Pump();
+            var glyphs = Descendants(root).OfType<TextBlock>().Select(t => t.Text).ToArray();
+            Program.Assert(root.Children.Count == 6 &&
+                glyphs.Contains("✓") && glyphs.Contains("✎"),
+                "settings omit the redundant hint and reuse the paper capsule glyphs");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,
@@ -409,9 +419,9 @@ internal static class MaterialPresentationChecks
                 return evt;
             }
 
-            var upperGroup = (StackPanel)root.Children[3];
-            var separator = (Border)root.Children[4];
-            var menuHeading = (TextBlock)root.Children[5];
+            var upperGroup = (StackPanel)root.Children[2];
+            var separator = (Border)root.Children[3];
+            var menuHeading = (TextBlock)root.Children[4];
             Program.Assert(root.AllowDrop && upperGroup.AllowDrop &&
                 separator.ActualHeight > 0 && menuHeading.ActualHeight > 0,
                 "real settings editor has a hit-testable drop surface and divider");
@@ -429,7 +439,7 @@ internal static class MaterialPresentationChecks
                 "dropping on the lower section heading moves an actual item below the divider");
 
             root = Rebuild();
-            separator = (Border)root.Children[4];
+            separator = (Border)root.Children[3];
             var movedLower = RaiseDrag(separator, DragDrop.DropEvent,
                 PaperTopBarShortcuts.NewTodo,
                 new Point(10, separator.ActualHeight * 0.75));
@@ -438,7 +448,7 @@ internal static class MaterialPresentationChecks
                 "the divider's lower half drops into the menu without a dead zone");
 
             root = Rebuild();
-            var upperHeading = (TextBlock)root.Children[2];
+            var upperHeading = (TextBlock)root.Children[1];
             RaiseDrag(upperHeading, DragDrop.DropEvent,
                 PaperTopBarShortcuts.Association,
                 new Point(8, upperHeading.ActualHeight / 2));
@@ -447,7 +457,7 @@ internal static class MaterialPresentationChecks
                 "the upper group heading accepts a drop at its first slot");
 
             root = Rebuild();
-            separator = (Border)root.Children[4];
+            separator = (Border)root.Children[3];
             var movedUpper = RaiseDrag(separator, DragDrop.DropEvent,
                 PaperTopBarShortcuts.NewTodo,
                 new Point(10, separator.ActualHeight * 0.25));
@@ -457,7 +467,7 @@ internal static class MaterialPresentationChecks
                 "the divider's upper half appends to the title-bar group");
 
             root = Rebuild();
-            var lowerGroup = (StackPanel)root.Children[6];
+            var lowerGroup = (StackPanel)root.Children[5];
             var firstRow = (Grid)lowerGroup.Children[0];
             var rowHover = RaiseDrag(firstRow, DragDrop.DragOverEvent,
                 PaperTopBarShortcuts.ExternalEditor,
@@ -479,8 +489,8 @@ internal static class MaterialPresentationChecks
             // A physical left-button drag verifies the source gesture from
             // PreviewMouseLeftButtonDown through DragDrop.DoDragDrop to Drop.
             root = Rebuild();
-            upperGroup = (StackPanel)root.Children[3];
-            menuHeading = (TextBlock)root.Children[5];
+            upperGroup = (StackPanel)root.Children[2];
+            menuHeading = (TextBlock)root.Children[4];
             var sourceRow = (Grid)upperGroup.Children[1]; // New Todo
             var from = sourceRow.PointToScreen(new Point(
                 sourceRow.ActualWidth / 2, sourceRow.ActualHeight / 2));

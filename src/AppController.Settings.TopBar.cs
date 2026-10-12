@@ -21,15 +21,6 @@ public sealed partial class AppController
             Margin = new Thickness(0, 4, 0, 4)
         };
         root.Children.Add(SettingsSectionLabel(Strings.Get("TopBarSettingsTitle")));
-        root.Children.Add(new TextBlock
-        {
-            Text = Strings.Get("TopBarSettingsHint"),
-            Foreground = TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(10.5),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 2, 9)
-        });
-
         root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
         var shownGroup = BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Pinned(State), pinned: true);
@@ -161,6 +152,8 @@ public sealed partial class AppController
             row.Children.Add(new TextBlock
             {
                 Text = TopBarShortcutGlyph(action),
+                FontFamily = AppTypography.SymbolFontFamily,
+                FontWeight = FontWeights.SemiBold,
                 Foreground = TrayWeakTextBrush,
                 FontSize = AppTypography.Scale(12),
                 Width = AppTypography.Scale(24),
@@ -274,8 +267,8 @@ public sealed partial class AppController
 
     private static string TopBarShortcutGlyph(string action) => action switch
     {
-        PaperTopBarShortcuts.NewTodo => "☑",
-        PaperTopBarShortcuts.NewNote => "＋",
+        PaperTopBarShortcuts.NewTodo => "✓",
+        PaperTopBarShortcuts.NewNote => "✎",
         PaperTopBarShortcuts.Association => "◎",
         PaperTopBarShortcuts.ExternalEditor => "↗",
         _ => "·"

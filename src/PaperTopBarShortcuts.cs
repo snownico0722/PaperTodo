@@ -16,7 +16,7 @@ internal static class PaperTopBarShortcuts
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [NewTodo, NewNote, Association, ExternalEditor];
+    private static readonly string[] Defaults = [Association, NewNote, NewTodo, ExternalEditor];
 
     internal static IReadOnlyList<string> All => Defaults;
 

@@ -1524,9 +1524,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TopBarSettingsTitle" xml:space="preserve">
     <value>Top-bar shortcuts</value>
   </data>
-  <data name="TopBarSettingsHint" xml:space="preserve">
-    <value>Drag to reorder, or move an action between the two areas.</value>
-  </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
   </data>

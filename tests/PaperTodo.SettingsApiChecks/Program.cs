@@ -86,26 +86,31 @@ internal static partial class Program
     {
         var state = new AppState();
         Check(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.Association]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.ExternalEditor]),
-            "New installations show two creation actions, with association/editor in the menu.");
-        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, true, 1) &&
-              PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.Association,
-                   PaperTopBarShortcuts.NewNote]),
-            "Dragging a menu command above the divider pins it at the insertion slot.");
-        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, false, 0) &&
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
+                   PaperTopBarShortcuts.ExternalEditor]) &&
+              PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
+                  state.TopBarShortcutOrder),
+            "New installations pin only association and order Note, Todo, external editor in the menu.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
-            "Dragging to the lower group moves only one action without changing other ordering.");
-        Check(!PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, false, 0),
-            "Dropping in the same slot is a true no-op.");
-        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 0) &&
+            "Dragging a menu command above the divider pins it at the insertion slot.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Association]),
+                  [PaperTopBarShortcuts.NewNote]) &&
+              PaperTopBarShortcuts.Menu(state).SequenceEqual(
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
+                   PaperTopBarShortcuts.ExternalEditor]),
+            "Dragging to the lower group moves only one action without changing other ordering.");
+        Check(!PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0),
+            "Dropping in the same slot is a true no-op.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
+              PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]),
             "Reordering within one group preserves divider membership.");
         Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
                   PaperTopBarShortcuts.NewNote) &&
@@ -118,8 +123,8 @@ internal static partial class Program
                   [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.ExternalEditor,
                    PaperTopBarShortcuts.PluginActions, "unknown"])
                   .SequenceEqual(
-                  [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewTodo,
-                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Association]),
+                  [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
+                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
             "Duplicates and obsolete plugin pins never enter the new global configuration.");
 
         var controller = Controller();
