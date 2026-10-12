@@ -53,17 +53,8 @@ jobs:
           ./tools/testing/Run-Checks.ps1 -Group all -List
           ./tools/testing/Run-Checks.ps1 -Group regression
 
-      - name: Native material and skin checks
-        env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
-          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
+      - name: Material and skin behavior checks
+        # The no-longer-reliable DWM desktop screenshot fixture is removed (D-057).
+        # Native-state, window-lifecycle, offscreen WPF pixels and Aero parallax stay tested.
+        timeout-minutes: 2
         run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
-
-      - name: Upload material visual evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: material-visual-${{ github.sha }}
-          path: ${{ runner.temp }}/material-pixels
-          if-no-files-found: warn
-          retention-days: 7
