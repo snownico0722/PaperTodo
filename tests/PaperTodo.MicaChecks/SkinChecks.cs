@@ -297,6 +297,8 @@ internal static class SkinChecks
                 {
                     controller.State.ResizeGripMode = grip;
                     CheckResizeHitTests(window, $"native {skin}/{mode}/{grip}");
+                    if (mode == "light" && skin == PaperSkins.Mica && grip == ResizeGripModes.Hidden)
+                        DragActualResizeGrip(window, "native Mica after skin change, hidden grip");
                 }
                 Program.Assert(ReferenceEquals(editor, noteProperty.GetValue(window)) && new WindowInteropHelper(window).Handle == handle, "actual editor and HWND preserved");
                 var header = (Border)typeof(PaperWindow).GetField("_topBarHost", Program.Private)!.GetValue(window)!;
@@ -474,8 +476,8 @@ internal static class SkinChecks
     private static void DragActualResizeGrip(PaperWindow window, string scenario)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
-        var center = FindResizeGrip(window).PointToScreen(
-            new Point(FindResizeGrip(window).ActualWidth / 2, FindResizeGrip(window).ActualHeight / 2));
+        var grip = FindResizeGrip(window);
+        var center = grip.PointToScreen(new Point(grip.ActualWidth / 2, grip.ActualHeight / 2));
         var origin = new NativePoint((int)Math.Round(center.X), (int)Math.Round(center.Y));
         Program.Assert(GetWindowRect(hwnd, out var before), $"{scenario}: original bounds");
         Program.Assert(GetCursorPos(out var priorCursor), $"{scenario}: original cursor");
@@ -533,7 +535,11 @@ internal static class SkinChecks
     [StructLayout(LayoutKind.Sequential)]
     private struct WindowRect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)]
-    private record struct NativePoint(int X, int Y);
+    private struct NativePoint
+    {
+        public int X, Y;
+        public NativePoint(int x, int y) => (X, Y) = (x, y);
+    }
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
