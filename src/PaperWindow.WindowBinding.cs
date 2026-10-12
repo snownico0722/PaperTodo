@@ -122,7 +122,9 @@ public sealed partial class PaperWindow
             _controller.IsPaperLinkedToAnyTodo(_paper);
         var isAssociated = isWindowBound || isTodoLinked;
         _windowBindingButton.Visibility =
-            enabled ? Visibility.Visible : Visibility.Collapsed;
+            enabled && PaperTopBarShortcuts.Contains(
+                _controller.State, _paper.Type, PaperTopBarShortcuts.Association)
+                ? Visibility.Visible : Visibility.Collapsed;
         _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton, isAssociated);
         _windowBindingButton.Cursor =
             isWindowBound ? Cursors.Hand : Cursors.Cross;

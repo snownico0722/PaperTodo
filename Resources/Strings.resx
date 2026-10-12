@@ -1549,4 +1549,25 @@
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>胶囊和菜单显示时会临时读取其后方的局部背景；拖动胶囊时只读取一次低分辨率虚拟桌面。仅在本机内存中使用，不保存或上传。</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>纸片操作</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>自定义顶栏</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>调整按钮顺序</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>向左移动</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>向右移动</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>关联拖拽（固定后拖动）</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>插件操作</value>
+  </data>
 </root>

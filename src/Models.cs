@@ -500,6 +500,10 @@ public sealed class AppState
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
+    // New installations keep the top bar minimal. Loaded pre-customization data migrates the
+    // legacy global booleans once, preserving existing users' visible buttons and order.
+    public List<string> TodoTopBarShortcuts { get; set; } = [];
+    public List<string> NoteTopBarShortcuts { get; set; } = [];
     public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; } = true;
     [JsonPropertyName("enableTodoNoteLinks")]

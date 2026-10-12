@@ -219,19 +219,21 @@ public sealed partial class AppController
             value => State.RunLinkedScriptCapsulesOnClick = value,
             SettingEffects.TodoRows,
             title: Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"));
+        // Compatibility aliases: the former three global toggles now pin/unpin their
+        // commands on both paper types (external editor applies only to Notes).
         yield return DefineSetting<bool>("topbar.new_todo",
-            () => State.ShowTopBarNewTodoButton,
-            value => State.ShowTopBarNewTodoButton = value,
+            () => PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewTodo),
+            value => PaperTopBarShortcuts.SetBoth(State, PaperTopBarShortcuts.NewTodo, value),
             SettingEffects.TopBar,
             title: Strings.Get("SettingsShowTopBarNewTodoButton"));
         yield return DefineSetting<bool>("topbar.new_note",
-            () => State.ShowTopBarNewNoteButton,
-            value => State.ShowTopBarNewNoteButton = value,
+            () => PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewNote),
+            value => PaperTopBarShortcuts.SetBoth(State, PaperTopBarShortcuts.NewNote, value),
             SettingEffects.TopBar,
             title: Strings.Get("SettingsShowTopBarNewNoteButton"));
         yield return DefineSetting<bool>("topbar.external_open",
-            () => State.ShowTopBarExternalOpenButton,
-            value => State.ShowTopBarExternalOpenButton = value,
+            () => PaperTopBarShortcuts.Contains(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
+            value => PaperTopBarShortcuts.Set(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor, value),
             SettingEffects.TopBar,
             title: Strings.Get("SettingsShowTopBarExternalOpenButton"));
         yield return DefineSetting<bool>("window.hide_from_taskbar",

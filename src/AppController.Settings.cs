@@ -2662,13 +2662,16 @@ public sealed partial class AppController
         SetSettingFromUi("capsule.enabled", !State.UseCapsuleMode);
 
     private void ToggleTopBarNewTodoButton() =>
-        SetSettingFromUi("topbar.new_todo", !State.ShowTopBarNewTodoButton);
+        SetSettingFromUi("topbar.new_todo",
+            !PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewTodo));
 
     private void ToggleTopBarNewNoteButton() =>
-        SetSettingFromUi("topbar.new_note", !State.ShowTopBarNewNoteButton);
+        SetSettingFromUi("topbar.new_note",
+            !PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewNote));
 
     private void ToggleTopBarExternalOpenButton() =>
-        SetSettingFromUi("topbar.external_open", !State.ShowTopBarExternalOpenButton);
+        SetSettingFromUi("topbar.external_open",
+            !PaperTopBarShortcuts.Contains(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor));
 
     private void ToggleLinkedPaperNameDisplay() =>
         SetSettingFromUi("todo.show_linked_paper_name", !State.ShowLinkedPaperName);

@@ -154,7 +154,9 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (_paper.IsCollapsed || _pluginTopBarLabelsHost.Children.Count == 0)
+        if (_paper.IsCollapsed ||
+            !PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.PluginActions) ||
+            _pluginTopBarLabelsHost.Children.Count == 0)
         {
             _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
             UpdateTopBarResponsiveLayout();

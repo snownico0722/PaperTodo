@@ -1500,4 +1500,25 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>Capsules and menus take a temporary local snapshot of the background behind them; capsule dragging takes one low-resolution virtual-desktop snapshot. It is used only in local memory and is never saved or uploaded.</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>Paper actions</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>Customize title bar</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>Reorder shortcuts</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>Move left</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>Move right</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>Drag to associate (pin to drag)</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>Plugin actions</value>
+  </data>
 </root>

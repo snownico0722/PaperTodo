@@ -109,7 +109,9 @@ public sealed partial class PaperWindow
             UpdatePluginTopBarHostWidth();
             UpdateTopBarResponsiveLayout();
 
-            if (_paper.IsCollapsed || _pluginTopBarDesiredActions.Length == 0)
+            if (_paper.IsCollapsed ||
+                !PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.PluginActions) ||
+                _pluginTopBarDesiredActions.Length == 0)
             {
                 ResetPluginTopBarMaterialization();
                 UpdateTopBarResponsiveLayout();
@@ -329,7 +331,7 @@ public sealed partial class PaperWindow
         object sender,
         DependencyPropertyChangedEventArgs e)
     {
-        if (_reconcilingPluginHostActionVisibility)
+        if (_reconcilingPluginHostActionVisibility || _updatingTopBarResponsiveLayout)
         {
             return;
         }

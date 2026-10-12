@@ -67,6 +67,7 @@ internal static partial class Program
             ServiceBehavior();
             StartupApprovalBehavior();
             CatalogBehavior();
+            TopBarShortcutBehavior();
             TodoMoveBehavior();
             AdapterBehavior();
             SharedUiSettingBehavior();
@@ -79,6 +80,63 @@ internal static partial class Program
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    private static void TopBarShortcutBehavior()
+    {
+        var state = new AppState();
+        Check(PaperTopBarShortcuts.Get(state, PaperTypes.Todo).Count == 0 &&
+              PaperTopBarShortcuts.Get(state, PaperTypes.Note).Count == 0,
+            "New installs start with optional title-bar shortcuts tucked into the menu.");
+
+        PaperTopBarShortcuts.Set(state, PaperTypes.Note, PaperTopBarShortcuts.NewTodo, true);
+        PaperTopBarShortcuts.Set(state, PaperTypes.Note, PaperTopBarShortcuts.NewNote, true);
+        Check(PaperTopBarShortcuts.Move(state, PaperTypes.Note, PaperTopBarShortcuts.NewNote, -1) &&
+              PaperTopBarShortcuts.Get(state, PaperTypes.Note).SequenceEqual(
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
+            "Pinned Note commands retain explicit user-defined order.");
+        Check(!PaperTopBarShortcuts.Move(state, PaperTypes.Note, PaperTopBarShortcuts.NewNote, -1) &&
+              !PaperTopBarShortcuts.Contains(state, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo),
+            "Moving past the edge does nothing; Note shortcuts do not change Todo shortcuts.");
+        var normalized = PaperTopBarShortcuts.Normalize(PaperTypes.Todo,
+            [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewTodo, "unknown", PaperTopBarShortcuts.ExternalEditor]);
+        Check(normalized.SequenceEqual([PaperTopBarShortcuts.NewTodo]),
+            "Unknown, duplicate and other-paper-type shortcut identifiers are dropped.");
+
+        var controller = Controller();
+        controller.State.TodoTopBarShortcuts = [PaperTopBarShortcuts.Association];
+        controller.State.NoteTopBarShortcuts = [PaperTopBarShortcuts.NewNote];
+        var service = SettingsFor(controller, () => false, _ => { });
+        Throws<PaperSettingsException>(
+            () => service.Set("topbar.new_todo", Json(true)), "save_failed");
+        Check(controller.State.TodoTopBarShortcuts.SequenceEqual([PaperTopBarShortcuts.Association]) &&
+              controller.State.NoteTopBarShortcuts.SequenceEqual([PaperTopBarShortcuts.NewNote]),
+            "Legacy public topbar alias rolls back both asymmetric lists after save failure.");
+
+        var temp = Path.Combine(Path.GetTempPath(), "PaperTodo-TopBar-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            var legacy = new AppState
+            {
+                ShowTopBarNewTodoButton = false,
+                ShowTopBarNewNoteButton = true,
+                ShowTopBarExternalOpenButton = false
+            };
+            var json = JsonSerializer.Serialize(legacy,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root.Remove("todoTopBarShortcuts");
+            root.Remove("noteTopBarShortcuts");
+            File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
+            var loaded = new StateStore(temp, DurableAtomicFileWriter.Shared).Load();
+            Check(PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.Association) &&
+                  PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.NewNote) &&
+                  !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo) &&
+                  !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
+                "Old data.json visibility preferences migrate once to per-type ordered shortcuts.");
+        }
+        finally { Directory.Delete(temp, recursive: true); }
     }
 
     private static void PostCommitFailureDoesNotReplay()

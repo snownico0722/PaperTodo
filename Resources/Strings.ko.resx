@@ -1500,4 +1500,25 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>캡슐과 메뉴는 표시할 때 뒤쪽의 로컬 배경을 한 번만 캡처하며, 캡슐을 드래그할 때는 저해상도 가상 데스크톱을 한 번만 캡처합니다. 로컬 메모리에서만 사용하며 저장하거나 업로드하지 않습니다.</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>메모 메뉴</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>상단 바 사용자 지정</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>버튼 순서 변경</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>왼쪽으로 이동</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>오른쪽으로 이동</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>연결 드래그 (고정 후 사용)</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>플러그인 작업</value>
+  </data>
 </root>

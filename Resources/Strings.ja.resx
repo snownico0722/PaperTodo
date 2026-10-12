@@ -1500,4 +1500,25 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>カプセルとメニューは表示時に背後の局所背景を一度だけ取得し、カプセルのドラッグ時は低解像度の仮想デスクトップを一度だけ取得します。ローカルメモリ内でのみ使用し、保存やアップロードはしません。</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>紙片の操作</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>タイトルバーをカスタマイズ</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>ボタンの順序を変更</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>左へ移動</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>右へ移動</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>関連付けドラッグ（固定して使用）</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>プラグイン操作</value>
+  </data>
 </root>

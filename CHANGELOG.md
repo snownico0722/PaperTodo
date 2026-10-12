@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Unified paper menu and customizable title bar**: Expanded papers now expose a `···` button that opens the same actions as the paper context menu. New installs start with optional shortcuts tucked away; Todo and Note shortcuts can be pinned, unpinned, and reordered independently. Narrow windows overflow optional actions while preserving core window controls, and plugin actions remain available from the menu. Existing visibility preferences migrate on upgrade, replacing the three redundant settings toggles.
+
 - **Fast animations**: General settings now includes an optional fast-animation mode that reduces visual transition durations to about 60% while keeping animations enabled. The default remains off, and non-visual timers are unchanged.
 - **Compact built-in edge previews**: Note and Todo hover previews now share a 320 DIP maximum height while shorter content remains naturally sized. Plugin Mini size limits are unchanged.
 - **Master-capsule queue drag**: Pulling a master capsule horizontally now temporarily retracts its queue and switches to the same floating drag appearance as an ordinary capsule, staying aligned with the pointer even during a fast pull-out. On release, that floating capsule now uses the ordinary capsule return flight into the final master position before the real target is revealed, instead of jumping directly to the screen edge. Drop it on another monitor or side to move the current capsule queue while preserving member order. Hidden papers and expanded papers without a queue slot stay where they were. Vertical dragging still only adjusts the queue's starting height.

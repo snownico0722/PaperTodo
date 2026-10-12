@@ -452,7 +452,11 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 
 托盘当前基于仓库固定的 `vendor/wpf-notifyicon` 和 WPF `IconSource`；选择该路线的历史原因见 D-017。
 
-### 7.1 单窗口交互手势
+### 7.1 单纸片菜单与顶栏快捷操作
+
+展开纸片的 `···` 入口与纸片外框右键统一复用 `PaperWindow.BuildPaperContextMenu`，没有第二份纸片命令或独立的菜单业务逻辑。正文编辑、图片与插件输入区域继续保留各自的上下文菜单。关闭／折叠入口与标题左侧的置顶按钮保持固定；其余宿主按钮由 `AppState.TodoTopBarShortcuts` / `NoteTopBarShortcuts` 两份有序列表按纸片类型控制，旧的全局可见性开关仅作读取迁移与公共设置 API 兼容适配。新安装默认只显示常驻入口。菜单中的自定义项负责固定、取消固定与调整顺序，`PaperWindow` 的同一响应式布局在宽度不足时优先保住标题与常驻入口，多余快捷按钮仍可在统一菜单中执行。关联拖拽只有固定到顶栏时才具有拖拽起点；插件 Top Bar descriptor 的可见快捷区可按类型整体固定，未固定或溢出的插件命令仍由同一菜单调用现有宿主 dispatch，不转移 plugin 的 action ownership。
+
+### 7.2 单窗口交互手势
 
 单张展开纸片的窗口级关闭手势由 `PaperWindow` 接入，但**不复制关闭业务语义**：
 
