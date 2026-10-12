@@ -145,7 +145,7 @@ internal static partial class Program
             {
                 await Task.Delay(450);
                 var probe = ReadLive();
-                var expected = "perf-api-" + perf;
+                var expected = "a" + perf;
                 LivePaper(probe, "note-a")["title"] = expected;
                 WriteLive(probe);
                 var start = Stopwatch.GetTimestamp();
@@ -173,7 +173,7 @@ internal static partial class Program
                 await Task.Delay(450);
                 await Dispatcher.Yield(DispatcherPriority.Background);
                 var probe = ReadLive();
-                var expected = "perf-watcher-" + perf;
+                var expected = "w" + perf;
                 LivePaper(probe, "note-a")["title"] = expected;
                 WriteLive(probe);
                 var start = Stopwatch.GetTimestamp();
