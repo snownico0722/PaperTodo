@@ -572,7 +572,7 @@ internal static class MaterialPresentationChecks
     {
         var left = master.Left + master.Width + 240;
         var top = master.Top + 70;
-        var start = new ProcessStartInfo(Environment.ProcessPath!)
+        var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "PaperTodo.MicaChecks.exe"))
         {
             UseShellExecute = false,
             RedirectStandardInput = true,
