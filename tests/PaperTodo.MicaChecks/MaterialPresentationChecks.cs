@@ -399,6 +399,15 @@ internal static class MaterialPresentationChecks
             Program.Assert(root.Children.Count == 6 &&
                 glyphs.Contains("✓") && glyphs.Contains("✎"),
                 "settings omit the redundant hint and reuse the paper capsule glyphs");
+            var vectors = Descendants(root).OfType<System.Windows.Shapes.Path>().ToArray();
+            Program.Assert(vectors.Length == 2 &&
+                vectors.All(path => path.Data != null &&
+                    path.Data.Bounds.Width > 0 && path.Data.Bounds.Height > 0 &&
+                    path.StrokeThickness == 2 &&
+                    path.StrokeStartLineCap == PenLineCap.Round &&
+                    path.StrokeLineJoin == PenLineJoin.Round) &&
+                !glyphs.Contains("◎") && !glyphs.Contains("↗"),
+                "association and external editor use distinct round-stroke vectors instead of font glyphs");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,

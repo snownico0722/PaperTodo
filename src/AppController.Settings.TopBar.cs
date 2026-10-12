@@ -149,16 +149,7 @@ public sealed partial class AppController
                 Width = AppTypography.Scale(22),
                 VerticalAlignment = VerticalAlignment.Center
             });
-            row.Children.Add(new TextBlock
-            {
-                Text = TopBarShortcutGlyph(action),
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = TrayWeakTextBrush,
-                FontSize = AppTypography.Scale(12),
-                Width = AppTypography.Scale(24),
-                VerticalAlignment = VerticalAlignment.Center
-            });
+            row.Children.Add(CreateTopBarShortcutIcon(action));
             row.Children.Add(new TextBlock
             {
                 Text = TopBarShortcutName(action),
@@ -265,12 +256,62 @@ public sealed partial class AppController
         _ => action
     };
 
-    private static string TopBarShortcutGlyph(string action) => action switch
+    // Keep the settings icon column aligned. The two action icons are WPF vector
+    // strokes (24-unit Lucide-style outlines) rather than font-dependent symbols.
+    private static FrameworkElement CreateTopBarShortcutIcon(string action)
     {
-        PaperTopBarShortcuts.NewTodo => "✓",
-        PaperTopBarShortcuts.NewNote => "✎",
-        PaperTopBarShortcuts.Association => "◎",
-        PaperTopBarShortcuts.ExternalEditor => "↗",
-        _ => "·"
-    };
+        string? pathData = action switch
+        {
+            PaperTopBarShortcuts.Association =>
+                "M 10 13 A 5 5 0 0 0 17.54 13.54 L 20.54 10.54 " +
+                "A 5 5 0 0 0 13.47 3.47 L 11.75 5.18 " +
+                "M 14 11 A 5 5 0 0 0 6.46 10.46 L 3.46 13.46 " +
+                "A 5 5 0 0 0 10.53 20.53 L 12.24 18.82",
+            PaperTopBarShortcuts.ExternalEditor =>
+                "M 15 3 H 21 V 9 M 10 14 L 21 3 " +
+                "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
+                "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
+            _ => null
+        };
+        if (pathData == null)
+        {
+            return new TextBlock
+            {
+                Text = action == PaperTopBarShortcuts.NewTodo ? "✓" : "✎",
+                FontFamily = AppTypography.SymbolFontFamily,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = TrayWeakTextBrush,
+                FontSize = AppTypography.Scale(12),
+                Width = AppTypography.Scale(24),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        var canvas = new Canvas { Width = 24, Height = 24 };
+        canvas.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(pathData),
+            Stroke = TrayWeakTextBrush,
+            StrokeThickness = 2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round
+        });
+        var slot = new Grid
+        {
+            Width = AppTypography.Scale(24),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+        slot.Children.Add(new Viewbox
+        {
+            Width = AppTypography.Scale(16),
+            Height = AppTypography.Scale(16),
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = canvas
+        });
+        return slot;
+    }
 }
