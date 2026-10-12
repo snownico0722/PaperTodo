@@ -545,6 +545,11 @@ internal static class MaterialPresentationChecks
                     Wait(80);
                 }
             }
+            // Cross-process foreground is different from the same-thread outside window above.
+            // Reproduce a right click on a NOACTIVATE owner while another app is foreground.
+            outside.Close();
+            outside = null;
+            CheckMasterExternalForeground(controller, master, pill, menu);
         }
         finally
         {
@@ -559,6 +564,83 @@ internal static class MaterialPresentationChecks
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
                 controller.State.MatchAuxiliaryMaterialStrength) = original;
             Theme.Invalidate();
+        }
+    }
+    private static void CheckMasterExternalForeground(
+        AppController controller, MasterCapsuleWindow master, FrameworkElement pill, ContextMenu menu)
+    {
+        var left = master.Left + master.Width + 240;
+        var top = master.Top + 70;
+        var start = new ProcessStartInfo(Environment.ProcessPath!)
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add("--external-menu-window");
+        start.ArgumentList.Add(left.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(top.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        using var external = Process.Start(start) ??
+            throw new InvalidOperationException("Unable to launch the external foreground fixture");
+        try
+        {
+            var ready = external.StandardOutput.ReadLineAsync()
+                .WaitAsync(TimeSpan.FromSeconds(8)).GetAwaiter().GetResult();
+            Program.Assert(ready?.StartsWith("READY ", StringComparison.Ordinal) == true,
+                "external process exposes its real window handle");
+            var externalHwnd = new IntPtr(long.Parse(ready![6..],
+                System.Globalization.CultureInfo.InvariantCulture));
+            var externalX = (int)Math.Round(left + 95);
+            var externalY = (int)Math.Round(top + 60);
+            foreach (var fullMaterial in new[] { false, true })
+            {
+                controller.State.PaperSkin = PaperSkins.Mica;
+                controller.State.Theme = "light";
+                controller.State.MatchAuxiliaryMaterialStrength = fullMaterial;
+                Theme.Invalidate();
+                master.UpdateTheme();
+                Wait(70);
+
+                SetCursorPos(externalX, externalY);
+                Wait(30);
+                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                Until(() => GetForegroundWindow() == externalHwnd,
+                    "external process really owns foreground before MASTER right click");
+
+                var pillPoint = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
+                SetCursorPos((int)Math.Round(pillPoint.X), (int)Math.Round(pillPoint.Y));
+                Wait(30);
+                mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
+                Until(() => menu.IsOpen, "MASTER menu opens while a foreign app is foreground");
+                Wait(150);
+                var popupHwnd = (PresentationSource.FromVisual(menu) as HwndSource)?.Handle ?? IntPtr.Zero;
+                Program.Assert(menu.IsOpen && popupHwnd != IntPtr.Zero &&
+                    GetForegroundWindow() == popupHwnd,
+                    "real material Popup becomes foreground without being immediately dismissed");
+
+                SetCursorPos(externalX, externalY);
+                Wait(30);
+                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                Until(() => !menu.IsOpen, "cross-process outside click dismisses MASTER popup");
+                Wait(50);
+            }
+        }
+        finally
+        {
+            menu.IsOpen = false;
+            if (!external.HasExited)
+            {
+                try { external.StandardInput.WriteLine(); }
+                catch (IOException) { }
+                if (!external.WaitForExit(3000))
+                {
+                    external.Kill(entireProcessTree: true);
+                }
+            }
         }
     }
     private static void AssertNoPopupFade(ContextMenu menu)
@@ -577,6 +659,7 @@ internal static class MaterialPresentationChecks
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
 
     private static SkinBorder? Find(DependencyObject node)
     {
