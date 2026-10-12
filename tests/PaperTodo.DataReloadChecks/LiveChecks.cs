@@ -140,6 +140,36 @@ internal static partial class Program
             await Until(() => controller.State.Papers.Single(p => p.Id == "note-a").Title == "watch" && !controller.IsDataReloading, "watcher reload");
             Require(ReferenceEquals(noteB, windows["note-b"]), "watcher rebuilt an unrelated window");
             Console.WriteLine("PASS live FileSystemWatcher and self-write suppression");
+            var autoTimings = new List<double>();
+            for (var perf = 0; perf < 7; perf++)
+            {
+                controller.SaveNow(sync: true);
+                var probe = ReadLive();
+                var expected = "perf-watcher-" + perf;
+                LivePaper(probe, "note-a")["title"] = expected;
+                WriteLive(probe);
+                var start = Stopwatch.GetTimestamp();
+                await Until(() => controller.State.Papers.Single(p => p.Id == "note-a").Title == expected && !controller.IsDataReloading,
+                    "watcher latency probe " + perf);
+                autoTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            }
+            Console.WriteLine($"PERF_UI watcher_file_bytes={new FileInfo(Path.Combine(AppContext.BaseDirectory, "data.json")).Length} {FormatPerf(autoTimings)}");
+            var explicitTimings = new List<double>();
+            for (var perf = 0; perf < 7; perf++)
+            {
+                controller.SaveNow(sync: true);
+                var probe = ReadLive();
+                var expected = "perf-api-" + perf;
+                LivePaper(probe, "note-a")["title"] = expected;
+                WriteLive(probe);
+                var start = Stopwatch.GetTimestamp();
+                Require(native.ReloadData().Applied, "explicit latency probe rejected");
+                await Until(() => !controller.IsDataReloading && controller.State.Papers.Single(p => p.Id == "note-a").Title == expected,
+                    "explicit latency probe " + perf);
+                explicitTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            }
+            Console.WriteLine($"PERF_UI explicit_file_bytes={new FileInfo(Path.Combine(AppContext.BaseDirectory, "data.json")).Length} {FormatPerf(explicitTimings)}");
+
 
             controller.SaveNow(sync: true);
             var web = ReadLive(); LivePaper(web, "note-a")["title"] = "web title"; WriteLive(web);
