@@ -1515,7 +1515,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
 적용되지 않은 외부 변경은 자동 저장으로 덮어쓰지 않습니다. 파일을 수정하여 저장하거나 API / MCP로 다시 시도하세요. 화면 갱신 오류가 발생하면 재시작 후 데이터를 확인하세요.</value>
   </data>
   <data name="DataReloadRestart" xml:space="preserve">
-    <value>데이터를 저장했습니다. 인터페이스 언어 변경을 적용하려면 PaperTodo를 재시작하세요.</value>
+    <value>데이터를 저장했습니다. 인터페이스 언어 또는 처음 활성화한 네이티브 재질을 적용하려면 PaperTodo를 다시 시작하세요.</value>
   </data>
   <data name="DataReloadExitRecovery" xml:space="preserve">
     <value>data.json에 적용할 수 없는 외부 변경이 남아 있어 원본 파일을 보존했습니다. 종료 전 PaperTodo의 현재 상태를 별도로 저장했습니다:

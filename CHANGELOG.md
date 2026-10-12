@@ -20,7 +20,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
-- **Live data.json reload**: External edits to `data.json` can refresh papers, todos, notes and settings without restarting. Separate edits merge by field/identity; conflicting values keep PaperTodo's current state and archive the original external version and a structured diff. Native/Web plugins and MCP can request a reload and inspect its status. Changing interface language still requires restarting.
+- **Live data.json reload**: External edits to `data.json` can refresh papers, todos, notes and settings without restarting. Separate edits merge by field/identity; conflicting values keep PaperTodo's current state and archive the original external version and a structured diff. Native/Web plugins and MCP can request a reload and inspect its status. Changing interface language or first activating a native material still requires restarting.
 
 - **Fast animations**: General settings now includes an optional fast-animation mode that reduces visual transition durations to about 60% while keeping animations enabled. The default remains off, and non-visual timers are unchanged.
 - **Compact built-in edge previews**: Note and Todo hover previews now share a 320 DIP maximum height while shorter content remains naturally sized. Plugin Mini size limits are unchanged.

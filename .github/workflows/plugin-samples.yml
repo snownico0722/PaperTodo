@@ -83,3 +83,19 @@ jobs:
       - name: Plugin behavior and sample checks
         shell: pwsh
         run: ./tools/testing/Run-Checks.ps1 -Group plugins
+
+      # Temporary branch-only diagnostics: captures the newly rebuilt native binary.
+      # This step is removed after updating the committed sample output.
+      - name: Export rebuilt Codex plugin binary (temporary)
+        if: always()
+        shell: pwsh
+        run: |
+          $file = 'plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll'
+          if (-not (Test-Path -LiteralPath $file)) { throw "Rebuilt DLL was not found" }
+          $payload = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $file)))
+          Write-Output ('CODEX_DLL_BYTES:' + (Get-Item -LiteralPath $file).Length)
+          Write-Output 'CODEX_DLL_BASE64_BEGIN'
+          for ($i = 0; $i -lt $payload.Length; $i += 2048) {
+              Write-Output ('CODEX_DLL_CHUNK:' + $payload.Substring($i, [Math]::Min(2048, $payload.Length - $i)))
+          }
+          Write-Output 'CODEX_DLL_BASE64_END'

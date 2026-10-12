@@ -127,23 +127,31 @@ public sealed partial class AppController
             PrepareExternalPaperOperation();
             var before = StateStore.CopyForReload(State);
             var commit = _store.ReloadExternalState(State, Interlocked.Increment(ref _saveVersion));
-            if (commit.Result.Outcome != "unchanged" || _lastDataReloadResult == null)
-                _lastDataReloadResult = commit.Result;
+            // Native HWND transparency is fixed at startup. The first switch into a native
+            // material needs restart, like the normal skin setting path.
+            var result = commit.State == null ? commit.Result : commit.Result with
+            {
+                RestartRequired = commit.Result.RestartRequired ||
+                    (PaperSkins.UsesNativeBackdrop(commit.State.PaperSkin) &&
+                     NativeMicaBackdrop.IsSupported && !UsesNativeMicaWindows)
+            };
+            if (result.Outcome != "unchanged" || _lastDataReloadResult == null)
+                _lastDataReloadResult = result;
             if (commit.State == null)
             {
-                QueueDataReloadNotice(commit.Result);
-                return commit.Result;
+                QueueDataReloadNotice(result);
+                return result;
             }
 
             _saveTimer.Stop();
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
-            _pendingDataReload = new(before, commit.State, commit.Result, origin);
+            _pendingDataReload = new(before, commit.State, result, origin);
             // A plugin can delete its own paper through this call. Return to the caller before
             // tearing down that session/runtime. Send precedes the next input/render/timer turn;
             // shared commands and saves remain gated until the committed model is reconciled.
             Application.Current.Dispatcher.BeginInvoke(new Action(CompletePendingDataReload), DispatcherPriority.Send);
-            return commit.Result;
+            return result;
         }
         catch (Exception ex)
         {

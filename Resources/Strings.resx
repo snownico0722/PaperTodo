@@ -1564,7 +1564,7 @@
 外部文件不会被自动保存覆盖。请修正文件后保存，或通过 API / MCP 重试；界面刷新错误请重启后检查。</value>
   </data>
   <data name="DataReloadRestart" xml:space="preserve">
-    <value>数据已保存。界面语言的变更需要重启 PaperTodo 才能生效。</value>
+    <value>数据已保存。界面语言或首次启用的原生窗口材质需要重启 PaperTodo 才能生效。</value>
   </data>
   <data name="DataReloadExitRecovery" xml:space="preserve">
     <value>data.json 仍有未能应用的外部修改，原文件已保留。退出前的 PaperTodo 当前内容另存为：

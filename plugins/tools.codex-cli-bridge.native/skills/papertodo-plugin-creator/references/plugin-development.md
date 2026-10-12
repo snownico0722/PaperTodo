@@ -1280,3 +1280,16 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 - Edge Mini does not depend on keyboard input;
 - declare only permissions / `runtime` that are actually needed;
 - 0↔1 Runtime ownership is correct when switching providers or deleting Papers; exiting PaperTodo fully removes Runtime and Global Top Bar contributions.
+
+## Live data.json reload (host 2.2 capability)
+
+Native Body/Runtime sessions use `Workspace.ReloadData()` and `Workspace.GetDataReloadStatus()`. Web Body/Mini/Runtime sessions use the Workspace bridge:
+
+```js
+const result = await papertodo.workspace.request('data.reload', {});
+const status = await papertodo.workspace.request('data.status', {});
+```
+
+This is the same host operation as the file watcher and the MCP `reload_data` / `get_data_reload_status` tools; it does not reload plugin source, manifests or DLLs. The returned `DataReloadResult` reports the outcome (`unchanged`, `applied`, `conflict`, `invalid`, `busy`, `failed`), revision, conflicts and errors. Display reconciliation may finish on the next Dispatcher turn; query the status until `IsReloading` is false. Native Runtime calls marshal to the UI thread. If a plugin's own paper is removed, its session may be disposed after the result is returned.
+
+External editors should preserve `$paperTodoRevision` as well as Paper/Todo IDs. Three-way merging uses that revision as the editor's baseline, not the latest save. Disjoint edits merge, conflicting fields keep the running value and archive original input and conflict details as `dataconflict(n).json` / `dataconflictdiff(n).json`. Unknown baselines or malformed inputs never overwrite running data; normal domain APIs are preferred for ordinary Todo/Note changes. See `doc/ARCHITECTURE.md` and D-057.
