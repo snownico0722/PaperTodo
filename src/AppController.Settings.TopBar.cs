@@ -34,7 +34,7 @@ public sealed partial class AppController
         var shownGroup = BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Pinned(State), pinned: true);
         root.Children.Add(shownGroup);
-        var divider = SettingsSoftDivider();
+        var divider = (FrameworkElement)SettingsSoftDivider();
         root.Children.Add(divider);
         root.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
         root.Children.Add(BuildTopBarShortcutDropGroup(
