@@ -65,6 +65,7 @@
 | D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
+| D-057 | data.json 三方合并与统一热重载入口 | Accepted | 持久化 / 外部 API |
 
 ## 维护规则
 
@@ -1765,3 +1766,27 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `src/EdgeCapsuleQueueCompositionProxy.Runtime.cs` / `src/EdgeCapsuleQueueProxyWindow.cs`
 - `tests/PaperTodo.EdgeTitleChecks/TerminalHandoffFrameChecks.cs` / `ProxyVisualEvidence.cs`
 - `tests/PaperTodo.LifecycleChecks/MasterMaterialHandoffChecks.cs`
+
+---
+ 
+## D-057 — data.json 按实体身份三方合并，冲突保留运行状态并完整归档外部输入
+
+**Status:** Accepted
+
+### Context
+
+外部编辑 `data.json` 应在运行中作用于纸片、待办与设置，插件与 MCP 也需要统一且可查询的重载入口。AppState 由自动保存、编辑中的正文、窗口几何与插件绑定共同修改；整份反序列化替换会让存活的 PaperWindow 保留旧对象引用，单独监听文件事件无法阻止旧保存覆盖外部输入。
+
+### Decision
+
+使用 `$paperTodoRevision` 和有界历史作为真实三方合并基线，Paper / Todo 按 ID 匹配、字段级合并；同字段冲突保留 PaperTodo 当前值，并归档完整原始外部字节与结构化差异，非冲突项继续应用。未知或过期基线不猜测，整份外部输入归档，运行数据优先保留。
+
+`StateStore` 继续唯一拥有写锁、版本栅栏及主文件持久化；正常保存最后替换前检查外部变化。自动监听、Native/Web Workspace、MCP 共享 controller 入口。先收集尚未持久化的内置编辑，再在同一持久化语义下提交合并；UI 对象按 ID 原位更新，插件与窗口生命周期从现有入口协调。删除调用者当前纸片的收尾延至回调之后一轮 UI 调度。
+
+### Why / Consequences
+
+不新增第二个权威状态副本或跨进程同步服务，历史快照有界，因此不保证任意久远离线编辑都能精确推断意图。非法数据不会回退成空状态；正常退出若未能消费外部文件，就另存内存恢复文件。冲突与退出恢复文件进入原有图片保护扫描。无需为此把插件文件本身变成热重载对象；此宿主能力并入现行 2.2 API，不改变既有 2.1 插件的可加载性。
+
+### Evidence
+
+`src/StateStore.Reload.cs`、`src/StateJsonMerge.cs`、`src/StateReloadModels.cs`、`src/AppController.DataReload.cs`、`src/PaperCommandService.DataReload.cs` 及 `tests/PaperTodo.DataReloadChecks`。

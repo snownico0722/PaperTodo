@@ -1281,3 +1281,9 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+## data.json 实时重载（宿主 2.2 能力）
+
+Native Body / Runtime 使用 `Workspace.ReloadData()` 和 `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 通过 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})` 调用同一宿主入口。MCP 对应 `reload_data` 与 `get_data_reload_status`。该能力只重载宿主业务数据，不重新加载插件目录、DLL 或 Web 代码。
+
+外部编辑器应保留文件中的 `$paperTodoRevision` 以及纸片/待办 ID。宿主按实体身份和字段做三方合并，冲突保留运行中的值，并将外部原始文件与结构化差异分别另存 `dataconflict(n).json` 和 `dataconflictdiff(n).json`；未知基线和非法输入均不会直接覆盖运行数据。返回的 `DataReloadResult` 包含处理结果、冲突数量、归档文件名与错误；显示更新会在 API 返回后的 UI 调度轮次完成，可用状态接口查询 `IsReloading`。调用后如果本插件的纸片被删除，原 session 可能已经失效。普通待办/笔记更改优先使用已有领域 API。架构与取舍见 `doc/ARCHITECTURE.md` 和 D-057。

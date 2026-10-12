@@ -29,6 +29,7 @@ $checks = @(
     @{ Group = 'plugins'; Project = 'SettingsApiChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'CodexCliBridgeChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'persistence'; Project = 'PersistenceChecks'; Configuration = 'Release'; Runtime = 'win-x64' }
+    @{ Group = 'persistence'; Project = 'DataReloadChecks'; Configuration = 'Release'; Runtime = 'win-x64' }
     @{ Group = 'diagnostics'; Project = 'EdgeDiagnosticJournalChecks'; Configuration = 'Debug'; Runtime = '' }
     @{ Group = 'diagnostics'; Project = 'EdgeDiagnosticJournalChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'diagnostics'; Project = 'EdgeLatencyObservationChecks'; Configuration = 'Debug'; Runtime = '' }

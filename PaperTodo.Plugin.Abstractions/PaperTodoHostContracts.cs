@@ -269,6 +269,10 @@ public sealed record DeleteMutationResult(
 
 public interface IPaperTodoHostApi
 {
+    /// <summary>Consume external data.json edits. Presentation is reconciled on the next UI turn.</summary>
+    DataReloadResult ReloadData() => throw new NotSupportedException("This host does not support data reload.");
+    DataReloadStatus GetDataReloadStatus() => throw new NotSupportedException("This host does not support data reload.");
+
     IReadOnlySet<string> GrantedPermissions { get; }
 
     IReadOnlyList<PaperSnapshot> ListPapers(string? type = null);
