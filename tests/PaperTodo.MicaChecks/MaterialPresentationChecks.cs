@@ -670,12 +670,39 @@ internal static class MaterialPresentationChecks
                     "external process owns foreground before " + name + " right click");
 
                 var point = target.PointToScreen(new Point(target.ActualWidth / 2, target.ActualHeight / 2));
-                SetCursorPos((int)Math.Round(point.X), (int)Math.Round(point.Y));
+                var clickX = (int)Math.Round(point.X);
+                var clickY = (int)Math.Round(point.Y);
+                SetCursorPos(clickX, clickY);
                 Wait(30);
-                mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
-                mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
-                Until(() => menu.IsOpen, name + " menu opens while a foreign app is foreground");
-                Wait(150);
+                var hit = WindowFromPoint(new CursorPoint { X = clickX, Y = clickY });
+                if (name == "EDGE")
+                {
+                    Console.WriteLine($"EDGE native hit: point={clickX},{clickY} window={hit} owner={ownerHwnd} " +
+                        $"target={target.ActualWidth:F1}x{target.ActualHeight:F1}");
+                    Program.Assert(hit == ownerHwnd,
+                        "real mouse must hit the Edge HWND rather than a transparent margin or another window");
+                }
+                var openedCount = 0;
+                var closedCount = 0;
+                RoutedEventHandler opened = (_, _) => openedCount++;
+                RoutedEventHandler closed = (_, _) => closedCount++;
+                menu.Opened += opened;
+                menu.Closed += closed;
+                try
+                {
+                    mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
+                    Until(() => menu.IsOpen || openedCount > 0,
+                        name + " menu receives a real right click");
+                    Wait(150);
+                    Program.Assert(menu.IsOpen,
+                        $"{name} menu remains open (opened={openedCount}, closed={closedCount}, foreground={GetForegroundWindow()})");
+                }
+                finally
+                {
+                    menu.Opened -= opened;
+                    menu.Closed -= closed;
+                }
                 var popupHwnd = (PresentationSource.FromVisual(menu) as HwndSource)?.Handle ?? IntPtr.Zero;
                 Program.Assert(menu.IsOpen && popupHwnd != IntPtr.Zero &&
                     GetForegroundWindow() is var foreground &&
@@ -721,6 +748,7 @@ internal static class MaterialPresentationChecks
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(CursorPoint point);
 
     private static SkinBorder? Find(DependencyObject node)
     {
