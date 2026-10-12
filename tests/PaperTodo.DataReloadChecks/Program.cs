@@ -33,7 +33,6 @@ internal static partial class Program
                 check.Run();
                 Console.WriteLine("PASS " + check.Name);
             }
-            RunPerformanceChecks(); // One-time CI probe; remove after measurement.
             RunIsolatedLiveChecks();
             Console.WriteLine($"PASS data reload: {checks.Length} storage/merge groups and isolated live WPF/API/MCP fixture");
             return 0;

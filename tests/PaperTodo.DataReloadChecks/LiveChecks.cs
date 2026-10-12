@@ -140,58 +140,6 @@ internal static partial class Program
             await Until(() => controller.State.Papers.Single(p => p.Id == "note-a").Title == "watch" && !controller.IsDataReloading, "watcher reload");
             Require(ReferenceEquals(noteB, windows["note-b"]), "watcher rebuilt an unrelated window");
             Console.WriteLine("PASS live FileSystemWatcher and self-write suppression");
-            var explicitTimings = new List<double>();
-            for (var perf = 0; perf < 7; perf++)
-            {
-                await Task.Delay(450);
-                var probe = ReadLive();
-                var expected = "a" + perf;
-                LivePaper(probe, "note-a")["title"] = expected;
-                WriteLive(probe);
-                var start = Stopwatch.GetTimestamp();
-                var apiResult = native.ReloadData();
-                Console.WriteLine($"PERF_API_RESULT sample={perf} outcome={apiResult.Outcome} conflicts={apiResult.ConflictCount} applied={apiResult.Applied}");
-                Require(apiResult.Applied, "explicit latency probe rejected");
-                try
-                {
-                    await Until(() => !controller.IsDataReloading && controller.State.Papers.Single(p => p.Id == "note-a").Title == expected,
-                        "explicit latency probe " + perf);
-                }
-                catch (TimeoutException)
-                {
-                    var perfStatus = controller.GetDataReloadStatusCore();
-                    Console.WriteLine($"PERF_API_TIMEOUT expected={expected} actual={controller.State.Papers.Single(p=>p.Id=="note-a").Title} disk={Str(LivePaper(ReadLive(), "note-a")["title"])} pending={perfStatus.PendingExternalChange} busy={perfStatus.IsReloading} outcome={perfStatus.LastResult?.Outcome} conflicts={perfStatus.LastResult?.ConflictCount} timer={Field<DispatcherTimer?>(controller,"_dataReloadTimer")?.IsEnabled}");
-                    throw;
-                }
-                explicitTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
-            }
-            Console.WriteLine($"PERF_UI explicit_file_bytes={new FileInfo(Path.Combine(AppContext.BaseDirectory, "data.json")).Length} {FormatPerf(explicitTimings)}");
-            var autoTimings = new List<double>();
-            for (var perf = 0; perf < 7; perf++)
-            {
-                // Let the previous reload and any self-written file events settle.
-                await Task.Delay(450);
-                await Dispatcher.Yield(DispatcherPriority.Background);
-                var probe = ReadLive();
-                var expected = "w" + perf;
-                LivePaper(probe, "note-a")["title"] = expected;
-                WriteLive(probe);
-                var start = Stopwatch.GetTimestamp();
-                try
-                {
-                    await Until(() => controller.State.Papers.Single(p => p.Id == "note-a").Title == expected && !controller.IsDataReloading,
-                        "watcher latency probe " + perf);
-                }
-                catch (TimeoutException)
-                {
-                    var perfStatus = controller.GetDataReloadStatusCore();
-                    Console.WriteLine($"PERF_WATCHER_TIMEOUT expected={expected} actual={controller.State.Papers.Single(p=>p.Id=="note-a").Title} disk={Str(LivePaper(ReadLive(), "note-a")["title"])} pending={perfStatus.PendingExternalChange} busy={perfStatus.IsReloading} outcome={perfStatus.LastResult?.Outcome} timer={Field<DispatcherTimer?>(controller,"_dataReloadTimer")?.IsEnabled}");
-                    throw;
-                }
-                autoTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
-            }
-            Console.WriteLine($"PERF_UI watcher_file_bytes={new FileInfo(Path.Combine(AppContext.BaseDirectory, "data.json")).Length} {FormatPerf(autoTimings)}");
-
 
             controller.SaveNow(sync: true);
             var web = ReadLive(); LivePaper(web, "note-a")["title"] = "web title"; WriteLive(web);
