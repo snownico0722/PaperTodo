@@ -486,7 +486,7 @@ internal static class MaterialPresentationChecks
                 "the divider's lower half drops into the menu without a dead zone");
 
             root = Rebuild();
-            var upperHeading = (TextBlock)root.Children[1];
+            var upperHeading = (TextBlock)DropArea(root).Children[0];
             RaiseDrag(upperHeading, DragDrop.DropEvent,
                 PaperTopBarShortcuts.Association,
                 new Point(8, upperHeading.ActualHeight / 2));
