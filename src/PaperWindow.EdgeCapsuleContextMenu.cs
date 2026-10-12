@@ -39,6 +39,7 @@ public sealed partial class PaperWindow
     private ContextMenu BuildDeepCapsuleSlotContextMenu()
     {
         var menu = BuildPaperContextMenu(forDeepCapsuleSlot: true);
+        DeepCapsuleContextMenuSession.PrepareOwnerActivation((MaterialContextMenu)menu);
 
         menu.Opened += (_, _) => _deepCapsuleContextMenuSession.HandleOpened(menu);
         menu.Closed += (_, _) => _deepCapsuleContextMenuSession.HandleClosed(menu);

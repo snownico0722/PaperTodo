@@ -84,6 +84,23 @@ internal sealed class DeepCapsuleContextMenuSession
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
     }
 
+    // The NOACTIVATE capsule should stay passive for ordinary clicks. Only an explicit
+    // context-menu open is allowed to activate its native owner, and that must happen
+    // BEFORE WPF starts the menu's mouse-capture/focus session. Activating the Popup
+    // after ContextMenu.Opened already made a material menu dismiss itself (#227).
+    public static void PrepareOwnerActivation(MaterialContextMenu menu)
+    {
+        menu.BeforeWpfOpen = () =>
+        {
+            if (menu.PlacementTarget is { } target &&
+                PresentationSource.FromVisual(target) is HwndSource source &&
+                source.Handle != IntPtr.Zero)
+            {
+                WindowNative.TrySetForegroundWindow(source.Handle);
+            }
+        };
+    }
+
     private static void QueuePopupActivation(ContextMenu menu)
     {
         // ContextMenu.Opened runs after WPF entered menu mode. One Input turn is only to resolve
@@ -104,15 +121,15 @@ internal sealed class DeepCapsuleContextMenuSession
                     topmost: true,
                     insertAfter: IntPtr.Zero);
 
-                // On a NOACTIVATE owner, the popup must become foreground to receive
-                // outside clicks from other applications. WPF has already focused a
-                // MaterialContextMenu while entering menu mode: a second Focus() here
-                // can dismiss its subclassed popup immediately (the #227 regression).
-                WindowNative.TrySetForegroundWindow(source.Handle);
-                if (menu is not MaterialContextMenu)
+                // MaterialContextMenu is prepared before WPF enters menu mode; activating
+                // its owner here would close an already-open popup (#227).
+                if (menu is MaterialContextMenu)
                 {
-                    menu.Focus();
+                    return;
                 }
+
+                WindowNative.TrySetForegroundWindow(source.Handle);
+                menu.Focus();
             }));
     }
 

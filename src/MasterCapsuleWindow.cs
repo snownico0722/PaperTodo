@@ -244,6 +244,7 @@ public sealed class MasterCapsuleWindow : Window
         // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation
         // and stale-focus cleanup to DeepCapsuleContextMenuSession.
         var contextMenu = _controller.CreateTrayMenu(registerForLiveRefresh: true);
+        DeepCapsuleContextMenuSession.PrepareOwnerActivation((MaterialContextMenu)contextMenu);
         _pill.ContextMenu = contextMenu;
         _pill.ContextMenuOpening += (_, _) => _controller.RebuildTrayMenu(contextMenu);
         contextMenu.Opened += (_, _) => _contextMenuSession.HandleOpened(contextMenu);

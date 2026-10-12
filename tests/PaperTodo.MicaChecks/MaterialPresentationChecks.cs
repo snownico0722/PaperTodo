@@ -618,9 +618,11 @@ internal static class MaterialPresentationChecks
                 Until(() => menu.IsOpen, "MASTER menu opens while a foreign app is foreground");
                 Wait(150);
                 var popupHwnd = (PresentationSource.FromVisual(menu) as HwndSource)?.Handle ?? IntPtr.Zero;
+                var ownerHwnd = new WindowInteropHelper(master).Handle;
                 Program.Assert(menu.IsOpen && popupHwnd != IntPtr.Zero &&
-                    GetForegroundWindow() == popupHwnd,
-                    "real material Popup becomes foreground without being immediately dismissed");
+                    GetForegroundWindow() is var foreground &&
+                    (foreground == ownerHwnd || foreground == popupHwnd),
+                    "explicit menu request activates the capsule owner before WPF captures the mouse");
 
                 SetCursorPos(externalX, externalY);
                 Wait(30);
