@@ -222,7 +222,6 @@ public sealed partial class AppController : IDisposable
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.TimeChanged += OnSystemTimeChanged;
-        InitializeDataReload();
     }
 
     public async Task StartAsync(
@@ -254,7 +253,6 @@ public sealed partial class AppController : IDisposable
             }
             RefreshMcpRuntime();
             SchedulePluginStartupPapers(initialVisibilityCommand);
-            StartDataReloadWatcher();
             return;
         }
 
@@ -285,7 +283,6 @@ public sealed partial class AppController : IDisposable
         }
         RefreshMcpRuntime();
         SchedulePluginStartupPapers(initialVisibilityCommand);
-        StartDataReloadWatcher();
     }
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)
@@ -3461,15 +3458,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        if (ex is ExternalStatePendingException)
-        {
-            _hasPendingDirty = true;
-            _saveTimer.Stop();
-            _forceSaveTimer.Stop();
-            QueueDataReload();
-            return;
-        }
-
         // If nothing newer has superseded this attempt, keep trying after the force interval
         // so a transient write failure does not drop the dirty state permanently.
         ArmSaveRetryIfNeeded(failedVersion);
@@ -4124,7 +4112,7 @@ public sealed partial class AppController : IDisposable
         _displayMetricsRefreshTimer.Stop();
         StopTodoReminderTimer();
 
-        if (!SaveForNormalShutdown())
+        if (!TrySaveNow(sync: true))
         {
             TryExitCleanup(() =>
             {
@@ -4198,7 +4186,7 @@ public sealed partial class AppController : IDisposable
                 window.CommitPendingEditsForSave();
             }
 
-            SaveForNormalShutdown();
+            TrySaveNow(sync: true);
         }
 
         _lifecycleState = AppLifecycleState.Exiting;
@@ -4208,7 +4196,6 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
-        StopDataReloadWatcher();
         TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();

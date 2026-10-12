@@ -1281,7 +1281,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 - declare only permissions / `runtime` that are actually needed;
 - 0↔1 Runtime ownership is correct when switching providers or deleting Papers; exiting PaperTodo fully removes Runtime and Global Top Bar contributions.
 
-## Live data.json reload (host 2.2 capability)
+## Explicit data.json reload (host 2.2 capability)
 
 Native Body/Runtime sessions use `Workspace.ReloadData()` and `Workspace.GetDataReloadStatus()`. Web Body/Mini/Runtime sessions use the Workspace bridge:
 
@@ -1290,6 +1290,8 @@ const result = await papertodo.workspace.request('data.reload', {});
 const status = await papertodo.workspace.request('data.status', {});
 ```
 
-This is the same host operation as the file watcher and the MCP `reload_data` / `get_data_reload_status` tools; it does not reload plugin source, manifests or DLLs. The returned `DataReloadResult` reports the outcome (`unchanged`, `applied`, `conflict`, `invalid`, `busy`, `failed`), revision, conflicts and errors. Display reconciliation may finish on the next Dispatcher turn; query the status until `IsReloading` is false. Native Runtime calls marshal to the UI thread. If a plugin's own paper is removed, its session may be disposed after the result is returned.
+MCP exposes `reload_data` (full-write permission required) and read-only `get_data_reload_status`. There is **no file watcher or historical revision tracking**. External editors can modify `data.json`, but the running model changes only after an explicit reload request. The next ordinary save may otherwise overwrite those external changes.
 
-External editors should preserve `$paperTodoRevision` as well as Paper/Todo IDs. Three-way merging uses that revision as the editor's baseline, not the latest save. Disjoint edits merge, conflicting fields keep the running value and archive original input and conflict details as `dataconflict(n).json` / `dataconflictdiff(n).json`. Unknown baselines or malformed inputs never overwrite running data; normal domain APIs are preferred for ordinary Todo/Note changes. See `doc/ARCHITECTURE.md` and D-057.
+An explicit reload accepts the validated current `data.json` as authoritative, including replacement of unsaved in-memory or editor changes; it does **not** merge fields or archive conflicts. Missing/invalid input is rejected without changing the running model. The result reports `Outcome` (`applied`, `invalid`, `busy`, or `failed`), `Applied`, `RestartRequired`, and `Error`. Status reports `IsReloading`, `LastAttemptAt`, and `LastResult`. UI reconciliation may finish on the next Dispatcher turn; if the requested change deletes the caller's paper, its session can be released after the response. This is not plugin-code hot reload. Prefer domain APIs for ordinary Todo/Note edits.
+
+See `doc/ARCHITECTURE.md` and D-057.

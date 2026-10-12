@@ -110,7 +110,6 @@ internal static partial class Program
             var original = ReadLive();
             editorB.Text = "local draft";
             editorB.CaretOffset = 3;
-            var canUndo = editorB.Document.UndoStack.CanUndo;
             using var native = new PaperBodyPluginHostApi(controller, controller.PaperCommands, "note-a", "fixture.native", [], () => !noteA.IsClosed, () => true);
             using var observer = new PaperBodyPluginHostApi(controller, controller.PaperCommands, null, "fixture.observer", PaperTodoPermissionNames.All, () => true, () => true);
             var observed = new List<PaperTodoEvent>();
@@ -122,24 +121,30 @@ internal static partial class Program
             original["papers"]!.AsArray().Add(new JsonObject { ["id"] = "added", ["type"] = "note", ["content"] = "new paper", ["x"] = 250, ["y"] = 350 });
             WriteLive(original);
             var result = native.ReloadData();
-            Require(result.Applied && result.ConflictCount == 0 && !noteA.IsClosed, "Native API did not commit/return before surface teardown");
+            Require(result.Applied && !noteA.IsClosed, "Native API did not return before surface teardown");
             await Until(() => !controller.IsDataReloading, "Native reload completion");
             Require(ReferenceEquals(stateIdentity, controller.State) && ReferenceEquals(paperIdentity, controller.State.Papers.Single(p => p.Id == "note-a")), "state/paper identity changed");
             Require(ReferenceEquals(editorA, Field<MarkdownTextBox>(windows["note-a"], "_noteBox")) && editorA.PersistentText == "external body", "changed note did not refresh in place");
-            Require(ReferenceEquals(editorB, Field<MarkdownTextBox>(windows["note-b"], "_noteBox")) && editorB.PersistentText == "local draft" && editorB.CaretOffset == 3 && editorB.Document.UndoStack.CanUndo == canUndo, "unrelated note/editor/undo state changed");
+            Require(ReferenceEquals(editorB, Field<MarkdownTextBox>(windows["note-b"], "_noteBox")) && editorB.PersistentText == "second", "explicit import did not discard divergent unsaved editor text");
             Require(windows.ContainsKey("added") && Math.Abs(noteA.Left - 180) < 2, "new paper/geometry did not apply");
             Require(controller.State.Papers.Single(p => p.Id == "todo").Items[0].Text == "external todo", "todo did not apply");
             Require(observed.Any(e => e.Metadata.Origin == PaperTodoEventOrigin.Plugin && e.Metadata.SourcePluginId == "fixture.native"), "reload event origin was lost");
-            Console.WriteLine("PASS live native merge, model/editor identity, local pending edit, undo, geometry, add and events");
+            Console.WriteLine("PASS explicit Native import, in-place model/editor update, unsaved draft replacement, geometry and events");
 
             controller.SaveNow(sync: true);
-            var watched = ReadLive(); LivePaper(watched, "note-a")["title"] = "watch";
-            var activeWatcher = Field<FileSystemWatcher?>(controller, "_dataWatcher");
-            Require(activeWatcher is { EnableRaisingEvents: true }, "watcher was not active");
-            WriteLive(watched);
-            await Until(() => controller.State.Papers.Single(p => p.Id == "note-a").Title == "watch" && !controller.IsDataReloading, "watcher reload");
-            Require(ReferenceEquals(noteB, windows["note-b"]), "watcher rebuilt an unrelated window");
-            Console.WriteLine("PASS live FileSystemWatcher and self-write suppression");
+            var externalFile = ReadLive();
+            LivePaper(externalFile, "note-a")["title"] = "watch";
+            WriteLive(externalFile);
+            await Task.Delay(400);
+            Require(controller.State.Papers.Single(p => p.Id == "note-a").Title != "watch",
+                "data.json was imported without an explicit request");
+            Require(Str(LivePaper(ReadLive(), "note-a")["title"]) == "watch",
+                "idle host unexpectedly overwrote the external edit");
+            Require(native.ReloadData().Applied, "explicit Native import rejected");
+            await Until(() => !controller.IsDataReloading, "explicit import");
+            Require(controller.State.Papers.Single(p => p.Id == "note-a").Title == "watch" &&
+                ReferenceEquals(noteB, windows["note-b"]), "explicit import did not update title in place");
+            Console.WriteLine("PASS no implicit file watching; explicit request updates existing windows");
 
             controller.SaveNow(sync: true);
             var web = ReadLive(); LivePaper(web, "note-a")["title"] = "web title"; WriteLive(web);
@@ -147,7 +152,7 @@ internal static partial class Program
             Require(webResult.Applied, "Web bridge failed");
             await Until(() => !controller.IsDataReloading, "Web reload");
             var status = (DataReloadStatus)WebPluginWorkspaceRequests.Execute(native, "data.status", JsonSerializer.SerializeToElement(new { }))!;
-            Require(status.LastResult?.Applied == true && !status.PendingExternalChange, "Web status disagreed");
+            Require(status.LastResult?.Applied == true && !status.IsReloading, "Web status disagreed");
 
             controller.SaveNow(sync: true);
             var remote = ReadLive(); remote["theme"] = "dark"; WriteLive(remote);
@@ -192,7 +197,6 @@ internal static partial class Program
         finally
         {
             controller.Dispose();
-            Require(Field<FileSystemWatcher?>(controller, "_dataWatcher") == null, "watcher remained after dispose");
         }
     }
 }

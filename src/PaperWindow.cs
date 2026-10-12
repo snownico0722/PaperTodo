@@ -902,11 +902,11 @@ public sealed partial class PaperWindow : Window
             !(collapsed ?? _paper.IsCollapsed);
     }
 
-    private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
+    private bool TryGetPaperResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
     {
         hitTest = 0;
-        if ((!_controller.UsesNativeMicaWindows && ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden) ||
-            _paper.IsCollapsed ||
+        if (_paper.IsCollapsed ||
+            _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
             (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
@@ -938,15 +938,30 @@ public sealed partial class PaperWindow : Window
         {
             return false;
         }
-        // Native expanded papers fill the HWND; resizing is inside the visible edge.
-        // Legacy paper/capsule geometry retains its existing transparent shadow margin.
-        var resizeBorder = Math.Max(1.0, (UsesNativePaperChrome ? 5 : WindowChromeMargin) * dpiScale);
+        // All grip modes share the same resize hit test; the setting only changes the dots.
+        // Layered windows can pass mouse input through their transparent shadow gutter,
+        // so reach a few DIPs into the painted paper edge instead of relying on the gutter.
+        // Snapped and native papers have no gutter and keep a 5-DIP interior band.
+        var chromeMargin = _paperChrome?.Margin.Left ?? (UsesNativePaperChrome ? 0 : WindowChromeMargin);
+        var resizeBorder = Math.Max(1.0, (chromeMargin + 5) * dpiScale);
         var nearLeft = pointerX < bounds.Left + resizeBorder;
         var nearRight = pointerX >= bounds.Right - resizeBorder;
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        if (nearTop && nearLeft)
+        // The stock Window-template ResizeGrip is anchored to the HWND corner, not to
+        // the paper's inset chrome. Adding chromeMargin again steals clicks beside the
+        // grip in layered skins; the separate narrow edge band already covers paper edges.
+        var gripRightBand = SystemParameters.VerticalScrollBarWidth * dpiScale;
+        var gripBottomBand = SystemParameters.HorizontalScrollBarHeight * dpiScale;
+        var overGrip = pointerX >= bounds.Right - gripRightBand &&
+            pointerY >= bounds.Bottom - gripBottomBand;
+
+        if (overGrip)
+        {
+            hitTest = HtBottomRight;
+        }
+        else if (nearTop && nearLeft)
         {
             hitTest = HtTopLeft;
         }
@@ -997,7 +1012,7 @@ public sealed partial class PaperWindow : Window
             return IntPtr.Zero;
         }
 
-        if (msg == WmNcHitTest && TryGetHiddenResizeHitTest(hwnd, lParam, out var resizeHitTest))
+        if (msg == WmNcHitTest && TryGetPaperResizeHitTest(hwnd, lParam, out var resizeHitTest))
         {
             handled = true;
             return new IntPtr(resizeHitTest);

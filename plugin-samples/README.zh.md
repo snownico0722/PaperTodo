@@ -1282,8 +1282,10 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
 
-## data.json 实时重载（宿主 2.2 能力）
+## data.json 显式重载（宿主 2.2 能力）
 
-Native Body / Runtime 使用 `Workspace.ReloadData()` 和 `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 通过 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})` 调用同一宿主入口。MCP 对应 `reload_data` 与 `get_data_reload_status`。该能力只重载宿主业务数据，不重新加载插件目录、DLL 或 Web 代码。
+Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
 
-外部编辑器应保留文件中的 `$paperTodoRevision` 以及纸片/待办 ID。宿主按实体身份和字段做三方合并，冲突保留运行中的值，并将外部原始文件与结构化差异分别另存 `dataconflict(n).json` 和 `dataconflictdiff(n).json`；未知基线和非法输入均不会直接覆盖运行数据。返回的 `DataReloadResult` 包含处理结果、冲突数量、归档文件名与错误；显示更新会在 API 返回后的 UI 调度轮次完成，可用状态接口查询 `IsReloading`。调用后如果本插件的纸片被删除，原 session 可能已经失效。普通待办/笔记更改优先使用已有领域 API。架构与取舍见 `doc/ARCHITECTURE.md` 和 D-057。
+宿主**不监听磁盘文件，也不记录历史修订或做三方合并**。外部工具可以编辑 `data.json`，但只有显式发起重载才会让运行态接受它；否则下一次正常保存可能直接覆盖外部编辑。
+
+显式重载以校验后的磁盘文件为准，可覆盖尚未保存的内存/编辑器修改；非法或缺失输入直接报告错误，不替换运行数据。结果包含 `Outcome`（`applied`、`invalid`、`busy`、`failed`）、`Applied`、`RestartRequired` 和 `Error`；状态包含 `IsReloading`、`LastAttemptAt`、`LastResult`。UI 更新在 API 返回后的 UI 调度轮次完成；如果删除了发起调用的插件纸片，其 session 可能随后失效。本接口不热替换插件代码；普通 Todo / Note 编辑优先使用已有领域 API。技术取舍见 `doc/ARCHITECTURE.md` / D-057。

@@ -13,88 +13,15 @@ public sealed partial class AppController
     private sealed record PendingDataReload(AppState Before, AppState Next,
         DataReloadResult Result, PaperOperationContext Origin);
 
-    private FileSystemWatcher? _dataWatcher;
-    private DispatcherTimer? _dataReloadTimer;
-    private bool _dataReloadReady;
+    // No watcher or background history: reload happens only after an explicit API/MCP request.
     private bool _dataReloadEvaluating;
     private bool _applyingDataReload;
-    private int _dataReloadNotificationPosted;
     private PendingDataReload? _pendingDataReload;
     private DateTimeOffset? _lastDataReloadAt;
     private DataReloadResult? _lastDataReloadResult;
-    private string? _lastDataReloadNotice;
 
     internal bool IsDataReloading => _dataReloadEvaluating || _applyingDataReload || _pendingDataReload != null;
     internal bool SuppressDataReloadEditorCommit => _applyingDataReload || _pendingDataReload != null;
-
-    private void InitializeDataReload()
-    {
-        _store.EnableExternalReload(State);
-        _dataReloadTimer = new DispatcherTimer(DispatcherPriority.Background, Application.Current.Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(250)
-        };
-        _dataReloadTimer.Tick += OnDataReloadTimer;
-    }
-
-    private void StartDataReloadWatcher()
-    {
-        if (IsExiting || _dataReloadReady) return;
-        _dataReloadReady = true;
-        try
-        {
-            _dataWatcher = new FileSystemWatcher(Path.GetDirectoryName(_store.FilePath)!, "data.json")
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-                IncludeSubdirectories = false
-            };
-            _dataWatcher.Changed += OnDataFileChanged;
-            _dataWatcher.Created += OnDataFileChanged;
-            _dataWatcher.Deleted += OnDataFileChanged;
-            _dataWatcher.Renamed += OnDataFileRenamed;
-            _dataWatcher.Error += OnDataWatcherError;
-            _dataWatcher.EnableRaisingEvents = true;
-            QueueDataReload(); // covers edits between Load and watcher installation
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            _dataWatcher?.Dispose();
-            _dataWatcher = null;
-            _lastDataReloadResult = new() { Outcome = "failed", Error = ex.Message };
-            QueueDataReloadNotice(_lastDataReloadResult);
-        }
-    }
-
-    private void OnDataFileChanged(object sender, FileSystemEventArgs e) => QueueDataReload();
-    private void OnDataFileRenamed(object sender, RenamedEventArgs e) => QueueDataReload();
-    private void OnDataWatcherError(object sender, ErrorEventArgs e) => QueueDataReload();
-
-    private void QueueDataReload()
-    {
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.HasShutdownStarted ||
-            Interlocked.Exchange(ref _dataReloadNotificationPosted, 1) != 0) return;
-        dispatcher.BeginInvoke(new Action(() =>
-        {
-            Interlocked.Exchange(ref _dataReloadNotificationPosted, 0);
-            if (IsExiting || !_dataReloadReady) return;
-            _dataReloadTimer!.Stop();
-            _dataReloadTimer.Start();
-        }), DispatcherPriority.Background);
-    }
-
-    private void OnDataReloadTimer(object? sender, EventArgs e)
-    {
-        _dataReloadTimer!.Stop();
-        if (IsExiting || !_store.HasExternalStateChange()) return;
-        var result = ReloadDataCore(ImportDataOperation());
-        // Only a real, outstanding change waits for an ongoing gesture/apply. Invalid JSON
-        // waits for a new file event or explicit request, not a permanent retry loop.
-        if (result.Outcome == "busy" && !IsExiting) _dataReloadTimer.Start();
-    }
-
-    private static PaperOperationContext ImportDataOperation() =>
-        new(PaperTodoEventOrigin.Import, null, Guid.NewGuid(), DateTimeOffset.UtcNow);
 
     internal DataReloadStatus GetDataReloadStatusCore()
     {
@@ -102,8 +29,6 @@ public sealed partial class AppController
         return new()
         {
             IsReloading = IsDataReloading,
-            PendingExternalChange = _store.HasExternalStateChange(),
-            BaselineRevision = _store.ReloadRevision,
             LastAttemptAt = _lastDataReloadAt,
             LastResult = _lastDataReloadResult
         };
@@ -113,7 +38,7 @@ public sealed partial class AppController
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (IsExiting) return new() { Outcome = "failed", Error = "PaperTodo is exiting." };
-        if (!_dataReloadReady || IsDataReloading || Mouse.Captured != null || HasDeepCapsuleReorderDragInProgress())
+        if (IsDataReloading || Mouse.Captured != null || HasDeepCapsuleReorderDragInProgress())
             return new() { Outcome = "busy" };
 
         _dataReloadEvaluating = true;
@@ -126,7 +51,7 @@ public sealed partial class AppController
             foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForDataReload();
             PrepareExternalPaperOperation();
             var before = StateStore.CopyForReload(State);
-            var commit = _store.ReloadExternalState(State, Interlocked.Increment(ref _saveVersion));
+            var commit = _store.ReloadExternalState(Interlocked.Increment(ref _saveVersion));
             // Native HWND transparency is fixed at startup. The first switch into a native
             // material needs restart, like the normal skin setting path.
             var result = commit.State == null ? commit.Result : commit.Result with
@@ -135,11 +60,9 @@ public sealed partial class AppController
                     (PaperSkins.UsesNativeBackdrop(commit.State.PaperSkin) &&
                      NativeMicaBackdrop.IsSupported && !UsesNativeMicaWindows)
             };
-            if (result.Outcome != "unchanged" || _lastDataReloadResult == null)
-                _lastDataReloadResult = result;
+            _lastDataReloadResult = result;
             if (commit.State == null)
             {
-                QueueDataReloadNotice(result);
                 return result;
             }
 
@@ -157,7 +80,6 @@ public sealed partial class AppController
         {
             var result = new DataReloadResult { Outcome = "failed", Error = ex.GetBaseException().Message };
             _lastDataReloadResult = result;
-            QueueDataReloadNotice(result);
             return result;
         }
         finally { _dataReloadEvaluating = false; }
@@ -185,7 +107,7 @@ public sealed partial class AppController
                      (old.Type != next.Type || old.BodyProviderId != next.BodyProviderId)))
                 {
                     // Close against the OLD model/provider, before installing the new snapshot.
-                    // All dirty editor state was captured before disk commit.
+                    // The explicitly accepted disk model supersedes any pending editor values.
                     TryExitCleanup(pair.Value.CloseForReal);
                     _windows.Remove(pair.Key);
                 }
@@ -223,13 +145,13 @@ public sealed partial class AppController
         }
         catch (Exception ex)
         {
-            // Disk is already committed. Do not report a rolled-back transaction or reapply the
-            // external file. Preserve the authoritative candidate and report presentation failure.
+            // The external file has been accepted. Reconciliation failed; report this without
+            // claiming a rollback or triggering a second import.
             StateReloadModels.Apply(State, pending.Next);
             _lastDataReloadResult = pending.Result with
             {
                 Outcome = "failed", Applied = true,
-                Error = "The data was saved, but a display refresh failed: " + ex.GetBaseException().Message
+                Error = "The data was accepted, but a display refresh failed: " + ex.GetBaseException().Message
             };
         }
         finally
@@ -242,7 +164,6 @@ public sealed partial class AppController
         }
         RefreshTrayMenu();
         PublishExternalPaperOperation(pending.Origin);
-        QueueDataReloadNotice(_lastDataReloadResult ?? pending.Result);
         // Existing UI rules may normalize a placeholder or geometry. Save those actual runtime
         // adjustments through the normal versioned writer, not a second persistence path.
         if (!StateReloadModels.Equivalent(State, pending.Next)) MarkDirty();
@@ -283,75 +204,10 @@ public sealed partial class AppController
         }), DispatcherPriority.ContextIdle);
     }
 
-    private void QueueDataReloadNotice(DataReloadResult result)
-    {
-        if (result.Outcome is "unchanged" or "busy") return;
-        if (result.Outcome == "applied" && !result.RestartRequired)
-        {
-            _lastDataReloadNotice = null;
-            return;
-        }
-        var key = $"{result.Outcome}|{result.ConflictFile}|{result.Error}|{result.RestartRequired}";
-        if (key == _lastDataReloadNotice) return;
-        _lastDataReloadNotice = key;
-        Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (IsExiting) return;
-            var message = result.Outcome == "conflict"
-                ? Strings.Format("DataReloadConflict", result.ConflictCount, result.ConflictFile ?? "", result.ConflictDiffFile ?? "")
-                : result.Outcome == "applied"
-                    ? Strings.Get("DataReloadRestart")
-                    : Strings.Format("DataReloadFailed", result.Error ?? result.Outcome);
-            if (result.Outcome == "conflict" && result.RestartRequired)
-                message += Environment.NewLine + Strings.Get("DataReloadRestart");
-            MessageBox.Show(message, Strings.Get("DataReloadTitle"), MessageBoxButton.OK,
-                result.Outcome is "failed" or "invalid" ? MessageBoxImage.Warning : MessageBoxImage.Information);
-        }), DispatcherPriority.ContextIdle);
-    }
-
-    private void StopDataReloadWatcher()
-    {
-        _dataReloadReady = false;
-        _dataWatcher?.Dispose();
-        _dataWatcher = null;
-        if (_dataReloadTimer != null)
-        {
-            _dataReloadTimer.Stop();
-            _dataReloadTimer.Tick -= OnDataReloadTimer;
-            _dataReloadTimer = null;
-        }
-    }
-
     private bool FinishDataReloadBeforeExit()
     {
-        if (IsDataReloading)
-        {
-            Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
-            return false;
-        }
-        if (_dataReloadReady && _store.HasExternalStateChange())
-        {
-            _ = ReloadDataCore(ImportDataOperation());
-            if (_pendingDataReload != null)
-            {
-                Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private bool SaveForNormalShutdown()
-    {
-        if (TrySaveNow(sync: true)) return true;
-        if (!_store.HasExternalStateChange()) return false;
-        try
-        {
-            var path = _store.SavePendingExitRecovery(State);
-            MessageBox.Show(Strings.Format("DataReloadExitRecovery", Path.GetFileName(path)),
-                Strings.Get("DataReloadTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
-            return true;
-        }
-        catch { return false; } // existing exit failure dialog handles inability to preserve data
+        if (!IsDataReloading) return true;
+        Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
+        return false;
     }
 }

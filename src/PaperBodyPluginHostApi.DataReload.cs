@@ -4,8 +4,8 @@ namespace PaperTodo;
 
 internal sealed partial class PaperBodyPluginHostApi
 {
-    // Native and local Web plugins are trusted. This is the same explicit reload operation as
-    // the watcher/MCP entry, not a new permission wall or an alternate state writer.
+    // Native and local Web plugins share one explicit import entry with MCP.
+    // It does not create a second state writer or add a new permission gate.
     public DataReloadResult ReloadData() =>
         Invoke(() => _commands.ReloadData(PaperOperationContext.Plugin(_providerId)));
 

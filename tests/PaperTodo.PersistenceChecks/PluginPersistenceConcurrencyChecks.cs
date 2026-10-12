@@ -396,8 +396,7 @@ internal static class PluginPersistenceConcurrencyChecks
             return JsonDocument.Parse(bytes);
         }
 
-        public void Write(string targetPath, byte[] bytes, Func<string, bool>? validateTemp = null,
-            Action? beforeReplace = null)
+        public void Write(string targetPath, byte[] bytes, Func<string, bool>? validateTemp = null)
         {
             var attempt = Interlocked.Increment(ref _attemptCount);
             if (Interlocked.Increment(ref _activeWrites) != 1)
@@ -418,7 +417,7 @@ internal static class PluginPersistenceConcurrencyChecks
                     if (attempt <= failedAttempts)
                         throw new IOException("Injected failure of a plugin snapshot write.");
                 });
-                durable.Write(targetPath, bytes, validateTemp, beforeReplace);
+                durable.Write(targetPath, bytes, validateTemp);
             }
             finally
             {

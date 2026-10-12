@@ -410,6 +410,7 @@ internal static class Program
                     try { Assert(window.AllowsTransparency && !window.IsNativeMicaEffective, "unchanged legacy window"); }
                     finally { window.CloseForReal(); }
                 });
+                Check("layered skin and grip mode resizing", () => SkinChecks.CheckLayeredResize(controller));
             }
             Console.WriteLine($"Native Mica behavior checks passed: {_passed}.");
             return 0;

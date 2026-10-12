@@ -65,7 +65,7 @@
 | D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
-| D-057 | data.json 三方合并与统一热重载入口 | Accepted | 持久化 / 外部 API |
+| D-057 | data.json 仅显式重载，普通保存保持原路径 | Accepted | 持久化 / 外部 API |
 
 ## 维护规则
 
@@ -1769,24 +1769,24 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ---
  
-## D-057 — data.json 按实体身份三方合并，冲突保留运行状态并完整归档外部输入
+## D-057 — data.json 仅显式重载，普通保存保持原路径
 
 **Status:** Accepted
 
 ### Context
 
-外部编辑 `data.json` 应在运行中作用于纸片、待办与设置，插件与 MCP 也需要统一且可查询的重载入口。AppState 由自动保存、编辑中的正文、窗口几何与插件绑定共同修改；整份反序列化替换会让存活的 PaperWindow 保留旧对象引用，单独监听文件事件无法阻止旧保存覆盖外部输入。
+用户需要在 PaperTodo 运行期间由外部工具修改 `data.json`，并在需要时主动让宿主接受磁盘状态。早期候选实现使用常驻 FileSystemWatcher、历史版本快照、字段级三方合并与写前磁盘一致性检查；实测 4 MB 状态下正常保存的额外 JSON 解析、复制及历史维护带来明显成本。用户已明确接受：没有显式请求时，普通保存可覆盖外部编辑。
 
 ### Decision
 
-使用 `$paperTodoRevision` 和有界历史作为真实三方合并基线，Paper / Todo 按 ID 匹配、字段级合并；同字段冲突保留 PaperTodo 当前值，并归档完整原始外部字节与结构化差异，非冲突项继续应用。未知或过期基线不猜测，整份外部输入归档，运行数据优先保留。
+仅保留 Native/Web Workspace 与 GUI MCP 的显式请求入口，统一经 `PaperCommandService` → `AppController.DataReload` → `StateStore.Reload`。读取并校验当前主文件，不自动监听或追踪修订元数据；磁盘内容作为唯一待导入结果，不做三方合并。当前运行的未保存修改可能被替换。无效输入只报告错误，不调用启动时的 backup 恢复，也不生成恢复/冲突文件。
 
-`StateStore` 继续唯一拥有写锁、版本栅栏及主文件持久化；正常保存最后替换前检查外部变化。自动监听、Native/Web Workspace、MCP 共享 controller 入口。先收集尚未持久化的内置编辑，再在同一持久化语义下提交合并；UI 对象按 ID 原位更新，插件与窗口生命周期从现有入口协调。删除调用者当前纸片的收尾延至回调之后一轮 UI 调度。
+重载使用原 `StateStore` 写锁和版本序号读取文件并淘汰尚未执行的旧异步保存；不把重载变成第二条写入路径。普通保存完整恢复为原有序列化、原子临时文件替换和备份语义，不添加重载专用磁盘检查、历史快照或修订字段。已验证的 ID 原位模型更新及下一 UI 调度轮次的窗口/插件/Edge 生命周期协调仍保留，以维护存活对象引用。
 
 ### Why / Consequences
 
-不新增第二个权威状态副本或跨进程同步服务，历史快照有界，因此不保证任意久远离线编辑都能精确推断意图。非法数据不会回退成空状态；正常退出若未能消费外部文件，就另存内存恢复文件。冲突与退出恢复文件进入原有图片保护扫描。无需为此把插件文件本身变成热重载对象；此宿主能力并入现行 2.2 API，不改变既有 2.1 插件的可加载性。
+功能按需付费：不使用重载时不付出历史追踪成本。直接编辑主文件与正常自动保存可以竞争，属于明确接受的结果；需要可控的外部编辑工具应自行协调文件写入并及时调用 `reload_data`。显式请求不会保留未提交用户编辑或自动识别冲突，不承诺文件监听及跨进程同步；第三方插件业务状态与核心 `data.json` 继续分域。
 
 ### Evidence
 
-`src/StateStore.Reload.cs`、`src/StateJsonMerge.cs`、`src/StateReloadModels.cs`、`src/AppController.DataReload.cs`、`src/PaperCommandService.DataReload.cs` 及 `tests/PaperTodo.DataReloadChecks`。
+`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。

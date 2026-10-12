@@ -173,13 +173,13 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 
 全局 crash boundary 不执行普通“最后强行保存”。正常 durability 由常规保存、同步退出保存和 backup 提供。
 
-#### data.json 运行时重载
+#### data.json 按需显式重载
 
-外部文件监听、Native / Web Workspace API、GUI MCP 共享 `AppController.DataReload` / `PaperCommandService` 入口，不形成第二套 AppState 或数据写入器。重载前仅提交内置 Markdown 正文与必要 UI 编辑，不调用无关插件正文的全局 Commit；之后在 `StateStore` 的正常写锁和版本序号下校验、合并和持久化。状态合并后的 `AppState` / `PaperData` / `PaperItem` 按 ID 原位更新，存活窗口保留对象引用。UI、插件 Runtime 与 Edge presentation 由现有 controller 路径收敛。
+只有 Native / Web Workspace API 或 GUI MCP 显式调用 `reload_data` 时，`PaperCommandService` 才请求 `AppController.DataReload` 读取当前 `data.json`；不注册文件监听，不进行定时检查，不维护文件版本历史或三方合并基线。未请求时，用户对文件的外部修改不会自动进入运行态，下一次正常保存可以直接覆盖这些修改。
 
-运行时保存为 `data.json` 添加可选的 `$paperTodoRevision`；只在外部文件携带的版本有可确认历史快照时执行三方合并。实体按 ID 对齐，不同字段自动合并；同字段不兼容修改或删除/修改冲突保留当前运行值，外部原始内容及差异另存 `dataconflict(n).json` 与 `dataconflictdiff(n).json`。基线无法确认时保守保留运行状态并归档外部版本。旧文件仍可正常启动，版本信息不构成启动兼容性门槛。
+显式请求以经过校验的主文件为准：可以覆盖尚未保存的内存／编辑器修改，不逐字段合并、不生成冲突归档。文件无效或缺失则原样报告，不在运行时套用启动备份恢复或默认空数据。读取与正常保存共用 `StateStore` 的写锁和版本序号；接受文件后使较旧的排队异步保存失效，且重载过程不再次写主文件。普通保存、正常退出、备份、崩溃路径维持已有协议和开销，不额外解析、复制或持有持久化历史快照。
 
-保存替换主文件前检查未消费的外部变化，旧异步保存不能覆盖新提交的重载；重载输入缺失或非法时不回退启动备份、不清空运行数据，也不让自动保存覆盖该输入。正常退出仍无法完成重载时将内存保存到 `data.unsaved_exit.*.json`；崩溃边界不新增最终强存。这些额外恢复文件参与图片引用保护扫描。状态提交后在下一 UI 调度轮次协调窗口和插件生命周期，期间暂停共享业务写入与编辑器重新提交。界面语言改动与首次启用原生窗口材质仍需重启。机制不处理插件代码/DLL 的热替换；取舍见 D-057。
+`AppState` / `PaperData` / `PaperItem` 按 ID 原位更新存活实体，必要时通过既有窗口、插件 Runtime 和 Edge presentation 路径协调；如果调用者当前插件纸片被删除，实际 session 释放延迟到本次 API 返回后。状态与 UI 的短暂交接期拒绝重入共享命令或保存。界面语言变化及首次启用原生 HWND 材质仍须重启；不对插件 DLL / manifest 做代码热替换。取舍见 D-057。
 
 ### 4.3 图片资产
 
