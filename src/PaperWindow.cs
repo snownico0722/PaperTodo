@@ -948,7 +948,18 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        if (nearTop && nearLeft)
+        // Match the stock WPF grip's reserved bottom-right rectangle as well as the
+        // narrow border. Its dots sit farther inside the surface than the edge band.
+        var gripRightBand = (chromeMargin + SystemParameters.VerticalScrollBarWidth) * dpiScale;
+        var gripBottomBand = (chromeMargin + SystemParameters.HorizontalScrollBarHeight) * dpiScale;
+        var overGrip = pointerX >= bounds.Right - gripRightBand &&
+            pointerY >= bounds.Bottom - gripBottomBand;
+
+        if (overGrip)
+        {
+            hitTest = HtBottomRight;
+        }
+        else if (nearTop && nearLeft)
         {
             hitTest = HtTopLeft;
         }
