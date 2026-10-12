@@ -183,6 +183,12 @@ public sealed partial class AppController
                 WrapWithHint(
                     _settingsHidePapersFromWindowSwitcherCheckBox,
                     "TipHidePapersFromWindowSwitcher"),
+                WrapWithHint(
+                    SettingsToggle(
+                        HideTrayIconSettingLabel(),
+                        State.HideTrayIcon,
+                        ToggleHideTrayIcon),
+                    BuildSettingsHintTooltip(HideTrayIconSettingTip())),
                 CompactSettingsField(
                     Strings.Get("SettingsFullscreenTopmostMode"),
                     CreateFullscreenTopmostModeSegmentSelector(),
@@ -233,6 +239,7 @@ public sealed partial class AppController
         State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;
+        State.HideTrayIcon = false;
         State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
         State.ShowTopBarNewTodoButton = true;
         State.ShowTopBarNewNoteButton = true;
@@ -256,6 +263,7 @@ public sealed partial class AppController
 
         NormalizePaperSystemVisibilitySettings();
         ClampPaperTitlesToMaxLength(State.MaxTitleLength);
+        ApplyTrayIconVisibility();
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
         RefreshEdgeCapsuleHoverIntentRuntime();
