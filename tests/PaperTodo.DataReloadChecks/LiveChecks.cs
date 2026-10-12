@@ -143,23 +143,33 @@ internal static partial class Program
             var explicitTimings = new List<double>();
             for (var perf = 0; perf < 7; perf++)
             {
-                controller.SaveNow(sync: true);
+                await Task.Delay(450);
                 var probe = ReadLive();
                 var expected = "perf-api-" + perf;
                 LivePaper(probe, "note-a")["title"] = expected;
                 WriteLive(probe);
                 var start = Stopwatch.GetTimestamp();
-                Require(native.ReloadData().Applied, "explicit latency probe rejected");
-                await Until(() => !controller.IsDataReloading && controller.State.Papers.Single(p => p.Id == "note-a").Title == expected,
-                    "explicit latency probe " + perf);
+                var apiResult = native.ReloadData();
+                Console.WriteLine($"PERF_API_RESULT sample={perf} outcome={apiResult.Outcome} conflicts={apiResult.ConflictCount} applied={apiResult.Applied}");
+                Require(apiResult.Applied, "explicit latency probe rejected");
+                try
+                {
+                    await Until(() => !controller.IsDataReloading && controller.State.Papers.Single(p => p.Id == "note-a").Title == expected,
+                        "explicit latency probe " + perf);
+                }
+                catch (TimeoutException)
+                {
+                    var perfStatus = controller.GetDataReloadStatusCore();
+                    Console.WriteLine($"PERF_API_TIMEOUT expected={expected} actual={controller.State.Papers.Single(p=>p.Id=="note-a").Title} disk={Str(LivePaper(ReadLive(), "note-a")["title"])} pending={perfStatus.PendingExternalChange} busy={perfStatus.IsReloading} outcome={perfStatus.LastResult?.Outcome} conflicts={perfStatus.LastResult?.ConflictCount} timer={Field<DispatcherTimer?>(controller,"_dataReloadTimer")?.IsEnabled}");
+                    throw;
+                }
                 explicitTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
             }
             Console.WriteLine($"PERF_UI explicit_file_bytes={new FileInfo(Path.Combine(AppContext.BaseDirectory, "data.json")).Length} {FormatPerf(explicitTimings)}");
             var autoTimings = new List<double>();
             for (var perf = 0; perf < 7; perf++)
             {
-                controller.SaveNow(sync: true);
-                // Let notifications from PaperTodo's own save settle before editing externally.
+                // Let the previous reload and any self-written file events settle.
                 await Task.Delay(450);
                 await Dispatcher.Yield(DispatcherPriority.Background);
                 var probe = ReadLive();
