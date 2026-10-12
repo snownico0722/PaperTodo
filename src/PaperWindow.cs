@@ -2402,18 +2402,10 @@ public sealed partial class PaperWindow : Window
     private void UpdateTopBarResponsiveLayout()
     {
         if (_updatingTopBarResponsiveLayout ||
-            _topBar == null ||
-            _topBarTitleArea == null ||
-            _topBarTitleHost == null ||
-            _topBarButtonsHost == null ||
-            _topBarActionButtonsHost == null ||
-            _paperIconButton == null ||
-            _moreActionsButton == null ||
-            _closeButton == null ||
-            _paper.IsCollapsed)
-        {
+            _topBar == null || _topBarTitleHost == null ||
+            _topBarActionButtonsHost == null || _paperIconButton == null ||
+            _moreActionsButton == null || _closeButton == null || _paper.IsCollapsed)
             return;
-        }
 
         var availableWidth = _topBar.ActualWidth;
         if (!double.IsFinite(availableWidth) || availableWidth <= 0) return;
@@ -2421,57 +2413,64 @@ public sealed partial class PaperWindow : Window
         _updatingTopBarResponsiveLayout = true;
         try
         {
-            var leftWidth = TopBarOuterWidth(_paperIconButton);
             var titleChildMin = (_topBarTitleHost.Child as FrameworkElement)?.MinWidth ?? 0;
-            var titleWidth =
-                Math.Max(_topBarTitleHost.MinWidth,
-                    titleChildMin + _topBarTitleHost.Padding.Left + _topBarTitleHost.Padding.Right) +
+            var titleMinWidth = Math.Max(_topBarTitleHost.MinWidth,
+                titleChildMin + _topBarTitleHost.Padding.Left + _topBarTitleHost.Padding.Right) +
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
-            var fixedRightWidth = TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton);
-            var actionCapacity = Math.Max(0,
-                availableWidth - leftWidth - titleWidth - TopBarCollisionGap - fixedRightWidth);
+            var fixedWidth = TopBarOuterWidth(_paperIconButton) +
+                TopBarOuterWidth(_moreActionsButton) +
+                TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
+            var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
-            // The plugin/label hosts own explicit measured widths; the user's pinned buttons
-            // have their own fixed widths, even if a previous narrow layout hid them.
-            var othersWidth = _topBarActionButtonsHost.Children
-                .OfType<FrameworkElement>()
-                .Where(child => child is not Button && child.Visibility == Visibility.Visible)
-                .Sum(TopBarOuterWidth);
-            var desiredWidth = _topBarActionButtonsHost.Children
-                .OfType<Button>()
-                .Where(ShouldShowPinnedHostButton)
-                .Sum(TopBarOuterWidth);
+            // One layout owner distributes space in the user's saved order. The plugin
+            // group is one priority slot; its paper-scoped actions are atomic and its global
+            // tail can shrink. Neither branch hides the entire host to probe WPF layout.
+            _topBarActionButtonsHost.Visibility = Visibility.Visible;
+            foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+                button.Visibility = Visibility.Collapsed;
+            if (_pluginTopBarLabelsHost != null)
+                _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
 
-            // Existing plugin capacity reconciliation prunes excess plugin buttons first.
-            // Only after that do we progressively overflow user pins, in configured order.
-            var needsPluginTrim = _pluginTopBarButtonsHost?.Visibility == Visibility.Visible &&
-                _pluginTopBarActionElements.Count > 0 &&
-                othersWidth + desiredWidth > actionCapacity;
-            if (needsPluginTrim)
+            var overflow = false;
+            var pluginHandled = false;
+            foreach (var action in PaperTopBarShortcuts.Get(_controller.State, _paper.Type))
             {
-                foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
-                    button.Visibility = ShouldShowPinnedHostButton(button)
-                        ? Visibility.Visible : Visibility.Collapsed;
-                _topBarActionButtonsHost.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                var remaining = Math.Max(0, actionCapacity - othersWidth);
-                var overflow = false;
-                foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+                if (action == PaperTopBarShortcuts.PluginActions)
                 {
-                    var wanted = ShouldShowPinnedHostButton(button);
-                    var fits = wanted && !overflow && TopBarOuterWidth(button) <= remaining;
-                    button.Visibility = fits ? Visibility.Visible : Visibility.Collapsed;
-                    if (fits) remaining -= TopBarOuterWidth(button);
-                    else if (wanted) overflow = true;
+                    pluginHandled = true;
+                    var count = overflow ? 0 : PluginTopBarFittingCount(remaining);
+                    ReconcilePluginTopBarCapacity(count);
+                    if (count > 0 && _pluginTopBarButtonsHost != null)
+                        remaining -= TopBarOuterWidth(_pluginTopBarButtonsHost);
+                    else if (_pluginTopBarDesiredActions.Length > 0)
+                        overflow = true;
+                    continue;
                 }
-                _topBarActionButtonsHost.Visibility = othersWidth <= actionCapacity
-                    ? Visibility.Visible : Visibility.Collapsed;
+
+                var button = GetTopBarUserButton(action);
+                if (button == null || !ShouldShowPinnedHostButton(button)) continue;
+                var width = TopBarOuterWidth(button);
+                if (!overflow && width <= remaining)
+                {
+                    button.Visibility = Visibility.Visible;
+                    remaining -= width;
+                }
+                else
+                {
+                    overflow = true;
+                }
             }
 
-            var hideTitle = leftWidth + titleWidth + TopBarCollisionGap + fixedRightWidth > availableWidth;
+            if (!pluginHandled) ReconcilePluginTopBarCapacity(0);
+
+            // Passive plugin status labels do not depend on the plugin action pin setting
+            // and never displace interactive shortcuts.
+            if (!overflow && _pluginTopBarLabelsHost != null &&
+                _pluginTopBarLabelsHost.Children.Count > 0 &&
+                TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining)
+                _pluginTopBarLabelsHost.Visibility = Visibility.Visible;
+
+            var hideTitle = availableWidth < fixedWidth + titleMinWidth;
             if (hideTitle && _isEditingTitle) CommitTitleEdit();
             _topBarTitleHost.Visibility = hideTitle ? Visibility.Collapsed : Visibility.Visible;
         }
@@ -2985,8 +2984,6 @@ public sealed partial class PaperWindow : Window
             button.Visibility = ShouldShowPinnedHostButton(button)
                 ? Visibility.Visible : Visibility.Collapsed;
         UpdateTopBarResponsiveLayout();
-        if (!_reconcilingPluginTopBarCapacity && !_reconcilingPluginHostActionVisibility)
-            ReconcilePluginTopBarCapacity();
     }
 
     private void ConfirmAndDeletePaper()

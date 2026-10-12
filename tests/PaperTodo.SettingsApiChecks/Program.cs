@@ -113,6 +113,27 @@ internal static partial class Program
               controller.State.NoteTopBarShortcuts.SequenceEqual([PaperTopBarShortcuts.NewNote]),
             "Legacy public topbar alias rolls back both asymmetric lists after save failure.");
 
+        // A composite legacy boolean reports false for mixed per-type values, but an
+        // explicit Set(false) must still remove the pin from the other paper type.
+        controller.State.TodoTopBarShortcuts = [PaperTopBarShortcuts.NewTodo];
+        controller.State.NoteTopBarShortcuts = [PaperTopBarShortcuts.NewNote];
+        var commits = 0;
+        var composite = SettingsFor(controller, () => { commits++; return true; }, _ => { });
+        var cleared = composite.Set("topbar.new_todo", Json(false));
+        Check(cleared.Changed && commits == 1 &&
+              !PaperTopBarShortcuts.Contains(controller.State, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo) &&
+              !PaperTopBarShortcuts.Contains(controller.State, PaperTypes.Note, PaperTopBarShortcuts.NewTodo),
+            "Legacy Set(false) clears a partly configured shortcut instead of falsely reporting no-op.");
+        Check(!composite.Set("topbar.new_todo", Json(false)).Changed && commits == 1,
+            "Both values matching the desired legacy setting are a genuine no-op.");
+
+        controller.State.TodoTopBarShortcuts = [PaperTopBarShortcuts.NewTodo];
+        controller.State.NoteTopBarShortcuts = [];
+        var pinnedBoth = composite.Set("topbar.new_todo", Json(true));
+        Check(pinnedBoth.Changed && commits == 2 &&
+              PaperTopBarShortcuts.InBoth(controller.State, PaperTopBarShortcuts.NewTodo),
+            "Legacy Set(true) fills the missing paper type without removing the existing pin.");
+
         var temp = Path.Combine(Path.GetTempPath(), "PaperTodo-TopBar-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         try
@@ -136,6 +157,11 @@ internal static partial class Program
                   !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Todo, PaperTopBarShortcuts.NewTodo) &&
                   !PaperTopBarShortcuts.Contains(loaded, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
                 "Old data.json visibility preferences migrate once to per-type ordered shortcuts.");
+            Check(PaperTopBarShortcuts.Get(loaded, PaperTypes.Todo).SequenceEqual(
+                      [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+                  PaperTopBarShortcuts.Get(loaded, PaperTypes.Note).SequenceEqual(
+                      [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
+                "Migrated plugin actions retain their original position before built-in shortcuts.");
 
             // Explicit empty arrays are the new minimal preference, not a signal to remigrate.
             loaded.TodoTopBarShortcuts = [];

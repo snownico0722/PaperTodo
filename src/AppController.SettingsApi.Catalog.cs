@@ -225,17 +225,20 @@ public sealed partial class AppController
             () => PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewTodo),
             value => PaperTopBarShortcuts.SetBoth(State, PaperTopBarShortcuts.NewTodo, value),
             SettingEffects.TopBar,
-            title: Strings.Get("SettingsShowTopBarNewTodoButton"));
+            title: Strings.Get("SettingsShowTopBarNewTodoButton"),
+            isNoOp: pinned => PaperTopBarShortcuts.MatchesBoth(State, PaperTopBarShortcuts.NewTodo, pinned));
         yield return DefineSetting<bool>("topbar.new_note",
             () => PaperTopBarShortcuts.InBoth(State, PaperTopBarShortcuts.NewNote),
             value => PaperTopBarShortcuts.SetBoth(State, PaperTopBarShortcuts.NewNote, value),
             SettingEffects.TopBar,
-            title: Strings.Get("SettingsShowTopBarNewNoteButton"));
+            title: Strings.Get("SettingsShowTopBarNewNoteButton"),
+            isNoOp: pinned => PaperTopBarShortcuts.MatchesBoth(State, PaperTopBarShortcuts.NewNote, pinned));
         yield return DefineSetting<bool>("topbar.external_open",
             () => PaperTopBarShortcuts.Contains(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor),
             value => PaperTopBarShortcuts.Set(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor, value),
             SettingEffects.TopBar,
-            title: Strings.Get("SettingsShowTopBarExternalOpenButton"));
+            title: Strings.Get("SettingsShowTopBarExternalOpenButton"),
+            isNoOp: pinned => PaperTopBarShortcuts.Contains(State, PaperTypes.Note, PaperTopBarShortcuts.ExternalEditor) == pinned);
         yield return DefineSetting<bool>("window.hide_from_taskbar",
             () => State.HidePapersFromTaskbar,
             value => State.HidePapersFromTaskbar = value,

@@ -19,10 +19,7 @@ public sealed partial class PaperWindow
     private (FrameworkElement Element, PluginTopBarActionBinding Binding)?
         _pluginTopBarRejectedGlobalActionElement;
     private PaperHostTopBarActions _pluginHiddenHostTopBarActions;
-    private bool _pluginHostActionVisibilityHooksInstalled;
     private bool _pluginTopBarCapacityHookInstalled;
-    private bool _reconcilingPluginHostActionVisibility;
-    private bool _reconcilingPluginTopBarCapacity;
 
     internal static void EnsurePluginTopBarLoadedHandler() =>
         EnsurePluginLoadedRefreshHandler(
@@ -50,8 +47,7 @@ public sealed partial class PaperWindow
             .ToArray();
         ResetPluginTopBarMaterialization();
         _pluginHiddenHostTopBarActions = state.HiddenHostActions;
-        ReconcilePluginHiddenHostTopBarActions();
-        ReconcilePluginTopBarCapacity();
+        UpdateTopBarNewPaperButtons();
     }
 
     private void EnsurePluginTopBarButtonsHost()
@@ -75,129 +71,41 @@ public sealed partial class PaperWindow
         }
 
         EnsurePluginTopBarCapacityHook();
-        EnsurePluginHostActionVisibilityHooks();
     }
 
     private void EnsurePluginTopBarCapacityHook()
     {
-        if (_pluginTopBarCapacityHookInstalled || _topBar == null)
-        {
-            return;
-        }
-
+        if (_pluginTopBarCapacityHookInstalled || _topBar == null) return;
         _pluginTopBarCapacityHookInstalled = true;
-        _topBar.SizeChanged += (_, e) =>
-            ReconcilePluginTopBarCapacity(e.NewSize.Width > e.PreviousSize.Width);
+        _topBar.SizeChanged += (_, _) => UpdateTopBarResponsiveLayout();
     }
 
-    private void ReconcilePluginTopBarCapacity(bool allowExpansion = true)
+    // IconButton uses a 23 DIP button plus its two 1 DIP horizontal margins.
+    // Count descriptors without constructing/Measuring a hidden WPF subtree.
+    private const double PluginTopBarActionSlotWidth = 25;
+
+    private int PluginTopBarFittingCount(double availableWidth)
     {
-        if (_reconcilingPluginTopBarCapacity ||
-            _pluginTopBarButtonsHost == null ||
-            _topBarActionButtonsHost == null)
-        {
-            return;
-        }
+        if (_pluginTopBarButtonsHost == null || _pluginTopBarDesiredActions.Length == 0)
+            return 0;
+        var availableSlots = Math.Max(0, (int)Math.Floor((availableWidth + 0.01) /
+            PluginTopBarActionSlotWidth));
+        var paperCount = _pluginTopBarDesiredActions.Count(item =>
+            item.Scope == PaperTopBarActionScope.Paper);
+        // All paper-session actions appear together; global actions are a flexible tail.
+        if (availableSlots < paperCount) return 0;
+        return Math.Min(availableSlots, _pluginTopBarDesiredActions.Length);
+    }
 
-        _reconcilingPluginTopBarCapacity = true;
-        try
-        {
-            // Labels are passive metadata. Always remove them from the capacity calculation first
-            // so host controls and interactive plugin actions get the available width before labels.
-            if (_pluginTopBarLabelsHost != null)
-            {
-                _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
-            }
-
-            UpdatePluginTopBarHostWidth();
-            UpdateTopBarResponsiveLayout();
-
-            if (_paper.IsCollapsed ||
-                !PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.PluginActions) ||
-                _pluginTopBarDesiredActions.Length == 0)
-            {
-                ResetPluginTopBarMaterialization();
-                UpdateTopBarResponsiveLayout();
-                return;
-            }
-
-            var paperActionCount = _pluginTopBarDesiredActions.Count(item =>
-                item.Scope == PaperTopBarActionScope.Paper);
-
-            // Shrink only the tail that no longer fits. Global actions are the flexible tail;
-            // paper actions keep their existing all-or-nothing rule.
-            while (_topBarActionButtonsHost.Visibility != Visibility.Visible &&
-                   _pluginTopBarActionElements.Count > paperActionCount)
-            {
-                RemoveLastPluginTopBarActionElement(cacheForReuse: true);
-                UpdatePluginTopBarHostWidth();
-                UpdateTopBarResponsiveLayout();
-            }
-
-            if (_topBarActionButtonsHost.Visibility != Visibility.Visible)
-            {
-                while (_pluginTopBarActionElements.Count > 0)
-                {
-                    RemoveLastPluginTopBarActionElement(cacheForReuse: true);
-                }
-                UpdatePluginTopBarHostWidth();
-                UpdateTopBarResponsiveLayout();
-                return;
-            }
-
-            // A shrinking window can only reduce capacity. Do not probe actions that are already
-            // known not to fit; growth or a non-size state change will try the cached tail again.
-            if (!allowExpansion)
-            {
-                return;
-            }
-
-            if (_pluginTopBarActionElements.Count < paperActionCount)
-            {
-                while (_pluginTopBarActionElements.Count < paperActionCount)
-                {
-                    AddPluginTopBarActionElement(
-                        _pluginTopBarDesiredActions[_pluginTopBarActionElements.Count]);
-                }
-                UpdatePluginTopBarHostWidth();
-                UpdateTopBarResponsiveLayout();
-                if (_topBarActionButtonsHost.Visibility != Visibility.Visible)
-                {
-                    while (_pluginTopBarActionElements.Count > 0)
-                    {
-                        RemoveLastPluginTopBarActionElement(cacheForReuse: true);
-                    }
-                    UpdatePluginTopBarHostWidth();
-                    UpdateTopBarResponsiveLayout();
-                    return;
-                }
-            }
-
-            // Global descriptors are already in Priority order. Add only the missing tail and stop
-            // at the first action that would displace host controls. The rejected element is kept
-            // detached for reuse, so resize no longer recreates Buttons or reparses SVG geometry.
-            while (_pluginTopBarActionElements.Count < _pluginTopBarDesiredActions.Length)
-            {
-                AddPluginTopBarActionElement(
-                    _pluginTopBarDesiredActions[_pluginTopBarActionElements.Count]);
-                UpdatePluginTopBarHostWidth();
-                UpdateTopBarResponsiveLayout();
-                if (_topBarActionButtonsHost.Visibility == Visibility.Visible)
-                {
-                    continue;
-                }
-
-                RemoveLastPluginTopBarActionElement(cacheForReuse: true);
-                UpdatePluginTopBarHostWidth();
-                UpdateTopBarResponsiveLayout();
-                break;
-            }
-        }
-        finally
-        {
-            _reconcilingPluginTopBarCapacity = false;
-            ReconcilePluginTopBarLabelCapacity();
-        }
+    private void ReconcilePluginTopBarCapacity(int targetCount)
+    {
+        if (_pluginTopBarButtonsHost == null) return;
+        while (_pluginTopBarActionElements.Count > targetCount)
+            RemoveLastPluginTopBarActionElement(cacheForReuse: true);
+        while (_pluginTopBarActionElements.Count < targetCount)
+            AddPluginTopBarActionElement(
+                _pluginTopBarDesiredActions[_pluginTopBarActionElements.Count]);
+        UpdatePluginTopBarHostWidth();
     }
 
     private FrameworkElement AddPluginTopBarActionElement(
@@ -316,36 +224,6 @@ public sealed partial class PaperWindow
             : Visibility.Collapsed;
     }
 
-    private void EnsurePluginHostActionVisibilityHooks()
-    {
-        if (_pluginHostActionVisibilityHooksInstalled ||
-            _newTodoButton == null ||
-            _newNoteButton == null)
-        {
-            return;
-        }
-
-        _pluginHostActionVisibilityHooksInstalled = true;
-        _newTodoButton.IsVisibleChanged += OnPluginHostActionVisibilityChanged;
-        _newNoteButton.IsVisibleChanged += OnPluginHostActionVisibilityChanged;
-    }
-
-    private void OnPluginHostActionVisibilityChanged(
-        object sender,
-        DependencyPropertyChangedEventArgs e)
-    {
-        if (_reconcilingPluginHostActionVisibility || _updatingTopBarResponsiveLayout)
-        {
-            return;
-        }
-
-        if (_pluginHiddenHostTopBarActions != PaperHostTopBarActions.None)
-        {
-            ReconcilePluginHiddenHostTopBarActions();
-        }
-        ReconcilePluginTopBarCapacity();
-    }
-
     private static UIElement CreatePluginTopBarIcon(
         Button button,
         PaperTopBarIcon icon)
@@ -401,37 +279,4 @@ public sealed partial class PaperWindow
         return text;
     }
 
-    private void ReconcilePluginHiddenHostTopBarActions()
-    {
-        if (_reconcilingPluginHostActionVisibility)
-        {
-            return;
-        }
-
-        _reconcilingPluginHostActionVisibility = true;
-        try
-        {
-            // The user setting is the base visibility; plugin suppression is the final paper-local
-            // layer. Reapplying this from the visibility hooks prevents a later settings refresh
-            // from temporarily resurrecting actions that the active provider asked to hide.
-            UpdateTopBarNewPaperButtons();
-
-            if (_newTodoButton != null &&
-                _pluginHiddenHostTopBarActions.HasFlag(
-                    PaperHostTopBarActions.NewTodoPaper))
-            {
-                _newTodoButton.Visibility = Visibility.Collapsed;
-            }
-            if (_newNoteButton != null &&
-                _pluginHiddenHostTopBarActions.HasFlag(
-                    PaperHostTopBarActions.NewNotePaper))
-            {
-                _newNoteButton.Visibility = Visibility.Collapsed;
-            }
-        }
-        finally
-        {
-            _reconcilingPluginHostActionVisibility = false;
-        }
-    }
 }

@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
+using PaperTodo.Plugin;
 
 internal static class MaterialPresentationChecks
 {
@@ -38,7 +39,7 @@ internal static class MaterialPresentationChecks
         }
 
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength);
+            controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
@@ -76,6 +77,8 @@ internal static class MaterialPresentationChecks
             controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate();
 
             CheckRealRightClicks(controller);
+            CheckPaperTopBar(controller);
+            CheckPaperStartupFade(controller);
             CheckMasterRightClicks(controller);
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false; Theme.Invalidate();
@@ -96,6 +99,18 @@ internal static class MaterialPresentationChecks
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshBackground();
             Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture && settings.Opacity == 1,
                 "resizing Settings keeps the native material path capture-free and fully visible");
+
+            // This real settings interaction was previously trapped inside the discarded
+            // CopyFromScreen fixture; keep the independent WPF behavior without desktop pixels.
+            var alwaysActive = Descendants(settings).OfType<CheckBox>().Single(box =>
+                Equals(box.Content, Strings.Get("SettingsMicaAlwaysActive")));
+            if (alwaysActive.IsChecked != true)
+            {
+                alwaysActive.IsChecked = true;
+                alwaysActive.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            }
+            Program.Assert(controller.State.MicaAlwaysActive,
+                "clicking the native material appearance setting publishes the preference");
         }
         finally
         {
@@ -103,10 +118,177 @@ internal static class MaterialPresentationChecks
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength) = saved;
+                controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive) = saved;
             Theme.Invalidate();
         }
     }
+    private static void CheckPaperTopBar(AppController controller)
+    {
+        var state = controller.State;
+        var oldPins = state.TodoTopBarShortcuts.ToList();
+        var oldSkin = state.PaperSkin;
+        var oldLinks = state.EnableTodoPaperLinks;
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo, Title = "Top bar commands",
+            X = 65, Y = 70, Width = 235, Height = 245
+        };
+        state.Papers.Add(paper);
+        PaperWindow? window = null;
+        var paperOwner = Guid.NewGuid();
+        var globalOwner = Guid.NewGuid();
+        try
+        {
+            state.PaperSkin = PaperSkins.Paper;
+            state.EnableTodoPaperLinks = true;
+            state.TodoTopBarShortcuts =
+                [PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewTodo,
+                 PaperTopBarShortcuts.NewNote];
+            Theme.Invalidate();
+            // Use the real controller-owned window so a menu pin change must refresh
+            // the live instance through AppController, not just mutate AppState.
+            controller.ShowPaper(paper);
+            var liveWindows = (Dictionary<string, PaperWindow>)typeof(AppController)
+                .GetField("_windows", Program.Private)!.GetValue(controller)!;
+            window = liveWindows[paper.Id];
+            window.UpdateLayout();
+            Wait(40);
+
+            var paperActions = new[]
+            {
+                new PaperTopBarAction { Id = "paper-one", ToolTip = "Paper one",
+                    Icon = PaperTopBarIcon.Character("1") },
+                new PaperTopBarAction { Id = "paper-two", ToolTip = "Paper two",
+                    Icon = PaperTopBarIcon.Character("2") }
+            };
+            var globals = new[]
+            {
+                new PaperTopBarAction { Id = "global-one", ToolTip = "Global one",
+                    Icon = PaperTopBarIcon.Character("3") },
+                new PaperTopBarAction { Id = "global-two", ToolTip = "Global two",
+                    Icon = PaperTopBarIcon.Character("4") }
+            };
+            controller.SetPluginPaperTopBarActions(paperOwner, "topbar-fixture",
+                paper.Id, paperActions, PaperHostTopBarActions.None, () => true, _ => { });
+            controller.SetPluginGlobalTopBarActions(globalOwner, "topbar-fixture",
+                globals, () => true, _ => { });
+            window.RefreshPluginTopBarActions();
+            window.UpdateLayout();
+            Wait(50);
+
+            T Field<T>(string name) => (T)typeof(PaperWindow)
+                .GetField(name, Program.Private)!.GetValue(window)!;
+            var host = Field<StackPanel>("_topBarActionButtonsHost");
+            var plugins = Field<StackPanel>("_pluginTopBarButtonsHost");
+            var createTodo = Field<Button>("_newTodoButton");
+            var createNote = Field<Button>("_newNoteButton");
+            var association = Field<Button>("_windowBindingButton");
+            var more = Field<Button>("_moreActionsButton");
+            var close = Field<Button>("_closeButton");
+            var pin = Field<Button>("_paperIconButton");
+            void LayoutAt(double width)
+            {
+                window.Width = width;
+                window.UpdateLayout();
+                Program.Pump();
+            }
+
+            LayoutAt(235);
+            Program.Assert(plugins.Children.Count >= 2 &&
+                createTodo.Visibility != Visibility.Visible &&
+                close.Visibility == Visibility.Visible &&
+                more.Visibility == Visibility.Visible &&
+                pin.Visibility == Visibility.Visible &&
+                host.Visibility == Visibility.Visible,
+                "narrow title bar keeps the higher-priority plugin group and fixed controls");
+            LayoutAt(430);
+            Program.Assert(plugins.Children.Count == 4 &&
+                createTodo.Visibility == Visibility.Visible &&
+                createNote.Visibility == Visibility.Visible,
+                "resizing wider restores all paper/global plugin actions and built-in pins");
+
+            state.TodoTopBarShortcuts =
+                [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.Association,
+                 PaperTopBarShortcuts.PluginActions, PaperTopBarShortcuts.NewNote];
+            window.UpdateTopBarNewPaperButtons();
+            LayoutAt(235);
+            Program.Assert(createTodo.Visibility == Visibility.Visible &&
+                association.Visibility == Visibility.Visible &&
+                plugins.Children.Count == 0 &&
+                host.Visibility == Visibility.Visible,
+                "a newly enabled association never hides the entire shortcut host");
+            LayoutAt(430);
+            Program.Assert(plugins.Children.Count == 4,
+                "plugin actions return when space grows without requiring a plugin refresh");
+
+            // The ellipsis and the chrome right-click build the same paper-level menu.
+            more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            var popup = more.ContextMenu;
+            var context = Field<SkinBorder>("_paperChrome").ContextMenu;
+            Program.Assert(popup != null && context != null &&
+                popup.Items.OfType<MenuItem>().Select(item => item.Header as string).SequenceEqual(
+                    context.Items.OfType<MenuItem>().Select(item => item.Header as string)),
+                "ellipsis and right-click expose identical paper command lists");
+            var customize = popup.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuCustomizeTopBar")));
+            var newNote = customize.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuNewNotePaper")));
+            Program.Assert(newNote.IsChecked, "pinned command is checked in the visible menu");
+            newNote.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Program.Assert(!PaperTopBarShortcuts.Contains(state, paper.Type, PaperTopBarShortcuts.NewNote) &&
+                createNote.Visibility != Visibility.Visible,
+                "clicking the actual menu checkbox removes the live title-bar shortcut");
+            popup.IsOpen = false;
+        }
+        finally
+        {
+            controller.RemovePluginPaperTopBarSession(paperOwner);
+            controller.RemovePluginGlobalTopBarRuntime(globalOwner, "topbar-fixture");
+            window?.CloseForReal();
+            state.Papers.Remove(paper);
+            state.TodoTopBarShortcuts = oldPins;
+            state.EnableTodoPaperLinks = oldLinks;
+            state.PaperSkin = oldSkin;
+            Theme.Invalidate();
+        }
+    }
+
+    private static void CheckPaperStartupFade(AppController controller)
+    {
+        var state = controller.State;
+        var oldAnimations = state.EnableAnimations;
+        var paper = new PaperData { Type = PaperTypes.Todo,
+            Title = "Startup opacity", Width = 300, Height = 220, X = 80, Y = 80 };
+        state.Papers.Add(paper);
+        try
+        {
+            state.EnableAnimations = true;
+            controller.ShowPaper(paper);
+            Wait(700);
+            var windows = (Dictionary<string, PaperWindow>)typeof(AppController)
+                .GetField("_windows", Program.Private)!.GetValue(controller)!;
+            Program.Assert(windows.TryGetValue(paper.Id, out var window) &&
+                !window.HasAnimatedProperties,
+                "startup fade releases its opacity clock after showing the real paper");
+            window!.CloseForReal();
+        }
+        finally
+        {
+            state.Papers.Remove(paper);
+            state.EnableAnimations = oldAnimations;
+        }
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+    }
+
     private static void CheckRealRightClicks(AppController controller)
     {
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "Right-click regression",

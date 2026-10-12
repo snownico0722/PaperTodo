@@ -126,23 +126,20 @@ public sealed partial class PaperWindow
             Header = Strings.Get("MenuReorderTopBar"),
             Padding = new Thickness(8, 4, 10, 4)
         };
+        // Keep the reorder menu one level deep: select "move action left/right"
+        // directly, instead of opening another submenu for every action.
         for (var i = 0; i < pinned.Count; i++)
         {
             var action = pinned[i];
-            var entry = new MenuItem
-            {
-                Header = TopBarActionText(action),
-                Padding = new Thickness(8, 4, 10, 4)
-            };
-            var left = MenuItem(Strings.Get("MenuTopBarMoveLeft"),
-                (_, _) => _controller.MoveTopBarShortcut(paperType, action, -1));
-            left.IsEnabled = i > 0;
-            var right = MenuItem(Strings.Get("MenuTopBarMoveRight"),
-                (_, _) => _controller.MoveTopBarShortcut(paperType, action, 1));
-            right.IsEnabled = i < pinned.Count - 1;
-            entry.Items.Add(left);
-            entry.Items.Add(right);
-            reorder.Items.Add(entry);
+            var label = TopBarActionText(action);
+            if (i > 0)
+                reorder.Items.Add(MenuItem(
+                    Strings.Get("MenuTopBarMoveLeft") + " · " + label,
+                    (_, _) => _controller.MoveTopBarShortcut(paperType, action, -1)));
+            if (i < pinned.Count - 1)
+                reorder.Items.Add(MenuItem(
+                    Strings.Get("MenuTopBarMoveRight") + " · " + label,
+                    (_, _) => _controller.MoveTopBarShortcut(paperType, action, 1)));
         }
         menu.Items.Add(reorder);
     }

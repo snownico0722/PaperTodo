@@ -70,23 +70,27 @@ internal static class PaperTopBarShortcuts
     internal static bool InBoth(AppState state, string action) =>
         Contains(state, PaperTypes.Todo, action) && Contains(state, PaperTypes.Note, action);
 
+    // A legacy global write is complete only when both per-type values agree with it.
+    internal static bool MatchesBoth(AppState state, string action, bool pinned) =>
+        Contains(state, PaperTypes.Todo, action) == pinned &&
+        Contains(state, PaperTypes.Note, action) == pinned;
+
     internal static void MigrateLegacy(AppState state, bool todo, bool note)
     {
         if (todo)
         {
-            var actions = new List<string> { Association };
+            // The legacy plugin host was visually before the built-in shortcuts.
+            var actions = new List<string> { PluginActions, Association };
             if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
             if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
-            actions.Add(PluginActions);
             state.TodoTopBarShortcuts = actions;
         }
         if (note)
         {
-            var actions = new List<string> { Association };
+            var actions = new List<string> { PluginActions, Association };
             if (state.ShowTopBarExternalOpenButton) actions.Add(ExternalEditor);
             if (state.ShowTopBarNewTodoButton) actions.Add(NewTodo);
             if (state.ShowTopBarNewNoteButton) actions.Add(NewNote);
-            actions.Add(PluginActions);
             state.NoteTopBarShortcuts = actions;
         }
     }
