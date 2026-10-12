@@ -367,8 +367,9 @@ internal static class SkinChecks
     private static void CheckResizeHitTests(PaperWindow window, string scenario)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
-        Program.Assert(window.ResizeMode == ResizeMode.CanResizeWithGrip &&
-            GetWindowRect(hwnd, out var rect), $"{scenario}: expanded HWND must be resizable");
+        Program.Assert(window.ResizeMode == ResizeMode.CanResizeWithGrip,
+            $"{scenario}: expanded paper must allow resizing");
+        Program.Assert(GetWindowRect(hwnd, out var rect), $"{scenario}: HWND rectangle");
 
         var chrome = (PaperChromeBorder)typeof(PaperWindow)
             .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
