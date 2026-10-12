@@ -949,10 +949,11 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        // Match the stock WPF grip's reserved bottom-right rectangle as well as the
-        // narrow border. Its dots sit farther inside the surface than the edge band.
-        var gripRightBand = (chromeMargin + SystemParameters.VerticalScrollBarWidth) * dpiScale;
-        var gripBottomBand = (chromeMargin + SystemParameters.HorizontalScrollBarHeight) * dpiScale;
+        // The stock Window-template ResizeGrip is anchored to the HWND corner, not to
+        // the paper's inset chrome. Adding chromeMargin again steals clicks beside the
+        // grip in layered skins; the separate narrow edge band already covers paper edges.
+        var gripRightBand = SystemParameters.VerticalScrollBarWidth * dpiScale;
+        var gripBottomBand = SystemParameters.HorizontalScrollBarHeight * dpiScale;
         var overGrip = pointerX >= bounds.Right - gripRightBand &&
             pointerY >= bounds.Bottom - gripBottomBand;
 
