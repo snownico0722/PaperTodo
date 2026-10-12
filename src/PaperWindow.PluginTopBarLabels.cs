@@ -154,9 +154,9 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (_paper.IsCollapsed ||
-            !PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.PluginActions) ||
-            _pluginTopBarLabelsHost.Children.Count == 0)
+        // Passive status labels are not executable shortcuts. Keep the existing label
+        // contract independent of the user's pinned/unpinned plugin action buttons.
+        if (_paper.IsCollapsed || _pluginTopBarLabelsHost.Children.Count == 0)
         {
             _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
             UpdateTopBarResponsiveLayout();

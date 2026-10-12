@@ -69,6 +69,9 @@ public sealed partial class PaperWindow
         if (_pluginTopBarButtonsHost.Parent == null)
         {
             _topBarActionButtonsHost.Children.Insert(0, _pluginTopBarButtonsHost);
+            // Plugin actions have the same user-defined ordering as built-in shortcuts.
+            // Position the empty host on first attach; don't reparent active controls later.
+            ReorderTopBarUserButtons();
         }
 
         EnsurePluginTopBarCapacityHook();
