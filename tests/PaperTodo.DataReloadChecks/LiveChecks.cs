@@ -174,8 +174,8 @@ internal static partial class Program
                 }
                 catch (TimeoutException)
                 {
-                    var status = controller.GetDataReloadStatusCore();
-                    Console.WriteLine($"PERF_WATCHER_TIMEOUT expected={expected} actual={controller.State.Papers.Single(p=>p.Id=="note-a").Title} disk={Str(LivePaper(ReadLive(), "note-a")["title"])} pending={status.PendingExternalChange} busy={status.IsReloading} outcome={status.LastResult?.Outcome} timer={Field<DispatcherTimer?>(controller,"_dataReloadTimer")?.IsEnabled}");
+                    var perfStatus = controller.GetDataReloadStatusCore();
+                    Console.WriteLine($"PERF_WATCHER_TIMEOUT expected={expected} actual={controller.State.Papers.Single(p=>p.Id=="note-a").Title} disk={Str(LivePaper(ReadLive(), "note-a")["title"])} pending={perfStatus.PendingExternalChange} busy={perfStatus.IsReloading} outcome={perfStatus.LastResult?.Outcome} timer={Field<DispatcherTimer?>(controller,"_dataReloadTimer")?.IsEnabled}");
                     throw;
                 }
                 autoTimings.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
